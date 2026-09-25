@@ -47,8 +47,7 @@ def _short_channel_regressors(
 ) -> dict[str, np.ndarray]:
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 
-    # a --config TOML can write `short_channel = true`, which reaches this past the CLI's
-    # own choices and predates there being a strategy to name
+    # a --config TOML can write `short_channel = true`, which reaches this past the CLI's choices
     if strategy is True:
         strategy = "mean"
     if strategy not in ("mean", "pca"):
@@ -148,14 +147,10 @@ def _short_channel_basis(data: np.ndarray) -> dict[str, np.ndarray]:
 
     ``data`` is ``(n_channels, n_times)``, chromophores stacked.
 
-    **Every component is kept, and that is not an oversight.** A least-squares fit depends
-    only on the column space of its design matrix, so an orthonormal basis of a full-rank
-    block spans what the raw channels spanned and leaves the residual identical to the last
-    bit. What changes against the mean strategy is the number of columns, two against twice
-    the channel count, not the decomposition: the decomposition is there so the columns are
-    not collinear. Dropping components by explained variance would change the fit, but no
-    implementation does it and no threshold for it has been published, so this does not
-    invent one.
+    **Every component is kept.** A least-squares fit depends only on the column space of its
+    design matrix, so an orthonormal basis of a full-rank block spans what the raw channels
+    spanned and leaves the residual identical to the last bit. The decomposition is there so
+    the columns are not collinear.
 
     Steps:
 
@@ -219,17 +214,12 @@ def _aux_regressors(
       2. through the same bandpass the data went through
       3. z-scored
 
-    Step 2 is what short channels get for free. They are channels of the same recording, so
-    they ride through the filter with everything else and regressor and target end up in one
-    frequency band. Aux comes from outside that recording and gets none of it, so it would
-    otherwise arrive carrying variance the data no longer has anywhere. That inflates the
-    denominator of every beta it appears in, under-correcting inside the band, and puts the
-    same out-of-band variance back into the residual the filter had just cleaned.
+    Step 2 is what short channels get for free by riding through the filter with the data.
+    Aux comes from outside the recording, so without it the regressor would carry variance
+    the data no longer has and put that variance back into the residual.
 
-    The drift columns of the design matrix cover the equivalent mismatch below the high-pass
-    cutoff, since they span exactly the frequencies the high-pass removed. Nothing in the
-    design matrix spans what sits above the low-pass, which for a motion sensor is most of
-    its power, so this filter is not optional.
+    The drift columns cover the equivalent mismatch below the high-pass cutoff; nothing in
+    the design matrix spans what sits above the low-pass, so this filter is not optional.
     """
     table = read_aux_table(Path(aux_path))
     available = [c for c in table.columns if c != TIME_COLUMN]
@@ -430,9 +420,8 @@ def run_glm_pipeline(
         events = read_table(events_path) if events_path else None
 
     # short-channel confounds come from `haemo` itself, so they have been through whatever
-    # filter it has and cannot re-inject variance the filter removed: the spectral
-    # misspecification of Hallquist et al. 2013, whose fix is to put data and confounds
-    # through the same filter. External confounds have not, hence `_aux_regressors`
+    # filter it has and cannot re-inject variance the filter removed. External confounds
+    # have not, hence `_aux_regressors`
     confound_cols = (_short_channel_regressors(haemo, short_channel, sep_bands)
                      if short_channel else {})
     if aux_path:

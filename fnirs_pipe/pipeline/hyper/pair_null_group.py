@@ -1,18 +1,14 @@
 """The re-paired null read above the cell: one verdict per occasion, one per cohort.
 
-``pair-null`` ranks each channel of each dyad inside its own draws, which asks where a
-channel stands and answers it with whatever resolution the pool allows: a cell drawn against
-n stand-ins cannot reach a p below 1/(n+1), so a per-cell test corrected over many cells
-is close to unable to reject whatever the data does. Averaging first spends that resolution
-differently. It cannot say which channel, and in exchange it can say whether the pairing
-beats its null at all.
+``pair-null`` ranks each channel of each dyad inside its own draws, and a cell drawn against
+n stand-ins cannot reach a p below 1/(n+1). Averaging first cannot say which channel, but it
+can say whether the pairing beats its null at all.
 
 Two levels, because they need different data and only one of them fits inside the per-dyad
 stage:
 
 ``occasion``  the channels averaged, ranked in that occasion's own draws. One dyad's draws
-              are enough, so ``pair-null`` could carry this; it is here instead so that both
-              levels come off one table and one set of choices.
+              are enough; it is here so that both levels come off one table.
 ``cohort``    the channels averaged and then the occasions averaged, against a null that
               draws one stand-in per occasion. This needs every occasion's draws at once,
               which is why it cannot live in a stage that runs one dyad at a time.
@@ -91,8 +87,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
 
     Emitted rather than selected, because which ones exist is a property of the draws and not
     a choice: all n^2 pairings only if the null was drawn crossed, regions only if a mapping
-    was given. A caller that has to remember a flag to get the level its reference
-    implementation used will one day forget it.
+    was given.
     """
     hom_d, hom_r = _homologous(draws), _homologous(real)
     yield "whole", "whole", "homologous", hom_d, hom_r
@@ -101,9 +96,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     crossed = {o for o, part in draws.groupby("occasion")
                if "label2" in part.columns
                and (part["label"] != part["label2"].fillna(part["label"])).any()}
-    # and the real table: a mean over n homologous cells ranked inside a null built from n^2
-    # pairings is not the same statistic on both sides. The centre survives it, the spread
-    # does not, and the narrower n^2 null moves a p in the permissive direction
+    # and the real table: n homologous cells against an n^2 null is not one statistic
     real_crossed = ("label2" in real.columns
                     and (real["label"] != real["label2"].fillna(real["label"])).any())
     if crossed and not real_crossed:
@@ -112,8 +105,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
                        "over every pairing. Rerun the real tables with --wtc-channel-cross")
     if crossed and real_crossed:
         # A whole-brain mean is over every pairing, not the diagonal.
-        # All or none: n^2 pairings for one occasion and n for the next is not one
-        # statistic, and a part-crossed tree is what a rerun looks like half way through
+        # All or none: n^2 pairings for one occasion and n for the next is not one statistic
         short = sorted(set(draws["occasion"].unique()) - crossed)
         if short:
             logger.warning("no all-pairings level: %d of %d occasions are homologous only "
@@ -125,13 +117,10 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     for name, channels in (roi_map or {}).items():
         d = hom_d[hom_d["label"].isin(channels)]
         r = hom_r[hom_r["label"].isin(channels)]
-        # a thinly covered region is not a region; Nguyen and Miller average the pairings
+        # a thinly covered region is not a region
         if d["label"].nunique() >= min_channels and r["label"].nunique() >= min_channels:
             yield "roi", name, "homologous", d, r
-    # one test per channel pairing, pooled over occasions, which is the granularity the
-    # field reports at: 27 of 30 WTC studies take the channel pair as the unit and test it
-    # across their sample. Ours is a permutation rather than a t test, the sample being
-    # occasions rather than independent dyads, but the cell is the same cell
+    # one test per channel pairing, pooled over occasions
     for label in sorted(hom_d["label"].unique()):
         d = hom_d[hom_d["label"] == label]
         r = hom_r[hom_r["label"] == label]
@@ -144,8 +133,7 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
     """Every occasion's table concatenated, refusing rather than dropping a malformed one.
 
     A table missing a column the others have concatenates to NaN and then leaves the groupby
-    without a word, taking that occasion's contribution to every mean with it. One table
-    written by an older version of the pipeline is enough, and nothing downstream shows it.
+    without a word, taking that occasion's contribution to every mean with it.
     """
     frames = []
     for path in sorted(Path(output_dir).rglob(f"group-*_task-{task}{suffix}")):
@@ -227,12 +215,7 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
     nothing in another's.
 
     ``paired`` averages each occasion's draws into one baseline and tests real against it
-    paired over occasions, so the width is the spread between occasions. This is the read the
-    released implementations use, and on the phase null it is the only valid one: phase
-    randomisation is applied one channel at a time, which flattens the surrogate's
-    inter-channel covariance, and a mean over channels then has a null narrower than it
-    should be. A re-paired stand-in is a real recording whose channels covary naturally, so
-    there the two reads answer the same question and should agree.
+    paired over occasions, so the width is the spread between occasions.
 
     ``lift`` is the same number in both rows; what differs is what it is divided by.
     """
@@ -297,7 +280,7 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
         t, p_two = stats.ttest_1samp(diff, 0.0)
         row["t"] = float(t)
         row["df"] = int(diff.size - 1)
-        # one-tailed, the direction the released implementations test: real above its baseline
+        # one-tailed: real above its baseline
         row["p"] = float(p_two / 2 if t > 0 else 1.0 - p_two / 2)
     return row
 
@@ -313,15 +296,11 @@ def correct_cohort(frame: pd.DataFrame) -> pd.DataFrame:
 
       channel granularity, N channels in one condition  ->  family N, four q columns
 
-    Four methods rather than one, because the count depends on which and a report that names
-    no method cannot be read. ``q`` stays Benjamini-Hochberg, so a caller reading that column
-    gets what it always got; BH is also the most permissive of the four on sparse effects,
-    which makes it the choice most favourable to a positive result. ``q_by`` is the version
-    valid under arbitrary dependence and is the conservative bound.
+    ``q`` is Benjamini-Hochberg. ``q_by`` is the version valid under arbitrary dependence and
+    is the conservative bound.
 
-    ``family`` is the number of tests the correction ran over. It matters: at whole-brain
-    granularity the family is one cell, so every q equals its p and no correction happened.
-    A count quoted without it is not interpretable.
+    ``family`` is the number of tests the correction ran over. At whole-brain granularity the
+    family is one cell, so every q equals its p and no correction happened.
 
     Rows whose ``p`` is absent, which is what a paired test over fewer than three occasions
     leaves, take no part in any family and keep a blank q.
@@ -353,9 +332,7 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
       percentile 94.74 off 19 draws  ->  p 0.1, because 18 of 19 beaten is rank 2 of 20
 
     The stage that writes a cell's percentile runs one dyad at a time and so cannot correct
-    across cells, and nothing else in the package does either, so without this the correction
-    would live in whatever script last read the tables. One family per
-    condition and level, so the family is a number a reader can state.
+    across cells. One family per condition and level.
     """
     from statsmodels.stats.multitest import multipletests
 
@@ -401,9 +378,7 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
     draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma, needs=("draw", "label"))
     real = _read_tree(output_dir, REAL_SUFFIX, task, chroma, needs=("label",))
     sources = sorted(set(draws.source) | set(real.source))
-    # A null averaged over one band and a real value over another measure different things,
-    # and a tree part way through a re-band has both. The stages read the band off each
-    # other's sidecars for this reason; nothing checked it once the tables were on disk
+    # a null averaged over one band and a real value over another measure different things
     bands = _band_of(set(draws.source)) | _band_of(set(real.source))
     if len(bands) > 1:
         raise ValueError(
@@ -443,8 +418,8 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
 
     # at the root, so no group- and no sub-: what marks a table as cross-dyad is having no
     # analysis unit in its name. The task and the chromophore stay, both being a filter this
-    # command was given rather than something it merged over; without them a second run for
-    # another task or chromophore silently overwrote the first.
+    # command was given rather than something it merged over, so a second run for another
+    # task or chromophore does not overwrite the first.
     common = {"chromophore": chroma, "task": task, "condition": "all",
               "nulldist": _NULL[null], "statistic": "wtc"}
     written = []

@@ -96,9 +96,8 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
     Returns (aligned_raws, offsets, group_sqm). The rejections are applied here rather than
-    in each metric because --bads-scope decides them: a metric reading the Raw alone gets
-    whatever that one file's sidecar recorded, which is the run's own rejections and not
-    the union over the subject's runs that `subject` scope asks for.
+    in each metric because --bads-scope decides them: one file's sidecar holds only that
+    run's own rejections.
 
     --tstart/--tend are not applied here. They name a window of the analysis, and the report
     takes it out of the transform of the whole recording rather than cutting the recording
@@ -138,8 +137,7 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
     ``sub-01  long 18/20  bad 2  mean SCI 0.86  from: tapping``
 
     Counted off the aligned Raw after the rejections are applied, so it describes the channel
-    set the coherence actually uses rather than what the montage holds. The report says the
-    same thing, but only once the run has finished, which with --wtc-phase-null is hours later.
+    set the coherence actually uses rather than what the montage holds.
     """
     for subject_id, raw in aligned_raws.items():
         sqm = group_sqm.get(subject_id, {})
@@ -165,10 +163,8 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
 def _merge_reminder(output_dir: Path) -> None:
     """Say so when the merged tables are missing or older than the per-dyad ones.
 
-    A stale merged table is worse than none: it reads like a finished result. Merging is not
-    done here because a run often covers one dyad, and merging the whole tree after it would
-    fail on bands that a later run legitimately changed, and would race a parallel run for
-    the same three files.
+    Merging is not done here: merging the whole tree after a one-dyad run would fail on bands
+    a later run changed, and would race a parallel run for the same files.
 
     Driven off the aggregator's own discovery, so the counts are the ones `merge` would
     use and a kind added later cannot be left out.
@@ -192,14 +188,11 @@ def _merge_reminder(output_dir: Path) -> None:
 def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
     """Say so when ISC and the coherence are about to describe different frequencies.
 
-    The two are averages of one complex coherency, so comparing them across dyads is only
-    meaningful on one band: zero-lag Pearson r is the power-weighted mean of
-    ``|gamma| cos phi`` and the WTC band mean is the unweighted mean of ``|gamma|^2``. Under
-    a 1/f spectrum an unbanded ISC puts most of its weight below a coherence band that
-    starts at 0.06 Hz, so the two can be uncorrelated with nothing wrong in either.
+    The two are averages of one complex coherency, so they compare only on one band: zero-lag
+    Pearson r is the power-weighted mean of ``|gamma| cos phi`` and the WTC band mean is the
+    unweighted mean of ``|gamma|^2``.
 
-    Reported rather than enforced: a run may want them apart, and a run that computes no ISC
-    at all should not be made to name a band for it.
+    Reported rather than enforced, so a run that computes no ISC need not name a band for it.
     """
     wtc_band = (wtc_band_fmin, wtc_band_fmax)
     if wtc_band == (None, None):
@@ -249,9 +242,7 @@ def cmd_run(
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
 
-    # Each metric gets the band it was given, never the other's: a flag that silently moves
-    # a second metric cannot be read off the command line it is absent from, and a reader of
-    # a methods section has no way to recover it. What the two bands are is checked instead.
+    # each metric gets the band it was given, never the other's; a mismatch is only warned about
     isc_band = (isc_fmin, isc_fmax) if (isc_fmin is not None or isc_fmax is not None) else None
     _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax)
 
@@ -366,9 +357,8 @@ def cmd_run(
                       f"--tstart/--tend: {', '.join(dropped)}")
             cond_windows = inside
         if wtc_window_s and cond_windows:
-            # equal-length windows replace the conditions as the unit of analysis, so the
-            # estimation problem is identical everywhere and what is left between windows
-            # is the condition. The null resolves the same grid off the same reference.
+            # equal-length windows replace the conditions as the unit of analysis; the null
+            # resolves the same grid off the same reference
             cond_windows, _ = split_windows(cond_windows, wtc_window_s)
             if not cond_windows:
                 print(f"     [warn] --wtc-window-s {wtc_window_s}: no condition is long "
@@ -466,9 +456,8 @@ def cmd_run(
 
     # The index is rebuilt for every dyad this run touched, reading the tables rather than
     # anything held in memory, so a dyad whose other tasks were analysed in an earlier run
-    # still lists them. It cannot be built inside `_process`: a dyad with several tasks
-    # would then have its index rewritten once per task, each time from a tree missing the
-    # tasks still to come.
+    # still lists them. Not built inside `_process`, which would rewrite it once per task
+    # from a tree missing the tasks still to come.
     from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
 
     for gid in dict.fromkeys(key[0] for key in groups):
@@ -607,8 +596,7 @@ def cmd_pair_null(
     if failures:
         print(f"\n{failures} group(s) failed", file=sys.stderr)
         raise SystemExit(1)
-    # a closing hint must not decide the exit code: a long stage that has written every
-    # table is finished, whatever a reminder about the next command does afterwards
+    # a closing hint must not decide the exit code
     try:
         _merge_reminder(output_dir)
     except Exception as exc:

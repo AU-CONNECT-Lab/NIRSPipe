@@ -142,8 +142,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
 
     Raw intensity carries two channels per pair, one per wavelength, and SCI is a property
     of the pair rather than of either wavelength. A view that lists pairs (the channel
-    decisions tables) needs one row each, and looking a pair's score up by guessing at a
-    suffix is what made the GUI print a dash for every channel::
+    decisions tables) needs one row each::
 
         rows for "S1_D1 760" and "S1_D1 850"  ->  one row, pair "S1_D1"
 
@@ -232,10 +231,6 @@ def registration_note(offset: "tuple[float, float] | None") -> "str | None":
 
     ``offset`` is :func:`fnirs_pipe.qc.metrics.registration_offset`' output, and None means
     there is nothing to say. One wording for both views, as the separation notes are.
-
-    Worth its own note rather than a figure caption because the figures it invalidates are
-    the ones a reader trusts on sight: a cloud of optodes drawn beside a brain reads as a
-    montage that reaches an unusual part of it, not as a montage in the wrong frame.
     """
     if offset is None:
         return None
@@ -272,9 +267,7 @@ def separation_notes(
     treats as a warning and carries on past.
 
     ``orphan_mm`` is :func:`separation_orphans`' output, name -> mm. Given, the second note
-    also says where those channels actually sit and which bound would take them in, which
-    is the difference between a reader knowing the gap exists and knowing what to do about
-    it: the gap is a package default, the separations are this montage's.
+    also says where those channels actually sit and which bound would take them in.
 
     Returns the notes in the order they should be printed, empty when the split was clean.
     The caller decides where they go: the subject report files them as run notes, the raw
@@ -473,8 +466,7 @@ def split_table(
     ``channel_sets`` is ``[(name, n_channels, scalars, colour), ...]`` -- normally All, Long
     and Short. ``colour`` says whether that row's cells carry a verdict: only the long
     channels get one, because a short channel's coupling is high by construction and the
-    published cutoffs were never set for it, so colouring its row would call a number good
-    against a threshold that does not apply::
+    cutoffs do not apply to it::
 
         split_table([("Long", 40, {"sci_mean": 0.81}, True)], [("sci_mean", "Mean SCI")])
         -> columns: [{"key": "sci_mean", "label": "Mean SCI", ...}]

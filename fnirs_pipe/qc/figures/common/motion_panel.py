@@ -32,8 +32,7 @@ _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 _LW = 1.5          # data traces, thick enough to read at report width
 _LW_RULE = 1.2     # threshold rules, thinner than the data they judge
 
-# Muted rather than saturated, so the shading and the rules read as background and the
-# traces as foreground. One green for everything the correction owns: the corrected trace in
+# Muted colours. One green for everything the correction owns: the corrected trace in
 # both figures and the footprint strip. Amber shades spikes, dark red draws the threshold.
 _GVTD_LINE = "#8494a6"
 _GVTD_AFTER = "#55a868"
@@ -71,10 +70,7 @@ def _px_rows(heights_px: list[int], vertical_spacing: float, chrome_px: int):
     return [h / total for h in heights_px], int(round(plot_px)) + chrome_px
 
 
-# A GVTD line at this length is still cheap to draw, so a 15-minute run at 10 Hz reaches the
-# page at its own resolution and the pooling below only bites on recordings several times
-# longer. Kept well above the carpet's own column cap, which is an image and bounded by the
-# screen instead.
+# display cap for a GVTD line; well above the carpet's column cap, bounded by the screen
 _LINE_MAX_PTS = 10000
 
 
@@ -148,10 +144,9 @@ def _matched_od_after(
         ch_names = [S1_D1 760, S1_D1 850];  after has both, 10 Hz, same n_times  -> (2, N)
         ch_names = [S1_D1 760, S1_D1 850];  after has only S1_D1 760             -> None
 
-    A near miss is worse than nothing here: GVTD over a different channel set can differ
-    several-fold on one recording, and the panel would show that as an effect of the
-    correction. The corrected file is already OD, so the conversion is only for the case
-    where a caller hands over intensity.
+    A near miss is worse than nothing here: GVTD over a different channel set would show as
+    an effect of the correction. The corrected file is already OD, so the conversion is only
+    for the case where a caller hands over intensity.
     """
     if raw_after is None:
         return None
@@ -184,13 +179,9 @@ def _matched_od_after(
 # montage that could not be split) keeps the trace's own grey.
 _SET_COLORS = {"long": LONG_COLOR, "short": SHORT_COLOR, "unclassified": UNCLASSIFIED_COLOR}
 
-# Headroom over the tallest sample. Well above the 1.1 a trace alone would need: the top of
-# every row is where the two stat lines go, and they must not sit on the data.
+# Headroom over the tallest sample, leaving the top of each row for the two stat lines.
 _GVTD_HEADROOM = 1.45
-# A high percentile rather than the maximum, so one brief spike cannot flatten the threshold
-# line and the ordinary variation against the axis. The rows still share one scale, since that
-# is what makes them comparable, and each row's true maximum stays printed in its label, so
-# nothing is hidden by the cap.
+# y cap percentile, so one spike cannot flatten the rest; each row's maximum is in its label
 _GVTD_CAP_PCTL = 99.5
 
 # names the annotation holding a GVTD row's numbers, so a condition view can find it
@@ -202,7 +193,7 @@ def _gvtd_row_label(name: str, n_ch: int) -> str:
 
     ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.01-0.5 Hz``. GVTD is an RMS
     across channels, so which channels went in changes every value on the row and the
-    threshold with them; a row that does not say cannot be compared against another one.
+    threshold with them.
     """
     return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
             f"{n_ch} ch · 0.01–0.5 Hz</span>")
@@ -216,17 +207,12 @@ def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> 
       gvtd_y_top([long_before, long_after, short_before, short_after], [4.8e-4, 3.4e-4])
       -> 0.0127
 
-    A percentile rather than a maximum: on a recording with a handful of violent samples the
-    maximum flattens everything else into the bottom pixel, and the top 0.5% is allowed off
-    the canvas for that reason. Never below a row's threshold, since the line a row is judged
-    against has to stay visible.
+    A percentile rather than a maximum, so the top 0.5% may run off the canvas. Never below a
+    row's threshold, since the line a row is judged against has to stay visible.
 
-    One number for every row because long and short are the same unit at comparable
-    magnitudes, and scaling each to itself would hide the difference the second row exists to
-    show.
+    One number for every row, since long and short are the same unit.
 
-    Public because a per-condition view recomputes it over that condition's window, and a
-    view drawn by a different rule from the figure it narrows is worse than no view.
+    Public because a per-condition view recomputes it over that condition's window.
 
     ``build_motion_detail_figure`` deliberately draws the same series against its own
     maximum instead, its GVTD row being read as a pair with the derivative row under it.
@@ -240,8 +226,8 @@ def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> 
 def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") -> str:
     """One line of run-level numbers for a GVTD row, e.g. ``max 1.9e-03 · … · 7.1% above``.
 
-    ``thresh`` is dropped from a corrected row's line: it is deliberately the uncorrected
-    run's threshold, so repeating it says nothing and costs the width the rest needs.
+    ``thresh`` is dropped from a corrected row's line, since it is the uncorrected run's
+    threshold.
     """
     if g.size == 0:
         return ""
@@ -257,9 +243,7 @@ def _blocked_carpet(z, z_after, blocks):
     """The carpet's y labels and ``[(set name, first row, last row), ...]`` for its blocks.
 
     The images pass through untouched: the blocks sit directly on top of each other and the
-    seam between them is a thin drawn rule (see :func:`_carpet_band_marks`). A blank channel
-    row would be a whole channel high and read as a margin between two separate figures
-    rather than as a division inside one::
+    seam between them is a thin drawn rule (see :func:`_carpet_band_marks`)::
 
         blocks [("long", [a, b]), ("short", [c])]
         -> labels [a, b, c], spans [("long", 0, 1), ("short", 2, 2)]
@@ -274,8 +258,7 @@ def _blocked_carpet(z, z_after, blocks):
 
 # ---- Carpet ----
 # Both the subject panel and the dyad panel draw this image, so the scale, the clip and the
-# column cap live here once. Grey rather than a diverging ramp: it is the subject report's
-# carpet, and a dyad page that recoloured it would not be comparable with the member's own.
+# column cap live here once; grey, so a dyad page matches the member's own carpet.
 CARPET_MAX_PTS = 2000
 CARPET_Z = 3.0
 
@@ -301,8 +284,7 @@ def carpet_z(
     Returns the per-channel mean and SD alongside, so a second carpet of the same recording
     after a correction can be z-scored by the *uncorrected* numbers: rescaling it by its own
     SD would divide out the shrinkage the comparison exists to show. Pass them back as
-    ``stats`` to do that. 2 dp because the colour scale cannot resolve more and the z values
-    are most of the payload of the saved HTML.
+    ``stats`` to do that. 2 dp because the colour scale cannot resolve more.
     """
     step = max(1, data.shape[1] // CARPET_MAX_PTS)
     carpet = data[:, ::step]
@@ -333,8 +315,7 @@ def add_carpet(fig, row: int, z: np.ndarray, t: np.ndarray, labels: list[str],
 
 
 # The division between two channel-set blocks: a rule across the image and a matching break
-# in the side bar. Kept to a couple of pixels, since the blocks are two halves of one carpet
-# read against each other and anything wider reads as two stacked figures.
+# in the side bar, kept to a couple of pixels so the blocks read as one carpet.
 _SEAM = 0.005
 
 
@@ -345,8 +326,7 @@ def _carpet_band_marks(fig, row: int, spans: list, n_rows: int) -> None:
     reversed, so row ``i`` of ``n`` runs from ``1 - (i+1)/n`` to ``1 - i/n`` up from the
     bottom. The bar carries no text: it takes its colour from the GVTD row that averaged
     those channels, which is directly above and names itself. It sits hard against the
-    image's left edge: a bar floating out in the margin reads as a column of its own rather
-    than as a key to the rows beside it. Skipped for a single block, where the bars would
+    image's left edge. Skipped for a single block, where the bars would
     all be one colour and tell nothing apart.
     """
     if len(spans) < 2:
@@ -378,9 +358,8 @@ def carpet_gvtd_figure(
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
-    Only the 0.01-0.5 Hz GVTD is drawn. Differencing amplifies the ~1 Hz cardiac component
-    well above head motion, so the unfiltered trace reads as pulse rather than movement and
-    is not worth a panel; ``gvtd_mean`` and ``gvtd_p95`` still report it.
+    Only the 0.01-0.5 Hz GVTD is drawn, since the unfiltered trace is dominated by the
+    cardiac component; ``gvtd_mean`` and ``gvtd_p95`` still report it.
     ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip directly
     above the trace, so what the correction touched sits against what it was aimed at.
     ``spike_segments`` shades the GVTD panel behind the trace, and is either one span list
@@ -400,19 +379,16 @@ def carpet_gvtd_figure(
 
     Everything the comparison is read against stays fixed to the uncorrected side: the
     threshold line, and the per-channel mean and SD both carpets are z-scored by.
-    Re-deriving either from the corrected data would rescale the very panel that is supposed
-    to show the improvement, and a correction that shrank the signal would come out looking
-    unchanged. A ``raw_after`` that does not cover the same channels for the same duration at
+    Re-deriving either from the corrected data would hide a correction that shrank the
+    signal. A ``raw_after`` that does not cover the same channels for the same duration at
     the same rate is dropped rather than drawn (see ``_matched_od_after``).
 
     ``blocks`` is ``[(set name, channel names), ...]`` with the canonical set first, normally
     ``[("long", ...), ("short", ...)]`` from :func:`gvtd_channel_blocks`. Each gets its own
     GVTD row and its own block of carpet rows, so short-channel quality can be read off the
-    same panel without entering the number the verdict is taken from. GVTD is an RMS across
-    channels and the two sets measure different depths, so they stay separate traces rather
-    than one trace over the union. The rows share a y range, which is the point: the sets are
-    the same unit and comparable magnitudes, and scaling each to itself would hide exactly
-    the difference the extra row was added to show. Only the canonical row carries the
+    same panel without entering the number the verdict is taken from. The sets stay separate
+    traces rather than one trace over the union, and the rows share a y range (see
+    :func:`gvtd_y_top`). Only the canonical row carries the
     ``segments`` labels, since it is the one the reported scalars come from.
     Omitting ``blocks`` draws the single row ``channel_set`` names, over ``ch_names``.
     """
@@ -453,10 +429,7 @@ def carpet_gvtd_figure(
             "thresh": gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD),
         })
 
-    # carpet: all channels of every block (both wavelengths are positively correlated, safe
-    # in one z-scored image). one scale for both carpets, taken from the uncorrected side:
-    # z-scoring the corrected data by its own SD would divide out the very shrinkage the
-    # panel is there to show
+    # carpet: every block's channels, both wavelengths, z-scored by the uncorrected side
     data_z, t_carpet, stats = carpet_z(od_data, times, z_threshold)
     data_z_after = (None if not has_after else
                     carpet_z(od_after, times, z_threshold, stats=stats)[0])
@@ -471,9 +444,7 @@ def carpet_gvtd_figure(
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
     n_rows    = int(has_strip) + len(rows) + n_carpets
-    # 6 px a channel, capped: the carpet is a texture read for its stripes, not a per-row
-    # trace, so height past this adds screen and no detail. It also sets the gap between two
-    # blocks, which is one blank row and wants to be a seam rather than a margin
+    # 6 px a channel, capped: the carpet is read as a texture, not row by row
     carpet_px = int(max(150, min(n_ch * 6, 380)))
     heights   = (([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] * len(rows)
                  + [carpet_px] * n_carpets)
@@ -713,11 +684,9 @@ def build_motion_detail_figure(
 
     ``gvtd_picks`` is the channel set row 1 averages and ``gvtd_set`` names it on the panel.
     The caller passes the separation class ``ch_name`` itself belongs to, because rows 1 and 2
-    are read as a pair and the two classes are not on one scale: short-channel peaks run
-    around 1.7 times the long-channel ones and their peak-to-resting ratio around twice, so a
-    short channel's derivative under a long-channel GVTD invites a comparison that is not
-    there. ``spike_segments`` has to come from the same class for the same reason. Left
-    unset, row 1 covers every channel, which matches no other panel in the report.
+    are read as a pair and the two classes are not on one scale. ``spike_segments`` has to
+    come from the same class for the same reason. Left unset, row 1 covers every channel,
+    which matches no other panel in the report.
 
     References
     ----------
@@ -735,9 +704,8 @@ def build_motion_detail_figure(
     motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=GVTD_N_STD)
     t_gvtd, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
 
-    # This channel's |dOD/dt|, on full-res OD and through the same band-limited derivative
-    # the spike marks come from. Differencing the decimated trace instead would alias the
-    # cardiac band back in; max-pooling rather than striding keeps each peak at its height.
+    # this channel's |dOD/dt| on full-res OD, through the derivative the spike marks come from
+    # differenced before pooling: decimating first would alias the cardiac band back in
     if ch_name in raw_od_before.ch_names:
         ch_idx   = raw_od_before.ch_names.index(ch_name)
         tvd_full = np.abs(_motion_band_diff(od_full[[ch_idx]], full_sfreq)[0])

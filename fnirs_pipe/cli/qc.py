@@ -122,8 +122,7 @@ def cmd_prep_raw(
             logger.warning("sub-%s | subject index failed", subject, exc_info=True)
         return len(all_runs)
 
-    # one subject's failure must not take the rest of the batch with it, the rule
-    # `fnirs-prep` already follows: the reports are independent and a rerun is cheap
+    # one subject's failure must not take the rest of the batch with it
     n_runs, failed = 0, []
     for subject in participant_label:
         try:
@@ -371,9 +370,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Lower bound of cardiac band in Hz (required; population-dependent).")
     hr.add_argument("--cardiac-h-freq", type=float, required=True,
                     help="Upper bound of cardiac band in Hz (required; population-dependent).")
-    # named for what they set; --fmin / --fmax stay as aliases. The bare pair says nothing
-    # about which of the report's frequency bands it is, and reads as the analysis band that
-    # fnirs-hyper spells --wtc-fmin
+    # named for what they set; --fmin / --fmax stay as aliases
     hr.add_argument("--coh-fmin", "--fmin", dest="coherence_fmin", type=float, default=0.01,
                     help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
     hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,

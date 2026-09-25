@@ -102,9 +102,9 @@ def _metric_class(key: str, value: float, sci_threshold: float) -> str:
 
     The exception is the same one the per-channel tables make: this run screened at
     ``--sci-threshold``, so colouring its SCI against the registry's cutoff would show a
-    verdict the run did not reach. Both estimates take it, the windowed one included, or the
-    only coloured SCI on the page is the whole-run one nobody reads. Everything else is the
-    registry's, and a metric with no published cutoff there prints uncoloured on purpose.
+    verdict the run did not reach. Both estimates take it, the windowed one included.
+    Everything else is the registry's, and a metric with no published cutoff there prints
+    uncoloured.
     """
     if key in ("sci_mean", "sci_win_mean"):
         return "qm-ok" if value >= sci_threshold else "qm-bad"
@@ -217,7 +217,7 @@ def _record_window_matches(
 
     A record's ``window_s`` is on that member's own recording; a hyper window is on the
     clock ``align_recordings`` cropped every member onto, and the two differ by that
-    member's crop offset. Matching on the label alone would pair ``talk#2`` with a
+    member's crop offset. Matching on the label alone would pair ``task#2`` with a
     different occurrence whenever the crop dropped an earlier one, so the bounds are
     checked rather than assumed.
 
@@ -259,10 +259,7 @@ def condition_subject_metrics(
     channel's SCI under one condition cannot differ between a subject page and a dyad page.
 
     **It reports, it does not re-decide.** The coherence on a condition's page was computed
-    on the channel set the whole recording was screened into, because the window is read out
-    of a transform of the whole recording and a per-condition channel set would need a
-    transform of its own. Screening each condition separately would also make a contrast
-    between two conditions a contrast between two montages. So these rows say how the
+    on the channel set the whole recording was screened into, so these rows say how the
     channels held up over this stretch, and the set they were drawn from is the run's.
 
     A member whose record predates the section contributes nothing and its column reads as
@@ -283,11 +280,8 @@ def condition_subject_metrics(
             logger.info("%s: no by_condition section in the quality record, so the "
                         "per-condition quality table has no column for it", sid)
             continue
-        # `windows` drives the loop rather than the record's own set, and the two floors
-        # differ on purpose: the record keeps anything holding two screening windows (20 s),
-        # hyper anything holding one cycle of the slowest frequency analysed (100 s at
-        # 0.01 Hz). The record's set is therefore a superset, and reading it straight
-        # through would put a condition too short to have a coherence onto a WTC page.
+        # `windows` drives the loop, not the record's own set: the record keeps shorter
+        # conditions than hyper, and one too short for a coherence must not reach a WTC page
         for label, t0, t1 in windows:
             entry = by_condition.get(label)
             if entry is None:
@@ -359,10 +353,8 @@ def group_methods(
     which leaves no file to scan), then what was measured across the two (read from the
     group's sidecars).
 
-    The paragraph describes **one** preprocessing pipeline, because that is what a
-    manuscript can use. When the members were not processed the same way, that becomes a
-    note rather than a sentence naming both, since a Methods section hedging every
-    parameter is worse than one that says which subject it describes.
+    The paragraph describes **one** preprocessing pipeline. When the members were not
+    processed the same way, that becomes a note saying which subject it describes.
     """
     per_member = {e.subject_id: steps_from_sidecars(_member_nirs_dir(output_dir, e))
                   for e in group}
@@ -398,7 +390,7 @@ def decision_rows(sqm_data: dict, subject_ids: list[str],
            "by_sub": {"sub-01": {"sci": "0.956", "sci_cls": "", ...}, "sub-02": {...}}}]
 
     Grouped by channel rather than by member, because that is the comparison the page is
-    for: a pair's two members sit side by side in one row instead of twenty-two rows apart.
+    for: a pair's two members sit side by side in one row.
     Every string and every cell class is built here by the functions the subject report and
     the raw viewer use, so the dyad's cells and the member's own report cannot disagree; the
     page's script only lays them out.
@@ -581,10 +573,8 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
 
     ``valid`` is the share of band cells that survived the cone of influence, and it is one
     number for the whole scope rather than a column: the cone depends on the window length
-    and the band, so every pairing in a scope has the same share. A window whose coherence
-    rests on a third of its cells is not the same measurement as one that kept all of them,
-    which is worth saying once at the top rather than repeating down every row. A rejected
-    pairing contributes nothing to it, its band mean being NaN.
+    and the band, so every pairing in a scope has the same share. A rejected pairing
+    contributes nothing to it, its band mean being NaN.
 
     Rows are every pairing that carries at least one value, so an uncrossed run shows the
     coherence on the diagonal and the ISC everywhere, which is what those two actually
@@ -593,8 +583,8 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
 
     ``diagonal_only`` drops the crossed pairings, for the table whose subject is the
     homologous mean alone. The correlation matrix is a full ROI x ROI whatever the
-    coherence beside it covers, so without this that table grew a row per crossed region
-    carrying no coherence and repeating the correlation the crossed table above it prints.
+    coherence beside it covers, so without this that table would grow a row per crossed
+    region carrying no coherence.
     """
     cells: dict = {}
     fracs: set = set()
@@ -658,9 +648,7 @@ def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
             "rows": [{"a": "S1_D1", "b": "S1_D2",
                       "cells": {"Whole run": {"HbO WTC": "0.241"}, "rest": {...}}}]}
 
-    Stacked instead, a crossed dyad's pairings are n^2 rows per condition and the whole
-    run's copy of a pairing is hundreds of rows away from the condition's. Side by side, the
-    comparison a block design is run for is one row.
+    Side by side, so a pairing's whole-run value and its conditions' sit in one row.
 
     ``columns`` is the union over the scopes, which is what lets one header stand over all
     of them; a scope that filled fewer leaves its cells empty rather than shifting the rest.
@@ -777,9 +765,8 @@ def build_hyper_post_report(
 
     ``wtc_channel_cross`` crosses every long channel with every other, n channels giving n^2
     rows in ``stat-wtc_relmat.tsv`` instead of n. The extra pairs reach the TSV and the crossed
-    matrix, while the map selector keeps the homologous ones: n^2 options is not a list
-    anybody reads through, and drawing a full frequency × time map for each of them per
-    chromophore is most of what the figures cost. Crossing is also what produces the
+    matrix, while the map selector keeps the homologous ones: a full frequency × time map for
+    each crossed pair per chromophore would be most of what the figures cost. Crossing is also what produces the
     ROI × ROI matrix, since the ROI numbers are grouped from the channel ones.
 
     ``wtc_by_condition`` repeats the whole coherence analysis inside each task annotation's
@@ -803,8 +790,8 @@ def build_hyper_post_report(
     whole-run transform, over a cut padded by that many seconds on each side. Left at None,
     which is the default, conditions are windowed out of the whole-run transform. See
     :func:`_transform_condition`: with adequate padding the two give the same number, so this
-    exists for a caller who wants per-condition transforms, and 0 reproduces the unpadded cut
-    other pipelines take. Costs one transform per condition per chromophore.
+    exists for a caller who wants per-condition transforms, and 0 gives the unpadded cut.
+    Costs one transform per condition per chromophore.
 
     ``wtc_mask_coi`` restricts each band mean to the cone of influence. On by default; the
     share inside the cone is reported either way as ``n_valid_frac``.
@@ -812,13 +799,10 @@ def build_hyper_post_report(
     ``wtc_chroma`` is the chromophores to run, ``("hbo",)``, ``("hbr",)`` or both. Both is
     the default and costs exactly twice as much, since the two are the same computation run
     twice: a member's HbO pairs only with the other member's HbO, and the two are never
-    mixed and never averaged. The reason to have both is a consistency check rather than two
-    results, HbO carrying the larger amplitude and HbR the less scalp contamination, so a
-    coupling in HbO with nothing in HbR is a caution flag. Every band-mean table gains a
+    mixed and never averaged. Every band-mean table gains a
     ``chromophore`` column rather than splitting per chromophore, the tables being
     long-format. The figures are keyed by chromophore instead and the page carries all of
-    them, switched together by one control, which is the comparison the second chromophore
-    exists for; ``wtc_chroma[0]`` is only what the page opens on.
+    them, switched together by one control; ``wtc_chroma[0]`` is only what the page opens on.
 
     ``wtc_save_maps`` writes the full time-frequency maps beside the tables as ``.npz``, one
     per chromophore, so a different band can be averaged later without a second wavelet
@@ -857,9 +841,8 @@ def build_hyper_post_report(
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
 
     # Every inter-brain figure on this report is of two members. A group of three has three
-    # such pairings and the transform carries all of them, so each gets its own page rather
-    # than one page standing for the group: the numbers differ per pairing and a single page
-    # would have to pick one and name it after the group.
+    # such pairings and the transform carries all of them, so each gets its own page: the
+    # numbers differ per pairing.
     pairings = list(combinations(subject_ids, 2))
 
     def _pair_slug(pair: "tuple[str, str] | None") -> str:
@@ -878,9 +861,8 @@ def build_hyper_post_report(
 
     # ---- is this a segment rather than a recording? ----
     # A cut carries two edges of its own, and everything this report computes from a wavelet
-    # transform loses a share of its band at them that grows as the cut shortens. Treating a
-    # segment and a whole recording alike is the one way into inflated numbers a reader cannot
-    # see, so this still computes but says which it got.
+    # transform loses a share of its band at them that grows as the cut shortens, so this
+    # still computes but says which it got.
     crop_info = crop_provenance(ref_raw) if ref_raw else None
     if crop_info:
         span = crop_info["window"]
@@ -968,8 +950,8 @@ def build_hyper_post_report(
 
         ``interactive`` writes each map as its own Plotly page instead of a PNG, and the
         entry then carries the iframe's height beside its URL. The ROI panel takes it and
-        the channel panel does not, on volume alone: both cost about 3 MB a map, and a
-        crossed dyad has n^2 channel pairings against a handful of ROI ones.
+        the channel panel does not, on volume alone: a crossed dyad has n^2 channel
+        pairings against a handful of ROI ones.
 
         ``view_spans`` puts every condition's window into the file as well, so the run's
         page and each condition's are one file addressed by URL fragment. Interactive only:
@@ -1117,11 +1099,9 @@ def build_hyper_post_report(
             -> {"chan_matrix": {...}, "roi_matrix": {...}}
 
         One figure per matrix rather than one per chromophore, which is the one thing on
-        this page that is not built per chromophore. HbO and HbR are run as a consistency
-        check on each other, and side by side on one colour scale is that check; stacked as
-        two figures with a colorbar each, they are two results a reader has to hold in their
-        head. The maps above stay per chromophore because a map is a picture of one pairing
-        and there is no comparison to draw inside it.
+        this page that is not built per chromophore: HbO and HbR sit side by side on one
+        colour scale. The maps above stay per chromophore because a map is a picture of one
+        pairing.
 
         ``cond_slug`` names the files, absent for the run and the window's own label for a
         window, the same rule the figure sets follow. No chromophore in the name, both being
@@ -1194,8 +1174,7 @@ def build_hyper_post_report(
             windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
             roi_map_name=roi_map_name, whiten_s=wtc_whiten_s)
     # Everything above is the analysis and has already written its tables; everything below
-    # draws them. The figures are most of this step's output on disk, and a study that reads
-    # the tables never opens them.
+    # draws them.
     if no_report:
         logger.info("group-%s | --no-report: tables written, figures skipped", group_id)
         return None
@@ -1240,9 +1219,8 @@ def build_hyper_post_report(
     def _isc_roi_matrix_of(pair, label) -> dict:
         """The ROI ISC of both chromophores as one figure, the way the WTC matrices are.
 
-        One figure rather than one per chromophore, for the reason `_matrix_set` gives: HbO
-        and HbR are a consistency check on each other and side by side on one scale is that
-        check. Nothing is drawn where the run had no ROI map, since `isc_roi` is then empty.
+        One figure rather than one per chromophore, as in `_matrix_set`: HbO and HbR side by
+        side on one scale. Nothing is drawn where the run had no ROI map, since `isc_roi` is then empty.
         """
         mats = {_CHROMA_LABEL[c]: result.isc_roi.get(pair, {}).get(label, {}).get(
                                       c, (None, None))
@@ -1304,10 +1282,8 @@ def build_hyper_post_report(
 
     # A condition keeps the run's task- entity and takes a cond- of its own,
     # `..._task-experiment_cond-baseline_report.html`, which is the rule the subject
-    # report follows. Putting the label in `task-` instead would name a condition page the
-    # same as the run page of a tree where that condition was cropped to its own task, and
-    # the two are not the same number: one carries the whole recording's cone of influence
-    # and the other two edges of its own.
+    # report follows. In `task-` it would collide with the run page of a tree where that
+    # condition was cropped to its own task, which is not the same number.
     def _page_path(label: "str | None", pair: "tuple[str, str] | None" = None) -> Path:
         # the condition and the pairing are entities of their own; the whole-run page for
         # the only pairing carries neither
@@ -1358,9 +1334,7 @@ def build_hyper_post_report(
 
         ``number_scopes`` is ``[(heading, band frames, ISC label), ...]``: the run's page
         carries the whole run and then every condition, a condition's page carries itself
-        alone. The pictures above are of one scope and the numbers below are not, because a
-        block design is read by comparing conditions and every panel repeated per condition
-        would be a page nobody scrolls.
+        alone. The pictures above are of one scope and the numbers below are not.
         """
         # Every figure's URL keyed by chromophore, which is what the page's chromophore
         # switch reads. The panels are one set of DOM nodes filled from these, not one set
@@ -1494,7 +1468,7 @@ def build_hyper_post_report(
     # One set of pages per pairing, and inside each the conditions first and the run last,
     # so the run's page carries the complete error and note lists: a guard that failed while a
     # window was being drawn belongs on both. The path returned is the first pairing's run
-    # page, which for a dyad is the only one there has ever been.
+    # page, which for a dyad is the only one.
     output_path = None
     for pr in pairings:
         pair_figs = {c: _figures_for(c, passes[c], pr) for c in chroma}
@@ -1524,8 +1498,8 @@ def build_hyper_post_report(
             logger.info("group-%s | %s condition %s -> %s",
                         group_id, " × ".join(pr), label, written.name)
 
-        # the run's page prints every condition under the whole run, which is the comparison
-        # a block design is run for and the one thing no condition page can show
+        # the run's page prints every condition under the whole run, which no condition page
+        # can show
         written = _render_page(
             {c: pair_figs[c]["run_figs"] for c in chroma}, run_matrices,
             [("Whole run", run_bands, None)]

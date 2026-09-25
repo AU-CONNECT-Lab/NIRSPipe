@@ -49,9 +49,7 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Separation (mm)", ["sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm"]),
 ]
 
-# Settings the record stores beside its metrics. A distribution of a number the run was told
-# to use, rather than one it measured, says nothing: they stay in the table and out of the
-# figures.
+# Settings the record stores beside its metrics: kept in the table, out of the figures.
 _SETTING_METRICS = frozenset(
     {"qc_window_s", "gvtd_censor_n_std", "gvtd_censor_min_epoch_s"})
 
@@ -121,10 +119,7 @@ def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], 
 # ---- Deviation from the cohort ----
 
 # Mean |z| over every metric, above which a run is called out. One number per run rather than
-# one test per metric: the group table carries 85 columns, and fencing each of them separately
-# and flagging a run that trips any one flags nearly every run in a large cohort whatever its
-# quality. A fence on the scores themselves masks instead: four poor runs in a cohort of twenty
-# pull the fence up over their own heads.
+# one test per metric, which would flag nearly every run in a large cohort.
 SCORE_THRESHOLD = 2.0
 
 # One colour per run picked out of the pale mass, the same colour in every panel.
@@ -219,11 +214,9 @@ def build_deviation_strip(
 ) -> "tuple[go.Figure | None, list[str]]":
     """One row per metric, one dot per run at its robust z, colour = channel set.
 
-    This is the report's overview, in place of a subject x metric heatmap. A heatmap of
-    z-scores has two failure modes this does not: at a small cohort every cell takes one of
-    two colours, and at any cohort the metric names have to be read sideways. Here the metric
-    names are horizontal, the cohort's spread is the width of its dot cloud, and a run sitting
-    apart is apart on the axis rather than a shade darker.
+    This is the report's overview. The metric names are horizontal, the cohort's spread is
+    the width of its dot cloud, and a run sitting apart is apart on the axis rather than a
+    shade darker.
 
     Returns (figure, dropped): a metric every run agreed on has no z to plot and is named in
     the report's notes instead.
@@ -308,9 +301,7 @@ _WINDOW_MATRICES = [
 _GVTD_SETS = {"long": "gvtd_per_window", "short": "gvtd_per_window_short",
               "all": "gvtd_per_window_all"}
 
-# The trend a reader looks for in a windowed metric is slower than one QC window, so each
-# series is smoothed over this many seconds and then sampled at that same step. Drawing 200
-# runs at full resolution is a quarter of a million samples for a picture of a grey mass.
+# Each windowed series is smoothed over this many seconds and then sampled at that same step.
 SMOOTH_S = 60.0
 
 
@@ -318,8 +309,8 @@ def _set_rows(row: dict, per_channel_field: str) -> dict[str, list[int]]:
     """Row indices of each channel set for a stored channel x window matrix.
 
     The matrix carries no channel names; its rows follow the recording's channel order, which
-    is the key order of ``per_channel.raw.<field>``. Verified rather than assumed: splitting
-    the matrices this way reproduces the stored per-set psp_mean and cv_mean exactly.
+    is the key order of ``per_channel.raw.<field>``. Splitting the matrices this way
+    reproduces the stored per-set psp_mean and cv_mean exactly.
     """
     per_channel = row.get("per_channel") or {}
     names = list((per_channel.get("raw") or {}).get(per_channel_field) or {})
@@ -377,9 +368,8 @@ def _smooth(values: np.ndarray, window: int) -> np.ndarray:
 def _bundle(x, ys, colour: str = "#c8d0d8", width: float = 0.5, opacity: float = 0.45):
     """Every run as one trace, the runs separated by a None in the data.
 
-    Plotly slows to a crawl somewhere past a thousand traces, and a cohort of 200 drawn a
-    line at a time reaches that on one panel. No hover: a line inside a grey mass cannot be
-    pointed at, and a name per sample doubles the file.
+    One trace rather than one per run, since Plotly slows past a thousand traces. No hover: a
+    line inside a grey mass cannot be pointed at.
     """
     xs: list = []
     values: list = []
@@ -420,9 +410,7 @@ def build_window_grid(
     """Metric x channel-set grid over time: every run pale, the cohort's band and median over.
 
     Rows are metrics and columns are channel sets, sharing the y axis along a row so the three
-    sets are read against each other. Only the short channels degrading is a coupling story
-    and the long ones going with them is a movement story, and nothing else in the report
-    separates the two.
+    sets are read against each other.
 
     ``highlight`` names runs that keep a line of their own, one colour each, the same colour
     in every cell.
@@ -516,18 +504,14 @@ def build_condition_timeline(
 ) -> "go.Figure | None":
     """One run's windowed metrics over time, the conditions shaded behind them.
 
-    The cohort's :func:`build_window_grid` splits the channel sets into columns because it
-    is drawing many runs; a subject page draws one, so the sets share a panel and the columns
-    are spent on nothing. Long and short only: ``all`` is a blend of the two and lands
-    between them, a third line for no third answer.
+    The channel sets share a panel, where the cohort's :func:`build_window_grid` gives each a
+    column. Long and short only: ``all`` is a blend of the two and lands between them.
 
-    Smoothed over :data:`SMOOTH_S` and sampled at that step for the reason recorded there,
-    which also takes a 390-window run down to 65 points a line.
+    Smoothed over :data:`SMOOTH_S` and sampled at that step.
 
-    Colours come from the run report rather than from ``_SET_COLOURS``. That palette puts the
-    long channels on the blue ``_utils.HBR_COLOR`` uses, so a long-channel line here and an
-    HbR trace one click away would be the same blue; ``LONG_COLOR`` and ``SHORT_COLOR`` are
-    the separation split every raw-level view already wears.
+    Colours come from the run report rather than from ``_SET_COLOURS``, whose long-channel
+    blue is the one ``_utils.HBR_COLOR`` uses; ``LONG_COLOR`` and ``SHORT_COLOR`` are the
+    separation split every raw-level view already wears.
     """
     picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
     if "gvtd" in metrics:
@@ -558,7 +542,7 @@ def build_condition_timeline(
     for name, t0, t1 in windows:
         fig.add_vrect(x0=t0, x1=t1, fillcolor=_rgba(colours[name], 0.10), line_width=0,
                       layer="below", row="all", col=1)
-        # named once, on the top panel: a label per panel is the same word four times
+        # named once, on the top panel
         fig.add_annotation(x=(t0 + t1) / 2, y=1.0, yref="y domain", text=name,
                            showarrow=False, yanchor="bottom", row=1, col=1,
                            font=dict(size=9, color=colours[name]))
@@ -610,8 +594,7 @@ def build_condition_panels(
 ) -> "go.Figure | None":
     """One panel per metric: x is the condition, one line per run, the median over them.
 
-    The windows collapsed into the blocks the run was designed around, which is the form the
-    question takes: did this run get worse where everyone got worse, or on its own.
+    The windows collapsed into the blocks the run was designed around.
     """
     conditions = condition_names(rows)
     if len(conditions) < 2:
@@ -674,7 +657,7 @@ def _condition_heatmap(panels: "list[tuple[str, np.ndarray]]", conditions: list[
 
     Two pictures are this one with a different y axis: runs against conditions over a cohort,
     and channels against conditions inside one run. Sharing the renderer is what keeps them
-    reading the same way, since a reader who learned the colour on one meets it on the other.
+    reading the same way.
 
     The y labels sit on the left edge only. The panels share the axis, and repeating the
     names over every panel's cells makes this unreadable.
@@ -772,9 +755,9 @@ def build_channel_condition_matrix(by_condition: dict) -> "go.Figure | None":
     """channel x condition for one run, the panels and order of ``build_condition_panels``.
 
     The cohort's matrix asks which *run* moved in a condition; a subject has one run per
-    page, so the same question there is which *channel* moved, and the answer is the only one
-    a group page cannot give. The panel list is derived from ``_CONDITION_METRICS`` rather
-    than written again, so the two cannot name different metrics under the same heading.
+    page, so the same question there is which *channel* moved. The panel list is derived
+    from ``_CONDITION_METRICS`` rather than written again, so the two cannot name different
+    metrics under the same heading.
 
     Channels are ordered by how far they move across conditions on the first panel, worst
     first, and every panel keeps that order so one row reads across all of them.

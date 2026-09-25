@@ -51,9 +51,8 @@ def _section(name: str, data: dict[str, Any]) -> str:
 def _config_section(config: Any) -> dict[str, Any]:
     """Scalar fields of a config dataclass, minus what [execution] already carries.
 
-    Reading the config rather than the CLI args is what makes the record true: values
-    supplied by --config TOML never appear in argv, so an args-derived record would
-    show them as absent. Iterating fields also means new config options are recorded
+    Read off the config rather than the CLI args, since values supplied by --config TOML
+    never appear in argv. Iterating fields also means new config options are recorded
     without touching this file.
     """
     from dataclasses import fields

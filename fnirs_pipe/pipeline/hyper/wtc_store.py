@@ -1,9 +1,7 @@
 """Save the WTC time-frequency maps to disk, and re-average a saved one over a new band.
 
-The band mean written beside the archive is the cheap half of the calculation: the wavelet
-transform costs minutes per dyad, the averaging costs milliseconds. Keeping only the mean
-therefore made "would the result hold over 0.05 to 0.20 Hz?" a question that had to be
-answered by recomputing everything. The maps saved here answer it offline.
+The band mean written beside the archive is the cheap half of the calculation, so the maps
+saved here let a new band be averaged offline, without a new wavelet transform.
 """
 
 from __future__ import annotations
@@ -42,12 +40,11 @@ def _restore_key(key: str) -> tuple[str, str, "str | tuple[str, str]"]:
 def save_wtc(result: WTCResult, path: Path) -> Path:
     """Write every pair's coherence map, its cone of influence and the axes to one npz.
 
-    Stored as float32, which is what the maps already are: a coherence is bounded in [0, 1]
-    and nothing downstream reads more than three decimals of it.
+    Stored as float32, which is what the maps already are.
 
     The relative phase is stored beside each map when the pair carries one, so the arrows can
-    be redrawn from a saved run. A file written before phase existed simply has none, and
-    :func:`load_wtc` gives those pairs a phase of None.
+    be redrawn from a saved run. A pair stored without one gets a phase of None from
+    :func:`load_wtc`.
     """
     arrays: dict[str, np.ndarray] = {
         "freqs": np.asarray(result.freqs, dtype=np.float32),
@@ -101,7 +98,7 @@ def save_null_levels(levels: dict, path: Path) -> Path:
 
     Tiny beside the maps: one row per pair, not one map per pair, so it is written whether or
     not ``--wtc-save-maps`` was asked for. The report needs it to draw arrows against the
-    null, and re-running the null to recover it costs hours.
+    null.
     """
     arrays = {_flatten_key(sub1, sub2, label): np.asarray(level, dtype=np.float32)
               for (sub1, sub2, label), level in levels.items()}
@@ -217,7 +214,7 @@ def reband_tree(
     """Re-average every saved map under output_dir, writing one TSV beside each npz.
 
     The new tables are named after the band so they sit next to the original without
-    overwriting it, which is the point: the comparison is between them.
+    overwriting it.
 
     An archive carrying a ``chromo-`` entity gets its ``chromophore`` column back, so the
     re-banded table has the shape ``fnirs-hyper`` writes.
@@ -227,8 +224,7 @@ def reband_tree(
     written: list[Path] = []
     for npz_path in sorted(output_dir.rglob("*_stat-wtc_relmat.npz")):
         entities = parse_path(npz_path.name)
-        # the null levels sit under the same entities but hold one row per pair, not a map;
-        # without this they would be opened, found to have no map in them, and warned about
+        # the null levels sit under the same entities but hold one row per pair, not a map
         if entities.get("desc") == "level":
             continue
         try:

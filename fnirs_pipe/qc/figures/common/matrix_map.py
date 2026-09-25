@@ -19,9 +19,7 @@ import plotly.graph_objects as go
 CORRELATION_SCALE = "RdBu_r"
 COHERENCE_SCALE = "viridis"
 
-# A cell no value was computed for: grey, because it is not a value and no point on the
-# scale should be able to stand for it. Light enough not to read as a value of its own, and
-# still clear of the palest end of either scale, which is very nearly white.
+# A cell no value was computed for: grey, off both scales and clear of their near-white ends.
 BLANK_CELL = "#d5d5d5"
 
 
@@ -72,16 +70,12 @@ def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
 
       a cell at .69 -> white text;  the same number at .12 -> black
 
-    **Every cell gets its number.** A fixed colour scale is what lets two panels be compared
-    by eye, and the cost is that a matrix whose values all sit near 0.25 renders as one flat
-    square; the printed value is what makes such a matrix readable at all.
+    **Every cell gets its number**, so a matrix on a fixed scale whose values sit close
+    together stays readable.
 
-    The ink is chosen from **the cell's own colour** and not from its value: a sequential
-    scale is pale at its low end and dark at its high one while a diverging one is dark at
-    both ends and pale in the middle, so any rule written against the value serves one of
-    them and fails the other. Asking the scale and taking the luminance serves both, and any
-    scale added later. Two text traces rather than one, because a heatmap takes a single
-    ``textfont`` for the whole grid and that is the one thing this needs per cell.
+    The ink is chosen from **the cell's own colour** and not from its value, so one rule
+    serves sequential and diverging scales alike. Two text traces rather than one, because a
+    heatmap takes a single ``textfont`` for the whole grid.
     """
     n = max(len(row_labels), len(col_labels), 1)
     size = float(np.clip(150.0 / n, 5.0, 14.0))

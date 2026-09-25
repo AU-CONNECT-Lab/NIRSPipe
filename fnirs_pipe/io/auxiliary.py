@@ -41,8 +41,7 @@ AUX_SUFFIX = "timeseries"
 # also goes in the sidecar.
 TIME_COLUMN = "time"
 
-# Six significant digits: below the resolution of the inertial and physiological sensors
-# that populate an aux group, and appreciably smaller on disk than full repr precision.
+# six significant digits, below the resolution of the sensors an aux group carries
 _FLOAT_FORMAT = "%.6g"
 
 
@@ -51,8 +50,7 @@ _FLOAT_FORMAT = "%.6g"
 def _decode(value) -> str:
     """SNIRF metadata strings arrive as bytes, 0-d arrays or 1-element arrays.
 
-    NIRx writes an aux channel's `name` as an HDF5 scalar; the reader in mne-nirs indexes it
-    as `np.array(key)[0]` and raises IndexError on every file from that device.
+    NIRx writes an aux channel's `name` as an HDF5 scalar.
     """
     array = np.asarray(value)
     item = array.item() if array.ndim == 0 else array.ravel()[0]
@@ -66,8 +64,7 @@ def read_aux_snirf(path: Path | str) -> tuple[dict[str, np.ndarray], dict[str, n
     Each channel keeps its own time base because the format permits them to differ; callers
     that need one grid go through `resample_to_grid`.
 
-    A `dataTimeSeries` of shape (T, 1) is squeezed to (T,). The spec allows it and the helper
-    in mne-nirs does not, which is the second of the two reasons that helper fails here.
+    A `dataTimeSeries` of shape (T, 1), which the spec allows, is squeezed to (T,).
     """
     import h5py
 
@@ -111,9 +108,8 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
     ``t_dst`` is the finer grid there is nothing to fold and only the interpolation happens.
 
     The filter treats ``t_src`` as uniform while the interpolation uses the timestamps as
-    recorded. That split is deliberate: sampling jitter is normally far too small to affect
-    a filter's response, and far too large to ignore when it accumulates over a long
-    recording into a real offset at the end.
+    recorded: jitter too small to move a filter's response still accumulates into a real
+    offset over a long recording.
 
     Parameters
     ----------
@@ -177,8 +173,7 @@ def write_aux_window(
     starting at the summed length of those before it, which is how `mne.concatenate_raws`
     joins the segments the combined output is made of.
 
-    Aux keeps the rate it was recorded at. Resampling is a postprocessing decision and
-    `resample_to_grid` is where it belongs.
+    Aux keeps the rate it was recorded at; `resample_to_grid` resamples it downstream.
 
         source 0 to 600 s at 100 Hz, windows [(100, 400)]
             -> one channel of 30001 samples stamped 0 to 300 s
@@ -261,9 +256,7 @@ def write_aux_table(
     """Extract a recording's aux channels into a gzipped TSV, at the rate they were recorded.
 
     Returns the table and the facts about it a sidecar should carry, or None when the file
-    has no aux group. The table is deliberately not resampled: the rate it would be
-    resampled to is a postprocessing decision, and baking it in here would make the file
-    valid for exactly one downstream configuration.
+    has no aux group. The table is not resampled, so it serves any downstream rate.
     """
     times, values, units = read_aux_snirf(source_path)
     if not values:

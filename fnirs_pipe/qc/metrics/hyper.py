@@ -1,6 +1,6 @@
 """Dyad-level quality metrics: the shared screening grid, and the scalars a record holds.
 
-Nothing here imports ``qc.figures``. What stayed there is figure data rather than a measured
+Nothing here imports ``qc.figures``. What lives there is figure data rather than a measured
 number: ``motion_series`` builds carpet z-scores, ``head_geometry`` projects optodes.
 """
 
@@ -24,11 +24,9 @@ NULL_ALPHA_PCT = 95.0
 def sci_of(sqm_data: dict, sid: str) -> dict:
     """The per-channel SCI a dyad page prints, for one member.
 
-    The **windowed** estimate, which is the one this project reads: a drift shared by both
-    wavelengths lifts the whole-run number, and the two can disagree about which channel
-    coupled better. The whole-run scores stand in only for a record written before the
-    windowed pass existed, so an old tree degrades to the number it has rather than to an
-    empty grid.
+    The **windowed** estimate, since a drift shared by both wavelengths lifts the whole-run
+    number. The whole-run scores stand in only for a record written before the windowed pass
+    existed, so an old tree degrades to the number it has rather than to an empty grid.
     """
     member = sqm_data.get(sid) or {}
     return member.get("sci_win_per_channel") or member.get("sci_per_channel") or {}
@@ -67,9 +65,8 @@ def _ch_kept_by_member(
     **The verdict, not a threshold on SCI.** These three colours are labelled good / mixed /
     bad on every panel that draws them, and "good" has one meaning in this package: the
     channel survived screening. Screening is `good_frac`, the share of 10 s windows in which
-    SCI and PSP both cleared their lines, so a channel can be dropped at an SCI of 0.96 and
-    kept at a lower one. Colouring by ``sci_threshold`` instead, which is what this did, put
-    a green channel under a rejected one and called both "good".
+    SCI and PSP both cleared their lines, so a channel can be dropped at a high SCI and kept
+    at a lower one; colouring by ``sci_threshold`` would call a rejected channel "good".
 
     ``sci_threshold`` stays the fallback and nothing else: a record with no rejection list at
     all is the one case with no verdict to draw, and an all-grey montage says less than the
@@ -106,11 +103,10 @@ def coupled_grid(
     carpet, the two head figures) then cannot disagree about which window was good.
 
     **Every pair, with the long ones named separately.** The carpet is a long-channel picture
-    because the dyad measures run on long channels, but a head draws the whole montage, and a
-    grid holding only the long set handed the short markers a NaN each: eight discs with no
-    colour and no meaning on it.
+    because the dyad measures run on long channels, but a head draws the whole montage, short
+    markers included.
 
-    Two things this does that a per-panel version kept getting wrong. The stored matrices are
+    Two alignments are made here. The stored matrices are
     on each member's **own** clock, so the window centres are shifted by that member's crop
     offset, and a dyad with unequal offsets would otherwise compare window *k* of one against
     window *k* of the other. And they cover the **whole** recording while the dyad exists only
@@ -271,12 +267,11 @@ def screening_summary(coherence_df: "pd.DataFrame") -> dict:
 
     ::
 
-      -> {"windows": {"conversation": {"percentile": 100.0, "coherence": 0.224, ...}},
-          "above": ["conversation"], "alpha": 95.0}
+      -> {"windows": {"task": {"percentile": 100.0, "coherence": 0.224, ...}},
+          "above": ["task"], "alpha": 95.0}
 
-    ``mean_coherence`` stays in the record because a reader wants the measured value, but the
-    **percentile is what grades it**: a raw coherence has no meaning apart from the null it is
-    read against, so a fixed cutoff on it grades nothing.
+    ``mean_coherence`` stays in the record, but the **percentile is what grades it**: a raw
+    coherence has no meaning apart from the null it is read against.
     """
     if coherence_df is None or coherence_df.empty:
         return {}

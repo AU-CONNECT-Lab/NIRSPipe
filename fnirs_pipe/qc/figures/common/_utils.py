@@ -19,15 +19,11 @@ SHORT_COLOR = "#78b1f2"
 # channels the long and short ranges both leave out; see channel_table._neither_range_title
 UNCLASSIFIED_COLOR = "#95a5a6"
 
-# Tick and axis text. A figure that leaves this unset is coloured by whoever renders it:
-# the CLI gets plotly's template default (#2a3f5f) and the interface gets its own page
-# colour, so one recording's channel labels would come out two different colours in two views.
-# The interface keeps whatever a figure sets for itself, so setting it here settles both.
+# Tick and axis text, set explicitly so the CLI and the interface render it the same colour.
 AXIS_TEXT_COLOR = "#2a3f5f"
 
-# Welch segment length for the single-stage PSD panels. Short segments average more, so the
-# curve shows band structure instead of estimator noise. The multi-stage figure keeps MNE's
-# longer default instead: its cutoffs sit below 0.2 Hz and need the finer bin.
+# Welch segment length for the single-stage PSD panels; the multi-stage figure keeps MNE's
+# longer default, whose finer bin its sub-0.2 Hz cutoffs need.
 PSD_NFFT = 256
 
 # Qualitative palette for condition/trigger colors (cycled by index).
@@ -51,10 +47,8 @@ def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
       timeline_row_traces([{"onset": 10, "duration": 30}], 1, "#e74c3c", "video", True)
       -> [Bar spanning 10-40 s at y=1]
 
-    A block design carries the answer to "did this block run as long as it should have" in
-    ``duration``, which a tick at the onset throws away. Both shapes can appear on one row,
-    since a run can mix a timed block with an instant cue, so each event picks its own by
-    its duration and the two traces share a legend entry.
+    Both shapes can appear on one row, since a run can mix a timed block with an instant cue,
+    so each event picks its own by its duration and the two traces share a legend entry.
     """
     blocks = [e for e in events if float(e.get("duration") or 0) > _MIN_BLOCK_S]
     ticks  = [e for e in events if float(e.get("duration") or 0) <= _MIN_BLOCK_S]
@@ -82,9 +76,7 @@ def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
     return traces
 
 
-# Shared styling for the event timelines. The rows are named on the axis, so nothing in
-# them needs a legend entry to be identified, and the band is what keeps a mark tied to the
-# label beside it once a run has more than three or four conditions.
+# Shared styling for the event timelines; the alternating band ties a mark to its row label.
 TIMELINE_BAND_COLOR = "#f7f8fa"
 TIMELINE_ROW_PX = 36
 # a block narrower than this share of the recording has no room for its length printed
@@ -152,10 +144,8 @@ def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
     pass; ``_maxpool_xy`` keeps the timestamp each bin's peak was found at, so a peak sits
     where it happened rather than on a bin edge, and those fail the test and keep their x.
 
-    Values go out as float32, which is a display cast and not a measurement one: it is 7
-    significant figures, the relative error is 6e-8 whatever the magnitude, and across every
-    trace in a motion panel that is at most 5e-5 of a pixel. Timestamps stay float64, since
-    those are what the uniformity test and the peak positions are read off.
+    Values go out as float32, which is a display cast and not a measurement one. Timestamps
+    stay float64, since those are what the uniformity test and the peak positions are read off.
     """
     t = np.asarray(times, dtype=float)
     y = np.asarray(values, dtype=np.float32)
@@ -194,8 +184,7 @@ def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None) -
     """Shade and label the physiological bands on a PSD figure.
 
     One definition so the multi-stage PSD panel and the per-channel PSD mark the same bands
-    the same way: a reader comparing the two should not have to work out whether a stripe
-    means the same thing in both. ``rows`` is the subplot row count for a figure made with
+    the same way. ``rows`` is the subplot row count for a figure made with
     make_subplots, or None for a plain single-axis figure, which is the only difference
     between the two::
 
@@ -268,12 +257,9 @@ def head_outline(ax, xs, ys):
 def chunk_annotations(raw, chunk_duration: "float | None"):
     """A copy of ``raw`` with each long annotation cut into ``chunk_duration``-long trials.
 
-    A block design marks one 240 s annotation per condition. Nothing can average that: an
-    evoked response needs several trials of one length, and MNE's Epochs is a 3-D array, so
-    every trial has to be the same length. Cutting the block into equal pieces is what MNE
-    itself offers for this, as ``events_from_annotations(chunk_duration=...)``; doing it to
-    the annotations instead means every figure, the event timeline and the per-trial scoring
-    all see the same trials, without each of them growing a parameter.
+    MNE's Epochs is a 3-D array, so every trial has to be the same length, and a block design
+    marks one long annotation per block. Cutting the annotations rather than the events means
+    every figure, the event timeline and the per-trial scoring all see the same trials.
 
     A 240 s block chunked at 25 s -> 9 annotations of 25 s, and the 15 s that do not fill a
     chunk are dropped, which is the rule MNE applies. Annotations already shorter than a
@@ -313,8 +299,7 @@ def chunk_annotations(raw, chunk_duration: "float | None"):
 
 # ---- Optode geometry ----
 # Read off the channel locs and projected the way MNE flattens sensors, so an optode
-# lands in the same frame as the channel midpoints. Here rather than with the figures
-# that draw heads, because two of those modules need it and neither owns it.
+# lands in the same frame as the channel midpoints.
 
 def _topomap_project(xyz: np.ndarray, sphere: np.ndarray) -> np.ndarray:
     """Flatten 3-D points the way MNE flattens sensors for a topomap.

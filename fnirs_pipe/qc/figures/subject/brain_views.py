@@ -6,7 +6,6 @@ two panels of the combined figure read the same way.
 
 Three camera perspectives (frontal, left lateral, superior) assembled into a
 single base64 PNG (no Plotly wrapper, which avoids large go.Image JSON overhead).
-brain_viewer.py is intentionally not touched.
 """
 
 import base64
@@ -30,7 +29,7 @@ _GOOD_COLOR = "#27ae60"
 _MID_COLOR  = "#f39c12"
 _BAD_COLOR  = "#e74c3c"
 _NA_COLOR   = "#95a5a6"
-# red source / blue detector is the field convention, and matches the 2-D flat map;
+# red source / blue detector, matching the 2-D flat map;
 # it re-uses the quality colours, but optodes are dots and channels are lines
 _SRC_COLOR, _SRC_EDGE = "#e74c3c", "#922b21"
 _DET_COLOR, _DET_EDGE = "#2980b9", "#1a5276"

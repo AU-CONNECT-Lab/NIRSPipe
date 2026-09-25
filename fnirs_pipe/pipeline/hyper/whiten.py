@@ -37,8 +37,8 @@ def ar_whiten_fixed(x: np.ndarray, order: int) -> "np.ndarray | None":
       a 3900 s trace at 10 Hz, order 100  ->  3900 s of residual, the first 10 s zeroed
 
     The filter runs from the first sample, so the first ``order`` samples are a startup
-    transient, measured at tens of times the residual's spread; they are set to zero rather
-    than dropped, since dropping them would move every later sample off the shared clock.
+    transient; they are set to zero rather than dropped, since dropping them would move every
+    later sample off the shared clock.
     None when the row cannot be fitted: non-finite, constant, or a singular system.
     """
     if not np.isfinite(x).all() or x.size <= order:
@@ -71,9 +71,9 @@ def whiten_raws(raws: dict, order_s: float, sep_bands=None) -> dict:
       {"sub-01": raw, "sub-02": raw}, 10.0  ->  the same two recordings, whitened at AR(100)
 
     Refuses a record shorter than four times the order, the floor the correlation's fit
-    uses, rather than lowering the order for it: a lower order for one member would undo the
-    point of sharing one. A channel that cannot be fitted is marked bad on the copy, which
-    drops it from the coherence the way a rejected channel is dropped.
+    uses, rather than lowering the order for it, since the order is shared. A channel that
+    cannot be fitted is marked bad on the copy, which drops it from the coherence the way a
+    rejected channel is dropped.
     """
     order = whiten_order(raws, order_s)
     if order < 1:

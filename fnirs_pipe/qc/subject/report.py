@@ -167,7 +167,7 @@ def _epoch_window_mismatch(raw_haemo: mne.io.Raw, epoch_tmax: float) -> "float |
     epoch figures describe the first ``epoch_tmax`` seconds of a block and nothing says so.
     Returns the median duration when it exceeds the window, else None.
 
-    A 240 s conversation block against the 25 s fallback -> 240.0; a 5 s trial -> None.
+    A 240 s task block against the 25 s fallback -> 240.0; a 5 s trial -> None.
     """
     durations = [float(a["duration"]) for a in raw_haemo.annotations
                  if not str(a["description"]).upper().startswith("BAD")
@@ -285,10 +285,8 @@ def _section_sci(
     than recomputed, so the panel and the stored numbers cannot disagree. An absent section
     leaves the per-window half of the panel out and the per-channel half intact.
 
-    Every view in the panel is the uncorrected optical density. SCI and PSP measure optode
-    coupling, which is a property of how the cap sat rather than of anything the pipeline
-    does, so the stage that answers "was this channel worth keeping" is the one before the
-    correction.
+    Every view in the panel is the uncorrected optical density, the stage coupling is judged
+    on.
     """
     def _series(key: str) -> "np.ndarray | None":
         value = (windowed or {}).get(key)
@@ -414,16 +412,14 @@ def _motion_detail_figures(
 
     Built here and saved by :func:`_section_motion_detail`, because a per-condition page
     shows the same figures narrowed rather than remeasured: the GVTD row on each of them is
-    filtered and thresholded over the whole run, so rebuilding on a cut would give every
-    condition a trace of its own that no other condition could be read against.
+    filtered and thresholded over the whole run.
     """
     if raw_od_before is None or raw_od_after is None:
         return []
     shared_chs = [c for c in raw_od_after.ch_names if c in raw_od_before.ch_names]
 
     # the same blocks the carpet panel drew, so the two figures never name sets differently.
-    # Required rather than defaulted: gvtd_channel_blocks already collapses a montage with no
-    # long channels to one "all" block, and a fallback here would be the forbidden union
+    # Required, not defaulted: gvtd_channel_blocks already handles a montage with no long channels
     members = [(name, names, set(names)) for name, names in gvtd_blocks]
 
     def set_of(ch: str) -> "tuple[str, list[str]]":
@@ -468,10 +464,9 @@ def _section_motion_detail(
     once and carries each condition's window as a table the page picks from by URL fragment,
     rather than once per condition as copies identical but for a few axis numbers.
 
-    The y axes follow the window, which the carpet's do not: its colour scale is one scale
-    across conditions by design, while these rows are read for the shape of a trace and a
-    quiet condition under the run's scale is a flat line. ``rescale_y_to_window`` says why at
-    length; ``window_view_spec`` is the same measurement, handed over rather than applied.
+    The y axes follow the window, which the carpet's colour scale does not;
+    ``window_view_spec`` is the same measurement as ``rescale_y_to_window``, handed over rather
+    than applied.
 
     ``fig_name`` is the run's namer; the channel goes in as an entity, so the raw viewer
     and this report spell these the same way.
@@ -694,14 +689,10 @@ def _section_haemo(
     cropped input because the order matters and only this function knows it. The correlation
     panels and the spectra can be cut and then measured: a correlation is over whatever
     samples it gets, and ``compute_psd`` is Welch, which segments and tapers but does not
-    band-pass. The stage comparison cannot, because it band-limits every stage to the
-    analysis passband before subtracting them, deliberately (see
-    :func:`~fnirs_pipe.qc.metrics.comparable_stage_metrics`), and at a 0.01 Hz high-pass
-    that FIR runs about 330 s, longer than a 300 s condition. Cut first and it is filtered
-    against its own two edges.
-
-    So the stages are band-limited over the whole run and cut afterwards, the order the
-    pipeline itself uses, and ``comparable_stage_metrics`` is then told not to filter again.
+    band-pass. The stage comparison band-limits every stage (see
+    :func:`~fnirs_pipe.qc.metrics.comparable_stage_metrics`), so the stages are filtered over
+    the whole run and cut afterwards, and ``comparable_stage_metrics`` is then told not to
+    filter again.
 
     ``psd`` False leaves the spectrum out and keeps the rest; only a caller holding both
     spans can tell whether the cut clears mne's ``n_fft``. See :func:`_cropped_sections`.
@@ -759,9 +750,7 @@ def _section_haemo(
             """The stage measured where the verdict lives, or unchanged with nothing to drop.
 
             Long channels only, so these panels answer the question the metrics table above
-            them answers. A short channel is a regressor rather than a measurement, and an
-            average over both moved the correlation that reads as the verdict: on a montage
-            with eight short channels it sat at -0.18 where the long channels alone gave -0.50.
+            them answers.
             """
             names, _ = long_short_channels(raw, sep_bands)
             if not names or len(names) == len(raw.ch_names):
@@ -771,8 +760,7 @@ def _section_haemo(
         with _guard("Denoising stage metrics", errors, subject):
             banded_here = crop is not None and (l_freq is not None or h_freq is not None)
             if banded_here:
-                # filter over the whole run, cut after: the reverse gives a 330 s FIR two
-                # edges of its own on a 300 s condition
+                # filter over the whole run, cut after
                 staged = [(label, _cut(_long_only(raw).copy()
                                        .filter(l_freq, h_freq, verbose=False)))
                           for label, raw in stages]
@@ -1262,19 +1250,14 @@ def _section_sqm(
         post_key = "motion_post_long" if raw_key == "raw_long" else "motion_post"
         for k, v in (record.get(post_key) or {}).items():
             sqm[f"{k}_post"] = v
-        # The denoised side of the haemoglobin metrics. `errts` rather than `filtered`: the
-        # bandpass alone moves gcor and the band powers for reasons that are the filter's,
-        # not the recording's, while the regression is the step whose effect is worth a
-        # number. A run that regressed nothing has no `errts` and prints single values.
+        # The denoised side of the haemoglobin metrics, from `errts`; a run that regressed
+        # nothing prints single values.
         errts_key = "errts_long" if record.get("errts_long") else "errts"
         for k, v in (record.get(errts_key) or {}).items():
             sqm[f"{k}_errts"] = v
         # ---- GCOR either side of the confound regression ----
-        # `filtered` rather than `preproc` on the before side: the bandpass alone raises
-        # GCOR, so the regression is the only step here whose effect is worth a number.
-        # Both sides come off the record's own sections, so this pair is the same channel
-        # set as every row beside it: a number measured over every channel, sitting beside
-        # rows that are long, would disagree with them about what the regression did.
+        # `filtered` on the before side, so the pair isolates the regression. Both sides come
+        # off the record's own sections, the same channel set as every row beside it.
         filtered_key = "filtered_long" if record.get("filtered_long") else "filtered"
         for key in ("gcor_hbo", "gcor_hbr"):
             pre = (record.get(filtered_key) or {}).get(key)
@@ -1717,11 +1700,8 @@ def build_subject_report(
     raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
     raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
     raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
-    # the haemo chain as it exists on disk, in the order it was written. The PSD figure used
-    # to re-filter `raw_haemo` in memory to invent its "after" row, which showed the filter
-    # rather than the run; a stage missing here simply does not get a line. desc-errts earns
-    # its row by being the only detrend when no bandpass ran, and by showing the regression
-    # stayed out of the analysis band when one did.
+    # the haemo chain as it exists on disk, in the order it was written; a stage missing here
+    # gets no line
     psd_stages        = [
         (f"desc-{desc}", raw)
         for desc in ("filtered", "resampled", "errts")
@@ -2084,9 +2064,7 @@ def _figure_leaks(page: dict, label_slug: str) -> "list[str]":
     """Whole-run figures that survived onto a condition page, by value rather than by name.
 
     `_blanked` empties the section variables it is given, so a figure passed to the template
-    some other way slips through it. That is not a hypothetical: `denoise_carpet_path` was
-    a loose keyword and appeared on every per-condition page. Checking the assembled values
-    catches the next one without anybody remembering to extend a list.
+    some other way slips through it; checking the assembled values catches it.
     """
     leaks = []
     for key, value in page.items():
@@ -2127,7 +2105,7 @@ def _cropped_sections(
     correlation over whatever samples it is given, and ``compute_psd`` is Welch, which
     segments and tapers but does not band-pass. So a cropped condition carries no filter
     edge that the whole run would not have had. A shorter span costs frequency resolution
-    (1/900 Hz against 1/3900 Hz here) and averages fewer Welch segments, which makes the
+    and averages fewer Welch segments, which makes the
     spectrum noisier and leaves it unbiased.
 
     Noisier up to a point. Below ``PSD_NFFT_CAP`` samples the cut lands on a coarser grid

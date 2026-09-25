@@ -54,10 +54,8 @@ def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
     """Layout for a single-panel PSD, with the physiological bands shaded.
 
-    ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, which is the point: with
-    constant edges a study of infants (cardiac near 2 Hz) would get a stripe drawn over the
-    adult band, and a reader checking whether a channel carries a pulse would look in the
-    wrong place. Passing None omits that band, and the colours and
+    ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, not constant edges.
+    Passing None omits that band, and the colours and
     frequencies both come from the same place the multi-stage PSD figure reads them from.
     """
     bands = physio_bands(cardiac, resp)
@@ -95,9 +93,7 @@ def sci_color(sci: float | None, threshold: float = SCI_PASS,
 
     ``rejected`` outranks SCI because the two are not the same question. Screening counts how
     many windows a channel was coupled in, so a channel whose whole-run SCI is 0.96 can still
-    be loose through most of a condition and be dropped. Colouring by SCI alone drew that
-    channel green on a page whose table called it BAD, which is the same class of defect as
-    colouring against a fixed 0.75: the picture and the verdict beside it disagreeing.
+    be loose through most of a condition and be dropped.
 
     Passing None keeps the SCI-only ladder, for the callers that have no verdict to hand.
     """
@@ -181,7 +177,6 @@ def build_ts_figure(
         layout=go.Layout(
             xaxis=dict(title="Time (s)", gridcolor="#eeeeee", zerolinecolor="#cccccc"),
             # one tick per trace, so the name sits on the trace instead of in a legend
-            # whose order is the reverse of the stacking and whose spacing is unrelated
             yaxis=dict(
                 tickmode="array",
                 tickvals=[i * 3 for i in range(n)],
@@ -215,13 +210,11 @@ def build_channel_figure(
     """One channel pair as up to three panels: HbO/HbR over time, its PSD, its epoch average.
 
     ``cardiac`` and ``resp`` are the run's own band edges, taken from the CLI, and shade the
-    PSD panel the way the multi-stage PSD figure shades its rows. Without them the panel is
-    a bare spectrum, and a reader judging whether a channel carries a pulse has to hold the
-    band edges in their head; passing None omits that band rather than guessing a default.
+    PSD panel the way the multi-stage PSD figure shades its rows; passing None omits that
+    band rather than guessing a default.
 
-    ``epoch=False`` returns None for the third panel. An epoch average is read for the shape
-    of a slow curve, and on an unfiltered stage that shape is buried under cardiac ripple, so
-    a caller with a denoised view of the same channel elsewhere asks for the first two only.
+    ``epoch=False`` returns None for the third panel, for a caller with a denoised view of
+    the same channel elsewhere.
     """
     hbo_name = f"{ch_pair} hbo"
     hbr_name = f"{ch_pair} hbr"
@@ -317,10 +310,8 @@ def build_channel_figure(
                     baseline=(epoch_tmin, 0),
                     preload=True, verbose=False,
                 )
-                # one panel per condition, HbO/HbR in their usual red and blue. A condition
-                # with one epoch is not an average: it is that block's own concentration
-                # trace, and drawing it under a heading that says "mean" invites it to be
-                # read as an evoked response. Same floor the per-trial panels use.
+                # one panel per condition, HbO/HbR in their usual red and blue; a condition
+                # with one epoch is not an average
                 panels = []
                 for cond in event_id:
                     try:
@@ -331,8 +322,7 @@ def build_channel_figure(
                         continue
                     panels.append((cond, ep_subset.get_data()))
                 if panels:
-                    # stacked, for the same reason the grand mean is: five conditions across
-                    # one short row leaves each a few centimetres of a slow curve
+                    # stacked, one row per condition, like the grand mean
                     n = len(panels)
                     epoch_fig = make_subplots(
                         rows=n, cols=1, shared_xaxes=True, vertical_spacing=0.06,
@@ -586,11 +576,10 @@ def _psd_groups(
 ) -> list[tuple[str, np.ndarray, dict]]:
     """Partition the PSD rows by source-detector separation, long first.
 
-    Short channels sit on a much shorter photon path, so their spectrum is systematically
-    above the long ones; pooling the two into a single mean hides both. The split is the
-    one every other raw-level view uses, read from ``long_short_channels`` so this figure
-    cannot disagree with the per-channel table or the quality heatmap about which channel
-    is which.
+    Short channels sit on a much shorter photon path, so the two get a mean each. The split
+    is the one every other raw-level view uses, read from ``long_short_channels`` so this
+    figure cannot disagree with the per-channel table or the quality heatmap about which
+    channel is which.
 
     e.g. 30 channels of which 6 are short ->
     [("Long channels", <24 rows>, ...), ("Short channels", <6 rows>, ...)]
@@ -736,10 +725,7 @@ def _trial_image_plot(
     )
     fig.add_trace(go.Heatmap(
         z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
-        # no zsmooth: it interpolates both axes, and adjacent rows are separate trials, in
-        # the pooled panel separate conditions, so blending them invents a gradient between
-        # things that are not neighbours. The time axis needs none at fNIRS sampling rates,
-        # ~300 samples across a 30 s window
+        # no zsmooth: it would blend adjacent rows, which are separate trials or conditions
         colorbar=dict(title="µM", len=0.7, y=0.62),
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
@@ -842,8 +828,8 @@ def _trial_image_by_span(
     record assigns everything else. Its epoch window is free to run past the edge of the
     condition and usually does, since the response outlasts the event.
 
-    Example: blocks ``("talk", 0, 120)`` and ``("listen", 120, 240)`` with six 8 s trials
-    inside each give ``{"talk": (6, n_times), "listen": (6, n_times)}``.
+    Example: blocks ``("task", 0, 120)`` and ``("rest", 120, 240)`` with six 8 s trials
+    inside each give ``{"task": (6, n_times), "rest": (6, n_times)}``.
 
     Returns None for a recording with nothing to epoch, and omits a window that caught no
     trial rather than giving it an empty entry.
@@ -852,7 +838,7 @@ def _trial_image_by_span(
     on ``t0`` is strict. On a blocked event-related design the block is itself an event,
     sitting at ``t0``, so counting it would put a row describing the whole block beside the
     trials inside it. A genuine trial starting in the same sample as its block is lost with
-    it, and that is the cheaper error: the two are indistinguishable from the annotations.
+    it: the two are indistinguishable from the annotations.
     """
     if not picks or not spans:
         return None
@@ -900,10 +886,8 @@ def _condition_trial_images(
 ) -> "dict[str, list[go.Figure]] | None":
     """One figure per condition window, on a colour scale shared across the windows.
 
-    Shared because the panels are read against each other: they land on separate pages, one
-    per condition, and a scale taken per page would make two conditions with different
-    responses look alike. The run's own trial image shares a scale across its conditions for
-    the same reason; this is that figure split by window instead of by event name.
+    Shared because the panels land on separate pages, one per condition, and are read against
+    each other. This is the run's own trial image split by window instead of by event name.
     """
     res = _trial_image_by_span(raw_haemo, picks, spans, epoch_tmin, epoch_tmax)
     if res is None:
@@ -994,11 +978,8 @@ def build_epoch_preview_figure(
 ) -> go.Figure | None:
     """Grand mean per condition: every long channel averaged, with the short ones dotted.
 
-    The short trace is the reason this figure can be trusted or not. Short channels are too
-    shallow to reach cortex, so when the dotted line rises with the solid one the response is
-    scalp haemodynamics, not activation, and the solid line means nothing on its own. They
-    are drawn rather than dropped: dropping them makes the figure look identical and quietly
-    removes the only thing that says whether to believe it.
+    The short channels are drawn rather than dropped, as the scalp reference for the
+    long-channel mean.
 
     ``sep_bands`` is this run's separations from :func:`separation_bands`; None takes the
     package defaults.
@@ -1046,7 +1027,7 @@ def build_epoch_preview_figure(
                 traces.append((sp, color, f"{chromo.upper()} short (scalp)", "dot"))
 
         # one panel per condition, so HbO and HbR can keep the red/blue they carry in every
-        # other panel; colouring by condition instead needed a second cue for chromophore
+        # other panel
         panels = []
         for cond in event_id:
             try:
@@ -1059,9 +1040,7 @@ def build_epoch_preview_figure(
         if not panels:
             return None
 
-        # stacked, one row per condition, rather than side by side. Five conditions across
-        # one 300 px row left each panel a few centimetres wide, and the thing this figure
-        # is read for is the shape of a slow haemodynamic curve
+        # stacked, one row per condition, rather than side by side
         n = len(panels)
         scaling = _scale_setting_conditions(panels)
         titles = [f"{c} (n={e.shape[0]})" +
@@ -1071,9 +1050,7 @@ def build_epoch_preview_figure(
             rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.9 / n),
             subplot_titles=titles,
         )
-        # the task's own length, so the curve can be read against when the task stopped
-        # rather than against the onset alone. Per condition, not one median over all of
-        # them: a run of 300 s and 900 s blocks shaded every panel with the same 900 s
+        # the task's own length, per condition, so the curve reads against when it stopped
         by_cond: "dict[str, list[float]]" = {}
         for m in markers:
             if float(m["duration"]) > 0:
@@ -1092,8 +1069,7 @@ def build_epoch_preview_figure(
                     showlegend=(i == 1),
                     line=dict(color=color, width=2, dash=dash),
                 ), row=i, col=1)
-            # clamped to the window: an unclamped shape drives the autorange, and a 900 s
-            # block left the -5 to 25 s traces in the leftmost 3% of the panel
+            # clamped to the window: an unclamped shape drives the autorange
             block = float(np.median(by_cond.get(_cond, []))) if by_cond.get(_cond) else 0.0
             if block > 0:
                 fig.add_vrect(x0=0, x1=min(block, epoch_tmax), line_width=0,
@@ -1102,8 +1078,7 @@ def build_epoch_preview_figure(
             fig.add_hline(y=0, line=dict(color="#cccccc", width=1), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                           row=i, col=1)
-            # one y scale for every row: without it each condition autoscales and the panel
-            # stops being a comparison
+            # one y scale for every row, or each condition autoscales to itself
             fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
                              row=i, col=1,
                              **({"range": yrange} if i == 1 else {"matches": "y"}))
@@ -1131,13 +1106,11 @@ def _scale_setting_conditions(panels):
     """Conditions allowed to set the shared y scale, which is not every condition.
 
     A stray trigger leaves a condition of one or two trials whose average is single-trial
-    noise; on one recording it ran three times the amplitude of the real conditions and
-    flattened all of them onto its scale. Below ``_SCALE_MIN_TRIALS`` a condition is still
-    drawn, just not consulted for the range.
+    noise. Below ``_SCALE_MIN_TRIALS`` a condition is still drawn, just not consulted for the
+    range.
 
     e.g. panels of 30, 30 and 2 trials -> the two 30-trial ones. When nothing clears the bar
-    (a block design with one block per condition) every panel is kept, since a figure with
-    no scale at all is worse than one set by few trials.
+    (a block design with one block per condition) every panel is kept.
     """
     kept = [p for p in panels if p[1].shape[0] >= _SCALE_MIN_TRIALS]
     return kept or list(panels)

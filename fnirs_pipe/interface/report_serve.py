@@ -1,11 +1,8 @@
 """Serving generated QC reports back into the GUI as an inline preview.
 
-An `html.Iframe(srcDoc=...)` would be enough for the reports the QC writer makes
-self-contained, and wrong for the cohort ones: `desc-subjects_report.html` is an iframe shell whose
-panels are sibling files, and a `srcdoc` document has no base URL for a relative `src` to
-resolve against, so every panel inside it would come up blank.
-
-So the reports are served as files. The route is keyed by an opaque token rather than by the
+Reports are served as files, not through `srcDoc`: `desc-subjects_report.html` is an iframe
+shell whose panels are sibling files, and a `srcdoc` document has no base URL to resolve
+them against. The route is keyed by an opaque token rather than by the
 path, which keeps Windows drive letters out of URLs and means the page can only ever ask for
 a directory some run actually produced. Flask's `send_from_directory` refuses to escape the
 root it is given, so the token cannot be used to walk the filesystem either.
@@ -21,8 +18,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("interface.report_serve")
 
 # token -> directory a completed run wrote into. Populated by the run callbacks, read by the
-# Flask route below; both live in this one process, which is what makes a module-level
-# registry the right shape rather than a shortcut.
+# Flask route below, both in this one process.
 _ROOTS: dict[str, Path] = {}
 
 

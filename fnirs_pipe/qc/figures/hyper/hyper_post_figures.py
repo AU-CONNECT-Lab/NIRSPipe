@@ -24,9 +24,8 @@ def _log_freq_ticks(freqs: np.ndarray) -> "tuple[list[float], list[float]]":
     e.g. a 0.004-0.2 Hz axis gives ([0.01, 0.1], [0.005 ... 0.09]): the decades carry the
     labels and every intermediate digit gets a bare tick.
 
-    Named rather than left to a locator, which over a range of this width labels all nine
-    digits of every decade: 0.008 and 0.009 then sit a fifth as far apart as 0.1 and 0.2 and
-    the text collides. One list drives every figure in the report, so two of them cannot
+    Named rather than left to a locator, whose labels collide over a range of this width.
+    One list drives every figure in the report, so two of them cannot
     disagree about what a tick means.
     """
     lo, hi = float(np.min(freqs)), float(np.max(freqs))
@@ -59,8 +58,7 @@ def _freq_label(f: float, superscript: str = "html") -> str:
 def _apply_log_freq_axis(ax, freqs: np.ndarray) -> None:
     """Put :func:`_log_freq_ticks` on an axis, low frequency at the top.
 
-    Reversed so frequency increases downward, which is how the wavelet coherence figures in
-    the literature are drawn.
+    Reversed so frequency increases downward.
     """
     major, minor = _log_freq_ticks(freqs)
     ax.set_yscale("log")
@@ -88,9 +86,7 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
 
       a map carrying the phase-scrambled null's level -> "the phase-scrambled null"
 
-    Four sources and four wordings, because three of them are tests and the last is not: a
-    caption reading "the Monte Carlo level" over arrows drawn at a flat display threshold
-    would be claiming a test nobody ran.
+    Four sources and four wordings, because three of them are tests and the last is not.
     """
     if wtc_data.get("sig") is None:
         return f"{arrow_min:g}"
@@ -106,12 +102,10 @@ def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHE
 
       a 51 x 3962 map -> a boolean of the same shape, usually a few percent True
 
-    Two conditions, and both matter. **Inside the cone**, because a coefficient built against
-    the padding has a phase built against the padding too, and without the mask those
-    arrows draw at the same weight as the rest. **Above the level**, the Monte Carlo one when
+    **Inside the cone**, because a coefficient built against the padding has a phase built
+    against the padding too. **Above the level**, the Monte Carlo one when
     ``--wtc-significance`` produced it and ``arrow_min`` otherwise, because the relative
-    phase of two uncorrelated series is a uniformly random direction and a field of those
-    reads as structure to the eye.
+    phase of two uncorrelated series is a uniformly random direction.
     """
     inside = freqs[:, None] >= freq_coi[None, :]
     if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
@@ -144,24 +138,17 @@ def build_wtc_channel(
     drawn on top of the map:
 
     - the **phase arrows**, thinned onto a coarse grid by :func:`_phase_arrows`. Right is in
-      phase, left antiphase, up means the first member leads by a quarter cycle. A quiver
-      field is the half of a coherence map that says which brain led. Plotly draws one too,
-      through ``figure_factory.create_quiver``, so the arrows are not what keeps this panel a
-      PNG; its arrowheads are laid out in data coordinates and would skew on a log axis.
+      phase, left antiphase, up means the first member leads by a quarter cycle. Plotly's
+      ``figure_factory.create_quiver`` lays its arrowheads out in data coordinates, which
+      would skew on a log axis.
     - the region **outside the cone of influence**, washed out rather than only bounded by
-      the dashed line. Those cells are coefficients padded against the record's edges, near 1
-      whatever the data did, so a reader who takes them for signal reads the ends of every
-      recording as strongly coupled.
+      the dashed line: those cells are coefficients padded against the record's edges.
     - the **significance contour**, where coherence beats the Monte Carlo level, when one was
       computed.
     - one **span bar per block** above the axes with a line at each end of it, and one
-      legend entry per condition in the top right. A block design repeats a condition, so a
-      label on every bar would print the same word once per block. The bar runs the block's
-      actual length, so the gaps between blocks are visible:
-      a recording is continuous and its untasked stretches are data like any other, which a
-      set of onset lines alone would make look like block boundaries. Shading each block on
-      the map would put it under an opaque heatmap where nothing shows; outside the axes the
-      span cannot be covered.
+      legend entry per condition in the top right. The bar runs the block's actual length, so
+      the gaps between blocks are visible, and sits outside the axes, where the heatmap cannot
+      cover it.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -186,12 +173,8 @@ def build_wtc_channel(
         ax.contour(times, freqs, ratio, levels=[1.0], colors="black", linewidths=1.1,
                    zorder=4)
 
-    # one span bar per block above the axes, and a line at each end of it on the map itself.
-    # The bar says where the block is and the lines say where it starts and stops; without
-    # the closing line a reader inside the heatmap has to look up at the bar to find the end.
-    # A line is a claim about one moment, so an end past the right edge is dropped rather
-    # than drawn at the edge, the same rule the onset already followed. The bar is cut there
-    # instead, being about where the block sits rather than how long it is
+    # one span bar per block above the axes, and a line at each end of it on the map itself;
+    # an end past the right edge drops its line, as the onset does, and cuts the bar there
     drawn_conditions: dict[str, str] = {}
     for m in markers_list:
         onset, duration = float(m["onset"]), float(m["duration"])
@@ -219,8 +202,7 @@ def build_wtc_channel(
     ax.tick_params(labelsize=8)
 
     # ---- title left, condition legend right, both on the strip above the span bars ----
-    # A block design repeats a condition, and naming every bar printed "game1" eight times.
-    # One key in the corner names each colour once; the bars keep the colour and drop the text
+    # one key in the corner names each colour once; the bars keep the colour and drop the text
     legend_rows = 1
     if drawn_conditions:
         from matplotlib.lines import Line2D
@@ -234,15 +216,11 @@ def build_wtc_channel(
                   labelspacing=0.3, borderpad=0.0, borderaxespad=0.0)
     heading = f"{site_label}   {pair_label}".strip() if site_label else pair_label
     ax.set_title(heading, fontsize=10, loc="left", pad=20 + 10 * (legend_rows - 1))
-    # the live twin of this panel has no frame, and a framed map beside an unframed one
-    # reads as two different kinds of figure
+    # no frame, matching the live twin of this panel
     for spine in ax.spines.values():
         spine.set_visible(False)
     flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
-    # Two lines, and this is about the figure's width rather than about the wording: the
-    # crop on the way out takes the widest thing drawn, and on one line this caption is wider
-    # than the map and its colorbar together, which left the saved image with a sixth of its
-    # width in white to the right of the bar.
+    # two lines: on one, the caption is wider than the map and the crop pads it with white
     caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
                f"cycle,\ndrawn only where coherence clears "
                f"{_clears(wtc_data, arrow_min)}"
@@ -258,33 +236,24 @@ _INTERACTIVE_PLOT_H = 430
 
 # The cross panel's height, the same way. Two square panels side by side, so this is what
 # decides how large a square gets: the width is the page's, and the aspect constraint
-# letterboxes whatever the height does not use. Much lower and a matrix comes out small on a
-# wide monitor with a third of the panel blank to either side of it.
+# letterboxes whatever the height does not use.
 PANEL_HEIGHT = 720
 
-# Arrow length in pixels. The still's is a fifty-second of its axes, which on a report page
-# about 1600 px wide comes out near this; it is a pixel length here rather than a share of
-# the panel because an annotation's tail is offset in pixels.
+# Arrow length in pixels, since an annotation's tail is offset in pixels; near the still's.
 _INTERACTIVE_ARROW_PX = 23.0
 
 # Name every arrow carries, so the resize hook can find them among the figure's annotations
 # and a per-condition view can swap the whole set without disturbing the caption.
 _ARROW_NAME = "wtcarrow"
 
-# Wide and flat, and this is a layout number rather than a taste one. The page caps the
-# still at the height of the live ROI map under it, so on any monitor wide enough the aspect
-# alone decides how much of the column is left blank beside it: with the colorbar and labels
-# these 5 inches per inch come out near 3.1, which fills the width of a 1920 page at that
-# cap.
+# Wide and flat: the page caps the still at the live ROI map's height, so the aspect decides
+# how much of the column it fills.
 WTC_FIGSIZE = (15.0, 3.0)
 WTC_QUIVER_SCALE = 52.0
 
 # ---- why the live panel's lines are drawn about twice their matplotlib widths ----
-# The still's widths are in points and it is written at 300 dpi, so a 1.1 pt line lands as
-# 4.6 px in the file and, once the page has scaled that file to its own width, as about
-# 2.4 CSS px. Plotly is handed CSS pixels directly, so the same 1.1 draws half as heavy a
-# line. Every width below is the still's own, doubled, which is what makes the two panels
-# look like one pair rather than a drawing and a sketch of it.
+# The still's widths are points at 300 dpi, which the page renders about twice as heavy as the
+# same number in Plotly's CSS pixels; every width below is the still's own times this.
 _LIVE_LINE_SCALE = 2.2
 
 # Height from width, and arrow length from the plot area, on every draw and every resize.
@@ -303,8 +272,7 @@ def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
 
     The live twin of :func:`_phase_arrows`, and a function rather than a block inside the
     figure because a per-condition view of that figure needs its own set: the grid spans
-    whatever time axis it is given, so a 300 s condition read off a 1800 s run would show
-    the five columns of the run's grid that happen to land inside it.
+    whatever time axis it is given.
 
     Inset off the edges, which the matplotlib panel does not need: its quiver is clipped at
     the axes and an annotation is not, so an arrow on the outermost row would hang its tail
@@ -365,10 +333,10 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
 
     What the file then serves is the run at its own URL and each condition at
     ``…/map.html#video``, which is the arrangement the subject report's time-axis figures
-    already use. It is sound here for the same reason the tables are: a condition is read
-    out of the whole-run transform and never cut from it, so its map *is* a slice of this
-    one, down to the cone. A run transformed per condition is a different figure and gets
-    its own file; the caller decides, since it is the one that knows which route ran.
+    use. A condition is read out of the whole-run transform and never cut from it, so its
+    map *is* a slice of this one, down to the cone. A run transformed per condition is a
+    different figure and gets its own file; the caller decides, since it is the one that
+    knows which route ran.
 
     Only the arrows are rebuilt. They sit on a grid spread over whatever span they were
     drawn for, so a narrowed view of the run's set would show a handful of columns; each
@@ -418,23 +386,17 @@ def build_wtc_map_interactive(
       the same wtc_data -> go.Figure, about 3 MB of standalone HTML
 
     Same map, same cone, same arrow rule, same span bars and legend. What it adds is hover
-    (time, frequency and coherence per cell) and zoom, which is the whole reason the ROI
-    panel takes this and the channel panels stay PNG: a per-channel map costs the same 3 MB,
-    and a crossed dyad has n^2 channel pairings against a handful of ROI ones.
+    (time, frequency and coherence per cell) and zoom. The ROI panel takes this and the
+    channel panels stay PNG, since a crossed dyad has n^2 channel pairings.
 
     **Each arrow is an annotation anchored in data with its tail offset in pixels**
     (``axref="pixel"``), which is what ``angles="uv"`` gives the matplotlib panel: the head
     sits on its grid point and the direction is a screen direction, so a relative phase of a
     quarter cycle draws a quarter turn however wide the frame ends up. ``ff.create_quiver``
-    would work too and is one trace instead of N, but it lays the barb and both head strokes
-    out in *data* coordinates, and on axes of seconds against log-Hz that shears every
-    arrowhead and makes the angle depend on the rendered width. An arrow costs about 180
-    bytes against the map's three megabytes, so the trace count is not worth the distortion.
-    Plotly's ``ay`` grows downward, which is the sign that makes ``sin`` point up.
+    lays its arrowheads out in *data* coordinates, which on axes of seconds against log-Hz
+    shears them. Plotly's ``ay`` grows downward, which is the sign that makes ``sin`` point up.
 
-    No ``zsmooth``. Plotly would interpolate the cells, and the moire the pixel grid makes of
-    a map this wide would go with it, but so would the real structure: at the fast end of the
-    band the coherence decorrelates in about ten seconds, and those stripes are the data.
+    No ``zsmooth``: interpolating the cells would smooth the real fast-band structure away.
     """
     if wtc_data is None or len(freqs) == 0 or len(times) == 0:
         return None
@@ -549,9 +511,8 @@ def flat_colorbar(fig, mappable, ax, label: str, **kwargs):
 
       flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
 
-    The live ROI panel is Plotly and draws an unframed bar; the stills are matplotlib and
-    drew a framed one, so the same scale appeared twice on one page in two liveries. One
-    look, and the choice is made in one place.
+    The live ROI panel is Plotly and draws an unframed bar; this gives the matplotlib stills
+    the same look, chosen in one place.
     """
     bar = fig.colorbar(mappable, ax=ax, label=label, **kwargs)
     bar.outline.set_visible(False)
@@ -658,8 +619,7 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
 
 
 # Share of pairings a connectogram keeps when there is no null to rank them against. A
-# display cut, and the subtitle says so: it draws the same number of chords whatever the data
-# did, which is exactly what a test must not do.
+# display cut, not a test, and the subtitle says so.
 ARC_FALLBACK_QUANTILE = 0.90
 
 
@@ -679,12 +639,9 @@ def _arc_rule(
       threshold given  -> cells over one number               "|Pearson r| >= 0.3"
       quantile given   -> the strongest share of them         "strongest 10% (display cut)"
 
-    Three tiers in that order of preference, which is the order they deserve to be believed
-    in. A per-cell ``level`` out of a surrogate distribution is a test; a fixed
-    ``threshold`` is a number somebody chose, and the scale it has to be chosen on moves with
-    the preprocessing, so it wins only when asked for explicitly; a ``quantile`` of the matrix
-    itself keeps the strongest share whatever they are worth and is labelled as the display
-    cut it is. With none of the three, every finite pairing is drawn.
+    A per-cell ``level`` out of a surrogate distribution is a test; a fixed ``threshold``
+    wins only when asked for explicitly; a ``quantile`` of the matrix itself is labelled as
+    the display cut it is. With none of the three, every finite pairing is drawn.
 
     The rule string uses the ">=" character rather than the HTML entity: plotly's text parser
     takes the tags it knows, and an escaped entity in a subplot title fails the whole render.
@@ -724,7 +681,7 @@ def _cross_matrix_figure(
     Shared by the coherence matrices and the ROI ISC one, which differ only in scale and
     wording. Rows are the first member's sites and columns the second's, so the diagonal is
     the homologous pairing and no cell is within-brain. Each panel's subtitle carries its
-    own grand mean, which is the number the two chromophores are compared on.
+    own grand mean.
 
     ``panels`` is ``[(display name, matrix), ...]``, already filtered to the ones worth
     drawing. The last panel carries the colorbar and the rest draw none, which is what puts
@@ -795,26 +752,20 @@ def build_cross_panel(
 
       an n x n of ISC values -> [ matrix with every cell printed | connectogram ]
 
-    The two panels answer different questions off one set of numbers, which is why both are
-    on the page. **The matrix is the record**: every cell carries its value, blanks included,
-    so a pairing can be looked up. **The circle is the shape**: an eye reads n^2 printed
-    numbers as a texture, and the chords say which sites the strong pairings actually land
-    on.
+    **The matrix is the record**: every cell carries its value, blanks included, so a pairing
+    can be looked up. **The circle is the shape**: the chords say which sites the strong
+    pairings actually land on.
 
-    The coherence matrices are not drawn by this. They come in a pair, HbO against HbR, and
-    that comparison is what the panel is for there, so :func:`build_wtc_cross_matrix` spends
-    both halves of its width on the two heatmaps instead.
+    The coherence matrices are not drawn by this: :func:`build_wtc_cross_matrix` spends both
+    halves of its width on the HbO and HbR heatmaps instead.
 
     Both rows and columns are the *montage*, row for the first member and column for the
     second, so cell (i, j) is one member's site i against the other's site j and the diagonal
     is the homologous pairing. There is no within-brain cell anywhere in it, which is why
     every chord on the circle crosses the middle.
 
-    Live rather than a still, and the whole reason is the circle: a chord is drawn between
-    two nodes and thirty of them cross, so on a PNG the only way to read one is to trace it
-    to both ends and hope the labels are legible. Hovering says which pairing it is and what
-    it is worth. The heatmap is live for the same reason, a channel montage printing two
-    hundred cells that are easier to hover than to read.
+    Live rather than a still, so hovering a chord or a cell says which pairing it is and what
+    it is worth.
 
     The scale is the caller's and both panels share it, so there is one colorbar: a
     correlation takes :data:`CORRELATION_SCALE` over -1 to 1.
@@ -861,11 +812,7 @@ def build_cross_panel(
         yaxis=dict(title=axis_title(sub1), range=[len(row_labels) - 0.5, -0.5],
                    showgrid=False, zeroline=False, scaleanchor="x", constrain="domain"),
         # The same span on both, so the constraint letterboxes the subplot instead of
-        # stretching the circle into an ellipse. The span is what sets the circle's size in
-        # the panel: the nodes sit at radius 1, so at 1.38 the circle used less than three
-        # quarters of the height the matrix beside it used all of. The labels are drawn in
-        # points rather than data units and do not shrink with it, so this is as close as the
-        # longest of them can come to the panel edge.
+        # stretching the circle into an ellipse; the span leaves just room for the labels
         xaxis2=dict(visible=False, range=[-_CIRCLE_SPAN, _CIRCLE_SPAN], constrain="domain"),
         yaxis2=dict(visible=False, range=[-_CIRCLE_SPAN, _CIRCLE_SPAN], scaleanchor="x2",
                     scaleratio=1, constrain="domain"),
@@ -891,16 +838,11 @@ def build_wtc_cross_matrix(
       {"HbO": frame, "HbR": frame} -> [ HbO matrix | HbR matrix ], one colour scale
 
     Rows are sub1's sites, columns sub2's, so cell (i, j) is sub1's site i against sub2's
-    site j and the diagonal is the homologous pairing the rest of the report shows. This is
-    the whole point of ``--wtc-channel-cross``: the crossed pairs are computed and written to
-    the TSV, and without this figure the only ones anybody looks at are the n on the diagonal.
+    site j and the diagonal is the homologous pairing the rest of the report shows. It draws
+    the crossed pairs ``--wtc-channel-cross`` writes to the TSV.
 
     **The two chromophores share the figure and the scale.** HbO and HbR are two parallel
-    passes, never mixed and never averaged, and what they are both run for is the check that
-    a coupling shows in each; side by side on one colorbar is that check, where one above the
-    other on two colorbars is two results a reader has to hold in their head. There is no
-    connectogram: a coherence grid is small enough that the heatmap already carries its
-    shape, and the second chromophore is the comparison worth the width. :func:`build_isc_panel`
+    passes, never mixed and never averaged. There is no connectogram. :func:`build_isc_panel`
     keeps its circle, having a null to rank the pairings by; the ROI ISC matrices have none
     and are laid out like this one.
 
@@ -909,9 +851,6 @@ def build_wtc_cross_matrix(
     empty, so a run of one chromophore gets one panel. ``labels`` is the montage rather than
     whatever the frames happen to carry, so a dyad that lost a channel still gets a matrix of
     the same shape as one that did not, and the blanks say which sites went.
-
-    Read cell by cell the off-diagonal is exploratory: single pairings are noisy and a
-    correction over n**2 of them leaves little. The structure is what it is for.
     """
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
@@ -953,9 +892,8 @@ def _phase_arrows(ax, times: np.ndarray, freqs: np.ndarray, phase, n_time: int =
     same length and drawing fewer loses nothing.
 
     ``scale`` and ``width`` are quiver's, in axes-relative units, so they have to be given
-    per panel rather than fixed here: the defaults suit a thumbnail, and the same numbers on
-    a full-width single map draw arrows tall enough to hide the map under them. Larger
-    ``scale`` is shorter arrows.
+    per panel rather than fixed here: the defaults suit a thumbnail. Larger ``scale`` is
+    shorter arrows.
 
     ``mask`` keeps only the grid points it marks True, which is how :func:`_arrow_mask` stops
     the field being drawn over noise and over padding. Sampled on the same coarse grid as the
@@ -1034,10 +972,8 @@ def build_isc_roi_matrix(isc_by_chroma: dict, subject_ids: list[str]):
       {"HbO": (4 x 4 r, ["L", "R", ...]), "HbR": (...)} -> [ HbO matrix | HbR matrix ]
 
     The ROI counterpart of :func:`build_isc_panel`, and it drops the connectogram that one
-    keeps. A handful of regions is small enough that the heatmap already carries the shape,
-    and the ROI matrices have no phase-scrambled null, so a chord rule would have nothing to
-    rank pairings by. Side by side on one scale is the HbO against HbR check instead, the
-    reading :func:`build_wtc_cross_matrix` is laid out for.
+    keeps, since the ROI matrices have no phase-scrambled null to rank pairings by. Laid out
+    like :func:`build_wtc_cross_matrix`.
 
     ``isc_by_chroma`` maps a display name to ``(matrix, roi labels)``. An entry that is
     None, has no finite cell, or does not match the axis the first panel set is left out

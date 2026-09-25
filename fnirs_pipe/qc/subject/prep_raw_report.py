@@ -60,7 +60,7 @@ _EPOCH_TMAX   = 25.0
 # A montage with no short channels has no table to put anything in and gets one list.
 #
 # Derived by subtracting what the tables carry rather than written out again, so a column
-# added to either one leaves the list on its own: mean amplitude was in both for a while.
+# added to either one leaves the list on its own.
 _VIEW_MONTAGE_KEYS = tuple(
     k for k in ("cp_mean", "n_flat_channels", "mean_amp_mean",
                 "spike_count", "spike_pct_frames", "spike_num_frames")
@@ -158,8 +158,7 @@ def _process_run(
 
     The second return value is what the per-condition views need and the viewer must never
     see: the windowed matrices, the record and the condition windows. It is kept out of the
-    payload because that one is serialised with ``json.dumps`` and a numpy array is not
-    serialisable, so folding these in would turn a working report into a crash.
+    payload, which is serialised with ``json.dumps`` and cannot hold a numpy array.
     """
     from fnirs_pipe.qc.figures import (
         build_channel_figure,
@@ -200,9 +199,7 @@ def _process_run(
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
 
-    # The one preprocessing step this report runs, and only because the panel it feeds is
-    # unreadable without it: motion is what a raw recording is judged on, and a figure of
-    # the uncorrected trace cannot say whether the correction would have dealt with it.
+    # The one preprocessing step this report runs, for the motion panels' before and after.
     # Nothing is written back; the corrected copy lives for the length of this function.
     raw_motcorr = None
     if motion_correction and motion_correction != "none":
@@ -218,18 +215,14 @@ def _process_run(
 
     # `sqm` stays the flat all-channel view the per-window figures below read. The record
     # written to disk is the sectioned one, built through the same function the pipeline
-    # uses, and it is now what the panels read too: the flat view averages a short
-    # channel's coupling in with the long ones, which lifts SCI, PSP and SNR and can make a
-    # poorly coupled recording read as a good one.
+    # uses, and the panels read it too, so short channels stay out of the long verdict.
     # the figures colour a channel short or not short, so only the short edge applies
     short_thresh = (sep_bands if sep_bands is not None else separation_bands())[0]
     raw_secs, raw_pc = raw_sections(
         raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
         screen_scores.get("good_frac"))
-    # Reported per condition, never screened on: one channel set has to serve every
-    # condition, or a contrast between two conditions is also a contrast between two
-    # montages. This is what says "the channel was fine in rest and dead in the second
-    # game" without changing which channels the analysis gets. A window shorter than two
+    # Reported per condition, never screened on: one channel set serves every condition, so a
+    # contrast between conditions is never one between montages. A window shorter than two
     # screening windows has too few to count, so it is not offered a share at all.
     # both bound before the guard: it swallows the exception, and the per-condition views
     # read these afterwards
@@ -270,9 +263,8 @@ def _process_run(
     # Persist windowed series so group_raw can build time × subject heatmaps. Their own
     # section, since `_split_scalars` would file every one of these lists under per_channel.
     windowed: dict = {}
-    # GVTD off the corrected file where there is one, as the pipeline's own record does:
-    # GVTD measures the movement the correction exists to remove, so the corrected stage is
-    # the informative one for it. SCI and PSP stay on the uncorrected file, being coupling.
+    # GVTD off the corrected file where there is one, as the pipeline's own record does;
+    # SCI and PSP stay on the uncorrected file, being coupling.
     series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq,
                                     window_s, gvtd_od=raw_motcorr,
                                     raw_intensity=raw, sep_bands=sep_bands)
@@ -395,9 +387,8 @@ def _process_run(
                                    raw_after=carpet_after,
                                    channel_set=gvtd_set, blocks=gvtd_blocks)
         fname = fig_name("carpet")
-        # not written per condition: its GVTD is filtered, its carpet z-scored per channel
-        # and its colour scale taken over the run, so a cut would give each condition a
-        # scale no other one can be read against. One file, narrowed by URL fragment.
+        # not written per condition: its GVTD filter, z-scale and colour scale are run-wide,
+        # so one file is narrowed by URL fragment
         h     = _save_figure_html(fig, fig_dir / fname,
                                   views=_carpet_views(fig, view_windows))
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
@@ -457,9 +448,7 @@ def _process_run(
     fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
 
     # ── inline only: evoked topo ───────────────────────────────────────────────
-    # for the GUI's Data Prep page, which reads this result. The report dropped the panel:
-    # at this stage the average is taken on unfiltered, uncorrected concentration and is
-    # mostly drift, and the GUI already shows it interactively.
+    # for the GUI's Data Prep page, which reads this result; the report does not draw it
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         with guard("Evoked topography", errors, label):
@@ -470,9 +459,7 @@ def _process_run(
                 evoked_topo_inline = {"figure": fig.to_dict()}
 
     # ── file: grand mean ───────────────────────────────────────────────────────
-    # One row per condition, every long channel averaged with the short ones dotted. The
-    # dotted trace is what the panel is read for at this stage: when it rises with the solid
-    # one the response is scalp haemodynamics, and nothing downstream will separate them.
+    # One row per condition, every long channel averaged with the short ones dotted.
     if raw_haemo is not None:
         with guard("Grand mean", errors, label):
             fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=fig_tmin,
@@ -483,9 +470,8 @@ def _process_run(
                 figure_paths["epoch_mean"] = {"src": f"figures/{fname}", "h": h}
 
     # ── file: per-channel motion detail ────────────────────────────────────────
-    # The subject report's own figures, builder and saver: this panel answers the same
-    # question on the same two recordings, and a second copy of it here is how two reports
-    # start disagreeing about what a channel did. One file per channel, carrying every
+    # The subject report's own figures, builder and saver, so the two reports cannot
+    # disagree about what a channel did. One file per channel, carrying every
     # condition's window, so a condition page narrows the view instead of remeasuring.
     motion_channels: list[str] = []
     if raw_motcorr is not None:
@@ -512,7 +498,7 @@ def _process_run(
                 )["motion_detail_pairs"]
                 motion_channels = [entry["pair"] for entry in saved]
                 # every one of these is the same four-row layout, so one height serves the
-                # panel and the viewer does not carry eighty-eight of them
+                # panel and the viewer does not carry one per channel
                 figure_paths["motion_detail_template"] = {
                     "src": f"figures/{fig_name('motion', channel='{ch}')}",
                     "h": saved[0]["h"] if saved else 700,
@@ -521,8 +507,8 @@ def _process_run(
     # ── file: per-channel trial images ─────────────────────────────────────────
     # Trials down the rows, so a channel that was fine for the first half and lost for the
     # second reads as a band rather than being averaged away. HbO only, as the subject
-    # report's is: single-trial HbR is too low-amplitude to read as an image. A condition
-    # holding fewer than two trials draws nothing, which is what a block design is.
+    # report's is. A condition holding fewer than two trials draws nothing, which is what a
+    # block design is.
     trial_img_pairs: list = []
     trial_img_by_cond: dict = {}
     if raw_haemo is not None and view_windows:
@@ -665,9 +651,7 @@ def _process_run(
             "motion_split": motion_split,
             "channel_set":  "long channels" if sqm_split else "every channel",
         },
-        # One table, at pair granularity: a decision is taken per source-detector pair and
-        # SCI is a property of the pair rather than of either wavelength, so a per-wavelength
-        # table beside this one would list every channel twice for no extra information. The
+        # One table, at pair granularity: a decision is taken per source-detector pair. The
         # per-wavelength numbers are in the CSV written next to the record.
         "channels": {
             "pairs":  pair_cells,
@@ -904,9 +888,8 @@ def build_prep_raw_report(
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
     ``by_condition`` writes one extra report per annotated condition beside the run's own,
-    carrying the condition in its ``cond-`` entity. They are separate files rather than a
-    switch inside this one because this report is already long, and their numbers are sliced
-    out of the run's windowed pass rather than measured on a cut of it. See
+    carrying the condition in its ``cond-`` entity. Their numbers are sliced out of the run's
+    windowed pass rather than measured on a cut of it. See
     :mod:`fnirs_pipe.qc.subject.condition_views`.
     """
     # the report sits in the subject's own folder, so its figures are one level in from it

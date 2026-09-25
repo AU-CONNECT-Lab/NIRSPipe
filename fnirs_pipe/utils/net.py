@@ -25,10 +25,8 @@ def resolve_port(preferred: int, *, explicit: bool, host: str = "127.0.0.1") -> 
     """Port to serve on, at or just above `preferred`.
 
     A server left running by an earlier session, another app sitting on the same default,
-    or a Windows reserved port range all make `preferred` unbindable. Walking upwards is
-    right when the port is just a default, wrong when the caller named it: a forwarding
-    rule or a bookmarked URL points at that one number, so a silent move only hides the
-    conflict. Hence `explicit`.
+    or a Windows reserved port range all make `preferred` unbindable. It walks upwards only
+    when the port is a default; a port the caller named (`explicit`) is never silently moved.
 
     resolve_port(8050, explicit=False) -> 8051, when 8050 is taken
     resolve_port(8050, explicit=True)  -> SystemExit, when 8050 is taken

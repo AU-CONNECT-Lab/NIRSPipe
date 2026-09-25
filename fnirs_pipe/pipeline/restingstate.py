@@ -45,17 +45,10 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
     every other channel's mALFF. The ``bad`` column keeps meaning rejected,
     since that is what the group tables read.
 
-    Rest mode produces two residuals and this function must receive the broadband one.
-    Connectivity (FC) wants a bandpassed residual (~0.01-0.08 Hz) so cardiac, respiration and
-    Mayer waves are dropped before correlating. ALFF/fALFF want the opposite: fALFF is the
-    band's share of the total spectral amplitude, so its denominator needs the full spectrum;
-    a bandpassed input removes the out-of-band power and collapses fALFF to ~1 on every
-    channel. ALFF is unaffected either way because it only averages the in-band amplitude, so
-    a single broadband signal serves both metrics. The pipeline therefore runs the confound
-    regression a second time without the low-pass and feeds that residual here (FC keeps the
-    bandpassed one). The linear detrend the references apply before the FFT is here supplied
-    by the GLM drift regressors, matching the "detrend, no bandpass" recipe of Zang 2007 /
-    Zou 2008.
+    Rest mode produces two residuals and this function must receive the broadband one. The
+    pipeline runs the confound regression a second time without the low-pass and feeds that
+    residual here (FC keeps the bandpassed one). The linear detrend before the FFT is
+    supplied by the GLM drift regressors.
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]
@@ -139,17 +132,12 @@ def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
         -> one row per (ROI, chromophore) with the four measures averaged
 
     **The averaging happens after the measure, which is the opposite of**
-    :func:`compute_fc_roi`, and the difference is not cosmetic. An ROI mean signal carries only
-    the part its channels share, so the amplitude measured on it is the ROI's amplitude times
-    its internal coherence: it falls as the ROI grows and as its channels agree less, which
-    makes two ROIs of different size, and two subjects of different coherence, incomparable.
-    A correlation has no such problem, so that product averages first and this one does not.
+    :func:`compute_fc_roi`. An ROI mean signal carries only the part its channels share, so an
+    amplitude measured on it falls as the ROI grows and as its channels agree less.
 
-    ``zalff`` is the column to prefer downstream: it is already standardised within its
-    chromophore, so averaging it matches the form the reference literature reports, and HbO and
-    HbR stay on one scale. Rejected channels are dropped before averaging rather than
-    propagating NaN, the way every other ROI-level product here drops them; ``n_channels``
-    records how many survived, without which a thinly covered ROI reads like a well covered one.
+    Rejected channels are dropped before averaging rather than propagating NaN, the way every
+    other ROI-level product here drops them; ``n_channels`` records how many survived, without
+    which a thinly covered ROI reads like a well covered one.
     """
     if alff_df is None or alff_df.empty or not roi_map:
         return pd.DataFrame()
@@ -183,15 +171,14 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
     same shape and the same channel order, so a group analysis can stack them however their
     rejections differ. It is the package's convention for every channel-by-channel matrix,
-    :func:`fnirs_pipe.pipeline.hyper.isc.compute_isc` included since 0.30.0.
+    :func:`fnirs_pipe.pipeline.hyper.isc.compute_isc` included.
     ROI-level products do the opposite and drop the rejected channels before averaging (see
     :func:`compute_fc_roi`): a bad channel inside an ROI mean reaches every correlation that
     ROI takes part in, where in a channel matrix it is confined to one row and one column.
 
-    Plain Pearson, and deliberately so: a shrinkage estimator is more accurate per edge on weak
-    connections, but shrinks by an amount that tracks the channel-to-sample ratio, so subjects
-    with shorter runs or more rejected channels are pulled toward zero harder than others and
-    ``fisher_z`` carries that into the group statistics. Every FC product here uses the same one.
+    Plain Pearson, not shrinkage: a shrinkage estimator shrinks by an amount that tracks the
+    channel-to-sample ratio, so it would differ between subjects. Every FC product here uses
+    the same one.
     """
     picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
     if len(picks) < 2:
@@ -302,10 +289,8 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     through the mean of its channel-pair correlations.
 
     A seed's own channels are set to NaN, identified by **membership, not by a correlation
-    near 1**: they sit inside the average, so their correlation is inflated by construction
-    and says nothing about connectivity. Recognising them by value instead would also erase
-    a channel that genuinely tracks the seed, turning the strongest real connection in the
-    map into an apparent absence.
+    near 1**: they sit inside the average, so their correlation is inflated by construction,
+    and a test by value would also erase a channel that genuinely tracks the seed.
 
     Membership means the channels actually averaged, so a rejected one listed in ``roi_map``
     is not part of any seed. Columns span every channel, a rejected one's being NaN, as in

@@ -71,7 +71,7 @@ def _drift_phrase(params: dict[str, Any]) -> str | None:
     """The drift basis as prose, or None when the design carried none.
 
     Each model names only the parameter that model uses: a polynomial has no high-pass
-    cutoff, and quoting the field anyway printed "cutoff: None Hz".
+    cutoff.
     """
     drift = params.get("drift_model")
     if drift == "cosine":
@@ -100,7 +100,7 @@ def _noise_phrase(value: Any) -> str:
     """The noise model as prose, expanding the one spelling that names no order.
 
     ``auto`` is mne-nirs' own rule and reaches the sidecar unexpanded, so the sentence has
-    to say what it stands for; "a auto noise model" is what it said before.
+    to say what it stands for.
     """
     value = str(value or "").strip().lower()
     if value == "auto":
@@ -124,9 +124,7 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     sc = params.get("short_channel")
     if sc == "mean":
         parts.append("the mean short-channel time course of each chromophore")
-    # not "the principal components of the short channels": every component is kept, so the
-    # columns span what the short channels themselves span and the decomposition is there
-    # for conditioning. A reader told "principal components" would take it for a reduction
+    # not "principal components": every component is kept, so the basis is no reduction
     elif sc == "pca":
         parts.append("an orthogonal basis of every short-channel time course, both "
                      "chromophores decomposed together")
@@ -146,11 +144,9 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     filter templates call ``l_freq``.
     """
     if key == "sci_marking":
-        # All three numbers the screening uses, because none of them describes it alone:
-        # SCI and PSP are the per-window lines and `min_good_frac` is what actually rejects
-        # a channel. Naming only the first two reads as though either could reject on its
-        # own. Each falls back to the criteria table for a record written before the run
-        # started stamping it.
+        # All three numbers the screening uses: SCI and PSP are the per-window lines and
+        # `min_good_frac` is what actually rejects a channel. Each falls back to the criteria
+        # table for a record that does not carry it.
         from fnirs_pipe.qc.metrics import criterion_cutoffs
         from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
         cutoffs = criterion_cutoffs()
@@ -184,8 +180,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"))}
     if key == "glm":
-        # the drift phrase carries its own parameter, so a polynomial stops being described
-        # by a cosine's cutoff
+        # the drift phrase carries its own parameter, so a polynomial is never described by a
+        # cosine's cutoff
         return {
             "hrf_model": str(params.get("hrf_model", "")),
             "noise_model": _noise_phrase(params.get("noise_model")),
@@ -267,10 +263,10 @@ def step_summary(step: str | None) -> str:
 # STEP_SUMMARY above describes steps; this describes the numbers those steps produced, so a
 # report never prints one bare.
 #
-# Each line says what the number is and which way is good, because a value with no
-# direction is not actionable. Where the answer is "it depends", say so rather than
-# inventing a threshold: several of these are relative measures with no absolute cutoff,
-# and GVTD in particular is judged against gvtd_thresh, which is computed per recording.
+# Each line says what the number is and which way is good. Where the answer is "it
+# depends", say so rather than inventing a threshold: several of these are relative measures
+# with no absolute cutoff, and GVTD in particular is judged against gvtd_thresh, which is
+# computed per recording.
 #
 # Per-channel keys are not listed; they are the same quantity as their scalar sibling.
 METRIC_SUMMARY = {
@@ -441,9 +437,8 @@ def is_key_metric(metric: str) -> bool:
 # ---- how a metric is printed ----
 #
 # One row per metric: the label a panel prints, the number format, and where the colouring
-# changes. It sits beside METRIC_SUMMARY because a label and its tooltip drift apart the
-# moment they live in different files, and because a threshold spread over the report
-# templates, the viewer's JavaScript and the GUI is three chances to disagree.
+# changes. It sits beside METRIC_SUMMARY so a label, its tooltip and its threshold are
+# defined once for the report templates, the viewer's JavaScript and the GUI.
 #
 # Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
 #
@@ -464,8 +459,7 @@ _HIGHER, _LOWER = "higher", "lower"
 METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | None"]] = {
     # coupling
     "sci_mean":                ("Mean SCI (whole run)", ".3f", (0.75, 0.5), _HIGHER),
-    # no cutoffs: the published ones were set on the whole-run estimator above, and a
-    # windowed number is not entitled to them just for sharing a name
+    # no cutoffs: the published ones are for the whole-run estimator above
     "sci_win_mean":            ("Mean SCI (10 s)", ".3f", None, _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
     "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
@@ -497,8 +491,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # spectral
     "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", ".3e", None, None),
     "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", ".3e", None, None),
-    # descriptive, not a quality reading: injected motion raises this sevenfold, so a
-    # "higher is better" arrow would mark a contaminated channel as the good one
+    # descriptive, not a quality reading: motion raises it, so it has no better end
     "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, None),
     "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, None),
     "resp_band_power_hbo":     ("Resp band power (HbO)", ".3e", None, None),

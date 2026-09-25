@@ -69,8 +69,7 @@ def trial_sqm(raw, t0: float, t1: float,
 
     The intensity recording is what gets cropped, not the optical density derived from it,
     so that a trial's CV, SNR and spike count sit on the same scale as the recording-level
-    numbers in the same report. Reusing the whole-recording OD object would be cheaper by
-    one conversion per trial but would put the two sets of figures on different footings.
+    numbers in the same report.
 
     No sliding-window series is attached: a window of a few seconds has no room for the 10 s
     grid the recording-level series uses. For the same reason a trial shorter than two

@@ -174,10 +174,7 @@ def compute_group_sqm_raw(
         screen: dict = {}
         screen_windows: dict = {}
         if raw_od is not None:
-            # the coupled-window grid, kept rather than recounted: the dyad panels that draw
-            # quality over time have to shade the windows the verdict was taken on, and a
-            # second pass could disagree with it. `have` then stops the criterion table from
-            # counting the same windows again.
+            # the coupled-window grid, kept so the panels shade the windows the verdict used
             from fnirs_pipe.qc.metrics.windowed import coupled_windows
             counted = coupled_windows(
                 raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
@@ -185,9 +182,7 @@ def compute_group_sqm_raw(
             if counted["mask"] is not None:
                 screen_windows = {k: counted[k] for k in
                                   ("mask", "centers", "sci", "psp", "channel_order")}
-                # CV on the same grid, off raw intensity, which is what it is defined on:
-                # after the optical-density conversion sigma/mu is no longer relative
-                # brightness. SCI and PSP are blind to the shifts and dropouts it catches.
+                # CV on the same grid, off raw intensity: after OD sigma/mu is not relative
                 try:
                     from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv
                     cv_m, cv_t = compute_windowed_cv(raw)
@@ -196,9 +191,7 @@ def compute_group_sqm_raw(
                 except Exception:
                     logger.warning("%s: windowed CV could not be measured",
                                    entry.subject_id, exc_info=True)
-                # motion on the same window grid, which the screening pass does not measure:
-                # SCI and PSP are blind to movement by construction, so without this row the
-                # dyad panel can say a pair decoupled but never that the member moved
+                # motion on the same window grid, which the screening pass does not measure
                 try:
                     from fnirs_pipe.qc.metrics.gvtd import compute_windowed_gvtd
                     means, _p95, gvtd_t = compute_windowed_gvtd(raw_od)
@@ -242,9 +235,7 @@ def compute_group_sqm_raw(
                                    or sqm["per_channel_all"])
         sqm_data[entry.subject_id] = sqm
 
-        # Every scalar the record holds, not a whitelist: a whitelist leaves SCI as the only
-        # quality metric a hyperscanning study sees, and SCI is amplitude-invariant, so a run
-        # with a collapsed cardiac pulse would read as fine
+        # every scalar the record holds, not a whitelist that would leave SCI alone
         scalar_rows.append({
             "group_id":       gid,
             "subject_id":     entry.subject_id,
@@ -302,20 +293,18 @@ def load_group_sqm(
 
     - ``"run"``: this task's own rejections, matching the rest of the metrics returned here.
     - ``"subject"``: the union over the subject's runs, so a channel rejected in any
-      condition is rejected in all of them. Conditions then rest on the same channel set,
-      which is what a comparison between them needs; the cost is losing a channel everywhere
-      because one segment was bad.
+      condition is rejected in all of them. Conditions then rest on the same channel set, at
+      the cost of losing a channel everywhere because one segment was bad.
 
     ``scope_tasks`` bounds that union to the tasks the analysis covers, normally the ones the
     pairs table names. Without it the union is every ``desc-sci`` sidecar in the folder, so a
     subject who also sat a resting run, or a second experiment, loses channels here for a
     recording nobody asked about.
 
-    Which scope is worth using depends on how the tree was produced, and the two are not
-    always different. A recording preprocessed whole is screened once, so the subject has one
-    run per task and the union over it is itself: ``subject`` and ``run`` then name the same
-    set, and a line in the log says so. They differ when the conditions were cropped to
-    separate tasks before prep, which is the case ``subject`` was added for.
+    A recording preprocessed whole is screened once, so the subject has one run per task and
+    the union over it is itself: ``subject`` and ``run`` then name the same set, and a line in
+    the log says so. They differ when the conditions were cropped to separate tasks before
+    prep.
 
     Returns {subject_id: sqm_dict}. Alongside the flattened scalars each dict carries
     ``windowed`` (the record's channel-by-window matrices), ``channel_order`` (their row
@@ -350,10 +339,8 @@ def load_group_sqm(
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
             sqm.update(record.get("preproc_long") or {})
-            # the channel-by-window matrices, kept whole rather than flattened: they are
-            # what a per-condition view is a column selection out of, and without them the
-            # dyad pages can only print the whole recording's numbers under a condition's
-            # heading. Nested under one key so they cannot collide with a scalar name.
+            # the channel-by-window matrices a per-condition view selects columns from,
+            # nested under one key so they cannot collide with a scalar name
             sqm["windowed"] = record.get("windowed") or {}
             sqm["channel_order"] = list(
                 ((record.get("per_channel") or {}).get("raw") or {})
@@ -366,9 +353,7 @@ def load_group_sqm(
             # `raw_short` and the dyad's channel table prints short rows too
             sqm["per_channel"] = per_ch
             sqm["per_channel_all"] = per_ch.get("raw") or {}
-            # the long section too, and it is not a nicety: every dyad measure runs on long
-            # channels, and a `raw_long` is not written when the montage is all long, so the
-            # whole-file section is the long one there rather than a missing answer
+            # an all-long montage writes no `raw_long`, so the whole-file section stands in
             sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel_all"]
             # the same screening grid `compute_group_sqm_raw` keeps when it measures one
             # itself, rebuilt here from the matrices the record stored. One shape, so a dyad
@@ -377,10 +362,7 @@ def load_group_sqm(
             # the per-condition numbers the record already holds, so the dyad pages read
             # them rather than cutting the matrices above a second time
             sqm["by_condition"] = record.get("by_condition") or {}
-            # The same scalars kept split by channel set instead of collapsed onto the long
-            # view above. The dyad quality table prints the three sets side by side, the way
-            # a subject report's own metrics section does, so a reader is not handed one set
-            # and left to trust that it was the right one to judge the dyad on.
+            # the same scalars split by channel set, for the dyad quality table's three columns
             sqm["by_set"] = {
                 set_name: {k: v
                            for section in sections
@@ -432,8 +414,7 @@ def load_group_sqm(
             logger.info("%s task-%s: %d rejected channel(s) from %s (%s)",
                         entry.subject_id, entry.task, len(sqm["bad_channels"]), kind, path.name)
 
-        # which run each rejection came from, so the union is reviewable rather than a
-        # channel list with no explanation of why a clean condition lost a channel
+        # which run each rejection came from, so the union is reviewable
         sources: dict[str, list[str]] = {
             ch: [entry.task] for ch in (sqm.get("bad_channels") or [])
         }
@@ -449,10 +430,7 @@ def load_group_sqm(
                         sources[ch].append(from_task)
             sqm["bad_channels"] = sorted(sources)
             if len(in_scope) <= 1:
-                # loud, because it reads as a choice that was made and was not. The union
-                # over one run is that run, so the flag did nothing; a caller who passed it
-                # expecting conditions to be unioned is looking at a tree where they are
-                # not separate runs, and the union they wanted is already what prep did
+                # the union over one run is that run, so the flag did nothing
                 logger.warning(
                     "%s: --bads-scope subject found %d run(s) in scope, so the union is "
                     "just that run's own rejections and the flag changed nothing. That is "
@@ -533,10 +511,9 @@ def _screen_cutoffs(json_path: Path) -> dict:
 
     ``{"sci": 0.8, "psp": 0.1, "good_frac": 0.75}``, or an empty dict when the sidecar
     predates them. A per-condition view rebuilds the coupled-window share from the stored
-    matrices, and it has to apply the lines that subject was actually screened by: the
-    registry defaults would produce a share no channel of theirs was ever judged against,
-    and ``fnirs-hyper``'s own ``--sci-threshold`` is a colouring threshold for the dyad
-    page, not the one prep ran.
+    matrices, and it has to apply the lines that subject was actually screened by, not the
+    registry defaults or ``fnirs-hyper``'s own ``--sci-threshold``, which only colours the
+    dyad page.
     """
     try:
         params = json.loads(json_path.read_text(encoding="utf-8")).get("parameters") or {}
@@ -588,19 +565,14 @@ def resolve_group_bands(
     """The separation bands a dyad's inter-brain metrics run on, read off the members' records.
 
     ``fnirs-hyper`` works on derivatives that prep has already split into long and short
-    channels and stamped with the bands it split them by, so being *told* the bands again on
-    the command line is an invitation to type a number that does not match the one on disk.
-    Reading them back makes that mismatch impossible rather than merely documented.
+    channels and stamped with the bands it split them by, so the bands are read back rather
+    than taken again from the command line.
     ``fnirs-qc hyper-raw`` is not a caller: it reads BIDS raw data and computes the record
     itself, so there is nothing on disk to read back and its flags stay the source of truth.
 
     Two members are two prep runs, so they can disagree. **That is refused, not
-    reconciled.** The bands did not only choose which channels are long, they chose what
-    short-channel regression removed from each member upstream, so a band derived from both
-    would be stamped on a table that neither member was processed with. Nothing is lost by
-    refusing: the homologous channel set already intersects on its own, because the metrics
-    pair by S-D label and a label only one member calls long is simply absent from the
-    other's map.
+    reconciled**: the bands also chose what short-channel regression removed from each
+    member upstream, so a band derived from both would describe neither.
 
     ``override`` is the three flags as ``{"short_max_dist": ..., "long_min_dist": ...,
     "long_max_dist": ...}`` in metres, None for one left off. A value given wins and is

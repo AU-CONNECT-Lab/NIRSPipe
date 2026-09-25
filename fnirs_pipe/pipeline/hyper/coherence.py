@@ -85,12 +85,9 @@ def welch_nperseg(n_times: int) -> int:
 
       a 3900 s run at 10 Hz -> 512;  a 300 s block -> 512;  a 20 s window -> 64
 
-    A quarter of the stretch so a short window still yields several segments, capped at 512
-    so a long one does not spend its resolution on a frequency nobody reads, floored at 64 so
-    the band has bins at all. One function because the number decides both the estimate and
-    its floor: magnitude-squared coherence sits near 1/(number of segments) when nothing is
-    coupled, so two callers with two copies of this rule would print values a reader compares
-    that are not on the same scale.
+    A quarter of the stretch, capped at 512 and floored at 64. One function because the number
+    decides both the estimate and its floor: magnitude-squared coherence sits near 1/(number
+    of segments) when nothing is coupled, so every caller's values sit on one scale.
     """
     return min(512, max(64, n_times // 4))
 
@@ -119,10 +116,8 @@ def screening_coherence(
 
     **The percentile is the readable number, not the coherence.** Magnitude-squared coherence
     has a floor near :math:`1/n_{seg}` where :math:`n_{seg}` is the number of Welch segments,
-    and that count falls with the window, so on one recording the floor moves by an order of
-    magnitude between a 300 s block and the whole run. Two windows' raw values are therefore
-    not comparable and neither is readable alone; each value's rank inside a null drawn for
-    *that* window is both.
+    and that count falls with the window, so two windows' raw values are not comparable; each
+    value's rank inside a null drawn for *that* window is.
 
     The null pairs one member against a phase-scrambled copy of the other, which is the
     surrogate :func:`~fnirs_pipe.pipeline.hyper.wtc_null.write_wtc_null` uses on the post report. One
@@ -172,11 +167,7 @@ def screening_coherence(
                     null[k, i] = _band_coherence(
                         d1[i, i0:i1], phase_scramble(d2[i, i0:i1], rng),
                         sfreq, nperseg, fmin, fmax)
-            # Two percentiles, because they answer different questions and only the
-            # second is the window's verdict. Per channel, a rank among that channel's own
-            # draws, which at an affordable iteration count is noisy. Per window, the rank
-            # of the channel mean among the null's channel means: the channels are pooled
-            # before the comparison, so it tests the dyad rather than each channel.
+            # window percentile: the channel mean ranked among the null's channel means
             mean_null = null.mean(axis=1)
             window_pct = float((mean_null < real.mean()).mean() * 100)
             for i, label in enumerate(labels):

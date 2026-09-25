@@ -150,16 +150,11 @@ def record_has_bands(scalars: dict) -> bool:
 # reading 20.
 SCI_PASS = 0.8        # also the --sci-threshold default
 PSP_PASS = 0.1
-# Share of windows in which a channel must pass both lines above to be kept. SCI's 0.8 and
-# PSP's 0.1 are the values their authors established; this one is not theirs. The tool that
-# defines the rule leaves the percentage to the user and states no default, so 0.75 is
-# borrowed from the one worked example that names a number.
+# Share of windows in which a channel must pass both lines above to be kept.
 GOOD_FRAC_PASS = 0.75
 # CV is measured per channel name, and intensity names are per wavelength, so it is the
-# per-wavelength CV and takes its threshold: 5% (Lloyd-Fox 2009). Alternatives are 7.5%
-# (Hocke 2018) and 15% (Piper 2014), both on whole-channel CV. SNR is 1/CV by construction,
-# so it is derived rather than written down, and the stored snr_pass_rate reads the same
-# line: three numbers for one decision is how they drifted apart in the first place.
+# per-wavelength CV and takes its threshold: 5% (Lloyd-Fox 2009). SNR is 1/CV by
+# construction, so it is derived and the stored snr_pass_rate reads the same line.
 CV_PASS  = 0.05
 SNR_PASS = 1.0 / CV_PASS
 
@@ -237,8 +232,7 @@ def separation_orphans(
 
 
 # How far past the scalp the fiducials describe an optode may sit before the positions and
-# the fiducials are taken to be in different coordinate frames. A registered cap already
-# reaches past 1x, because the cardinal points sit low on the head and the vertex does not.
+# the fiducials are taken to be in different coordinate frames.
 REGISTRATION_MAX_RATIO = 2.0
 
 
@@ -354,7 +348,7 @@ def _mask_to_segments(flagged: np.ndarray, times: np.ndarray) -> "list[tuple[flo
 
 # ---- Which events a run can actually be epoched on ----
 # The CNR metric and the subject report both ask this before building Epochs, so it sits
-# below both rather than in qc.figures, where it was.
+# below both.
 
 def epochable_events(raw, tmin: float, tmax: float):
     """Events that can actually be epoched over ``[tmin, tmax]``, as ``(events, event_id)``.

@@ -113,13 +113,12 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
 
     ::
 
-      _mean_by_chroma(wtcbycond, "coherence", ("condition", "game1"))
-      -> {"hbo": 0.2538, "hbr": 0.2483}
+      _mean_by_chroma(wtcbycond, "coherence", ("condition", "task1"))
+      -> {"hbo": 0.25, "hbr": 0.24}
 
-    Homologous pairs only. A crossed table holds every channel against every other, and the
-    mean over all of those is dominated by pairings of unrelated sites: it is a different
-    quantity from the homologous mean and moves differently between conditions, so mixing
-    the two down one column would make a crossed run and an uncrossed one incomparable.
+    Homologous pairs only. A crossed table's mean over every channel against every other is
+    a different quantity, so mixing the two down one column would make a crossed run and an
+    uncrossed one incomparable.
     """
     if df is None or column not in df.columns:
         return {}
@@ -143,7 +142,7 @@ def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None
 
     ::
 
-      _past_null(null_table, ("condition", "game1")) -> {"hbo": (2, 14), "hbr": (0, 14)}
+      _past_null(null_table, ("condition", "task1")) -> {"hbo": (2, 10), "hbr": (0, 10)}
 
     Coherence has a floor that moves with the window, so two windows' raw values do not
     compare and neither is readable on its own. Each channel pair's own surrogate draws are
@@ -290,7 +289,7 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
 
 
 def _window_of(bycond_path: Path, label: "str | None") -> str:
-    """``"521.3-1421.3 s"`` for one condition, off the table's sidecar, or ""."""
+    """``"300.0-1200.0 s"`` for one condition, off the table's sidecar, or ""."""
     if label is None:
         return ""
     try:

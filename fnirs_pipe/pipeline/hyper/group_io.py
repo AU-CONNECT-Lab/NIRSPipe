@@ -133,8 +133,7 @@ def load_group_haemo(
 
     "preproc" is Beer-Lambert output, the stage every montage has. Anything the post
     pipeline wrote is equally valid input here: "filtered", "resampled", "errts" (the
-    confound-regression residual, which is what an inter-brain metric usually wants, since
-    short-channel regression removes the systemic physiology two people in one room share).
+    confound-regression residual).
 
     Returns {subject_id: raw_haemo}.
     Raises MissingDerivativesError if any SNIRF is absent, StageError if one holds optical
@@ -218,9 +217,7 @@ def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list
         -> that file, rather than nothing
 
     Reads the same folders :func:`~fnirs_pipe.io.derivatives.find_preproc_snirf` reads the
-    recording itself from. Built by hand as ``output_dir/sub-XX/nirs`` before, which on a
-    session tree named a folder that does not exist: no channel was rejected, every quality
-    column read n/a, and nothing failed.
+    recording itself from.
     """
     return sorted((f for d in subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
                    for f in d.glob(pattern)), key=lambda f: f.name)
@@ -270,11 +267,8 @@ def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
     """A sentence for the ISC panel when the files record no bandpass, else None.
 
     ISC is a whole-record zero-lag correlation and so has no frequency axis to keep drift
-    out of. On an unfiltered stage it is dominated by the slowest component present, and two
-    members recorded in one room drift together for instrumental and environmental reasons
-    that are not neural. Excluding the short channels does not help: long channels carry the
-    same drift. WTC is unaffected, since its band mean averages only the cells inside the
-    requested band.
+    out of; on an unfiltered stage it is dominated by the slowest component present. WTC is
+    unaffected, since its band mean averages only the cells inside the requested band.
 
     ``--desc`` defaults to ``preproc``, which is Beer-Lambert output and is not bandpassed,
     so the default is the case this warns about.

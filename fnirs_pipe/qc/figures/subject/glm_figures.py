@@ -160,10 +160,8 @@ def _clim_vmax(clim: dict) -> float:
 def _add_shared_colorbar(fig, clim: dict) -> None:
     """One horizontal scale under the three views, in micromolar.
 
-    The renderer draws a colourbar into every view, so a three-view strip carries the same
-    scale three times, each squeezed narrow enough that its scientific-notation labels run
-    into one another. This draws it once instead, wide enough to read, in the unit the
-    betas are quoted in elsewhere rather than in bare molar.
+    The renderer draws a colourbar into every view; this draws it once instead, in the unit
+    the betas are quoted in elsewhere rather than in bare molar.
 
     MNE spaces ``pos_lims``/``lims`` evenly about zero, so a plain symmetric norm over
     RdBu_r reproduces exactly what was rendered.
@@ -207,8 +205,7 @@ def _save_glm_brain(
     ]
 
     try:
-        # HbO only, the surface-projection convention; the HbR betas are reported by the
-        # beta heatmap and the beta table, which are both per chromophore
+        # HbO only; the HbR betas are reported by the beta heatmap and the beta table
         ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in results_df.columns), None)
         raw_hbo = raw_haemo.copy().pick("hbo")
 
@@ -330,9 +327,8 @@ def _plotted_rows(df, raw_haemo: "mne.io.Raw | None"):
 
     _plotted_rows(df_with_hbo_and_hbr_rows, raw) -> only the good HbO rows
 
-    The colour scale has to be measured on the same set that gets drawn. A bad channel's
-    beta can sit orders of magnitude above the rest, and left in, it sets a limit no drawn
-    channel comes near, flattening every real one to background grey.
+    The colour scale has to be measured on the same set that gets drawn, or a bad channel's
+    beta sets a limit no drawn channel comes near.
     """
     ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in df.columns), None)
     if ch_col is None:
@@ -349,13 +345,9 @@ def _shared_clim(results_dict: "dict[str, pd.DataFrame]",
                  raw_haemo: "mne.io.Raw | None" = None) -> dict:
     """One colour scale over every condition, so two of them can be read against each other.
 
-    Scaling each condition to its own maximum would make a condition that barely activated
-    look like one that activated strongly, since both would fill their own scale.
-
     The limit is a high percentile of the drawn rows rather than their maximum, so one
-    surviving outlier channel cannot flatten the rest. There is deliberately no absolute
-    floor: haemoglobin betas sit around 1e-7 M, so any fixed floor would outrun the data
-    and grey out every condition.
+    surviving outlier channel cannot flatten the rest. There is no absolute floor: at the
+    scale of haemoglobin betas a fixed one would grey out every condition.
     """
     vals = [_plotted_rows(df, raw_haemo)[_coef_col(df)].to_numpy(dtype=float)
             for df in results_dict.values()]
@@ -380,8 +372,8 @@ def activation_condition_figures(
 ) -> "list[tuple[str, str]]":
     """One brain render per condition, as ``[(label, png_b64), ...]``.
 
-    activation_condition_figures(haemo, {"rest": df1, "talk": df2})
-    -> [("rest", "iVBOR..."), ("talk", "iVBOR...")]
+    activation_condition_figures(haemo, {"rest": df1, "task": df2})
+    -> [("rest", "iVBOR..."), ("task", "iVBOR...")]
 
     The report shows these behind one switch rather than stacked, so a condition can be
     looked at on its own. The colour scale is shared, see :func:`_shared_clim`.
@@ -409,9 +401,7 @@ def activation_panel(
 ) -> str | None:
     """Every condition's render stacked into one image, for a caller that wants one file.
 
-    The subject report does not use this any more: five conditions stack to roughly 3500 px,
-    where no single condition can be looked at and two cannot be compared without scrolling
-    between them. It renders each condition through
+    The subject report does not use this. It renders each condition through
     :func:`activation_condition_figures` and switches between them instead.
     """
     rendered = activation_condition_figures(raw_haemo, results_dict, clim, view, size)

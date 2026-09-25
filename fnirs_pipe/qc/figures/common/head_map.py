@@ -7,11 +7,9 @@ One projection, one outline, two marks. Which mark is right depends on what the 
   as a path, becomes a single larger disc inside a grey ring.
 - a **disc** at the channel's midpoint, for a value that is a property of one place, such as
   an amplitude. Bars are wrong for those: they meet end to end wherever two channels share
-  an optode, so a montage of independent measurements reads as one connected polyline and
-  the eye groups it into shapes that mean nothing.
+  an optode, so a montage of independent measurements reads as one connected polyline.
 
-A reader who has learned one of these figures can read the next one, and two views cannot
-drift into describing different heads.
+Two views built on it cannot drift into describing different heads.
 
 Built on :mod:`fnirs_pipe.qc.figures.common.topomap`'s projection, which is MNE's own, so
 these heads and a real topomap put a channel in the same place. What varies between callers
@@ -28,15 +26,13 @@ from fnirs_pipe.qc.figures.common.topomap import (
     _LONG_SIZE, _SHORT_SIZE, _glyph_points, _projected_optodes,
 )
 
-# one disc standing for a whole channel has to carry the value on its own, so it is drawn
-# larger than the discs a bar is strung from
+# one disc per channel, drawn larger than the discs a bar is strung from
 _DISC_SIZE = 15
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.head_map")
 
-# a channel the caller has no value for. Grey rather than an end of the colour scale, which
-# would read as a measured extreme instead of as an absence
+# a channel the caller has no value for; grey, since a scale end would read as a real extreme
 BLANK_COLOR = "#cfd6dc"
 DIM_OPACITY = 0.3
 
@@ -106,11 +102,7 @@ def _marker(g: dict, keep, size: float, short: bool, disc: bool = False,
         labels = [lab for lab, k in zip(labels, keep) if k]
     return go.Scatter(
         x=gx, y=gy, mode="markers", text=labels,
-        # a grey ring, which reads as a separate object against both the head and the bars
-        # while leaving the fill on the shared colour scale. White disappears into the page
-        # and near-black fights the fill for attention. A disc takes a white one instead:
-        # nothing else is drawn at that size, and the white is what keeps two neighbouring
-        # channels from merging into one blob
+        # grey ring on short-channel markers, white on discs so neighbours do not merge
         marker=dict(size=size, symbol="circle",
                     line=dict(width=ring, color="white" if ring and disc else "#98a4ae"),
                     **marker),
@@ -127,9 +119,7 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
     marker of a channel takes that channel's colour.
 
     ``mark`` is "bar" or "disc"; see this module's own docstring for which a number wants.
-    With bars, long and short stay on one colour scale, so a short channel reads as a
-    contamination check rather than as a second map; the **shape** is what separates them,
-    which is why one figure can carry both.
+    With bars, long and short stay on one colour scale and the **shape** separates them.
 
     ``customdata`` gives one extra value per channel and ``hover_tail`` a template fragment
     to print it with, for a figure whose colour is a derived number and whose reader still
@@ -142,8 +132,7 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
     a channel that has none:
 
     - ``blank_color`` draws the channels whose value is not finite in that flat colour. A
-      caller with no number for a channel then gets a grey channel rather than a gap, which
-      is what keeps the montage readable as a montage.
+      caller with no number for a channel then gets a grey channel rather than a gap.
     - ``dim`` names the channels to draw at reduced opacity. They keep their colour, because
       they do carry a real value; what the dimming means is the caller's to say.
 
@@ -178,8 +167,7 @@ def head_glyph(fig, geo, scope, values, row, col, title, cmin, cmax, bar, colors
             colorscale=colorscale, cmin=cmin, cmax=cmax, showscale=bool(show_bar),
             colorbar=colorbar,
         ).update(
-            # the member in every bubble: a grid of heads is read by pointing at one, and
-            # the row label is off at the edge by then
+            # the member in every bubble, since the row label is off at the edge
             hovertemplate=(f"<b>{sid}</b><br>" if sid else "")
                           + "%{text}<br>%{marker.color:" + fmt + "}" + hover_tail
                           + "<extra></extra>",
@@ -229,10 +217,8 @@ def head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int,
         for c in range(1, n_cols + 1):
             n = (r - 1) * n_cols + c
             fig.update_xaxes(visible=False, range=xr, row=r, col=c)
-            # the report renders figures responsive, so a wider container would stretch the
-            # head into an ellipse; the anchor keeps it round and spends the slack as margin.
-            # The axis stays visible with everything stripped rather than `visible=False`,
-            # which would take the title with it, and the title is what names the row.
+            # the anchor keeps the head round in a responsive container; stripped rather than
+            # `visible=False`, which would also drop the title that names the row
             fig.update_yaxes(range=yr, row=r, col=c, showticklabels=False, showgrid=False,
                              zeroline=False, showline=False, ticks="",
                              scaleanchor="x" if n == 1 else f"x{n}", scaleratio=1)

@@ -2,9 +2,8 @@
 
 Kept apart from ``group_figures``, whose panels are the individual cohort's robust-z strip
 and boxes over a metric table. Nothing here is a z-score: a dyad is read against the alpha
-line of its own null and against the share of its own recording it could use, both of which
-mean something on a cohort of three. The two modules share the report shell and the row
-order convention and nothing else.
+line of its own null and against the share of its own recording it could use. The two
+modules share the report shell and the row order convention and nothing else.
 
 Every panel takes the same ``rows``, one dict per dyad-task, and the same ``order``, so a
 dyad sits on the same line down the page and is read across the panels rather than looked up
@@ -26,13 +25,11 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_hyper_figures")
 
-# How far round a full share sweeps on a dial, and where it starts. The rest of the circle
-# is the gap the ring labels sit in; an arc that closed on itself would also be unreadable,
-# a full circle and a nearly full one looking the same.
+# How far round a full share sweeps on a dial, and where it starts; the gap holds the labels.
 _DIAL_SWEEP, _DIAL_START = 320.0, 20.0
 _DIAL_ACCENTS = ("#4f9aa8", "#2f6f8f", "#1f5673", "#7a9e7e", "#b07d62", "#8c6f9e")
 
-# The dials are there to be looked at one by one; a wall of twenty is a field again.
+# dials drawn, one per dyad from the worst down
 N_DIALS = 6
 
 
@@ -51,13 +48,10 @@ def _by_label(rows: list[dict]) -> dict:
 def build_usable_bars(rows: list[dict], order: list[str]) -> "go.Figure | None":
     """One bar per dyad, split into coupled in both / one member / neither.
 
-    The overview panel. Every other column measures one axis, channels or time, and this is
-    the one number carrying both, a cell being one channel pair in one window. The three
-    colours are the ones the dyad's own usable-time carpet uses, so a reader arriving from a
-    dyad page is not relearning the key.
+    The overview panel, carrying both channels and time, a cell being one channel pair in one
+    window. The three colours are the ones the dyad's own usable-time carpet uses.
 
-    None when no dyad carries the split, which is what a cohort of records written before
-    the shares were stored looks like.
+    None when no dyad carries the split.
     """
     by_label = _by_label(rows)
     parts = (("usable_window_frac", "coupled in both", _GOOD_COLOR),
@@ -104,10 +98,8 @@ def _dot_trace(frame: pd.DataFrame, showscale: bool,
                colorbar_x: "float | None" = None) -> go.Scatter:
     """One marker per cell, coloured by the share.
 
-    The ramp runs pale for a lost pair and dark for a kept one, the way round a reader first
-    resists: nearly every cell is high, so the rare low one should be the bright dot in a
-    dark field rather than one shade among many. The white between the dots does the row
-    separation a filled grid asks the reader to do.
+    The ramp runs pale for a lost pair and dark for a kept one, so the rare low cell is the
+    bright dot in a dark field.
     """
     x, y, values = [], [], []
     for label in frame.index:
@@ -132,8 +124,7 @@ def build_pair_field(rows: list[dict], order: list[str]) -> "go.Figure | None":
     """dyad x channel pair, one dot per cell, worst column first.
 
     The finding no single dyad page can carry: a column pale down the whole cohort is the cap
-    or the optode rather than the dyad. Columns are ordered by the cohort's own mean, since
-    the panel is read to find those columns and not to read off a spatial layout.
+    or the optode rather than the dyad. Columns are ordered by the cohort's own mean.
 
     None when the dyads share no pair, rather than a field whose columns are not the same
     pair down the page. A cohort on two montages keeps the pairs the two have in common.
@@ -180,10 +171,7 @@ def _add_dial(fig, row: int, col: int, label: str, rings: list[str], values: lis
 def build_condition_dials(rows: list[dict], order: list[str]) -> "go.Figure | None":
     """The condition field on the left, the dyads it turns up as dials on the right.
 
-    One figure rather than two, because the two halves are one move: the field says which
-    dyads are worth opening and the dials say what happened inside them. The field is the
-    same share cut by block, which is comparable across dyads in a way absolute seconds are
-    not, the recordings differing in length.
+    The field is the same share cut by block, a share rather than absolute seconds.
 
     None when no dyad carries per-condition shares.
     """
@@ -235,10 +223,9 @@ def build_null_strip(rows: list[dict], order: list[str]) -> "go.Figure | None":
     """One row per dyad, one marker per window, on the rank scale the dyad strip uses.
 
     Raw coherence cannot share an axis across windows: the estimator's floor sits near one
-    over the number of Welch segments and that count falls with the window, so 0.03 is
-    unremarkable in one window and out of reach in another. The rank inside that window's own
-    surrogate null is what goes on one axis, and it is the channel mean's rank, the channels
-    pooled before the comparison rather than a hundred draws ranked one channel at a time.
+    over the number of Welch segments and that count falls with the window. The rank inside
+    that window's own surrogate null is what goes on one axis, and it is the channel mean's
+    rank, the channels pooled before the comparison.
 
     The row's span is drawn as a line, so a dyad whose windows disagree is a long row rather
     than markers to be found. None when no dyad carries a screening verdict.

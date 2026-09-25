@@ -1,11 +1,11 @@
 """Per-run SQM record: one JSON per BIDS run, assembled after the pipeline has finished.
 
 The pipeline writes each stage to disk; this reads those files back and computes every
-metric once, at one named stage, through one writer. That is what stops the two
-checkpoints from overwriting each other, and it works on any tree a past run left behind.
+metric once, at one named stage, through one writer. It works on any tree a past run left
+behind.
 
 Sections name the input a metric family was measured on. The metric names inside a
-section are the same names the metric functions have always returned:
+section are the names the metric functions return:
 
     raw        every channel of the original recording, the archival view
     raw_long   the same recording, long channels only
@@ -22,10 +22,9 @@ and so on for each stage. One file seen through three channel sets, so the only 
 differs within a trio is source-detector separation, and a ``_long`` number is only ever
 compared against another ``_long`` one.
 
-**Split a new metric three ways unless it cannot be.** A short channel sits millimetres
-from its source: it returns far more light, a far stronger pulse, and it sees scalp rather
+**Split a new metric three ways unless it cannot be.** A short channel sees scalp rather
 than cortex, so an average over both sets describes neither. Two kinds of metric are the
-exception, and both are exceptions for a reason that can be stated:
+exception:
 
     a sum over channels  ``spike_count``, which tracks how many channels a set has and
                      nothing else. It is the only metric of the motion families that stays
@@ -38,9 +37,7 @@ exception, and both are exceptions for a reason that can be stated:
                      section alone (see ``_WHOLE_FILE_KEYS``); repeating it under ``_long``
                      would name a quantity that does not exist.
 
-Anything else, split it. The metric that made this a rule was ``hbo_hbr_corr_mean``: the
-HbO-HbR anticorrelation is a property of cortical haemodynamics, a short channel has none,
-and mixing the two moved one of the numbers that decides whether a run looks usable.
+Anything else, split it.
 
 Bad channels: the Beer-Lambert conversion is the dividing line, never the section.
 
@@ -50,9 +47,8 @@ Bad channels: the Beer-Lambert conversion is the dividing line, never the sectio
 A rejected channel is still part of what the machine recorded, so everything measured
 before Beer-Lambert describes the recording as it arrived; after it the channel is out of
 the analysis, and those metrics go through ``mne.pick_types``, which drops bads by
-default. Reading it the other way round gives ``sci_mean`` over channels that were
-selected for having good SCI, which is circular and can never fall below the threshold.
-``channel_retention_rate`` is what says how many were dropped.
+default. Excluding them earlier would make ``sci_mean`` circular, taken over channels
+selected for good SCI. ``channel_retention_rate`` is what says how many were dropped.
 
 Per-channel values live under ``per_channel`` so the sections stay scalar. Those are
 always complete, every channel, whichever section they sit under.
@@ -80,10 +76,6 @@ logger = get_logger("qc.sqm_record")
 
 # the post-Beer-Lambert stages, in the order the pipeline writes them. Each is its own
 # section named after the file it measured, which is the rule every other section follows.
-# The `final` section this replaced named a position rather than an input: it meant
-# "resampled, or filtered, or preproc, whichever exists", so the same key described the
-# bandpassed file on one run and the unfiltered one on another, and a run that regressed
-# confounds had its actual endpoint (`errts`) sitting outside it.
 _HAEMO_STAGES = ("filtered", "resampled", "errts")
 
 # Which side of the bandpass a stage sits on, named beside the list it comes from so a new
@@ -111,8 +103,7 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
 # `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
 # that saw both commands has both files. Both are sectioned; the shape is what is read,
-# never the name, so a record written before the two writers shared their raw sections
-# still lands in the same columns.
+# never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
 OPTIONAL_SECTIONS = ("censor",)
@@ -145,8 +136,7 @@ def entities_of(label: str) -> dict[str, str | None]:
     return {key: entity_of(label, key) for key in ("ses", "task", "run")}
 
 
-# What record_path writes, for the readers that glob for it. Four of them spelled it out by
-# hand, which is one rename away from a cohort page that silently aggregates nothing.
+# What record_path writes, for the readers that glob for it; one spelling for all of them.
 # The suffix is `qc`, not `nirs`: a .json whose suffix is nirs is by BIDS definition the
 # sidecar of a snirf, and there is no desc-sqm snirf for this to be the sidecar of.
 RECORD_SUFFIXES = {desc: f"_desc-{desc}_qc.json" for desc in SQM_DESCS}
@@ -225,7 +215,7 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
         scores = _sidecar(stages["sci"]).get("sci_scores")
         if scores:
             return {k: float(v) for k, v in scores.items()}
-    # pre-0.20 trees have no stored scores; the OD file still supports recomputing them
+    # a tree with no stored scores still has the OD file to recompute them from
     source = stages.get("sci") or stages.get("od")
     if source is None:
         return {}
@@ -242,12 +232,10 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
 def _good_frac_scores(stages: dict[str, Path]) -> dict[str, float]:
     """Per-channel coupled-window share from the sci sidecar, or empty.
 
-    Not recomputed when it is absent, unlike :func:`_sci_scores`. The share is a count
-    against two thresholds over a scope, so recomputing it here would need this run's
+    Not recomputed when it is absent, unlike :func:`_sci_scores`: it depends on this run's
     ``--sci-threshold``, ``--psp-threshold``, ``--min-good-frac`` and ``--screen-scope``,
-    and guessing any of them would put a number in the record that no channel was actually
-    judged by. A tree written before the share was stored has none, and the report says so
-    by leaving the row out.
+    and a guess would store a number no channel was judged by. A tree without the stored
+    share has none, and the report leaves the row out.
     """
     if "sci" not in stages:
         return {}
@@ -277,7 +265,7 @@ def _short_section(
     Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
     channels, and so does the whole spike family: the mask is a per-channel MAD test, and the
     frame counts over it ask how many of *these* channels spiked at once, which the windowed
-    half has stored per set since ``spike_spans_short_s``. ``spike_count`` is a sum over
+    half stores per set (``spike_spans_short_s``). ``spike_count`` is a sum over
     channels rather than a per-channel reading, so it counts this set's channels and not
     another's; it is printed beside the set's channel count for that reason. Drift does not
     transfer. GVTD does, in full, threshold included: it is an RMS
@@ -285,14 +273,12 @@ def _short_section(
     subset of the long one, and its threshold is the mode of *its own trace over time*, which
     has as many samples as any other trace of the same recording.
 
-    The channel count is not what sets the threshold, so a short set having few channels is
-    no reason to withhold one. What does need care is comparison: each set's share is counted
-    against its own set's threshold, so a short share and a long share are not two readings
-    of one thing. That is a labelling problem, and the panel labels it.
+    Each set's share is counted against its own set's threshold, so a short share and a long
+    share are not two readings of one thing; the panel labels them.
 
     Every value here is a value and not a verdict. Nothing colours a short channel's row,
-    because a short channel's coupling is high by construction and the published cutoffs
-    were never set for it; the long section is where the number is read against a line.
+    because a short channel's coupling is high by construction; the long section is where
+    the number is read against a line.
     """
     from fnirs_pipe.qc.metrics import (
         _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
@@ -470,11 +456,7 @@ def haemo_sections(
     """One haemoglobin file measured over every channel, the long ones, the short ones.
 
     The same three-way split as :func:`raw_sections`, and for the same reason: a short
-    channel sees scalp, so a mean taken over both sets describes neither. Global
-    correlation is the sharpest case, since short channels correlate strongly with one
-    another and lift it by construction, but the HbO-HbR anticorrelation is the one that
-    misleads most: it is a property of cortical haemodynamics, and a short channel has
-    none, so mixing the two moves the number that decides whether a run looks usable.
+    channel sees scalp, so a mean taken over both sets describes neither.
 
     ``compute`` maps a Raw to a flat metric dict, which is what lets the unfiltered stage
     (band power and drift included) and the filtered ones share this.
@@ -512,17 +494,13 @@ def _motion_post_section(
     the correction is there to remove, so a run that improved shows them fall against the
     same keys in ``raw``. SCI and PSP answer the second: they live in the cardiac band,
     above the frequencies motion correction touches, so they should come back unchanged. A
-    drop means the correction ate physiology along with the artifact, which is the failure
-    mode wavelet correction has and TDDR largely does not.
+    drop means the correction ate physiology along with the artifact.
 
-    ``gvtd_thresh`` is the matching ``raw*`` section's cutoff, and it is what makes the
-    first question answerable: the cutoff is derived from whatever trace it is shown, so
-    counting each side against its own turns the pair into two shape statistics of two
-    different distributions rather than a before and an after. See ``_motion_metrics``.
+    ``gvtd_thresh`` is the matching ``raw*`` section's cutoff, so both sides are counted
+    against one yardstick. See ``_motion_metrics``.
 
-    Hand-picked rather than ``compute_raw_sqm``: this file is optical density, so that
-    would set the whole intensity family to None and add CP and channel distance on top,
-    twenty-odd keys of which half would be empty.
+    Hand-picked rather than ``compute_raw_sqm``: this file is optical density, which would
+    leave that function's intensity family empty.
     """
     from fnirs_pipe.qc.metrics import (
         _mean_or_none, _motion_metrics, _psp_metrics, _sci_win_metrics, _spike_metrics,
@@ -562,9 +540,8 @@ def motion_sections(
     measurement per set rather than the same one regrouped.
 
     ``raw_thresh(name)`` returns the ``raw*`` section's GVTD cutoff for the matching channel
-    set, and it is what makes the before-and-after answerable: the cutoff is derived from
-    whatever trace it is shown, so counting each side against its own would compare two
-    shape statistics of two different distributions. See :func:`_motion_post_section`.
+    set, so before and after are counted against one yardstick. See
+    :func:`_motion_post_section`.
 
     ``before_od`` None leaves the footprint half out and keeps the rest: measuring what the
     correction touched needs both sides, measuring the corrected file needs only the one.
@@ -838,7 +815,7 @@ def _condition_entries(
 
         entry = {
             # unrounded, so a reader can pair these bounds back to the annotations they
-            # came from; rounding them is what silently dropped conditions before
+            # came from
             "window_s": [float(t0), float(t1)],
             "bad_channels": cond_bad,
             "scalars": scalars,
@@ -1037,7 +1014,7 @@ def compute_run_sections(
                 if names:
                     picked = spike_source.copy().pick(names)
                 elif key == "spike_spans_s":
-                    picked = spike_source          # unsplit montage: every channel, as before
+                    picked = spike_source          # unsplit montage: every channel
                 else:
                     continue
                 windowed[key] = [list(span) for span in spike_segments(picked)]
@@ -1069,10 +1046,8 @@ def compute_run_sections(
     # SCI, PSP and GVTD per window, all three on the same grid, but not off the same file.
     #
     # SCI and PSP come from the uncorrected OD, which is where the per-channel scores in
-    # `raw` were taken. The report draws both halves of one panel from these, and reading
-    # the windows off the corrected file put the heatmap a stage ahead of the lollipop
-    # beside it. GVTD keeps the corrected file: it measures the movement the correction
-    # exists to remove, so the corrected one is the informative stage for it.
+    # `raw` were taken, so both halves of the report's panel sit on one stage. GVTD keeps
+    # the corrected file.
     sci_source  = stages.get("sci") or stages.get("od") or stages.get("motcorrected")
     gvtd_source = stages.get("motcorrected") or sci_source
     if sci_source is not None:
@@ -1248,8 +1223,8 @@ def build_sqm_records(
                 logger.warning("%s: no band edges in the sidecars and none supplied; skipped", label)
                 continue
             bands = {k: (v if v is not None else recorded[k]) for k, v in bands.items()}
-        # a tree written before the length was stored falls back to the default the
-        # pipeline has always used, so its series are still binned on a known grid
+        # a tree with no stored length falls back to the pipeline's default, so its series
+        # are still binned on a known grid
         window_s = qc_window_s if qc_window_s is not None else (_window_s(stages) or 10.0)
         # each section guards itself, so what reaches here is fatal for this run only;
         # the remaining runs still get their records

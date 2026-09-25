@@ -33,9 +33,7 @@ def edge_to_mid_rms(
     above 1 means the transient is a real part of what the file contains.
 
     A detrend does not reduce it: the bandpass is linear and time-invariant and the trend
-    lies in its stopband, so subtracting the trend first changes nothing. Projecting the low
-    band out through the design matrix instead of filtering it out avoids the transient
-    entirely, which is why a GLM run defaults to no data filter at all.
+    lies in its stopband, so subtracting the trend first changes nothing.
 
     Parameters
     ----------
@@ -164,7 +162,7 @@ def _cnr_metrics(
     Anything built from band power cannot: the filter removes the out-of-band term by
     construction, so the ratio improves whatever the data did. CNR can move either way,
     because a filter or a regression that eats the response shrinks the numerator at the
-    same time as the denominator, which is exactly the failure worth seeing.
+    same time as the denominator.
 
     ``BAD_`` annotations are censoring marks rather than stimuli and are excluded from the
     event set; epochs overlapping them are dropped by ``reject_by_annotation``. Bad channels
@@ -334,9 +332,7 @@ def _drift_metrics(raw_haemo: mne.io.Raw, order: "int | None" = None) -> dict[st
 
     A polynomial trend is fitted per channel; drift is the mean peak-to-peak of that trend.
     Its order follows the recording length, one degree per ``DRIFT_ORDER_PER_S`` seconds,
-    so what counts as drift is a period (about twice that) rather than a shape. A fixed
-    order cannot do this: the same wander is two cycles in a 300 s run and fourteen in a
-    1800 s one, and only the first is something a cubic can follow.
+    so what counts as drift is a period (about twice that) rather than a shape.
 
     Parameters
     ----------

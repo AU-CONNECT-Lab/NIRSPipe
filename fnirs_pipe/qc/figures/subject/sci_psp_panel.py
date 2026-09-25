@@ -74,12 +74,11 @@ def channel_quality_heatmap(
 
     ``split_at`` is the index the short channels start at, given when the caller has
     already ordered ``ch_names`` long block first; it draws the divider and names the two
-    blocks. The two are pruned by the same threshold but answer different questions, so a
-    reader needs to know which side of the line a column is on.
+    blocks.
 
     Status is the screening verdict and Coupled is the row that produces it, which is why it
     sits directly under: a channel can fail on its coupled-window share with every average
-    below it comfortable, and without this row nothing on the page says so. The rows under
+    below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers` and none of
     them prunes.
     """
@@ -157,9 +156,9 @@ def channel_quality_heatmap(
 
 
 # key and row label only. The hover format and which end is the better one come from the
-# metric registry, which is also where the reports read them: a row that said SNR was better
-# low here and better high there would be a contradiction inside one report. Labels stay
-# local because a heatmap row is a few characters wide and the registry's are sentences.
+# metric registry, which is also where the reports read them, so the two cannot disagree.
+# Labels stay local because a heatmap row is a few characters wide and the registry's are
+# sentences.
 #
 # Every key here must carry a direction in the registry. Colour is relative within a row --
 # the worse end of what this recording actually did -- so a descriptive metric with no better
@@ -205,8 +204,7 @@ def trial_quality_heatmap(
     this recording actually did, not a threshold anyone crossed. Hover carries the real value.
 
     Example: 40 trials whose SCI holds near 0.9 except trials 12 and 13 gives a mostly uniform
-    SCI row with two red cells, which is the whole point of looking per trial rather than at
-    the recording mean.
+    SCI row with two red cells.
 
     Returns None when no metric survives on any trial (nothing to draw).
     """
@@ -314,8 +312,7 @@ def _window_centers(win_times) -> np.ndarray:
     """[start, end] window pairs -> one centre per window; already-1-D input passes through.
 
     e.g. [(0.0, 10.1), (10.1, 20.2)] -> [5.05, 15.15]. Flattening instead would hand a
-    heatmap twice as many x values as it has columns, and the extras are silently dropped,
-    which compresses the plotted time axis to half the recording.
+    heatmap twice as many x values as it has columns, halving the plotted time axis.
     """
     a = np.asarray(win_times, dtype=float)
     return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
@@ -349,8 +346,7 @@ def build_sci_psp_figure(
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
     the whole-run correlation and not the windowed one the strip draws.
 
-    Without the windowed matrices this falls back to the lollipop-only pair it has always
-    drawn, which is what a record predating the windowed section leaves it with.
+    Without the windowed matrices this falls back to the lollipop-only pair.
     """
     ch_names = list(sci_scores.keys())
     sci_arr  = np.array([sci_scores.get(ch, 0.0) for ch in ch_names])
@@ -394,14 +390,11 @@ def build_sci_psp_figure(
     #  threshold, higher is better, hover line, colour range)
     #
     # SCI and PSP centre their scale on the threshold; CV pins its range to twice it
-    # instead. CV is unbounded above and a single flat window can reach 0.38 against a 0.05
-    # line, which through `zmid` would stretch the scale to that one window and paint every
-    # ordinary window the same green. Pinned, the line sits mid-scale and anything twice as
-    # bad saturates, which is what the row is read for.
+    # instead, since CV is unbounded above and one flat window would stretch a `zmid` scale.
+    # Pinned, the line sits mid-scale and anything twice as bad saturates.
     # the mean beside a row is that row's own mean, not the scalar of the same name: the
     # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
-    # to 10 s, so on any other QC window the dot would sit beside a row it was not measured
-    # from. Here the dot is the row, averaged along time.
+    # to 10 s. Here the dot is the row, averaged along time.
     def _row_mean(matrix) -> np.ndarray:
         with np.errstate(invalid="ignore"):
             return np.nanmean(np.asarray(matrix, dtype=float), axis=1)

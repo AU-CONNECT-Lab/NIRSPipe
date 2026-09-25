@@ -11,9 +11,8 @@ nothing held in memory and can be rebuilt for a past output tree.
 
 The Conditions section covers per-condition *views* only, the ``by_condition`` block a
 whole-run pass leaves in its record. A tree cropped per condition first is already listed
-above, one run per condition, and belongs there rather than here: a cropped condition is
-filtered against its own two edges and lands on its own window grid, so its numbers are not
-comparable with a view's and the two must not share a table. See
+above, one run per condition, and belongs there rather than here: its numbers are not
+comparable with a view's, so the two must not share a table. See
 :mod:`fnirs_pipe.qc.subject.condition_views`.
 """
 
@@ -43,10 +42,9 @@ logger = get_logger("qc.subject_index")
 # say whether a run is usable at a glance; everything else stays in the run's own report.
 #
 # Long channels first, all channels as the fallback, which is the same preference the run's
-# own report and the hyperscanning tables use. Without it this table read `raw_*` while the
-# report beside it read `raw_long_*`, so one label named two different numbers. The last two
-# `Motion corr.` has no long-channel form: the correction footprint counts what the
-# correction touched, over every channel.
+# own report and the hyperscanning tables use. The last two `Motion corr.` has no
+# long-channel form: the correction footprint counts what the correction touched, over
+# every channel.
 _COLUMNS = (
     ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
@@ -134,8 +132,8 @@ def _shape(nirs_dir: Path, label: str, record: dict | None = None) -> dict:
 
     A run measured by `prep-raw` alone wrote no stage file, so the count is counted off the
     record's own per-channel block instead and the rest is left absent: the rate and the
-    length are not in there under any name, and a plausible number put where a measured one
-    goes is worse than a blank cell. ``channel_retention_rate`` is ``1 - bad/total``, which
+    length are not in there under any name, so they stay blank rather than guessed.
+    ``channel_retention_rate`` is ``1 - bad/total``, which
     turns back into the count of rejected channels exactly.
 
     ::
@@ -230,13 +228,12 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
 
     Read from each run's ``_desc-channel_qc.tsv``, which carries one ``is_bad`` per channel.
     The two wavelengths of a pair are collapsed into the pair: rejecting one rejects the
-    optode, and a row per wavelength says nothing a row per pair does not.
+    optode.
 
     Returns ``{"rejected": [{"pair", "bad_in", "n_bad"}], "clean", "n_pairs", "n_clean"}``.
     Only the rejected pairs get a row, ordered by how many runs rejected them and then by
-    the montage order the CSV is written in: a grid whose every cell says "kept" is a
-    sentence, not a table, and the pairs that survived are named in one. An empty dict when
-    no run wrote the file, which is what a tree from before it existed looks like.
+    the montage order the CSV is written in; the pairs that survived are listed in
+    ``clean``. An empty dict when no run wrote the file.
     """
     order: list[str] = []
     bad_by_label: dict[str, set[str]] = {}
@@ -483,8 +480,7 @@ def write_subject_index(
             title=f"sub-{subject}",
             heading=f"sub-{subject}",
         ),
-        # the errors block only when a section actually failed: this page has never carried
-        # one, and an empty "no errors" panel is chrome it does not need
+        # the errors block only when a section actually failed
         **footer_vars(versions=collect_software_versions(),
                       errors=errors or None, scope=f"sub-{subject}"),
         subject=subject,

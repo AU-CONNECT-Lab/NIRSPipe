@@ -2,9 +2,7 @@
 
 A recording preprocessed whole holds its conditions as annotations, so a per-condition view
 is a column selection out of the windowed metrics the run already computed, never a cut of
-the recording. The difference is not only cost. A condition cut into its own file is
-filtered against its own two edges and lands on a window grid starting at its own onset, so
-its numbers are comparable neither with the other conditions nor with the run. See
+the recording, so its numbers stay on the run's filter and window grid. See
 :func:`~fnirs_pipe.qc.metrics.windowed.condition_window_means`.
 
 Each view screens on its own stretch, so a channel coupled through one condition and loose
@@ -158,9 +156,8 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict,
     )
 
     out: dict = {}
-    # `filtered` on the before side, not `haemo`: the bandpass alone moves gcor, so pairing
-    # preproc against errts would credit the regression with the filter's effect too. The
-    # run's own page pairs the same two stages under these names.
+    # `filtered` on the before side, not `haemo`, so the pair isolates the regression; the
+    # run's own page pairs the same two stages under these names
     for raw, suffix, gcor_suffix in ((haemo, "", None),
                                      (filtered, None, "_prereg"),
                                      (errts, "_errts", "_postreg")):
@@ -194,26 +191,18 @@ def zoom_to_condition(figure, t0: float, t1: float):
 
     ::
 
-      zoom_to_condition(carpet_figure_dict, 543.7, 1443.7)
+      zoom_to_condition(carpet_figure_dict, 600.0, 1500.0)
 
-    This is how the carpet, the GVTD trace and the raw timeseries go per condition. Handing
-    a cropped recording to the figure builders instead would recompute what they derive
-    internally, and all three of those derivations are run-wide on purpose:
-    ``carpet_gvtd_figure`` filters GVTD at 0.01-0.5 Hz, z-scores each channel, and picks a
-    threshold off the distribution. On a short piece the 0.01 Hz filter would run against
-    the piece's own two edges, each condition would get its own
-    per-channel mean and SD so no two carpets could be read against each other, and each
-    would get its own threshold line. That figure's own docstring makes this argument for
-    the corrected-versus-uncorrected pair; it holds the same way across conditions.
-
-    So the run is measured once and the view is narrowed. Every x axis in the layout is set,
+    This is how the carpet, the GVTD trace and the raw timeseries go per condition. A cropped
+    recording would make the figure builders re-derive what they compute run-wide (the GVTD
+    filter, each channel's z-scale, the threshold), so the run is measured once and the view
+    is narrowed. Every x axis in the layout is set,
     because the carpet is stacked subplots sharing a time axis and leaving one unset would
     show a panel at a different span from the one above it.
 
     Takes either a plotly figure or its dict form, since the two report paths hold different
     ones: the raw viewer inlines figure dicts, and the subject report keeps plotly objects
-    to save as files. One function rather than an ``update_xaxes`` call at one call site and
-    this loop at the other, which would be two spellings of one decision and free to drift.
+    to save as files. One function for both, so the two paths cannot drift.
     A figure object is narrowed in place and returned; a dict is returned narrowed as a copy,
     because the run's own dict is written out as well.
     """
@@ -256,15 +245,9 @@ def rescale_y_to_window(figure, t0: float, t1: float):
       rescale_y_to_window(motion_detail_fig, 22.4, 322.4)
 
     The companion of :func:`zoom_to_condition`, which narrows the view along time and leaves
-    the y axes pinned to the whole run. That pinning is what a quiet condition runs into:
-    its GVTD peaks can fill a small fraction of an axis set by a louder condition, so the row
-    reads as a flat line with the threshold rule near its floor, and the panel stops
-    answering the question it is on the page for.
-
-    What the run-wide axis bought is a comparison between conditions by eye. Each page
-    already carries that comparison as a number, per condition and to three figures, so this
-    trades a worse copy of it for a panel that works. The row labels carry this window's
-    maximum and the run's beside it, so a reader is told which scale they are on.
+    the y axes pinned to the whole run, where a quiet condition's row reads as a flat line.
+    The row labels carry this window's maximum and the run's beside it, so a reader is told
+    which scale they are on.
 
     Shaded spans follow the new range instead of setting it: they are frames drawn to the
     row's height, not measurements. A row with no trace inside the window is left alone.
@@ -336,10 +319,8 @@ def window_view_spec(figure, t0: float, t1: float) -> dict:
                 lo, hi = min(lo, float(inside.min())), max(hi, float(inside.max()))
         if not np.isfinite(lo) or hi <= lo:
             continue
-        # a row the builder pinned to zero keeps its floor there. Those rows hold magnitudes,
-        # GVTD and |dOD/dt|, and a peak on them is read as a height: lifting the floor to the
-        # window's own minimum would draw a quiet condition's ripple as though it were one.
-        # A row that autoranged (OD, which goes negative) gets a floor fitted to the window.
+        # a row pinned to zero (a magnitude: GVTD, |dOD/dt|) keeps that floor; an autoranged
+        # row (OD, which goes negative) gets a floor fitted to the window
         key = "yaxis" + axis[1:]
         was = figure.layout[key].range if key in figure.layout else None
         if was is not None and float(was[0]) == 0.0:
@@ -459,8 +440,7 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
 
 
 # figures a condition page keeps whole, because they describe the run rather than any one
-# condition. The optode layout is the montage; the event timeline is the run's schedule, and
-# a reader comparing two conditions wants the same picture on both pages.
+# condition. The optode layout is the montage; the event timeline is the run's schedule.
 CONDITION_PAGE_FIGURES = ("layout", "trigger")
 
 
@@ -474,11 +454,10 @@ def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
     A figure reaches a condition page one of three ways, and each leaves a mark: rewritten
     for the condition (its ``cond-`` entity is the slug), addressed at the condition's window
     (``…#<slug>``), or kept whole on purpose (:data:`CONDITION_PAGE_FIGURES`). Anything else
-    is the run's figure sitting under this condition's numbers with nothing to say so, which
-    is what happened to every panel here before the pages read the record.
+    is the run's figure sitting under this condition's numbers with nothing to say so.
 
-    Checking the assembled values rather than a list of keys is what catches the next one
-    without anybody remembering to extend a list.
+    Checking the assembled values rather than a list of keys also catches a figure added
+    later.
     """
     leaks = []
     for key, value in (figure_paths or {}).items():
@@ -507,21 +486,17 @@ def carpet_window_spec(figure, t0: float, t1: float) -> dict:
           "bands": [{"i": 1, "lo": 0.0, "hi": 0.0061}, ...],
           "notes": [{"name": "gvtd-stat-long", "text": "max 2.36e-03 ..."}, ...]}
 
-    Two things differ from :func:`window_view_spec`, which is why this is its own function
-    rather than an option on that one.
+    Two things differ from :func:`window_view_spec`.
 
     **One top for every GVTD row, by the figure's own rule.** ``gvtd_y_top`` is called on
     this window's samples, so the view is drawn the way the panel is drawn: a 99.5th
     percentile rather than a maximum, and never below the threshold rule. Long and short
-    share the number because they are the same unit at comparable magnitudes; scaling each
-    to itself would hide the difference the second row is there to show.
+    share the number, so the difference between the two rows stays visible.
 
     **The heatmaps are not touched.** Their colour is a z-score against a per-channel mean
     and SD taken over the whole run from the uncorrected side, and both carpets use those
-    same two numbers. Re-deriving them per condition would make one colour mean a different
-    deviation on each page, and the colour bar is one legend for the whole image with nowhere
-    to say so. A line can print the scale it is on beside itself, which is what the rewritten
-    stat labels below do, and a pixel cannot.
+    same two numbers, so one colour means one deviation on every page. The lines print the
+    scale they are on in the rewritten stat labels below.
     """
     from fnirs_pipe.qc.figures.common.motion_panel import (
         GVTD_STAT_SLOT, _gvtd_stat_label, gvtd_y_top,
@@ -626,8 +601,7 @@ def condition_payloads(
       be read against. The run's file carries every window and this page asks for one by URL
       fragment.
     - **taken out of the run's own pass**: the trial images. One run-wide pass drew every
-      condition's, so the pages share a colour scale; a scale taken per page would make two
-      conditions with different responses look alike.
+      condition's, so the pages share a colour scale.
     - **rebuilt on a cropped copy**: the spectrum and the grand mean, through ``remake_psd``
       and ``remake_epoch``. There is nothing
       to slice, it being one spectrum rather than a time-by-frequency matrix, and nothing in
@@ -635,8 +609,7 @@ def condition_payloads(
       transform gets no spectrum rather than one on a coarser grid than the run's.
 
     The event timeline is the run's own figure, left whole: it is the schedule the whole
-    recording ran to, and two condition pages showing different pictures of it invites a
-    comparison between them that is not there.
+    recording ran to.
     The per-trial table is cut to the trials whose onset falls inside the window; nothing is
     rescored, a trial's SQM reading nothing outside its own crop.
 
@@ -768,19 +741,16 @@ def condition_payloads(
             paths.pop("epoch_mean", None)
             if epoch_fig is not None:
                 paths["epoch_mean"] = save_figure("epoch_mean", slug, epoch_fig)
-            # this condition's rows out of the run-wide pass, never redrawn: a scale taken
-            # per page would make two conditions with different responses look alike
+            # this condition's rows out of the run-wide pass, never redrawn: one shared scale
             d["trial_images"] = [
                 saved for pair, figs in ((trial_images or {}).get(label) or [])
                 for saved in [save_stack("trialimg", slug, pair, figs)] if saved
             ] if save_stack else []
-        # the trial images are figure paths outside `figure_paths`, which is the shape the
-        # subject report's one leak took, so they go through the same check
+        # the trial images are figure paths outside `figure_paths`, so they are checked too
         leaks = figure_leaks(
             {**paths, **{f"trial_image[{e['pair']}]": e for e in d["trial_images"]}}, slug)
         if leaks:
-            # loud rather than silent: a run-wide figure under per-condition numbers reads
-            # as that condition's, and nothing on the page would say otherwise
+            # loud, not silent: a run-wide figure here would read as this condition's
             logger.warning("condition %s still points at run-wide figures (%s); they are "
                            "being dropped", label, ", ".join(leaks))
             for key in leaks:
@@ -843,9 +813,8 @@ def slice_time_traces(figure: dict, t0: float, t1: float) -> dict:
 
       n traces of 4427 points, 3602.4 to 3902.5 s  ->  n traces of ~1300
 
-    The companion of :func:`zoom_to_condition` and the choice between them is not a matter
-    of taste. Narrowing sets the axis and leaves the run's samples in the trace, which is
-    what a figure deriving something internally needs; it also means Plotly's own
+    The companion of :func:`zoom_to_condition`. Narrowing sets the axis and leaves the run's
+    samples in the trace, which is what a figure deriving something internally needs; it also means Plotly's own
     double-click, which autoranges over the data it holds, opens the whole run. Slicing
     removes that, so it is right wherever the y values do not depend on which samples are
     present. The raw-signal panel qualifies: each channel was z-scored and offset over the
@@ -905,9 +874,8 @@ def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold
     """The SCI/PSP panel over one condition's columns, a real slice of both matrices.
 
     Unlike the carpet, this figure derives nothing internally: it is handed the matrices and
-    the per-channel scalars, so both are replaced by the condition's. Passing the
-    condition's matrices with the run's scalars would put a per-condition heatmap beside a
-    whole-run bar, which is the mistake this pairing exists to prevent.
+    the per-channel scalars, so both are replaced by the condition's and a per-condition
+    heatmap never sits beside a whole-run bar.
 
     Returns the figure itself, or None when no window of the run's grid falls inside this
     condition, so the caller can write it to a file of its own.
@@ -953,8 +921,7 @@ def condition_slices_from_record(
 
     The record's ``windowed`` section already stores the channel-by-window SCI and PSP
     matrices and their window bounds, so a condition is a column selection out of what the
-    run measured once. This is the whole reason the subject report can go per condition
-    without touching the recording again.
+    run measured once.
 
     The coupled-window share is rebuilt here rather than read, because the record stores
     only its whole-run value. It goes through
@@ -963,8 +930,8 @@ def condition_slices_from_record(
     screened by. Both cutoffs have to be the run's own; passing anything else produces a
     number no channel was judged against.
 
-    Returns an empty dict when the record predates the stored matrices, which is the honest
-    answer: the values cannot be recovered from the whole-run scalars.
+    Returns an empty dict when the record carries no stored matrices: the values cannot be
+    recovered from the whole-run scalars.
     """
     from fnirs_pipe.qc.metrics.windowed import (
         condition_window_means, coupled_mask_from_matrices,
@@ -990,7 +957,7 @@ def condition_slices_from_record(
         if psp_matrix else None
     frac_by_cond = ({} if mask is None
                     else condition_window_means(mask.astype(float), sci_times, windows))
-    # records written before CV was windowed have no matrix; those pages leave it out
+    # a record with no CV matrix leaves CV off its pages
     cv_by_cond = ({} if not cv_matrix or cv_times is None
                   else condition_window_means(cv_matrix, cv_times, windows))
 

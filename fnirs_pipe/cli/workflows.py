@@ -98,9 +98,7 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     """Stop a run whose input was cut into one file per condition before preprocessing.
 
     Motion correction fits its weighting over whatever series it is handed and the bandpass
-    pads whatever it is given, so each condition preprocessed alone gets a different answer,
-    the bandpass's being a baseline invented at the segment edges. Padding the crop fixes
-    only the bandpass. The right order is to preprocess the recording and cut afterwards.
+    pads whatever it is given, so each condition preprocessed alone gets a different answer.
 
     Detected from the input tree's own `dataset_description.json`, which `fnirs-prep crop`
     stamps with its name, so nothing new has to be recorded for this to work.
@@ -162,9 +160,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     # The separation bands are resolved here rather than in either config builder because only
     # the post builder is given the TOML, and prep is the step that stamps the bands into the
-    # record. Resolving them in one place is what keeps the record, the regression and the
-    # reports describing the same montage; half a threading is worse than no TOML support.
-    # CLI still wins. `fnirs-prep` has no --config of its own, so its bands stay CLI-only.
+    # record. CLI still wins. `fnirs-prep` has no --config of its own, so its bands stay CLI-only.
     for _band in _shared.SEPARATION_BAND_KEYS:
         if args.get(_band) is None and toml.get(_band) is not None:
             args[_band] = toml[_band]
@@ -262,7 +258,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             for snirf_path in files:
                                 src_entities = layout.parse_file_entities(str(snirf_path))
                                 # the file's own session, which --session-label only filters on;
-                                # without it every output of a session tree lost its ses- level
+                                # without it the outputs of a session tree lose their ses- level
                                 prep_config = _make_prep_config(
                                     subject, src_entities.get("session") or session, args)
                                 logger.info("processing: %s", snirf_path)
@@ -281,8 +277,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
                     # one SQM record per run, written once both passes have finished so the
                     # post-Beer-Lambert sections can measure the files post actually produced.
-                    # The database takes one row per section, which is what its checkpoint
-                    # column has always been for.
+                    # The database takes one row per section.
                     import json as _json
                     from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
                     try:
@@ -365,8 +360,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         except Exception:
                             logger.warning("sub-%s | run index failed", subject, exc_info=True)
 
-                # Recorded rather than raised: the subjects are independent and a rerun skips
-                # what finished, so one bad recording must not strand the rest of the batch.
+                # recorded rather than raised, so one bad recording does not strand the batch
                 except Exception as exc:
                     subject_status = "FAILED"
                     subject_error = str(exc)
@@ -381,14 +375,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         duration_seconds=time.monotonic() - t0,
                     )
 
-        # Threads rather than processes: the heavy steps are numpy and MNE, which release
-        # the GIL, and one execution_id and one `failed` list stay shared without pickling.
+        # threads, not processes: one execution_id and one `failed` list stay shared
         n_jobs = max(1, int(args.get("n_jobs") or 1))
         if n_jobs > 1 and len(participant_label) > 1:
             from joblib import Parallel, delayed
             from threadpoolctl import threadpool_limits
-            # One BLAS thread per job. Left alone each job opens as many threads as there
-            # are cores and they fight over them, which can end up slower than serial.
+            # one BLAS thread per job, or the jobs oversubscribe the cores
             logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
                         len(participant_label), n_jobs)
             with threadpool_limits(limits=1):

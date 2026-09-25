@@ -6,9 +6,7 @@ per-dyad pass; re-pairing needs the rest of the cohort, so it reads the pairs ta
 finished derivatives tree and runs after them.
 
 Its parameters are read back off the real table's sidecar instead of being taken from the
-command line. A null is only meaningful against the table it is subtracted from, so a band
-or a mask the caller could type differently is a way for the two to disagree silently. Same
-reason ``alignment_params`` is read off the lineage stamps rather than passed in.
+command line, so the null and the table it is subtracted from cannot disagree.
 """
 
 from __future__ import annotations
@@ -32,9 +30,7 @@ logger = logging.getLogger(__name__)
 
 POOLS = ("position", "any")
 
-# a partner whose recording cannot reach the real dyad's analysed length is refused rather
-# than shortened: coherence rises as a record shortens, so a null averaged over draws of
-# unequal length is a mixture the real table cannot be compared against
+# refused, not shortened: coherence rises as a record shortens, so draws must match in length
 _DURATION_TOL_S = 1e-3
 
 
@@ -57,10 +53,9 @@ def partner_pool(
 
     ``position`` keeps a member's role: where the two members of a group are not
     interchangeable, only the other groups' member at the same index is a valid stand-in.
-    It is also the only safe pool where one person appears in several groups, which is what
-    a cohort of the same pair recorded over many days looks like: ``any`` would there pair
-    somebody with themselves on another day, which is not a null at all. ``any`` doubles the
-    pool and is refused unless the table shows nobody is repeated.
+    It is also the only safe pool where one person appears in several groups, since ``any``
+    would there pair somebody with themselves. ``any`` doubles the pool and is refused unless
+    the table shows nobody is repeated.
     """
     if pool not in POOLS:
         raise ValueError(f"pool must be one of {POOLS}, got {pool!r}")
@@ -75,11 +70,7 @@ def partner_pool(
         return [entry for gid, members in same_task.items() if gid != group_id
                 for entry in members if entry.subject_id not in own]
 
-    # only the members this draw keeps are barred, not the whole group. Where the cohort is
-    # the same people recorded repeatedly, every stand-in shares a subject id with the member
-    # it replaces, and barring the group would empty the pool on exactly the cohort this
-    # null was asked for. Pairing somebody with themselves is what has to be barred, and
-    # that is the member being held fixed
+    # only the member held fixed is barred, not the whole group, so repeat visits keep a pool
     held = {e.subject_id for i, e in enumerate(same_task[group_id]) if i != position}
     return [members[position] for gid, members in same_task.items()
             if gid != group_id and len(members) > position
@@ -138,8 +129,8 @@ def _warn_unverifiable_pool(same_task: dict) -> None:
 def real_table_params(real_tsv: Path) -> dict:
     """The real WTC table's own record of how it was computed, off its sidecar.
 
-    Raises rather than falling back on defaults: a null built on a guess about the band is
-    worse than no null, because nothing downstream can tell the two apart.
+    Raises rather than falling back on defaults, since nothing downstream could tell a null
+    built on a guessed band from one built on the recorded one.
     """
     sidecar = real_tsv.with_suffix(".json")
     if not sidecar.exists():
@@ -214,11 +205,7 @@ def _draw_condition_pairs(
     reads; with whitening off the two are the same objects.
 
     Each condition is taken from **the stand-in's own onset**, not from where it sat in the
-    real dyad's clock. Sessions that run to one timetable drift: the first trigger lines up
-    by construction and the gaps between blocks do not, so by the last condition the two
-    recordings can be well apart. Cutting the stand-in at the real dyad's window
-    would then correlate one person's conversation against another's silence and call it a
-    null, which reads as "no coupling" for a reason that has nothing to do with coupling.
+    real dyad's clock: sessions that run to one timetable drift apart between blocks.
 
     Taking each side from its own marker makes every draw the same length as the condition it
     stands in for, so the whole-record duration does not matter and a stand-in shorter than
@@ -286,10 +273,7 @@ def _draw_condition_pairs(
             start, real_t0 = max(0.0, start), max(0.0, float(t0))
             span = min(span, end - start, fixed_end - real_t0)
             # context either side, so the cone of influence reaches into the pad and not
-            # into the condition: the real table is windowed out of a whole-record
-            # transform and a draw cut to the bare block is not, which is the same length
-            # bias the two routes were measured to differ by. Whatever the recordings can
-            # spare, equal on both sides so the pair stays aligned and the same length.
+            # into the condition; equal on both sides so the pair stays aligned
             lead = min(margin, start, real_t0)
             trail = min(margin, end - start - span, fixed_end - real_t0 - span)
             segments.append((label, start, span, real_t0, lead, max(0.0, trail)))
@@ -344,11 +328,7 @@ def run_pair_null(
     phase-scrambled table has, plus the per-condition and homologous-ROI tables where the
     real side has them. Returns the whole-run path.
 
-    The re-paired ISC rides along on the same draws: making one is two recordings read,
-    aligned and cropped, and a correlation over that costs nothing beside it. It is the only
-    null the correlation has, the phase-scrambled one having the same defect here as it does
-    for the coherence and a worse one, a whole-record correlation carrying more of the shared
-    task than a band mean does.
+    The re-paired ISC rides along on the same draws.
 
     Unlike the phase-scrambled null this runs after the real table rather than around it,
     and takes its band, its mask, its frequency range and its window off that sidecar. Draw
@@ -378,7 +358,7 @@ def run_pair_null(
     mask_coi = bool(real_params["mask_coi"])
     window_s = real_params.get("analysis_window_s")
     analysis_window = tuple(window_s) if window_s else None
-    # absent on a table written before the option existed, which was never whitened
+    # absent means the real table was never whitened
     whiten_s = float(real_params.get("wtc_whiten_s") or 0.0)
 
     isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
@@ -395,10 +375,8 @@ def run_pair_null(
     fixed_id = members[0].subject_id
     true_pair = (members[0].subject_id, members[1].subject_id)
     aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
-    # A stand-in need not match the whole recording's length: each condition is cut from its
-    # own marker on both sides, so what has to agree is the block, and the blocks are what
-    # the trigger defines. That is what lets a cohort whose sessions differ by minutes draw
-    # from its whole pool rather than only from the sessions that ran longer.
+    # a stand-in need not match the whole recording's length: each condition is cut from its
+    # own marker on both sides
     recorded = real_params.get("aligned_duration_s")
     if recorded is not None and abs(float(recorded) - aligned_duration) > _DURATION_TOL_S:
         # the tree moved under the table: the null would describe a different stretch
@@ -425,9 +403,7 @@ def run_pair_null(
         if analysis_window is not None:
             lo, hi = analysis_window
             windows = [w for w in windows if w[1] >= lo and w[2] <= hi]
-        # taken off the sidecar rather than the command line, for the same reason the band
-        # and the mask are: a null resolved on a different grid than the table it is
-        # subtracted from measures the grid, not the pairing
+        # taken off the sidecar rather than the command line, like the band and the mask
         if real_params.get("wtc_window_s"):
             windows, window_sources = split_windows(
                 windows, float(real_params["wtc_window_s"]))
@@ -549,10 +525,7 @@ def run_pair_null(
         **alignment_params(aligned_real),
     )
 
-    # Per condition only. A whole-run re-paired null would mean cutting the stand-in at the
-    # real dyad's clock, and the sessions drift apart between blocks, so that table would
-    # correlate one person's conversation against another's game and rank a real value
-    # against it.
+    # per condition only: a whole-run draw would cut the stand-in on the real dyad's clock
     out_path = None
     cond_null = {"condition": "all", "nulldist": "pair", "statistic": "wtc"}
     for bucket, entities, step, extra in (
@@ -599,10 +572,9 @@ def run_pair_null(
 def _isc_settings_of(sidecar: Path, whiten: int, max_lag_s: float, band):
     """The band, whitening and lag the real ISC used, read off its sidecar.
 
-    Taken from the file rather than the command line for the reason the coherence's band is:
-    a null computed on other settings than the table it is subtracted from is not a null of
-    anything. A tree written before those fields existed has none, and then what the caller
-    passed stands, with a line in the log saying the two were not checked against each other.
+    Taken from the file rather than the command line, like the coherence's band. A sidecar
+    without those fields leaves what the caller passed standing, with a line in the log
+    saying the two were not checked against each other.
     """
     try:
         params = json.loads(sidecar.read_text(encoding="utf-8")).get("parameters", {})

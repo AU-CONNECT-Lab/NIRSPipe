@@ -4,7 +4,7 @@ Two families, because the package draws with two libraries. Plotly figures becom
 standalone iframe-ready HTML; matplotlib figures arrive already encoded and are decoded
 to a PNG file. Both end in ``figures/`` beside the report, which is what keeps a report
 page small: the page carries a URL per figure and the browser fetches the one being
-looked at. Embedding them instead makes a figure-heavy report very large.
+looked at.
 """
 
 from __future__ import annotations
@@ -20,10 +20,8 @@ from fnirs_pipe.io.naming import figure_name
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
-# No scrollbar inside a figure's frame. The page that holds it sizes the frame to the height
-# the figure reports, so a scrollbar there is always transient -- but while it is up it takes
-# 15px off the width the figure measures itself against, and a figure that sets its height
-# from its width came out that much shorter than the still beside it.
+# No scrollbar inside a figure's frame: even a transient one takes width off the figure, and
+# a figure that sets its height from its width comes out shorter.
 _IFRAME_CSS = ("html,body{margin:0;padding:0;width:100%;}"
                "html{scrollbar-width:none;}html::-webkit-scrollbar{display:none;}")
 
@@ -34,8 +32,7 @@ CENTER_FIGURE_CSS = ".plotly-graph-div{margin-left:auto;margin-right:auto;}"
 
 # The figure's own height, reported to the page that frames it. Measured off the plot
 # divs and not off `document.body.scrollHeight`, which is floored by the iframe's current
-# height: a figure could grow that way but never shrink, so one that sizes itself to the
-# page's width left a white band under it at every width narrower than it opened at.
+# height and so never lets a figure shrink.
 _RESIZE_JS = (
     "<script>(function(){"
     "function _h(){"

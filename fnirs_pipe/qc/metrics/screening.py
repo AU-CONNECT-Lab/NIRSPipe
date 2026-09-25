@@ -7,9 +7,8 @@ adding one is adding a line plus a scorer. Everything that prunes goes through
 :func:`screen_channels`, so the prep pipeline, the raw QC report, the per-trial scoring and
 the dyad path cannot end up screening on different things.
 
-**SCI and PSP are measured and reported but do not decide.** Their published definition
-pairs them inside one short window and counts how many windows a channel passes, which is
-what ``good_frac`` does; the two whole-run numbers stay in the table because every report
+**SCI and PSP are measured and reported but do not decide.** ``good_frac`` pairs them
+inside one short window and counts how many windows a channel passes; the two whole-run numbers stay in the table because every report
 prints them and because they are the lines ``good_frac`` applies per window.
 
 The scores themselves are measured in :mod:`fnirs_pipe.qc.metrics.coupling`; this module
@@ -82,11 +81,8 @@ def _good_frac_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq:
         scope=context.get("scope"))
 
 
-# The criteria, in the order a report lists them. SCI and PSP both measure optode-scalp
-# coupling from the cardiac pulsation and they catch different failures: SCI is high
-# whenever the two wavelengths agree, which movement can fake, and PSP is near zero when it
-# is faked. That is why the rejection is neither of them on its own but `good_frac`, which
-# requires both inside the same window and then counts the windows.
+# The criteria, in the order a report lists them. Movement can fake a high SCI but not PSP,
+# so the rejection is `good_frac`, which requires both inside the same window.
 CRITERIA: tuple[Criterion, ...] = (
     Criterion("sci", "SCI", SCI_PASS, _sci_scorer,
               config_field="sci_threshold", screens=False),

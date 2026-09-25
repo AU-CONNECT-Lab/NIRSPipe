@@ -125,10 +125,8 @@ def _warn_unmatched_design_band(config: PostConfig) -> None:
     spanning everything below the cutoff *is* a high-pass. A low-order polynomial does not
     span it and neither does no drift model at all.
 
-    How much it costs depends on block length against the cutoff: a design whose blocks sit
-    well inside the passband loses a couple of percent, while one whose fundamental falls
-    below the cutoff can lose most of the effect. A warning rather than an error for that
-    reason, since only the caller knows their design.
+    A warning rather than an error: how much it costs depends on block length against the
+    cutoff, and only the caller knows their design.
     """
     if config.high_pass is None:
         return
@@ -236,8 +234,8 @@ def _warn_drift_absorbs_task(
     """A drift basis reaching a condition's own rhythm fits that condition away as drift.
 
     The cosine basis spans everything below its cutoff, so the cutoff has to sit below the
-    frequency at which the condition repeats. The usual choice is half that frequency,
-    which leaves the basis an octave of room before it reaches the task.
+    frequency at which the condition repeats. The warning suggests half that frequency, an
+    octave of room before the basis reaches the task.
     """
     if config.drift_model != "cosine" or config.drift_high_pass is None:
         return
@@ -355,9 +353,8 @@ def run_post(
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
 
-        # FC on the task residual, which is what makes it a connectivity measure rather
-        # than a map of who responded to the same stimulus: the task is in the design
-        # matrix, so what correlates here is what the model did not explain.
+        # FC on the task residual: the task is in the design matrix, so what correlates here
+        # is what the model did not explain.
         if config.fc:
             _warn_fc_without_bandpass(config)
             fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
@@ -467,10 +464,8 @@ def run_post(
                 config, output_dir, rec, source_entities=source_entities)
 
     # GCOR around the confound regression is not measured here. Both of its stages are
-    # written to disk, and the SQM record measures each one per channel set; computing it a
-    # second time in memory gave the report a number over every channel to print beside
-    # rows that were long-channel, which reversed the direction the regression appeared to
-    # move HbR global correlation in. The report reads `filtered` -> `errts` instead.
+    # written to disk and the SQM record measures each one per channel set, so the report
+    # reads `filtered` -> `errts`.
     return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
 
 def _deriv_sidecar(path: Path, step: str, source: str | None, bads: list[str], **params) -> None:
@@ -497,9 +492,8 @@ def _write_fc_derivatives(
 
     All three modes land here, and the only thing that differs is what arrives: rest
     regresses confounds alone, glm regresses the task as well, and denoise passes either its
-    own confound residual or, when no regression ran, the bandpassed data itself.
-    Correlating a task residual is what makes the result connectivity rather than a map of
-    who responded to the same stimulus, so the distinction lives in the caller, not here.
+    own confound residual or, when no regression ran, the bandpassed data itself. The
+    distinction lives in the caller, not here.
     """
     from fnirs_pipe.pipeline.restingstate import (
         _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
@@ -624,8 +618,7 @@ def _write_rest_derivatives(
     alff_df = None
     if raw_resid_bb is not None:
         # handed in rather than blanked afterwards: a channel fitted against a copy of
-        # itself must also stay out of the mALFF/zALFF reference, and doing that here and
-        # the blanking there is what let a numerical zero into the reference mean
+        # itself must also stay out of the mALFF/zALFF reference mean
         empty = sole_regressor_channels(raw_resid_bb, config.short_channel,
                                         separation_bands(config))
         alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass,

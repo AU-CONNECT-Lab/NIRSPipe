@@ -22,15 +22,12 @@ logger = get_logger("qc.metrics.coupling")
 # part of what PSP measures, not smoothing: it moves the spread between good and bad channels
 PSP_WINDOW_S = 10.0
 # CV is sigma/mu, so a longer window admits slower variation into sigma and the number grows
-# with the recording: a whole-run CV reads well above a 10 s one, and the difference is
-# the drift, not the noise CV_PASS was set for. Pinned for the same reason PSP is,
-# and to the same length so the two scalars describe the same stretch of recording.
+# with the recording. Pinned like PSP, and to the same length so the two scalars describe
+# the same stretch of recording.
 CV_WINDOW_S = 10.0
 # SCI on that same pinned grid. `sci_mean` is the whole-run correlation of the two
-# wavelengths, which a slow drift shared by both inflates; over 10 s the cardiac band is
-# most of what is left to correlate. The two disagree enough to swap which channel set
-# looks better, so both are reported: the whole-run one is what the published cutoffs were
-# set on, the windowed one is what the windowed panels and the per-condition slices show.
+# wavelengths, which a slow drift shared by both inflates; both are reported, and the
+# windowed one is what the windowed panels and the per-condition slices show.
 SCI_WINDOW_S = 10.0
 
 
@@ -262,11 +259,9 @@ def compute_psp_scores(
 ) -> dict[str, float]:
     """Peak spectral power per channel, averaged over ``PSP_WINDOW_S`` windows.
 
-    Measured on optical density, which is what ``peak_power`` is meant for: the metric
-    cross-correlates the two wavelengths, so it has no meaning after Beer-Lambert, and
-    mne_nirs' own test converts to OD before calling it. Its docstring saying
-    "haemoglobin data" is a copy-paste slip shared with ``scalp_coupling_index_windowed``.
-    Converting here keeps this agreeing with the windowed PSP series, which is handed OD.
+    Measured on optical density: the metric cross-correlates the two wavelengths, so it has
+    no meaning after Beer-Lambert, whatever ``peak_power``'s docstring says. Converting here
+    keeps this agreeing with the windowed PSP series, which is handed OD.
 
     The window is pinned to ``PSP_WINDOW_S`` rather than following the QC window length; see
     the constant for what changes when it moves. The windowed PSP series is a separate view
@@ -313,13 +308,10 @@ def _cardiac_power_metrics(
 
     where :math:`f_c` is the peak frequency in ``[cardiac_l_freq, cardiac_h_freq]``.
 
-    Reported without a pass/fail line. CP measures the *shape* of one channel's spectrum
-    inside the band and never compares the two wavelengths, so it is not a coupling metric
-    despite the company it keeps: rotating the cardiac phase of one wavelength until SCI
-    inverts leaves CP unmoved. Its source defines a CP >= 0.5 gate on a fixed 0.83-2.5 Hz
-    band, which does not survive a user-chosen band, and argues against fixed thresholds on
-    these indicators in the same paper. Experimental, and it tracks PSP closely
-    (Spearman rho 0.83). SCI + PSP are the primary cardiac quality metrics.
+    Reported without a pass/fail line, since its source's gate is defined on a fixed band.
+    CP measures the *shape* of one channel's spectrum inside the band and never compares the
+    two wavelengths, so it is not a coupling metric despite the company it keeps.
+    Experimental; SCI + PSP are the primary cardiac quality metrics.
 
     Parameters
     ----------

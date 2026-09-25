@@ -16,9 +16,7 @@ from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
                                           decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
-# Imported rather than restated: these heads are the subject report's channel map with a
-# different quantity on them, and a reader who learned one reads the other. Two copies of
-# the pair would let one report's bars thicken while the other's stayed put.
+# imported rather than restated, so the dyad and subject reports draw the same heads
 from fnirs_pipe.qc.figures.common.head_map import (
     head_axes as _head_axes, head_geometry, head_ground as _head_ground,
     head_glyph as _head_glyph,
@@ -91,10 +89,7 @@ def build_alignment_timeline(
 ) -> "go.Figure | None":
     """Every member's annotated blocks, on its own clock above and the shared one below.
 
-    Alignment is a claim about where the blocks sit, so the blocks are the picture and the
-    millisecond residual is a number for the table beside it. The second row is what every
-    later panel reads; a block that does not line up there is a trigger that landed late in
-    one member, or two machines whose rates pulled them apart across the run.
+    The second row is the shared clock every later panel reads.
 
     One row per member in each panel. None when nothing is annotated.
     """
@@ -148,8 +143,7 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 
     ``crop`` moves ``first_samp`` and leaves annotation onsets on the original clock, so the
     shared-clock time is ``onset - first_time``. Without that subtraction an aligned timeline
-    is drawn identical to the unaligned one, which is the one way this figure can look right
-    and be wrong.
+    is drawn identical to the unaligned one.
     """
     if raw is None:
         return []
@@ -165,11 +159,7 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 # ---------------------------------------------------------------------------
 
 # (key, axis label, whether the row is divided by each member's own median). SCI and PSP are
-# what the carpet's mask is made of, so they explain it directly. CV is here because they are
-# blind to a class of failure they cannot see by construction: injection testing puts
-# `good_frac` on wavelength decoupling and cardiac loss only, while CV is what moves on
-# baseline shifts and signal loss. Motion has a panel of its own; it is about the dyad rather
-# than about a channel and does not belong under this carpet.
+# what the carpet's mask is made of; CV catches baseline shifts and signal loss they miss.
 _SERIES_ROWS = (("sci", "SCI (10 s)", False), ("psp", "PSP (10 s)", False),
                 ("cv", "CV (10 s)", False))
 _LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
@@ -204,10 +194,8 @@ def build_usable_time(
     lose is a different one. That intersection is the carpet at the bottom.
 
     Over it, each member's long-channel means for the metrics the mask is made of, so the
-    panel says why a pair went and not only that it did, plus motion, which those two are
-    blind to by construction: a window can decouple because the member moved, and SCI and PSP
-    cannot tell you that. A condition bar names the blocks and dotted rules carry their edges
-    down through the series.
+    panel says why a pair went and not only that it did. A condition bar names the blocks
+    and dotted rules carry their edges down through the series.
 
     None when the grid holds no pair.
     """
@@ -215,8 +203,7 @@ def build_usable_time(
     if not pairs:
         return None
     t = np.asarray(grid["t"], dtype=float)
-    # the carpet is a long-channel picture: every dyad measure runs on long channels, and a
-    # short row here would be read as coverage the analysis could have used
+    # long channels only, the set every dyad measure runs on
     keep = [i for i, name in enumerate(grid["pairs"]) if name in set(pairs)]
     status = dyad_status(grid, subject_ids)[keep]
     lost = (status != 2).mean(axis=1)
@@ -305,30 +292,22 @@ def build_usable_time(
 # Figure: motion, and whether the two moved together
 # ---------------------------------------------------------------------------
 
-# The motion panel is two figures, one for the recording as it arrived and one for the
-# motion-corrected file, rather than one figure carrying both. They hold the same rows in
-# the same order on the same axes, so the correction is read by looking from one to the
-# other; stacking before and after in one figure would double its height and put the
-# comparison between rows that are already a channel set apart.
+# The motion panel is two figures, before and after correction, on the same rows and axes.
 
-# Colour is the member, and nothing else: the channel set is the row, and before/after is
-# the figure. A third thing encoded in hue makes the figure unreadable.
+# Colour is the member, and nothing else: the channel set is the row, before/after the figure.
 _MEMBER_COLOURS = ["#4c72b0", "#c44e52", "#55a868", "#8172b3"]
-# The shared floor under both traces. Grey rather than a fourth member colour, since it
-# belongs to the pair and not to either of them.
+# The shared floor under both traces; grey, since it belongs to the pair and not to either.
 _TOGETHER_FILL = "rgba(120,120,130,0.30)"
 _SPIKE_BOTH = "rgba(245,158,11,0.9)"
 
 _MOTION_ROW_PX = 84
 _MOTION_CARPET_PX = 240
 _SPIKE_ROW_PX = 26
-# Headroom over the 99.5th percentile of every trace on a set's rows. One brief sample can
-# be a hundred times the median here, and scaling to the maximum would flatten the rest of
-# the recording onto the axis; each row's own maximum stays printed in the margin.
+# Headroom over the 99.5th percentile of every trace on a set's rows; each row's own maximum
+# stays printed in the margin.
 _MOTION_CAP_PCTL = 99.5
 _MOTION_HEADROOM = 1.35
-# Spikes land a few seconds apart for most of a noisy recording, which as separate marks is
-# a grey wash rather than a set of events. Runs closer than this are one mark.
+# Spike runs closer than this many seconds are drawn as one mark.
 SPIKE_MERGE_S = 2.0
 
 
@@ -382,20 +361,17 @@ def motion_series(
 
     **Each member is divided by its own before-median, and the corrected traces are divided
     by that same number.** GVTD is an RMS of optical-density derivatives in the recording's
-    own units, so two members' raw traces share no scale and "who moved more" is the one
-    reading a common axis could not support; at x its own median, 1.0 is that member's usual
-    level for both of them. Dividing the corrected trace by its *own* median instead would
-    divide out exactly the shrinkage the second figure exists to show.
+    own units, so two members' raw traces share no scale; at x its own median, 1.0 is that
+    member's usual level for both of them. Dividing the corrected trace by its *own* median
+    would divide out the shrinkage the second figure shows.
 
     One y range per channel set, shared by that set's before and after rows, which is what
     makes the correction readable as a drop. Long and short do not share one: each pair of
     (member, set) is divided by its own median, so a "x median" on the long channels is not
     the same quantity as one on the short.
 
-    Spikes are kept only where **every** member was spiking at once. A member spiking alone
-    costs that member's channels, which the usable-time carpet already shows; both at once is
-    the case that survives a surrogate null and raises any synchrony measure taken on the
-    pair.
+    Spikes are kept only where **every** member was spiking at once; a member spiking alone
+    shows on the usable-time carpet.
 
     Returns ``{}`` when no member carries usable optical density.
     """
@@ -451,8 +427,7 @@ def motion_series(
                 after_g = gvtd_timetrace(after_data[rows], sfreq, *GVTD_MOTION_BAND)
                 series["after"].setdefault(name, []).append((sid, after_g / mid))
 
-        # spikes on the canonical set only: the test is ">= 10% of *these* channels", and
-        # one lane a member per set is more marks than the strip can carry
+        # spikes on the canonical set only: the test is ">= 10% of *these* channels"
         canonical = blocks[0][1]
         for stage, source in (("before", od), ("after", after_od)):
             if stage not in stages or source is None:
@@ -503,8 +478,7 @@ def motion_series(
     spikes_both = {}
     for stage in stages:
         lanes = [m[:n] for m in spikes.get(stage, {}).values() if m is not None]
-        # every member, not any: a span one of them was spiking through is that member's
-        # problem and the usable-time carpet already carries it
+        # every member, not any; one member's spikes show on the usable-time carpet
         both = (np.logical_and.reduce(lanes)
                 if len(lanes) == len(have) and len(lanes) > 1
                 else np.zeros(n, dtype=bool))
@@ -518,8 +492,8 @@ def motion_series(
 def _matched_after(after_od, ch_names, shape, sfreq, sid):
     """The corrected recording over ``ch_names``, or None if it does not line up.
 
-    A near miss is worse than nothing: GVTD over a different channel set differs severalfold
-    on one recording, and the second figure would show that as an effect of the correction.
+    A near miss is worse than nothing: GVTD over a different channel set would show in the
+    second figure as an effect of the correction.
     """
     if after_od is None:
         return None
@@ -549,21 +523,16 @@ def build_motion_panel(
 
       build_motion_panel(motion, "after", conditions)  ->  figure
 
-    **Simultaneous motion is a dyad problem, not two individual ones.** A member moving
-    alone costs that member's channels, which the usable-time carpet already shows. Both
-    moving at once raises any synchrony measure taken on the pair, and a shifted or
-    scrambled copy of one member does not remove it, so this is what the screening synchrony
-    has to be read against. It is drawn as the pointwise minimum of the two traces, filled
-    to the axis: high only where both are high, and needing no threshold to be picked.
+    Simultaneous motion is drawn as the pointwise minimum of the two traces, filled to the
+    axis: high only where both are high, and needing no threshold to be picked.
 
     Under the rows sits the spike strip, marking only the spans where every member was
     spiking at once, and under that each member's z-scored optical-density carpet, drawn by
     the subject report's own :func:`~fnirs_pipe.qc.figures.common.motion_panel.add_carpet` so the
     dyad's image and the member's own cannot drift apart.
 
-    Row titles and the run's numbers sit in the left margin rather than inside the panels: a
-    noisy recording fills its rows top to bottom and anything drawn inside one ends up under
-    the data.
+    Row titles and the run's numbers sit in the left margin rather than inside the panels,
+    where a noisy recording's data would cover them.
 
     Returns None for a stage the dyad has no data for.
     """
@@ -581,9 +550,7 @@ def build_motion_panel(
     has_spikes = bool(spans_both)
     n_rows = int(has_cond) + len(sets) + int(has_spikes) + len(carpets)
 
-    # the spike strip sits directly under the condition bar, above the traces: both are
-    # marks on the clock rather than a quantity, and reading them as one band is what says
-    # which block the dyad was spiking through
+    # the spike strip sits directly under the condition bar, above the traces, as one band
     heights = (([TIMELINE_ROW_PX - 10] if has_cond else [])
                + ([_SPIKE_ROW_PX] if has_spikes else [])
                + [_MOTION_ROW_PX] * len(sets)
@@ -714,9 +681,8 @@ def build_head_by_condition(
 ) -> "go.Figure | None":
     """One head per member per block, coloured by the share of its windows that coupled.
 
-    The aggregated view. It answers which part of whose cap went and in which block, which a
-    single instant cannot: a reader would otherwise drag a slider and average in their head.
-    Complements the usable-time carpet, which is channel by time with no geometry.
+    The aggregated view: which part of whose cap went and in which block. Complements the
+    usable-time carpet, which is channel by time with no geometry.
     """
     names = list(conditions)
     if not names or not geo_by_sub:
@@ -764,11 +730,10 @@ def build_head_slider(
 
     The instantaneous view, coloured by that window's SCI rather than by a share. Every frame
     names the block it lands in, so a position on the slider says what the dyad was doing and
-    not only when; without that the reader has the carpet's x axis and no way to place it.
+    not only when.
 
     ``step`` decimates the frames. Each one carries a colour per marker per member, so the
-    page grows with the frame count and a ten-second grid is three times the file a
-    thirty-second one is for no reading a QC pass makes.
+    page grows with the frame count.
     """
     if not geo_by_sub:
         return None
@@ -856,16 +821,11 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     """Each window's coherence as its rank inside its own surrogate null, one row per window.
 
     **Raw coherence cannot share an axis across windows.** The estimator's floor sits near
-    1/(number of Welch segments), and that count falls with the window, so on one recording
-    the floor moves by an order of magnitude between a 300 s block and the whole run: 0.03 is
-    unremarkable in one window and out of reach in another. A value's percentile inside the
-    null drawn for *that* window is the quantity that is comparable, and it puts every window
-    on one axis with one line to clear.
+    1/(number of Welch segments), and that count falls with the window. A value's percentile
+    inside the null drawn for *that* window puts every window on one axis with one line to
+    clear.
 
-    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded. The
-    channel mean is the number to read: at the iteration counts a QC pass can afford, a
-    per-channel percentile is a noisy rank and the count of channels over the line moves with
-    the draw while the window's own verdict does not.
+    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded.
 
     Expects the frame :func:`~fnirs_pipe.pipeline.hyper.coherence.screening_coherence` returns.
     None when it is empty.
@@ -891,8 +851,7 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
             x=pct, y=i + jitter.uniform(-0.13, 0.13, len(pct)), mode="markers",
             name=str(name), legendgroup=str(name), showlegend=False,
             customdata=sub["ch_name"].tolist(),
-            # saturated only above the line: a channel that cleared its null is the one a
-            # reader is looking for, and the rest are the spread it has to be read against
+            # saturated only above the line; the rest are drawn as grey spread
             marker=dict(size=8,
                         color=[colour if p >= NULL_ALPHA_PCT else "#d7dde2" for p in pct],
                         opacity=[0.95 if p >= NULL_ALPHA_PCT else 0.75 for p in pct],
@@ -900,8 +859,7 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
             hovertemplate=("<b>%{customdata}</b><br>" + str(name)
                            + "<br>%{x:.1f}th percentile of its null<extra></extra>"),
         ))
-    # the window's own rank, not the mean of its channels' ranks: averaging fourteen noisy
-    # ranks is a weaker statement than pooling the channels and ranking once
+    # the window's own rank (channels pooled, ranked once), not the mean of its channels' ranks
     means = [float(coherence_df[coherence_df["window"] == n]["window_percentile"].iloc[0])
              for n in rows]
     fig.add_trace(go.Scatter(

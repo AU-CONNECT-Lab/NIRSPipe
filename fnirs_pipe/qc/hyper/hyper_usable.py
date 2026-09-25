@@ -3,7 +3,7 @@
 A cell is one channel pair in one window, and it is usable only while the pair is coupled in
 **both** members at that moment. That intersection is what
 :func:`~fnirs_pipe.qc.metrics.hyper.dyad_status` computes; this reduces it to what a
-report over twenty dyads can carry: a handful of scalars for the record, and one row per
+cohort report can carry: a handful of scalars for the record, and one row per
 (pair, condition) for the panels.
 
 Two layers on purpose. The record holds one number per dyad, the way every other quality
@@ -60,11 +60,8 @@ def usable_scalars(grid: dict, subject_ids: list[str]) -> dict:
     a shared one, both members out at the same moment; two dyads with the same usable share
     and different middles are two different problems.
 
-    ``usable_stretch_s`` is the median over pairs of that pair's longest unbroken usable run.
-    A dyad keeping 60% of its cells in one block and one keeping 60% scattered over two
-    hundred single-window holes read the same on the fractions and are not the same
-    recording: a coherence window needs contiguous data, and the second dyad has none long
-    enough to hold one.
+    ``usable_stretch_s`` is the median over pairs of that pair's longest unbroken usable run,
+    which the fractions cannot show: a coherence window needs contiguous data.
     """
     rows = _long_rows(grid)
     if not rows:

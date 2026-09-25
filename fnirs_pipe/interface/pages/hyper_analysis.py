@@ -87,9 +87,7 @@ def _run_section():
                      "–",
                      dbc.Input(id="hy-wtc-band-fmax", type="number", step=0.01,
                                placeholder="whole axis")),
-                # its own pair rather than following the one above: the correlation and the
-                # coherence are comparable only on one band, and a control that cannot be
-                # seen is a band nobody can report
+                # its own pair rather than following the one above
                 band("ISC band (Hz)",
                      dbc.Input(id="hy-isc-fmin", type="number", step=0.001,
                                placeholder="whole passband"),
@@ -105,8 +103,7 @@ def _run_section():
                 field("Min channels per ROI",
                       dbc.Input(id="hy-wtc-roi-min-channels", type="number", min=1, step=1,
                                 placeholder="2")),
-                # left empty the condition is the unit, which is what the CLI defaults to.
-                # Set, conditions of unequal length stop being compared on unequal terms
+                # left empty the condition is the unit, which is what the CLI defaults to
                 field("Equal windows (s)",
                       dbc.Input(id="hy-wtc-window-s", type="number", min=1, step=5,
                                 placeholder="condition length")),

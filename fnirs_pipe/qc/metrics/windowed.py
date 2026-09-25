@@ -151,10 +151,8 @@ def attach_windowed_series(
     is stored as ``qc_window_s`` so a record says which grid its series were binned on;
     ``psp_mean`` is deliberately not on that grid, see :data:`~fnirs_pipe.qc.metrics.coupling.PSP_WINDOW_S`.
 
-    ``gvtd_od`` exists because the two families want different stages. SCI and PSP measure
-    optode coupling, which the motion correction is not supposed to change, so they belong
-    on the uncorrected file where the per-channel scores were taken. GVTD measures movement,
-    which the correction is entirely about, so it belongs on the corrected one. Both grids
+    ``gvtd_od`` lets GVTD run on the motion-corrected file while SCI and PSP stay on the
+    uncorrected one, where the per-channel scores were taken. Both grids
     are derived from ``window_s`` the same way, so the series stay time-aligned across the
     two files as long as neither was resampled.
     """
@@ -248,13 +246,9 @@ def attach_windowed_series(
     return series
 
 
-# The window the SCI and PSP pass lines were established at. Deliberately not the report's
-# `window_s`, which a user may set freely: PSP is a power and moves with window length (a
-# well-coupled channel's rises, an uncoupled channel's falls), so 0.1 selects a different
-# set of channels at every length, and a screening line that follows a display setting is a
-# screening line that silently stops meaning what it was calibrated to mean. SCI is a
-# correlation and is window-free, so only PSP forces this, and one window for both keeps the
-# two on one grid.
+# The window the SCI and PSP pass lines were established at. Not the report's `window_s`:
+# PSP moves with window length, so a line that followed it would select a different set of
+# channels at every length.
 SCREEN_WINDOW_S = 10.0
 
 
@@ -283,9 +277,7 @@ def task_scope_windows(
       "rest" at 20 s for 300 s, plus a 5 s trigger  ->  [("rest", 20.0, 320.0)]
 
     The annotation's own duration is the window, so a recording carrying only zero-length
-    or short triggers yields nothing here and the caller keeps whatever scope it had. That
-    is the case worth knowing about: scoping to five 10 s triggers out of an hour would
-    count one minute of the recording and still read like a verdict on the whole thing.
+    or short triggers yields nothing here and the caller keeps whatever scope it had.
 
     Clamped to the recording, and on the data axis: a cropped Raw keeps its annotations on
     the original axis while its samples restart at zero.
@@ -341,8 +333,8 @@ def coupled_mask_from_matrices(
       sci 0.85 psp 0.30 against 0.8 / 0.1  ->  True
       sci 0.92 psp 0.04 against 0.8 / 0.1  ->  False   (movement, not coupling)
 
-    The AND is applied inside the window, which is the whole of what the screening change
-    was about, and it lives here alone so the two callers cannot drift apart: the screening
+    The AND is applied inside the window, and it lives here alone so the two callers cannot
+    drift apart: the screening
     measures the matrices off a recording, while a per-condition view reads the ones the
     quality record already stored. A second copy of this comparison would let a report
     disagree with the verdict the run was screened by.
@@ -380,25 +372,16 @@ def good_window_fraction(
 
     ::
 
-      a channel passing both lines in 300 of 391 windows  ->  0.767
+      a channel passing both lines in 300 of 400 windows  ->  0.75
 
-    A window counts when SCI **and** PSP both pass in *that* window. The two are paired
-    inside the window rather than judged separately over the recording because they are
-    only informative together: movement inflates SCI, and PSP is what catches it, so a
-    window with high SCI and near-zero PSP is movement rather than coupling. Comparing a
-    whole-run SCI against a whole-run PSP cannot see that, since it no longer knows whether
-    the good SCI and the bad PSP happened at the same time.
-
-    Counting windows rather than averaging them is the other half. An average can be carried
-    over the line by the part of the recording where the channel was fine, so a channel that
-    is excellent for half the run and dead for the other half passes; a count cannot be
-    rescued that way.
+    A window counts when SCI **and** PSP both pass in *that* window: a window with high SCI
+    and near-zero PSP is movement rather than coupling, which whole-run numbers cannot see.
+    Windows are counted rather than averaged, so a channel dead for half the run cannot pass
+    on the other half.
 
     ``scope`` restricts the **denominator** to the windows whose centres fall inside those
-    stretches. A run usually holds time no analysis reads, a lead-in before the first block
-    and the gaps between blocks, and a channel coupled throughout every block should not be
-    rejected for what it did while nobody was doing anything. None counts the whole
-    recording.
+    stretches, such as the blocks of a run without its lead-in and gaps. None counts the
+    whole recording.
 
     The scope masks one whole-record pass rather than cutting the recording and measuring
     each piece: SCI and PSP filter to the cardiac band, so a cut piece is filtered against
@@ -474,8 +457,8 @@ def condition_window_means(
 
     ::
 
-      matrix (n_ch, 390) on a 10 s grid, a condition running 543.7 to 1443.7 s
-      -> {"game1": (n_ch,) means over the 90 columns whose centres fall inside it}
+      matrix (n_ch, 360) on a 10 s grid, a condition running 600 to 1500 s
+      -> {"task1": (n_ch,) means over the 90 columns whose centres fall inside it}
 
     ``matrix`` is reduced over its last axis, so a per-channel metric (channels x windows)
     gives one value per channel and a single series (windows,) gives one scalar.
@@ -484,10 +467,8 @@ def condition_window_means(
     :func:`condition_window_fractions` and the screening scope use, so every per-condition
     number in a report comes off one grid and one filter.
 
-    Slicing rather than cutting the recording is the point, and it is not only cheaper. A
-    condition cut into its own file is filtered against its own two edges and lands on a
-    grid starting at its own onset, so its windows are not the run's windows and its numbers
-    are comparable neither with the other conditions nor with the whole run.
+    Slicing rather than cutting the recording keeps the run's grid: a condition cut into its
+    own file is filtered against its own two edges and lands on a grid of its own.
 
     A condition holding no whole window is left out rather than given an empty mean, which
     is what an annotation shorter than one window looks like.
@@ -524,16 +505,14 @@ def condition_window_fractions(
 
     ::
 
-      [("rest", 0, 300), ("talk", 300, 600)]  ->  {"rest": {ch: 0.98}, "talk": {ch: 0.41}}
+      [("rest", 0, 300), ("task", 300, 600)]  ->  {"rest": {ch: 0.98}, "task": {ch: 0.41}}
 
     Reported, never screened on. One channel set has to serve every condition or a contrast
     between two conditions is also a contrast between two montages, so this answers "when
     was this channel bad" without changing what is dropped.
 
     One windowed pass masked per condition, for the reason
-    :func:`good_window_fraction` gives: cutting each condition out first would filter each
-    piece against its own edges and put each on its own grid, so the conditions would be
-    comparable neither with each other nor with the run-wide share.
+    :func:`good_window_fraction` gives.
     """
     mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
                                   sci_cutoff, psp_cutoff, window_s)

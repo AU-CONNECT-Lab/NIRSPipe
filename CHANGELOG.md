@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
 - Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
+- Code comments and docstrings say what the code does, without design arguments, measured values or rejected alternatives
 - The Hyper Analysis page names each command by its console script, not the retired subcommand names
 - Help, GUI and report text say what each option or panel does, without design rationale or references to other tools
 - **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first

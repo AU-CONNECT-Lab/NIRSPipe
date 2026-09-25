@@ -258,10 +258,8 @@ def _assign_depth(nodes: dict[str, Node]) -> None:
 
 # ---- Drawing the graph: collapsing repeats ----
 
-# A step that produced this many outputs from one set of inputs is drawn as one box. Below
-# it the members still read side by side; above it that one column is taller than the rest
-# of the graph put together, which is what a group run's ISC does at two chromophores times
-# six windows. Two is left alone: a box saying "2 outputs" hides as much as it saves.
+# A step that produced this many outputs from one set of inputs is drawn as one box; fewer
+# are drawn side by side.
 _COLLAPSE_MIN = 3
 
 

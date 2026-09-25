@@ -39,7 +39,7 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     if raw.first_time:
         raw = _zero_first_time(raw)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    # in the call: mne_nirs costs 2.4 s to import, and every command's startup reads this module
+    # in the call: mne_nirs is slow to import, and every command's startup reads this module
     from mne_nirs.io.snirf import write_raw_snirf
 
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
@@ -125,21 +125,17 @@ def long_channel_picks(
     A 6-channel montage whose last pair is short ->
         long_channel_picks(raw, "hbo") == [0, 1]   (the third hbo pick is gone)
 
-    Short channels sample scalp haemodynamics, so an inter-brain metric computed on them
-    measures systemic physiology two people share by sitting in the same room rather than
-    any brain coupling. Montages with no short channels lose nothing.
+    Short channels sample scalp haemodynamics, so no inter-brain metric is computed on them.
+    Montages with no short channels lose nothing.
 
     "Long" is the package's one separation rule,
     :func:`~fnirs_pipe.qc.metrics._helpers.separation_bands`, and a channel outside both
-    bands is in neither list. This dropped only the short channels until 0.30.0, so a
-    separation past the long band was short-distance to the reports and usable to the dyad
-    metrics; ``long_short_channels`` names such a channel in a warning.
+    bands is in neither list; ``long_short_channels`` names such a channel in a warning.
 
     ``exclude`` is pick_types', so rejected channels are dropped by default, which is what a
     metric wants. ``exclude=[]`` keeps them, which is what the *axis* of a channel-by-channel
     matrix wants: an axis over the montage rather than over the survivors gives every subject
-    and every dyad a matrix of one shape, so a group analysis can stack them however their
-    rejections differ.
+    and every dyad a matrix of one shape.
     """
     from fnirs_pipe.qc.metrics._helpers import long_short_channels
 

@@ -1,15 +1,11 @@
 """Channel-wise scalp maps of the evoked response, drawn as coloured source-detector paths.
 
 Each channel is painted along the path between its own source and detector, so the map shows
-what was measured and nothing else. An interpolated map (MNE's ``plot_topomap``, an EEG
-rendering) fills the scalp between channels with a smooth field, which on a montage of a few
-dozen sparse channels is mostly invented: a pattern that looks spatially resolved comes from
-the interpolator, not the optodes.
+what was measured and nothing else. An interpolated map (MNE's ``plot_topomap``) would fill
+the scalp between channels with a field the optodes did not measure.
 
-Short channels get their own row on the same colour scale as the long ones. They are too
-shallow to reach cortex, so a short row as strongly coloured as the long row above it says
-the "response" is systemic scalp signal. Nothing else in the report catches that, and the
-figures upstream of this one run pre-regression, where the contamination is still present.
+Short channels get their own row on the same colour scale as the long ones, so a scalp
+response shows as a short row as strongly coloured as the long row above it.
 """
 
 from __future__ import annotations
@@ -28,10 +24,7 @@ logger = get_logger("qc.figures")
 # ---- Glyph geometry ----
 _SAMPLES     = 26      # markers laid along a long channel to read as a continuous bar
 _TRIM        = 0.16    # fraction of the path left bare at each end, so optodes stay visible
-# Marker size is in pixels while a head scales with its container, so these are read
-# against the smallest head this grid draws: chromophore x separation rows against one
-# column per condition. Much thicker and a channel bar swallows the head under it. The
-# dyad report's heads carry the same pair.
+# marker sizes in pixels, set for the smallest head this grid draws; the dyad heads share them
 _LONG_SIZE   = 7
 _SHORT_SIZE  = 12      # a short channel is too stubby to read as a path; draw one disc
 
@@ -41,8 +34,7 @@ _FRAME_STOP  = 20.0    # past the canonical response; frames beyond this carry n
 _OPEN_AT     = 6.0     # canonical HbO peak, so the figure opens on the informative frame
 
 # ---- Colour ----
-# a percentile, not the max: one stray condition (a mis-triggered event with two trials)
-# would set the scale for every panel and wash the real conditions out to white
+# a percentile, not the max, so one stray condition cannot wash the rest out to white
 _SCALE_PCT   = 99.5
 # below this a condition is single-trial noise: drawn, but not consulted for the range
 _SCALE_MIN_TRIALS = 3
@@ -152,8 +144,7 @@ def evoked_channel_map_figure(
 
     Rows are chromophore x separation (HbO long, HbO short, HbR long, HbR short), columns are
     conditions, and the slider steps the whole grid through the epoch window a second at a
-    time. Long and short share a colour scale within a chromophore, which is what makes the
-    short row readable as a contamination check rather than a second map.
+    time. Long and short share a colour scale within a chromophore.
 
     ``sep_bands`` is this run's separations from :func:`separation_bands`; every caller in one
     run has to pass the same value or the rows would describe a different montage than the
@@ -211,10 +202,8 @@ def evoked_channel_map_figure(
         (_, _, _, per_pair), pairs = geometry[scope]
         return _pair_values(evokeds[cond], pairs, per_pair, chromo, t)
 
-    # one scale per chromophore, spanning both separations: a short row only reads as a
-    # contamination check when its colour means the same as the long row's. A condition of
-    # one or two trials is single-trial noise and is drawn but kept out of the range, the
-    # way the grand mean keeps it out of its y scale
+    # one scale per chromophore, spanning both separations
+    # conditions under _SCALE_MIN_TRIALS are drawn but left out of the range, as the grand mean
     n_trials = {c: int(getattr(evokeds[c], "nave", 0) or 0) for c in conds}
     scaling = [c for c in conds if n_trials[c] >= _SCALE_MIN_TRIALS] or list(conds)
 
@@ -227,10 +216,8 @@ def evoked_channel_map_figure(
         v = float(np.nanpercentile(np.abs(vals), _SCALE_PCT)) if np.any(np.isfinite(vals)) else 0.0
         vlim[chromo] = v or 1.0
 
-    # the short row's question is not spatial: eight scattered discs carry no pattern, and
-    # the one thing wanted from them is how big the scalp response is next to the brain one.
-    # Stated per panel as a share of the long peak, taken over the window rather than at the
-    # frame on screen, so the verdict does not change as the slider moves
+    # each short panel's peak as a share of the long peak, over the whole window so the
+    # verdict does not change as the slider moves
     verdicts = {}
     for chromo, scope in rows:
         if scope != "short" or "long" not in scoped:
@@ -255,8 +242,7 @@ def _window_peak(row_values, chromo, scope, cond, times) -> "float | None":
 _MARGIN   = dict(l=56, r=86, t=46, b=70)
 _H_SPACE  = 0.02
 _V_SPACE  = 0.05
-# the canvas follows the panel, not the other way round: a fixed canvas divided by the
-# column count gave a one-condition page a head 958 px across and a figure 4550 px tall
+# the canvas follows the panel, not the other way round, so few columns never mean huge heads
 _FIG_W_MAX   = 1100
 _PANEL_W_MAX = 200
 

@@ -6,10 +6,6 @@
   compute_isc_pairs               The same computation delivered as a long table, with the
                                   scrambled null beside it.
   roi_mean_of_isc                 Groups those correlations into ROIs.
-
-Whitening is what separates this from a plain correlation of two filtered traces. Both
-members carry slow drift and the same cardiac and respiratory rhythms, so an unwhitened
-correlation is largely a correlation of shared physiology, and its null is not flat.
 """
 
 from __future__ import annotations
@@ -124,18 +120,13 @@ def _isc_from_rows(
       max_lag 16  ->  the strongest r within 16 samples either way, and where it was
 
     With ``max_lag`` the pair is re-correlated at every shift in ``[-max_lag, max_lag]`` and
-    the strongest of them kept. Two people's haemodynamic responses do not peak at the same
-    instant, so a same-sample correlation reads a coupling a second apart as no coupling; a
-    short search either way is what the cross-correlation literature reports instead.
+    the strongest of them kept.
 
-    **Strongest means largest in magnitude, and the sign is kept.** The published form takes
-    the largest signed value, which suits a metric built for positive coupling but would turn
-    every anticorrelated pairing into a small positive number, and this matrix has both.
-    The two agree wherever the coupling is positive.
+    **Strongest means largest in magnitude, and the sign is kept**, so an anticorrelated
+    pairing stays negative rather than becoming a small positive number.
 
     Lag is in samples and positive means the second member follows the first. Searching
-    inflates the value under no coupling, since it is a maximum over many draws, so a lagged
-    matrix belongs with a null searched the same way.
+    inflates the value under no coupling, since it is a maximum over many draws.
 
     Each shift is correlated over its own overlap, so both sides are re-standardised per lag
     rather than once over the whole record.
@@ -182,9 +173,7 @@ def _isc_rows(
     raw2 = aligned_raws.get(subject_ids[1])
     if raw1 is None or raw2 is None:
         return None, None, None
-    # the same refusal WTC makes: alignment equalises duration, not rate, so at two rates
-    # sample i of one member and sample i of the other are not the same moment and the
-    # correlation between them is a plausible-looking number about nothing
+    # the same refusal WTC makes: at two rates sample i is not the same moment in both members
     _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
 
     def _by_label(raw: mne.io.Raw) -> dict[str, int]:
@@ -227,9 +216,7 @@ def _isc_rows(
         sfreq = float(raw1.info["sfreq"])
         first = max(0, int(round(float(window[0]) * sfreq)))
         last  = min(n_times, int(round(float(window[1]) * sfreq)))
-        # two samples is the least a correlation can be computed from at all; a window this
-        # short is a trigger artefact rather than a condition, and returning nothing leaves
-        # the panel out instead of printing a coefficient over three points
+        # two samples is the least a correlation can be computed from at all
         if last - first < 2:
             logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
                            "no correlation computed",
@@ -257,16 +244,11 @@ def compute_isc(
 
     ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
     condition gets a correlation of its own. Unlike the wavelet coherence this really is a
-    cut and not a slice of a whole-record computation, and it is sound for the reason the
-    subject report's own per-condition panels are: a correlation has no frequency axis and
-    nothing here filters, so a window carries no edge that the whole record would not have
-    had. What it does carry is its own mean and its own standard deviation, and it has to:
-    both sides are z-scored inside the window, because the correlation over a stretch is
-    against that stretch's mean, not the recording's.
-
-    Cutting the wavelet coherence the same way would be wrong, and that asymmetry is the
-    whole of why the two are treated differently here. See
-    :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`.
+    cut and not a slice of a whole-record computation: a correlation has no frequency axis
+    and nothing here filters, so a window carries no edge that the whole record would not
+    have had. Both sides are z-scored inside the window, because the correlation over a
+    stretch is against that stretch's mean, not the recording's. The wavelet coherence is
+    windowed instead; see :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`.
 
     Both axes are the *montage's* long channels, rejected ones included, so every dyad's
     matrix has one shape and a group analysis can stack them however their rejections
@@ -285,15 +267,12 @@ def compute_isc(
     the WTC path reads them from.
 
     Raises ValueError if the members were recorded at different sampling rates, which is
-    the refusal WTC has always made: alignment equalises duration, not rate.
+    the refusal WTC makes: alignment equalises duration, not rate.
 
     ``whiten`` is the largest autoregressive order :func:`_ar_whiten` may spend on each
-    channel before the correlation, 0 to correlate the signals themselves. A haemodynamic
-    trace is strongly autocorrelated, so a correlation between two of them rests on far
-    fewer independent observations than it has samples, and the value it takes under no
-    coupling at all is correspondingly large. Whitening puts r back on the scale its sample
-    count implies; it also shrinks it, so a whitened matrix and an unwhitened one are not
-    comparable and the sidecar records which was written.
+    channel before the correlation, 0 to correlate the signals themselves. Whitening shrinks
+    r, so a whitened matrix and an unwhitened one are not comparable and the sidecar records
+    which was written.
 
     Args:
         ch_type: "hbo" or "hbr".
@@ -309,10 +288,8 @@ def compute_isc(
 def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
     """Band-limit the rows that carry data, leaving all-NaN rows alone.
 
-    ISC has no frequency axis of its own: it reads whatever band the preprocessing left, so
-    two runs filtered differently produce correlations that are not comparable, and a
-    correlation compared against a WTC band mean is comparing different frequencies. This is
-    what lets the two be put on one band.
+    ISC has no frequency axis of its own: it reads whatever band the preprocessing left. This
+    is what lets it be put on the same band as a WTC band mean.
 
     Filtering happens before the window is cut, so a 300 s condition carries no edge its
     whole recording did not have. One row of 4000 samples at 10 Hz, band (0.06, 0.15) ->
@@ -362,22 +339,17 @@ def compute_isc_pairs(
       a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z, ar_order, ar_order2
 
     The matrix is what the report draws; the frame is what a group analysis reads, and it is
-    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``, which is what
-    should be averaged across dyads, since r is bounded and its mean is biased toward the
-    interior. ``ar_order`` and ``ar_order2`` are what each side's channel was whitened at,
-    and are absent when ``whiten`` is 0.
+    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. ``ar_order``
+    and ``ar_order2`` are what each side's channel was whitened at, and are absent when
+    ``whiten`` is 0.
 
-    ``n_null`` phase-scrambles the second member and recomputes, which is the null a
-    correlation between two recordings needs: scrambling preserves each signal's own power
-    spectrum and so its autocorrelation, and it is the autocorrelation that decides how large
-    r gets with no coupling present. It adds ``null_mean``, ``null_sd``, ``null_p95`` and
-    ``percentile``, the share of a cell's surrogate draws its real value beat. All four are
-    on ``|r|``: the question a null answers here is whether the pair is coupled, not which
-    way, and a surrogate is as likely to land either side of zero.
+    ``n_null`` phase-scrambles the second member and recomputes; scrambling preserves each
+    signal's own power spectrum and so its autocorrelation. It adds ``null_mean``,
+    ``null_sd``, ``null_p95`` and ``percentile``, the share of a cell's surrogate draws its
+    real value beat. All four are on ``|r|``, since a surrogate is as likely to land either
+    side of zero.
 
-    Whitening and the null answer the same objection by different routes and compose without
-    double-counting: whitening moves the estimate onto an honest scale, the null measures the
-    scale directly, and with both on the null is drawn through the whitening too.
+    With whitening and the null both on, the null is drawn through the whitening too.
     """
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
                                        window, band)
@@ -415,10 +387,9 @@ def _isc_null_draws(
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
-    Only the second member is scrambled, the choice :func:`compute_wtc_phase_null` makes for the
-    same reason: scrambling both would test one surrogate against another, which is a weaker
-    null than a real recording against a surrogate. A blank row stays blank, having no
-    spectrum to preserve.
+    Only the second member is scrambled, as in :func:`compute_wtc_phase_null`, so a real
+    recording is tested against a surrogate. A blank row stays blank, having no spectrum to
+    preserve.
     """
     rng = np.random.default_rng(seed)
     finite = np.isfinite(data2).all(axis=1)
@@ -442,9 +413,7 @@ def _add_isc_null_columns(
     **Every null column describes the magnitude**, hence ``null_abs_``: a correlation is
     two-sided, so a surrogate that lands at -0.4 is as far from no coupling as one at +0.4,
     and the rank ``percentile`` reports is |r| among |draws|. The ``r`` column beside them is
-    signed. Naming these ``null_mean`` next to a signed ``r`` invited reading one against the
-    other, which compares a magnitude with a value that can be negative and makes a table look
-    self-contradictory.
+    signed.
     """
     absolute = np.abs(draws)
     # a blanked channel makes a cell all-NaN, which every nan-aware reduction warns about and

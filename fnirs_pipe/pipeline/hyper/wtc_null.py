@@ -1,18 +1,17 @@
 """The phase-scrambled null, computed and written on its own.
 
 Called from ``fnirs-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
-stage, band and window by construction: a null averaged over a different band is not the
-null for the table it sits beside. Crossing is the one thing it does not inherit: it is the
-null's own decision, ``--wtc-phase-null-cross``, off by default, because n channels crossed
+stage, band and window by construction. Crossing is the one thing it does not inherit: it is
+the null's own decision, ``--wtc-phase-null-cross``, off by default, and n channels crossed
 give n^2 pairings and so n times the surrogate cost of the n homologous ones.
 
-The chromophores are inherited, unlike crossing: a null missing one leaves that half of the
-real table with nothing to be tested against, which is not a saving worth offering.
+The chromophores are inherited, unlike crossing, so no half of the real table is left with
+nothing to be tested against.
 
 Two halves, and the report sits between them. :func:`run_wtc_null` draws the surrogates and
 writes the per-frequency level the phase arrows are drawn against, which has to exist before
 the figures are built. :func:`write_wtc_null` ranks those draws against the real band means,
-which the same report writes. One call could only ever have satisfied one of the two.
+which the same report writes.
 """
 
 from __future__ import annotations
@@ -155,10 +154,8 @@ def write_wtc_null(
     whole-run path either way; the per-condition one sits beside it.
 
     The real tables are read back off disk rather than passed in, the report step having just
-    written them, and are what gives both tables their ``percentile`` column. They are only
-    ever a few hundred rows, and reading them here keeps the report's own signature out of
-    the null's business. A tree without them still gets a null, just one nothing has been
-    ranked against yet.
+    written them, and are what gives both tables their ``percentile`` column. A tree without
+    them still gets a null, just one nothing has been ranked against yet.
     """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params

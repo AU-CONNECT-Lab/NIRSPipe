@@ -52,12 +52,8 @@ class WTCResult:
 # Morlet (w0 = 6) Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
 _FLAMBDA = 4 * np.pi / (6 + np.sqrt(2 + 6 ** 2))
 
-# Sub-octaves per octave on the wavelet scale grid: the frequency-axis resolution, and
-# pycwt's own default. Not configurable, and _SCALE_MARGIN below is why: the coherence is
-# smoothed across neighbouring scales over a fixed span in log2(scale), so a different dj
-# needs a different margin for --wtc-limit-scales to keep returning the same coherences.
-# Reported in every WTC sidecar instead, since it decides how many time-frequency cells a
-# band mean averages over.
+# Sub-octaves per octave, pycwt's default. Fixed because _SCALE_MARGIN is sized for it;
+# reported in every WTC sidecar.
 WTC_DJ = 1.0 / 12
 
 # Width of the coherence's scale-direction boxcar, in log2(scale) units, so it spans
@@ -103,8 +99,8 @@ def _fft_length(n: int, dt: float, s_max: float) -> int:
     Padding stops the circular convolution wrapping the end of the record onto its start, so
     what it has to clear is how far the widest wavelet reaches in from an edge. That is
     :func:`cone_margin_s` at the **largest computed scale**, which sits ``_SCALE_MARGIN``
-    scales below ``fmin`` rather than at it. The minimum is what keeps a recording shorter
-    than its own padding from being transformed over more samples than it is today.
+    scales below ``fmin`` rather than at it. The minimum keeps a recording shorter than its
+    own padding from being transformed over more samples than pycwt would use.
     """
     margin = int(np.ceil(cone_margin_s(1.0 / (_FLAMBDA * s_max)) / dt))
     return min(next_fast_len(n + margin), 1 << (max(n, 1) - 1).bit_length())
@@ -114,10 +110,7 @@ def _morlet():
     r"""The mother wavelet every coherence here is computed with.
 
     A Morlet whose smoothing operator :math:`S` spans ``_SCALE_SMOOTH_DJ0`` in log2(scale),
-    which is the width the coherence is defined with. pycwt's own Morlet spans twice that,
-    and a wider window pulls :math:`R^2` down: the cross term :math:`S(W_{xy})` loses
-    magnitude as phases from neighbouring scales cancel, while the auto terms
-    :math:`S(|W_x|^2)` have nothing to cancel. Measured at about 0.05 on a band mean.
+    half the width of pycwt's own.
 
     Returned as an instance rather than a class so the scale window is built once per
     transform, and named apart from the stock Morlet because pycwt keys its Monte Carlo
@@ -165,9 +158,6 @@ def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
 
         \mathrm{margin} = \mathrm{factor} \times \frac{\sqrt{2}}{f_{\min}}
 
-    ``factor`` is 2 rather than 1 because the cone is a contour and not a wall: contamination
-    is small past it, not absent.
-
     Returned in seconds, so a caller crops ``[t0 - margin, t1 + margin]`` and windows the
     result back to ``[t0, t1]``.
     """
@@ -203,11 +193,8 @@ def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tupl
 def _decim_step(sfreq: float) -> int:
     """Samples per retained column of a coherence map: one per second, at least one.
 
-    The maps are for reading and for averaging over a band, and neither needs the sampling
-    rate: a long recording at 10 Hz runs to tens of thousands of columns per pair per
-    frequency, far more than any figure resolves or any band mean moves on. What it does limit
-    is how short a window --wtc-by-condition can describe, so it is reported in the sidecar
-    as the time resolution it produces rather than as this count.
+    It bounds how short a window --wtc-by-condition can describe, and is reported in the
+    sidecar as a time resolution.
     """
     return max(1, int(round(sfreq)))
 
@@ -467,21 +454,14 @@ def _wtc_over_pairs(
 
     ``axis`` is the montage's labels, rejections included, and is what the keys are drawn
     from: a label one member has no usable channel at gets its key with ``None`` behind it
-    rather than no key at all. That is the package's one rule for a channel-by-channel
-    result, the same ``exclude=[]`` against ``exclude="bads"`` split
-    :func:`~fnirs_pipe.io.snirf.long_channel_picks` documents, and it is what gives every
-    dyad a table of one shape: a cohort table missing thirty rows for one dyad cannot say
-    whether those pairs were rejected or never in the montage, and a merged frame cannot be
-    subtracted row by row from its null. Left at None the keys come from the surviving
-    channels, which is the shape a caller with no montage to hand can produce.
+    rather than no key at all, so every dyad's table has one shape (the ``exclude=[]`` rule
+    :func:`~fnirs_pipe.io.snirf.long_channel_picks` documents). Left at None the keys come
+    from the surviving channels, which is the shape a caller with no montage to hand can
+    produce.
 
-    **Each side contributes its own surviving channels.** Drawing both axes from the first
-    subject's list would drop every pairing involving a channel the second subject kept and
-    the first had rejected -- pairings that never needed the first subject's copy of that
-    channel -- and would make the result depend on which member the pairs table happens to
-    list first. The published pipelines cross the two lists independently
-    and blank only the row or only the column a rejection belongs to (St. Clair et al.
-    2025).
+    **Each side contributes its own surviving channels**, so a channel only the second
+    subject kept still reaches its pairings and the result does not depend on which member
+    is listed first.
 
     Time axis decimated to ~1 Hz for display; frequency axis filtered to [fmin, fmax] Hz.
     significance adds a per-frequency Monte Carlo level to each pair (slow; ~300 surrogate runs).
@@ -500,13 +480,10 @@ def _wtc_over_pairs(
     ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
     :func:`compute_wtc_phase_null` takes the same number for its own surrogate generator, so one
     value makes a whole run reproducible without the two sharing a stream.
-    It is applied once here rather than per pair:
-    the surrogates come from numpy's global legacy RNG inside pycwt, which takes no seed
-    argument, and seeding every pair with one number would hand nearly identical surrogates
-    to channels with similar autocorrelation, turning the Monte Carlo error into a bias
-    shared by the whole montage. Seeding once lets the stream advance, so each pair draws
-    fresh numbers. The cost is that a pair's level depends on how many ran before it, so
-    changing the channel set moves the levels of everything after it.
+    It seeds numpy's global RNG once per call, not per pair, since per-pair seeding would
+    hand channels with similar autocorrelation near-identical surrogates. A pair's level
+    therefore depends on how many pairs ran before it, so changing the channel set moves the
+    levels of everything after it.
     """
     subject_ids = list(raws.keys())
     ref_raw = raws[subject_ids[0]]
@@ -632,18 +609,12 @@ def compute_wtc(
 
     ``ch_type`` is one chromophore, "hbo" or "hbr". Running both is this function called
     twice and costs exactly twice as much: nothing about the statistic changes, and the two
-    never mix, since a member's HbO pairs only with the other member's HbO. The reason to
-    run both is a consistency check rather than two results -- HbO has the larger amplitude
-    and the better SNR, HbR is the less contaminated by scalp and systemic circulation, so a
-    coupling in HbO with nothing in HbR is a caution flag.
+    never mix, since a member's HbO pairs only with the other member's HbO.
 
     ``cross`` crosses every channel with every other rather than pairing like with like, so
     n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by
-    the label. It tests whether one person's channel couples to a different site on the
-    other's head. The cost is quadratic in the channel count, and it is also what
-    :func:`roi_mean_of_channels` needs to build the cross-ROI matrix. Read cell by cell the
-    off-diagonal is exploratory: single channels are noisy and the correction over n**2 pairs
-    leaves little.
+    the label. The cost is quadratic in the channel count, and it is also what
+    :func:`roi_mean_of_channels` needs to build the cross-ROI matrix.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -664,14 +635,9 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
       a 1200 s result + (300, 600)  ->  the same maps holding only those 300 s
 
     This is how a condition is read out of a whole-record transform, and it is not the same
-    number as transforming that condition on its own. A cut window has two edges of its own,
-    and the cone of influence reaches further at longer periods, so a short condition
-    transformed alone has a larger share of its band cells sitting outside the cone. Those
-    cells are coefficients padded against the window's own edges, near 1 whatever the data
-    does, so transforming each condition separately inflates the band mean by an amount that
-    tracks window length, which in a design whose conditions differ in length is confounded
-    with the contrast. Windowing carries the whole record's cone instead, which only reaches
-    into the ends of the recording.
+    number as transforming that condition on its own: a cut window has two edges of its own,
+    so more of its band cells fall outside the cone. Windowing carries the whole record's
+    cone instead, which only reaches into the ends of the recording.
 
     ``sig`` is carried through unchanged: a Monte Carlo level is per frequency and constant
     over time, so a window of it is itself.
@@ -714,10 +680,6 @@ def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
     :math:`R = \sqrt{X^2 + Y^2}`, which is 0 when every angle agrees and grows without bound
     as they spread round the circle. Both are the forms Grinsted et al. (2004) define for a
     wavelet phase.
-
-    ``s`` is reported rather than a confidence interval on the mean: neighbouring cells of a
-    smoothed map are not independent, so an interval computed as though they were is too
-    narrow to mean anything.
 
     An empty input, or one with no finite angle, gives NaN at ``n = 0``.
     """
@@ -780,14 +742,8 @@ def wtc_band_mean(
     it are wavelet coefficients padded against the edges of the record: near 1 whatever the
     data does, and enough of them at the low-frequency end to carry a whole row.
 
-    ``mask_coi`` is **on by default**. Cells outside the cone are padding, so averaging them
-    reports the record's edges as coupling, which is the whole reason the cone is drawn. Very
-    few published studies say either way, and that is a gap in reporting rather than a
-    consensus to average everything: of 30 WTC studies extracted, one mentions the cone at all
-    and it excludes. Masking does discard more of a short segment than of a long one, so it
-    moves conditions of different length by different amounts, which is why ``n_valid_frac`` is
-    reported either way and why the windowing in :func:`window_result` matters more than this
-    flag: on a whole-record transform there is almost nothing outside the cone to drop.
+    ``mask_coi`` is **on by default**; cells outside the cone are padding. Masking discards
+    more of a short segment than of a long one, so ``n_valid_frac`` is reported either way.
     ``--no-wtc-mask-coi`` averages the whole band.
 
     ``n_valid_frac`` is the share of band cells that lie inside the cone of influence. **It is
@@ -795,8 +751,7 @@ def wtc_band_mean(
     even when every cell was averaged.
 
     ``coherence_z`` is the Fisher r-to-z of ``coherence`` (:math:`\operatorname{arctanh}`,
-    clipped just below 1), which is what group statistics should average: coherence is bounded
-    on [0, 1], so its mean across dyads is biased toward the interior.
+    clipped just below 1).
 
     ``phase_angle`` is the circular mean of the relative phase over the same band, in degrees,
     positive meaning the first member leads; ``phase_sd`` is its circular standard deviation,

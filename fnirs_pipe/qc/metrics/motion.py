@@ -35,9 +35,8 @@ def _spike_mask(diff_data: np.ndarray) -> np.ndarray:
 def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
     """Temporal derivative of OD band-limited to the motion band (cardiac removed first).
 
-    EEG detects spikes on band-limited data (line-noise/muscle filtered out first); the
-    fNIRS analog filters out the ~1 Hz cardiac band so the derivative reflects motion,
-    not pulsation. Uses the same GVTD motion band.
+    Filters out the ~1 Hz cardiac band so the derivative reflects motion, not pulsation.
+    Uses the same GVTD motion band.
     """
     d = np.nan_to_num(od_data, nan=0.0, posinf=0.0, neginf=0.0)
     h_freq = GVTD_MOTION_BAND[1]
@@ -75,7 +74,7 @@ def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str,
     Notes
     -----
     Experimental. Spikes are detected on the motion-band-filtered OD derivative (cardiac
-    removed first, EEG-style filter-then-detect), so they reflect motion rather than
+    removed first), so they reflect motion rather than
     pulsation; a per-channel MAD 3-sigma outlier count, distinct from the global GVTD
     threshold. temporal_derivative_variance uses the *unfiltered* derivative (per-channel
     derivative energy, the squared DVARS-vstd normaliser) for flagging noisy channels,
@@ -169,7 +168,7 @@ def motion_correction_metrics(
     -----
     Experimental and correction-agnostic: it measures the footprint of whatever
     correction ran (e.g. TDDR repairs only the < 0.5 Hz component), not a new
-    correction. Overlaps GVTD (both track motion); frame it as correction burden.
+    correction. Overlaps GVTD (both track motion); it measures correction burden.
     """
     corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
     frac_per_ch = {ch: float(corrected[i].mean()) for i, ch in enumerate(raw_before.ch_names)}

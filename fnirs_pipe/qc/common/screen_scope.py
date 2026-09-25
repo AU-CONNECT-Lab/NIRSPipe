@@ -1,14 +1,11 @@
 """Which stretches of a recording the channel screening counts over.
 
 A run holds time no analysis reads: the lead-in before the first block, the gaps between
-blocks, the tail after the last one. Counting coupled windows over all of it holds a channel
-responsible for what it did while nobody was doing anything, which is not what the count is
-for. The tool that defines the rule counts only inside its periods of interest for exactly
-this reason.
+blocks, the tail after the last one. ``"task"`` counts coupled windows only inside the
+annotated blocks.
 
-This is one channel set either way. Restricting the *denominator* is a different question
-from screening each condition separately, which would give one channel set per condition and
-make a contrast between two conditions also a contrast between two montages.
+This is one channel set either way: only the *denominator* is restricted, so a contrast
+between two conditions is never also a contrast between two montages.
 """
 
 from __future__ import annotations
@@ -33,11 +30,10 @@ def resolve_screen_scope(
       "task", blocks annotated                 ->  [("rest", 20.0, 320.0), ...]
       "task", only short triggers annotated    ->  None, with a warning
 
-    ``"task"`` falls back to the whole recording rather than to nothing, because the case it
-    falls back from is a recording carrying triggers instead of blocks: scoping to five 10 s
-    triggers out of an hour would count one minute and still read as a verdict on the run.
-    The fallback is logged with what it found, since a silent one leaves two runs screened
-    differently with nothing on disk saying which.
+    ``"task"`` falls back to the whole recording rather than to nothing, since the case it
+    falls back from is a recording carrying triggers instead of blocks. The fallback is logged
+    with what it found, since a silent one leaves two runs screened differently with nothing
+    on disk saying which.
     """
     if scope not in SCOPE_CHOICES:
         raise ValueError(f"screen scope must be one of {SCOPE_CHOICES}, got {scope!r}")

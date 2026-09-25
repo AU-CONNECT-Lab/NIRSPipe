@@ -4,15 +4,9 @@ Each flag is declared here exactly once. ``add_*`` puts one on a parser or on an
 group, for a command that files it under a heading of its own; the plain functions return a
 parent parser to hand to ``add_parser(parents=[...])``.
 
-They live here rather than in each CLI because two commands spelling one parameter two ways
-is how the dyad coherence band ended up as ``--fmin`` in ``fnirs-qc`` and ``--wtc-fmin`` in
-``fnirs-hyper``, and how the SCI line ended up written out as ``0.8`` in three places
-instead of read from :data:`~fnirs_pipe.qc.metrics.SCI_PASS`.
-
 Only genuinely shared parameters belong here. A flag that means something different to two
-commands stays in each of them: the dyad coherence window is 30 s with a 5 s step and the
-per-channel QC window is 10 s and does not overlap, so one ``--window-length`` covering both
-would name two things.
+commands stays in each of them, as the dyad coherence window and the per-channel QC window
+do.
 """
 
 from __future__ import annotations
@@ -24,10 +18,8 @@ from pathlib import Path
 class BidsLabel(str):
     """A BIDS entity label with its ``sub-``/``ses-``/``task-`` prefix taken off.
 
-    The BIDS Apps interface asks for bare labels, but the folder on disk is what a user
-    reads and types, so ``--participant-label sub-01`` arrives often enough to be worth
-    accepting. Stripping it here rather than in each command is what keeps one CLI tolerant
-    and the next one silently finding no files.
+    Accepts ``--participant-label sub-01`` as well as the bare label, and strips it here so
+    every command treats the two alike.
 
     Used as an argparse ``type``, so it strips once, at parse time::
 
@@ -48,10 +40,8 @@ class BidsLabel(str):
 def add_separation_bands(container, note: str = "") -> None:
     """``--short-max-dist`` / ``--long-min-dist`` / ``--long-max-dist``, in mm.
 
-    Three flags rather than one taking three values, because the upper bound defaults to
-    off and a single flag has no natural way to spell that. They are validated together in
-    :func:`separation_bands_from_args`, so moving one and leaving the others cannot produce
-    overlapping bands.
+    They are validated together in :func:`separation_bands_from_args`, so moving one and
+    leaving the others cannot produce overlapping bands.
     """
     from fnirs_pipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
 
@@ -86,8 +76,7 @@ def separation_bands_from_args(args) -> dict:
     args with --long-max-dist 55 -> {"short_max_dist": None, "long_min_dist": None,
                                      "long_max_dist": 0.055}
 
-    Values arrive in mm because that is how a montage is described, and are stored in
-    metres because that is what MNE reports. A flag left off stays None so the config
+    Values arrive in mm and are stored in metres, as MNE reports them. A flag left off stays None so the config
     keeps the package default; validation therefore runs on the resolved bands rather
     than on what was typed.
     """
@@ -169,8 +158,7 @@ def screening(sci_default: "float | None" = None, note: str = "") -> argparse.Ar
     """The screening lines as a parent parser.
 
     One block for all three, because they are one decision: SCI and PSP say what a coupled
-    window is, and the third says how many of them a channel needs. A command that can move
-    one has no reason not to move the others.
+    window is, and the third says how many of them a channel needs.
     """
     p = argparse.ArgumentParser(add_help=False)
     add_sci_threshold(p, sci_default, note)

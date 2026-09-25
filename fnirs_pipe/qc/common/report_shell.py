@@ -43,9 +43,7 @@ _SHEETS: dict[str, str] = {}
 # the look, then the footer. Tokens first so the look can override them, the footer last
 # so it can override either.
 #
-# `css` stays a parameter so a second look is one argument away, but it overrides the look
-# rather than choosing between two. `document.css` names the look and not the report that
-# wears it, so a second look arriving does not make the name wrong.
+# `css` overrides the look rather than choosing between two.
 TOKENS_CSS = stylesheet("_tokens.css")
 LOOK_CSS = stylesheet("document.css")
 FOOTER_CSS = stylesheet("_footer.css")
@@ -57,7 +55,7 @@ FOOTER_CSS = stylesheet("_footer.css")
 def guard(label: str, errors: list, scope: str):
     """Run a report section, and on failure record it instead of losing the whole report.
 
-    ``scope`` is what the run is called in the log: ``sub-01``, ``group-D01_task-chat``.
+    ``scope`` is what the run is called in the log: ``sub-01``, ``group-G01_task-main``.
     """
     try:
         yield
@@ -149,9 +147,9 @@ def page_vars(
 ) -> dict:
     """Variables the shell's head and nav bar read.
 
-    page_vars(title="fnirs-pipe Hyper Raw Report - D01 / chat",
+    page_vars(title="fnirs-pipe Hyper Raw Report - G01 / main",
               heading="fnirs-pipe Hyper Raw Report",
-              nav_meta=[("group", "D01"), ("task", "chat")],
+              nav_meta=[("group", "G01"), ("task", "main")],
               nav_note="SCI thr: 0.80")
 
     ``nav_meta`` prints as ``label: <b>value</b>`` chips in run order; ``nav_note`` is the
@@ -194,7 +192,7 @@ def nav_bar(
 
     ::
 
-      nav_bar([("Motion", "Motion"), ("GLM", "GLM")], key="__sub-01_task-chat",
+      nav_bar([("Motion", "Motion"), ("GLM", "GLM")], key="__sub-01_task-main",
               index="sub-01_desc-index_report.html")
       -> Summary | Motion  GLM | Provenance  Methods | <- All runs
 
@@ -207,9 +205,7 @@ def nav_bar(
 
     ``siblings`` are the pages read alongside this one, as ``{label, href, current}``, and
     ``index`` the page above it. ``summary=""`` drops the leading entry, for an index page
-    whose first section is its summary. The skeleton lives here rather than in each template
-    because it is what drifted: a report that grew a sibling grew its own spelling of the
-    divider before it, and one of them never grew the link back to its index at all.
+    whose first section is its summary. The skeleton lives here rather than in each template.
     """
     bar: list[dict] = []
     if summary:

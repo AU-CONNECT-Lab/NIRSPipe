@@ -37,8 +37,7 @@ _HBO_COLOR = HBO_COLOR
 _HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
 
-# an unsigned magnitude, so one hue ramped rather than a diverging pair: the middle of ALFF
-# is not a neutral value the way r = 0 is
+# an unsigned magnitude, so one hue ramped rather than a diverging pair
 _ALFF_SCALE = "Viridis"
 
 
@@ -62,8 +61,7 @@ def _pair_blocks(pairs, raw, sep_bands):
     """The panel's channel order: ``(pairs, x positions, block spans)``.
 
     Grouped by separation and sorted by name inside a group, which is the per-channel
-    table's order. Sorting by value instead would put an outlier at an end, but each of the
-    panel's rows would then want a different order and none of them would line up.
+    table's order.
 
     Without ``raw`` there is no separation to block by and the pairs are one list, which is
     what a caller holding only the tables can draw.
@@ -101,9 +99,7 @@ def _panel_matrix(fig, frame, order, chromo, col, show_bar):
     # to_numpy can hand back a read-only view, and the matrix is blanked in place
     mat = np.array(frame.reindex(index=names, columns=names).to_numpy(dtype=float), copy=True)
     np.fill_diagonal(mat, np.nan)
-    # Lower triangle only, as the HbO-HbR correlation panel draws it: the matrix is symmetric,
-    # so the upper half is the same values read the other way round and drawing both doubles
-    # the ink for no second reading
+    # Lower triangle only, as the HbO-HbR correlation panel draws it: the matrix is symmetric
     mat[np.triu_indices(len(order), k=1)] = np.nan
     matrix_ground(fig, len(order), len(order), 1, col, triangle=True)
     fig.add_trace(go.Heatmap(
@@ -125,11 +121,7 @@ def _panel_matrix(fig, frame, order, chromo, col, show_bar):
 
 
 def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
-    """One measure's row: a marker per chromophore per pair, the two joined.
-
-    The gap between the two markers is the question a reader brings to a channel, which a
-    row per channel would leave them to reassemble from two adjacent labels.
-    """
+    """One measure's row: a marker per chromophore per pair, the two joined."""
     def value(pair, chromo):
         got = values.get(pair, {}).get(chromo)
         return float(got[measure]) if got is not None and measure in got else np.nan
@@ -158,8 +150,7 @@ def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
             hovertemplate="%{customdata}<br>" + label + " = %{y:.3g}<extra></extra>",
         ), row=row, col=col)
         if ok.any():
-            # the reference a marker is read against: above or below what this run's own
-            # channels did, which no absolute number supplies
+            # the run's own channel mean, the reference a marker is read against
             fig.add_hline(y=float(np.mean(y[ok])),
                           line=dict(color=colour, width=1, dash="dash"),
                           opacity=0.5, row=row, col=col)
@@ -169,12 +160,8 @@ def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
     span = (hi - lo) or abs(hi) or 1.0
 
     if (~drawn).any():
-        # a channel with no value keeps its position rather than leaving a gap, or half a
-        # montage of rejections reads as a figure with nothing in it. Below the measured
-        # range and not on the zero line: a channel whose amplitude really is near zero
-        # belongs on the axis, and the two states must not land on the same row.
-        # "no value" and not "rejected": rejection is the usual reason but not the only one,
-        # and the panel cannot tell them apart. The per-channel table can.
+        # a channel with no value keeps its position, below the measured range so it never
+        # sits on a real near-zero value; "no value", since the panel cannot tell why
         idx = np.flatnonzero(~drawn)
         fig.add_trace(go.Scatter(
             x=xs[idx], y=np.full(len(idx), lo - 0.17 * span), mode="markers",
@@ -200,10 +187,10 @@ def rest_channel_panel(
 ):
     """The run's channels in one panel: FC on top, ALFF and fALFF below.
 
-    Built in the shape of the HbO-HbR correlation panel, which a reader of this report has
-    already learned: two matrices side by side on one colour scale, and a per-pair strip
-    under them. Here the two matrices are the two chromophores rather than two stages, and
-    the strips carry amplitude rather than a correlation.
+    Built in the shape of the HbO-HbR correlation panel: two matrices side by side on one
+    colour scale, and a per-pair strip under them. Here the two matrices are the two
+    chromophores rather than two stages, and the strips carry amplitude rather than a
+    correlation.
 
     **The rows share one channel order and one set of separation blocks**, so a channel is in
     the same relative place in all of them. They do not share an x *scale*: the matrices are
@@ -337,10 +324,8 @@ def fc_roi_matrix_figure(
 def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":
     """The long-channel flat head this run's maps are drawn on, or None with no positions.
 
-    Short channels are deliberately left out of every map in this module: they measure
-    extracerebral signal, so neither a connectivity claim nor a low-frequency amplitude is
-    about the cortex there, and including them would set a shared colour scale from signal
-    nobody is asking about.
+    Short channels are left out of every map in this module: they measure extracerebral
+    signal.
     """
     from fnirs_pipe.qc.metrics import long_short_channels
 
@@ -397,8 +382,7 @@ def fc_seed_topo_figure(
     coloured by that seed's correlation with it, on the same reversed RdBu / +-1 scale
     fc_matrix_figure uses so the two figures can be read against each other.
 
-    Three states are distinguishable on purpose, because confusing them is the mistake this
-    figure exists to avoid:
+    Three states are distinguishable:
 
     - an ordinary channel, coloured by r;
     - a channel with no value, grey. That is a channel **inside the seed**, whose correlation
@@ -442,10 +426,8 @@ def fc_seed_topo_figure(
 
 
 # What each row draws, best column first, and the measured column its hover names. mALFF
-# rather than ALFF because the raw amplitude is in molar at 1e-8, which no reader has a
-# calibration for, and because it is standardised within each chromophore: that is what lets
-# HbO and HbR share one scale without HbR, the smaller of the two by roughly a factor, coming
-# out a single dark colour. The measured amplitude is still one hover away.
+# is standardised within each chromophore, so HbO and HbR share one scale; the measured
+# amplitude is one hover away.
 _ALFF_ROWS = ((("malff", "alff"), "alff"), (("falff",), None))
 _ALFF_LABELS = {"malff": "mALFF", "alff": "ALFF", "falff": "fALFF"}
 
@@ -467,11 +449,9 @@ def _alff_rows(alff_df: pd.DataFrame) -> "list[tuple[str, str, str | None]]":
 def _row_colorbar(row: int, n_rows: int) -> dict:
     """Colorbar placement for one row of a head grid: horizontal, under the row it describes.
 
-    Beside the row is where it belongs but not where it can go: the grid anchors each head
-    square inside a much wider cell, so a vertical bar at a cell's right edge floats in the
-    gap between two heads and reads as belonging to neither. The row gap is what the head
-    circle leaves free; inside the cell the circle fills the height and a bar there crosses
-    its lower arc.
+    Not beside the row: the grid anchors each head square inside a much wider cell, so a
+    vertical bar at a cell's right edge floats in the gap between two heads. The row gap is
+    what the head circle leaves free.
     """
     cell = (1.0 - _ROW_GAP * (n_rows - 1)) / n_rows
     return {"orientation": "h", "len": 0.3, "thickness": 9,
@@ -490,24 +470,16 @@ def alff_topo_figure(
 ) -> "go.Figure | None":
     """Low-frequency amplitude drawn on the flat map, or None with no positions.
 
-    The bar chart in :func:`alff_falff_figure` orders channels by name, which puts no two
-    neighbours side by side; low-frequency amplitude is a spatial claim, and this is the
-    view it can be read as one in.
-
     One disc per channel, at its source-detector midpoint, because the value is a property
-    of a place rather than of a path. The segment idiom belongs to
-    :func:`fc_seed_topo_figure`, where the value really is a claim about a pair of points;
-    borrowed here it chained neighbouring channels into polylines that meant nothing.
+    of a place rather than of a path.
 
     Both rows are dimensionless, so a row's two chromophores share one scale and one bar and
     can be read against each other. The rows keep their own: fALFF is a share of the whole
-    spectrum and mALFF a multiple of the chromophore's own mean, and nothing is gained by
-    putting them on one axis.
+    spectrum and mALFF a multiple of the chromophore's own mean.
 
     A rejected channel is drawn grey rather than dropped, so the montage stays complete and
     the gap reads as a rejection, and its value is kept out of the scale. Grey alone, not
-    grey and faded: for this figure a rejected channel is exactly the channel with no value,
-    and a disc carrying both marks is too faint to find.
+    grey and faded: for this figure a rejected channel is exactly the channel with no value.
     """
     geo = _head_for(raw, sep_bands)
     if geo is None:

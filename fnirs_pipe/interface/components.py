@@ -30,8 +30,7 @@ def section(title, *children, key=None, open=True):
     """A titled group inside a card, so related parameters share one card instead of four.
 
     With a `key` the group folds away, and its header carries a summary of what is set
-    inside it. Collapsing a group of parameters only helps if the values stay readable;
-    the summary is what a page fills in through `{key}-summary`.
+    inside it, which a page fills in through `{key}-summary`.
     """
     if key is None:
         return html.Div([html.Div(title, className="fp-section"), *children])

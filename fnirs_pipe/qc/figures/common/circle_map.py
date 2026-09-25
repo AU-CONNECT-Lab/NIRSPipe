@@ -1,14 +1,11 @@
 """The circle the inter-brain connectogram is drawn on.
 
 Where a node sits, how a chord between two of them bows, and how a node's label is set
-against the ring. The geometry is kept apart from the figure that fills it so a second
-circle, should one earn its place, starts from this one rather than from a fresh copy.
+against the ring. The geometry is kept apart from the figure that fills it.
 
-Groups are separated by blank circle rather than by a drawn rule: the gap is visible before
-any label is read, and it costs no ink. A dyad circle has two groups, the two members.
-**Nodes carry no colour of their own.** Position already separates the groups, so hue would
-repeat what the gaps say and spend the reader's colour budget on it; the chords need that
-budget for their value.
+Groups are separated by blank circle rather than by a drawn rule. A dyad circle has two
+groups, the two members. **Nodes carry no colour of their own**: the chords need the colour
+for their value.
 """
 
 from __future__ import annotations
@@ -63,8 +60,7 @@ def node_arc(fig, theta: float, half_width: float, hover: str, row: int, col: in
              colour: str = NODE_INK, radius: float = 1.0, width: float = 9) -> None:
     """One node, as a thick arc segment of the ring rather than a dot.
 
-    An arc says how much of the circle the node owns, which is what makes a group of them
-    read as a block; a dot leaves the reader counting.
+    An arc spans the share of the circle the node owns, so a group of them reads as a block.
     """
     a = np.linspace(theta - half_width, theta + half_width, 12)
     fig.add_trace(go.Scatter(

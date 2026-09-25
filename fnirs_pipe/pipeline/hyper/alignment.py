@@ -45,10 +45,8 @@ def _stamp_alignment(raw: mne.io.Raw, source: mne.io.Raw, step: str,
     across; without it ``path_from`` returns None and every sidecar built from these
     objects loses its ``Sources``.
 
-    The passband is carried for the same reason. It describes the data rather than this
-    step, nothing here changes it, and every consumer downstream of the alignment sees only
-    this stamp: dropping it made an aligned recording indistinguishable from one that was
-    never filtered, and the ISC panel said so on every correctly filtered run.
+    The passband is carried too: it describes the data rather than this step, and every
+    consumer downstream of the alignment sees only this stamp.
     """
     prev = lineage_of(source)
     carried = {k: v for k, v in ((prev.params if prev else None) or {}).items()
@@ -87,8 +85,7 @@ def alignment_params(raws: dict[str, mne.io.Raw]) -> dict:
     first = next(iter(aligned.values()))
     out: dict = {
         "aligned": bool(first.params.get("aligned")),
-        # one word rather than a set: two members aligned by different routes is not a
-        # state the callers can produce, and saying so loudly beats writing a list
+        # one word: two members aligned by different routes is not a state the callers produce
         "align_step": steps.pop() if len(steps) == 1 else sorted(steps),
         "align_offset_s": {sid: lin.params.get("offset_s") for sid, lin in aligned.items()},
         "aligned_duration_s": first.params.get("duration_s"),
@@ -108,10 +105,9 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
       {"align_group": "G1", "align_step": "align_recordings", "align_trigger": "start",
        "align_offset_s": 22.4, "aligned_duration_s": 3900.0}
 
-    The offset goes in the member's own sidecar, as a shift a step applied to one file is
-    recorded beside that file, rather than in a group table in a tree that is read as an
-    input next. The copied BIDS sidecar is added to, not replaced: the fields a raw recording
-    has to carry are still needed there. Read off the lineage stamp, like
+    The offset goes in the member's own sidecar. The copied BIDS sidecar is added to, not
+    replaced: the fields a raw recording has to carry are still needed there. Read off the
+    lineage stamp, like
     :func:`alignment_params`, so the sidecar cannot claim an alignment that did not run.
     """
     snirf_path, out_dir = Path(snirf_path), Path(out_dir)
@@ -235,8 +231,8 @@ def align_like(
     The dyad raw report converts to haemoglobin before aligning, so the aligned objects are
     no longer optical density and nothing downstream can take GVTD or a carpet off them.
     This brings the intensity copy onto the same window instead of aligning it a second
-    time: a second pass would re-detect the trigger and could disagree with the one every
-    other panel is drawn against.
+    time, so it cannot land on a trigger other than the one every other panel is drawn
+    against.
 
     ``crop`` accumulates into ``first_samp``, so the shift already applied to a member is
     ``aligned.first_time - raw.first_time`` whatever produced it, trigger alignment, a plain
@@ -323,11 +319,7 @@ def resolve_analysis_window(
 
     **It returns a window; it does not cut.** The recordings stay whole and the window is
     taken out of the wavelet transform afterwards, which is the same route
-    ``--wtc-by-condition`` takes and for the reason recorded in
-    :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`: a cut stretch transformed on its
-    own has two edges of its own, and its cone of influence eats a share of the band that
-    grows as the window shortens, so the coherence over a 300 s cut comes out higher than
-    the same 300 s read out of the whole record.
+    ``--wtc-by-condition`` takes (see :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`).
 
     ``tend`` past the end of the data is clipped rather than refused: recordings differ in
     length and an over-long window is a request for "to the end", not a mistake. A ``tstart``

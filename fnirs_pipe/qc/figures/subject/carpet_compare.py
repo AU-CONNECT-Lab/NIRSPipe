@@ -65,9 +65,8 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
     """[(set name, times, before trace, after trace | None), ...], one entry per channel set.
 
     One row per set rather than one over their union: GVTD is an RMS across channels and the
-    long and short sets measure different depths. ``blocks`` has no default for that reason:
-    ``gvtd_channel_blocks`` already collapses a montage with no long channels to a single
-    "all" block, so a fallback here could only put the union back.
+    long and short sets measure different depths. ``blocks`` has no default:
+    ``gvtd_channel_blocks`` already handles a montage with no long channels.
     """
     def _od(raw):
         if raw is None:

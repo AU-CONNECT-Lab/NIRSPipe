@@ -196,10 +196,8 @@ def _process_hyper_raw_group(
             aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
             windows=[(name, a, b) for name, (a, b) in conditions.items()],
             sep_bands=sep_bands)
-    # The whole-run rows are the plain pairwise coherence, so the table and the record read
-    # them out of the pass that already measured them rather than measuring a second time.
-    # Two passes meant two copies of the segment-length rule, and a value on this page is
-    # compared with its own null: they have to be the same estimate.
+    # The whole-run rows are the plain pairwise coherence, read out of the pass that already
+    # measured them, so a value on this page and its own null are the same estimate.
     coherence_df = (screening_df[screening_df["window"] == "whole run"]
                     [["ch_name", "sub1", "sub2", "coherence"]].reset_index(drop=True)
                     if not screening_df.empty else pd.DataFrame(

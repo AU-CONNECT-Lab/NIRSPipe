@@ -67,8 +67,7 @@ def bic_ar_order(resid: np.ndarray, pmax: int) -> np.ndarray:
     if pmax < 1:
         return np.zeros(0)
 
-    # via the periodogram rather than np.correlate, which is a direct O(n^2) convolution and
-    # costs 18 ms per call at a ten-minute recording against 0.8 ms here, for the same numbers
+    # via the periodogram rather than np.correlate, which is a direct O(n^2) convolution
     size = 1 << int(np.ceil(np.log2(2 * n)))
     spec = np.fft.rfft(x, size)
     acov = np.fft.irfft(spec * np.conj(spec), size)[:pmax + 1] / n
@@ -222,11 +221,9 @@ def fit_channel(y: np.ndarray, design: np.ndarray, pmax: int,
 
     res = _ARIRLSModel(design, rho, fit.weights).fit(y2)
     # all three are plain attributes read at contrast time, so assigning here is what makes
-    # the t value the robust one rather than the weighted least-squares one. The covariance
-    # is taken from the robust fit rather than rebuilt: a weighted normal-equation covariance
-    # misses the correction the robust estimator carries and comes out about 3% small, which
-    # lands straight on the t value. nilearn multiplies cov by dispersion on the way out, so
-    # this divides it back out and leaves MSE reading as the robust variance it is
+    # the t value the robust one. cov comes from the robust fit, not rebuilt: a weighted
+    # normal-equation cov misses the robust correction. nilearn multiplies cov by dispersion
+    # on the way out, so this divides it back out
     res.dispersion = float(fit.scale) ** 2
     res.cov = np.asarray(fit.cov_params()) / res.dispersion
     res.df_residuals = satterthwaite_df(wx, fit.weights)

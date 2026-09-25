@@ -29,9 +29,8 @@ def _wl_filter_coeffs(coeffs, iqr_factor: float, signal_length: int):
     out = []
     for _, cD in coeffs:
         cDf = cD.copy()
-        # the fence is estimated over the whole time span and never per time window:
-        # the method assumes a single coefficient distribution per level and needs the
-        # entire recording to fit it. the slice keeps the padding out of the statistics
+        # one fence per level over the whole time span, never per time window; the slice
+        # keeps the padding out of the statistics
         _wl_clip_iqr(cDf[:signal_length], iqr_factor)
         out.append((cAf, cDf))
     return out
@@ -44,8 +43,7 @@ def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = "db2", iqr_factor
     Pad to 2^k → remove DC → MAD noise-normalize → SWT → zero detail-coefficient outliers beyond
     Q1/Q3 ± iqr_factor·IQR (per level) → iSWT → denormalize → restore DC and length.
 
-    level is the decomposition depth. The paper does not state one; this default reaches
-    scales of about 25 s for a 10 min run, far enough for a baseline shift.
+    level is the decomposition depth.
     """
     import pywt
     raw = raw_od.copy()

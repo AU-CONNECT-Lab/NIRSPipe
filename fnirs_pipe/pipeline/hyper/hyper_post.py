@@ -109,8 +109,7 @@ class HyperPostResult:
     cond_windows: list
     # how each condition was read: None means windowed out of the whole-run transform, a
     # number means transformed on its own over a cut padded by that many seconds. The report
-    # points a window at the run's own ROI map only in the first case, so it needs this and
-    # would otherwise have to reach back into the config to get it
+    # points a window at the run's own ROI map only in the first case
     cond_pad_s: "float | None"
     chan_axis: list[str]
     roi_labels: list[str]
@@ -169,9 +168,8 @@ def write_isc_matrix(
     ``step`` and ``index_label`` are what let this serve the ROI means of those matrices
     too, which are the same square shape over regions instead of channels.
 
-    ``align`` is what :func:`~fnirs_pipe.pipeline.hyper.alignment_params` returned.
-    ISC is a correlation between two members sample by sample, so it is the metric a missed
-    alignment damages most, and the file says which one it got.
+    ``align`` is what :func:`~fnirs_pipe.pipeline.hyper.alignment_params` returned, so the
+    file says which alignment it got.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
@@ -214,8 +212,7 @@ def run_hyper_post(
     the footer of the page this result is drawn on and not only the run log.
     """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar
-    # straight from the modules that define them. The package re-exports the set, and
-    # taking them from there makes the coherence look like a property of the group loader
+    # straight from the modules that define them, not the package re-exports
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
     from fnirs_pipe.pipeline.hyper.wtc import (
         WTCResult,
@@ -288,13 +285,10 @@ def run_hyper_post(
         """What every WTC table and map records about how it was computed."""
         return dict(
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
-            # --tstart/--tend, without which a reader cannot tell a table describing the
-            # whole recording from one describing a stretch of it, and the null that ranks
-            # this table has always recorded it while the table itself did not
+            # --tstart/--tend, so a table of a stretch is not read as the whole recording
             **({"analysis_window_s": [round(x, 3) for x in analysis_window]}
                if analysis_window is not None else {}),
-            # the window grid, without which the null cannot resolve the same one; a table
-            # of conditions and a table of equal-length windows are not comparable
+            # the window grid, without which the null cannot resolve the same one
             **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
                if config.wtc_window_s else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
@@ -312,15 +306,11 @@ def run_hyper_post(
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. What the padding buys is the cone:
         with a margin past :func:`~fnirs_pipe.pipeline.hyper.wtc.cone_margin_s` it lands
-        outside the condition instead of eating its edges, which is the whole difference
-        between this and cutting a condition to its own boundaries.
+        outside the condition instead of eating its edges.
 
-        ``cond_pad_s`` of 0 does cut to the boundaries, which reproduces the route most
-        published per-condition pipelines take and is biased upward by an amount that grows
-        as the condition shortens. It is here to reproduce such a result, not to produce one.
+        ``cond_pad_s`` of 0 does cut to the boundaries.
 
-        Costs one transform per condition per chromophore on top of the whole-run pass, which
-        is why it is not the default.
+        Costs one transform per condition per chromophore on top of the whole-run pass.
         """
         lo = max(0.0, tstart - cond_pad_s)
         hi = min(min(float(r.times[-1]) for r in wtc_raws.values()), tstop + cond_pad_s)
@@ -396,8 +386,8 @@ def run_hyper_post(
 
         ``sig`` is whatever the phase arrows are thresholded against, and it already holds
         pycwt's Monte Carlo level when --wtc-significance ran. The null's level is the same
-        shape and answers the same question against a better null, so it goes in the same
-        slot rather than a second one the figures would have to choose between.
+        shape, so it goes in the same slot rather than a second one the figures would have to
+        choose between.
 
         Absent unless --wtc-phase-null ran for this dyad, which is the usual case: the maps then
         keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min. A level
@@ -506,7 +496,7 @@ def run_hyper_post(
                         "transform", len(cond_windows))
 
     def _roi_band(chan_band_df, ch_type: str, what: str):
-        """The ROI number the WTC literature reports: coherence per channel pair, averaged.
+        """The ROI number: coherence per channel pair, averaged.
 
         A table rather than a figure, and derived from a frame carrying every pairing in the
         group, so it is computed once per chromophore beside the channel means instead of
@@ -521,7 +511,7 @@ def run_hyper_post(
         return out
 
     def _roi_hom_band(chan_band_df, ch_type: str, what: str):
-        """The homologous ROI mean, which is the number to report and the one with a null.
+        """The homologous ROI mean, the one with a null.
 
         Separate from `_roi_band` rather than a column beside it, because a crossed run
         writes a 4x4 matrix and this writes four rows: one file, one quantity. See
@@ -551,9 +541,7 @@ def run_hyper_post(
         **No figures here.** The transform covers every pairing in the group at once and is
         the expensive step, while a figure is of one pairing, so the two are separated: this
         runs once per chromophore and :func:`_figures_for` runs once per chromophore per
-        pairing off what it returns. Running the transform per pairing instead would repeat
-        the one step worth not repeating, and returning per-pairing tables would multiply
-        every row of every TSV by the pairing count.
+        pairing off what it returns.
 
         ``cond_wtc`` and ``cond_bands`` are positional over the windows, so the chromophores'
         lists line up even where a guard failed on one of them. ``cond_bands`` holds each
@@ -593,16 +581,7 @@ def run_hyper_post(
         out["roihom"] = _roi_hom_band(chan_band_df, ch_type, "whole run")
 
         # ---- per condition ----
-        # Each task window read out of the whole-run pass above rather than transformed on
-        # its own, which is the comparison a block design is run for.
-        #
-        # Windowed, not recomputed: a window transformed alone has two edges of its own and
-        # the cone of influence reaches further at longer periods, so a short condition
-        # keeps a smaller share of its band cells and the ones it keeps anyway are padded
-        # against those edges. Recomputing inflated the band mean by an amount that tracked
-        # window length, which in a design whose conditions differ in length is confounded
-        # with the contrast. See `window_result`. It is also cheaper: the whole-run
-        # transform is computed either way, and this adds no second one.
+        # each task window read out of the whole-run pass, not recomputed; see `window_result`
         for label, tstart, tstop in cond_windows:
             out["cond_wtc"].append(None)
             out["cond_bands"].append({"chan": None, "roichan": None,
@@ -739,19 +718,13 @@ def run_hyper_post(
                                   phase_level_source=cond_level))
 
     # ---- ISC, which is a cut and not a slice ----
-    # Always both chromophores, not --wtc-chroma: ISC is cheap, and its matrix cannot share a
-    # file the way the long-format WTC tables can. A window here is a real cut, unlike the
-    # coherence, which is sliced out of the whole-run transform; see `compute_isc` and
-    # `window_result` for why each is right.
+    # Always both chromophores, not --wtc-chroma: its matrix cannot share a file the way the
+    # long-format WTC tables can. A window here is a real cut, unlike the coherence, which is
+    # sliced out of the whole-run transform; see `compute_isc` and `window_result`.
     isc_pair_frames: list = []
 
     def _isc_params() -> dict:
-        """What the correlation was computed on, for the sidecar to carry.
-
-        None of it could be read off the file before, so a table computed with the flags
-        unset looked exactly like one computed with them set, which is how a run that
-        silently ignored them went unnoticed for a fortnight.
-        """
+        """What the correlation was computed on, for the sidecar to carry."""
         return {"isc_band_hz": list(isc_band) if isc_band else None,
                 "isc_whiten_max_order": isc_whiten,
                 "isc_max_lag_s": isc_max_lag_s,

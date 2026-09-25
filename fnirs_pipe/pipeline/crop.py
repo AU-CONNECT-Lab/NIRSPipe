@@ -1,9 +1,6 @@
 """SNIRF cropping: single-segment and multi-segment to BIDS derivatives.
 
 Crops a raw recording, or with ``input_desc`` a pipeline stage inside a derivatives tree.
-The second is the order the pipeline wants: motion correction and the bandpass both read
-whatever series they are handed, so they belong on the whole recording and the cut belongs
-after them.
 """
 
 from __future__ import annotations
@@ -47,9 +44,8 @@ def _trigger_origin(raw, trigger_name: str | None) -> float:
     Example: a subject whose "start" trigger fires at 12.4 s, cropped with tmin=60, tmax=90,
     keeps 72.4 s to 102.4 s of its own recording.
 
-    A missing trigger falls back to 0.0 with a warning rather than raising: the crop still
-    produces a usable file, just on the recording's own clock, and refusing would take down
-    a whole batch for one subject.
+    A missing trigger falls back to 0.0 with a warning rather than raising, so the file is
+    cut on the recording's own clock and one subject cannot take down a batch.
     """
     if not trigger_name:
         raise ValueError("--align trigger requires --trigger-name")
@@ -350,9 +346,7 @@ def crop_snirf(
 
     ``input_desc`` cuts a pipeline stage instead of a recording: `bids_dir` is then a
     derivatives tree and the file carrying that desc- entity is the input, e.g. "errts" for
-    the residual. This is the order the pipeline wants, since motion correction and the
-    bandpass both read whatever series they are handed. The desc- entity is kept on the
-    output, so a cut of the residual is `..._task-baseline_desc-errts_nirs.snirf`.
+    the residual. The desc- entity is kept on the output, so a cut of the residual is `..._task-baseline_desc-errts_nirs.snirf`.
 
     Returns list of written SNIRF paths.
     """

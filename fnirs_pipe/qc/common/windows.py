@@ -1,7 +1,6 @@
 """Condition windows and crop provenance, read off a recording's annotations.
 
-Shared by both report paths on purpose: these lived in the dyad report, and the
-``first_time`` correction in :func:`markers_on_data_axis` was applied on that path only.
+Shared by both report paths.
 """
 
 from __future__ import annotations
@@ -28,9 +27,7 @@ def crop_provenance(raw: "mne.io.Raw") -> "dict | None":
         -> {"window": [3555.0, 3927.0], "analysis": [3602.4, 3902.5], "margin_s": 47.1}
 
     ``fnirs-prep crop`` records the span it wrote and, with ``--margin``, the narrower span
-    the cut was made for. Nothing downstream had read either, so a segment and a whole
-    recording were treated identically and the tool said nothing about it. That is the one
-    way into edge-inflated coherence that a user cannot see, since the numbers look ordinary.
+    the cut was made for.
 
     The sidecar is read off disk rather than the lineage stamp, which carries only the filter
     keys across a SNIRF round trip.
@@ -58,7 +55,7 @@ def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
 
     ::
 
-      a raw cropped from 22.4 s, annotation "talk" at onset 3602.4  ->  onset 3580.0
+      a raw cropped from 22.4 s, annotation "task" at onset 3602.4  ->  onset 3580.0
 
     Annotations of a cropped recording still sit on the original recording's axis, with the
     offset held in ``first_time``, while the data axis and everything computed from it start
@@ -66,10 +63,7 @@ def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
     from its first shared trigger, so raw annotation onsets are late by that trigger's onset
     against any figure or window drawn on the aligned clock.
 
-    Every consumer of the aligned markers goes through this. The condition windows did the
-    subtraction and the figures' block boundaries did not, which drew every boundary line on
-    every coherence map late by that same offset. It is invisible on a tree whose input
-    files each held one condition cropped to its own start, where the offset is zero.
+    Every consumer of the aligned markers goes through this.
     """
     origin = float(raw.first_time)
     markers = extract_markers(raw)
@@ -84,8 +78,8 @@ def condition_windows(
 ) -> "list[tuple[str, float, float]]":
     """[(label, tstart, tend)] on the aligned clock, one window per task annotation.
 
-    e.g. annotations "Video" at 60 s for 240 s and "Talk" at 300 s for 240 s give
-    ``[("Video", 60.0, 300.0), ("Talk", 300.0, 540.0)]``.
+    e.g. annotations "Rest" at 60 s for 240 s and "Task" at 300 s for 240 s give
+    ``[("Rest", 60.0, 300.0), ("Task", 300.0, 540.0)]``.
 
     An annotation's own ``duration`` is the window when it has one. Many acquisition systems
     write triggers with a duration of zero, so a window with none runs from its onset to the
@@ -98,11 +92,8 @@ def condition_windows(
     reads a join between two non-adjacent segments as a step, which lands in the result as
     broadband coherence at the join.
 
-    ``min_duration`` drops windows shorter than that, in seconds. One cycle of the lowest
-    frequency asked for is the sensible floor, and it is why an event-related design with
-    two-second trials yields nothing here: a window holding less than one cycle has no
-    average of that frequency to report, however the coherence was computed. Pass 0.0 where
-    the windows only split panels and no frequency has to fit inside one.
+    ``min_duration`` drops windows shorter than that, in seconds. Pass 0.0 where the windows
+    only split panels and no frequency has to fit inside one.
     """
     markers = sorted(markers_on_data_axis(raw), key=lambda m: m["onset"])
     if not markers:
@@ -186,24 +177,14 @@ def split_windows(
            {"rest-w1": ("rest", 0.0), "task-w1": ("task", 0.0),
             "task-w2": ("task", 100.0), "task-w3": ("task", 200.0)}
 
-    Why a caller wants this: a condition's own length decides things that have nothing to do
-    with the condition. The width of a resampled null, and the number of cycles of the band's
-    slowest oscillation the block contains, both track duration, so two conditions of
-    different length are not estimating the same quantity however carefully each is computed.
-    Making the unit an equal-length window removes that, and what remains between windows is
-    the condition.
-
-    The remainder is dropped rather than kept short, which is the point: a window of another
-    length would reintroduce exactly what this removes. A window shorter than ``length_s``
-    therefore yields nothing and is logged, so a condition too short to hold one disappears
-    from the analysis rather than entering it on different terms.
+    The remainder is dropped rather than kept short, since a window of another length would
+    undo the split. A window shorter than ``length_s`` therefore yields nothing and is logged.
 
     The second return value is what a null needs. A draw cuts the stand-in at its own marker
     for the condition, not at the real dyad's clock, so for a window it needs the condition
     the window belongs to and how far into it the window starts. Returned explicitly rather
-    than parsed back out of the label, because ``condition_windows`` already numbers a
-    repeated description ``desc#2`` and a second numbering scheme on top of that is a
-    collision waiting to happen.
+    than parsed back out of the label, which ``condition_windows`` may already have numbered
+    ``desc#2``.
     """
     if length_s <= 0:
         raise ValueError(f"length_s must be positive, got {length_s}")

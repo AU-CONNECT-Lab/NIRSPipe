@@ -4,14 +4,11 @@ The per-metric hover text is next door in :mod:`~fnirs_pipe.qc.boilerplate.vocab
 this is the layer above it, the paragraphs that introduce a section or say how to read the
 panel under it.
 
-**Half the report's prose is here and half is still in the template, and the split is not
-arbitrary.** A paragraph lives here when it is the same sentence every time, value slots
-included: ``{sci}`` and friends are filled by the caller. It stays in the template when it
-*branches*, when a ``{% if %}`` decides which sentence to say. Moving one of those would
-mean either embedding Jinja in a Python string, with no highlighting and no lint, or
-assembling the sentence out of fragments in Python, which reads worse than the template
-does. So: **if a paragraph can differ between two runs by more than a value, look in
-subject_report.html.j2.**
+**Half the report's prose is here and half is still in the template.** A paragraph lives
+here when it is the same sentence every time, value slots included: ``{sci}`` and friends
+are filled by the caller. It stays in the template when it *branches*, when a ``{% if %}``
+decides which sentence to say. So: **if a paragraph can differ between two runs by more
+than a value, look in subject_report.html.j2.**
 
 The strings carry HTML (``<code>``, ``<b>``, ``&nbsp;``) and reach the page unescaped,
 which is what ``render()`` does with every other variable; a report environment that turned

@@ -536,10 +536,8 @@ def update_channel_detail(channel_pair, store):
             from fnirs_pipe.qc.common.figure_io import extract_markers
             from fnirs_pipe.qc.figures import build_channel_figure
             from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
-            # off the recording being drawn, not out of the payload: this figure is the one
-            # that draws on the original axis, so its markers have to be the annotations of
-            # the raw it is handed. The panel's list is on the data axis and would be late
-            # by first_time on anything cropped. `_section_channel_detail` does the same.
+            # off the raw being drawn, not the payload, whose list is on the data axis and
+            # late by first_time when cropped; `_section_channel_detail` does the same
             markers = extract_markers(raw_haemo)
             tmin, tmax = cached.get("epoch_window", [_EPOCH_TMIN, _EPOCH_TMAX])
             cardiac = cached.get("cardiac")
@@ -843,7 +841,7 @@ def highlight_topo_channel(channel_pair, store):
     if not store:
         return no_update
     cached = _RESULT_CACHE.get(store.get("cache_key"), {})
-    # by shape name, not by index: a positional lookup highlighted the wrong cell
+    # by shape name, not by index: a positional lookup would highlight the wrong cell
     shapes = cached.get("evoked_topo", {}).get("figure", {}).get("layout", {}).get("shapes", [])
     cells = [(i, sh.get("name")) for i, sh in enumerate(shapes) if sh.get("name")]
     if not cells:
@@ -1436,8 +1434,7 @@ def drift_cutoff_hint(rows):
 
     slowest_name = max(gaps, key=gaps.get)
     slowest = gaps[slowest_name]
-    # every condition, because a marker seen twice sets the bound and is rarely the one
-    # being modelled; the reader can see which is which only if all of them are listed
+    # every condition, since the one that sets the bound is rarely the one being modelled
     per_condition = " · ".join(f"{name} {gap:.0f} s"
                                for name, gap in sorted(gaps.items(), key=lambda kv: -kv[1]))
     return html.Small([

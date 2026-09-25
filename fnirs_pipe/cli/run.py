@@ -19,10 +19,8 @@ _HRF_CHOICES           = [
     "spm", "spm + derivative", "spm + derivative + dispersion",
     "glover", "glover + derivative", "glover + derivative + dispersion", "fir",
 ]
-# what the GUI dropdown offers and the help lists. "auto" is mne-nirs' own rule, an AR order
-# of 4x the sampling rate; the low orders are fMRI defaults arriving through nilearn, where a
-# sampling rate an order of magnitude slower makes one lag enough
-_NOISE_CHOICES         = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls"]
+# what the GUI dropdown offers and the help lists; "auto" is an AR order of 4x the sampling rate
+_NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls"]
 # the one rule, shared with the GUI's `pattern` so the browser refuses what argparse would
 NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
@@ -30,8 +28,7 @@ _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
 def _noise_model(value: str) -> str:
     """``ols``, ``auto``, ``arN`` for any order the library will take, or ``ar_irls``.
 
-    A pattern rather than a closed list: what the package measures is no reason to stop a
-    caller passing something else. The dropdown and the help still name the common ones.
+    A pattern rather than a closed list; the dropdown and the help name the common ones.
     """
     if re.fullmatch(NOISE_MODEL_PATTERN, value):
         return value
@@ -105,8 +102,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--resp-h-freq", type=float,
                           help="Upper bound of respiration band in Hz (required at participant level; "
                                "population-dependent). Adult ~0.5; infants higher.")
-    # the other screening line. Optional, unlike --sci-threshold: PSP has a published
-    # default that holds across populations, so a run that does not name it is not guessing
+    # the other screening line, optional unlike --sci-threshold
     _shared.add_psp_threshold(prep_opt)
     _shared.add_min_good_frac(prep_opt)
     _shared.add_screen_scope(prep_opt)

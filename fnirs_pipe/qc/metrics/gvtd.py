@@ -5,12 +5,7 @@ The whole of GVTD is here, from the per-sample trace to the spans a run marks as
 against the trace, the censoring is defined against the threshold, and the channel set the
 figures print is the one the censoring used.
 
-``GVTD_MOTION_BAND`` does not follow ``--mode``, and the channel set is the long channels
-rather than an option, since the analysis never uses the rest.
-
-``_motion_metrics`` keeps its name, which predates the split and says "motion" where it
-means GVTD. The other motion measures, spikes and the correction footprint, are in
-``motion.py``.
+The other motion measures, spikes and the correction footprint, are in ``motion.py``.
 """
 
 from typing import Any
@@ -25,8 +20,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.metrics.gvtd")
 
 
-# Hz, Sherafati 2020. One band for every mode: a QC number that moved with the analysis band
-# could not be compared across a cohort.
+# Hz, Sherafati 2020; the same for every --mode
 GVTD_MOTION_BAND = (0.01, 0.5)
 GVTD_N_STD = 3.0  # one constant: the figures draw this threshold, the record stores it
 
@@ -179,19 +173,15 @@ def gvtd_channel_picks(
 
     Defaults to the long channels, which is the set the analysis uses, so a run is judged on
     the channels it is built from. ``channel_set`` overrides that with ``"short"`` or
-    ``"all"`` for a caller that has been told which set to use; only ``--gvtd-censor`` does,
-    since which frames get marked BAD_gvtd is a choice a study can reasonably make either
-    way. Nothing else passes it, and in particular the carpet does not: it draws every set it
-    has and an override there would collapse two rows into one.
+    ``"all"`` for a caller that has been told which set to use; only ``--gvtd-censor``
+    passes it, and the carpet draws every set and never overrides.
 
     The fallback is about **missing optode positions**, not about a montage without long
     channels. An unregistered montage reports every separation as zero, so neither band
-    claims anything and there is no split to make; with no distances there is no
-    separation-based choice to be had, and every channel is the only honest pick.
+    claims anything and every channel is picked.
 
-    The returned label is what actually happened rather than what was asked for, since it is
-    what the figure prints and what the record stores, and a wrong label makes two runs look
-    comparable when they are not.
+    The returned label is the set actually used, which on the fallback differs from the one
+    asked for.
 
     Example: an n-channel montage with n_long long and the rest out of band returns
     ``(n_long names, "long")``; the same call on an unregistered montage returns
@@ -199,8 +189,7 @@ def gvtd_channel_picks(
     """
     long_names, short_names = long_short_channels(raw, sep_bands)
     wanted = channel_set or "long"
-    # refused rather than defaulted: the label is returned to be stored and printed, so an
-    # unrecognised set that quietly picked the long channels would label them as itself
+    # refused, not defaulted: a silent fallback would store the wrong label
     if wanted not in ("long", "short", "all"):
         raise ValueError(f"unknown GVTD channel set {channel_set!r}; "
                          "expected 'long', 'short', 'all' or None")
@@ -261,16 +250,8 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
         Count the above-threshold timepoints against this cutoff instead of this
         recording's own. Given by the caller for the motion-corrected file, so that the
         before and after halves of a pair are counted against one yardstick.
-
-        Without it the pair is not a comparison. The threshold is the mode of the trace's
-        own histogram plus 3 SD, so it tracks whatever distribution it is handed. It is the
-        same rule the per-condition views follow: fix the yardstick over the run and count
-        the mask, never re-derive it on the part being compared.
-
-        ``gvtd_thresh`` still reports this recording's own cutoff either way, because the
-        report has a row for exactly that and its movement is worth seeing;
-        ``gvtd_thresh_applied`` names the one the counts used, so a record can never be read
-        as counting against a cutoff it did not use.
+        ``gvtd_thresh`` still reports this recording's own cutoff; ``gvtd_thresh_applied``
+        names the one the counts used.
 
     Returns
     -------
@@ -352,15 +333,11 @@ def gvtd_censor_spans(
 ) -> "tuple[list[tuple[float, float]], dict[str, Any]]":
     """Spans of a recording to censor on GVTD, and what censoring them costs.
 
-    :footcite:`Sherafati2020` excludes the timepoints above the GVTD threshold from later
-    analysis rather than repairing them, so this returns spans to mark rather than data to
-    replace: nothing here interpolates, zero-fills or averages over what it flags.
+    Returns spans to mark, following :footcite:`Sherafati2020`, not data to replace: nothing
+    here interpolates, zero-fills or averages over what it flags.
 
-    Two passes, and the second is why a threshold alone is not enough. First every sample
-    above the threshold is flagged. Then any surviving stretch shorter than ``min_epoch_s``
-    is flagged as well, since a four-second island between two artifacts is not something a
-    spectral or connectivity analysis can use, and leaving it in makes the retained fraction
-    look better than the retained data is.
+    Two passes: every sample above the threshold is flagged, then every surviving stretch
+    shorter than ``min_epoch_s``.
 
     The rule is about every survivor, not only the islands between artifacts. On a 100 s
     recording with artifacts at 20-22 s and 26-28 s and ``min_epoch_s=30``, the 4 s island
@@ -368,11 +345,7 @@ def gvtd_censor_spans(
     ``[(0.0, 28.0)]`` and one surviving epoch of 72 s, where the threshold alone would have
     left three epochs.
 
-    ``n_std`` defaults to the lenient 10 the reference used for censoring, not to the 3.0
-    the reports score with. The two answer different questions: scoring asks how far a
-    recording departed from its own resting level, censoring decides what to throw away, and
-    on a recording that flags half its frames the strict value cascades through the
-    ``min_epoch_s`` pass and censors everything.
+    ``n_std`` defaults to 10, not the 3.0 the reports score with.
 
     Returns
     -------
@@ -402,8 +375,7 @@ def gvtd_censor_spans(
         logger.warning("GVTD has no positive values; nothing censored")
         return [], empty
 
-    # gvtd is one sample shorter than times, the first sample having no derivative. The
-    # reference prepends a zero there, which no threshold flags, so the mask starts False.
+    # gvtd is one sample shorter than times: the first sample has no derivative and is never flagged
     flagged = np.concatenate(([False], gvtd > thresh))
 
     # second pass: a surviving stretch too short to analyse is censored with the artifacts

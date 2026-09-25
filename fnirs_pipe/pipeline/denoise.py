@@ -14,10 +14,7 @@ logger = get_logger("post.denoise")
 
 # ---- Filter design ----
 # One design, used by the data, by the regressors filtered to match it, and by the report, so
-# the three cannot drift apart. Butterworth is the default because it has no transition
-# bandwidth to get wrong, unlike MNE's FIR defaults, whose 2 Hz floor is written for EEG and
-# leaves an fNIRS low-pass with its stopband above the cardiac band. FIR stays available for
-# the one thing Butterworth cannot do, linear phase.
+# the three cannot drift apart.
 
 FILTER_METHODS = ("iir", "fir")
 DEFAULT_FILTER_METHOD = "iir"
@@ -34,9 +31,8 @@ _HAMMING_LENGTH_FACTOR = 3.3
 def _fir_transitions(l_freq: float | None, h_freq: float | None) -> tuple[float | None, float | None]:
     """(l_trans_bandwidth, h_trans_bandwidth) for a FIR design; None where that edge is absent.
 
-    Only the low-pass side is overridden. MNE's high-pass formula ends in min(..., l_freq),
-    which already clamps it to something sensible at these frequencies, and narrowing it
-    further is what makes the filter too long to fit a short recording.
+    Only the low-pass side is overridden; the high-pass is MNE's own formula, since a
+    narrower one makes the filter too long to fit a short recording.
     """
     l_trans = min(max(l_freq * 0.25, 2.0), l_freq) if l_freq else None
     h_trans = h_freq * FIR_TRANS_RATIO if h_freq else None

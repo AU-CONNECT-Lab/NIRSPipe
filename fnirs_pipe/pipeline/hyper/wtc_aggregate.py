@@ -1,10 +1,8 @@
 """Merge the per-dyad WTC band-mean tables into one long table per study.
 
 ``fnirs-hyper`` writes one ``group-<id>_task-<task>_stat-wtc_relmat.tsv`` per dyad and
-task, and a dozen more beside it for the ROI means, the conditions and the nulls. A study
-with twenty dyads and three conditions ends up with hundreds of files that a group analysis
-has to stitch together by hand, and the stitching is where the mistakes live. This produces
-the stitched tables instead, with ``group_id`` and ``task`` carried as columns so nothing
+task, and a dozen more beside it for the ROI means, the conditions and the nulls. This
+produces the stitched tables, with ``group_id`` and ``task`` carried as columns so nothing
 about a row depends on the filename it came from.
 
 What counts as one kind is not a list kept here: it is the set of entities a file carries
@@ -13,9 +11,8 @@ two agrees, which is the rule a merged name follows as well -- the merged table 
 inputs' own name with ``group-`` and ``task-`` taken out, so it lands at the root, where
 having no analysis unit in the name is what marks a table as cross-dyad.
 
-The merge refuses more than it warns. A coherence value only means something alongside the
-band it was averaged over, and nothing downstream of a concatenated TSV can recover which
-band a given row used, so a disagreement here is a stop rather than a caveat.
+The merge refuses more than it warns: nothing downstream of a concatenated TSV can recover
+which band a given row used.
 """
 
 from __future__ import annotations
@@ -32,11 +29,9 @@ from fnirs_pipe.io.naming import parse_path, derivative_path
 
 logger = get_logger("pipeline.wtc_aggregate")
 
-# parameters that have to match across every file in a merge, and why they cannot be mixed.
-# n_iter, null_kind and pair_pool only ever appear on a null's sidecar, and a file without a
-# key carries no opinion, so listing them guards the null merges without touching the real
-# tables. null_kind is what keeps the two nulls apart if one is renamed onto the other's
-# path: they answer different questions and a table holding both answers neither
+# parameters that have to match across every file in a merge. null_kind and pair_pool only
+# ever appear on a null's sidecar, and a file without a key carries no opinion, so listing
+# them guards the null merges without touching the real tables.
 # n_iter is not here: it is a column of the table, not a property of one, so mixing it
 # leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s")
@@ -189,15 +184,10 @@ def _warn_mixed_iterations(seen: dict[str, dict]) -> None:
     Unlike a band, ``n_iter`` is a column of the merged table, so a reader can see what each
     row rests on and split or weight by it. What it costs is the resolution of ``percentile``:
     a null of 20 draws ranks a real value to about 5%, one of 2 draws to 50%, and one of a
-    single draw has two possible answers. Comparing percentiles across groups without looking
-    at ``n_iter`` treats those as the same number.
+    single draw has two possible answers.
 
-    For the re-paired null it is worse than uneven, it is **systematic**. The pool is the
-    other groups whose own block of the condition is at least as long as this one's, so a
-    long block has few stand-ins and a short one has many, and the resolution of the null
-    ends up correlated with duration. Duration also moves coherence, since a shorter transform loses a larger
-    share of its band to the cone. So the groups with the coarsest null are not a random
-    subset. Report ``n_iter`` beside any percentile drawn from this table.
+    For the re-paired null the pool is the other groups whose own block of the condition is
+    at least as long as this one's, so its draw count tracks block length.
     """
     counts = {name: params["n_iter"] for name, params in seen.items() if "n_iter" in params}
     if len(set(counts.values())) <= 1:
@@ -215,8 +205,7 @@ def _warn_mixed_chromophores(frames: dict[str, pd.DataFrame]) -> None:
 
     Unlike a band or a crossing, a chromophore is a *row* label, so mixing does not corrupt
     a column: the rows stay readable and separable. It does mean the merged table has a
-    different dyad count per chromophore, which a group model will silently absorb, so it is
-    worth a line in the log.
+    different dyad count per chromophore.
     """
     seen = {name: tuple(sorted(df["chromophore"].dropna().unique()))
             for name, df in frames.items() if "chromophore" in df.columns}

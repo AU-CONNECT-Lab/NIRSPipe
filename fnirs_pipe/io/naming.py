@@ -86,8 +86,8 @@ def derivative_path(output_dir, suffix: str, extension: str, **entities) -> Path
         -> ``out/sub-01/nirs/sub-01_task-rest_desc-preproc_qc.json``
 
     Entities whose value is None are dropped, so a caller can pass ``session=None`` without
-    branching. Raises ValueError when no pattern fits, which is the failure worth having:
-    silently returning a name outside the scheme would let the names drift apart.
+    branching. Raises ValueError when no pattern fits, rather than returning a name outside
+    the scheme.
     """
     from bids.layout.writing import build_path
 

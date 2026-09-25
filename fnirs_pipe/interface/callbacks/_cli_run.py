@@ -28,8 +28,7 @@ def preview_text(argv: list[str], shell: str) -> str:
 
 # The landing page each command writes, newest match wins. A command absent from this table
 # writes tables and no report; a command present here that produced nothing is a failure,
-# not a quiet "not found". Keeping every pattern in one place is what makes a renamed
-# report show up as one broken page rather than none.
+# not a quiet "not found".
 REPORT_PATTERNS: dict[str, list[str]] = {
     "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
     "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],

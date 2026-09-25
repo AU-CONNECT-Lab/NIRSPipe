@@ -262,9 +262,8 @@ def run_prep(
             sep_bands=separation_bands(config),
             channel_set=config.gvtd_censor)
         # BAD_ annotations, so the spans travel with the data instead of being cut out of
-        # it: MNE's reject_by_annotation drops the epochs they overlap, a continuous
-        # analysis can pick the surviving stretches, and a threshold set too strictly is
-        # undone by rerunning rather than by re-acquiring
+        # it: MNE's reject_by_annotation drops the epochs they overlap, and a continuous
+        # analysis can pick the surviving stretches
         if censor_spans:
             # orig_time has to be the existing annotations': a fresh Annotations defaults
             # to None, and mne refuses to concatenate two that disagree. It only refuses

@@ -6,9 +6,6 @@
   compute_wtc_pair_null      The accounting the re-paired null needs, whose draws are real
                              recordings rather than scrambled ones and therefore arrive from
                              outside.
-
-Two independent traces reach high coherence over short windows and narrow bands on their
-own, so a coherence value without its level is not yet a result.
 """
 
 from __future__ import annotations
@@ -37,11 +34,9 @@ logger = get_logger("pipeline.surrogate")
 def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """Surrogate with the same power spectrum as ``sig`` and its phases randomised.
 
-    The null a hyperscanning result needs is "this dyad against a dyad that never
-    interacted", not "this dyad against red noise". Scrambling one side's phases destroys
-    every temporal relationship while leaving each signal's own spectrum and autocorrelation
-    intact, so coherence computed against the surrogate is the coherence two unrelated
-    recordings of this kind produce.
+    Scrambling one side's phases destroys every temporal relationship while leaving each
+    signal's own spectrum and autocorrelation intact, so coherence computed against the
+    surrogate is the coherence two unrelated recordings of this kind produce.
 
     Phases are randomised under Hermitian symmetry, so the inverse transform is real and the
     magnitude spectrum is preserved exactly. DC and, on an even-length record, Nyquist have
@@ -69,9 +64,8 @@ class NullDraws:
     re-pairing, and in nothing after that, so both summarise through the same code and their
     tables subtract from the same real table.
 
-    The draws are kept rather than averaged on the spot because the number worth reading off
-    a null is not its mean but where a real value falls inside it, and the real table is
-    written by a step that runs after this one. :meth:`summarise` is that step's half.
+    The draws are kept rather than averaged on the spot, since a real value is ranked inside
+    them by a step that runs after this one. :meth:`summarise` is that step's half.
     """
 
     draws: "list[pd.DataFrame]"
@@ -84,8 +78,7 @@ class NullDraws:
     partners: "list[str] | None" = None
     # what each entry of cond_draws came from, one id per frame: the stand-in for a
     # re-paired draw, the iteration for a scrambled one. Kept so the draws can be written
-    # out one row per draw, which a test that averages them before ranking needs and the
-    # summary cannot be taken apart to give
+    # out one row per draw
     cond_draw_ids: "list[str] | None" = None
     # condition -> (sub1, sub2, label) -> level, re-pairing only: its draws are conditions,
     # so its level is counted per condition and there is no whole-run one
@@ -115,15 +108,11 @@ class NullDraws:
                       ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
         """The same two tables at ROI level, for :func:`roi_mean_of_homologous`.
 
-        **Each iteration is grouped into ROIs before the iterations are summarised**, which is
-        the whole point and not an implementation detail. An ROI value is the mean of that
-        region's channels, so its null is the distribution of that mean, and that distribution
-        depends on how the channels' draws move together within an iteration. Summarise first
-        and the covariance is gone: all that is left is each channel's own ``null_sd``, from
-        which the mean's spread can only be bracketed between ``sd / sqrt(k)`` and ``sd``.
+        **Each iteration is grouped into ROIs before the iterations are summarised**, so the
+        null of an ROI mean keeps how its channels' draws move together within an iteration.
 
-        It costs nothing. The draws being averaged are the ones already taken for the channel
-        table; no surrogate is transformed twice.
+        The draws being averaged are the ones already taken for the channel table; no
+        surrogate is transformed twice.
 
         Only the homologous ROI value can be ranked this way. A crossed ``(roi, roi)`` cell
         also holds the within-region cross pairings, which a homologous null never draws.
@@ -153,8 +142,7 @@ class NullDraws:
 NULL_ARROW_QUANTILE = 0.95
 
 # Bins the surrogate coherences are counted into, per frequency. Coherence is bounded on
-# [0, 1], so a fixed grid is exact to 1/_NULL_HIST_BINS and, unlike keeping the draws,
-# costs the same whatever n_iter is: the alternative is n_iter copies of a whole map.
+# [0, 1], so a fixed grid is exact to 1/_NULL_HIST_BINS and costs the same whatever n_iter is.
 _NULL_HIST_BINS = 1000
 
 
@@ -228,14 +216,11 @@ def _collect_draw(
 ) -> None:
     """Fold one surrogate WTC run into the draws the null is summarised from.
 
-    Shared by both nulls on purpose. They differ only in how a surrogate is made, phase
-    randomisation against re-pairing, and a null whose cells were read off the map by a
-    different rule than the table it is subtracted from measures the difference between
-    the two rules rather than the coupling.
+    Shared by both nulls, so each reads its cells off the map by the same rule as the table
+    it is subtracted from.
     """
     # --tstart/--tend, read off this draw's transform the way the real table reads it off
-    # its own. Without it the whole-run row of the null describes the recording while the
-    # row it is compared against describes the window
+    # its own
     run_result = (result if analysis_window is None
                   else window_result(result, *analysis_window))
     frames.append(wtc_band_mean(run_result, band_fmin, band_fmax, mask_coi=mask_coi))
@@ -272,21 +257,18 @@ def compute_wtc_phase_null(
     One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
     per iteration; the band means are averaged across iterations. The result has the columns
     ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell,
-    plus ``null_sd``, ``null_p95`` and ``n_iter``: the mean alone cannot say where in its null
-    a real value sits, and a null nobody can rank against is only half of one.
+    plus ``null_sd``, ``null_p95`` and ``n_iter``.
 
     Returns a :class:`NullDraws`, which holds the per-iteration draws as well as their
     summary: ranking a real value inside its null needs the draws, and the caller that has
     the real table to rank runs after this one.
 
     Cost is ``n_iter`` times a full WTC run. Significance contours are never computed here:
-    this table *is* the null, so a second null inside it would be redundant and slow. The
+    this table *is* the null. The
     surrogate maps are not saved either; each one is counted into a per-frequency histogram on the way past, and ``NullDraws.levels`` is
     ``{(sub1, sub2, label): ndarray(n_freqs,)}``, the coherence a cell has to clear at each
-    frequency to beat the null. That is what the phase arrows are drawn against, and it has
-    to be per frequency: surrogate coherence is not flat in frequency, it rises at both ends
-    of the computed range, so one scalar threshold over the whole map draws arrows
-    preferentially at the band edges.
+    frequency to beat the null. That is what the phase arrows are drawn against, and it is
+    per frequency because surrogate coherence is not flat in frequency.
 
     ``seed`` drives the phase randomisation and nothing else. Passing the same value as the
     real run is what makes the pair reproducible together.
@@ -303,19 +285,13 @@ def compute_wtc_phase_null(
     ``analysis_window`` is ``--tstart``/``--tend``, and does the same job for the whole-run
     row that ``windows`` does for the per-condition ones: the real whole-run table describes
     that stretch, so its null has to as well.
-
-    A whole-run null against a windowed real table is anticonservative on the short windows,
-    because a long record's surrogate coherence is lower than a short window's. Passing
-    ``windows`` and ``analysis_window`` is what removes that.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
 
     subject_ids = list(raws.keys())
     if len(subject_ids) != 2:
-        # _wtc_over_pairs walks every combination, and only one subject is scrambled, so a
-        # third member would give pairs of two real recordings sitting in a table labelled
-        # null. Refused rather than warned: a wrong null reads exactly like a right one.
+        # refused, not warned: a third member would leave real pairs in a table labelled null
         raise ValueError(
             f"phase-scrambled WTC needs exactly 2 subjects, got {len(subject_ids)}: "
             f"{subject_ids}. Only one side is scrambled, so a larger group would leave "
@@ -323,8 +299,7 @@ def compute_wtc_phase_null(
         )
 
     true_signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
-    # scramble the second subject only: scrambling both would test surrogate against
-    # surrogate, which is a different and weaker null
+    # scramble the second subject only, so a real recording is tested against a surrogate
     scrambled_id = subject_ids[1]
     rng = np.random.default_rng(seed)
 
@@ -333,10 +308,7 @@ def compute_wtc_phase_null(
     cond_draw_ids: list[str] = []
     hists: dict[tuple, np.ndarray] = {}
     # the unscrambled side is the same signal in every iteration, so its transforms are
-    # computed once and reused. Roughly a third of the run: two thirds of an iteration is
-    # _prepare_channel and half of those prepares were this side's. Costs one montage of
-    # transforms resident (~70 MB per channel on an hour-long recording), which does not
-    # grow with n_iter
+    # computed once and reused; one montage of transforms stays resident, whatever n_iter
     cache1: dict[tuple[str, str], _ChannelWavelet] = {}
     for i in range(n_iter):
         signals = dict(true_signals)
@@ -388,13 +360,10 @@ def compute_wtc_pair_null(
     cut onto the clock the real table was computed on. Building them is the caller's job:
     it needs the pairs table and the derivatives tree, neither of which this module reads.
 
-    The difference from :func:`compute_wtc_phase_null` is what the surrogate keeps. Phase
-    randomisation destroys every temporal structure including each member's own time-locked
-    response to the task, so under a task design it is the looser null: two people who never
-    meet still cohere through the task they both did. A re-paired partner is a real recording
-    of the same task, so what survives the comparison is coupling beyond what the shared task
-    explains. Everything downstream of the transform is the other null's code, so the two
-    tables subtract from the same real table and from each other.
+    The difference from :func:`compute_wtc_phase_null` is what the surrogate keeps: a
+    re-paired partner is a real recording of the same task, so each member's own time-locked
+    response to the task survives. Everything downstream of the transform is the other null's
+    code, so the two tables subtract from the same real table and from each other.
 
     Both the pair key and the per-frequency histogram are relabelled to ``true_pair``. Each
     draw carries a different partner, and the summary groups by ``sub1``/``sub2``, so without
@@ -416,14 +385,11 @@ def compute_wtc_pair_null(
     partners: list[str] = []
     # Keyed per condition and per segment, not per condition alone: a draw pads the condition
     # with whatever both recordings can spare either side, so the fixed member's stretch is
-    # the same only across draws that got the same pad. Most of a pool does, so the cache
-    # still pays; a stand-in near the end of its recording simply gets its own entry
+    # the same only across draws that got the same pad
     caches: dict[tuple, dict[tuple[str, str], _ChannelWavelet]] = {}
     # a fifth element is the pair the coherence reads, whitened, where --wtc-whiten is on
     for partner_id, label, pair, inner, *whitened in draws:
-        # Making a draw is the expensive half: two recordings read and cut. Any other metric
-        # wanting the same re-paired pool has to be computed here rather than over a second
-        # pass, which would double that cost to save a few seconds of its own.
+        # other metrics on the same re-paired pool ride on this draw rather than a second pass
         if on_draw is not None:
             on_draw(partner_id, label, pair, inner)
         wtc_pair = whitened[0] if whitened else pair
@@ -473,10 +439,8 @@ def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
 
     ``null_mean`` is the mean of the draws and ``null_mean_z`` its Fisher z, taken from the
     averaged value rather than averaged itself. **Not called ``coherence``**, which is what
-    every other table's measured value is called: this column is the null's own centre, and a
-    reader who takes it for the real value compares the null with itself. ``null_sd``,
-    ``null_p95`` and ``n_iter`` describe the spread it came out of, since a null summarised by
-    its mean alone cannot say whether a real value above it is anywhere near unusual.
+    every other table's measured value is called: this column is the null's own centre.
+    ``null_sd``, ``null_p95`` and ``n_iter`` describe the spread it came out of.
 
     ``real`` is the true-dyad table, matched on ``keys``, and adds ``percentile``: the share
     of a cell's draws its real value beat. A cell the real table has no row for, or whose
@@ -521,8 +485,7 @@ def _null_percentile(out: pd.DataFrame, keys: "list[str]", draws: dict,
 
       real 0.31 against draws [0.22, 0.25, 0.29, 0.33]  ->  75.0
 
-    Counting rather than interpolating a stored quantile: at the iteration counts a null is
-    affordable at, the two disagree by more than the number is worth.
+    Counting rather than interpolating a stored quantile.
 
     A homologous null against a crossed real table ranks the crossed table's diagonal: the
     rows where ``label`` and ``label2`` agree are the pairings the null was drawn for.

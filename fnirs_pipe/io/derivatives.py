@@ -53,8 +53,7 @@ def channel_decisions_path(
 ) -> Path:
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
-    Re-exported from :mod:`fnirs_pipe.io.naming`, which builds it, because four callers
-    already import it from here.
+    Re-exported from :mod:`fnirs_pipe.io.naming`, which builds it.
     """
     from fnirs_pipe.io.naming import channel_decisions_path as _path
 
@@ -78,8 +77,7 @@ def group_report_dir(output_dir: Path, group_id: str) -> Path:
 def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) -> Path:
     """A group's tables, sidecars and quality record: ``group-<id>/[ses-<s>/]nirs``.
 
-    The mirror of a subject's ``sub-<id>/[ses-<s>/]nirs``. Loose in the derivatives root, a
-    cohort's group files would sit between the reader and the subject folders.
+    The mirror of a subject's ``sub-<id>/[ses-<s>/]nirs``.
     """
     folder = group_report_dir(output_dir, group_id)
     if session:
@@ -182,10 +180,8 @@ def select_one_run(
     ``[sub-01_ses-a_x, sub-01_ses-b_x], session="a"`` -> the ses-a one
     ``[sub-01_ses-a_x, sub-01_ses-b_x], session=None`` -> raises, naming a and b
 
-    One recording per group member is what every inter-brain metric assumes. Taking the
-    first match would silently analyse one of a subject's two sessions or runs and drop the
-    other, with nothing in the output saying which, so ambiguity is refused: naming the
-    session or the run is a decision only the caller can make.
+    One recording per group member is what every inter-brain metric assumes, so ambiguity is
+    refused rather than resolved to the first match.
     """
     for name, value in (("ses", session), ("run", run)):
         if value is not None:
@@ -290,10 +286,7 @@ _REPLACE_WAIT_S = 0.05
 # What a reader should not hold against the tree: the reports and their figures are for
 # people, and BIDS says nothing about either.
 #
-# No trailing slash on the two directories. It is the gitignore spelling for "a directory
-# of this name at any depth", but bids-validator 3.0.2 matches nothing with it, so
-# `figures/` would leave every figure under `sub-*/figures/` and `group-*/figures/` on the
-# validator's books.
+# No trailing slash on the two directories: the validator matches nothing with `figures/`.
 #
 # The records that are a JSON with no data file beside them: the quality records, the
 # human ratings and the channel decisions. A validator reads any such JSON as a sidecar
@@ -308,8 +301,7 @@ def write_bidsignore(output_dir: Path) -> None:
     """Register the paths BIDS has no say over, so a validator skips rather than flags them.
 
     Reports, logs, the figures inside them, and the JSON-only records. Every table and every
-    file with a sidecar stays on the validator's books, dyad tables included: a result
-    nothing can index is a result nobody else's tooling can read.
+    file with a sidecar stays on the validator's books, dyad tables included.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / ".bidsignore").write_text("\n".join(_BIDSIGNORE) + "\n", encoding="utf-8")

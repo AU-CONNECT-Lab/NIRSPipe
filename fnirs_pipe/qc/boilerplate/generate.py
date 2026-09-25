@@ -149,8 +149,7 @@ def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[
     if prep_config is None:
         return []
     # every section goes through template_slots, so a template that grows a slot is filled
-    # the same way here as on the sidecar path. Filling them by hand is what left this one
-    # raising KeyError on a slot the screening sentence had gained
+    # the same way here as on the sidecar path
     from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
 
     def slots(key: str, params: dict) -> tuple[str, dict]:

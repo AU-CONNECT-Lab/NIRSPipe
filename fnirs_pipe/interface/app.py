@@ -30,10 +30,8 @@ _CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "trans
 _CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
-# Two families, split by what you do rather than by tool: the QC pages load one recording
-# and show it to you, the batch pages assemble a command and run it. The five batch pages
-# are one CLI each; the two QC pages are the only ones no single CLI covers, because
-# looking before deciding is the thing a command line cannot do.
+# Two families: the QC pages load one recording and show it, and no single CLI covers
+# them; the batch pages assemble a command and run it, one CLI each.
 _NAV = [
     ("Quality control", [("Data Preparation", "/"),
                          ("Hyper Preparation", "/hyper-align")]),

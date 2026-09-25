@@ -71,15 +71,12 @@ def long_axis_over(
       member A: S1_D1, S2_D2        member B: S2_D2, S3_D3
       -> ["S1_D1", "S2_D2", "S3_D3"]
 
-    One member's montage is not the axis. A label only the other member carries still has a
-    row or a column of its own, so drawing the axis from the first member alone drops it.
+    A label only the other member carries still has a row or a column of its own.
 
-    **Bads are kept**, unlike in :func:`_long_by_label`, which drops them because it is
-    choosing what to compute on. An axis has to outlive a rejection: two dyads that lost
-    different channels still have to produce matrices of one shape to be stacked, and a
-    reader has to be able to tell an empty cell from a channel that was never in the
-    montage. A 20-channel montage with 2 rejected gives 20 labels, of which 2 index an
-    all-blank row or column.
+    **Bads are kept**, unlike in :func:`_long_by_label`, so two dyads that lost different
+    channels still produce matrices of one shape, and an empty cell stays distinct from a
+    channel that was never in the montage. A 20-channel montage with 2 rejected gives 20
+    labels, of which 2 index an all-blank row or column.
 
     One recording is a group of one, so ``long_axis_over([raw], ch_type)`` is the same rule
     over a single montage.

@@ -23,8 +23,7 @@ VIEW_LABELS = ["Frontal", "Left Lateral", "Superior"]
 def load_mesh_traces(opacity: float = 1.0) -> list[go.Mesh3d]:
     """Load fsaverage5 pial surface as Mesh3d traces, opaque by default.
 
-    An opaque surface hides whatever sits behind it, which is the point: optodes on
-    the far side of the head no longer show through and crowd the near-side ones.
+    An opaque surface hides the optodes on the far side of the head.
     """
     try:
         from nilearn import datasets, surface as surf

@@ -1,14 +1,12 @@
 """What each pipeline step did: one small panel per metric, plus the per-channel detail.
 
 Small multiples rather than one shared axis, because the metrics here run on unrelated
-scales and a shared axis would either flatten the correlations or hide the band powers.
-Each panel carries its own range and prints its values, so no comparison between panels is
-implied.
+scales. Each panel carries its own range and prints its values, so no comparison between
+panels is implied.
 
 Direction is marked only on the whole chain, never on an intermediate step: a step can move
-a metric for reasons that are not quality, and colouring that step would print the wrong
-conclusion on the figure. A panel with ``lower_better`` unset gets no direction at all, for
-rows where movement is not itself good or bad.
+a metric for reasons that are not quality. A panel with ``lower_better`` unset gets no
+direction at all, for rows where movement is not itself good or bad.
 
 ``stage_metrics_figure`` renders whatever panels it is handed; ``denoise_stage_panels``
 below turns the haemoglobin chain's numbers into panels.
@@ -62,7 +60,7 @@ def denoise_stage_panels(metrics: dict) -> "list[Panel]":
     Ordered quality first, then the share of variance still present, then the two band
     powers that only say whether the filter ran. Those last are greyed: sitting entirely
     outside the analysis passband, they fall by the filter's stopband attenuation whatever
-    the data did, so their one use is catching a filter that was not configured as asked.
+    the data did.
     """
     panels = [Panel(title, metrics["quality"][key], lower_better)
               for key, title, lower_better in _DENOISE_QUALITY

@@ -4,9 +4,7 @@
   roi_mean_of_homologous   The same, restricted to a region against itself in the partner.
   roi_maps_from_channels   The maps grouped the same way, so a figure matches the table.
 
-ROI coherence is always computed per channel pair and then averaged. Averaging the signals
-into one ROI trace first is a different and less sensitive number, and the studies that
-compared the two report the channel route detecting effects the signal route misses.
+ROI coherence is always computed per channel pair and then averaged.
 """
 
 from __future__ import annotations
@@ -38,11 +36,10 @@ def roi_maps_from_channels(
 ) -> WTCResult:
     """Average the channel-pair WTC maps cell by cell into one map per ROI pair.
 
-    The ROI number the field reports is a mean over channel-pair coherences, so the figure
-    that belongs beside it is the mean over those channels' maps rather than a separate
-    transform on ROI-averaged signals. Averaging the maps first and the band second gives the
+    The ROI number is a mean over channel-pair coherences, so the figure beside it is the
+    mean over those channels' maps. Averaging the maps first and the band second gives the
     same number as averaging the band first and the channels second, so the picture and the
-    table finally agree.
+    table agree.
 
     ::
 
@@ -87,21 +84,16 @@ def roi_mean_of_channels(
     roi_map: dict[str, list[str]],
     min_channels: int = 2,
 ) -> pd.DataFrame:
-    """Average channel-level band means within each ROI: the ROI number the WTC literature reports.
-
-    The field computes coherence per channel pair and averages those values into ROI
-    clusters. The alternative, one WTC on the ROI-averaged signal, is a different number
-    because coherence is bounded and nonlinear, and it is the less sensitive of the two.
+    """Average channel-level band means within each ROI.
 
     ``band_df`` is what :func:`wtc_band_mean` returns for a channel-level result; a crossed
     one carries ``label2`` and is grouped on both sides into the ROI-by-ROI matrix. ``n_ch``
     counts the channel pairs behind each mean, so an ROI thinned by rejection is visible.
     Channels no ROI lists are dropped.
 
-    ``min_channels`` drops a cell resting on fewer than that many channel pairs, the rule the
-    published pipelines use to stop one surviving optode from standing in for a region. It
-    counts pairs, so on a crossed frame a cell needs ``min_channels`` combinations rather than
-    that many channels on each side.
+    ``min_channels`` drops a cell resting on fewer than that many channel pairs, so one
+    surviving optode does not stand in for a region. It counts pairs, so on a crossed frame a
+    cell needs ``min_channels`` combinations rather than that many channels on each side.
 
     ``coherence_z`` is recomputed from the averaged coherence rather than averaged itself, so
     it stays the Fisher z of the number in the same row.
@@ -163,10 +155,8 @@ def roi_mean_of_homologous(
 
     :func:`roi_mean_of_channels` groups whatever it is handed, so on a crossed frame its
     ``(roi, roi)`` diagonal is the mean of every pairing inside the ROI, sixteen of them here,
-    of which four are homologous. That is a different quantity from the one the literature
-    reports and from the one an uncrossed run produces, and a flag whose job is to add the
-    off-diagonal cells should not silently redefine the diagonal. This function is the
-    reported number: the homologous mean, identical whether or not the run crossed.
+    of which four are homologous. That is a different quantity from the one an uncrossed run
+    produces. This function is the homologous mean, identical whether or not the run crossed.
 
     It is also the only ROI value the homologous phase-scrambled null can rank, since the null
     draws exactly these pairings.

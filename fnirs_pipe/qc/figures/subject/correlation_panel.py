@@ -6,23 +6,16 @@ Bottom row: per-pair HbO–HbR r as a dumbbell, before → after, grouped by sou
             separation.
 
 Both stages share one figure and one channel order, so a channel sits at the same height
-before and after and the change is the length of a connector. Two figures each sorted by
-their own r would put it at two heights in two differently ordered lists.
+before and after and the change is the length of a connector.
 
-Separation is what the grouping is for. The HbO–HbR anticorrelation is a property of
-cortical haemodynamics, so it says nothing about a
-short channel, which only ever sees scalp. Sorted together the short channels land at one
-end of the list and read as the worst channels on the montage when they are simply not
-being asked the same question. The heatmap rows follow the same grouping, so the block
+Separation is what the grouping is for: a short channel only ever sees scalp, so it is not
+sorted among the long ones. The heatmap rows follow the same grouping, so the block
 dividers inside each chromophore mark the long/short boundary rather than wherever the
 acquisition order happened to switch.
 
 Both panels read their colour off one reversed RdBu scale, so a shade means the same r
-whether it is a matrix cell or a dot. **The panel carries no threshold.** A fixed cut such
-as r = -0.3 has no source, and which side of it a run lands on moves with the low-pass edge,
-so it reports the passband as much as the physiology. The value is worth reading and a
-verdict is not. Any future verdict should also stay off green/amber/red, which separates
-amber from green by only ΔE 5.8 under protanopia.
+whether it is a matrix cell or a dot. **The panel carries no threshold**: which side of a
+fixed cut a run lands on moves with the low-pass edge.
 """
 
 import mne
@@ -42,9 +35,8 @@ _GROUP_LABEL = {
 }
 
 # One correlation scale for the whole report, red at r = +1; see figures.common.matrix_map.
-# A white midpoint rather than a tinted one is what keeps a correlation matrix reading as
-# "nothing here" in the middle instead of beige. The dots below take their fill from the
-# same map, so one colour means one r across the figure.
+# The dots below take their fill from the same map, so one colour means one r across the
+# figure.
 _SCALE, _REVERSE = CORRELATION_SCALE, False
 
 _MUTED, _GRID, _BASELINE = "#888888", "#eeeeee", "#444444"
@@ -57,13 +49,11 @@ _AFTER_LABEL = "after denoising"
 _AFTER_LABEL_GLM = "after GLM (task removed)"
 
 # ---- Layout ----
-# The heatmap is square-constrained, so its side is min(column width, row height). A row
-# height fixed in advance makes the row the binding one on a wide page: small cells with
-# the spare width spent on blank range either side of the matrix, which also pushes the y
-# tick labels away from it. The row is sized off the channel count instead,
-# and `constrain="domain"` below shrinks the axis rather than padding its range, so the
-# labels stay against the matrix whichever dimension binds. These are the height the file is
-# written with; `fit_js` replaces it with the one that fits the page the figure is opened on.
+# The heatmap is square-constrained, so its side is min(column width, row height). The row
+# is sized off the channel count, and `constrain="domain"` below shrinks the axis rather
+# than padding its range, so the labels stay against the matrix whichever dimension binds.
+# These are the height the file is written with; `fit_js` replaces it with the one that fits
+# the page the figure is opened on.
 _CELL_PX = 22
 _HEAT_MIN_PX, _HEAT_MAX_PX = 520, 1100
 _DUMBBELL_PX = 300
@@ -140,8 +130,7 @@ def _add_heatmap(fig, corr, order, col, show_scale, heat_px):
         z=np.asarray(corr, dtype=np.float32), x=order, y=order,
         zmin=-1.0, zmax=1.0, colorscale=_SCALE, reversescale=_REVERSE,
         showscale=show_scale,
-        # in pixels and hung from the top of the row, so `fit_js` restores it by setting one
-        # number: a fraction of the figure's height would have to be recomputed with the rest
+        # in pixels and hung from the top of the row, so `fit_js` restores it with one number
         colorbar=dict(title="Pearson r", lenmode="pixels", len=heat_px * 0.92,
                       yanchor="top", y=1.0, thickness=12,
                       tickvals=[-1, -0.5, 0, 0.5, 1]),
@@ -253,9 +242,7 @@ def hbo_hbr_correlation_figure(
     per pair, which is what a run with no denoising and what a condition page both get.
 
     ``task_modelled`` says the after stage is a GLM residual, with the task model taken out
-    as well as the confounds, so the after column is labelled to say so: a model that
-    explained part of the shared response leaves a weaker anticorrelation with nothing
-    having gone wrong.
+    as well as the confounds, so the after column is labelled to say so.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     order = _channel_order(raw_haemo, groups)
@@ -297,9 +284,7 @@ def hbo_hbr_correlation_figure(
     xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1,
                                after_label=after_label, task_modelled=task_modelled)
 
-    # Every channel keeps its label: unlike a static panel, an unreadable
-    # tick here is one scroll-zoom away from being readable, so subsampling them buys
-    # nothing. The size only has to keep a few dozen channels legible unzoomed.
+    # every channel keeps its label, readable by zooming; the size keeps a few dozen legible
     tick_fs = int(np.clip(480 / max(n_ch, 1), 5, 10))
     for col in range(1, cols + 1):
         x_axis = "x" if col == 1 else "x2"
@@ -324,8 +309,7 @@ def hbo_hbr_correlation_figure(
         title=dict(text=title, x=0.5, font=dict(size=16)),
         height=int(height), plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=90, r=70, t=70, b=90),
-        # above the dumbbell: at lower right it sat on the short channels, which is exactly
-        # where this panel puts its most positive values
+        # above the dumbbell, clear of the short channels at lower right
         legend=dict(orientation="h", xanchor="right", yanchor="bottom",
                     x=1.0, y=dumb_frac - v_spacing / 2, font=dict(size=10)),
     )
@@ -350,7 +334,7 @@ def fit_js(fig: "go.Figure") -> str:
     scaling with the figure.
 
     Idempotent and re-run on resize. A page where the width cannot be read leaves the written
-    height alone, which is the figure as it is drawn today.
+    height alone.
     """
     heat = sorted({_axis_name(tr.yaxis) for tr in fig.data if tr.type == "heatmap"})
     dumb = sorted({_axis_name(tr.yaxis) for tr in fig.data} - set(heat))
@@ -366,8 +350,7 @@ def fit_js(fig: "go.Figure") -> str:
         "var gd=document.querySelector('.plotly-graph-div');"
         "if(!gd||typeof Plotly==='undefined'||!gd.layout)return;"
         # the first subplot's drag layer is its plot area, so this is the width the matrix
-        # actually got. Deriving it from the container and the domains lands about 30 px out,
-        # the axis constraint and the colour bar having moved things in between
+        # actually got, after the axis constraint and the colour bar
         "var L=gd.layout,m=L.margin||{},drag=gd.querySelector('.nsewdrag');"
         "if(!drag)return;"
         "var w=drag.getBoundingClientRect().width;"
