@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
 - The 3D brain views render off-screen with pyvista instead of plotly and kaleido, so no browser is needed; a failed render is listed on the run page
 - The GLM activation figures render off-screen with pyvista instead of a Qt window, matching the previous images
+- `nibabel` is a declared dependency; the activation renders read FreeSurfer curvature with it
 - The superior brain view puts the nose up and the subject's left on the left, as the optode flat map does
 - A further 41 cheap package imports move to module level; no command's startup loads anything more
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename

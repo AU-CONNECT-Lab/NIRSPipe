@@ -23,6 +23,9 @@ from matplotlib.colors import Normalize
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
+from fnirs_pipe.qc.figures.common._surface_overlay import (
+    activation_rgba, smoothing_matrix, vertex_normals,
+)
 from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 
 if TYPE_CHECKING:
@@ -196,21 +199,15 @@ def _render_activation(stc, clim: dict, subjects_dir, size: tuple[int, int],
                        view_configs: list[dict]) -> list[np.ndarray]:
     """Draw ``stc`` on the fsaverage pial surface as ``stc.plot`` does, without its Qt window.
 
-    Uses MNE's own colour table, smoothing and layer compositing with ``stc.plot``'s defaults
-    (transparent below fmin, 10 smoothing steps, grey binary curvature), then renders in an
-    off-screen pyvista plotter. One RGB image per entry of ``view_configs``.
+    Same defaults as ``stc.plot``: transparent below fmin, 10 smoothing steps, grey binary
+    curvature. Renders in an off-screen pyvista plotter, one RGB image per ``view_configs``.
     """
     import os
 
     import pyvista as pv
-    from mne.morph import _hemi_morph
-    from mne.surface import complete_surface_info, read_curvature, read_surface
-    from mne.viz._3d_overlay import _LayeredMesh
-    from mne.viz._brain.colormap import calculate_lut
+    from nibabel.freesurfer import read_morph_data
 
     fmin, fmid, fmax = clim["pos_lims"]
-    ctable = np.round(calculate_lut("RdBu_r", alpha=1.0, fmin=fmin, fmid=fmid, fmax=fmax,
-                                    center=0.0, transparent=True) * 255).astype(np.uint8)
     surf_dir = os.path.join(subjects_dir, "fsaverage", "surf")
 
     plotter = pv.Plotter(off_screen=True, window_size=list(size))
@@ -218,25 +215,14 @@ def _render_activation(stc, clim: dict, subjects_dir, size: tuple[int, int],
         plotter.set_background("white")
         for hemi, vertices, data in (("lh", stc.vertices[0], stc.lh_data[:, 0]),
                                      ("rh", stc.vertices[1], stc.rh_data[:, 0])):
-            coords, faces = read_surface(os.path.join(surf_dir, f"{hemi}.pial"))
-            normals = complete_surface_info(dict(rr=coords, tris=faces), copy=False,
-                                            verbose=False, do_neighbor_tri=False)["nn"]
-            curv = read_curvature(os.path.join(surf_dir, f"{hemi}.curv"), binary=False)
-            with mne.utils.use_log_level(False):
-                smooth = _hemi_morph(faces, np.arange(len(coords)), vertices, 10,
-                                     maps=None, warn=False)
-
-            layers = _LayeredMesh(renderer=None, vertices=coords, triangles=faces,
-                                  normals=normals)
-            layers.add_overlay(scalars=(curv > 0).astype(np.int64), colormap="Greys",
-                               rng=[-1, 2], opacity=1.0, name="curv")
-            layers.add_overlay(scalars=smooth.dot(data), colormap=ctable,
-                               rng=[-fmax, fmax], opacity=None, name="data")
+            coords, faces = mne.read_surface(os.path.join(surf_dir, f"{hemi}.pial"))
+            curv = read_morph_data(os.path.join(surf_dir, f"{hemi}.curv"))
+            smooth = smoothing_matrix(faces, len(coords), vertices, steps=10)
 
             mesh = pv.PolyData(coords, np.hstack([np.full((len(faces), 1), 3), faces]).ravel())
-            mesh.point_data["Normals"] = normals
+            mesh.point_data["Normals"] = vertex_normals(coords, faces)
             mesh.GetPointData().SetActiveNormals("Normals")
-            mesh.point_data["Data"] = layers._current_colors
+            mesh.point_data["Data"] = activation_rgba(curv, smooth @ data, fmin, fmid, fmax)
             actor = plotter.add_mesh(mesh, scalars="Data", rgba=True, reset_camera=False)
             actor.prop.interpolation = "phong"
 
