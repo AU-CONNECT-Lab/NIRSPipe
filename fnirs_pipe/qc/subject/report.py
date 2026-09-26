@@ -1499,7 +1499,11 @@ def _section_glm(
                 # "game 1" would land on one file and the switcher would offer two labels
                 # pointing at the same picture
                 used: set[str] = set()
-                for label, b64 in activation_condition_figures(raw_haemo, results_dict):
+                failed: list[tuple[str, str]] = []
+                rendered = activation_condition_figures(raw_haemo, results_dict, failed=failed)
+                errors.extend(f"GLM activation panel ({cond}): {reason}"
+                              for cond, reason in failed)
+                for label, b64 in rendered:
                     slug = _pair_fname(label) or "cond"
                     if slug in used:
                         slug = f"{slug}{len(used) + 1}"

@@ -4,9 +4,9 @@ What matters about the split is the part that is easy to lose: the colour scale 
 stay shared, or the switch stops being a comparison and a condition that barely activated
 fills its own scale and reads as strong.
 
-`_save_glm_brain` needs pyvista, fsaverage and an offscreen GL context, so it is stubbed
-here. That is the point: everything these tests pin sits either side of the render, and the
-render itself is covered by the fact that the report treats None as "skip the panel".
+`_save_glm_brain` needs fsaverage and an offscreen GL context, so it is stubbed here:
+everything these tests pin sits either side of the render. The render itself is tested in
+test_glm_activation_render.py.
 """
 
 import base64
@@ -97,17 +97,26 @@ def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
     assert [limit for _, limit in seen] == pytest.approx([4.0, 4.0], rel=0.05)
 
 
-def test_a_condition_that_failed_to_render_is_left_out(monkeypatch):
+def _fails_for(*labels):
+    def render(*a, **k):
+        if a[5] in labels:
+            raise RuntimeError(f"no surface for {a[5]}")
+        return _tiny_png()
+    return render
+
+
+def test_a_condition_that_failed_to_render_is_left_out_and_reported(monkeypatch):
     # a blank panel behind a label reads as "this condition had no activation", which is a
-    # different claim from "the render failed"
-    monkeypatch.setattr(glm_figures, "_save_glm_brain",
-                        lambda *a, **k: None if a[5] == "video" else _tiny_png())
-    out = activation_condition_figures(None, _results(game=[1.0], video=[1.0]))
+    # different claim from "the render failed"; the reason goes back to the caller instead
+    monkeypatch.setattr(glm_figures, "_save_glm_brain", _fails_for("video"))
+    failed = []
+    out = activation_condition_figures(None, _results(game=[1.0], video=[1.0]), failed=failed)
     assert [label for label, _ in out] == ["game"]
+    assert failed == [("video", "no surface for video")]
 
 
 def test_no_condition_rendering_gives_nothing_rather_than_raising(monkeypatch):
-    monkeypatch.setattr(glm_figures, "_save_glm_brain", lambda *a, **k: None)
+    monkeypatch.setattr(glm_figures, "_save_glm_brain", _fails_for("game"))
     assert activation_condition_figures(None, _results(game=[1.0])) == []
     assert activation_panel(None, _results(game=[1.0])) is None
 

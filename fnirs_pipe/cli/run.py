@@ -264,11 +264,8 @@ def _check_epoch_window(args: argparse.Namespace) -> None:
 
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
+    _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "fnirs-pipe")
     bids_dir = args.bids_dir.resolve()
-    if args.output_dir.resolve() == bids_dir:
-        print(f"Error: the output directory is the input BIDS directory; choose another, "
-              f"e.g. {bids_dir / 'derivatives' / 'fnirs-pipe'}.", file=sys.stderr)
-        raise SystemExit(1)
     work_dir = args.work_dir.resolve() if args.work_dir else None
     if work_dir is not None and (work_dir == bids_dir or bids_dir in work_dir.parents):
         print("Error: the work directory is inside the input BIDS directory; choose one "

@@ -129,3 +129,45 @@ def test_a_validator_that_prints_no_report_stops_the_run(tmp_path, monkeypatch):
         a[0], 2, stdout="", stderr="boom"))
     with pytest.raises(SystemExit, match="boom"):
         bids_io.validate_bids(tmp_path)
+
+
+# ---- the other commands that read a BIDS dataset ----
+
+PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
+SAME_DIR_COMMANDS = {
+    "crop":           ("prep", ["crop", "{b}", "{b}", "--participant-label", "01", "--tmin", "0"]),
+    "align":          ("prep", ["align", "{b}", "{b}", "--group-csv", "{b}/pairs.csv"]),
+    "markers export": ("prep", ["edit-markers", "export", "{b}", "{b}", "--participant-label", "01"]),
+    "markers apply":  ("prep", ["edit-markers", "apply", "{b}", "{b}", "--participant-label", "01",
+                                "--shift", "1"]),
+    "prep-raw":       ("qc", ["prep-raw", "{b}", "{b}", "--participant-label", "01", *PHYS]),
+    "hyper-raw":      ("qc", ["hyper-raw", "{b}", "{b}", "--pairs-csv", "{b}/pairs.csv", *PHYS]),
+}
+
+
+def _entry(module: str):
+    from fnirs_pipe.cli import prep, qc
+    return {"prep": prep.main, "qc": qc.main}[module]
+
+
+@pytest.mark.parametrize("name", list(SAME_DIR_COMMANDS))
+def test_every_command_refuses_to_write_into_its_input(name, mini_bids, capsys):
+    module, argv = SAME_DIR_COMMANDS[name]
+    before = sorted(p.relative_to(mini_bids) for p in mini_bids.rglob("*"))
+    with pytest.raises(SystemExit) as exit_:
+        _entry(module)([a.format(b=mini_bids) for a in argv] + ["--skip-bids-validation"])
+    assert exit_.value.code != 0
+    assert "output directory is the input" in capsys.readouterr().err
+    assert sorted(p.relative_to(mini_bids) for p in mini_bids.rglob("*")) == before
+
+
+def test_cropping_a_pipeline_output_back_into_its_own_tree_is_allowed(tmp_path, capsys):
+    from fnirs_pipe.cli import prep
+    tree = tmp_path / "out"
+    tree.mkdir()
+    try:
+        prep.main(["crop", str(tree), str(tree), "--participant-label", "01", "--tmin", "0",
+                   "--input-desc", "errts", "--skip-bids-validation"])
+    except SystemExit:
+        pass          # nothing to crop in an empty tree; the point is what it was stopped for
+    assert "output directory is the input" not in capsys.readouterr().err

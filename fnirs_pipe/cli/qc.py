@@ -36,6 +36,7 @@ def cmd_prep_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
+    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-qc")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
@@ -158,6 +159,7 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
+    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)

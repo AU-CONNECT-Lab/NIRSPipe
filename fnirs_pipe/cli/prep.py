@@ -51,6 +51,9 @@ def cmd_crop(
     band_fmin: float | None = None,
 ) -> None:
     """Crop SNIRFs and write to derivatives/cropped/."""
+    # cropping a pipeline output back into its own tree is the intended use of --input-desc
+    if input_desc is None:
+        _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
@@ -115,6 +118,7 @@ def cmd_align(
     bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
+    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
@@ -184,6 +188,7 @@ def cmd_markers_export(
     n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Export events.tsv(s) to out_dir for manual editing."""
+    _shared.refuse_output_in_input(bids_dir, out_dir, "fnirs-prep")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
@@ -206,6 +211,7 @@ def cmd_markers_apply(
     rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Apply marker edits to runs and write to derivatives/marker_edited/."""
+    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)

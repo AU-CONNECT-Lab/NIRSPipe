@@ -138,3 +138,19 @@ def test_the_superior_view_reads_like_the_flat_map_beside_it():
     # nose up and the subject's left on the left, as the flat map draws them
     assert centre("red")[0] < 0.5
     assert centre("green")[1] < 0.5
+
+
+def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_brain(monkeypatch):
+    from fnirs_pipe.qc.figures.common import _brain_utils
+
+    def offline(*a, **k):
+        raise OSError("no network")
+
+    _brain_utils._head_to_mri.cache_clear()
+    monkeypatch.setattr(_brain_utils.mne.datasets, "fetch_fsaverage", offline)
+    raw, sci = _montage()
+    try:
+        with pytest.raises(RuntimeError, match="fsaverage"):
+            bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci)
+    finally:
+        _brain_utils._head_to_mri.cache_clear()

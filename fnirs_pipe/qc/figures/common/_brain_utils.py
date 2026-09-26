@@ -49,14 +49,16 @@ _HEAD_FID_TOL = 0.010   # m; how far a fiducial may stray from its head-frame ax
 
 @lru_cache(maxsize=1)
 def _head_to_mri() -> np.ndarray:
-    """fsaverage head->MRI (surface RAS) as a 4x4, or identity if fsaverage is missing."""
+    """fsaverage head->MRI (surface RAS) as a 4x4; raises when fsaverage cannot be loaded."""
     try:
         fs_dir = mne.datasets.fetch_fsaverage(verbose=False)
         trans = mne.read_trans(os.path.join(fs_dir, "bem", "fsaverage-trans.fif"))
-        return np.asarray(trans["trans"], float)
     except Exception as exc:
-        _logger.warning("fsaverage head->MRI transform unavailable (%s); using raw coords", exc)
-        return np.eye(4)
+        raise RuntimeError(
+            f"fsaverage is needed to place the optodes on the brain and could not be loaded "
+            f"({exc}); run mne.datasets.fetch_fsaverage() once on a machine with internet "
+            f"access") from exc
+    return np.asarray(trans["trans"], float)
 
 
 def _fiducials_are_head_like(info) -> bool:

@@ -12,6 +12,7 @@ do.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 
@@ -35,6 +36,15 @@ class BidsLabel(str):
                 text = text[len(prefix):]
                 break
         return super().__new__(cls, text)
+
+
+def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str) -> None:
+    """Exit non-zero when the output directory is the input dataset itself."""
+    bids_dir = Path(bids_dir).resolve()
+    if Path(output_dir).resolve() == bids_dir:
+        print(f"Error: the output directory is the input BIDS directory; choose another, "
+              f"e.g. {bids_dir / 'derivatives' / tool}.", file=sys.stderr)
+        raise SystemExit(1)
 
 
 def add_separation_bands(container, note: str = "") -> None:

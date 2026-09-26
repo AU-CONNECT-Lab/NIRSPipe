@@ -250,15 +250,12 @@ def _save_glm_brain(
     view: str = "lat",
     size: tuple[int, int] = (800, 700),
     title: str = "",
-) -> str | None:
-    try:
-        from mne import EvokedArray, read_source_spaces
-        from mne.source_estimate import stc_near_sensors
-        from mne._fiff.constants import FIFF
-        from mne.utils import get_subjects_dir
-        import os
-    except ImportError:
-        return None
+) -> str:
+    from mne import EvokedArray, read_source_spaces
+    from mne.source_estimate import stc_near_sensors
+    from mne._fiff.constants import FIFF
+    from mne.utils import get_subjects_dir
+    import os
 
     view_configs = [
         {'azimuth': 180, 'elevation': 90},  # Lateral
@@ -266,71 +263,66 @@ def _save_glm_brain(
         {'azimuth': 90,  'elevation': 90},  # Frontal
     ]
 
-    try:
-        # HbO only; the HbR betas are reported by the beta heatmap and the beta table
-        ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in results_df.columns), None)
-        raw_hbo = raw_haemo.copy().pick("hbo")
+    # HbO only; the HbR betas are reported by the beta heatmap and the beta table
+    ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in results_df.columns), None)
+    raw_hbo = raw_haemo.copy().pick("hbo")
 
-        # stc_near_sensors._get_channel_positions skips bad channels but evoked.data
-        # includes them, causing a matmul shape mismatch, so drop bads before passing
-        bads_in_hbo = [b for b in raw_hbo.info["bads"] if b in raw_hbo.ch_names]
-        if bads_in_hbo:
-            raw_hbo.drop_channels(bads_in_hbo)
+    # stc_near_sensors._get_channel_positions skips bad channels but evoked.data
+    # includes them, causing a matmul shape mismatch, so drop bads before passing
+    bads_in_hbo = [b for b in raw_hbo.info["bads"] if b in raw_hbo.ch_names]
+    if bads_in_hbo:
+        raw_hbo.drop_channels(bads_in_hbo)
 
-        hbo_ch_names = set(raw_hbo.ch_names)
+    hbo_ch_names = set(raw_hbo.ch_names)
 
-        if ch_col is not None:
-            results_df = results_df[results_df[ch_col].str.endswith("hbo")].copy()
-            results_df = results_df[results_df[ch_col].isin(hbo_ch_names)].copy()
+    if ch_col is not None:
+        results_df = results_df[results_df[ch_col].str.endswith("hbo")].copy()
+        results_df = results_df[results_df[ch_col].isin(hbo_ch_names)].copy()
 
-        coef_col = _coef_col(results_df)
+    coef_col = _coef_col(results_df)
 
-        # the projection steps of plot_glm_surface_projection; the render is _render_activation
-        if ch_col is not None:
-            results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
-        ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())
-        # trans="fsaverage" makes stc_near_sensors read loc as head coords, so move the
-        # optodes into that frame rather than just relabelling them
-        for idx in range(len(ea.ch_names)):
-            loc = ea.info["chs"][idx]["loc"]
-            loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo.info).reshape(9)
-            ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
+    # the projection steps of plot_glm_surface_projection; the render is _render_activation
+    if ch_col is not None:
+        results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
+    ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())
+    # trans="fsaverage" makes stc_near_sensors read loc as head coords, so move the
+    # optodes into that frame rather than just relabelling them
+    for idx in range(len(ea.ch_names)):
+        loc = ea.info["chs"][idx]["loc"]
+        loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo.info).reshape(9)
+        ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
 
-        subjects_dir = get_subjects_dir(raise_error=True)
-        src_path = os.path.join(subjects_dir, "fsaverage", "bem", "fsaverage-ico-5-src.fif")
-        src = read_source_spaces(src_path)
+    subjects_dir = get_subjects_dir(raise_error=True)
+    src_path = os.path.join(subjects_dir, "fsaverage", "bem", "fsaverage-ico-5-src.fif")
+    src = read_source_spaces(src_path)
 
-        picks = np.arange(len(ea.ch_names))
-        stc = stc_near_sensors(
-            evoked=ea, picks=picks, subject="fsaverage", trans="fsaverage",
-            distance=0.03, mode="weighted", surface="pial",
-            subjects_dir=subjects_dir, src=src, project=True, verbose=False,
-        )
-        with RENDER_LOCK:
-            view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
+    picks = np.arange(len(ea.ch_names))
+    stc = stc_near_sensors(
+        evoked=ea, picks=picks, subject="fsaverage", trans="fsaverage",
+        distance=0.03, mode="weighted", surface="pial",
+        subjects_dir=subjects_dir, src=src, project=True, verbose=False,
+    )
+    with RENDER_LOCK:
+        view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
 
-        combined_img = np.hstack(view_images)
+    combined_img = np.hstack(view_images)
 
-        import matplotlib.pyplot as plt
-        fig_width = (size[0] * len(view_configs)) / 100
-        fig_height = size[1] / 100
-        fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=100)
-        ax.imshow(combined_img)
-        ax.axis('off')
-        if title:
-            ax.set_title(title, fontsize=16, pad=10)
-        plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
-        _add_shared_colorbar(fig, clim)
+    import matplotlib.pyplot as plt
+    fig_width = (size[0] * len(view_configs)) / 100
+    fig_height = size[1] / 100
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=100)
+    ax.imshow(combined_img)
+    ax.axis('off')
+    if title:
+        ax.set_title(title, fontsize=16, pad=10)
+    plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
+    _add_shared_colorbar(fig, clim)
 
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
-        plt.close(fig)
-        buf.seek(0)
-        return base64.b64encode(buf.read()).decode()
-
-    except Exception:
-        logger.exception("GLM brain render failed")
-        return None
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode()
 
 
 def _b64_to_figure(b64: str | None, title: str, img_height: int) -> go.Figure:
@@ -340,7 +332,7 @@ def _b64_to_figure(b64: str | None, title: str, img_height: int) -> go.Figure:
     fig.update_layout(title=title, paper_bgcolor="#ffffff", height=img_height + 60,
                       margin=dict(l=0, r=0, t=50, b=10))
     if b64 is None:
-        fig.add_annotation(text="Brain render unavailable (pyvista/mne_nirs not installed).",
+        fig.add_annotation(text="Brain render unavailable; see the run log.",
                            showarrow=False, font=dict(size=13))
         return fig
     fig.add_layout_image(dict(
@@ -419,6 +411,7 @@ def activation_condition_figures(
     clim: dict | None = None,
     view: str = "dorsal",
     size: tuple[int, int] = (800, 700),
+    failed: "list[tuple[str, str]] | None" = None,
 ) -> "list[tuple[str, str]]":
     """One brain render per condition, as ``[(label, png_b64), ...]``.
 
@@ -429,15 +422,20 @@ def activation_condition_figures(
     looked at on its own. The colour scale is shared, see :func:`_shared_clim`.
 
     A condition whose render failed is left out rather than kept as a blank panel, so the
-    switcher never offers a label with nothing behind it.
+    switcher never offers a label with nothing behind it; ``failed`` collects
+    ``(label, reason)`` for each one, for the caller to report.
     """
     if clim is None:
         clim = _shared_clim(results_dict, raw_haemo)
     rendered: list[tuple[str, str]] = []
     for cond, df in results_dict.items():
-        b64 = _save_glm_brain(raw_haemo, df, clim, view, size, str(cond))
-        if b64 is not None:
-            rendered.append((str(cond), b64))
+        try:
+            rendered.append((str(cond), _save_glm_brain(raw_haemo, df, clim, view, size,
+                                                        str(cond))))
+        except Exception as exc:
+            logger.exception("GLM activation render failed for %s", cond)
+            if failed is not None:
+                failed.append((str(cond), str(exc)))
     return rendered
 
 

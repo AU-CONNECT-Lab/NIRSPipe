@@ -7,12 +7,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-pipe` output names its input dataset under `SourceDatasets` in `dataset_description.json`
 - `fnirs-hyper-groupnull` tests every crossed channel pairing across occasions, as its own family, when the null was drawn crossed
 - `fnirs-hyper --wtc-whiten SECONDS` prewhitens long channels before the coherence, one fixed AR order for both members; off by default
 - `fnirs-hyper-pairnull` writes per-condition arrow levels and an ISC `null_abs_p95` column, which the next `fnirs-hyper` run uses on condition pages
 - `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
 
 ### Changed
+- **Breaking**: commands reading BIDS check their input with bids-validator when installed and stop on errors; `--skip-bids-validation` skips that check
+- Files BIDS does not recognise are left out of the input even with `--skip-bids-validation`
 - **Breaking**: `fnirs-hyper` crosses channels by default (`--no-wtc-channel-cross`); the phase-scrambled null follows that unless set
 - **Breaking**: `fnirs-hyper-pairnull` draws its null over every channel pairing by default (`--no-wtc-pair-cross`)
 - The Hyper Analysis page's crossing switches start on and pass their off state explicitly
@@ -43,6 +46,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
+- `fnirs-pipe` stops when the output directory is the input directory or the work directory lies inside it
+- `fnirs-pipe --participant-label` naming no participant in the dataset stops the run instead of exiting 0
 - The brain view labelled Frontal showed the back of the brain
 - The 3D brain views drew rejected channels in their SCI colour rather than as rejected
 - `--mode glm` with `--n-jobs` above 1 hung or crashed while drawing the activation figures
