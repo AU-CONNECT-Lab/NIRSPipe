@@ -17,6 +17,9 @@ because each function exists to beat a simpler statistic that would pass a naive
 `gvtd_threshold` against mean + n*std, `_spike_mask` against a std threshold, and `_gcor`
 against the 0 an unnormalised version would give. The control is what stops the test from
 passing on the simpler thing.
+
+The spectral sections (band power, CP) sit on MNE's Welch PSD, so they are closed form up
+to window leakage and are compared with a tolerance rather than exactly.
 """
 
 import mne
@@ -27,14 +30,19 @@ from numpy.testing import assert_allclose
 
 from fnirs_pipe.pipeline.restingstate import fisher_z
 from fnirs_pipe.qc.metrics import (
+    _cardiac_power_metrics,
+    _drift_metrics,
     _gcor,
     _mask_to_segments,
+    _spectral_metrics,
     _spike_mask,
     channel_cv,
     channel_snr,
     gvtd_censor_spans,
     gvtd_channel_picks,
     gvtd_threshold,
+    gvtd_timetrace,
+    haemo_quality_metrics,
     long_short_channels,
 )
 
@@ -441,3 +449,220 @@ def test_the_mad_threshold_resists_the_spikes_it_is_measuring():
     assert _spike_mask(data)[0, :100].all()
     naive = np.abs(data - data.mean()) > 3.0 * data.std()
     assert not naive[0, :100].any()                     # the control: std misses every one
+
+
+# ---- shared builders for the haemoglobin and OD sections ----
+
+SFREQ = 10.0
+
+
+def _haemo_raw(hbo: dict, hbr: dict) -> mne.io.Raw:
+    names = [f"{k} hbo" for k in hbo] + [f"{k} hbr" for k in hbr]
+    types = ["hbo"] * len(hbo) + ["hbr"] * len(hbr)
+    data = np.vstack(list(hbo.values()) + list(hbr.values()))
+    return mne.io.RawArray(data, mne.create_info(names, SFREQ, types), verbose="error")
+
+
+def _od_raw(data: np.ndarray) -> mne.io.Raw:
+    data = np.atleast_2d(data)
+    names = [f"S{i + 1}_D{i + 1} 760" for i in range(data.shape[0])]
+    info = mne.create_info(names, SFREQ, ["fnirs_od"] * data.shape[0])
+    return mne.io.RawArray(data, info, verbose="error")
+
+
+def _times(duration_s: float) -> np.ndarray:
+    return np.arange(int(duration_s * SFREQ)) / SFREQ
+
+
+def _sine(freq: float, amp: float, t: np.ndarray) -> np.ndarray:
+    return amp * np.sin(2 * np.pi * freq * t)
+
+
+# ---- HbO-HbR correlation ----
+
+def test_a_mirrored_hbr_gives_minus_one_and_a_copy_gives_plus_one():
+    x = np.random.default_rng(10).normal(size=2000)
+    out = haemo_quality_metrics(_haemo_raw({"S1_D1": x, "S2_D2": x},
+                                           {"S1_D1": -0.3 * x, "S2_D2": 2.0 * x}))
+    assert_allclose(out["hbo_hbr_corr_per_channel"]["S1_D1"], -1.0, atol=1e-12)
+    assert_allclose(out["hbo_hbr_corr_per_channel"]["S2_D2"], 1.0, atol=1e-12)
+    assert_allclose(out["hbo_hbr_corr_mean"], 0.0, atol=1e-12)
+
+
+def test_hbo_meets_its_own_hbr_by_name_not_by_position():
+    # HbR listed in the opposite order: a positional pairing would cross the two pairs
+    rng = np.random.default_rng(11)
+    a, b = rng.normal(size=(2, 2000))
+    out = haemo_quality_metrics(_haemo_raw({"S1_D1": a, "S2_D2": b},
+                                           {"S2_D2": -b, "S1_D1": -a}))
+    assert_allclose(out["hbo_hbr_corr_per_channel"]["S1_D1"], -1.0, atol=1e-12)
+    assert_allclose(out["hbo_hbr_corr_per_channel"]["S2_D2"], -1.0, atol=1e-12)
+
+
+def test_an_hbo_channel_without_its_hbr_is_left_out():
+    x = np.random.default_rng(12).normal(size=2000)
+    out = haemo_quality_metrics(_haemo_raw({"S1_D1": x, "S2_D2": x}, {"S1_D1": -x}))
+    assert list(out["hbo_hbr_corr_per_channel"]) == ["S1_D1"]
+    assert_allclose(out["hbo_hbr_corr_mean"], -1.0, atol=1e-12)
+
+
+# ---- cardiac and respiration band power ----
+
+CARDIAC = (0.8, 2.0)
+RESP = (0.15, 0.45)
+
+
+def _bands(raw):
+    return _spectral_metrics(raw, *CARDIAC, *RESP)
+
+
+def test_band_fractions_are_each_tone_share_of_the_variance():
+    # a sine of amplitude A carries A^2/2 of variance, so two tones split the total A^2 : B^2
+    t = _times(600)
+    hbo = _sine(1.2, 1.0, t) + _sine(0.3, 2.0, t)
+    out = _bands(_haemo_raw({"S1_D1": hbo}, {"S1_D1": _sine(1.2, 1.0, t)}))
+    assert_allclose(out["cardiac_band_frac_hbo"], 1.0 / 5.0, atol=5e-4)
+    assert_allclose(out["resp_band_frac_hbo"], 4.0 / 5.0, atol=5e-4)
+    assert_allclose(out["cardiac_band_frac_hbr"], 1.0, atol=5e-4)
+
+
+def test_band_power_is_absolute_and_band_frac_is_not():
+    t = _times(600)
+    hbo = _sine(1.2, 1.0, t) + _sine(0.3, 2.0, t)
+    base = _bands(_haemo_raw({"S1_D1": hbo}, {"S1_D1": hbo}))
+    loud = _bands(_haemo_raw({"S1_D1": 3.0 * hbo}, {"S1_D1": hbo}))
+    assert_allclose(loud["cardiac_band_power_hbo"], 9.0 * base["cardiac_band_power_hbo"], rtol=1e-9)
+    assert_allclose(loud["cardiac_band_frac_hbo"], base["cardiac_band_frac_hbo"], rtol=1e-9)
+
+
+def test_each_chromophore_is_summarised_on_its_own():
+    # control for pooling: HbR a thousand times larger must not move any HbO number
+    t = _times(600)
+    hbo = _sine(1.2, 1.0, t) + _sine(0.3, 2.0, t)
+    hbr = _sine(0.3, 1.0, t)
+    small = _bands(_haemo_raw({"S1_D1": hbo}, {"S1_D1": hbr}))
+    large = _bands(_haemo_raw({"S1_D1": hbo}, {"S1_D1": 1e3 * hbr}))
+    for key in ("cardiac_band_power_hbo", "cardiac_band_frac_hbo",
+                "resp_band_power_hbo", "resp_band_frac_hbo"):
+        assert_allclose(large[key], small[key], rtol=1e-12)
+
+
+# ---- low-frequency drift ----
+
+def test_a_ramp_drifts_by_slope_times_duration():
+    t = _times(600)
+    out = _drift_metrics(_haemo_raw({"S1_D1": 2e-3 * t}, {"S1_D1": -5e-4 * t}))
+    assert_allclose(out["lowfreq_drift_amplitude_hbo"], 2e-3 * t[-1], rtol=1e-9)
+    assert_allclose(out["lowfreq_drift_amplitude_hbr"], 5e-4 * t[-1], rtol=1e-9)
+
+
+def test_an_oscillation_leaks_into_the_trend_only_as_one_over_frequency():
+    # control against the raw peak-to-peak (10 here); the polynomial's leakage is ~1/(f T)
+    t = _times(600)
+
+    def drift(freq):
+        x = _sine(freq, 5.0, t)
+        return _drift_metrics(_haemo_raw({"S1_D1": x}, {"S1_D1": x}))["lowfreq_drift_amplitude_hbo"]
+
+    assert drift(1.0) < 0.01 * 10.0
+    assert_allclose(drift(0.5) / drift(1.0), 2.0, rtol=0.05)
+
+
+def test_the_same_slope_drifts_twice_as_far_over_twice_the_time():
+    # the documented reason the number is not comparable across recording lengths
+    short, long_ = _times(300), _times(600)
+    a = _drift_metrics(_haemo_raw({"S1_D1": 1e-3 * short}, {"S1_D1": 1e-3 * short}))
+    b = _drift_metrics(_haemo_raw({"S1_D1": 1e-3 * long_}, {"S1_D1": 1e-3 * long_}))
+    assert_allclose(b["lowfreq_drift_amplitude_hbo"] / a["lowfreq_drift_amplitude_hbo"],
+                    long_[-1] / short[-1], rtol=1e-9)
+
+
+# ---- cardiac power ----
+
+def _cp(data):
+    return _cardiac_power_metrics(_od_raw(data), *CARDIAC)["cp_mean"]
+
+
+def test_a_pure_cardiac_tone_has_all_its_power_at_the_peak():
+    assert_allclose(_cp(_sine(1.2, 1.0, _times(600))), 1.0, atol=5e-4)
+
+
+def test_power_in_the_shoulder_is_the_only_thing_that_lowers_cp():
+    # 1.55 Hz is inside +-0.5 of the 1.2 Hz peak and outside +-0.2, so CP = A^2 / (A^2 + B^2)
+    t = _times(600)
+    assert_allclose(_cp(_sine(1.2, 1.0, t) + _sine(1.55, 0.5, t)), 1.0 / 1.25, atol=5e-4)
+
+
+def test_power_beyond_the_wide_window_is_ignored():
+    # 1.9 Hz is inside the cardiac band but more than 0.5 Hz from the peak
+    t = _times(600)
+    assert_allclose(_cp(_sine(1.2, 1.0, t) + _sine(1.9, 0.5, t)), 1.0, atol=5e-4)
+
+
+def test_a_respiration_tone_louder_than_the_heart_does_not_capture_the_peak():
+    # the PSD is cut to the cardiac band, so the peak search never sees 0.3 Hz
+    t = _times(600)
+    clean = _cp(_sine(1.2, 1.0, t) + _sine(1.55, 0.5, t))
+    with_resp = _cp(_sine(1.2, 1.0, t) + _sine(1.55, 0.5, t) + _sine(0.3, 10.0, t))
+    assert_allclose(with_resp, clean, atol=5e-4)
+
+
+# ---- GVTD trace ----
+# Unfiltered, the trace is g_i = sqrt(mean_j (y[j, i+1] - y[j, i])^2), so a step or a ramp
+# gives its value by hand. The filtered path is checked only for the Nyquist rule.
+
+def test_a_step_in_one_of_two_channels_is_one_sample_of_height_over_root_two():
+    data = np.zeros((2, 50))
+    data[0, 20:] = 3.0
+    g = gvtd_timetrace(data, SFREQ)
+    expected = np.zeros(49)
+    expected[19] = 3.0 / np.sqrt(2.0)          # diff index 19 is sample 20 minus sample 19
+    assert_allclose(g, expected, atol=1e-15)
+
+
+def test_simultaneous_jumps_combine_as_a_root_mean_square():
+    data = np.zeros((3, 10))
+    data[0, 5:], data[1, 5:], data[2, 5:] = 1.0, -2.0, 2.0
+    assert_allclose(gvtd_timetrace(data, SFREQ)[4], np.sqrt((1 + 4 + 4) / 3.0), atol=1e-15)
+
+
+def test_a_ramp_gives_a_flat_trace_at_its_slope_per_sample():
+    data = np.vstack([0.5 * np.arange(40.0), -0.5 * np.arange(40.0)])
+    assert_allclose(gvtd_timetrace(data, SFREQ), np.full(39, 0.5), atol=1e-15)
+
+
+def test_standardising_takes_the_loud_channel_out_of_the_global_value():
+    # control: unstandardised, scaling one channel moves the trace
+    rng = np.random.default_rng(20)
+    data = rng.normal(size=(3, 500))
+    loud = data.copy()
+    loud[0] *= 1e3
+    assert not np.allclose(gvtd_timetrace(loud, SFREQ), gvtd_timetrace(data, SFREQ))
+    assert_allclose(gvtd_timetrace(loud, SFREQ, standardize_channels=True),
+                    gvtd_timetrace(data, SFREQ, standardize_channels=True), rtol=1e-10)
+
+
+def test_a_flat_channel_stays_zero_under_standardising():
+    data = np.zeros((2, 50))
+    data[0] = np.random.default_rng(21).normal(size=50)
+    d = np.diff(data[0])
+    g = gvtd_timetrace(data, SFREQ, standardize_channels=True)
+    assert np.isfinite(g).all()
+    assert_allclose(g, np.abs(d / d.std()) / np.sqrt(2.0), rtol=1e-12)
+
+
+def test_a_non_finite_sample_counts_as_zero_rather_than_poisoning_the_trace():
+    data = np.ones((2, 10))
+    data[0, 4] = np.nan
+    zeroed = data.copy()
+    zeroed[0, 4] = 0.0
+    g = gvtd_timetrace(data, SFREQ)
+    assert np.isfinite(g).all()
+    assert_allclose(g, gvtd_timetrace(zeroed, SFREQ), atol=1e-15)
+
+
+def test_an_h_freq_at_nyquist_degrades_the_bandpass_to_a_high_pass():
+    data = np.random.default_rng(22).normal(size=(3, 3000))
+    assert_allclose(gvtd_timetrace(data, SFREQ, l_freq=0.1, h_freq=SFREQ / 2),
+                    gvtd_timetrace(data, SFREQ, l_freq=0.1, h_freq=None), atol=0)
+

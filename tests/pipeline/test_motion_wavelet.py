@@ -166,6 +166,35 @@ def test_clip_iqr_writes_through_the_callers_view():
     assert a[3] == 1.0         # outside the view, untouched
 
 
+# Nine values put the quartiles on the 3rd and 7th sorted entries whatever the two ends hold,
+# so Q1 = 2, Q3 = 6, IQR = 4 and the 1.5 fence is [2 - 6, 6 + 6] = [-4, 12].
+def test_clip_iqr_zeroes_strictly_beyond_the_hand_computed_fence():
+    on_fence = np.array([-4.0, 1, 2, 3, 4, 5, 6, 7, 12.0])
+    _wl_clip_iqr(on_fence, 1.5)
+    assert on_fence[0] == -4.0 and on_fence[-1] == 12.0
+
+    past_fence = np.array([-4.01, 1, 2, 3, 4, 5, 6, 7, 12.01])
+    _wl_clip_iqr(past_fence, 1.5)
+    assert past_fence[0] == 0.0 and past_fence[-1] == 0.0
+    assert (past_fence[1:-1] == np.arange(1.0, 8.0)).all()
+
+
+def test_clip_iqr_fence_is_proportional_to_the_factor():
+    # factor 0.5: fence [2 - 2, 6 + 2] = [0, 8]
+    block = np.array([-0.5, 1, 2, 3, 4, 5, 6, 7, 8.5])
+    _wl_clip_iqr(block, 0.5)
+    assert block[0] == 0.0 and block[-1] == 0.0
+
+
+def test_clip_iqr_is_not_widened_by_the_outlier_it_is_clipping():
+    # control: mean + 3 SD is dragged out by the 1000 and lets 15 through
+    block = np.array([1.0, 2, 3, 4, 5, 6, 7, 15, 1000])
+    naive_kept = abs(15 - block.mean()) <= 3 * block.std()
+    _wl_clip_iqr(block, 1.5)                  # Q1 3, Q3 7, fence [-3, 13]
+    assert naive_kept
+    assert block[-2] == 0.0 and block[-1] == 0.0
+
+
 # ---- What the shipped configuration achieves ----
 
 @requires_pywt
