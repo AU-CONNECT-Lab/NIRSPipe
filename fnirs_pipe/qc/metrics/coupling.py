@@ -12,7 +12,9 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import SNR_PASS
-from fnirs_pipe.qc.metrics._helpers import _mean_or_none, _safe_metrics
+from fnirs_pipe.qc.metrics._helpers import (
+    _mean_or_none, _safe_metrics, require_cardiac_below_nyquist,
+)
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
@@ -61,6 +63,9 @@ def compute_sci_scores(
     object so later metrics can reuse it, reshapes the array into a per-channel
     dict, and is crash-safe: on failure every channel defaults to 1.0 (so no
     channel is wrongly dropped) instead of raising and aborting the whole run.
+    The exception is a cardiac band at or above Nyquist, which is a configuration
+    error rather than a data failure and raises ``ValueError``: defaulting there would
+    report every channel of every run as perfectly coupled.
 
     Already-OD input is passed through rather than converted: recomputing scores from a
     tree on disk reads ``desc-sci`` or ``desc-od``, and ``optical_density`` raises on
@@ -70,6 +75,7 @@ def compute_sci_scores(
     ----------
     .. footbibliography::
     """
+    require_cardiac_below_nyquist(raw.info["sfreq"], cardiac_h_freq)
     raw_od = (raw if is_optical_density(raw)
               else mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False))
     try:

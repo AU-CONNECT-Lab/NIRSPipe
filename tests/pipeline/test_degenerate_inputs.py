@@ -24,6 +24,7 @@ from fnirs_pipe.pipeline.prep_pipeline import (
     mark_bad_channels,
     run_prep,
 )
+from fnirs_pipe.qc.metrics import compute_sci_scores, screening_scores
 
 from tests._synth import synth_raw
 
@@ -112,10 +113,31 @@ def test_manual_marks_alone_that_leave_nothing_still_say_so(tmp_path):
         _prep(raw, tmp_path, bad_channels=every)
 
 
-def test_a_cardiac_band_above_nyquist_is_refused_naming_the_flag():
-    od = intensity_to_od(synth_raw("01", "rest").resample(2.0))
-    with pytest.raises(ValueError, match=r"--cardiac-h-freq 1.5 Hz .* Nyquist frequency \(1 Hz\)"):
+_ABOVE_NYQUIST = r"--cardiac-h-freq 1.5 Hz .* Nyquist frequency \(1 Hz\)"
+
+
+@pytest.fixture(scope="module")
+def slow_intensity():
+    return synth_raw("01", "rest").resample(2.0)
+
+
+def test_a_cardiac_band_above_nyquist_is_refused_naming_the_flag(slow_intensity):
+    od = intensity_to_od(slow_intensity.copy())
+    with pytest.raises(ValueError, match=_ABOVE_NYQUIST):
         mark_bad_channels(od, 0.8, _BANDS["cardiac_l_freq"], _BANDS["cardiac_h_freq"])
+
+
+def test_the_qc_sci_refuses_it_instead_of_scoring_every_channel_one(slow_intensity):
+    with pytest.raises(ValueError, match=_ABOVE_NYQUIST):
+        compute_sci_scores(slow_intensity.copy(), _BANDS["cardiac_l_freq"], _BANDS["cardiac_h_freq"])
+
+
+def test_screening_refuses_it_instead_of_screening_nothing(slow_intensity):
+    # SCI handed in, so only the window criterion is left for the catch-all to swallow
+    od = intensity_to_od(slow_intensity.copy())
+    have = {"sci": {ch: 1.0 for ch in od.ch_names}}
+    with pytest.raises(ValueError, match=_ABOVE_NYQUIST):
+        screening_scores(od, _BANDS["cardiac_l_freq"], _BANDS["cardiac_h_freq"], have=have)
 
 
 # ---- a filter longer than the recording ----

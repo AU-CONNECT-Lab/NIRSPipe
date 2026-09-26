@@ -26,7 +26,7 @@ from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_st
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS
+from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
@@ -96,13 +96,7 @@ def mark_bad_channels(
     them on their own.
     Raises StageError if the criteria leave no usable channel.
     """
-    nyquist = raw_od.info["sfreq"] / 2
-    if cardiac_h_freq >= nyquist:
-        raise ValueError(
-            f"--cardiac-h-freq {cardiac_h_freq:g} Hz is at or above the Nyquist frequency "
-            f"({nyquist:g} Hz) of this {raw_od.info['sfreq']:g} Hz recording, so the cardiac "
-            f"band cannot be filtered. Lower --cardiac-h-freq below {nyquist:g} Hz."
-        )
+    require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)

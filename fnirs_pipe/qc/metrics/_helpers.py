@@ -275,6 +275,17 @@ def registration_offset(
     return (reach * 1e3, scalp * 1e3) if reach > max_ratio * scalp else None
 
 
+def require_cardiac_below_nyquist(sfreq: float, cardiac_h_freq: float) -> None:
+    """Refuse a cardiac band the recording's sampling rate cannot carry."""
+    nyquist = sfreq / 2
+    if cardiac_h_freq >= nyquist:
+        raise ValueError(
+            f"--cardiac-h-freq {cardiac_h_freq:g} Hz is at or above the Nyquist frequency "
+            f"({nyquist:g} Hz) of this {sfreq:g} Hz recording, so the cardiac band cannot "
+            f"be filtered. Lower --cardiac-h-freq below {nyquist:g} Hz."
+        )
+
+
 def _mean_or_none(values) -> "float | None":
     """Mean of a collection of values, or None if it is empty."""
     vals = list(values)

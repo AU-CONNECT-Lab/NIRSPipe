@@ -23,7 +23,9 @@ from typing import Callable
 
 import mne
 
-from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, SCI_PASS
+from fnirs_pipe.qc.metrics._helpers import (
+    GOOD_FRAC_PASS, PSP_PASS, SCI_PASS, require_cardiac_below_nyquist,
+)
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
 from fnirs_pipe.qc.metrics.windowed import good_window_fraction
@@ -150,6 +152,8 @@ def screening_scores(
     None counts all of it. It reaches the window-counting criterion only; nothing else in
     the table has a time axis to restrict.
     """
+    # before the loop, whose catch-all would turn this into "screens nothing"
+    require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
     scores = dict(have or {})
     context = {"cutoffs": cutoffs or criterion_cutoffs(), "scope": scope}
     for c in CRITERIA:

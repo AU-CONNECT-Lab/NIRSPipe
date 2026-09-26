@@ -36,7 +36,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Non-finite samples are zeroed at the OD step and their channels marked bad; they used to crash post inside the GLM
-- A cardiac band at or above the recording's Nyquist frequency is refused before screening, naming `--cardiac-h-freq`
+- A cardiac band at or above the recording's Nyquist frequency is refused, naming `--cardiac-h-freq`; QC used to score every channel's SCI as 1.0
 - **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only
 - Duplicated events (same trial_type, onset and duration) are dropped with a warning instead of summed into one doubled regressor
 - `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions or runs into one draw; a draw is now named by subject, session and run
