@@ -103,6 +103,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         logger.warning("no all-pairings level: the draws are crossed and the real table is "
                        "not, so that level would rank a mean over the diagonal inside a null "
                        "over every pairing. Rerun the real tables with --wtc-channel-cross")
+    all_pairings = False
     if crossed and real_crossed:
         # A whole-brain mean is over every pairing, not the diagonal.
         # All or none: n^2 pairings for one occasion and n for the next is not one statistic
@@ -113,6 +114,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
                            "homologous level, which every occasion supports",
                            len(short), draws["occasion"].nunique(), ", ".join(short))
         else:
+            all_pairings = True
             yield "whole", "whole", "all", draws, real
     for name, channels in (roi_map or {}).items():
         d = hom_d[hom_d["label"].isin(channels)]
@@ -126,6 +128,13 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         r = hom_r[hom_r["label"] == label]
         if not d.empty and not r.empty:
             yield "channel", label, "homologous", d, r
+    # with the null drawn crossed, every pairing is also tested on its own: a family of n^2
+    if all_pairings:
+        real_by_pair = dict(tuple(real.groupby(["label", "label2"])))
+        for (a, b), d in draws.groupby(["label", "label2"]):
+            r = real_by_pair.get((a, b))
+            if r is not None and not r.empty:
+                yield "channel", f"{a}>{b}", "all", d, r
 
 
 def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,

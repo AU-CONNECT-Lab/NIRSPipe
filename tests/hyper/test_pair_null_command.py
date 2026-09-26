@@ -87,10 +87,10 @@ def test_the_draw_count_is_unbounded_unless_capped():
     assert _parse("--wtc-pair-max", "5").wtc_pair_max == 5
 
 
-def test_the_crossing_is_its_own_decision():
-    """Same split as --wtc-phase-null-cross: crossing multiplies the cost per draw."""
-    assert _parse().wtc_pair_cross is False
-    assert _parse("--wtc-pair-cross").wtc_pair_cross is True
+def test_the_null_is_crossed_unless_told_otherwise():
+    """Independent of the real run's crossing: crossing multiplies the cost per draw."""
+    assert _parse().wtc_pair_cross is True
+    assert _parse("--no-wtc-pair-cross").wtc_pair_cross is False
 
 
 @pytest.mark.parametrize("flag", ["--wtc-band-fmin", "--wtc-band-fmax", "--wtc-mask-coi",

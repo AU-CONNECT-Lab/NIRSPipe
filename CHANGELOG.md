@@ -7,11 +7,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `fnirs-hyper-groupnull` tests every crossed channel pairing across occasions, as its own family, when the null was drawn crossed
 - `fnirs-hyper --wtc-whiten SECONDS` prewhitens long channels before the coherence, one fixed AR order for both members; off by default
 - `fnirs-hyper-pairnull` writes per-condition arrow levels and an ISC `null_abs_p95` column, which the next `fnirs-hyper` run uses on condition pages
 - `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
 
 ### Changed
+- **Breaking**: `fnirs-hyper` crosses channels by default (`--no-wtc-channel-cross`); the phase-scrambled null follows that unless set
+- **Breaking**: `fnirs-hyper-pairnull` draws its null over every channel pairing by default (`--no-wtc-pair-cross`)
+- The Hyper Analysis page's crossing switches start on and pass their off state explicitly
 - **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
 - Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
 - Code comments and docstrings say what the code does, without design arguments, measured values or rejected alternatives

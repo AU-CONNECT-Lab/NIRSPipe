@@ -222,7 +222,7 @@ def cmd_run(
     wtc_by_condition: bool, wtc_chroma: str, wtc_window_s: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
-    wtc_phase_null: int | None, wtc_phase_null_cross: bool,
+    wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
     bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
     isc_max_lag: float, isc_phase_null: int,
     isc_fmin: "float | None", isc_fmax: "float | None",
@@ -238,6 +238,9 @@ def cmd_run(
     The null reuses this run's aligned recordings and every band parameter, so it cannot be
     computed over a different band than the table it sits beside.
     """
+    # unset, the null is crossed exactly when the real table is
+    if wtc_phase_null_cross is None:
+        wtc_phase_null_cross = wtc_channel_cross
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
@@ -282,6 +285,11 @@ def cmd_run(
     if len(chroma) > 1:
         print("[info] --wtc-chroma both: two full WTC passes per dyad, so roughly twice "
               "the runtime. Pass hbo or hbr for one.", file=sys.stderr)
+    if wtc_phase_null and wtc_phase_null_cross:
+        print("[info] the phase-scrambled null is crossed: every iteration covers every "
+              "channel pairing, the squared pair count, and dominates the runtime. "
+              "--no-wtc-phase-null-cross draws it over the homologous pairings only.",
+              file=sys.stderr)
 
     groups = _select_groups(pairs_csv, group_id, task_label)
 
@@ -720,13 +728,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "Display only: no table or figure value changes with it. Both "
                           "--wtc-phase-null and --wtc-significance override it with a level per "
                           "frequency, the phase-scrambled one winning where both ran.")
-    run.add_argument("--wtc-channel-cross", action="store_true",
+    run.add_argument("--wtc-channel-cross", action=argparse.BooleanOptionalAction, default=True,
                      help="Cross every long channel with every other across the two brains "
-                          "instead of pairing each channel with its counterpart, so n "
-                          "channels give n^2 coherence values rather than n. The extra "
-                          "pairs reach the channel TSV with a label2 column; the "
-                          "time-frequency heatmaps stay on the homologous pairs. Does not "
-                          "affect the null: see --wtc-phase-null-cross.")
+                          "(default on), so n channels give n^2 coherence values rather than "
+                          "n. The extra pairs reach the channel TSV with a label2 column; the "
+                          "time-frequency heatmaps stay on the homologous pairs. "
+                          "--no-wtc-channel-cross pairs each channel with its counterpart only.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length "
                           "and make the window the unit instead of the condition. Needs "
@@ -776,11 +783,13 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "cell's percentile inside its own draws, and the maps draw their "
                           "phase arrows against the null's level rather than "
                           "--wtc-arrow-min.")
-    run.add_argument("--wtc-phase-null-cross", action="store_true",
-                     help="Cross the channels for the null too. Independent of "
-                          "--wtc-channel-cross; crossing squares the pair count on every "
-                          "iteration. Without it, the homologous null still covers the "
-                          "homologous rows of a crossed real table (label equal to label2).")
+    run.add_argument("--wtc-phase-null-cross", action=argparse.BooleanOptionalAction,
+                     default=None,
+                     help="Cross the channels for the phase-scrambled null too. Unset, it "
+                          "follows --wtc-channel-cross. Crossing squares the pair count on "
+                          "every iteration. --no-wtc-phase-null-cross draws the null over the "
+                          "homologous pairings only, which covers the homologous rows of a "
+                          "crossed real table (label equal to label2).")
     run.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
                      help="Which rejected channels are excluded from the inter-brain "
                           "metrics. 'run' (default) uses this task's own rejections. "
@@ -945,10 +954,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Stop after N draws. The pool is finite, so this is a ceiling "
                            "rather than a count: without it every eligible stand-in is "
                            "used, which is what gives the percentile its best resolution.")
-    pair.add_argument("--wtc-pair-cross", action="store_true",
-                      help="Draw the null over every channel pair rather than homologous "
-                           "ones only. Independent of the real run's --wtc-channel-cross; "
-                           "a crossed null costs one full run per channel pair.")
+    pair.add_argument("--wtc-pair-cross", action=argparse.BooleanOptionalAction, default=True,
+                      help="Draw the null over every channel pair (default on) rather than "
+                           "homologous ones only. Independent of the real run's "
+                           "--wtc-channel-cross; a crossed null costs one full run per channel "
+                           "pair. --no-wtc-pair-cross draws the homologous pairings only.")
     pair.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
                       help="Drop an ROI cell resting on fewer than N channel pairs "
                            "(default 2). Match the value the real tables used.")

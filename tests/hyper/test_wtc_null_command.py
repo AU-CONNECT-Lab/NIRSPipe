@@ -1,13 +1,13 @@
-"""The null shares the hyper run but not its crossing.
+"""The null shares the hyper run, and its crossing unless told otherwise.
 
-The null's crossing is set by its own flag, `--wtc-phase-null-cross`, not by the table's:
-crossing the channel table multiplies the cost of every surrogate iteration. The null's
+Unset, `--wtc-phase-null-cross` follows `--wtc-channel-cross`, which is on by default, and
+either can be set on its own: crossing multiplies the cost of every surrogate iteration. The null's
 sidecar records the iteration count and the shape as well as the band, so a short probe and
 a full null do not look alike.
 
 The null runs inside `fnirs-hyper`, which is what keeps its band and its stage identical
 to the table it sits beside. These tests hold that in place: the null is off unless asked
-for, its crossing is its own decision, the sidecar says what was run, and a merge keeps
+for, its crossing follows the table unless set, the sidecar says what was run, and a merge keeps
 mixed iteration counts visible while refusing mixed bands.
 """
 
@@ -65,20 +65,23 @@ def test_the_iteration_count_is_what_asks_for_it():
     assert _hyper("--wtc-phase-null", "100").wtc_phase_null == 100
 
 
-# ---- the crossing stays split ----
+# ---- the null follows the table's crossing unless set ----
 
-def test_the_null_is_homologous_unless_asked():
-    assert _hyper("--wtc-phase-null", "100").wtc_phase_null_cross is False
+def test_the_real_table_is_crossed_by_default():
+    assert _hyper().wtc_channel_cross is True
+    assert _hyper("--no-wtc-channel-cross").wtc_channel_cross is False
 
 
-def test_crossing_the_real_run_does_not_cross_the_null():
-    args = _hyper("--wtc-phase-null", "100", "--wtc-channel-cross")
-    assert args.wtc_channel_cross is True
+def test_the_nulls_crossing_is_left_to_follow_the_table_unless_set():
+    """None here; `cmd_run` resolves it to the table's crossing before anything runs."""
+    assert _hyper("--wtc-phase-null", "100").wtc_phase_null_cross is None
+
+
+def test_the_null_can_be_set_either_way_on_its_own():
+    args = _hyper("--wtc-phase-null", "100", "--no-wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is False
-
-
-def test_the_null_can_be_crossed_on_its_own():
-    args = _hyper("--wtc-phase-null", "100", "--wtc-phase-null-cross")
+    assert args.wtc_channel_cross is True
+    args = _hyper("--wtc-phase-null", "100", "--no-wtc-channel-cross", "--wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is True
     assert args.wtc_channel_cross is False
 

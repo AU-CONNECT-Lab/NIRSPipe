@@ -160,7 +160,7 @@ def _run_section():
                     {"label": "Normalize recordings", "value": "normalize"},
                     {"label": "Check only (compute nothing)", "value": "check_only"},
                 ],
-                value=[], switch=True,
+                value=["wtc_channel_cross", "wtc_phase_null_cross"], switch=True,
             ), columns=True),
         ),
     ))
@@ -183,7 +183,7 @@ def _pair_null_section():
                 id="hy-pair-flags",
                 options=[{"label": "Every channel pair, not homologous only",
                           "value": "wtc_pair_cross"}],
-                value=[], inline=True, switch=True,
+                value=["wtc_pair_cross"], inline=True, switch=True,
             )),
         ),
         subtitle="Pairs one member with people from the other groups who did the same task. "

@@ -116,8 +116,8 @@ def _crossed_real(diagonal, off_diagonal):
 
 
 def test_a_homologous_null_ranks_the_crossed_table_s_diagonal():
-    """`--wtc-channel-cross` without `--wtc-phase-null-cross` is the recommended pair, and the
-    null is the null for the pairings it was drawn for. Keying on `label` alone would take
+    """A crossed real table beside `--no-wtc-phase-null-cross`: the homologous null is the
+    null for the pairings it was drawn for. Keying on `label` alone would take
     the row that label came first in, which is its pairing with the *first* channel of the other
     montage: right for the first label by coincidence and wrong for every other."""
     null = NullDraws(draws=[_homologous_draw(v) for v in (0.10, 0.20, 0.30)],

@@ -193,6 +193,19 @@ def test_a_homologous_draw_offers_the_whole_brain_level_and_its_channels():
     assert [lv for g, lv in got if g == "channel"] == CHANNELS
 
 
+def test_a_crossed_null_tests_every_pairing_on_its_own():
+    """The literature's family: every crossed pairing across occasions, apart from the diagonal's."""
+    d = _draws().assign(label2=lambda f: f.label)
+    crossed = pd.concat([d, d.assign(label2="S9_D9")])
+    got = [lv for g, lv, pr, _, _ in _variants(crossed, crossed, None) if g == "channel" and pr == "all"]
+    assert sorted(got) == sorted([f"{c}>{c}" for c in CHANNELS] + [f"{c}>S9_D9" for c in CHANNELS])
+
+
+def test_a_homologous_null_offers_no_crossed_channel_family():
+    d = _draws().assign(label2=lambda f: f.label)
+    assert not [lv for g, lv, pr, _, _ in _variants(d, d, None) if g == "channel" and pr == "all"]
+
+
 def test_a_crossed_draw_also_offers_every_pairing():
     d = _draws().assign(label2=lambda f: f.label)
     crossed = pd.concat([d, d.assign(label2="S9_D9", coherence=0.9)])

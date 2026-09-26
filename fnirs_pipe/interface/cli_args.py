@@ -72,8 +72,9 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _text("--wtc-pair-pool", opts.get("wtc_pair_pool"))
         args += _num("--wtc-pair-max", opts.get("wtc_pair_max"))
-        if "wtc_pair_cross" in (opts.get("pair_flags") or []):
-            args.append("--wtc-pair-cross")
+        # crossing is the default, so an unticked switch has to say so
+        args.append("--wtc-pair-cross" if "wtc_pair_cross" in (opts.get("pair_flags") or [])
+                    else "--no-wtc-pair-cross")
         if "bads_subject" in (opts.get("hyper_flags") or []):
             args += ["--bads-scope", "subject"]
         return args
@@ -117,10 +118,11 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--wtc-significance")
         if "wtc_no_mask_coi" in flags:
             args.append("--no-wtc-mask-coi")
-        if "wtc_channel_cross" in flags:
-            args.append("--wtc-channel-cross")
-        if "wtc_phase_null_cross" in flags:
-            args.append("--wtc-phase-null-cross")
+        # crossing is the default, so an unticked switch has to say so
+        args.append("--wtc-channel-cross" if "wtc_channel_cross" in flags
+                    else "--no-wtc-channel-cross")
+        args.append("--wtc-phase-null-cross" if "wtc_phase_null_cross" in flags
+                    else "--no-wtc-phase-null-cross")
         # the switch turns the per-condition pass off, that pass being the default
         if "no_by_condition" in flags:
             args.append("--no-by-condition")
