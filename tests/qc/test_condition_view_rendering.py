@@ -61,15 +61,22 @@ pytestmark = pytest.mark.skipif(_chrome() is None,
 
 def _shot(html: Path, png: Path, fragment: str = "") -> bytes:
     url = html.resolve().as_uri() + fragment
-    subprocess.run(
-        [_chrome(), "--headless=old", "--disable-gpu", "--no-sandbox",
-         "--virtual-time-budget=15000", "--window-size=1000,560",
-         f"--user-data-dir={png.parent / '_profile'}", f"--screenshot={png}", url],
-        capture_output=True, timeout=120,
-    )
-    if not png.exists():
-        pytest.skip("the browser wrote no screenshot")
-    data = png.read_bytes()
+    # a cold profile can be captured half drawn; two identical shots in a row mean it settled
+    shots: list[bytes] = []
+    for _ in range(4):
+        png.unlink(missing_ok=True)
+        subprocess.run(
+            [_chrome(), "--headless=old", "--disable-gpu", "--no-sandbox",
+             "--virtual-time-budget=15000", "--window-size=1000,560",
+             f"--user-data-dir={png.parent / '_profile'}", f"--screenshot={png}", url],
+            capture_output=True, timeout=120,
+        )
+        if not png.exists():
+            pytest.skip("the browser wrote no screenshot")
+        shots.append(png.read_bytes())
+        if len(shots) > 1 and shots[-1] == shots[-2]:
+            break
+    data = shots[-1]
     if len(data) < MIN_RENDER_BYTES:
         pytest.skip("the figure did not render; the Plotly CDN is probably unreachable")
     return data
