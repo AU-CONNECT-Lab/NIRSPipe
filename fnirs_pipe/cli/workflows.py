@@ -503,7 +503,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
 def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None):
     from fnirs_pipe.qc.subject.report import build_subject_report
 
-    hbo_picks = mne.pick_types(last_result.raw_haemo.info, fnirs="hbo")
+    # rejected channels included, so the brain figures can draw them as rejected
+    hbo_picks = mne.pick_types(last_result.raw_haemo.info, fnirs="hbo", exclude=[])
     coords_head = np.array([
         last_result.raw_haemo.info["chs"][i]["loc"][:3] for i in hbo_picks
     ])

@@ -37,6 +37,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - The brain view labelled Frontal showed the back of the brain
+- The 3D brain views drew rejected channels in their SCI colour rather than as rejected
 - Non-finite samples are zeroed at the OD step and their channels marked bad; they used to crash post inside the GLM
 - A cardiac band at or above the recording's Nyquist frequency is refused, naming `--cardiac-h-freq`; QC used to score every channel's SCI as 1.0
 - **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only

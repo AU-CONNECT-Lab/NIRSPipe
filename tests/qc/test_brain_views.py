@@ -93,3 +93,24 @@ def test_subjects_rendering_in_parallel_threads_each_get_their_figure():
     with ThreadPoolExecutor(max_workers=3) as pool:
         figures = list(pool.map(one, range(3)))
     assert len(figures) == 3 and all(figures)
+
+
+def test_a_rejected_channel_reaches_the_figure_flagged_as_rejected(mini_bids, tmp_path, monkeypatch):
+    from fnirs_pipe.cli.run import main
+    from fnirs_pipe.qc.subject import report
+
+    seen = {}
+
+    def capture(ch_names, coords_head, good_mask, **kwargs):
+        seen.update(zip(ch_names, good_mask))
+        return None
+
+    monkeypatch.setattr(report, "quality_brain_views", capture)
+    main([str(mini_bids), str(tmp_path / "out"), "participant", "--participant-label", "01",
+          "--task-label", "tapping", "--bad-channels", "S1_D1", "--dpf", "6",
+          "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+          "--resp-l-freq", "0.1", "--resp-h-freq", "0.4"])
+
+    # S1_D1 couples well, so only the rejection can colour it red
+    assert seen.get("S1_D1 hbo") is not None, "the rejected channel never reached the figure"
+    assert not seen["S1_D1 hbo"]
