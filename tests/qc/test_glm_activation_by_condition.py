@@ -45,7 +45,7 @@ def test_the_colour_scale_covers_every_condition():
 
 
 def test_an_all_zero_run_still_gets_a_usable_scale():
-    # a zero-width scale would make stc.plot raise rather than draw a flat brain
+    # a flat run still gets a non-zero scale to draw against
     clim = _shared_clim(_results(flat=[0.0, 0.0]))
     assert clim["pos_lims"][-1] > 0
 

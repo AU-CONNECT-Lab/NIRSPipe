@@ -192,10 +192,10 @@ def _render_views(plotter) -> list[np.ndarray]:
     """One RGB screenshot per camera in ``CAMERAS``, each titled with its view label."""
     center = np.asarray(plotter.center, float)
     imgs = []
-    for direction, label in zip(CAMERAS, VIEW_LABELS):
+    for (direction, up), label in zip(CAMERAS, VIEW_LABELS):
         eye = np.asarray(direction, float)
         # any distance works: reset_camera keeps the direction and refits the scene
-        plotter.camera_position = [center + 500 * eye / np.linalg.norm(eye), center, (0, 0, 1)]
+        plotter.camera_position = [center + 500 * eye / np.linalg.norm(eye), center, up]
         plotter.reset_camera()
         title = plotter.add_text(label, position="upper_edge", font_size=14, color="black")
         imgs.append(np.asarray(plotter.screenshot(return_img=True))[:, :, :3])

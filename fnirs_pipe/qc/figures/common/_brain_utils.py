@@ -11,11 +11,12 @@ from fnirs_pipe.utils.logging import get_logger
 
 _logger = get_logger("qc.figures.brain_utils")
 
-# direction from the brain's centre to the camera, in fsaverage RAS (+x right, +y anterior, +z up)
+# (direction from the brain's centre to the camera, the image's up), in fsaverage RAS
+# (+x right, +y anterior, +z up); superior puts the nose up, as the optode flat map does
 CAMERAS = [
-    (0.0,  2.0, 0.5),    # frontal
-    (-2.0, 0.0, 0.3),    # left lateral
-    (0.0,  0.3, 2.0),    # superior
+    ((0.0,  2.0, 0.5), (0, 0, 1)),    # frontal
+    ((-2.0, 0.0, 0.3), (0, 0, 1)),    # left lateral
+    ((0.0,  0.3, 2.0), (0, 1, 0)),    # superior
 ]
 VIEW_LABELS = ["Frontal", "Left Lateral", "Superior"]
 

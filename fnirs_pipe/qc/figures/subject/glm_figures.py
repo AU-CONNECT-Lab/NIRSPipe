@@ -1,7 +1,7 @@
 """GLM visualisation figures.
 
 design_matrix_figure():   regressor time series + censoring + BC/AC bars.
-activation_brain_figure(): brain surface projection via mne_nirs (solid surface).
+activation_brain_figure(): brain surface projection, rendered off-screen.
 activation_panel():        per-condition rows of brain projections.
 """
 
@@ -178,6 +178,85 @@ def _add_shared_colorbar(fig, clim: dict) -> None:
     cb.outline.set_linewidth(0.5)
 
 
+def _mne_lighting(plotter) -> None:
+    """MNE's three camera lights in place of the headlight: below, upper left, upper right."""
+    lights = list(plotter.renderer.GetLights())
+    lights[0].SetSwitch(False)
+    placed = ((0, -45), (-60, 30), (60, 30))
+    for i, light in enumerate(lights[1:]):
+        az, el = placed[i] if i < len(placed) else (0.0, 0.0)
+        theta, phi = np.deg2rad(az), np.deg2rad(90.0 - el)
+        light.SetPosition(np.sin(theta) * np.sin(phi), np.cos(phi), np.cos(theta) * np.sin(phi))
+        light.SetIntensity(0.7 if i < len(placed) else 0.0)
+        light.SetSwitch(i < len(placed))
+        light.SetColor(1.0, 1.0, 1.0)
+
+
+def _render_activation(stc, clim: dict, subjects_dir, size: tuple[int, int],
+                       view_configs: list[dict]) -> list[np.ndarray]:
+    """Draw ``stc`` on the fsaverage pial surface as ``stc.plot`` does, without its Qt window.
+
+    Uses MNE's own colour table, smoothing and layer compositing with ``stc.plot``'s defaults
+    (transparent below fmin, 10 smoothing steps, grey binary curvature), then renders in an
+    off-screen pyvista plotter. One RGB image per entry of ``view_configs``.
+    """
+    import os
+
+    import pyvista as pv
+    from mne.morph import _hemi_morph
+    from mne.surface import complete_surface_info, read_curvature, read_surface
+    from mne.viz._3d_overlay import _LayeredMesh
+    from mne.viz._brain.colormap import calculate_lut
+
+    fmin, fmid, fmax = clim["pos_lims"]
+    ctable = np.round(calculate_lut("RdBu_r", alpha=1.0, fmin=fmin, fmid=fmid, fmax=fmax,
+                                    center=0.0, transparent=True) * 255).astype(np.uint8)
+    surf_dir = os.path.join(subjects_dir, "fsaverage", "surf")
+
+    plotter = pv.Plotter(off_screen=True, window_size=list(size))
+    try:
+        plotter.set_background("white")
+        for hemi, vertices, data in (("lh", stc.vertices[0], stc.lh_data[:, 0]),
+                                     ("rh", stc.vertices[1], stc.rh_data[:, 0])):
+            coords, faces = read_surface(os.path.join(surf_dir, f"{hemi}.pial"))
+            normals = complete_surface_info(dict(rr=coords, tris=faces), copy=False,
+                                            verbose=False, do_neighbor_tri=False)["nn"]
+            curv = read_curvature(os.path.join(surf_dir, f"{hemi}.curv"), binary=False)
+            with mne.utils.use_log_level(False):
+                smooth = _hemi_morph(faces, np.arange(len(coords)), vertices, 10,
+                                     maps=None, warn=False)
+
+            layers = _LayeredMesh(renderer=None, vertices=coords, triangles=faces,
+                                  normals=normals)
+            layers.add_overlay(scalars=(curv > 0).astype(np.int64), colormap="Greys",
+                               rng=[-1, 2], opacity=1.0, name="curv")
+            layers.add_overlay(scalars=smooth.dot(data), colormap=ctable,
+                               rng=[-fmax, fmax], opacity=None, name="data")
+
+            mesh = pv.PolyData(coords, np.hstack([np.full((len(faces), 1), 3), faces]).ravel())
+            mesh.point_data["Normals"] = normals
+            mesh.GetPointData().SetActiveNormals("Normals")
+            mesh.point_data["Data"] = layers._current_colors
+            actor = plotter.add_mesh(mesh, scalars="Data", rgba=True, reset_camera=False)
+            actor.prop.interpolation = "phong"
+
+        _mne_lighting(plotter)
+        focal = np.asarray(plotter.center, float)
+        images = []
+        for cfg in view_configs:
+            # MNE's convention: elevation is the polar angle from +z; camera 480 mm from origin
+            az, el = np.deg2rad(cfg["azimuth"]), np.deg2rad(cfg["elevation"])
+            position = 480 * np.array([np.sin(el) * np.cos(az), np.sin(el) * np.sin(az),
+                                       np.cos(el)])
+            up = (0, 0, 1) if 5 <= abs(cfg["elevation"]) <= 175 else (0, 1, 0)
+            plotter.camera_position = [position, focal, up]
+            plotter.render()
+            images.append(np.asarray(plotter.screenshot(return_img=True))[:, :, :3])
+        return images
+    finally:
+        plotter.close()
+
+
 def _save_glm_brain(
     raw_haemo: mne.io.Raw,
     results_df: "pd.DataFrame",
@@ -187,14 +266,11 @@ def _save_glm_brain(
     title: str = "",
 ) -> str | None:
     try:
-        import pyvista as pv
-        pv.OFF_SCREEN = True
         from mne import EvokedArray, read_source_spaces
         from mne.source_estimate import stc_near_sensors
         from mne._fiff.constants import FIFF
         from mne.utils import get_subjects_dir
         import os
-        mne.viz.set_3d_backend('pyvistaqt')
     except ImportError:
         return None
 
@@ -223,8 +299,7 @@ def _save_glm_brain(
 
         coef_col = _coef_col(results_df)
 
-        # Replicate plot_glm_surface_projection internally so we can pass
-        # time_viewer=False, required for offscreen rendering (no iren available)
+        # the projection steps of plot_glm_surface_projection; the render is _render_activation
         if ch_col is not None:
             results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
         ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())
@@ -246,18 +321,7 @@ def _save_glm_brain(
             subjects_dir=subjects_dir, src=src, project=True, verbose=False,
         )
         with RENDER_LOCK:
-            brain = stc.plot(
-                src=src, subjects_dir=subjects_dir, hemi="both", surface="pial",
-                initial_time=0, clim=clim, size=size, colormap="RdBu_r",
-                background="w", colorbar=False, time_viewer=False, verbose=False,
-            )
-            view_images = []
-            for cfg in view_configs:
-                brain.show_view(azimuth=cfg['azimuth'], elevation=cfg['elevation'], distance=480)
-                if hasattr(brain, 'plotter'):
-                    brain.plotter.render()
-                view_images.append(brain.screenshot())
-            brain.close()
+            view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
 
         combined_img = np.hstack(view_images)
 
@@ -358,7 +422,7 @@ def _shared_clim(results_dict: "dict[str, pd.DataFrame]",
     if v <= 0 and mag.size:
         v = float(mag.max())
     if v <= 0:
-        # a zero-width scale makes stc.plot raise rather than draw a flat brain
+        # a flat run still gets a non-zero scale
         v = 1.0
     return dict(kind="value", pos_lims=(0, v / 2, v))
 

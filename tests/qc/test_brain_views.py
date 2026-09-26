@@ -114,3 +114,27 @@ def test_a_rejected_channel_reaches_the_figure_flagged_as_rejected(mini_bids, tm
     # S1_D1 couples well, so only the rejection can colour it red
     assert seen.get("S1_D1 hbo") is not None, "the rejected channel never reached the figure"
     assert not seen["S1_D1 hbo"]
+
+
+def test_the_superior_view_reads_like_the_flat_map_beside_it():
+    brain = load_mesh_traces()
+    verts = np.vstack([m.points for m in brain])
+    front, left = verts[verts[:, 1].argmax()], verts[verts[:, 0].argmin()]
+    lift = np.array([0.0, 0.0, 30.0])   # above the cortex, so the top-down camera sees both
+    markers = [(bv._spheres((front + lift)[None, :], 8.0), PURE["red"]),
+               (bv._spheres((left + lift)[None, :], 8.0), PURE["green"])]
+    plotter = bv._build_3d_scene(brain, markers)
+    try:
+        img = dict(zip(VIEW_LABELS, bv._render_views(plotter)))["Superior"]
+    finally:
+        plotter.close()
+
+    def centre(name):
+        on = np.array(PURE[name]) > 0
+        hit = np.all(img[:, :, on] > 150, axis=2) & np.all(img[:, :, ~on] < 80, axis=2)
+        ys, xs = np.nonzero(hit)
+        return ys.mean() / img.shape[0], xs.mean() / img.shape[1]
+
+    # nose up and the subject's left on the left, as the flat map draws them
+    assert centre("red")[0] < 0.5
+    assert centre("green")[1] < 0.5
