@@ -83,3 +83,21 @@ def test_conditions_render_from_parallel_threads(subjects_dir):
     assert all(figures)
     img = np.array(Image.open(io.BytesIO(base64.b64decode(figures[0]))).convert("RGB"))
     assert img.shape[1] > img.shape[0]
+
+
+def test_a_failed_condition_render_is_listed_on_the_run_page(mini_bids, tmp_path, monkeypatch):
+    from fnirs_pipe.cli.run import main
+
+    def broken(*a, **k):
+        raise RuntimeError("renderer unavailable")
+
+    monkeypatch.setattr(glm_figures, "_render_activation", broken)
+    out = tmp_path / "out"
+    main([str(mini_bids), str(out), "participant", "--participant-label", "01",
+          "--task-label", "tapping", "--skip-bids-validation", "--dpf", "6",
+          "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+          "--resp-l-freq", "0.1", "--resp-h-freq", "0.4", "--mode", "glm",
+          "--hrf-model", "glover", "--drift-model", "cosine", "--drift-high-pass", "0.01",
+          "--stim-dur", "5", "--noise-model", "ols"])
+    pages = "".join(p.read_text(encoding="utf-8") for p in (out / "sub-01").glob("*_report.html"))
+    assert "GLM activation panel (tapping): renderer unavailable" in pages

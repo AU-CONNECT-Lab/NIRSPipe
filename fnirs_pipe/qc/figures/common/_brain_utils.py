@@ -24,7 +24,7 @@ VIEW_LABELS = ["Frontal", "Left Lateral", "Superior"]
 RENDER_LOCK = threading.Lock()
 
 
-def load_mesh_traces() -> list:
+def load_brain_meshes() -> list:
     """fsaverage5 pial surface, left and right, as pyvista meshes in mm."""
     import pyvista as pv
     from nilearn import datasets, surface as surf

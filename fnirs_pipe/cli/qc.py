@@ -373,6 +373,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     hr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    hr.add_argument("analysis_level", choices=["group"],
+                    help="Always `group`: every metric here needs both members present.")
     hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
                     help="Differential pathlength factor. One value or one per wavelength.")
     hr.add_argument("--cardiac-l-freq", type=float, required=True,
@@ -423,5 +425,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
-    kw = {k: v for k, v in vars(args).items() if k != "func"}
+    # analysis_level only gives hyper-raw the BIDS App shape; `group` is its one value
+    kw = {k: v for k, v in vars(args).items() if k not in ("func", "analysis_level")}
     args.func(**kw)

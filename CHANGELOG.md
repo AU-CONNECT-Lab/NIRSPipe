@@ -6,51 +6,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-26
+
 ### Added
 - `fnirs-pipe` output names its input dataset under `SourceDatasets` in `dataset_description.json`
 - `fnirs-hyper-groupnull` tests every crossed channel pairing across occasions, as its own family, when the null was drawn crossed
-- `fnirs-hyper --wtc-whiten SECONDS` prewhitens long channels before the coherence, one fixed AR order for both members; off by default
-- `fnirs-hyper-pairnull` writes per-condition arrow levels and an ISC `null_abs_p95` column, which the next `fnirs-hyper` run uses on condition pages
-- `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
 
 ### Changed
+- **Breaking**: `fnirs-qc hyper-raw` takes the analysis level `group` after its two directories, as `fnirs-hyper` does
+- The brain figures stop with a message when fsaverage cannot be loaded, instead of drawing optodes off the brain
 - **Breaking**: commands reading BIDS check their input with bids-validator when installed and stop on errors; `--skip-bids-validation` skips that check
 - Files BIDS does not recognise are left out of the input even with `--skip-bids-validation`
 - **Breaking**: `fnirs-hyper` crosses channels by default (`--no-wtc-channel-cross`); the phase-scrambled null follows that unless set
 - **Breaking**: `fnirs-hyper-pairnull` draws its null over every channel pairing by default (`--no-wtc-pair-cross`)
 - The Hyper Analysis page's crossing switches start on and pass their off state explicitly
-- **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
-- Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
-- Code comments and docstrings say what the code does, without design arguments, measured values or rejected alternatives
-- The Hyper Analysis page names each command by its console script, not the retired subcommand names
-- Help, GUI and report text say what each option or panel does, without design rationale or references to other tools
-- **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
-- A null level on disk is used only when its sidecar matches the run; each page names the null its arrows and chords used
-- WTC table sidecars record `phase_level_source`, and saved maps get a sidecar that `fnirs-hyper band` carries onto its tables
-- Conditions whose file names would collide get no subject report pages, with an error naming them; a dyad run refuses them, and a condition named `all`
-- **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
-- **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
-- `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked
-- **Breaking**: the append-only rating logs are `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`, not at the tree root
-- **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
-- 128 function-level imports of modules their file already loads move to module level; startup is unchanged
-- `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
 - The 3D brain views render off-screen with pyvista instead of plotly and kaleido, so no browser is needed; a failed render is listed on the run page
 - The GLM activation figures render off-screen with pyvista instead of a Qt window, matching the previous images
 - `nibabel` is a declared dependency; the activation renders read FreeSurfer curvature with it
 - The superior brain view puts the nose up and the subject's left on the left, as the optode flat map does
-- A further 41 cheap package imports move to module level; no command's startup loads anything more
-- Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
-- **Breaking**: `fnirs-prep crop` refuses several segments without a `task` column instead of naming them `_seg-<NN>`; the GUI segment tables gain a Task column
-- Removed the unused whole-run re-pairing helpers `_draw_pairs` and `condition_coverage`
-- `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
+- `fnirs-prep` and `fnirs-qc` commands reading BIDS stop when the output directory is the input, except `crop --input-desc`
+- A GLM activation render that fails is listed on the run page instead of being dropped silently
 - `fnirs-pipe` stops when the output directory is the input directory or the work directory lies inside it
 - `fnirs-pipe --participant-label` naming no participant in the dataset stops the run instead of exiting 0
 - The brain view labelled Frontal showed the back of the brain
 - The 3D brain views drew rejected channels in their SCI colour rather than as rejected
 - `--mode glm` with `--n-jobs` above 1 hung or crashed while drawing the activation figures
+
+## [0.52.0] - 2026-09-25
+
+### Fixed
 - Non-finite samples are zeroed at the OD step and their channels marked bad; they used to crash post inside the GLM
 - A cardiac band at or above the recording's Nyquist frequency is refused, naming `--cardiac-h-freq`; QC used to score every channel's SCI as 1.0
 - **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only
@@ -59,22 +45,55 @@ All notable changes to this project will be documented in this file.
 - `run_glm_pipeline` asked to write outputs without `source_path` refuses before fitting; it used to fail at output naming
 - `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions or runs into one draw; a draw is now named by subject, session and run
 - `fnirs-hyper-groupnull` failed on a channel with no occasion holding both a real value and draws; that channel is now left out
+
+## [0.51.0] - 2026-09-25
+
+### Changed
+- **Breaking**: `fnirs-hyper-groupnull --task` is required; it had a study-specific default
+- Comments, docstrings, help and report text no longer carry study-specific numbers, change history or documentation links
+- Code comments and docstrings say what the code does, without design arguments, measured values or rejected alternatives
+- The Hyper Analysis page names each command by its console script, not the retired subcommand names
+- Help, GUI and report text say what each option or panel does, without design rationale or references to other tools
+
+### Fixed
 - The raw viewer never showed its before/after motion note or its read-only channel-decisions hint; both had lost their element
+
+## [0.50.0] - 2026-09-23
+
+### Added
+- `fnirs-hyper --wtc-whiten SECONDS` prewhitens long channels before the coherence, one fixed AR order for both members; off by default
+- `fnirs-hyper-pairnull` writes per-condition arrow levels and an ISC `null_abs_p95` column, which the next `fnirs-hyper` run uses on condition pages
+- `fnirs-log rebuild` builds a new database from every JSONL log, archived ones included, leaving the old one untouched
+
+### Changed
+- **Breaking**: `fnirs-log merge` merges only finished executions, moves their logs to `archived/`, and backs up the database first
+- A null level on disk is used only when its sidecar matches the run; each page names the null its arrows and chords used
+- WTC table sidecars record `phase_level_source`, and saved maps get a sidecar that `fnirs-hyper band` carries onto its tables
+- Conditions whose file names would collide get no subject report pages, with an error naming them; a dyad run refuses them, and a condition named `all`
+
+### Fixed
 - `fnirs-qc hyper-raw` failed on recordings whose aligned window ended a float round-off past the last sample
 - `fnirs-hyper` and its companions' help and merge hint named the old `run` / `band` / `merge` / `pair-null` subcommands
-- The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling
-- Two runs in one raw report wrote their condition pages to one file
-- Raw condition pages dropped every panel redrawn for the condition as a leak
-- The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
-- A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
+- Condition pages captioned arrows drawn against the phase-scrambled null as the Monte Carlo level
+- `fnirs-log merge` inserted every row again each time it ran
+- `fnirs-hyper band` dropped every WTC parameter except the band and mask from its sidecars
+- The dyad index warned that each optional table the run did not write was unreadable
+- A dyad report's provenance diagram left out the phase-scrambled null table until the next run
+
+## [0.49.0] - 2026-09-23
+
+### Changed
+- **Breaking**: the append-only rating logs are `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`, not at the tree root
+- **Breaking**: `fnirs-prep crop` refuses several segments without a `task` column instead of naming them `_seg-<NN>`; the GUI segment tables gain a Task column
+- Removed the unused whole-run re-pairing helpers `_draw_pairs` and `condition_coverage`
+- `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
+
+### Fixed
 - Merging the per-pairing tables of groups of three or more wrote every pairing to one file; the merged name keeps `pair-`
 - `fnirs-prep crop` wrote two segments sharing a `task` label to one file; it now refuses them
 - The re-paired null cut every repeat of a condition from the stand-in's first block of it, not the matching one
 - A segment cropped from a recording kept the source's `TaskName` and `RecordingDuration` and recorded no source or window
 - `fnirs-hyper` reported a `StageError`, such as an optical-density `--desc`, as an unexpected error with a traceback
-- Condition pages captioned arrows drawn against the phase-scrambled null as the Monte Carlo level
-- `fnirs-log merge` inserted every row again each time it ran
-- `fnirs-hyper band` dropped every WTC parameter except the band and mask from its sidecars
 - `fnirs-hyper-band --wtc-suffix` is reduced to a valid `band-` value, and its help shows the real default
 - The `fnirs-hyper-merge` help lists what refuses a merge and what only warns
 - The raw viewer's condition pages name their channel-summary and trial tables `_qc`, as its run page does
@@ -82,6 +101,25 @@ All notable changes to this project will be documented in this file.
 - Without `--session-label`, `fnirs-pipe participant` wrote a session tree's outputs to `sub-<id>/nirs` with no `ses-`, one session overwriting another
 - The run report, the subject index and the rating server read and link each session's own `nirs/`
 - The generated reproduction script keeps each run's task, run and session in its file names, and its GLM step runs again
+
+## [0.48.0] - 2026-09-23
+
+### Changed
+- **Breaking**: the raw viewer's condition pages are `cond-<label>_desc-raw_report.html` under the run's own label; they swapped the condition into `task-`
+- **Breaking**: the dyad cohort page's figures are `desc-groups<panel>_nirs.html`, not `cohort_hyper_<panel>.html`
+- `.bidsignore` names the five JSON-only records (quality, ratings, channel decisions); every table stays checked
+- **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
+- 128 function-level imports of modules their file already loads move to module level; startup is unchanged
+- `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
+- A further 41 cheap package imports move to module level; no command's startup loads anything more
+- Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
+
+### Fixed
+- The subject index linked no raw condition page, looking for the pre-rename `desc-raw_nirs` spelling
+- Two runs in one raw report wrote their condition pages to one file
+- Raw condition pages dropped every panel redrawn for the condition as a leak
+- The dyad rating server read its task as `unknown`, so channel decisions went to a file the raw page never reads
+- A collapsed provenance box counted no conditions, the `cond-` entity being unknown to its parser
 - The GLM tables go to the session folder their run's snirfs use, not `sub-<id>/nirs`
 - `fnirs-qc provenance` refreshes the graph a dyad report links, and finds subjects with sessions
 - The dyad quality loader read SCI from the per-channel table as comma separated and silently got none
@@ -91,8 +129,6 @@ All notable changes to this project will be documented in this file.
 - A member two groups share is refused by `fnirs-prep align` instead of being silently re-cut by the second group
 - On a tree both commands wrote, no page linked the raw condition pages; the index's Conditions rows now list them beside the pipeline's
 - `fnirs-pipe group` warned of a split tree whenever a `qc/` or `derivatives/` folder existed, and looked for pre-rename record names
-- The dyad index warned that each optional table the run did not write was unreadable
-- A dyad report's provenance diagram left out the phase-scrambled null table until the next run
 
 ## [0.47.0] - 2026-09-23
 

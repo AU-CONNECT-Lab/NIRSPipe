@@ -345,7 +345,7 @@ fnirs-qc prep-raw BIDS_DIR OUTPUT_DIR --participant-label LABEL [LABEL ...]
                   [--short-max-dist/--long-min-dist/--long-max-dist MM]
                   [--skip-bids-validation]
 
-fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR --pairs-csv PATH
+fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR group --pairs-csv PATH
                    --dpf FLOAT [FLOAT ...]
                    --cardiac-l-freq FLOAT --cardiac-h-freq FLOAT
                    [--group-id / --task-label / --session-label]

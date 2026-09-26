@@ -137,11 +137,13 @@ PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
 SAME_DIR_COMMANDS = {
     "crop":           ("prep", ["crop", "{b}", "{b}", "--participant-label", "01", "--tmin", "0"]),
     "align":          ("prep", ["align", "{b}", "{b}", "--group-csv", "{b}/pairs.csv"]),
-    "markers export": ("prep", ["edit-markers", "export", "{b}", "{b}", "--participant-label", "01"]),
+    "markers export": ("prep", ["edit-markers", "export", "{b}", "{b}",
+                                "--participant-label", "01"]),
     "markers apply":  ("prep", ["edit-markers", "apply", "{b}", "{b}", "--participant-label", "01",
                                 "--shift", "1"]),
     "prep-raw":       ("qc", ["prep-raw", "{b}", "{b}", "--participant-label", "01", *PHYS]),
-    "hyper-raw":      ("qc", ["hyper-raw", "{b}", "{b}", "--pairs-csv", "{b}/pairs.csv", *PHYS]),
+    "hyper-raw":      ("qc", ["hyper-raw", "{b}", "{b}", "group", "--pairs-csv", "{b}/pairs.csv",
+                                *PHYS]),
 }
 
 

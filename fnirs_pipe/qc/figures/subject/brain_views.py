@@ -19,7 +19,7 @@ from PIL import Image as _PILImage
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common._brain_utils import (
-    CAMERAS, RENDER_LOCK, VIEW_LABELS, load_mesh_traces, to_mni,
+    CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, to_mni,
 )
 from fnirs_pipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
 
@@ -123,7 +123,7 @@ def _spheres(points: np.ndarray, radius: float):
         geom=pv.Sphere(radius=radius), scale=False, orient=False)
 
 
-def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
+def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
                  sci_threshold: float = SCI_PASS) -> list[tuple]:
     """S-D segments as one tube mesh per quality colour, plus optode spheres.
 
@@ -153,20 +153,20 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
         sources.setdefault(src_id, s)
         detectors.setdefault(det_id, d)
 
-    traces = []
+    meshes = []
     for color, points in groups.items():
         n = len(points) // 2
         lines = np.column_stack([np.full(n, 2), np.arange(0, 2 * n, 2), np.arange(1, 2 * n, 2)])
         segments = pv.PolyData(np.vstack(points), lines=lines.ravel())
-        traces.append((segments.tube(radius=_LINK_RADIUS), color))
+        meshes.append((segments.tube(radius=_LINK_RADIUS), color))
     for optodes, color, radius in ((sources, _SRC_COLOR, _SRC_RADIUS),
                                    (detectors, _DET_COLOR, _DET_RADIUS)):
         if optodes:
-            traces.append((_spheres(np.vstack(list(optodes.values())), radius), color))
-    return traces
+            meshes.append((_spheres(np.vstack(list(optodes.values())), radius), color))
+    return meshes
 
 
-def _channel_marker_trace(ch_names, coords_mni, good_mask) -> list[tuple]:
+def _channel_marker_meshes(ch_names, coords_mni, good_mask) -> list[tuple]:
     """Fallback when optode positions are unavailable: spheres at channel midpoints."""
     good_mask = np.asarray(good_mask, bool)
     return [(_spheres(coords_mni[mask], _MARKER_RADIUS), color)
@@ -174,16 +174,16 @@ def _channel_marker_trace(ch_names, coords_mni, good_mask) -> list[tuple]:
             if mask.any()]
 
 
-def _build_3d_scene(mesh_traces, data_traces):
+def _build_3d_scene(brain_meshes, data_meshes):
     """Off-screen plotter holding the brain surface and the ``(mesh, colour)`` data."""
     import pyvista as pv
 
     plotter = pv.Plotter(off_screen=True, window_size=list(_VIEW_SIZE))
     plotter.set_background("white")
-    for mesh in mesh_traces:
+    for mesh in brain_meshes:
         plotter.add_mesh(mesh, color="#e8e8e8", smooth_shading=True,
                          ambient=0.3, diffuse=0.75, specular=0.12)
-    for mesh, color in data_traces:
+    for mesh, color in data_meshes:
         plotter.add_mesh(mesh, color=color, smooth_shading=True)
     return plotter
 
@@ -216,22 +216,22 @@ def quality_brain_views(
     A failed render raises, so the report lists it rather than leaving the panel blank.
     """
     good_by_base = {n.split(" ")[0]: bool(g) for n, g in zip(ch_names, good_mask)}
-    data_traces: list = []
+    data_meshes: list = []
     if raw is not None:
         try:
-            data_traces = _link_traces(raw, sci_scores or {}, good_by_base,
+            data_meshes = _link_meshes(raw, sci_scores or {}, good_by_base,
                                        sci_threshold)
         except Exception as exc:
             logger.warning("channel links failed: %s", exc)
-    if not data_traces:
-        data_traces = _channel_marker_trace(
+    if not data_meshes:
+        data_meshes = _channel_marker_meshes(
             ch_names,
             to_mni(coords_head, raw.info if raw is not None else None),
             good_mask,
         )
 
     with RENDER_LOCK:
-        plotter = _build_3d_scene(load_mesh_traces(), data_traces)
+        plotter = _build_3d_scene(load_brain_meshes(), data_meshes)
         try:
             imgs = _render_views(plotter)
         finally:

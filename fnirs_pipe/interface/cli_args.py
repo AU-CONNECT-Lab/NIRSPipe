@@ -264,6 +264,7 @@ def build_raw_qc_args(command: str, opts: dict) -> list[str]:
             args.append("--epoch-qc")
         return args
 
+    args.append("group")
     args += _text("--pairs-csv", opts.get("pairs_csv"))
     args += _text("--group-id", opts.get("group_id"))
     args += _screening(opts)

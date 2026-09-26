@@ -244,7 +244,7 @@ def test_prep_participant_label_required():
 
 def test_qc_subcommands_and_fmin_dest():
     args = qc_cli._build_parser().parse_args(
-        ["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0",
+        ["hyper-raw", "/b", "/o", "group", "--pairs-csv", "p.csv", "--dpf", "6.0",
          "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
          "--fmin", "0.02", "--fmax", "0.2"]
     )
@@ -352,7 +352,8 @@ def test_qc_provenance_accepts_no_options():
 @pytest.mark.parametrize("argv", [
     pytest.param(["prep-raw", "/b", "/o", "--participant-label", "01", "--dpf", "6.0"],
                  id="prep-raw"),
-    pytest.param(["hyper-raw", "/b", "/o", "--pairs-csv", "p.csv", "--dpf", "6.0"], id="hyper-raw"),
+    pytest.param(["hyper-raw", "/b", "/o", "group", "--pairs-csv", "p.csv", "--dpf", "6.0"],
+                 id="hyper-raw"),
 ])
 def test_cardiac_band_stays_required(argv, capsys):
     # The band is population-dependent and drives SCI, PSP and Cardiac Power. A default
