@@ -22,7 +22,7 @@ from matplotlib.colors import Normalize
 
 from fnirs_pipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._brain_utils import to_head
+from fnirs_pipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
 from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 
 if TYPE_CHECKING:
@@ -245,21 +245,21 @@ def _save_glm_brain(
             distance=0.03, mode="weighted", surface="pial",
             subjects_dir=subjects_dir, src=src, project=True, verbose=False,
         )
-        brain = stc.plot(
-            src=src, subjects_dir=subjects_dir, hemi="both", surface="pial",
-            initial_time=0, clim=clim, size=size, colormap="RdBu_r",
-            background="w", colorbar=False, time_viewer=False, verbose=False,
-        )
-
-        view_images = []
-        for cfg in view_configs:
-            brain.show_view(azimuth=cfg['azimuth'], elevation=cfg['elevation'], distance=480)
-            if hasattr(brain, 'plotter'):
-                brain.plotter.render()
-            view_images.append(brain.screenshot())
+        with RENDER_LOCK:
+            brain = stc.plot(
+                src=src, subjects_dir=subjects_dir, hemi="both", surface="pial",
+                initial_time=0, clim=clim, size=size, colormap="RdBu_r",
+                background="w", colorbar=False, time_viewer=False, verbose=False,
+            )
+            view_images = []
+            for cfg in view_configs:
+                brain.show_view(azimuth=cfg['azimuth'], elevation=cfg['elevation'], distance=480)
+                if hasattr(brain, 'plotter'):
+                    brain.plotter.render()
+                view_images.append(brain.screenshot())
+            brain.close()
 
         combined_img = np.hstack(view_images)
-        brain.close()
 
         import matplotlib.pyplot as plt
         fig_width = (size[0] * len(view_configs)) / 100

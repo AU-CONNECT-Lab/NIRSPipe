@@ -19,7 +19,7 @@ dependencies = [
     "pandas>=2.0",
     "jinja2>=3.1",
     "plotly>=5.18",
-    "kaleido",            # plotly static PNG export
+    "pyvista>=0.43",      # off-screen 3D brain renders
     "matplotlib>=3.8",    # every static QC panel; imported at module level
     "pillow>=10.0",       # stitches the rendered brain views side by side
     "joblib>=1.3",        # parallel dispatch (--n-jobs)

@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `fnirs-prep align` records each member's offset in its own `_nirs.json` and no longer writes `align-offsets.tsv`
 - 128 function-level imports of modules their file already loads move to module level; startup is unchanged
 - `mne_nirs` is imported only when a SNIRF is written; `fnirs-hyper --help` takes 0.9 s instead of 2.3 s
+- The 3D brain views render off-screen with pyvista instead of plotly and kaleido, so no browser is needed; a failed render is listed on the run page
 - A further 41 cheap package imports move to module level; no command's startup loads anything more
 - Provenance node labels read every entity, so a table's label names its measure and slices instead of repeating the filename
 - **Breaking**: `fnirs-prep crop` refuses several segments without a `task` column instead of naming them `_seg-<NN>`; the GUI segment tables gain a Task column
@@ -35,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
+- The brain view labelled Frontal showed the back of the brain
 - Non-finite samples are zeroed at the OD step and their channels marked bad; they used to crash post inside the GLM
 - A cardiac band at or above the recording's Nyquist frequency is refused, naming `--cardiac-h-freq`; QC used to score every channel's SCI as 1.0
 - **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only

@@ -4,8 +4,8 @@ A channel is the source-detector segment, so quality is drawn on the link, not o
 a sphere at the channel midpoint. Colours follow the 2-D optode flat map so the
 two panels of the combined figure read the same way.
 
-Three camera perspectives (frontal, left lateral, superior) assembled into a
-single base64 PNG (no Plotly wrapper, which avoids large go.Image JSON overhead).
+Three camera perspectives (frontal, left lateral, superior) rendered off-screen and
+assembled into a single base64 PNG.
 """
 
 import base64
@@ -14,13 +14,13 @@ import re
 
 import mne
 import numpy as np
-import plotly.graph_objects as go
-import plotly.io as pio
 from PIL import Image as _PILImage
 
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.figures.common._brain_utils import CAMERAS, VIEW_LABELS, load_mesh_traces, to_mni
+from fnirs_pipe.qc.figures.common._brain_utils import (
+    CAMERAS, RENDER_LOCK, VIEW_LABELS, load_mesh_traces, to_mni,
+)
 from fnirs_pipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
 
 logger = get_logger("qc.figures.brain_views")
@@ -31,8 +31,12 @@ _BAD_COLOR  = "#e74c3c"
 _NA_COLOR   = "#95a5a6"
 # red source / blue detector, matching the 2-D flat map;
 # it re-uses the quality colours, but optodes are dots and channels are lines
-_SRC_COLOR, _SRC_EDGE = "#e74c3c", "#922b21"
-_DET_COLOR, _DET_EDGE = "#2980b9", "#1a5276"
+_SRC_COLOR = "#e74c3c"
+_DET_COLOR = "#2980b9"
+# drawn sizes, in mm on the fsaverage surface
+_LINK_RADIUS = 1.0
+_SRC_RADIUS, _DET_RADIUS, _MARKER_RADIUS = 3.0, 2.5, 3.0
+_VIEW_SIZE = (1400, 1120)
 
 _CH_RE = re.compile(r"(S\d+)[_\s]+(D\d+)", re.IGNORECASE)
 
@@ -112,9 +116,21 @@ def _collect_pairs(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> tup
     return ends, scis, goods
 
 
+def _spheres(points: np.ndarray, radius: float):
+    import pyvista as pv
+
+    return pv.PolyData(np.asarray(points, float)).glyph(
+        geom=pv.Sphere(radius=radius), scale=False, orient=False)
+
+
 def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
-                 sci_threshold: float = SCI_PASS) -> list[go.Scatter3d]:
-    """S-D segments grouped into one trace per quality colour, plus optode dots."""
+                 sci_threshold: float = SCI_PASS) -> list[tuple]:
+    """S-D segments as one tube mesh per quality colour, plus optode spheres.
+
+    Returns ``(mesh, colour)`` pairs.
+    """
+    import pyvista as pv
+
     ends, scis, goods = _collect_pairs(raw, sci_scores, good_by_base)
     if not ends:
         return []
@@ -123,7 +139,7 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
     flat = np.vstack([np.vstack(ends[p]) for p in pair_ids])
     mni  = to_mni(flat, raw.info)
 
-    groups: dict[str, dict[str, list]] = {}
+    groups: dict[str, list[np.ndarray]] = {}
     sources: dict[str, np.ndarray] = {}
     detectors: dict[str, np.ndarray] = {}
     for i, pair_id in enumerate(pair_ids):
@@ -131,75 +147,60 @@ def _link_traces(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
         vals = scis.get(pair_id)
         sci  = float(np.mean(vals)) if vals else None
         color = _link_color(sci, goods.get(pair_id), sci_threshold)
-        g = groups.setdefault(color, {"x": [], "y": [], "z": [], "t": []})
-        g["x"] += [float(s[0]), float(d[0]), None]
-        g["y"] += [float(s[1]), float(d[1]), None]
-        g["z"] += [float(s[2]), float(d[2]), None]
-        label = f"{pair_id}<br>SCI = " + (f"{sci:.3f}" if sci is not None else "N/A")
-        g["t"] += [label, label, None]
+        groups.setdefault(color, []).extend([s, d])
 
         src_id, det_id = pair_id.split("_")
         sources.setdefault(src_id, s)
         detectors.setdefault(det_id, d)
 
-    traces = [
-        go.Scatter3d(
-            x=g["x"], y=g["y"], z=g["z"], mode="lines",
-            line=dict(color=color, width=6),
-            text=g["t"], hoverinfo="text", showlegend=False,
-        )
-        for color, g in groups.items()
-    ]
-    optode_specs = (
-        (sources,   _SRC_COLOR, _SRC_EDGE, 5),
-        (detectors, _DET_COLOR, _DET_EDGE, 4),
-    )
-    for optodes, color, edge, size in optode_specs:
-        if not optodes:
-            continue
-        pos = np.vstack(list(optodes.values()))
-        traces.append(go.Scatter3d(
-            x=pos[:, 0].tolist(), y=pos[:, 1].tolist(), z=pos[:, 2].tolist(),
-            mode="markers",
-            marker=dict(size=size, color=color, opacity=1.0,
-                        line=dict(width=1.0, color=edge)),
-            text=list(optodes), hoverinfo="text", showlegend=False,
-        ))
+    traces = []
+    for color, points in groups.items():
+        n = len(points) // 2
+        lines = np.column_stack([np.full(n, 2), np.arange(0, 2 * n, 2), np.arange(1, 2 * n, 2)])
+        segments = pv.PolyData(np.vstack(points), lines=lines.ravel())
+        traces.append((segments.tube(radius=_LINK_RADIUS), color))
+    for optodes, color, radius in ((sources, _SRC_COLOR, _SRC_RADIUS),
+                                   (detectors, _DET_COLOR, _DET_RADIUS)):
+        if optodes:
+            traces.append((_spheres(np.vstack(list(optodes.values())), radius), color))
     return traces
 
 
-def _channel_marker_trace(ch_names, coords_mni, good_mask) -> go.Scatter3d:
-    """Fallback when optode positions are unavailable: dots at channel midpoints."""
-    return go.Scatter3d(
-        x=coords_mni[:, 0].tolist(),
-        y=coords_mni[:, 1].tolist(),
-        z=coords_mni[:, 2].tolist(),
-        mode="markers",
-        marker=dict(size=6, color=[_GOOD_COLOR if g else _BAD_COLOR for g in good_mask],
-                    opacity=0.95, line=dict(width=0.5, color="#333")),
-        text=ch_names,
-        hovertemplate="<b>%{text}</b><br>%{x:.1f}, %{y:.1f}, %{z:.1f} mm<extra></extra>",
-        showlegend=False,
-    )
+def _channel_marker_trace(ch_names, coords_mni, good_mask) -> list[tuple]:
+    """Fallback when optode positions are unavailable: spheres at channel midpoints."""
+    good_mask = np.asarray(good_mask, bool)
+    return [(_spheres(coords_mni[mask], _MARKER_RADIUS), color)
+            for mask, color in ((good_mask, _GOOD_COLOR), (~good_mask, _BAD_COLOR))
+            if mask.any()]
 
 
-def _build_3d_scene(mesh_traces, data_traces) -> go.Figure:
-    """Single-panel 3D figure used for static rendering."""
-    fig = go.Figure()
-    for mt in mesh_traces:
-        fig.add_trace(mt)
-    for tr in data_traces:
-        fig.add_trace(tr)
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(visible=False), yaxis=dict(visible=False),
-            zaxis=dict(visible=False), bgcolor="#ffffff",
-        ),
-        margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="#ffffff",
-        showlegend=False,
-    )
-    return fig
+def _build_3d_scene(mesh_traces, data_traces):
+    """Off-screen plotter holding the brain surface and the ``(mesh, colour)`` data."""
+    import pyvista as pv
+
+    plotter = pv.Plotter(off_screen=True, window_size=list(_VIEW_SIZE))
+    plotter.set_background("white")
+    for mesh in mesh_traces:
+        plotter.add_mesh(mesh, color="#e8e8e8", smooth_shading=True,
+                         ambient=0.3, diffuse=0.75, specular=0.12)
+    for mesh, color in data_traces:
+        plotter.add_mesh(mesh, color=color, smooth_shading=True)
+    return plotter
+
+
+def _render_views(plotter) -> list[np.ndarray]:
+    """One RGB screenshot per camera in ``CAMERAS``, each titled with its view label."""
+    center = np.asarray(plotter.center, float)
+    imgs = []
+    for direction, label in zip(CAMERAS, VIEW_LABELS):
+        eye = np.asarray(direction, float)
+        # any distance works: reset_camera keeps the direction and refits the scene
+        plotter.camera_position = [center + 500 * eye / np.linalg.norm(eye), center, (0, 0, 1)]
+        plotter.reset_camera()
+        title = plotter.add_text(label, position="upper_edge", font_size=14, color="black")
+        imgs.append(np.asarray(plotter.screenshot(return_img=True))[:, :, :3])
+        plotter.remove_actor(title)
+    return imgs
 
 
 def quality_brain_views(
@@ -209,13 +210,11 @@ def quality_brain_views(
     raw: mne.io.Raw | None = None,
     sci_scores: dict[str, float] | None = None,
     sci_threshold: float = SCI_PASS,
-) -> str | None:
-    """Render 3-view brain figure and return as base64 PNG string, or None on failure.
+) -> str:
+    """Render 3-view brain figure and return as base64 PNG string.
 
-    Avoids embedding go.Image traces in Plotly (which inflates HTML size significantly).
+    A failed render raises, so the report lists it rather than leaving the panel blank.
     """
-    mesh_traces = load_mesh_traces()
-
     good_by_base = {n.split(" ")[0]: bool(g) for n, g in zip(ch_names, good_mask)}
     data_traces: list = []
     if raw is not None:
@@ -225,32 +224,18 @@ def quality_brain_views(
         except Exception as exc:
             logger.warning("channel links failed: %s", exc)
     if not data_traces:
-        data_traces = [_channel_marker_trace(
+        data_traces = _channel_marker_trace(
             ch_names,
             to_mni(coords_head, raw.info if raw is not None else None),
             good_mask,
-        )]
+        )
 
-    fig_3d = _build_3d_scene(mesh_traces, data_traces)
-
-    scene_axis = dict(visible=False, showbackground=False, showgrid=False,
-                      showspikes=False, showline=False, zeroline=False)
-    scene_base = dict(xaxis=scene_axis, yaxis=scene_axis, zaxis=scene_axis,
-                      bgcolor="#ffffff")
-    imgs = []
-    for cam, label in zip(CAMERAS, VIEW_LABELS):
-        fig_3d.update_layout(scene=dict(**scene_base, camera=cam),
-                             title=label, title_x=0.5,
-                             title_font=dict(size=11))
+    with RENDER_LOCK:
+        plotter = _build_3d_scene(load_mesh_traces(), data_traces)
         try:
-            png = pio.to_image(fig_3d, format="png", width=700, height=560, scale=2)
-            arr = np.array(_PILImage.open(_io.BytesIO(png)))
-            imgs.append(arr)
-        except Exception as exc:
-            logger.warning("Static render failed (%s); panel skipped", exc)
-
-    if not imgs:
-        return None
+            imgs = _render_views(plotter)
+        finally:
+            plotter.close()
 
     trimmed = [_trim_white(a) for a in imgs]
     h = min(a.shape[0] for a in trimmed)
