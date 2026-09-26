@@ -1,8 +1,11 @@
 """Recordings that are wrong in the ways real acquisition goes wrong.
 
 Each case either runs to a sensible result or stops with an error that names the problem.
-Cases that currently do neither are not here; they are findings, recorded in the handoff.
 """
+
+import json
+import logging
+import warnings
 
 import mne
 import numpy as np
@@ -10,21 +13,34 @@ import pandas as pd
 import pytest
 from numpy.testing import assert_array_equal
 
-from fnirs_pipe.exceptions import AlignmentError, FilterDesignError
+from fnirs_pipe.exceptions import AlignmentError, FilterDesignError, StageError
 from fnirs_pipe.pipeline.denoise import filter_kwargs
 from fnirs_pipe.pipeline.glm import build_design_matrix
 from fnirs_pipe.pipeline.hyper.alignment import align_recordings
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
+from fnirs_pipe.pipeline.prep_pipeline import (
+    PrepConfig,
+    intensity_to_od,
+    mark_bad_channels,
+    run_prep,
+)
 
 from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.4)
 
 
-def _prep(raw, tmp_path):
+def _prep(raw, tmp_path, **overrides):
     config = PrepConfig(subject="01", dpf=[6.0], sci_threshold=0.8,
-                        motion_correction="none", **_BANDS)
+                        motion_correction="none", **_BANDS, **overrides)
     return run_prep(raw, config, tmp_path, source_entities={"task": "rest"})
+
+
+def _with(raw, edit):
+    data = raw.get_data()
+    edit(data)
+    out = mne.io.RawArray(data, raw.info, verbose="error")
+    return out.set_annotations(raw.annotations)
 
 
 # ---- prep on broken recordings ----
@@ -51,6 +67,57 @@ def test_a_recording_two_screening_windows_long_still_screens(tmp_path):
     assert _prep(raw, tmp_path).bad_channels == ["S3_D3 760", "S3_D3 850"]
 
 
+@pytest.mark.parametrize("value", [np.nan, np.inf])
+def test_a_non_finite_stretch_rejects_its_pair_and_no_longer_reaches_the_glm(tmp_path, value):
+    # before the fix prep passed the NaN through in a rejected channel and post died in KMeans
+    def spoil(data):
+        data[0, 100:200] = value
+
+    result = _prep(_with(synth_raw("01", "rest", bad_pair=None), spoil), tmp_path / "prep")
+    assert result.bad_channels == ["S1_D1 760", "S1_D1 850"]
+    assert np.isfinite(result.raw_haemo.get_data()).all()
+
+    sidecar = next((tmp_path / "prep").rglob("*desc-od_nirs.json"))
+    assert json.loads(sidecar.read_text())["non_finite_samples"]["S1_D1 760"] > 0
+
+    preproc = next((tmp_path / "prep").rglob("*desc-preproc_nirs.snirf"))
+    post = PostConfig(subject="01", high_pass=0.01, drift_model="polynomial", drift_order=1,
+                      short_channel="mean", **_BANDS)
+    residual = run_post(result.raw_haemo.copy(), post, tmp_path / "post", mode="denoise",
+                        source_entities={"task": "rest"}, source_path=preproc)[0]
+    good = [c for c in residual.ch_names if c not in residual.info["bads"]]
+    assert np.isfinite(residual.get_data(picks=good)).all()
+
+
+def test_a_finite_recording_records_no_non_finite_samples(tmp_path):
+    _prep(synth_raw("01", "rest"), tmp_path)
+    sidecar = next(tmp_path.rglob("*desc-od_nirs.json"))
+    assert "non_finite_samples" not in json.loads(sidecar.read_text())
+
+
+def test_non_finite_and_manual_marks_that_leave_nothing_name_both(tmp_path):
+    def spoil(data):
+        data[0, 100:200] = np.nan
+
+    raw = _with(synth_raw("01", "rest", bad_pair=None), spoil)
+    rest = sorted({c.rsplit(" ", 1)[0] for c in raw.ch_names} - {"S1_D1"})
+    with pytest.raises(StageError, match="--bad-channels and non-finite samples leave no usable"):
+        _prep(raw, tmp_path, bad_channels=rest)
+
+
+def test_manual_marks_alone_that_leave_nothing_still_say_so(tmp_path):
+    raw = synth_raw("01", "rest", bad_pair=None)
+    every = sorted({c.rsplit(" ", 1)[0] for c in raw.ch_names})
+    with pytest.raises(StageError, match="--bad-channels leaves no usable channel"):
+        _prep(raw, tmp_path, bad_channels=every)
+
+
+def test_a_cardiac_band_above_nyquist_is_refused_naming_the_flag():
+    od = intensity_to_od(synth_raw("01", "rest").resample(2.0))
+    with pytest.raises(ValueError, match=r"--cardiac-h-freq 1.5 Hz .* Nyquist frequency \(1 Hz\)"):
+        mark_bad_channels(od, 0.8, _BANDS["cardiac_l_freq"], _BANDS["cardiac_h_freq"])
+
+
 # ---- a filter longer than the recording ----
 
 def test_a_fir_longer_than_the_recording_is_refused_and_points_at_iir():
@@ -62,18 +129,53 @@ def test_the_iir_design_has_no_length_to_run_out_of():
     assert filter_kwargs(10.0, 600, 0.01, 0.2, method="iir")["method"] == "iir"
 
 
-# ---- events out of order ----
+# ---- events ----
+
+def _tapping_events(raw):
+    return pd.DataFrame({"trial_type": list(raw.annotations.description),
+                         "onset": raw.annotations.onset, "duration": 5.0})
+
+
+_DESIGN = dict(stim_dur=None, hrf_model="spm", drift_model="polynomial",
+               high_pass=None, drift_order=1)
+
 
 def test_event_order_does_not_change_the_design():
     raw = synth_raw("01", "tapping")
-    events = pd.DataFrame({"trial_type": list(raw.annotations.description),
-                           "onset": raw.annotations.onset,
-                           "duration": 5.0})
-    kwargs = dict(stim_dur=None, hrf_model="spm", drift_model="polynomial",
-                  high_pass=None, drift_order=1)
-    ordered = build_design_matrix(raw, events=events, **kwargs)
-    shuffled = build_design_matrix(raw, events=events.iloc[::-1].reset_index(drop=True), **kwargs)
+    events = _tapping_events(raw)
+    ordered = build_design_matrix(raw, events=events, **_DESIGN)
+    shuffled = build_design_matrix(raw, events=events.iloc[::-1].reset_index(drop=True), **_DESIGN)
     pd.testing.assert_frame_equal(ordered, shuffled)
+
+
+def test_a_repeated_trigger_is_dropped_rather_than_doubling_its_block(caplog):
+    raw = synth_raw("01", "tapping")
+    events = _tapping_events(raw)
+    doubled = pd.concat([events, events.iloc[[0]]], ignore_index=True)
+    with caplog.at_level(logging.WARNING), warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)       # nilearn's summing warning must not fire
+        design = build_design_matrix(raw, events=doubled, **_DESIGN)
+    pd.testing.assert_frame_equal(design, build_design_matrix(raw, events=events, **_DESIGN))
+    assert "dropped 1 duplicated event" in caplog.text
+
+
+def test_two_events_at_one_onset_with_different_durations_are_both_kept():
+    # not a duplicate by nilearn's own identity, so not ours to drop either
+    raw = synth_raw("01", "tapping")
+    events = _tapping_events(raw)
+    longer = events.iloc[[0]].assign(duration=10.0)
+    design = build_design_matrix(raw, events=pd.concat([events, longer], ignore_index=True),
+                                 **_DESIGN)
+    assert not design.equals(build_design_matrix(raw, events=events, **_DESIGN))
+
+
+def test_glm_mode_without_events_is_refused_and_points_at_denoise(tmp_path):
+    raw = synth_raw("01", "rest")
+    haemo = _prep(raw, tmp_path / "prep").raw_haemo
+    post = PostConfig(subject="01", hrf_model="spm", drift_model="polynomial", drift_order=1,
+                      stim_dur=5.0, **_BANDS)
+    with pytest.raises(ValueError, match="no events in the recording's annotations.*--mode denoise"):
+        run_post(haemo, post, tmp_path / "post", mode="glm", source_entities={"task": "rest"})
 
 
 # ---- hyperscanning alignment ----

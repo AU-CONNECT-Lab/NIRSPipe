@@ -18,6 +18,7 @@ from pathlib import Path
 
 import mne
 import mne.io
+import numpy as np
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import aux_table_path, write_aux_table
@@ -39,6 +40,17 @@ def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
     """Convert raw intensity signal to optical density."""
     od = mne.preprocessing.nirs.optical_density(raw)
     return stamp(od, stage="od", step="od_conversion", source=raw)
+
+def _zero_non_finite(raw: mne.io.Raw) -> dict[str, int]:
+    """Zero every NaN / inf sample in place and return how many each affected channel had.
+
+    _zero_non_finite(od_with_nan_stretch) -> {"S1_D1 760": 1000, "S1_D1 850": 1000}
+    """
+    data = raw.load_data()._data
+    bad = ~np.isfinite(data)
+    data[bad] = 0.0
+    return {raw.ch_names[i]: int(n) for i, n in enumerate(bad.sum(axis=1)) if n}
+
 
 # Step 2: SCI / bad channel pruning
 def compute_sci(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq: float) -> dict[str, float]:
@@ -84,6 +96,13 @@ def mark_bad_channels(
     them on their own.
     Raises StageError if the criteria leave no usable channel.
     """
+    nyquist = raw_od.info["sfreq"] / 2
+    if cardiac_h_freq >= nyquist:
+        raise ValueError(
+            f"--cardiac-h-freq {cardiac_h_freq:g} Hz is at or above the Nyquist frequency "
+            f"({nyquist:g} Hz) of this {raw_od.info['sfreq']:g} Hz recording, so the cardiac "
+            f"band cannot be filtered. Lower --cardiac-h-freq below {nyquist:g} Hz."
+        )
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
@@ -220,7 +239,13 @@ def run_prep(
     else:
         logger.info("sub-%s | step 1: OD conversion (%d ch)", config.subject, len(raw.ch_names))
         raw_od = intensity_to_od(raw)
-    _save(raw_od, "od")
+    # left in, a non-finite sample survives screening in a rejected channel and crashes the
+    # GLM later; zeroed and forced bad here, the channel is dropped like any other
+    non_finite = _zero_non_finite(raw_od)
+    if non_finite:
+        logger.warning("sub-%s | non-finite samples zeroed and their channels marked bad: %s",
+                       config.subject, non_finite)
+    _save(raw_od, "od", extra_provenance={"non_finite_samples": non_finite} if non_finite else None)
 
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
@@ -228,16 +253,22 @@ def run_prep(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
         min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
+    forced = _expand_bad_pairs(raw_od, list(non_finite))
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)
         if not manual:
             logger.warning("sub-%s | --bad-channels matched no channels: %s", config.subject, config.bad_channels)
         else:
             logger.info("sub-%s | manual bad channels: %s", config.subject, manual)
-        bad_chs = sorted(set(bad_chs) | set(manual))
+        forced += manual
+    if forced:
+        bad_chs = sorted(set(bad_chs) | set(forced))
         if len(bad_chs) == len(sci_scores):
+            why = [w for w, on in (("--bad-channels", config.bad_channels),
+                                   ("non-finite samples", non_finite)) if on]
             raise StageError(
-                f"--bad-channels leaves no usable channel: all {len(bad_chs)} are marked bad."
+                f"{' and '.join(why)} leave{'' if len(why) > 1 else 's'} no usable channel: "
+                f"all {len(bad_chs)} are marked bad."
             )
         raw_od.info["bads"] = bad_chs
     n_bad, n_total = len(bad_chs), len(sci_scores)

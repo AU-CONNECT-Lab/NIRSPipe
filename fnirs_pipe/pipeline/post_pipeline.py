@@ -333,6 +333,12 @@ def run_post(
         # the same table the design will be built from, so the warning cannot name a
         # condition the model does not carry
         design_events = read_table(config.events_path) if config.events_path else None
+        if not _design_onsets(result, design_events):
+            where = f"--events-path {config.events_path}" if config.events_path else "the recording's annotations"
+            raise ValueError(
+                f"GLM mode found no events in {where}, so the model would hold drift and "
+                f"confounds only. Use --mode denoise for confound regression without a task model."
+            )
         _warn_drift_absorbs_task(config, result, design_events)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,

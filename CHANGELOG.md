@@ -35,6 +35,10 @@ All notable changes to this project will be documented in this file.
 - `fnirs-prep crop` checks the segments table once before any subject, so a bad table is one error and writes nothing
 
 ### Fixed
+- Non-finite samples are zeroed at the OD step and their channels marked bad; they used to crash post inside the GLM
+- A cardiac band at or above the recording's Nyquist frequency is refused before screening, naming `--cardiac-h-freq`
+- **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only
+- Duplicated events (same trial_type, onset and duration) are dropped with a warning instead of summed into one doubled regressor
 - `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions or runs into one draw; a draw is now named by subject, session and run
 - `fnirs-hyper-groupnull` failed on a channel with no occasion holding both a real value and draws; that channel is now left out
 - The raw viewer never showed its before/after motion note or its read-only channel-decisions hint; both had lost their element

@@ -313,6 +313,13 @@ def build_design_matrix(
     # nilearn reads these four and warns about every other column a BIDS events.tsv carries
     events = events[[c for c in ("trial_type", "onset", "duration", "modulation")
                      if c in events.columns]]
+    # nilearn sums events sharing these three into one doubled regressor; a repeated
+    # hardware trigger is the usual cause, so keep one copy
+    duplicated = events.duplicated(subset=["trial_type", "onset", "duration"])
+    if duplicated.any():
+        logger.warning("dropped %d duplicated event(s) (same trial_type, onset and duration)",
+                       int(duplicated.sum()))
+        events = events[~duplicated]
 
     return make_first_level_design_matrix(
         frame_times,
