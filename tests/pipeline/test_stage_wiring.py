@@ -1,0 +1,111 @@
+"""Class A wiring: what reaches the library, and what each stage refuses.
+
+The math is MNE's; what is ours is that the DPF list arrives unchanged and in order, that a
+stage handed the wrong domain stops instead of converting garbage, and that the bandpass
+cutoffs are not swapped on their way to the filter.
+"""
+
+import mne
+import numpy as np
+import pytest
+from numpy.testing import assert_allclose
+
+from fnirs_pipe.pipeline.denoise import bandpass_filter
+from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
+from fnirs_pipe.utils.lineage import lineage_of
+
+from tests._synth import synth_raw
+
+
+@pytest.fixture(scope="module")
+def intensity():
+    return synth_raw("01", "rest")
+
+
+@pytest.fixture(scope="module")
+def od(intensity):
+    return intensity_to_od(intensity.copy())
+
+
+# ---- DPF reaches Beer-Lambert ----
+
+def _captured_ppf(monkeypatch, od, dpf):
+    seen = {}
+
+    def fake(raw, ppf):
+        seen["ppf"] = ppf
+        return raw.copy()
+
+    monkeypatch.setattr(mne.preprocessing.nirs, "beer_lambert_law", fake)
+    od_to_haemo(od.copy(), dpf=dpf)
+    return seen["ppf"]
+
+
+def test_one_dpf_is_passed_as_a_scalar(monkeypatch, od):
+    assert _captured_ppf(monkeypatch, od, [6.0]) == 6.0
+
+
+def test_a_dpf_per_wavelength_is_passed_whole_and_in_order(monkeypatch, od):
+    assert _captured_ppf(monkeypatch, od, [6.0, 5.2]) == [6.0, 5.2]
+
+
+def test_one_dpf_and_the_same_dpf_twice_are_the_same_conversion(od):
+    assert_allclose(od_to_haemo(od.copy(), [6.0]).get_data(),
+                    od_to_haemo(od.copy(), [6.0, 6.0]).get_data(), rtol=1e-12)
+
+
+def test_the_order_of_two_dpfs_matters(od):
+    # control for the in-order test above: a swap that changed nothing would make it vacuous
+    a = od_to_haemo(od.copy(), [6.0, 5.0]).get_data()
+    b = od_to_haemo(od.copy(), [5.0, 6.0]).get_data()
+    assert not np.allclose(a, b)
+
+
+# ---- each stage refuses the wrong domain ----
+
+def test_od_conversion_refuses_data_that_is_already_od(od):
+    with pytest.raises(RuntimeError, match="continuous wave"):
+        intensity_to_od(od.copy())
+
+
+def test_beer_lambert_refuses_raw_intensity(intensity):
+    with pytest.raises(RuntimeError, match="optical density"):
+        od_to_haemo(intensity.copy(), [6.0])
+
+
+def test_beer_lambert_refuses_haemoglobin(od):
+    haemo = od_to_haemo(od.copy(), [6.0])
+    with pytest.raises(RuntimeError, match="optical density"):
+        od_to_haemo(haemo, [6.0])
+
+
+# ---- the bandpass cutoffs are not swapped ----
+
+SFREQ = 10.0
+
+
+def _tones(*freqs):
+    t = np.arange(int(600 * SFREQ)) / SFREQ
+    names = [f"S{i + 1}_D{i + 1} hbo" for i in range(len(freqs))]
+    data = np.vstack([np.sin(2 * np.pi * f * t) for f in freqs])
+    return mne.io.RawArray(data, mne.create_info(names, SFREQ, ["hbo"] * len(freqs)),
+                           verbose="error")
+
+
+def _rms(x):
+    return float(np.sqrt(np.mean(x ** 2)))
+
+
+def test_the_passband_keeps_its_tone_and_both_stopbands_lose_theirs():
+    # one tone per channel: 0.25 Hz inside 0.1-0.5, 0.02 below it, 2 Hz above it
+    raw = bandpass_filter(_tones(0.25, 0.02, 2.0), l_freq=0.1, h_freq=0.5)
+    edge = int(60 * SFREQ)                            # clear of the filter's start-up
+    kept, below, above = raw.get_data()[:, edge:-edge]
+    assert_allclose(_rms(kept), 1 / np.sqrt(2), rtol=0.02)
+    assert _rms(below) < 0.01
+    assert _rms(above) < 0.01
+
+
+def test_the_stamp_records_the_cutoffs_the_filter_was_given():
+    params = lineage_of(bandpass_filter(_tones(0.25), l_freq=0.1, h_freq=0.5)).params
+    assert (params["l_freq"], params["h_freq"]) == (0.1, 0.5)
