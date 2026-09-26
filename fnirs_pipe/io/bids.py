@@ -1,15 +1,88 @@
 """BIDS dataset querying and participants.tsv helpers."""
 
 import json
+import shutil
+import subprocess
+from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
 from bids import BIDSLayout
 
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("io.bids")
+
+_VALIDATOR_INSTALL = "deno install -A -g -n bids-validator jsr:@bids/validator"
+
 
 def get_layout(bids_dir: Path, validate: bool = True) -> BIDSLayout:
     """Return a pybids BIDSLayout for the dataset."""
     return BIDSLayout(str(bids_dir), validate=validate)
+
+
+def _validator_command() -> "list[str] | None":
+    """The installed BIDS validator, as an argv prefix, or None."""
+    exe = shutil.which("bids-validator")
+    if exe:
+        return [exe]
+    deno = shutil.which("deno")
+    if deno:
+        return [deno, "run", "-A", "jsr:@bids/validator"]
+    return None
+
+
+def _validator_errors(report: dict) -> "dict[str, list[str]]":
+    """``{error code: [locations]}`` from a validator's JSON report, either report format.
+
+    The schema validator lists every issue with a severity; the older one keeps errors in
+    their own list, each carrying the files it was found in.
+    """
+    issues = report.get("issues") or {}
+    errors: dict[str, list[str]] = defaultdict(list)
+    for issue in issues.get("issues") or []:
+        if issue.get("severity") == "error":
+            errors[issue.get("code", "?")].append(issue.get("location") or "")
+    for issue in issues.get("errors") or []:
+        for f in issue.get("files") or [{}]:
+            path = ((f or {}).get("file") or {}).get("relativePath", "")
+            errors[issue.get("key", "?")].append(path)
+    return dict(errors)
+
+
+def validate_bids(bids_dir: Path) -> None:
+    """Check the input dataset with the BIDS validator, exiting non-zero on any error.
+
+    Carries on with a warning when no validator is installed, so a machine without one can
+    still run; ``--skip-bids-validation`` is how a user proceeds past a failing dataset.
+    """
+    cmd = _validator_command()
+    if cmd is None:
+        logger.warning("bids-validator not found, so the input was not validated; install it "
+                       "with `%s`, or pass --skip-bids-validation to silence this",
+                       _VALIDATOR_INSTALL)
+        return
+
+    logger.info("validating %s with bids-validator", bids_dir)
+    proc = subprocess.run([*cmd, str(bids_dir), "--json"], capture_output=True, text=True)
+    try:
+        errors = _validator_errors(json.loads(proc.stdout))
+    except (json.JSONDecodeError, AttributeError):
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
+        raise SystemExit("\n  ".join(
+            [f"Error: bids-validator did not produce a report (exit {proc.returncode}):", *tail])
+            + "\nPass --skip-bids-validation to run without it.")
+    if not errors:
+        return
+
+    lines = [f"Error: {bids_dir} is not valid BIDS "
+             f"({sum(map(len, errors.values()))} errors from bids-validator):"]
+    for code, where in sorted(errors.items()):
+        shown = ", ".join(w for w in where[:3] if w)
+        more = f" and {len(where) - 3} more" if len(where) > 3 else ""
+        lines.append(f"  {code} x{len(where)}: {shown}{more}")
+    lines.append("Fix the dataset, or pass --skip-bids-validation to run on it anyway.")
+    raise SystemExit("\n".join(lines))
 
 
 def write_bids_from_snirf(

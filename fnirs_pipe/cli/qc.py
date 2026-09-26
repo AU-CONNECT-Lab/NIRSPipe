@@ -36,6 +36,9 @@ def cmd_prep_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
@@ -49,7 +52,7 @@ def cmd_prep_raw(
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
         raise SystemExit(1)
 
-    layout = get_layout(bids_dir, validate=not skip_bids_validation)
+    layout = get_layout(bids_dir)
     sessions = session_label or [None]
     tasks    = task_label    or [None]
 
@@ -155,6 +158,9 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 
     # this writes group-*/ too, so the tree it lands in gets the same stamp fnirs-hyper
@@ -354,7 +360,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument(
         "--skip-bids-validation", "--skip_bids_validation",
         "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False)
+        action=argparse.BooleanOptionalAction, default=False,
+        help="Do not check the input with bids-validator.")
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",
@@ -381,7 +388,8 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument(
         "--skip-bids-validation", "--skip_bids_validation",
         "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False)
+        action=argparse.BooleanOptionalAction, default=False,
+        help="Do not check the input with bids-validator.")
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

@@ -51,6 +51,9 @@ def cmd_crop(
     band_fmin: float | None = None,
 ) -> None:
     """Crop SNIRFs and write to derivatives/cropped/."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     if segments_path is not None and (tmin is not None or tmax is not None):
         print("[error] --segments-path and --tmin/--tmax are mutually exclusive.", file=sys.stderr)
         raise SystemExit(1)
@@ -101,7 +104,7 @@ def cmd_crop(
             combine=combine,
             align=align, trigger_name=trigger_name,
             input_desc=input_desc,
-            validate=not skip_bids_validation,
+            validate=True,
             margin_s=margin,
         )
 
@@ -112,6 +115,9 @@ def cmd_align(
     bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     from fnirs_pipe.exceptions import AlignmentError
     from fnirs_pipe.io.derivatives import entity_of
     from fnirs_pipe.io.snirf import read_snirf
@@ -135,7 +141,7 @@ def cmd_align(
         print(f"Group {group_id} task-{task} ({len(group)} subjects)")
 
         try:
-            paths = member_snirfs(bids_dir, group, validate=not skip_bids_validation)
+            paths = member_snirfs(bids_dir, group, validate=True)
             raws = {sid: read_snirf(p, verbose=False) for sid, p in paths.items()}
         except Exception as exc:
             print(f"  [error] loading: {exc}", file=sys.stderr)
@@ -178,13 +184,16 @@ def cmd_markers_export(
     n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Export events.tsv(s) to out_dir for manual editing."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     from fnirs_pipe.pipeline.edit_markers import export_markers
 
     def _export_one(sub):
         return export_markers(
             bids_dir, sub, out_dir,
             ses=session_label, task=task_label, run=run_label,
-            validate=not skip_bids_validation,
+            validate=True,
         )
 
     _report(_run_parallel(_export_one, participant_label, n_jobs))
@@ -197,6 +206,9 @@ def cmd_markers_apply(
     rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Apply marker edits to runs and write to derivatives/marker_edited/."""
+    if not skip_bids_validation:
+        from fnirs_pipe.io.bids import validate_bids
+        validate_bids(bids_dir)
     ops = [x for x in (tsv, shift, set_duration, rename) if x is not None]
     if not ops:
         print("[error] Specify one of: --tsv, --shift, --set-duration, --rename", file=sys.stderr)
@@ -211,7 +223,7 @@ def cmd_markers_apply(
             bids_dir, output_dir, sub,
             ses=session_label, task=task_label, run=run_label,
             tsv=tsv, shift=shift, set_duration=set_duration, rename=rename,
-            validate=not skip_bids_validation,
+            validate=True,
         )
 
     _report(_run_parallel(_apply_one, participant_label, n_jobs))
@@ -233,7 +245,8 @@ def _add_selection(sp) -> None:
     sp.add_argument(
         "--skip-bids-validation", "--skip_bids_validation",
         "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False)
+        action=argparse.BooleanOptionalAction, default=False,
+        help="Do not check the input with bids-validator.")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -287,7 +300,8 @@ def _build_parser() -> argparse.ArgumentParser:
     align.add_argument(
         "--skip-bids-validation", "--skip_bids_validation",
         "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False)
+        action=argparse.BooleanOptionalAction, default=False,
+        help="Do not check the input with bids-validator.")
     align.set_defaults(func=cmd_align)
 
     markers = sub.add_parser("edit-markers", help="Edit markers in SNIRF files.")

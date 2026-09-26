@@ -17,7 +17,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.cli import _shared
-from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
+from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
 from fnirs_pipe.io.naming import report_name, roi_map_name
 from fnirs_pipe.io.derivatives import entity_of, write_bidsignore, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
@@ -144,12 +144,18 @@ def run_participant_level(args: dict[str, Any]) -> None:
         args.get("skip_bids_validation", False)
         or "bids-validation" in (args.get("ignore") or [])
     )
-    layout = get_layout(bids_dir, validate=not skip_validation)
-    # If no participant label provided, run on all subjects in BIDS dir. 
-    # Write dataset_description to output for provenance.
+    if not skip_validation:
+        validate_bids(bids_dir)
+    layout = get_layout(bids_dir)
+    # If no participant label provided, run on all subjects in BIDS dir.
     if not participant_label:
         participant_label = layout.get_subjects()
-    write_dataset_description(output_dir)
+    else:
+        missing = sorted(set(participant_label) - set(layout.get_subjects()))
+        if missing:
+            raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
+                             f"{', '.join(missing)}")
+    write_dataset_description(output_dir, source=bids_dir)
     write_bidsignore(output_dir)
 
     toml: dict[str, Any] = {}

@@ -242,7 +242,8 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Processing aspects to skip.")
     esc.add_argument("--skip-bids-validation", "--skip_bids_validation", "--skip_bids_validator",
                      dest="skip_bids_validation", action="store_true",
-                     help="Skip BIDS validation.")
+                     help="Do not check the input with bids-validator. Files BIDS does not "
+                          "recognise are left out either way.")
     esc.add_argument("--allow-cropped-input", action="store_true",
                      help="Run on a `fnirs-prep crop` tree, which is otherwise refused. "
                           "Every condition is then preprocessed on its own, and motion "
@@ -261,6 +262,20 @@ def _check_epoch_window(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _check_dirs(args: argparse.Namespace) -> None:
+    """Refuse to write into the input dataset: the run would stamp it as a derivative."""
+    bids_dir = args.bids_dir.resolve()
+    if args.output_dir.resolve() == bids_dir:
+        print(f"Error: the output directory is the input BIDS directory; choose another, "
+              f"e.g. {bids_dir / 'derivatives' / 'fnirs-pipe'}.", file=sys.stderr)
+        raise SystemExit(1)
+    work_dir = args.work_dir.resolve() if args.work_dir else None
+    if work_dir is not None and (work_dir == bids_dir or bids_dir in work_dir.parents):
+        print("Error: the work directory is inside the input BIDS directory; choose one "
+              "outside it.", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def _require(args: argparse.Namespace, *flags: str) -> None:
     """Exit non-zero naming the first flag the chosen level needs and did not get."""
     for flag in flags:
@@ -276,6 +291,7 @@ def main(argv: list[str] | None = None) -> None:
     # checked before the workflow import: a bad command line should not first pay for mne
     _require(args, *_LEVEL_REQUIRES[level])
     _check_epoch_window(args)
+    _check_dirs(args)
 
     from fnirs_pipe.cli.workflows import run_group_level, run_participant_level
 
