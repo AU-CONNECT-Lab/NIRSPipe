@@ -7,10 +7,13 @@ cutoffs are not swapped on their way to the filter.
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 from numpy.testing import assert_allclose
 
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.pipeline.denoise import bandpass_filter
+from fnirs_pipe.pipeline.glm import run_glm_pipeline
 from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from fnirs_pipe.utils.lineage import lineage_of
 
@@ -64,8 +67,13 @@ def test_the_order_of_two_dpfs_matters(od):
 # ---- each stage refuses the wrong domain ----
 
 def test_od_conversion_refuses_data_that_is_already_od(od):
-    with pytest.raises(RuntimeError, match="continuous wave"):
+    with pytest.raises(StageError, match="needs raw intensity.*got fnirs_od"):
         intensity_to_od(od.copy())
+
+
+def test_od_conversion_refuses_haemoglobin(od):
+    with pytest.raises(StageError, match="needs raw intensity.*got hbo, hbr"):
+        intensity_to_od(od_to_haemo(od.copy(), [6.0]))
 
 
 def test_beer_lambert_refuses_raw_intensity(intensity):
@@ -77,6 +85,23 @@ def test_beer_lambert_refuses_haemoglobin(od):
     haemo = od_to_haemo(od.copy(), [6.0])
     with pytest.raises(RuntimeError, match="optical density"):
         od_to_haemo(haemo, [6.0])
+
+
+# ---- GLM outputs need the file they came from ----
+
+def test_glm_outputs_without_a_source_file_are_refused_before_fitting(od, tmp_path):
+    haemo = od_to_haemo(od.copy(), [6.0])
+    with pytest.raises(ValueError, match="Pass source_path"):
+        run_glm_pipeline(haemo, stim_dur=None, hrf_model="spm", noise_model="ols",
+                         drift_model="polynomial", high_pass=None, drift_order=1,
+                         fir_delays=None, output_dir=str(tmp_path))
+
+
+def test_a_glm_that_writes_nothing_needs_no_source_file(od):
+    haemo = od_to_haemo(od.copy(), [6.0])
+    run_glm_pipeline(haemo, stim_dur=None, hrf_model="spm", noise_model="ols",
+                     drift_model="polynomial", high_pass=None, drift_order=1, fir_delays=None,
+                     events=pd.DataFrame(columns=["trial_type", "onset", "duration"]))
 
 
 # ---- the bandpass cutoffs are not swapped ----

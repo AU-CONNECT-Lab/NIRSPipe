@@ -422,6 +422,12 @@ def run_glm_pipeline(
     source_path: str | None = None,
     sep_bands=None,
 ) -> tuple:
+    if output_dir and not source_path:
+        raise ValueError(
+            "GLM outputs take their file name and their Sources entry from the file the data "
+            "was read from, and none is known. Pass source_path (to run_post: the "
+            "desc-preproc file the haemoglobin was read from)."
+        )
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
         events = read_table(events_path) if events_path else None

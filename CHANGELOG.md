@@ -39,6 +39,8 @@ All notable changes to this project will be documented in this file.
 - A cardiac band at or above the recording's Nyquist frequency is refused, naming `--cardiac-h-freq`; QC used to score every channel's SCI as 1.0
 - **Breaking**: `--mode glm` refuses a run with no events and points to `--mode denoise`; it used to fit drift only
 - Duplicated events (same trial_type, onset and duration) are dropped with a warning instead of summed into one doubled regressor
+- `intensity_to_od` refuses input that is not raw intensity with a `StageError` naming the channel types it got
+- `run_glm_pipeline` asked to write outputs without `source_path` refuses before fitting; it used to fail at output naming
 - `fnirs-hyper-pairnull` merged one person's stand-ins from different sessions or runs into one draw; a draw is now named by subject, session and run
 - `fnirs-hyper-groupnull` failed on a channel with no occasion holding both a real value and draws; that channel is now left out
 - The raw viewer never showed its before/after motion note or its read-only channel-decisions hint; both had lost their element

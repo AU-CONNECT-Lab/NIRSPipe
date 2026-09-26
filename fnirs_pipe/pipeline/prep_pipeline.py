@@ -38,6 +38,13 @@ logger = get_logger("pipeline.prep")
 # Step 1: OD conversion
 def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
     """Convert raw intensity signal to optical density."""
+    types = set(raw.get_channel_types())
+    if "fnirs_cw_amplitude" not in types:
+        raise StageError(
+            f"OD conversion needs raw intensity (fnirs_cw_amplitude channels), got "
+            f"{', '.join(sorted(types))}; data already in optical density goes straight to "
+            f"screening, which run_prep does on its own."
+        )
     od = mne.preprocessing.nirs.optical_density(raw)
     return stamp(od, stage="od", step="od_conversion", source=raw)
 
