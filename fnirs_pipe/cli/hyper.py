@@ -1005,12 +1005,8 @@ def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None
             raise SystemExit(1)
 
     kw = {k: v for k, v in vars(args).items() if k != "analysis_level"}
-    source = kw.get("derivatives_dir")
-    if source is not None and Path(source).resolve() == Path(kw["output_dir"]).resolve():
-        print("Error: the source and the output directory are the same. Each tree carries "
-              "its own dataset_description.json, so one path cannot be both.",
-              file=sys.stderr)
-        raise SystemExit(1)
+    if kw.get("derivatives_dir") is not None:
+        _shared.refuse_output_is_source(kw["derivatives_dir"], kw["output_dir"])
     func(**kw)
 
 

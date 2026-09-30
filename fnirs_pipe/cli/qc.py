@@ -161,10 +161,8 @@ def cmd_hyper_raw(
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
-    if derivatives_dir is not None and Path(derivatives_dir).resolve() == Path(output_dir).resolve():
-        print("Error: the output directory is the fnirs-pipe tree --derivatives-dir names; the "
-              "dyad reports go to the fnirs-hyper tree, a directory of its own.", file=sys.stderr)
-        raise SystemExit(1)
+    if derivatives_dir is not None:
+        _shared.refuse_output_is_source(derivatives_dir, output_dir)
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)

@@ -47,6 +47,15 @@ def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str) -> None:
         raise SystemExit(1)
 
 
+def refuse_output_is_source(derivatives_dir: Path, output_dir: Path) -> None:
+    """Exit non-zero when the fnirs-hyper tree would be the fnirs-pipe tree it reads."""
+    if Path(output_dir).resolve() == Path(derivatives_dir).resolve():
+        print("Error: the source and the output directory are the same. Each tree carries "
+              "its own dataset_description.json, so one path cannot be both.",
+              file=sys.stderr)
+        raise SystemExit(1)
+
+
 def add_separation_bands(container, note: str = "") -> None:
     """``--short-max-dist`` / ``--long-min-dist`` / ``--long-max-dist``, in mm.
 

@@ -57,5 +57,20 @@ def test_the_hyper_tree_cannot_be_the_fnirs_pipe_tree(mini_hyper_bids, tmp_path,
     with pytest.raises(SystemExit) as exit_:
         qc.main(_argv(bids, pairs, tree, "--derivatives-dir", str(tree)))
     assert exit_.value.code != 0
-    assert "fnirs-hyper tree" in capsys.readouterr().err
+    assert "are the same" in capsys.readouterr().err
+    assert not any(tree.iterdir())
+
+
+@pytest.mark.parametrize("entry", ["main", "main_pair_null"])
+def test_fnirs_hyper_refuses_to_write_into_the_tree_it_reads(entry, tmp_path, capsys):
+    from fnirs_pipe.cli import hyper
+
+    tree = tmp_path / "shared"
+    tree.mkdir()
+    (tmp_path / "pairs.csv").write_text("group_id,subject_id,task\nG01,sub-a,main\n")
+    with pytest.raises(SystemExit) as exit_:
+        getattr(hyper, entry)([str(tree), str(tree), "group",
+                               "--pairs-csv", str(tmp_path / "pairs.csv")])
+    assert exit_.value.code != 0
+    assert "are the same" in capsys.readouterr().err
     assert not any(tree.iterdir())
