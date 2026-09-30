@@ -9,7 +9,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.auxiliary import gyro_speed, read_aux_snirf
+from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -367,10 +367,10 @@ def _process_run(
     # named out here because the per-channel motion figures below read them too: a channel's
     # GVTD row has to be its own separation class's, the same blocks the carpet drew
     gvtd_blocks: "list[tuple[str, list[str]]]" = []
-    # the source snirf still carries its aux group; None where it has no gyroscope
-    imu = None
+    # the source snirf still carries its aux group; empty where it has no IMU
+    imu: dict = {}
     with guard("IMU", errors, label):
-        imu = gyro_speed(*read_aux_snirf(run["snirf_path"])[:2])
+        imu = imu_traces(*read_aux_snirf(run["snirf_path"])[:2])
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)

@@ -506,9 +506,9 @@ def carpet_window_spec(figure, t0: float, t1: float) -> dict:
     if not hasattr(figure, "update_yaxes"):
         return out
 
-    # the IMU row, where there is one, takes its own top by its own rule: not a GVTD unit
+    # each IMU row, where there is one, takes its own top by its own rule: not a GVTD unit
     for a in (figure.layout.annotations or ()):
-        if a.name != IMU_SLOT:
+        if not (a.name or "").startswith(IMU_SLOT):
             continue
         axis = str(a.yref).removesuffix(" domain")
         cut = []

@@ -174,53 +174,57 @@ def test_corrected_carpet_is_still_scaled_by_the_uncorrected_sd():
     assert np.median(z_after.std(axis=1) / z_before.std(axis=1)) == pytest.approx(0.5, abs=0.01)
 
 
-# ---- the IMU row ----------------------------------------------------------------------
+# ---- the IMU rows ---------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
 def imu_trace():
     t = np.arange(0.0, 200.0, 0.01)
     speed = np.abs(np.sin(2 * np.pi * 0.1 * t))
     speed[(t > 50) & (t < 51)] = 40.0
-    return t, speed
+    jerk = np.abs(np.cos(2 * np.pi * 0.1 * t))
+    jerk[(t > 120) & (t < 121)] = 90.0
+    return {"gyro": (t, speed), "accel": (t, jerk)}
 
 
-def _imu(fig):
-    return next(t for t in fig.data if t.name == "IMU")
+def _trace(fig, name):
+    return next(t for t in fig.data if t.name == name)
 
 
-def test_imu_sits_under_the_strip_and_over_the_gvtd_rows(imu_trace):
-    """The correction strip stays the top row; then the movement, the index computed from
-    the data, and the data."""
+def test_imu_rows_sit_under_the_strip_and_over_the_gvtd_rows(imu_trace):
+    """The correction strip stays the top row; then the movement, gyroscope first, then the
+    index computed from the data, and the data."""
     raw = synth_raw("01", "tapping", duration=200.0)
     fig = carpet_gvtd_figure(raw, raw.ch_names[:6], imu=imu_trace,
                              corrected_segments=CORRECTED_SPANS)
 
     assert _polygon(fig, "corrected").yaxis == "y"
-    assert _imu(fig).yaxis == "y2"
-    assert next(t for t in fig.data if t.name == "GVTD").yaxis == "y3"
-    assert any(a.name == IMU_SLOT for a in fig.layout.annotations)
+    assert _trace(fig, "gyroscope").yaxis == "y2"
+    assert _trace(fig, "accelerometer").yaxis == "y3"
+    assert _trace(fig, "GVTD").yaxis == "y4"
+    assert {a.name for a in fig.layout.annotations} >= {f"{IMU_SLOT}gyro", f"{IMU_SLOT}accel"}
     # the strip still sits directly on the row under it
     gap = fig.layout.yaxis.domain[0] - fig.layout.yaxis2.domain[1]
     assert 0 < gap < 0.01
 
 
-def test_no_imu_draws_no_row(imu_trace):
+def test_a_sensor_the_recording_lacks_gets_no_row(imu_trace):
     raw = synth_raw("01", "tapping", duration=200.0)
     without = carpet_gvtd_figure(raw, raw.ch_names[:6])
-    with_imu = carpet_gvtd_figure(raw, raw.ch_names[:6], imu=imu_trace)
+    gyro_only = carpet_gvtd_figure(raw, raw.ch_names[:6], imu={"gyro": imu_trace["gyro"]})
 
-    assert all(t.name != "IMU" for t in without.data)
-    # the row adds its own height rather than squeezing the others
-    assert with_imu.layout.height - without.layout.height >= _GVTD_ROW_PX
+    assert {t.name for t in without.data}.isdisjoint({"gyroscope", "accelerometer"})
+    assert "accelerometer" not in {t.name for t in gyro_only.data}
+    # a row adds its own height rather than squeezing the others
+    assert gyro_only.layout.height - without.layout.height >= _GVTD_ROW_PX
 
 
-def test_imu_row_keeps_the_jolt_and_stops_at_the_recording(imu_trace, od_with_cardiac):
+def test_imu_rows_keep_the_jolt_and_stop_at_the_recording(imu_trace, od_with_cardiac):
     """Max-pooled like the GVTD rows, so a one-second jolt survives the display cap, and
-    cut to the optical recording's span."""
+    cut to the optical recording's span. The per-channel figure carries both sensors."""
     ch = od_with_cardiac.ch_names[0]
     fig = build_motion_detail_figure(od_with_cardiac, od_with_cardiac, ch, imu=imu_trace)
-    row = _imu(fig)
+    gyro, accel = _trace(fig, "gyroscope"), _trace(fig, "accelerometer")
 
-    assert row.yaxis == "y"
-    assert np.max(row.y) == 40.0
-    assert np.max(row.x) <= od_with_cardiac.times[-1]
+    assert (gyro.yaxis, accel.yaxis) == ("y", "y2")
+    assert np.max(gyro.y) == 40.0 and np.max(accel.y) == 90.0
+    assert np.max(gyro.x) <= od_with_cardiac.times[-1]

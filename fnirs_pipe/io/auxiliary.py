@@ -156,8 +156,23 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
 
 # ---- motion ----
 
-# aux channel names carry no type field, so a gyroscope is recognised by name
+# aux channel names carry no type field, so a sensor is recognised by name
 GYRO_TOKEN = "gyro"
+ACCEL_TOKEN = "accel"
+
+
+def _axes(token: str, times: dict[str, np.ndarray], values: dict[str, np.ndarray]):
+    """Every axis whose name holds ``token``, on the first one's time base, or None.
+
+    An axis on its own time base is interpolated onto the first one's; that is upsampling
+    or a near-equal rate, so nothing is folded.
+    """
+    names = [n for n in values if token in n.lower()]
+    if not names:
+        return None
+    t = times[names[0]]
+    return t, [values[n] if np.array_equal(times[n], t) else np.interp(t, times[n], values[n])
+               for n in names]
 
 
 def gyro_speed(
@@ -170,24 +185,50 @@ def gyro_speed(
         {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} at 98.67 Hz  ->  (t, |omega|) at 98.67 Hz
 
     Each axis has its median taken off first, since a gyroscope at rest reads a small
-    constant offset rather than zero. An axis on its own time base is interpolated onto the
-    first one's; that is upsampling or a near-equal rate, so nothing is folded.
+    constant offset rather than zero.
     """
-    names = [n for n in values if GYRO_TOKEN in n.lower()]
-    if not names:
+    found = _axes(GYRO_TOKEN, times, values)
+    if found is None:
         return None
-    t = times[names[0]]
-    axes = [values[n] if np.array_equal(times[n], t) else np.interp(t, times[n], values[n])
-            for n in names]
+    t, axes = found
     return t, np.sqrt(sum((a - np.median(a)) ** 2 for a in axes))
 
 
-def table_gyro_speed(table: pd.DataFrame) -> tuple[np.ndarray, np.ndarray] | None:
-    """:func:`gyro_speed` over a table written by `write_aux_table`."""
+def accel_jerk(
+    times: dict[str, np.ndarray], values: dict[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Jerk magnitude over every accelerometer axis, at the aux rate, or None without one.
+
+    ::
+
+        {ACCEL_X_1, ACCEL_Y_1, ACCEL_Z_1} in m/s^2  ->  (t, |da/dt|) in m/s^3
+
+    The derivative is what removes gravity, which a still accelerometer reads as a constant
+    9.8 m/s^2 shared out over its axes by how the head is tilted. Differenced over the
+    recorded timestamps; the first sample repeats the second so the lengths match.
+    """
+    found = _axes(ACCEL_TOKEN, times, values)
+    if found is None or len(found[0]) < 2:
+        return None
+    t, axes = found
+    dt = np.diff(t)
+    jerk = np.sqrt(sum((np.diff(a) / dt) ** 2 for a in axes))
+    return t, np.r_[jerk[0], jerk]
+
+
+def imu_traces(
+    times: dict[str, np.ndarray], values: dict[str, np.ndarray],
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """``{"gyro": ..., "accel": ...}`` for whichever sensors the aux group carries."""
+    traces = {"gyro": gyro_speed(times, values), "accel": accel_jerk(times, values)}
+    return {name: trace for name, trace in traces.items() if trace is not None}
+
+
+def table_channels(table: pd.DataFrame) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    """A table written by `write_aux_table` as the ``(times, values)`` `read_aux_snirf` gives."""
     t = table[TIME_COLUMN].to_numpy(dtype=float)
     columns = [c for c in table.columns if c != TIME_COLUMN]
-    return gyro_speed({c: t for c in columns},
-                      {c: table[c].to_numpy(dtype=float) for c in columns})
+    return {c: t for c in columns}, {c: table[c].to_numpy(dtype=float) for c in columns}
 
 
 # ---- carrying aux through a crop ----
