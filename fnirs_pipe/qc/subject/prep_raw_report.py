@@ -9,6 +9,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.io.auxiliary import gyro_speed, read_aux_snirf
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -366,6 +367,10 @@ def _process_run(
     # named out here because the per-channel motion figures below read them too: a channel's
     # GVTD row has to be its own separation class's, the same blocks the carpet drew
     gvtd_blocks: "list[tuple[str, list[str]]]" = []
+    # the source snirf still carries its aux group; None where it has no gyroscope
+    imu = None
+    with guard("IMU", errors, label):
+        imu = gyro_speed(*read_aux_snirf(run["snirf_path"])[:2])
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
@@ -385,7 +390,7 @@ def _process_run(
                                                    "short": [tuple(sp) for sp in
                                                              windowed.get("spike_spans_short_s") or []] or None},
                                    raw_after=carpet_after,
-                                   channel_set=gvtd_set, blocks=gvtd_blocks)
+                                   channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu)
         fname = fig_name("carpet")
         # not written per condition: its GVTD filter, z-scale and colour scale are run-wide,
         # so one file is narrowed by URL fragment
@@ -490,6 +495,7 @@ def _process_run(
                               windowed.get("spike_spans_short_s") or []] or None,
                 },
                 gvtd_blocks=gvtd_blocks or None,
+                imu=imu,
             )
             if built:
                 saved = _section_motion_detail(

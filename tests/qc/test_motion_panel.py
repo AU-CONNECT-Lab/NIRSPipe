@@ -19,7 +19,8 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.qc.figures.common.motion_panel import (
-    _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure, carpet_gvtd_figure,
+    IMU_SLOT, _GVTD_ROW_PX, _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure,
+    carpet_gvtd_figure, carpet_z,
 )
 from fnirs_pipe.qc.metrics import _mask_to_segments
 from tests._synth import synth_raw
@@ -142,3 +143,83 @@ def test_maxpool_keeps_the_time_the_peak_happened():
 
     assert y_ds.max() == 5.0
     assert t_ds[y_ds.argmax()] == 2.0
+
+
+# ---- the carpet is detrended before it is scaled -----------------------------------------
+
+def test_carpet_grey_is_the_fluctuation_not_the_drift():
+    """A row that is a slow ramp plus a small oscillation reads as the oscillation. Scaled
+    without detrending, the ramp sets the SD and the row is a left-to-right gradient."""
+    t = np.linspace(0.0, 600.0, 6000)
+    wobble = np.sin(2 * np.pi * 0.05 * t)
+    data = np.vstack([10.0 * t / t[-1] + 0.1 * wobble])
+
+    z, t_ds, _ = carpet_z(data, t)
+
+    assert abs(np.corrcoef(z[0], t_ds)[0, 1]) < 0.1
+    assert np.corrcoef(z[0], wobble[::len(t) // len(t_ds)][:z.shape[1]])[0, 1] > 0.99
+
+
+def test_corrected_carpet_is_still_scaled_by_the_uncorrected_sd():
+    """Detrending does not change the before/after contract: the corrected side is divided by
+    the uncorrected SD, so a correction that halves the signal draws half as dark."""
+    t = np.linspace(0.0, 300.0, 3000)
+    rng = np.random.default_rng(0)
+    before = rng.standard_normal((4, t.size)) + np.linspace(0.0, 5.0, t.size)
+    after = 0.5 * before
+
+    z_before, _, stats = carpet_z(before, t, z_threshold=100.0)
+    z_after, _, _ = carpet_z(after, t, z_threshold=100.0, stats=stats)
+
+    assert np.median(z_after.std(axis=1) / z_before.std(axis=1)) == pytest.approx(0.5, abs=0.01)
+
+
+# ---- the IMU row ----------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def imu_trace():
+    t = np.arange(0.0, 200.0, 0.01)
+    speed = np.abs(np.sin(2 * np.pi * 0.1 * t))
+    speed[(t > 50) & (t < 51)] = 40.0
+    return t, speed
+
+
+def _imu(fig):
+    return next(t for t in fig.data if t.name == "IMU")
+
+
+def test_imu_is_the_first_row_of_the_carpet(imu_trace):
+    """Movement first, then the index computed from the data, then the data."""
+    raw = synth_raw("01", "tapping", duration=200.0)
+    fig = carpet_gvtd_figure(raw, raw.ch_names[:6], imu=imu_trace,
+                             corrected_segments=CORRECTED_SPANS)
+
+    assert _imu(fig).yaxis == "y"
+    assert _polygon(fig, "corrected").yaxis == "y2"
+    assert next(t for t in fig.data if t.name == "GVTD").yaxis == "y3"
+    assert any(a.name == IMU_SLOT for a in fig.layout.annotations)
+    # the strip still sits on the GVTD row under it, not on the IMU row above
+    gap = fig.layout.yaxis2.domain[0] - fig.layout.yaxis3.domain[1]
+    assert 0 < gap < 0.01
+
+
+def test_no_imu_draws_no_row(imu_trace):
+    raw = synth_raw("01", "tapping", duration=200.0)
+    without = carpet_gvtd_figure(raw, raw.ch_names[:6])
+    with_imu = carpet_gvtd_figure(raw, raw.ch_names[:6], imu=imu_trace)
+
+    assert all(t.name != "IMU" for t in without.data)
+    # the row adds its own height rather than squeezing the others
+    assert with_imu.layout.height - without.layout.height >= _GVTD_ROW_PX
+
+
+def test_imu_row_keeps_the_jolt_and_stops_at_the_recording(imu_trace, od_with_cardiac):
+    """Max-pooled like the GVTD rows, so a one-second jolt survives the display cap, and
+    cut to the optical recording's span."""
+    ch = od_with_cardiac.ch_names[0]
+    fig = build_motion_detail_figure(od_with_cardiac, od_with_cardiac, ch, imu=imu_trace)
+    row = _imu(fig)
+
+    assert row.yaxis == "y"
+    assert np.max(row.y) == 40.0
+    assert np.max(row.x) <= od_with_cardiac.times[-1]

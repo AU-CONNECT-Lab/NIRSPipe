@@ -154,6 +154,42 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
     return np.interp(t_dst, t_src, filtered)
 
 
+# ---- motion ----
+
+# aux channel names carry no type field, so a gyroscope is recognised by name
+GYRO_TOKEN = "gyro"
+
+
+def gyro_speed(
+    times: dict[str, np.ndarray], values: dict[str, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Angular speed over every gyroscope axis, at the aux rate, or None with no gyroscope.
+
+    ::
+
+        {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} at 98.67 Hz  ->  (t, |omega|) at 98.67 Hz
+
+    Each axis has its median taken off first, since a gyroscope at rest reads a small
+    constant offset rather than zero. An axis on its own time base is interpolated onto the
+    first one's; that is upsampling or a near-equal rate, so nothing is folded.
+    """
+    names = [n for n in values if GYRO_TOKEN in n.lower()]
+    if not names:
+        return None
+    t = times[names[0]]
+    axes = [values[n] if np.array_equal(times[n], t) else np.interp(t, times[n], values[n])
+            for n in names]
+    return t, np.sqrt(sum((a - np.median(a)) ** 2 for a in axes))
+
+
+def table_gyro_speed(table: pd.DataFrame) -> tuple[np.ndarray, np.ndarray] | None:
+    """:func:`gyro_speed` over a table written by `write_aux_table`."""
+    t = table[TIME_COLUMN].to_numpy(dtype=float)
+    columns = [c for c in table.columns if c != TIME_COLUMN]
+    return gyro_speed({c: t for c in columns},
+                      {c: table[c].to_numpy(dtype=float) for c in columns})
+
+
 # ---- carrying aux through a crop ----
 
 def write_aux_window(

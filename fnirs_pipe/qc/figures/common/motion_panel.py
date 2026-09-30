@@ -13,6 +13,7 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from scipy.signal import detrend
 
 from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
 from fnirs_pipe.qc.figures.common._utils import decimate as _decimate
@@ -116,14 +117,15 @@ def _span_polygons(spans, y0: float, y1: float):
     return (xs or [None]), (ys or [None])
 
 
-def _tighten_strip(fig, gap: float = 0.006) -> None:
+def _tighten_strip(fig, row: int = 1, gap: float = 0.006) -> None:
     """Sit the correction strip directly on the panel below it.
 
     ``make_subplots`` spaces every row equally, which leaves a strip one tenth the height of
-    its neighbours floating well clear of the trace it annotates. This moves the first row's
-    domain down until it nearly touches the second, without changing its height.
+    its neighbours floating well clear of the trace it annotates. This moves the strip's
+    domain down until it nearly touches the next row, without changing its height.
     """
-    strip, panel = fig.layout.yaxis, fig.layout.yaxis2
+    strip = fig.layout["yaxis" if row == 1 else f"yaxis{row}"]
+    panel = fig.layout[f"yaxis{row + 1}"]
     height = strip.domain[1] - strip.domain[0]
     bottom = min(panel.domain[1] + gap, 1.0 - height)
     strip.domain = (bottom, bottom + height)
@@ -239,6 +241,47 @@ def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") ->
     return (prefix + " · " if prefix else "") + " · ".join(parts)
 
 
+# ---- IMU row ----
+# The only motion trace not derived from the optical data, so it sits first: the movement,
+# then the index computed from the data, then the data.
+_IMU_COLOR = "#937860"
+# names the row's label, so a condition view can find which axis is the IMU's
+IMU_SLOT = "imu-row"
+_IMU_LABEL = ("<b>IMU</b>  <span style='font-size:9px;color:#8b95a1'>"
+              "gyroscope |ω|, each axis minus its median</span>")
+
+
+def imu_y_top(y: np.ndarray) -> float:
+    """The IMU row's top: the GVTD rows' percentile cap, so one jolt cannot flatten the rest."""
+    y = np.asarray(y, dtype=float)
+    y = y[np.isfinite(y)]
+    return float(np.percentile(y, _GVTD_CAP_PCTL)) * _GVTD_HEADROOM if y.size else 1.0
+
+
+def _add_imu_row(fig, row: int, imu: "tuple[np.ndarray, np.ndarray]",
+                 t0: float, t1: float) -> None:
+    """The gyroscope's angular speed over the optical recording's span, max-pooled."""
+    t, speed = imu
+    keep = (t >= t0) & (t <= t1)
+    t_ds, y_ds = _maxpool_xy(t[keep], speed[keep])
+    fig.add_trace(go.Scatter(
+        x=t_ds, y=y_ds, mode="lines", name="IMU", showlegend=False,
+        line=dict(color=_IMU_COLOR, width=_LW),
+        hovertemplate="t=%{x:.1f}s<br>|ω|=%{y:.3g}<extra></extra>",
+    ), row=row, col=1)
+    fig.update_yaxes(range=[0, imu_y_top(y_ds)], tickfont=dict(size=8),
+                     gridcolor="#eef1f4", zeroline=False, row=row, col=1)
+    fig.add_annotation(
+        x=0.004, xref="x domain", y=0.99, yref="y domain", text=_IMU_LABEL,
+        showarrow=False, xanchor="left", yanchor="top",
+        font=dict(size=13, color=_IMU_COLOR), name=IMU_SLOT, row=row, col=1,
+    )
+
+
+def _has_imu(imu) -> bool:
+    return imu is not None and len(imu[0]) > 1
+
+
 def _blocked_carpet(z, z_after, blocks):
     """The carpet's y labels and ``[(set name, first row, last row), ...]`` for its blocks.
 
@@ -281,13 +324,18 @@ def carpet_z(
 
         carpet_z(od[:, :39611], times)  ->  (z (44, 1980), t (1980,), (mean, std))
 
+    Each row is detrended before it is scaled, so the grey is a fluctuation about the row's
+    own trend and not where on a slow drift the sample sits. The display copy only.
+
     Returns the per-channel mean and SD alongside, so a second carpet of the same recording
     after a correction can be z-scored by the *uncorrected* numbers: rescaling it by its own
     SD would divide out the shrinkage the comparison exists to show. Pass them back as
-    ``stats`` to do that. 2 dp because the colour scale cannot resolve more.
+    ``stats`` to do that. That carpet is still detrended by its own fit. 2 dp because the
+    colour scale cannot resolve more.
     """
     step = max(1, data.shape[1] // CARPET_MAX_PTS)
-    carpet = data[:, ::step]
+    # linear detrend then z-score per row, as fMRIPrep and MRIQC draw their carpets
+    carpet = detrend(data[:, ::step], axis=1, type="linear")
     if stats is None:
         mean = carpet.mean(axis=1, keepdims=True)
         std = carpet.std(axis=1, keepdims=True)
@@ -355,8 +403,14 @@ def carpet_gvtd_figure(
     raw_after: "mne.io.Raw | None" = None,
     channel_set: str | None = None,
     blocks: "list[tuple[str, list[str]]] | None" = None,
+    imu: "tuple[np.ndarray, np.ndarray] | None" = None,
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
+
+    ``imu`` is ``(t, angular speed)`` at the aux rate, from
+    :func:`~fnirs_pipe.io.auxiliary.gyro_speed`. Given one, it is drawn as the first row, the
+    one record of movement that does not come from the optical data; without one the row is
+    left out rather than drawn empty.
 
     Only the 0.01-0.5 Hz GVTD is drawn, since the unfiltered trace is dominated by the
     cardiac component; ``gvtd_mean`` and ``gvtd_p95`` still report it.
@@ -442,16 +496,17 @@ def carpet_gvtd_figure(
     # the strip is the correction's own row, so it is there only when there is a correction
     # to draw; prep-raw runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
-    n_rows    = int(has_strip) + len(rows) + n_carpets
+    has_imu   = _has_imu(imu)
+    n_rows    = int(has_imu) + int(has_strip) + len(rows) + n_carpets
     # 6 px a channel, capped: the carpet is read as a texture, not row by row
     carpet_px = int(max(150, min(n_ch * 6, 380)))
-    heights   = (([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX] * len(rows)
-                 + [carpet_px] * n_carpets)
+    heights   = (([_GVTD_ROW_PX] if has_imu else []) + ([_STRIP_ROW_PX] if has_strip else [])
+                 + [_GVTD_ROW_PX] * len(rows) + [carpet_px] * n_carpets)
     vspace    = 0.03
     # chrome: the margins, the legend and the shared x-axis title
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=130)
-    strip_row = 1 if has_strip else None
-    gvtd_row  = 2 if has_strip else 1
+    strip_row = int(has_imu) + 1 if has_strip else None
+    gvtd_row  = int(has_imu) + int(has_strip) + 1
 
     # only the carpets take a subplot title, in plotly's own styling so they match the
     # titles on every other figure in the report; the GVTD rows name themselves inside their
@@ -467,6 +522,9 @@ def carpet_gvtd_figure(
     # drifting into the middle of the gap
     for ann in fig.layout.annotations:
         ann.yshift = 3
+
+    if has_imu:
+        _add_imu_row(fig, 1, imu, float(times[0]), float(times[-1]))
 
     if has_strip:
         xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
@@ -556,7 +614,7 @@ def carpet_gvtd_figure(
     fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
     fig.update_xaxes(range=[float(times[0]), float(times[-1])])
     if has_strip:
-        _tighten_strip(fig)
+        _tighten_strip(fig, strip_row)
 
     fig.update_layout(
         height=total_px,
@@ -668,8 +726,11 @@ def build_motion_detail_figure(
     spike_segments: "list[tuple[float, float]] | None" = None,
     gvtd_picks: "list[str] | None" = None,
     gvtd_set: str | None = None,
+    imu: "tuple[np.ndarray, np.ndarray] | None" = None,
 ) -> go.Figure:
     """4-row per-channel motion figure: GVTD, this channel's derivative, before/after OD, band strip.
+
+    ``imu`` adds the gyroscope row on top, as on the carpet panel.
 
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
     the motion-correction footprint and spike timepoints, never overlapping the traces.
@@ -724,12 +785,14 @@ def build_motion_detail_figure(
     # same shape as the carpet panel: the correction footprint on a strip over the traces,
     # the spikes shaded behind the two derivative rows they were detected on
     has_strip = bool(corrected_segments)
-    strip_row = 1 if has_strip else None
-    gvtd_row  = 2 if has_strip else 1
+    has_imu   = _has_imu(imu)
+    strip_row = int(has_imu) + 1 if has_strip else None
+    gvtd_row  = int(has_imu) + int(has_strip) + 1
     tvd_row, od_row = gvtd_row + 1, gvtd_row + 2
     # pixel rows, so the GVTD row is the same height here as in carpet_gvtd_figure; the
     # derivative row matches it, since the two are read as a pair
-    heights = ([_STRIP_ROW_PX] if has_strip else []) + [_GVTD_ROW_PX, _GVTD_ROW_PX, 218]
+    heights = (([_GVTD_ROW_PX] if has_imu else []) + ([_STRIP_ROW_PX] if has_strip else [])
+               + [_GVTD_ROW_PX, _GVTD_ROW_PX, 218])
     vspace  = 0.04
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=100)  # margins t=60, b=40
     fig = make_subplots(
@@ -737,6 +800,9 @@ def build_motion_detail_figure(
         shared_xaxes=True,
         row_heights=row_heights, vertical_spacing=vspace,
     )
+
+    if has_imu:
+        _add_imu_row(fig, 1, imu, float(t_full[0]), float(t_full[-1]))
 
     if has_strip:
         xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
@@ -836,7 +902,7 @@ def build_motion_detail_figure(
         )
     fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=od_row, col=1)
     if has_strip:
-        _tighten_strip(fig)
+        _tighten_strip(fig, strip_row)
     fig.update_layout(
         title_text=ch_name, height=total_px,
         plot_bgcolor="white", paper_bgcolor="white",

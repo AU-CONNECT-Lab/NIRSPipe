@@ -53,6 +53,7 @@ import base64
 import json
 from contextlib import contextmanager
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.io.auxiliary import find_aux_table, read_aux_table, table_gyro_speed
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
@@ -402,6 +403,7 @@ def _motion_detail_figures(
     segments: dict | None = None,
     corrected_segments: list | None = None,
     spike_by_set: dict | None = None,
+    imu: "tuple[np.ndarray, np.ndarray] | None" = None,
 ) -> "list[tuple[str, Any]]":
     """One per-channel motion figure per channel, each with its own class's GVTD on top.
 
@@ -436,7 +438,7 @@ def _motion_detail_figures(
                 raw_od_before, raw_od_after, ch, segments,
                 corrected_segments=corrected_segments,
                 spike_segments=(spike_by_set or {}).get(set_name),
-                gvtd_picks=picks, gvtd_set=set_name)))
+                gvtd_picks=picks, gvtd_set=set_name, imu=imu)))
     return built
 
 
@@ -575,6 +577,7 @@ def _section_motion(
     condition_spans: "list[tuple[str, float, float]] | None" = None,
     skip_carpet: bool = False,
     window: "tuple[float, float] | None" = None,
+    imu: "tuple[np.ndarray, np.ndarray] | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
@@ -630,7 +633,7 @@ def _section_motion(
                                      corrected_segments=corrected_segments,
                                      spike_segments=spike_by_set,
                                      raw_after=raw_after_motion,
-                                     channel_set=gvtd_set, blocks=gvtd_blocks)
+                                     channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu)
             carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
                 fig, figures_dir / fig_name("carpet"),
                 views=_carpet_views(fig, condition_spans or []))
@@ -1178,6 +1181,23 @@ def _load_stage_raw(
     return None
 
 
+def _load_imu(
+    out_dir: Path | None,
+    sqm_label: str | None,
+    subject: str,
+    errors: list,
+) -> "tuple[np.ndarray, np.ndarray] | None":
+    """The run's gyroscope speed, from the aux table preprocessing left beside its stages."""
+    if out_dir is None or sqm_label is None:
+        return None
+    with _guard("Reading IMU", errors, subject):
+        from fnirs_pipe.qc.subject.sqm_record import scan_runs
+        stages = list((scan_runs(out_dir).get(sqm_label) or {}).values())
+        table = find_aux_table(stages[0]) if stages else None
+        return None if table is None else table_gyro_speed(read_aux_table(table))
+    return None
+
+
 def _section_sqm(
     sci_scores: dict,
     bad_channels: list,
@@ -1704,6 +1724,7 @@ def build_subject_report(
     raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
     raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
     raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
+    imu               = _load_imu(nirs_dir, sqm_label, subject, errors)
     # the haemo chain as it exists on disk, in the order it was written; a stage missing here
     # gets no line
     psd_stages        = [
@@ -1730,13 +1751,14 @@ def build_subject_report(
                             raw_before_motion=raw_before_motion,
                             raw_after_motion=raw_after_motion,
                             condition_spans=_record_windows(
-                                record.get("by_condition") or {}) if by_condition else [])
+                                record.get("by_condition") or {}) if by_condition else [],
+                            imu=imu)
     motion_det_figs   = _motion_detail_figures(
                             raw_before_motion, raw_after_motion, subject, errors,
                             segments=segments,
                             corrected_segments=motion_vars.get("corrected_segments"),
                             spike_by_set=motion_vars.get("spike_by_set"),
-                            gvtd_blocks=gvtd_blocks)
+                            gvtd_blocks=gvtd_blocks, imu=imu)
     # every condition's window goes into the run's own files, which is what lets the
     # condition pages point at them with a fragment instead of getting copies
     motion_det_vars   = _section_motion_detail(

@@ -476,7 +476,7 @@ def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
 
 
 def carpet_window_spec(figure, t0: float, t1: float) -> dict:
-    """The carpet's GVTD rows re-fitted to one condition, its heatmaps left alone.
+    """The carpet's GVTD and IMU rows re-fitted to one condition, its heatmaps left alone.
 
     ::
 
@@ -499,12 +499,26 @@ def carpet_window_spec(figure, t0: float, t1: float) -> dict:
     scale they are on in the rewritten stat labels below.
     """
     from fnirs_pipe.qc.figures.common.motion_panel import (
-        GVTD_STAT_SLOT, _gvtd_stat_label, gvtd_y_top,
+        GVTD_STAT_SLOT, IMU_SLOT, _gvtd_stat_label, gvtd_y_top, imu_y_top,
     )
 
     out = {"x": [float(t0), float(t1)], "y": {}, "bands": [], "notes": []}
     if not hasattr(figure, "update_yaxes"):
         return out
+
+    # the IMU row, where there is one, takes its own top by its own rule: not a GVTD unit
+    for a in (figure.layout.annotations or ()):
+        if a.name != IMU_SLOT:
+            continue
+        axis = str(a.yref).removesuffix(" domain")
+        cut = []
+        for tr in figure.data:
+            x = _trace_x(tr)
+            if (getattr(tr, "yaxis", None) or "y") == axis and x is not None:
+                cut.append(np.asarray(tr.y, dtype=float)[(x >= t0) & (x <= t1)])
+        cut = np.concatenate(cut) if cut else np.empty(0)
+        if cut.size:
+            out["y"]["yaxis" + axis[1:]] = (0.0, imu_y_top(cut))
 
     # the GVTD rows are the ones carrying a named stat label; the strip has none and the
     # heatmaps are not scatter traces at all
