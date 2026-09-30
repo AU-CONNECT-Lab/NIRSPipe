@@ -188,18 +188,19 @@ def _imu(fig):
     return next(t for t in fig.data if t.name == "IMU")
 
 
-def test_imu_is_the_first_row_of_the_carpet(imu_trace):
-    """Movement first, then the index computed from the data, then the data."""
+def test_imu_sits_under_the_strip_and_over_the_gvtd_rows(imu_trace):
+    """The correction strip stays the top row; then the movement, the index computed from
+    the data, and the data."""
     raw = synth_raw("01", "tapping", duration=200.0)
     fig = carpet_gvtd_figure(raw, raw.ch_names[:6], imu=imu_trace,
                              corrected_segments=CORRECTED_SPANS)
 
-    assert _imu(fig).yaxis == "y"
-    assert _polygon(fig, "corrected").yaxis == "y2"
+    assert _polygon(fig, "corrected").yaxis == "y"
+    assert _imu(fig).yaxis == "y2"
     assert next(t for t in fig.data if t.name == "GVTD").yaxis == "y3"
     assert any(a.name == IMU_SLOT for a in fig.layout.annotations)
-    # the strip still sits on the GVTD row under it, not on the IMU row above
-    gap = fig.layout.yaxis2.domain[0] - fig.layout.yaxis3.domain[1]
+    # the strip still sits directly on the row under it
+    gap = fig.layout.yaxis.domain[0] - fig.layout.yaxis2.domain[1]
     assert 0 < gap < 0.01
 
 

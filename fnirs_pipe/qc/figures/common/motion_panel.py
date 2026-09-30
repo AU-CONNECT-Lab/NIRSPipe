@@ -242,8 +242,8 @@ def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") ->
 
 
 # ---- IMU row ----
-# The only motion trace not derived from the optical data, so it sits first: the movement,
-# then the index computed from the data, then the data.
+# The only motion trace not derived from the optical data, so it sits above the GVTD rows,
+# under the correction strip: the movement, then the index computed from the data, then the data.
 _IMU_COLOR = "#937860"
 # names the row's label, so a condition view can find which axis is the IMU's
 IMU_SLOT = "imu-row"
@@ -408,14 +408,14 @@ def carpet_gvtd_figure(
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
     ``imu`` is ``(t, angular speed)`` at the aux rate, from
-    :func:`~fnirs_pipe.io.auxiliary.gyro_speed`. Given one, it is drawn as the first row, the
+    :func:`~fnirs_pipe.io.auxiliary.gyro_speed`. Given one, it is drawn above the GVTD rows, the
     one record of movement that does not come from the optical data; without one the row is
     left out rather than drawn empty.
 
     Only the 0.01-0.5 Hz GVTD is drawn, since the unfiltered trace is dominated by the
     cardiac component; ``gvtd_mean`` and ``gvtd_p95`` still report it.
-    ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip directly
-    above the trace, so what the correction touched sits against what it was aimed at.
+    ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip at the very
+    top, over the IMU row where there is one and otherwise directly over the trace.
     ``spike_segments`` shades the GVTD panel behind the trace, and is either one span list
     for the canonical row or ``{set name: spans}`` so each row shades what was found on its
     own channels. The test behind a span is ">= 10% of these channels spiking", so a long-set
@@ -500,12 +500,13 @@ def carpet_gvtd_figure(
     n_rows    = int(has_imu) + int(has_strip) + len(rows) + n_carpets
     # 6 px a channel, capped: the carpet is read as a texture, not row by row
     carpet_px = int(max(150, min(n_ch * 6, 380)))
-    heights   = (([_GVTD_ROW_PX] if has_imu else []) + ([_STRIP_ROW_PX] if has_strip else [])
+    heights   = (([_STRIP_ROW_PX] if has_strip else []) + ([_GVTD_ROW_PX] if has_imu else [])
                  + [_GVTD_ROW_PX] * len(rows) + [carpet_px] * n_carpets)
     vspace    = 0.03
     # chrome: the margins, the legend and the shared x-axis title
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=130)
-    strip_row = int(has_imu) + 1 if has_strip else None
+    strip_row = 1 if has_strip else None
+    imu_row   = int(has_strip) + 1
     gvtd_row  = int(has_imu) + int(has_strip) + 1
 
     # only the carpets take a subplot title, in plotly's own styling so they match the
@@ -524,7 +525,7 @@ def carpet_gvtd_figure(
         ann.yshift = 3
 
     if has_imu:
-        _add_imu_row(fig, 1, imu, float(times[0]), float(times[-1]))
+        _add_imu_row(fig, imu_row, imu, float(times[0]), float(times[-1]))
 
     if has_strip:
         xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
@@ -730,7 +731,7 @@ def build_motion_detail_figure(
 ) -> go.Figure:
     """4-row per-channel motion figure: GVTD, this channel's derivative, before/after OD, band strip.
 
-    ``imu`` adds the gyroscope row on top, as on the carpet panel.
+    ``imu`` adds the gyroscope row above the GVTD row, under the strip, as on the carpet panel.
 
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
     the motion-correction footprint and spike timepoints, never overlapping the traces.
@@ -786,12 +787,13 @@ def build_motion_detail_figure(
     # the spikes shaded behind the two derivative rows they were detected on
     has_strip = bool(corrected_segments)
     has_imu   = _has_imu(imu)
-    strip_row = int(has_imu) + 1 if has_strip else None
+    strip_row = 1 if has_strip else None
+    imu_row   = int(has_strip) + 1
     gvtd_row  = int(has_imu) + int(has_strip) + 1
     tvd_row, od_row = gvtd_row + 1, gvtd_row + 2
     # pixel rows, so the GVTD row is the same height here as in carpet_gvtd_figure; the
     # derivative row matches it, since the two are read as a pair
-    heights = (([_GVTD_ROW_PX] if has_imu else []) + ([_STRIP_ROW_PX] if has_strip else [])
+    heights = (([_STRIP_ROW_PX] if has_strip else []) + ([_GVTD_ROW_PX] if has_imu else [])
                + [_GVTD_ROW_PX, _GVTD_ROW_PX, 218])
     vspace  = 0.04
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=100)  # margins t=60, b=40
@@ -802,7 +804,7 @@ def build_motion_detail_figure(
     )
 
     if has_imu:
-        _add_imu_row(fig, 1, imu, float(t_full[0]), float(t_full[-1]))
+        _add_imu_row(fig, imu_row, imu, float(t_full[0]), float(t_full[-1]))
 
     if has_strip:
         xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)

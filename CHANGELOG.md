@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- The carpet and per-channel motion figures draw the gyroscope's angular speed as their first row when the recording carries one
+- The carpet and per-channel motion figures draw the gyroscope's angular speed above the GVTD rows when the recording carries one
 
 ### Changed
 - Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
