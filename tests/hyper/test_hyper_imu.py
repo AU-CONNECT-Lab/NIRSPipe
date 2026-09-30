@@ -8,7 +8,9 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.alignment import align_imu_like, align_like
+from fnirs_pipe.pipeline.hyper.alignment import (
+    align_imu_like, align_like, align_recordings, crop_aligned_window,
+)
 from fnirs_pipe.qc.figures.hyper.hyper_figures import build_motion_panel, motion_series
 from tests._synth import synth_raw
 
@@ -102,3 +104,44 @@ def test_no_imu_draws_no_row(members):
 
     assert motion["imu"] == {}
     assert not any("gyroscope" in str(a.text) for a in fig.layout.annotations)
+
+
+# ---- through the alignment the report actually runs ---------------------------------------
+
+TRIGGER_OWN_S = {"sub-01": 8.0, "sub-02": 21.0}
+TSTART = 10.0
+JOLT_AFTER_TRIGGER_S = 40.0
+
+
+def _with_trigger(raw, onset):
+    """A fresh recording whose only annotation is the shared trigger, at ``onset`` on its clock."""
+    fresh = mne.io.RawArray(raw.get_data(), raw.info, verbose="error")
+    fresh.set_annotations(mne.Annotations([onset], [0.0], ["sync"]))
+    return fresh
+
+
+def test_a_jolt_at_one_moment_lands_at_one_shared_time_for_both():
+    """Both members jolt 40 s after the trigger, which each hit at a different time on its own
+    clock; after trigger alignment and a --tstart window the jolt is at 40 - tstart for both.
+    Cropping by hand in the tests above would not catch an alignment step that stopped
+    accumulating into first_samp, which is what the shift is read from."""
+    raws = {sid: _with_trigger(synth_raw(sid.removeprefix("sub-"), "tapping", duration=150.0),
+                               onset)
+            for sid, onset in TRIGGER_OWN_S.items()}
+    aligned, offsets = align_recordings(raws, "tapping")
+    aligned = crop_aligned_window(aligned, TSTART, None)
+    assert offsets == pytest.approx(TRIGGER_OWN_S)
+
+    t = np.arange(0.0, 150.0, 0.01)
+    imu = {}
+    for sid, onset in TRIGGER_OWN_S.items():
+        y = np.ones_like(t)
+        y[np.argmin(np.abs(t - (onset + JOLT_AFTER_TRIGGER_S)))] = 50.0
+        imu[sid] = {"gyro": (t, y)}
+    imu = align_imu_like(imu, raws, aligned)
+    motion = motion_series(align_like(raws, aligned), None, list(TRIGGER_OWN_S), imu=imu)
+
+    expected = JOLT_AFTER_TRIGGER_S - TSTART
+    step = 1.0 / raws["sub-01"].info["sfreq"]
+    for sid, y in motion["imu"]["gyro"]["members"]:
+        assert motion["t"][np.argmax(y)] == pytest.approx(expected, abs=step), sid
