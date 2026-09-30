@@ -370,7 +370,7 @@ def _process_run(
     # the source snirf still carries its aux group; empty where it has no IMU
     imu: dict = {}
     with guard("IMU", errors, label):
-        imu = imu_traces(*read_aux_snirf(run["snirf_path"])[:2])
+        imu = imu_traces(*read_aux_snirf(run["snirf_path"]))
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)

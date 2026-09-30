@@ -15,6 +15,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.signal import detrend
 
+from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
 from fnirs_pipe.qc.figures.common._utils import decimate as _decimate
 from fnirs_pipe.qc.figures.common._utils import line_xy as _line_xy
@@ -268,11 +269,11 @@ def _imu_sensors(imu) -> list[str]:
     return [s for s in _IMU_ROWS if s in (imu or {}) and len(imu[s][0]) > 1]
 
 
-def _add_imu_row(fig, row: int, sensor: str, trace: "tuple[np.ndarray, np.ndarray]",
+def _add_imu_row(fig, row: int, sensor: str, trace: "ImuTrace",
                  t0: float, t1: float) -> None:
     """One sensor's magnitude over the optical recording's span, max-pooled."""
     name, label, symbol, colour = _IMU_ROWS[sensor]
-    t, y = trace
+    t, y = trace.t, trace.y
     keep = (t >= t0) & (t <= t1)
     t_ds, y_ds = _maxpool_xy(t[keep], y[keep])
     fig.add_trace(go.Scatter(
@@ -281,7 +282,8 @@ def _add_imu_row(fig, row: int, sensor: str, trace: "tuple[np.ndarray, np.ndarra
         hovertemplate=f"t=%{{x:.1f}}s<br>{symbol}=%{{y:.3g}}<extra></extra>",
     ), row=row, col=1)
     fig.update_yaxes(range=[0, imu_y_top(y_ds)], tickfont=dict(size=8),
-                     gridcolor="#eef1f4", zeroline=False, row=row, col=1)
+                     gridcolor="#eef1f4", zeroline=False, row=row, col=1,
+                     title=dict(text=trace.unit, font=dict(size=8, color=colour), standoff=2))
     fig.add_annotation(
         x=0.004, xref="x domain", y=0.99, yref="y domain",
         text=f"<b>{name}</b>  <span style='font-size:9px;color:#8b95a1'>{label}</span>",
@@ -411,11 +413,11 @@ def carpet_gvtd_figure(
     raw_after: "mne.io.Raw | None" = None,
     channel_set: str | None = None,
     blocks: "list[tuple[str, list[str]]] | None" = None,
-    imu: "dict[str, tuple[np.ndarray, np.ndarray]] | None" = None,
+    imu: "dict[str, ImuTrace] | None" = None,
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
-    ``imu`` is ``{"gyro": (t, y), "accel": (t, y)}`` at the aux rate, from
+    ``imu`` is ``{"gyro": ImuTrace, "accel": ImuTrace}`` at the aux rate, from
     :func:`~fnirs_pipe.io.auxiliary.imu_traces`. Each sensor present is a row above the GVTD
     rows, the one record of movement that does not come from the optical data; a sensor the
     recording lacks gets no row rather than an empty one.
@@ -735,7 +737,7 @@ def build_motion_detail_figure(
     spike_segments: "list[tuple[float, float]] | None" = None,
     gvtd_picks: "list[str] | None" = None,
     gvtd_set: str | None = None,
-    imu: "dict[str, tuple[np.ndarray, np.ndarray]] | None" = None,
+    imu: "dict[str, ImuTrace] | None" = None,
 ) -> go.Figure:
     """4-row per-channel motion figure: GVTD, this channel's derivative, before/after OD, band strip.
 

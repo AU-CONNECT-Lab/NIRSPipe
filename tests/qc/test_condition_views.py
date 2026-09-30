@@ -270,13 +270,14 @@ def test_the_imu_row_is_refitted_to_the_window_by_its_own_rule():
     """A jolt in one condition must not flatten the IMU row on every other condition's page,
     and the row is not in GVTD units, so it does not share the GVTD rows' top."""
     from tests._synth import synth_raw
+    from fnirs_pipe.io.auxiliary import ImuTrace
     from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure
 
     raw = synth_raw("01", "tapping", duration=600.0)
     t = np.arange(0.0, 600.0, 0.01)
     speed = np.ones_like(t)
     speed[t > 300] = 50.0
-    fig = carpet_gvtd_figure(raw, raw.ch_names, imu={"gyro": (t, speed)})
+    fig = carpet_gvtd_figure(raw, raw.ch_names, imu={"gyro": ImuTrace(t, speed)})
 
     quiet = carpet_window_spec(fig, 0.0, 290.0)["y"]["yaxis"]
     loud = carpet_window_spec(fig, 310.0, 600.0)["y"]["yaxis"]

@@ -225,7 +225,7 @@ def cmd_hyper_raw(
         # will not read costs the row and not the report
         try:
             imu = align_imu_like(
-                {sid: imu_traces(*read_aux_snirf(path_from(raw))[:2])
+                {sid: imu_traces(*read_aux_snirf(path_from(raw)))
                  for sid, raw in raws_cw.items() if path_from(raw)},
                 raws_cw, aligned_raws)
         except Exception:

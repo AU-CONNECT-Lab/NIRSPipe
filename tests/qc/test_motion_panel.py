@@ -22,6 +22,7 @@ from fnirs_pipe.qc.figures.common.motion_panel import (
     IMU_SLOT, _GVTD_ROW_PX, _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure,
     carpet_gvtd_figure, carpet_z,
 )
+from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.qc.metrics import _mask_to_segments
 from tests._synth import synth_raw
 
@@ -183,7 +184,7 @@ def imu_trace():
     speed[(t > 50) & (t < 51)] = 40.0
     jerk = np.abs(np.cos(2 * np.pi * 0.1 * t))
     jerk[(t > 120) & (t < 121)] = 90.0
-    return {"gyro": (t, speed), "accel": (t, jerk)}
+    return {"gyro": ImuTrace(t, speed, "°/s"), "accel": ImuTrace(t, jerk, "m/s³")}
 
 
 def _trace(fig, name):
@@ -202,6 +203,8 @@ def test_imu_rows_sit_under_the_strip_and_over_the_gvtd_rows(imu_trace):
     assert _trace(fig, "accelerometer").yaxis == "y3"
     assert _trace(fig, "GVTD").yaxis == "y4"
     assert {a.name for a in fig.layout.annotations} >= {f"{IMU_SLOT}gyro", f"{IMU_SLOT}accel"}
+    # each IMU row's axis names the unit its sensor recorded
+    assert (fig.layout.yaxis2.title.text, fig.layout.yaxis3.title.text) == ("°/s", "m/s³")
     # the strip still sits directly on the row under it
     gap = fig.layout.yaxis.domain[0] - fig.layout.yaxis2.domain[1]
     assert 0 < gap < 0.01

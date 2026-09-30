@@ -53,7 +53,9 @@ import base64
 import json
 from contextlib import contextmanager
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.auxiliary import find_aux_table, imu_traces, read_aux_table, table_channels
+from fnirs_pipe.io.auxiliary import (
+    ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
+)
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
@@ -403,7 +405,7 @@ def _motion_detail_figures(
     segments: dict | None = None,
     corrected_segments: list | None = None,
     spike_by_set: dict | None = None,
-    imu: "dict[str, tuple[np.ndarray, np.ndarray]] | None" = None,
+    imu: "dict[str, ImuTrace] | None" = None,
 ) -> "list[tuple[str, Any]]":
     """One per-channel motion figure per channel, each with its own class's GVTD on top.
 
@@ -577,7 +579,7 @@ def _section_motion(
     condition_spans: "list[tuple[str, float, float]] | None" = None,
     skip_carpet: bool = False,
     window: "tuple[float, float] | None" = None,
-    imu: "dict[str, tuple[np.ndarray, np.ndarray]] | None" = None,
+    imu: "dict[str, ImuTrace] | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
@@ -1186,7 +1188,7 @@ def _load_imu(
     sqm_label: str | None,
     subject: str,
     errors: list,
-) -> "dict[str, tuple[np.ndarray, np.ndarray]] | None":
+) -> "dict[str, ImuTrace] | None":
     """The run's IMU traces, from the aux table preprocessing left beside its stages."""
     if out_dir is None or sqm_label is None:
         return None
@@ -1194,7 +1196,9 @@ def _load_imu(
         from fnirs_pipe.qc.subject.sqm_record import scan_runs
         stages = list((scan_runs(out_dir).get(sqm_label) or {}).values())
         table = find_aux_table(stages[0]) if stages else None
-        return None if table is None else imu_traces(*table_channels(read_aux_table(table)))
+        if table is None:
+            return None
+        return imu_traces(*table_channels(read_aux_table(table)), aux_table_units(table))
     return None
 
 

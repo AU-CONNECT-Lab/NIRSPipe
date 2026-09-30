@@ -23,7 +23,9 @@ reach postprocessing with its accelerometers intact.
 from __future__ import annotations
 
 import gzip
+import json
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -160,67 +162,90 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
 GYRO_TOKEN = "gyro"
 ACCEL_TOKEN = "accel"
 
+# vendor spellings of the two units, as an axis prints them; anything else passes through
+_UNIT_SPELLINGS = {"o/s": "°/s", "deg/s": "°/s", "m/s^2": "m/s²", "m/s2": "m/s²"}
 
-def _axes(token: str, times: dict[str, np.ndarray], values: dict[str, np.ndarray]):
-    """Every axis whose name holds ``token``, on the first one's time base, or None.
+
+class ImuTrace(NamedTuple):
+    """One sensor's magnitude over time, carrying the unit an axis should print."""
+    t: np.ndarray
+    y: np.ndarray
+    unit: str = ""
+
+
+def _axes(token: str, times: dict[str, np.ndarray], values: dict[str, np.ndarray],
+          units: dict[str, str] | None):
+    """Every axis whose name holds ``token``, on the first one's time base, and their unit.
 
     An axis on its own time base is interpolated onto the first one's; that is upsampling
-    or a near-equal rate, so nothing is folded.
+    or a near-equal rate, so nothing is folded. The unit is the axes' shared one as the
+    vendor spells it, or "" when they disagree or none is recorded.
     """
     names = [n for n in values if token in n.lower()]
     if not names:
         return None
     t = times[names[0]]
-    return t, [values[n] if np.array_equal(times[n], t) else np.interp(t, times[n], values[n])
-               for n in names]
+    axes = [values[n] if np.array_equal(times[n], t) else np.interp(t, times[n], values[n])
+            for n in names]
+    spelled = {(units or {}).get(n) for n in names}
+    unit = spelled.pop() if len(spelled) == 1 else None
+    return t, axes, "" if unit in (None, "", "n/a") else unit
 
 
 def gyro_speed(
     times: dict[str, np.ndarray], values: dict[str, np.ndarray],
-) -> tuple[np.ndarray, np.ndarray] | None:
+    units: dict[str, str] | None = None,
+) -> ImuTrace | None:
     """Angular speed over every gyroscope axis, at the aux rate, or None with no gyroscope.
 
     ::
 
-        {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} at 98.67 Hz  ->  (t, |omega|) at 98.67 Hz
+        {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} at 98.67 Hz, in o/s  ->  (t, |omega|, "°/s")
 
     Each axis has its median taken off first, since a gyroscope at rest reads a small
     constant offset rather than zero.
     """
-    found = _axes(GYRO_TOKEN, times, values)
+    found = _axes(GYRO_TOKEN, times, values, units)
     if found is None:
         return None
-    t, axes = found
-    return t, np.sqrt(sum((a - np.median(a)) ** 2 for a in axes))
+    t, axes, unit = found
+    return ImuTrace(t, np.sqrt(sum((a - np.median(a)) ** 2 for a in axes)),
+                    _UNIT_SPELLINGS.get(unit, unit))
 
 
 def accel_jerk(
     times: dict[str, np.ndarray], values: dict[str, np.ndarray],
-) -> tuple[np.ndarray, np.ndarray] | None:
+    units: dict[str, str] | None = None,
+) -> ImuTrace | None:
     """Jerk magnitude over every accelerometer axis, at the aux rate, or None without one.
 
     ::
 
-        {ACCEL_X_1, ACCEL_Y_1, ACCEL_Z_1} in m/s^2  ->  (t, |da/dt|) in m/s^3
+        {ACCEL_X_1, ACCEL_Y_1, ACCEL_Z_1} in m/s^2  ->  (t, |da/dt|, "m/s³")
 
     The derivative is what removes gravity, which a still accelerometer reads as a constant
     9.8 m/s^2 shared out over its axes by how the head is tilted. Differenced over the
     recorded timestamps; the first sample repeats the second so the lengths match.
     """
-    found = _axes(ACCEL_TOKEN, times, values)
+    found = _axes(ACCEL_TOKEN, times, values, units)
     if found is None or len(found[0]) < 2:
         return None
-    t, axes = found
+    t, axes, unit = found
     dt = np.diff(t)
     jerk = np.sqrt(sum((np.diff(a) / dt) ** 2 for a in axes))
-    return t, np.r_[jerk[0], jerk]
+    # the derivative's unit is the acceleration's per second
+    per_second = ("m/s³" if _UNIT_SPELLINGS.get(unit, unit) == "m/s²"
+                  else f"{unit}/s" if unit else "")
+    return ImuTrace(t, np.r_[jerk[0], jerk], per_second)
 
 
 def imu_traces(
     times: dict[str, np.ndarray], values: dict[str, np.ndarray],
-) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    units: dict[str, str] | None = None,
+) -> dict[str, ImuTrace]:
     """``{"gyro": ..., "accel": ...}`` for whichever sensors the aux group carries."""
-    traces = {"gyro": gyro_speed(times, values), "accel": accel_jerk(times, values)}
+    traces = {"gyro": gyro_speed(times, values, units),
+              "accel": accel_jerk(times, values, units)}
     return {name: trace for name, trace in traces.items() if trace is not None}
 
 
@@ -229,6 +254,15 @@ def table_channels(table: pd.DataFrame) -> tuple[dict[str, np.ndarray], dict[str
     t = table[TIME_COLUMN].to_numpy(dtype=float)
     columns = [c for c in table.columns if c != TIME_COLUMN]
     return {c: t for c in columns}, {c: table[c].to_numpy(dtype=float) for c in columns}
+
+
+def aux_table_units(path: Path) -> dict[str, str]:
+    """The per-channel units the table's sidecar records, or {} when it has none."""
+    sidecar = path.with_name(path.name.removesuffix(".gz")).with_suffix(".json")
+    try:
+        return dict(json.loads(sidecar.read_text(encoding="utf-8")).get("Units") or {})
+    except (OSError, ValueError):
+        return {}
 
 
 # ---- carrying aux through a crop ----

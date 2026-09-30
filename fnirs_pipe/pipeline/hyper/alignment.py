@@ -14,6 +14,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.exceptions import AlignmentError
+from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from fnirs_pipe.utils.lineage import lineage_of
@@ -262,10 +263,10 @@ def _aligned_shift(raw: mne.io.Raw, aligned: mne.io.Raw) -> float:
 
 
 def align_imu_like(
-    imu: "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]",
+    imu: "dict[str, dict[str, ImuTrace]]",
     raws: dict[str, mne.io.Raw],
     aligned_raws: dict[str, mne.io.Raw],
-) -> "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]":
+) -> "dict[str, dict[str, ImuTrace]]":
     """Each member's IMU traces moved onto the clock ``aligned_raws`` sit on.
 
     ::
@@ -273,22 +274,22 @@ def align_imu_like(
         member aligned 22.4 s in, gyro jolt at 30.0 s on its own clock
           -> the same jolt at 7.6 s on the shared clock
 
-    ``imu`` is ``{sid: {sensor: (t, y)}}`` on each member's own clock, zero at the first
+    ``imu`` is ``{sid: {sensor: ImuTrace}}`` on each member's own clock, zero at the first
     sample of ``raws[sid]``, the same assumption the aux regressors make. The shift is the one
     :func:`align_like` cuts the optical copy by, so the two cannot disagree. Samples outside
     the aligned window are dropped; a member the aligned set does not carry is left out.
     """
-    out: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
+    out: dict[str, dict[str, ImuTrace]] = {}
     for sid, traces in imu.items():
         raw, ref = raws.get(sid), aligned_raws.get(sid)
         if raw is None or ref is None or not traces:
             continue
         shift, end = _aligned_shift(raw, ref), float(ref.times[-1])
         out[sid] = {}
-        for sensor, (t, y) in traces.items():
-            t_shared = np.asarray(t, dtype=float) - shift
+        for sensor, trace in traces.items():
+            t_shared = np.asarray(trace.t, dtype=float) - shift
             keep = (t_shared >= 0.0) & (t_shared <= end)
-            out[sid][sensor] = (t_shared[keep], np.asarray(y)[keep])
+            out[sid][sensor] = ImuTrace(t_shared[keep], np.asarray(trace.y)[keep], trace.unit)
     return out
 
 

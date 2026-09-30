@@ -16,7 +16,7 @@ def test_speed_is_the_magnitude_over_the_axes_with_each_offset_removed():
     times = {"GYRO_X_1": t, "GYRO_Y_1": t, "ACCEL_X_1": t}
     values = {"GYRO_X_1": x, "GYRO_Y_1": y, "ACCEL_X_1": np.full_like(t, 9.81)}
 
-    t_out, speed = gyro_speed(times, values)
+    t_out, speed, _ = gyro_speed(times, values)
 
     assert t_out is t
     assert speed[500] == pytest.approx(5.0)
@@ -31,8 +31,8 @@ def test_jerk_ignores_gravity_and_sees_a_jolt():
     y = np.full_like(t, 9.81 * 0.8)
     x[500:] += 3.0
     y[500:] += 4.0
-    t_out, jerk = accel_jerk({"ACCEL_X_1": t, "ACCEL_Y_1": t},
-                             {"ACCEL_X_1": x, "ACCEL_Y_1": y})
+    t_out, jerk, _ = accel_jerk({"ACCEL_X_1": t, "ACCEL_Y_1": t},
+                                {"ACCEL_X_1": x, "ACCEL_Y_1": y})
 
     assert len(jerk) == len(t_out) == len(t)
     assert jerk[500] == pytest.approx(500.0)
@@ -72,13 +72,44 @@ def test_the_subject_report_finds_the_table_beside_the_stages(tmp_path):
                           "ACCEL_X_1": np.full_like(t, 9.81)})
     with gzip.open(tmp_path / "sub-01_task-rest_desc-aux_timeseries.tsv.gz", "wt") as fh:
         table.to_csv(fh, sep="\t", index=False)
+    (tmp_path / "sub-01_task-rest_desc-aux_timeseries.json").write_text(
+        '{"Units": {"GYRO_X_1": "o/s", "ACCEL_X_1": "m/s^2"}}', encoding="utf-8")
 
     errors: list = []
     imu = _load_imu(tmp_path, "sub-01_task-rest", "01", errors)
     assert errors == []
     assert set(imu) == {"gyro", "accel"}
     assert imu["gyro"][1].max() == pytest.approx(2.0)
+    assert (imu["gyro"].unit, imu["accel"].unit) == ("°/s", "m/s³")
 
     (tmp_path / "sub-02_task-rest_desc-sci_nirs.snirf").touch()
     assert _load_imu(tmp_path, "sub-02_task-rest", "02", errors) is None
     assert errors == []
+
+
+def test_each_sensor_carries_the_unit_its_axis_prints():
+    """The vendor's spelling is the one an axis prints: NIRx writes o/s and m/s^2. Jerk is
+    the acceleration per second; axes that disagree, or record none, print nothing."""
+    t = np.arange(0.0, 1.0, 0.1)
+    names = ["GYRO_X_1", "GYRO_Y_1", "ACCEL_X_1", "ACCEL_Y_1"]
+    times, values = {n: t for n in names}, {n: np.sin(t) for n in names}
+
+    traces = imu_traces(times, values, {"GYRO_X_1": "o/s", "GYRO_Y_1": "o/s",
+                                        "ACCEL_X_1": "m/s^2", "ACCEL_Y_1": "m/s^2"})
+    assert (traces["gyro"].unit, traces["accel"].unit) == ("°/s", "m/s³")
+
+    mixed = imu_traces(times, values, {"GYRO_X_1": "o/s", "GYRO_Y_1": "rad/s"})
+    assert (mixed["gyro"].unit, mixed["accel"].unit) == ("", "")
+
+
+def test_the_table_units_come_from_its_sidecar(tmp_path):
+    import json
+    from fnirs_pipe.io.auxiliary import aux_table_units
+
+    table = tmp_path / "sub-01_task-rest_desc-aux_timeseries.tsv.gz"
+    table.touch()
+    (tmp_path / "sub-01_task-rest_desc-aux_timeseries.json").write_text(
+        json.dumps({"Units": {"GYRO_X_1": "o/s"}}), encoding="utf-8")
+
+    assert aux_table_units(table) == {"GYRO_X_1": "o/s"}
+    assert aux_table_units(tmp_path / "missing_desc-aux_timeseries.tsv.gz") == {}

@@ -21,6 +21,7 @@ from fnirs_pipe.qc.figures.common.head_map import (
     head_axes as _head_axes, head_ground as _head_ground,
     head_glyph as _head_glyph,
 )
+from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common.motion_panel import (
     _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
@@ -347,7 +348,7 @@ def motion_series(
     after_raws: "dict[str, mne.io.Raw] | None",
     subject_ids: list[str],
     sep_bands=None,
-    imu: "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] | None" = None,
+    imu: "dict[str, dict[str, ImuTrace]] | None" = None,
 ) -> dict:
     """Everything the two motion figures draw, measured once off the aligned recordings.
 
@@ -361,7 +362,7 @@ def motion_series(
           "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04},
           "imu": {"gyro": {...}}}
 
-    ``imu`` is ``{sid: {sensor: (t, y)}}`` already on the shared clock, from
+    ``imu`` is ``{sid: {sensor: ImuTrace}}`` already on the shared clock, from
     :func:`~fnirs_pipe.pipeline.hyper.alignment.align_imu_like`; see :func:`_imu_rows`.
 
     **Each member is divided by its own before-median, and the corrected traces are divided
@@ -500,7 +501,8 @@ def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
     ::
 
       -> {"gyro": {"members": [("sub-01", (n,)), ...], "both": (n,) or None,
-                   "medians": {"sub-01": 2.1, "sub-02": 0.8}, "y_top": 14.2}}
+                   "medians": {"sub-01": 2.1, "sub-02": 0.8}, "unit": "°/s",
+                   "y_top": 14.2}}
 
     Each member is binned onto the optical grid by its maximum, so a jolt shorter than a
     sample survives and the two members' minimum is taken sample by sample. The divisor is
@@ -510,7 +512,7 @@ def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
     """
     rows = {}
     for sensor in _IMU_ROWS:
-        members, medians = [], {}
+        members, medians, units = [], {}, set()
         for sid in subject_ids:
             trace = ((imu or {}).get(sid) or {}).get(sensor)
             if trace is None or len(trace[0]) < 2:
@@ -520,6 +522,7 @@ def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
             np.maximum.at(binned, idx, np.asarray(trace[1], dtype=float))
             median = float(np.median(binned))
             medians[sid] = median
+            units.add(getattr(trace, "unit", ""))
             members.append((sid, binned / (median if median > 0 else 1.0)))
         if not members:
             continue
@@ -528,6 +531,8 @@ def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
                 if len(members) == len(subject_ids) > 1 else None)
         flat = np.concatenate([y for _, y in members])
         rows[sensor] = {"members": members, "both": both, "medians": medians,
+                        # printed only when every member's sensor agrees on it
+                        "unit": units.pop() if len(units) == 1 else "",
                         "y_top": float(np.nanpercentile(flat, _MOTION_CAP_PCTL))
                         * _MOTION_HEADROOM}
     return rows
@@ -727,7 +732,8 @@ def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list
                      zeroline=False, row=ri, col=1)
     _margin_label(fig, ri, f"<b>{name}</b><br>x own median")
     # the divisors themselves, so who moved more is stated even though the row cannot show it
-    medians = " · ".join(f"{sid} {m:.3g}" for sid, m in row["medians"].items())
+    unit = f" {row['unit']}" if row.get("unit") else ""
+    medians = " · ".join(f"{sid} {m:.3g}{unit}" for sid, m in row["medians"].items())
     fig.add_annotation(x=1, xref="paper", y=1.0, yref=f"y{ri if ri > 1 else ''} domain",
                        text=f"median {symbol}: {medians}", showarrow=False,
                        xanchor="right", yanchor="top", font=dict(size=9, color="#8b95a1"))

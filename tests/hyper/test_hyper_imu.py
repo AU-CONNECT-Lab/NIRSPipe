@@ -8,6 +8,7 @@ import mne
 import numpy as np
 import pytest
 
+from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.pipeline.hyper.alignment import (
     align_imu_like, align_like, align_recordings, crop_aligned_window,
 )
@@ -29,7 +30,7 @@ def _imu(t_end: float, scale: float = 1.0):
     t = np.arange(0.0, t_end, 0.01)
     y = scale * (1.0 + 0.1 * np.abs(np.sin(t)))
     y[np.argmin(np.abs(t - EVENT_OWN_S))] = 50.0 * scale
-    return {"gyro": (t, y)}
+    return {"gyro": ImuTrace(t, y, "°/s")}
 
 
 @pytest.fixture(scope="module")
@@ -44,9 +45,10 @@ def test_each_member_moves_by_its_own_shift(members):
     imu = align_imu_like({sid: _imu(120.0) for sid in raws}, raws, aligned)
 
     for sid, shift in SHIFTS.items():
-        t, y = imu[sid]["gyro"]
+        t, y, unit = imu[sid]["gyro"]
         assert t[np.argmax(y)] == pytest.approx(EVENT_OWN_S - shift, abs=0.01)
         assert t[0] >= 0.0 and t[-1] <= aligned[sid].times[-1] + 1e-9
+        assert unit == "°/s"          # the unit travels with the trace
 
 
 def test_imu_and_optical_copy_land_on_the_same_sample(members):
@@ -63,7 +65,7 @@ def test_imu_and_optical_copy_land_on_the_same_sample(members):
 
     for sid in SHIFTS:
         od_t = optical[sid].times[np.argmax(optical[sid].get_data()[0])]
-        t, y = imu[sid]["gyro"]
+        t, y, _ = imu[sid]["gyro"]
         assert t[np.argmax(y)] == pytest.approx(od_t, abs=1.0 / optical[sid].info["sfreq"])
 
 
@@ -90,7 +92,7 @@ def test_the_panel_draws_the_imu_above_the_gvtd_rows(members):
 
     labels = [str(a.text) for a in fig.layout.annotations]
     assert any("gyroscope" in text for text in labels)
-    assert any(text.startswith("median") for text in labels)
+    assert any(text.startswith("median") and "°/s" in text for text in labels)
     imu_axis = next(a.yref for a in fig.layout.annotations if "gyroscope" in str(a.text))
     gvtd_axis = next(a.yref for a in fig.layout.annotations if "GVTD" in str(a.text))
     # rows are numbered top down, so the IMU row's axis comes first
@@ -137,7 +139,7 @@ def test_a_jolt_at_one_moment_lands_at_one_shared_time_for_both():
     for sid, onset in TRIGGER_OWN_S.items():
         y = np.ones_like(t)
         y[np.argmin(np.abs(t - (onset + JOLT_AFTER_TRIGGER_S)))] = 50.0
-        imu[sid] = {"gyro": (t, y)}
+        imu[sid] = {"gyro": ImuTrace(t, y, "°/s")}
     imu = align_imu_like(imu, raws, aligned)
     motion = motion_series(align_like(raws, aligned), None, list(TRIGGER_OWN_S), imu=imu)
 
