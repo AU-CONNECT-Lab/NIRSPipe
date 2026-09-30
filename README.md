@@ -354,6 +354,7 @@ fnirs-qc hyper-raw BIDS_DIR OUTPUT_DIR group --pairs-csv PATH
                    [--coh-fmin/--coh-fmax FLOAT]                 [default: 0.01 / 0.10]
                    [--short-max-dist/--long-min-dist/--long-max-dist MM]
                    [--normalize] [--no-align] [--tstart/--tend FLOAT]
+                   [--derivatives-dir DIR]
 
 fnirs-qc cohort       OUTPUT_DIR
 fnirs-qc cohort-hyper OUTPUT_DIR
@@ -362,7 +363,7 @@ fnirs-qc provenance   OUTPUT_DIR
 
 `prep-raw` takes more than one subject, one subject's failure does not stop the rest, and it writes the subject index too. Its report is `sub-<id>_task-<t>_desc-raw_report.html` beside the pipeline's own. Its `--by-condition` writes one page per annotated condition, `sub-<id>_task-<t>_cond-<label>_desc-raw_report.html`, keeping the run's own task. Its `--motion-correction` runs that correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening verdict still describes the recording as delivered.
 
-`hyper-raw` writes into the hyper tree, the same one `fnirs-hyper` writes, as `group-<id>/group-<id>_task-<t>_desc-raw_report.html`. Its per-subject quality table is the long-channel view the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own raw page.
+`hyper-raw` writes into the hyper tree, the same one `fnirs-hyper` writes, as `group-<id>/group-<id>_task-<t>_desc-raw_report.html`. `--derivatives-dir` names the fnirs-pipe tree, from which its motion panel draws each member's recording after motion correction; without it the panel shows the recordings before correction only, and it refuses an output directory that is that tree. Its per-subject quality table is the long-channel view the individual reports print, so a subject's SCI, CV, SNR and GVTD can be read against their own raw page.
 
 `cohort` puts every subject in a tree on one page (`desc-subjects_report.html`). `cohort-hyper` is about dyads (`desc-groups_report.html`): how much of each recording both members could use at the same moment, split into one member's loss and the shared loss; where that time went, per channel pair and per condition; and each window's coherence as its rank inside its own null. It reads the records `hyper-raw` writes. `provenance` redraws the graphs from the sidecars already on disk.
 
@@ -384,9 +385,10 @@ fnirs-rate raw   OUTPUT_DIR --participant-label SUB
                  [--session-label / --task-label] [--sci-threshold FLOAT] [--port INT]   # default 5052
 fnirs-rate hyper OUTPUT_DIR --group-id GROUP_ID --task-label TASK_LABEL --pairs-csv PATH
                  [--session-label TEXT] [--sci-threshold FLOAT] [--port INT]             # default 5053
+                 [--derivatives-dir DIR]
 ```
 
-Ratings and channel decisions are written into the subject's `nirs/` folder, one file per rated page (`desc-rating_qc.json`, `desc-rawrating_qc.json`) and one per run (`desc-rawdecision_qc.json`), with append-only logs in `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`. A rerun of the pipeline never overwrites them.
+Ratings and channel decisions are written into the subject's `nirs/` folder, one file per rated page (`desc-rating_qc.json`, `desc-rawrating_qc.json`) and one per run (`desc-rawdecision_qc.json`), with append-only logs in `logs/group_ratings.jsonl` and `logs/group_raw_ratings.jsonl`. A rerun of the pipeline never overwrites them. `fnirs-rate hyper` serves the report in the fnirs-hyper tree; `--derivatives-dir` names the fnirs-pipe tree, so each member's channel decisions land in the file their own raw page reads.
 
 ### `fnirs-gui`: Dash desktop interface
 

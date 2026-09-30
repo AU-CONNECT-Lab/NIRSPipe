@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from collections import defaultdict
@@ -146,6 +147,15 @@ def cmd_prep_raw(
         raise SystemExit(1)
 
 
+def _generated_by(tree: Path) -> set[str]:
+    """The tool names in a tree's dataset_description.json, empty when there is none."""
+    try:
+        desc = json.loads((Path(tree) / "dataset_description.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {str(e.get("Name", "")) for e in desc.get("GeneratedBy") or [] if isinstance(e, dict)}
+
+
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
@@ -163,15 +173,24 @@ def cmd_hyper_raw(
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
     if derivatives_dir is not None:
         _shared.refuse_output_is_source(derivatives_dir, output_dir)
+    made_by = _generated_by(output_dir)
+    if "fnirs-pipe" in made_by:
+        print(f"Error: {output_dir} is a fnirs-pipe tree; the dyad reports go to the "
+              f"fnirs-hyper tree. Pass that as OUTPUT_DIR and this one as --derivatives-dir.",
+              file=sys.stderr)
+        raise SystemExit(1)
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
     from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 
     # this writes group-*/ too, so the tree it lands in gets the stamp fnirs-hyper gives it
-    # when both name the fnirs-pipe tree they read
-    write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=derivatives_dir or bids_dir)
+    # when both name the fnirs-pipe tree they read. Without --derivatives-dir an existing
+    # stamp is left alone, or its SourceDatasets would flip between the two commands
+    if derivatives_dir is not None or not made_by:
+        write_dataset_description(output_dir, name="fnirs-hyper output",
+                                  generated_by="fnirs-hyper",
+                                  source=derivatives_dir or bids_dir)
     write_bidsignore(output_dir)
 
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({

@@ -74,3 +74,33 @@ def test_fnirs_hyper_refuses_to_write_into_the_tree_it_reads(entry, tmp_path, ca
     assert exit_.value.code != 0
     assert "are the same" in capsys.readouterr().err
     assert not any(tree.iterdir())
+
+
+def test_a_fnirs_pipe_tree_is_refused_as_the_output(mini_hyper_bids, tmp_path, capsys):
+    from fnirs_pipe.io.derivatives import write_dataset_description
+
+    bids, pairs = mini_hyper_bids
+    tree = tmp_path / "fnirs-pipe"
+    write_dataset_description(tree)
+    before = (tree / "dataset_description.json").read_text()
+    with pytest.raises(SystemExit) as exit_:
+        qc.main(_argv(bids, pairs, tree))
+    assert exit_.value.code != 0
+    assert "is a fnirs-pipe tree" in capsys.readouterr().err
+    assert (tree / "dataset_description.json").read_text() == before
+    assert not list(tree.glob("group-*"))
+
+
+def test_without_a_derivatives_tree_the_existing_stamp_is_kept(
+        mini_hyper_bids, tmp_path, stage_reads):
+    from fnirs_pipe.io.derivatives import write_dataset_description
+
+    bids, pairs = mini_hyper_bids
+    deriv, out = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
+    deriv.mkdir()
+    write_dataset_description(out, name="fnirs-hyper output", generated_by="fnirs-hyper",
+                              source=deriv)
+    qc.main(_argv(bids, pairs, out))
+
+    desc = json.loads((out / "dataset_description.json").read_text())
+    assert desc["SourceDatasets"][0]["URL"] == deriv.resolve().as_uri()

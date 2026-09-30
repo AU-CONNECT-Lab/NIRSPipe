@@ -327,9 +327,12 @@ class HyperRatingApp:
         output_dir: Path,
         subject_ids: list[str],
         sci_threshold: float = SCI_PASS,
+        decisions_dir: "Path | None" = None,
     ):
         self.html_path     = html_path
         self.output_dir    = output_dir
+        # the members' decisions live beside their raw pages in the fnirs-pipe tree
+        self.decisions_dir = decisions_dir or output_dir
         self.subject_ids   = list(subject_ids)
         self.sci_threshold = sci_threshold
         stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-raw_report"
@@ -360,7 +363,7 @@ class HyperRatingApp:
             return {"ratings": {}, "notes": {}}
 
     def _decisions_path(self, sid: str) -> Path:
-        return channel_decisions_path(self.output_dir, sid,
+        return channel_decisions_path(self.decisions_dir, sid,
                                       task=self.task, session=self.session)
 
     def _load_decisions(self) -> dict:

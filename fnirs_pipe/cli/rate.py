@@ -58,6 +58,7 @@ def cmd_raw(
 def cmd_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
     session_label: str | None, sci_threshold: float, port: int | None,
+    derivatives_dir: Path | None = None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from fnirs_pipe.pipeline.hyper import parse_group_csv
@@ -82,8 +83,12 @@ def cmd_hyper(
         raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
 
+    if derivatives_dir is None:
+        print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
+              "members' raw pages in the fnirs-pipe tree do not read them.", file=sys.stderr)
     print(f"Launching hyper viewer: {html_path.name} ...")
-    HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold).run(port=port)
+    HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
+                   decisions_dir=derivatives_dir).run(port=port)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -119,7 +124,8 @@ def _build_parser() -> argparse.ArgumentParser:
     pw.set_defaults(func=cmd_raw)
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
-    ph.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    ph.add_argument("output_dir", type=Path,
+                    help="The fnirs-hyper tree holding the group-<id>/ raw report.")
     ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
                     help="Group ID to open, e.g. 'A'.")
     ph.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,
@@ -132,6 +138,9 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
     ph.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5053, or the next free port above it.")
+    ph.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
+                    help="The fnirs-pipe tree. Each member's channel decisions are kept there, "
+                         "in the file their raw page reads; without it they go to OUTPUT_DIR.")
     ph.set_defaults(func=cmd_hyper)
     return p
 
