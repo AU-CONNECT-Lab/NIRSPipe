@@ -11,9 +11,15 @@ All notable changes to this project will be documented in this file.
 - The same figures draw the accelerometer's jerk as a second IMU row when the recording carries one
 - The dyad motion panel draws each member's gyroscope and accelerometer on the shared clock, each divided by its own median
 - IMU rows print the unit the recording stores, on the axis or beside the dyad medians
+- `fnirs-qc hyper-raw --derivatives-dir` names the fnirs-pipe tree its motion panel reads corrected recordings from
 
 ### Changed
 - Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
+- `fnirs-qc hyper-raw` refuses an output directory that is its `--derivatives-dir`
+
+### Fixed
+- `fnirs-qc hyper-raw` looked for corrected recordings in the fnirs-hyper tree, so its motion panel never had a corrected side
+- The Hyper Preparation page wrote its dyad report into the derivatives tree and restamped it; it now takes a fnirs-hyper directory
 
 ## [0.53.0] - 2026-09-26
 

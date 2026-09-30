@@ -106,8 +106,16 @@ layout = dbc.Container([
                 dbc.Button("Write QC report", id="ha-report-btn",
                            color="secondary", outline=True),
             ),
+            params(
+                field("fnirs-hyper directory",
+                      dbc.Input(id="ha-hyper-dir", type="text",
+                                placeholder="tree the dyad reports go to, not the derivatives"),
+                      span=PATH),
+            ),
             html.Small("The report runs fnirs-qc hyper-raw over the group CSV with the"
-                       " parameters above. Export writes the aligned recordings themselves.",
+                       " parameters above, into the fnirs-hyper directory, reading each"
+                       " member's corrected recording from the derivatives directory."
+                       " Export writes the aligned recordings themselves.",
                        className="fp-hint d-block mt-1"),
             html.Div(id="ha-export-status", className="mt-2 small"),
             html.Div(id="ha-report-status", className="mt-2"),

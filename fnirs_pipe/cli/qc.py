@@ -157,18 +157,23 @@ def cmd_hyper_raw(
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     skip_bids_validation: bool,
+    derivatives_dir: Path | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
+    if derivatives_dir is not None and Path(derivatives_dir).resolve() == Path(output_dir).resolve():
+        print("Error: the output directory is the fnirs-pipe tree --derivatives-dir names; the "
+              "dyad reports go to the fnirs-hyper tree, a directory of its own.", file=sys.stderr)
+        raise SystemExit(1)
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
     from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
 
-    # this writes group-*/ too, so the tree it lands in gets the same stamp fnirs-hyper
-    # gives it, whichever of the two runs first
+    # this writes group-*/ too, so the tree it lands in gets the stamp fnirs-hyper gives it
+    # when both name the fnirs-pipe tree they read
     write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=bids_dir)
+                              generated_by="fnirs-hyper", source=derivatives_dir or bids_dir)
     write_bidsignore(output_dir)
 
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
@@ -195,6 +200,9 @@ def cmd_hyper_raw(
 
     groups = _select_groups(pairs_csv, group_id, task_label)
     ses = session_label[0] if session_label else None
+    if derivatives_dir is None:
+        print("[info] no --derivatives-dir: the motion panel shows the recordings before "
+              "correction only.", file=sys.stderr)
 
     def _process(gid, task, members):
         raws_cw = load_group_raw_bids(bids_dir, members)
@@ -215,11 +223,11 @@ def cmd_hyper_raw(
         # the motion panel needs optical density, which the haemoglobin conversion above
         # has already left behind, so the intensity copy is cut to the same window rather
         # than aligned a second time. The corrected file is whatever the member's own
-        # `fnirs-pipe` run left in derivatives, and is simply absent for a member who has
-        # not been through one.
+        # `fnirs-pipe` run left in the tree --derivatives-dir names, and is simply absent for
+        # a member who has not been through one.
         intensity_raws = align_like(raws_cw, aligned_raws)
-        after_raws = align_like(load_group_stage(output_dir, members, "motcorrected"),
-                                aligned_raws)
+        after_raws = (align_like(load_group_stage(derivatives_dir, members, "motcorrected"),
+                                 aligned_raws) if derivatives_dir is not None else {})
         # the aux group rides only in the source file, on each member's own clock; it is
         # moved by the same shift the intensity copy was cut by. A panel row, so a file that
         # will not read costs the row and not the report
@@ -388,7 +396,9 @@ def _build_parser() -> argparse.ArgumentParser:
                                  _shared.alignment_window()],
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    hr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    hr.add_argument("output_dir", type=Path,
+                    help="The fnirs-hyper tree the dyad reports go to, the one fnirs-hyper "
+                         "writes.")
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
     hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
@@ -410,6 +420,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--skip_bids_validator", dest="skip_bids_validation",
         action=argparse.BooleanOptionalAction, default=False,
         help="Do not check the input with bids-validator.")
+    hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
+                    help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
+                         "motion panel draws its after-correction side from desc-motcorrected "
+                         "there; without it, only the recordings before correction.")
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

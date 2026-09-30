@@ -527,6 +527,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     Input("ha-report-btn",  "n_clicks"),
     State("ha-bids-dir",    "value"),
     State("ha-deriv-dir",   "value"),
+    State("ha-hyper-dir",   "value"),
     State("ha-group-csv",   "value"),
     State("ha-group-select", "value"),
     State("ha-dpf",         "value"),
@@ -535,7 +536,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     State("ha-sci-thresh",  "value"),
     prevent_initial_call=True,
 )
-def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, group_csv, group_val,
+def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, hyper_dir, group_csv, group_val,
                            dpf, cardiac_l, cardiac_h, sci_thresh):
     # the viewer's group picker doubles as the report's scope; empty means every group
     group_id = None
@@ -543,7 +544,7 @@ def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, group_csv, group_val,
         group_id = group_val.split("|")[0] if "|" in str(group_val) else str(group_val)
 
     opts = {
-        "bids_dir": bids_dir, "output_dir": deriv_dir,
+        "bids_dir": bids_dir, "output_dir": hyper_dir, "derivatives_dir": deriv_dir,
         "pairs_csv": group_csv, "group_id": group_id,
         "dpf": dpf, "cardiac_l": cardiac_l, "cardiac_h": cardiac_h,
         "sci_threshold": sci_thresh,
@@ -554,4 +555,4 @@ def write_hyper_raw_report(n_clicks, bids_dir, deriv_dir, group_csv, group_val,
         return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
 
     argv = build_raw_qc_args("hyper-raw", opts)
-    return run_and_report({"argv": argv, "command": "hyper-raw", "output_dir": deriv_dir})
+    return run_and_report({"argv": argv, "command": "hyper-raw", "output_dir": hyper_dir})

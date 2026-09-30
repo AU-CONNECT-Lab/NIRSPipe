@@ -670,7 +670,7 @@ _RAW_QC_FULL_OPTS = dict(
     dpf=6.0, cardiac_l=0.7, cardiac_h=1.5, sci_threshold=0.8,
     window_length=10.0, epoch_tmin=-5.0, epoch_tmax=25.0, epoch_qc=True,
     short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
-    pairs_csv="/pairs.csv", group_id="G01",
+    pairs_csv="/pairs.csv", group_id="G01", derivatives_dir="/deriv",
 )
 
 
@@ -724,6 +724,12 @@ def test_a_raw_report_refuses_without_the_values_that_have_no_default(command):
     for field in ("dpf", "cardiac_l", "cardiac_h"):
         opts = dict(_RAW_QC_FULL_OPTS, **{field: None})
         assert missing_raw_qc(command, opts), f"{command} accepted a missing {field}"
+
+
+def test_the_dyad_report_writes_the_hyper_tree_and_reads_the_pipe_tree():
+    argv = build_raw_qc_args("hyper-raw", dict(_RAW_QC_FULL_OPTS, output_dir="/hyper"))
+    assert argv[3] == "/hyper"
+    assert argv[argv.index("--derivatives-dir") + 1] == "/deriv"
 
 
 def test_the_raw_reports_take_a_bids_directory():

@@ -265,6 +265,7 @@ def build_raw_qc_args(command: str, opts: dict) -> list[str]:
         return args
 
     args.append("group")
+    args += _text("--derivatives-dir", opts.get("derivatives_dir"))
     args += _text("--pairs-csv", opts.get("pairs_csv"))
     args += _text("--group-id", opts.get("group_id"))
     args += _screening(opts)
@@ -273,6 +274,8 @@ def build_raw_qc_args(command: str, opts: dict) -> list[str]:
 
 def missing_raw_qc(command: str, opts: dict) -> str | None:
     if not opts.get("bids_dir") or not opts.get("output_dir"):
+        if command == "hyper-raw":
+            return "Set the BIDS and fnirs-hyper directories."
         return "Set the BIDS and output directories."
     # these three have no defaults anywhere, by design
     if opts.get("dpf") is None:
