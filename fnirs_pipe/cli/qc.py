@@ -179,6 +179,7 @@ def cmd_hyper_raw(
     from fnirs_pipe.cli.hyper import _run_groups, _select_groups
     from fnirs_pipe.pipeline.hyper import (
         _raw_to_haemo,
+        align_imu_like,
         align_like,
         align_recordings,
         compute_group_sqm_raw,
@@ -188,7 +189,9 @@ def cmd_hyper_raw(
         normalize_raws,
         trim_to_shortest,
     )
+    from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_report
+    from fnirs_pipe.utils.lineage import path_from
 
     groups = _select_groups(pairs_csv, group_id, task_label)
     ses = session_label[0] if session_label else None
@@ -217,6 +220,18 @@ def cmd_hyper_raw(
         intensity_raws = align_like(raws_cw, aligned_raws)
         after_raws = align_like(load_group_stage(output_dir, members, "motcorrected"),
                                 aligned_raws)
+        # the aux group rides only in the source file, on each member's own clock; it is
+        # moved by the same shift the intensity copy was cut by. A panel row, so a file that
+        # will not read costs the row and not the report
+        try:
+            imu = align_imu_like(
+                {sid: imu_traces(*read_aux_snirf(path_from(raw))[:2])
+                 for sid, raw in raws_cw.items() if path_from(raw)},
+                raws_cw, aligned_raws)
+        except Exception:
+            logger.warning("%s: IMU could not be read; the motion panel has no IMU rows",
+                           gid, exc_info=True)
+            imu = {}
         return build_hyper_report(
             group_id=gid,
             task=task,
@@ -227,6 +242,7 @@ def cmd_hyper_raw(
             raw_raws=raws_haemo,
             intensity_raws=intensity_raws,
             after_raws=after_raws,
+            imu=imu,
             output_dir=output_dir,
             sep_bands=sep_bands,
             session=ses,

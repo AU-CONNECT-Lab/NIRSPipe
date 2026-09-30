@@ -244,7 +244,7 @@ def align_like(
         ref = aligned_raws.get(sid)
         if ref is None:
             continue
-        tmin = float(ref.first_time) - float(raw.first_time)
+        tmin = _aligned_shift(raw, ref)
         tmax = tmin + float(ref.times[-1])
         if tmin < -1e-6 or tmax > float(raw.times[-1]) + 1e-6:
             logger.warning("%s: the aligned window (%.1f-%.1f s) is not inside this copy "
@@ -253,6 +253,42 @@ def align_like(
             continue
         # the tolerance above lets float round-off past the last sample through; crop refuses it
         out[sid] = raw.copy().crop(tmin=max(tmin, 0.0), tmax=min(tmax, float(raw.times[-1])))
+    return out
+
+
+def _aligned_shift(raw: mne.io.Raw, aligned: mne.io.Raw) -> float:
+    """Seconds into ``raw`` at which ``aligned`` starts; ``crop`` accumulates into first_samp."""
+    return float(aligned.first_time) - float(raw.first_time)
+
+
+def align_imu_like(
+    imu: "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]",
+    raws: dict[str, mne.io.Raw],
+    aligned_raws: dict[str, mne.io.Raw],
+) -> "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]]":
+    """Each member's IMU traces moved onto the clock ``aligned_raws`` sit on.
+
+    ::
+
+        member aligned 22.4 s in, gyro jolt at 30.0 s on its own clock
+          -> the same jolt at 7.6 s on the shared clock
+
+    ``imu`` is ``{sid: {sensor: (t, y)}}`` on each member's own clock, zero at the first
+    sample of ``raws[sid]``, the same assumption the aux regressors make. The shift is the one
+    :func:`align_like` cuts the optical copy by, so the two cannot disagree. Samples outside
+    the aligned window are dropped; a member the aligned set does not carry is left out.
+    """
+    out: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
+    for sid, traces in imu.items():
+        raw, ref = raws.get(sid), aligned_raws.get(sid)
+        if raw is None or ref is None or not traces:
+            continue
+        shift, end = _aligned_shift(raw, ref), float(ref.times[-1])
+        out[sid] = {}
+        for sensor, (t, y) in traces.items():
+            t_shared = np.asarray(t, dtype=float) - shift
+            keep = (t_shared >= 0.0) & (t_shared <= end)
+            out[sid][sensor] = (t_shared[keep], np.asarray(y)[keep])
     return out
 
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     _stamp_alignment,
+    align_imu_like,
     align_like,
     align_recordings,
     alignment_params,

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - The carpet and per-channel motion figures draw the gyroscope's angular speed above the GVTD rows when the recording carries one
 - The same figures draw the accelerometer's jerk as a second IMU row when the recording carries one
+- The dyad motion panel draws each member's gyroscope and accelerometer on the shared clock, each divided by its own median
 
 ### Changed
 - Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift

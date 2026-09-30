@@ -124,6 +124,7 @@ def _process_hyper_raw_group(
     raw_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
+    imu: "dict[str, dict[str, tuple]] | None" = None,
     session: str | None = None,
     sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
@@ -235,7 +236,8 @@ def _process_hyper_raw_group(
     # of the page is drawn on, so it is its own pass rather than a row on the screening grid
     motion, motion_scalars = {}, {}
     with guard("Motion panel", errors, label):
-        motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands)
+        motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands,
+                               imu=imu)
     if not motion:
         note(notes, label, "no optical density for the members: the motion panels "
                            "are empty")

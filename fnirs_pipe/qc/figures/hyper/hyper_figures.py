@@ -23,7 +23,7 @@ from fnirs_pipe.qc.figures.common.head_map import (
 )
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common.motion_panel import (
-    carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
+    _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
 )
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
@@ -347,6 +347,7 @@ def motion_series(
     after_raws: "dict[str, mne.io.Raw] | None",
     subject_ids: list[str],
     sep_bands=None,
+    imu: "dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] | None" = None,
 ) -> dict:
     """Everything the two motion figures draw, measured once off the aligned recordings.
 
@@ -357,7 +358,11 @@ def motion_series(
           "series": {"before": {"long": [("sub-01", (39610,)), ...]}, ...},
           "spikes_both": {"before": [(412.0, 3.1), ...]},
           "carpets": {"before": [("sub-01", z, t, labels, spans)]},
-          "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04}}
+          "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04},
+          "imu": {"gyro": {...}}}
+
+    ``imu`` is ``{sid: {sensor: (t, y)}}`` already on the shared clock, from
+    :func:`~fnirs_pipe.pipeline.hyper.alignment.align_imu_like`; see :func:`_imu_rows`.
 
     **Each member is divided by its own before-median, and the corrected traces are divided
     by that same number.** GVTD is an RMS of optical-density derivatives in the recording's
@@ -486,7 +491,46 @@ def motion_series(
 
     return {"subject_ids": have, "t": t, "sets": sets, "stages": stages,
             "series": series, "spikes_both": spikes_both, "carpets": carpets,
-            "y_tops": y_tops, "divisors": divisors}
+            "y_tops": y_tops, "divisors": divisors, "imu": _imu_rows(imu, have, t)}
+
+
+def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
+    """Each IMU sensor as one row: every member on ``t``, divided by its own median.
+
+    ::
+
+      -> {"gyro": {"members": [("sub-01", (n,)), ...], "both": (n,) or None,
+                   "medians": {"sub-01": 2.1, "sub-02": 0.8}, "y_top": 14.2}}
+
+    Each member is binned onto the optical grid by its maximum, so a jolt shorter than a
+    sample survives and the two members' minimum is taken sample by sample. The divisor is
+    the GVTD rows' rule: two members' IMUs share no absolute scale (and where each sensor
+    sits is not recorded), so at x its own median 1.0 is that member's usual level. The
+    median is kept for the row's label, so who moved more is still on the page.
+    """
+    rows = {}
+    for sensor in _IMU_ROWS:
+        members, medians = [], {}
+        for sid in subject_ids:
+            trace = ((imu or {}).get(sid) or {}).get(sensor)
+            if trace is None or len(trace[0]) < 2:
+                continue
+            binned = np.zeros(len(t))
+            idx = np.clip(np.searchsorted(t, trace[0]), 0, len(t) - 1)
+            np.maximum.at(binned, idx, np.asarray(trace[1], dtype=float))
+            median = float(np.median(binned))
+            medians[sid] = median
+            members.append((sid, binned / (median if median > 0 else 1.0)))
+        if not members:
+            continue
+        # every member, not any, as for the GVTD rows' floor
+        both = (np.minimum.reduce([y for _, y in members])
+                if len(members) == len(subject_ids) > 1 else None)
+        flat = np.concatenate([y for _, y in members])
+        rows[sensor] = {"members": members, "both": both, "medians": medians,
+                        "y_top": float(np.nanpercentile(flat, _MOTION_CAP_PCTL))
+                        * _MOTION_HEADROOM}
+    return rows
 
 
 def _matched_after(after_od, ch_names, shape, sfreq, sid):
@@ -548,11 +592,15 @@ def build_motion_panel(
     carpets = motion["carpets"].get(stage) or []
     has_cond = bool(conditions)
     has_spikes = bool(spans_both)
-    n_rows = int(has_cond) + len(sets) + int(has_spikes) + len(carpets)
+    # the one record of movement not taken off the optical data, so it sits above the GVTD
+    # rows; the same in both stages, since a correction does not change how anyone moved
+    imu_rows = motion.get("imu") or {}
+    n_rows = int(has_cond) + len(imu_rows) + len(sets) + int(has_spikes) + len(carpets)
 
     # the spike strip sits directly under the condition bar, above the traces, as one band
     heights = (([TIMELINE_ROW_PX - 10] if has_cond else [])
                + ([_SPIKE_ROW_PX] if has_spikes else [])
+               + [_MOTION_ROW_PX] * len(imu_rows)
                + [_MOTION_ROW_PX] * len(sets)
                + [_MOTION_CARPET_PX] * len(carpets))
     vspace = 0.022
@@ -590,6 +638,10 @@ def build_motion_panel(
         ri += 1
 
     shown: set[str] = set()
+    for sensor, row in imu_rows.items():
+        _add_imu_row(fig, ri, sensor, row, t, sids, shown)
+        ri += 1
+
     for name in sets:
         entries = motion["series"][stage][name]
         y_top = motion["y_tops"][name]
@@ -644,6 +696,41 @@ def build_motion_panel(
                       legend=dict(orientation="h", yanchor="bottom", y=1.012,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig
+
+
+def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list[str],
+                 shown: set) -> None:
+    """One IMU sensor's row, drawn as the GVTD rows are: the pair's floor, then each member."""
+    name, _label, symbol, _colour = _IMU_ROWS[sensor]
+    if row["both"] is not None:
+        t_ds, m_ds = _maxpool_xy(t, row["both"])
+        fig.add_trace(go.Scatter(
+            x=t_ds, y=m_ds, mode="lines", fill="tozeroy", fillcolor=_TOGETHER_FILL,
+            line=dict(width=0), name="both at once", legendgroup="both",
+            showlegend="both" not in shown,
+            hovertemplate="t=%{x:.0f}s<br>both >= %{y:.2f}x<extra></extra>",
+        ), row=ri, col=1)
+        shown.add("both")
+    for sid, y in row["members"]:
+        t_ds, y_ds = _maxpool_xy(t, y)
+        fig.add_trace(go.Scatter(
+            x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
+            showlegend=sid not in shown, opacity=0.9,
+            line=dict(color=_MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)],
+                      width=1.5),
+            hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
+                          "%{y:.2f}x its own median<extra></extra>",
+        ), row=ri, col=1)
+        shown.add(sid)
+    fig.add_hline(y=1.0, row=ri, col=1, line=dict(color="#c8cfd6", width=1, dash="dot"))
+    fig.update_yaxes(range=[0, row["y_top"]], tickfont=dict(size=8), gridcolor="#eef1f4",
+                     zeroline=False, row=ri, col=1)
+    _margin_label(fig, ri, f"<b>{name}</b><br>x own median")
+    # the divisors themselves, so who moved more is stated even though the row cannot show it
+    medians = " · ".join(f"{sid} {m:.3g}" for sid, m in row["medians"].items())
+    fig.add_annotation(x=1, xref="paper", y=1.0, yref=f"y{ri if ri > 1 else ''} domain",
+                       text=f"median {symbol}: {medians}", showarrow=False,
+                       xanchor="right", yanchor="top", font=dict(size=9, color="#8b95a1"))
 
 
 def _margin_label(fig, row: int, text: str) -> None:
