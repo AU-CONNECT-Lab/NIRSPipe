@@ -1,4 +1,4 @@
 # What --mode denoise fills in when neither the command line nor --config sets it.
 high_pass = 0.01
-low_pass = 0.2
+low_pass = 0.5
 noise_model = "ols"

@@ -1,6 +1,6 @@
 # What --mode rest fills in when neither the command line nor --config sets it.
 high_pass = 0.01
-low_pass = 0.1
+low_pass = 0.08
 drift_model = "cosine"
 drift_high_pass = 0.01
 noise_model = "ols"
