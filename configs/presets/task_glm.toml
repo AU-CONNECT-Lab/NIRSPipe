@@ -1,7 +1,0 @@
-high_pass = 0.01
-low_pass = 0.5
-
-hrf_model = "spm"
-noise_model = "ar1"
-drift_model = "cosine"
-drift_high_pass = 0.01
