@@ -753,6 +753,22 @@ def test_the_placeholders_name_the_mode_defaults():
     from fnirs_pipe.cli.run import mode_defaults
     from fnirs_pipe.interface.callbacks.analysis_callbacks import mode_placeholders
 
-    _, low, _ = mode_placeholders("rest")
+    _, low, _, drift, _, noise = mode_placeholders("rest")
     assert str(mode_defaults("rest")["low_pass"]) in low
-    assert mode_placeholders("none") == ("off", "off", "from your design")
+    assert mode_defaults("rest")["drift_model"] in drift
+    assert mode_defaults("rest")["noise_model"] in noise
+    assert mode_placeholders("none")[:3] == ("off", "off", "from your design")
+
+
+def test_empty_model_fields_send_nothing_and_leave_it_to_the_mode():
+    blank = {**_FULL_OPTS, "post_mode": "glm",
+             "drift_model": None, "hrf_model": None, "noise_model": None}
+    flags = set(_build_cli_args(blank))
+    assert not flags & {"--drift-model", "--hrf-model", "--noise-model"}
+
+
+def test_the_cutoff_follows_a_cosine_the_mode_chose():
+    # glm's drift model comes from its defaults, but the cutoff still has to be sent
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": "glm", "drift_model": None})
+    assert argv[argv.index("--drift-high-pass") + 1] == str(_FULL_OPTS["drift_high_pass"])
+    assert "--drift-order" not in argv

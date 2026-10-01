@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-rate hyper --derivatives-dir` keeps each member's channel decisions in the fnirs-pipe tree, beside their raw page
 - `--mode` fills in its own defaults for the post settings, under `--config` and the command line
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
-- The Analysis page's empty filter fields show the chosen mode's defaults
+- The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
 
 ### Changed
 - Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
 
 ### Removed
-- `configs/presets/`, replaced by the mode defaults shipped inside the package
+- `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
 
 ### Fixed
 - `fnirs-qc hyper-raw` looked for corrected recordings in the fnirs-hyper tree, so its motion panel never had a corrected side

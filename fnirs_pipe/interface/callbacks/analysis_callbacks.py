@@ -249,10 +249,12 @@ def _build_cli_args(opts: dict) -> list[str]:
         # confound regression: honoured by every mode; a field left empty takes the mode's default
         if opts.get("drift_model"):
             args += ["--drift-model", opts["drift_model"]]
-            if opts["drift_model"] == "cosine" and opts.get("drift_high_pass") is not None:
-                args += ["--drift-high-pass", str(opts["drift_high_pass"])]
-            if opts["drift_model"] == "polynomial" and opts.get("drift_order") is not None:
-                args += ["--drift-order", str(opts["drift_order"])]
+        # the drift model that will run, typed or the mode's, decides which companion applies
+        drift = opts.get("drift_model") or mode_defaults(mode).get("drift_model")
+        if drift == "cosine" and opts.get("drift_high_pass") is not None:
+            args += ["--drift-high-pass", str(opts["drift_high_pass"])]
+        if drift == "polynomial" and opts.get("drift_order") is not None:
+            args += ["--drift-order", str(opts["drift_order"])]
         if opts.get("short_channel") and opts["short_channel"] != "none":
             args += ["--short-channel", opts["short_channel"]]
         if mode == "glm":
@@ -476,12 +478,18 @@ _GONE  = {"display": "none"}
     Input("an-drift-model", "value"), Input("an-drift-high-pass", "value"),
     Input("an-short-channel", "value"), Input("an-fc", "value"),
     Input("an-hrf-model", "value"), Input("an-noise-model", "value"),
-    Input("an-stim-dur", "value"),
+    Input("an-stim-dur", "value"), Input("an-post-mode", "value"),
 )
 def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, window,
                       card_l, card_h, resp_l, resp_h, tmin, tmax, chunk, by_cond,
                       censor, n_std, drift, drift_hp, short_ch, fc,
-                      hrf, noise, stim_dur):
+                      hrf, noise, stim_dur, mode):
+    # what the run will use, so an empty field still says what it gets
+    defaults = mode_defaults(mode)
+    drift = drift or defaults.get("drift_model")
+    drift_hp = drift_hp if drift_hp is not None else defaults.get("drift_high_pass")
+    hrf = hrf or defaults.get("hrf_model")
+    noise = noise or defaults.get("noise_model")
     return (
         summary(value("DPF", dpf), motion,
                 rng("separations", short_max, long_min, " mm")),
@@ -507,9 +515,11 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
     Output("an-drift-order-wrap", "style"),
     Input("an-gvtd-censor", "value"),
     Input("an-drift-model", "value"),
+    Input("an-post-mode", "value"),
 )
-def hide_what_does_not_apply(censor, drift):
+def hide_what_does_not_apply(censor, drift, mode):
     # each of these is read by exactly one setting of the control above it
+    drift = drift or mode_defaults(mode).get("drift_model")
     return (
         _SHOWN if censor not in (None, "off") else _GONE,
         _SHOWN if drift == "cosine" else _GONE,
@@ -523,6 +533,9 @@ def hide_what_does_not_apply(censor, drift):
     Output("an-high-pass",       "placeholder"),
     Output("an-low-pass",        "placeholder"),
     Output("an-drift-high-pass", "placeholder"),
+    Output("an-drift-model",     "placeholder"),
+    Output("an-hrf-model",       "placeholder"),
+    Output("an-noise-model",     "placeholder"),
     Input("an-post-mode", "value"),
 )
 def mode_placeholders(mode):
@@ -530,7 +543,9 @@ def mode_placeholders(mode):
 
     def shown(key, empty):
         return f"{defaults[key]} ({mode} default)" if key in defaults else empty
-    return shown("high_pass", "off"), shown("low_pass", "off"), shown("drift_high_pass", "from your design")
+    return (shown("high_pass", "off"), shown("low_pass", "off"),
+            shown("drift_high_pass", "from your design"), shown("drift_model", "none"),
+            shown("hrf_model", "none"), shown("noise_model", "auto"))
 
 
 # ── The drift cutoff is bracketed, so say so while the form is being filled ──

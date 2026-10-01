@@ -288,14 +288,13 @@ def _postprocessing():
         ),
         html.Div(id="an-band-note", className="mt-2"),
 
-        # every mode honours these, and glm and rest require a drift model, so not GLM-only
+        # every mode honours these, so not GLM-only; an empty field takes the mode's default
         html.Div(id="an-confound-section", children=[
             section("Confound regression",
                 params(
                     field("Drift model",
                           dcc.Dropdown(id="an-drift-model", options=_opts(_DRIFT_CHOICES),
-                                       value="cosine", clearable=False),
-                          hint="GLM and Rest default to cosine."),
+                                       value=None, placeholder="mode default")),
                     field("Drift high-pass (Hz)",
                           dbc.Input(id="an-drift-high-pass", type="number",
                                     placeholder="from your design"),
@@ -327,13 +326,14 @@ def _postprocessing():
                 params(
                     field("HRF model",
                           dcc.Dropdown(id="an-hrf-model", options=_opts(_HRF_CHOICES),
-                                       value="spm", clearable=False)),
+                                       value=None, placeholder="mode default")),
                     # free text with a suggestion list, not a dropdown: the CLI takes any
                     # `arN` and a closed list here would be the narrower surface. `pattern`
                     # is the CLI's own rule, so the browser refuses what the CLI would
                     field("Noise model",
                           html.Div([
-                              dbc.Input(id="an-noise-model", value="auto", debounce=True,
+                              dbc.Input(id="an-noise-model", debounce=True,
+                                        placeholder="mode default",
                                         list="an-noise-model-suggest",
                                         pattern=NOISE_MODEL_PATTERN),
                               html.Datalist(id="an-noise-model-suggest",
