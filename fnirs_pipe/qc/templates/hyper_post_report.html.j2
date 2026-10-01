@@ -105,28 +105,13 @@
   </div>
 
   <p class="qm-note" style="margin-top:0.75rem;">
-    {%- if condition_label %}
-    Every panel below is this window read out of the whole-run transform, so it carries the
-    recording&rsquo;s cone of influence and not two edges of its own.
-    {%- elif analysis_window %}
-    Restricted to {{ analysis_window }} by <code>--tstart</code>/<code>--tend</code>, taken
-    out of the transform of the whole recording. The coherence is
-    averaged across every condition inside that window.
-    {%- else %}
-    The coherence over the whole recording, averaged across every condition in it. The
-    per-condition pages are the ones to read for a block design.
-    {%- endif %}
-  </p>
+    {%- if condition_label %}{{ section_note('hyper_post.scope_condition') }}
+    {%- elif analysis_window %}{{ section_note('hyper_post.scope_restricted', window=analysis_window) }}
+    {%- else %}{{ section_note('hyper_post.scope_whole') }}
+    {%- endif %}</p>
 
   {% if window_cycles and window_cycles < min_band_cycles %}
-  <div class="too-short">
-    This window holds only {{ "%.1f"|format(window_cycles) }} cycles of
-    <code>--wtc-band-fmin</code>, the slowest frequency being averaged. A coherence there is
-    a statement about a phase relationship this window has seen about that many times, so
-    the low-frequency end of every number below rests on very few independent looks at it.
-    Raise <code>--wtc-band-fmin</code>, or read
-    that end as indicative. Nothing is masked or dropped on account of this.
-  </div>
+  <div class="too-short">{{ section_note('hyper_post.too_short', cycles="%.1f"|format(window_cycles)) }}</div>
   {% endif %}
 
   {#- Both of these are what the rest of the page is read against rather than findings of
@@ -136,9 +121,7 @@
   <div class="summary-grid" style="margin-top:1.1rem;">
     <div id="Alignment">
       <h3 style="margin:0 0 0.3rem;">The two clocks</h3>
-      <p class="qm-note">Crop offset from the first shared trigger; all recordings are then
-        trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s
-        own record is on its own, and this table is what converts between them.</p>
+      <p class="qm-note">{{ section_note('hyper_post.clocks') }}</p>
       <table class="qm-table qm-flat" id="align-table">
         <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
         <tbody id="align-tbody"></tbody>
@@ -147,8 +130,7 @@
     {% if roi_rows %}
     <div id="ROI">
       <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
-      <p class="qm-note">The channel-to-region mapping from <code>--roi-mapping</code>, which
-        is what the per-ROI panels below are averaged over.</p>
+      <p class="qm-note">{{ section_note('hyper_post.roi_grouping') }}</p>
       <table class="qm-table qm-flat" id="roi-table">
         <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
         <tbody>
@@ -170,27 +152,13 @@
 
 {#- the chromophore note: about every panel in this section rather than about any one of
     them, so it opens the section instead of standing as a panel of its own -#}
-<p class="step-desc">
-  Every panel below shows {{ wtc_chroma_labels | join(" above ") }}, stacked and labelled,
-  and <code>hyper-wtc.tsv</code> carries {{ wtc_chroma_labels | join(" and ") }} in a
-  <code>chromophore</code> column. <b>HbO and HbR are two parallel passes, never mixed and
-  never averaged.</b> Read them as a consistency check, not two results: HbR is the less
-  contaminated by scalp and systemic circulation, so a coupling that shows in HbO and not in
-  HbR is a caution flag. It is not a quantitative test: coherence is unsigned and bounded, so
-  there is no expected relationship between an HbO value and an HbR one. Read it as present
-  or absent. The maps stack; the two matrix panels put the chromophores side by side on one
-  colour scale, which is that check in one figure, and the inter-brain correlation panels
-  below do the same.
-</p>
+<p class="step-desc">{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above "), listed=wtc_chroma_labels | join(" and ")) }}</p>
 
 <details id="WTCChannel" open>
   <summary>a. Per channel</summary>
   <div class="details-body">
-    <p class="step-desc">Morlet wavelet. Arrows are relative phase, right in phase and up
-      {{ subject_ids[0] }} leading; the washed-out band below the white dash sits outside the
-      cone of influence.
-      {%- if chan_crossed %} The left selector is {{ subject_ids[0] }} and the right
-      {{ subject_ids[1] }}, the order the map title reads in.{% endif %}</p>
+    <p class="step-desc">{{ section_note('hyper_post.wtc_channel', lead=subject_ids[0]) }}
+      {%- if chan_crossed %} {{ section_note('hyper_post.selector_order', left=subject_ids[0], right=subject_ids[1]) }}{% endif %}</p>
     <div class="map-pick">
       <select id="ch-select-post" aria-label="{{ subject_ids[0] }} channel"></select>
       {% if chan_crossed %}
@@ -212,12 +180,8 @@
 <details id="WTCRoi" open>
   <summary>b. Per ROI</summary>
   <div class="details-body">
-    <p class="step-desc">The member channels&rsquo; maps averaged cell by cell, bad channels
-      excluded; arrows and cone as above. <b>These ones are live</b>: hover for the time,
-      frequency and coherence under the pointer, and drag to zoom. The per-channel maps
-      above are stills.
-      {%- if roi_crossed %} The left selector is {{ subject_ids[0] }} and the right
-      {{ subject_ids[1] }}, the order the map title reads in.{% endif %}</p>
+    <p class="step-desc">{{ section_note('hyper_post.wtc_roi') }}
+      {%- if roi_crossed %} {{ section_note('hyper_post.selector_order', left=subject_ids[0], right=subject_ids[1]) }}{% endif %}</p>
     <div class="map-pick">
       <select id="roi-select-post" aria-label="{{ subject_ids[0] }} region"></select>
       {% if roi_crossed %}
@@ -240,12 +204,8 @@
 <details id="wtc-roi-matrix-card" open>
   <summary>c. ROI &times; ROI</summary>
   <div class="details-body">
-    <p class="step-desc">Band mean per ROI pair, inside the COI: one number per map the
-      selectors above reach, and the rows of <code>hyper-wtc-roichan.tsv</code>.
-      {%- if wtc_chroma_labels | length > 1 %} {{ wtc_chroma_labels | join(" left, ") }}
-      right, on one colour scale: reading them side by side is the consistency check the two
-      chromophores are run for.{% endif %} Live, so hover names the pairing and prints its
-      value.</p>
+    <p class="step-desc">{{ section_note('hyper_post.wtc_roi_matrix') }}
+      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.wtc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.wtc_roi_matrix_live') }}</p>
     <iframe class="plotly-frame" src="{{ wtc_roi_matrix.wtc }}"
             title="ROI by ROI coherence"
             style="height:{{ wtc_roi_matrix.h or 720 }}px"></iframe>
@@ -259,10 +219,7 @@
 <details id="wtc-chan-matrix-card" open>
   <summary>{{ "d" if roi_rows else "b" }}. Channel &times; channel</summary>
   <div class="details-body">
-    <p class="step-desc">Band mean per channel pair, row = {{ subject_ids[0] }} and column =
-      {{ subject_ids[1] }}: one number per map the selectors above reach, and the rows of
-      <code>hyper-wtc.tsv</code>. There is no within-brain cell anywhere in it. Hover a cell
-      to see which pairing it is.</p>
+    <p class="step-desc">{{ section_note('hyper_post.wtc_chan_matrix', row=subject_ids[0], col=subject_ids[1]) }}</p>
     <iframe class="plotly-frame" src="{{ wtc_chan_matrix.wtc }}"
             title="channel by channel coherence"
             style="height:{{ wtc_chan_matrix.h or 720 }}px"></iframe>
@@ -275,11 +232,9 @@
 {% if isc_panel_hbo.wtc or isc_panel_hbr.wtc %}
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
-  Pearson r between the two members' time courses, every site of one against every site of
-  the other, {% if condition_label %}over this window only, z-scored inside it
-  {%- else %}over the whole recording{% endif %}. The channel panels pair their matrix with
-  a connectogram ({{ isc_arc_rule }}); the ROI matrix has no null to rank pairings by and
-  draws none.
+  {{ section_note('hyper_post.isc', arc_rule=isc_arc_rule,
+      scope=section_note('hyper_post.isc_scope_window') if condition_label
+            else section_note('hyper_post.isc_scope_run')) }}
   <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
   <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
 </p>
@@ -289,12 +244,8 @@
 <details id="ISCRoiMatrix" open>
   <summary>a. ROI &times; ROI</summary>
   <div class="details-body">
-    <p class="step-desc">The channel values of <code>hyper-isc-*.tsv</code> averaged in
-      Fisher z inside each ROI pair, so this rests on the same channels the ROI coherence
-      above does. Row = {{ subject_ids[0] }} and column = {{ subject_ids[1] }}, diagonal =
-      the homologous region.
-      {%- if wtc_chroma_labels | length > 1 %} {{ wtc_chroma_labels | join(" left, ") }}
-      right, on one colour scale.{% endif %} Hover a cell to see which pairing it is.</p>
+    <p class="step-desc">{{ section_note('hyper_post.isc_roi_matrix', row=subject_ids[0], col=subject_ids[1]) }}
+      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.isc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.hover_pairing') }}</p>
     <iframe class="plotly-frame" src="{{ isc_roi_matrix.wtc }}"
             title="ROI by ROI inter-brain synchrony"
             style="height:{{ isc_roi_matrix.h or 720 }}px"></iframe>
@@ -331,18 +282,9 @@
 <!-- ============================================================== numbers -->
 {% if number_tables %}
 <h2 id="Numbers">The numbers</h2>
-<p class="step-desc">Every value the panels above were drawn from, one row per pairing
-  {%- if condition_label %} over this window
-  {%- else %}, each condition beside the whole run, which is the comparison no single panel
-  above can show{% endif %}. Not rounded anywhere but here:
-  <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and
-  <code>hyper-isc-*.tsv</code> under the group&rsquo;s <code>nirs/</code> carry the same
-  numbers at full precision. <b>% in COI</b> beside a column group is the share of that
-  window&rsquo;s band cells that survived the cone of influence, which is the one thing
-  behind a WTC mean that no figure here shows. It is one number per window rather than per
-  pairing, the cone depending on the window length and the band and not on the channels: a
-  coherence resting on a third of its cells is not the same measurement as one that kept all
-  of them.</p>
+<p class="step-desc">{{ section_note('hyper_post.numbers',
+    scope=section_note('hyper_post.numbers_scope_window') if condition_label
+          else section_note('hyper_post.numbers_scope_run')) }}</p>
 {#- one table per kind of pairing, not one grid announcing each kind on a row spanning it.
     A crossed dyad's channel table is hundreds of rows and the ROI tables are a handful, so
     they are not read side by side; separate tables let each carry only the columns it
@@ -384,10 +326,7 @@
     </table>
   </div>
   {% endfor %}
-  <p class="qm-note">An ROI value is the mean of the channel pairs inside the two regions,
-    not a second analysis of an averaged signal. The ROI WTC is the plain mean of those
-    coherences and the ROI ISC the Fisher z mean of those correlations, a correlation being
-    signed where a coherence is not.</p>
+  <p class="qm-note">{{ section_note('hyper_post.roi_value') }}</p>
 </div>
 {% endif %}
 
@@ -395,30 +334,17 @@
 {% if subject_metrics_rows %}
 <h2 id="Quality">Per-subject quality</h2>
 <div class="qm-box">
-  <p class="step-desc">One table per channel set. &uarr; / &darr; marks the better
-    direction; SCI is coloured against this run&rsquo;s own threshold and HbO&ndash;HbR by
-    sign.</p>
+  <p class="step-desc">{{ section_note('hyper_post.member_metrics') }}</p>
   {{ subject_metrics(subject_metrics_rows) }}
-  <p class="qm-note">Each table is its own measurement, not a subset of the one above it:
-    GVTD is an RMS across the channels of its set and a retention rate is a fraction of
-    them. The coherence is computed on the long channels.</p>
+  <p class="qm-note">{{ section_note('hyper_post.member_metrics_sets') }}</p>
   {% if condition_label %}
-  <p class="qm-note">Over this window only, read off each member&rsquo;s own record, so
-    these are the numbers that member&rsquo;s per-condition page prints. A blank row is one
-    the record has no per-condition value for. This reports, it does not re-decide: the
-    channel set is the whole recording&rsquo;s, so a channel that came loose here is still
-    in.
-    <a href="{{ run_href }}">Whole-run page</a>.</p>
+  <p class="qm-note">{{ section_note('hyper_post.member_metrics_condition', href=run_href) }}</p>
   {% endif %}
 </div>
 {% elif condition_label %}
 <h2 id="Quality">Per-subject quality: not available for this window</h2>
 <div class="qm-box">
-  <p class="qm-note">Neither member&rsquo;s record carries a <code>by_condition</code>
-    section, so there are no per-condition numbers for this window. The whole
-    recording&rsquo;s are on the
-    <a href="{{ run_href }}">whole-run page</a>; re-running <code>fnirs-pipe</code> on
-    these subjects writes the section.</p>
+  <p class="qm-note">{{ section_note('hyper_post.member_metrics_missing', href=run_href) }}</p>
 </div>
 {% endif %}
 

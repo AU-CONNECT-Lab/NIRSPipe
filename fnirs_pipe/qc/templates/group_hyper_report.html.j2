@@ -60,9 +60,7 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
 
 {% block content %}
 
-{%- set small_caveat %}Only {{ n_rows }} dyads: the cohort median and the outlier rule each
-measure how far a dyad sits from the middle of its cohort, and this cohort has no middle to
-measure from. Read the panels as the dyads' own values side by side.{% endset %}
+{%- set small_caveat = section_note('hyper_group.small_cohort', n=n_rows) %}
 
 <h2 id="Summary">Summary</h2>
 <div class="summary-box">
@@ -79,10 +77,7 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
       {%- endfor %}
     </table>
   </div>
-  <p class="qm-note" style="margin-top:0.9rem">
-    Every panel keeps one row order, the dyads sorted by their shared usable time, so a dyad
-    is read across the page rather than looked up in each panel.
-  </p>
+  <p class="qm-note" style="margin-top:0.9rem">{{ section_note('hyper_group.row_order') }}</p>
   {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
 </div>
 
@@ -92,11 +87,7 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
     <span class="hint">one bar per dyad &bull; a cell is one channel pair in one window
       &bull; usable means coupled in both members at the same moment</span></summary>
   <div class="details-body">
-    <p class="step-desc">The intersection, not the smaller of the two members: two members
-      can each keep all but one pair and share one fewer than either, if the pair they each
-      lose is a different one. The middle band is an asymmetric loss, one cap or one electrode, and
-      the right band a shared one, both members out at the same moment. Two dyads with the
-      same usable share and different middles are two different problems.</p>
+    <p class="step-desc">{{ section_note('hyper_group.usable') }}</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     <iframe class="plot-frame" src="{{ figure_paths.usable_bars.src }}"
             style="height:{{ figure_paths.usable_bars.h }}px"></iframe>
@@ -110,15 +101,11 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
     <span class="hint">one dot per cell &bull; dark is usable, pale is lost &bull; pair
       columns ordered worst first</span></summary>
   <div class="details-body">
-    <p class="step-desc">A column pale down the whole cohort is the cap or the optode rather
-      than the dyad, which is the one finding no single dyad page can carry.</p>
+    <p class="step-desc">{{ section_note('hyper_group.pair_field') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.pair_field.src }}"
             style="height:{{ figure_paths.pair_field.h }}px"></iframe>
     {% if figure_paths.condition_dials %}
-    <p class="qm-note" style="margin-top:1rem">The same share cut by condition on the left,
-      comparable across dyads in a way absolute seconds are not; on the right the six dyads
-      that lost the most, a ring per condition with the dyad's overall share innermost. The
-      field says which dyads are worth opening, the dials what happened inside them.</p>
+    <p class="qm-note" style="margin-top:1rem">{{ section_note('hyper_group.condition_dials') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.condition_dials.src }}"
             style="height:{{ figure_paths.condition_dials.h }}px"></iframe>
     {% endif %}
@@ -128,8 +115,7 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
 <details id="Where" open>
   <summary>Where the time went: not available for this cohort</summary>
   <div class="details-body">
-    <p class="step-desc">The dyads share no channel pair, so a column of this panel would
-      not be the same pair down the page.</p>
+    <p class="step-desc">{{ section_note('hyper_group.no_shared_pairs') }}</p>
   </div>
 </details>
 {% endif %}
@@ -140,11 +126,7 @@ measure from. Read the panels as the dyads' own values side by side.{% endset %}
     <span class="hint">one row per dyad &bull; one marker per window &bull; the band is the
       top {{ "%.0f"|format(100 - alpha) }}%</span></summary>
   <div class="details-body">
-    <p class="step-desc">Raw coherence cannot share an axis across windows: the estimator's
-      floor moves with the window length, so one value can be unremarkable in one window and
-      out of reach in another. The rank inside that window's own surrogate null is what is
-      comparable, and it is the channel mean's rank, the channels pooled before the
-      comparison.</p>
+    <p class="step-desc">{{ section_note('hyper_group.null') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.null_strip.src }}"
             style="height:{{ figure_paths.null_strip.h }}px"></iframe>
   </div>

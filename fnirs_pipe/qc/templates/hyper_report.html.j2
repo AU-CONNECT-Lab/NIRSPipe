@@ -87,18 +87,10 @@
       <tr><th>Screening synchrony</th><td id="sum-screening">&mdash;</td></tr>
     </table>
   </div>
-  <p class="qm-note" style="margin-top:0.75rem;">
-    This page is the raw pass: every channel is measured, nothing is split by separation and
-    nothing has been corrected. It is what says whether the recording is worth preprocessing.
-    The synchrony below it is a screening flag read against its own null, not the
-    analysis.{% if post_href %} That is on the
-    <a href="{{ post_href }}">post report</a>.{% endif %}
-  </p>
+  <p class="qm-note" style="margin-top:0.75rem;">{{ section_note('hyper_raw.scope') }}{% if post_href %} {{ section_note('hyper_raw.scope_post_link', href=post_href) }}{% endif %}</p>
 
   <h3 style="margin-top:1.1rem;">The two clocks</h3>
-  <p class="qm-note">Crop offset from the first shared trigger; all recordings are then
-    trimmed to the shortest. A dyad window is on the aligned clock and a member&rsquo;s own
-    record is on its own, and these are what convert between them.</p>
+  <p class="qm-note">{{ section_note('hyper_raw.clocks') }}</p>
   <div class="summary-grid">
     <table class="qm-table qm-flat" id="align-table">
       <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
@@ -116,10 +108,7 @@
 
 <!-- ================================================= 2. alignment and clocks -->
 <h2 id="Alignment">1 &middot; Alignment and the two clocks</h2>
-<p class="step-desc">Alignment crops each recording at the first shared trigger, which
-  removes a constant offset and nothing else. What it cannot remove is a trigger that landed
-  late in one member, or a sampling-rate difference that pulls the two apart across the run.
-  Both show up as a block that does not line up below.</p>
+<p class="step-desc">{{ section_note('hyper_raw.alignment') }}</p>
 
 {% if figure_paths.alignment_timeline %}
 <details id="Timeline" open>
@@ -128,8 +117,7 @@
     <iframe class="plotly-frame" src="{{ figure_paths.alignment_timeline.src }}"
             title="conditions before and after alignment"
             style="height:{{ figure_paths.alignment_timeline.h }}px"></iframe>
-    <p class="qm-note">One row per member. The top pair is what was recorded; the bottom
-      pair is what every later panel reads.</p>
+    <p class="qm-note">{{ section_note('hyper_raw.alignment_timeline') }}</p>
     <p class="fig-path">{{ figure_paths.alignment_timeline.src }}</p>
   </div>
 </details>
@@ -137,10 +125,7 @@
 
 <!-- ================================================== 3. shared usable time -->
 <h2 id="Usable">2 &middot; Shared usable time</h2>
-<p class="step-desc">A channel is usable by the dyad only while it is coupled in
-  <em>both</em> members at the same moment, so the dyad&rsquo;s usable time is the
-  intersection of the two and not the smaller of them: two members can each keep all but one
-  pair and share one fewer than either, if the pair they each lose is a different one.</p>
+<p class="step-desc">{{ section_note('hyper_raw.usable') }}</p>
 
 {% if figure_paths.usable_time %}
 <details id="UsablePanel" open>
@@ -149,9 +134,7 @@
     <iframe class="plotly-frame" src="{{ figure_paths.usable_time.src }}"
             title="usable channel pairs over the shared clock"
             style="height:{{ figure_paths.usable_time.h }}px"></iframe>
-    <p class="qm-note">The series over the carpet are each member&rsquo;s long-channel means
-      for the metrics the mask is made of, off the same matrices, so a dip in a line is the
-      reason for the hole under it. Dotted rules are the screening lines.</p>
+    <p class="qm-note">{{ section_note('hyper_raw.usable_panel') }}</p>
     <p class="fig-path">{{ figure_paths.usable_time.src }}</p>
   </div>
 </details>
@@ -160,13 +143,7 @@
 <!-- ======================================================== 3. motion -->
 {% if figure_paths.motion_before %}
 <h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
-<p class="step-desc">SCI and PSP are blind to movement by construction, so the carpet above
-  can say a pair decoupled but never that the member moved. Each trace is that
-  member&rsquo;s GVTD divided by its own median, so 1.0 is that member&rsquo;s usual level.
-  GVTD is in each recording&rsquo;s own units, so the traces say when each member moved, not
-  who moved more. The
-  grey floor under the two traces is their pointwise minimum, which is high only where both
-  are high: simultaneous movement.</p>
+<p class="step-desc">{{ section_note('hyper_raw.motion') }}</p>
 
 <details id="MotionPanel" open>
   <summary>a. As it arrived</summary>
@@ -174,10 +151,7 @@
     <iframe class="plotly-frame" src="{{ figure_paths.motion_before.src }}"
             title="motion per member over the shared clock, before correction"
             style="height:{{ figure_paths.motion_before.h }}px"></iframe>
-    <p class="qm-note">The amber strip marks the spans where <em>every</em> member was
-      spiking at once; a member spiking alone costs that member&rsquo;s channels, which the
-      usable-time carpet above already shows. The grey carpets are each member&rsquo;s
-      per-channel optical density, z-scored the way the subject report draws it.</p>
+    <p class="qm-note">{{ section_note('hyper_raw.motion_before') }}</p>
     <p class="fig-path">{{ figure_paths.motion_before.src }}</p>
   </div>
 </details>
@@ -186,10 +160,7 @@
 <details id="MotionAfter" open>
   <summary>b. After motion correction</summary>
   <div class="details-body">
-    <p class="step-desc">The same rows on the same axes, off each member&rsquo;s
-      motion-corrected derivative. Both figures divide by the <em>uncorrected</em> median
-      and both carpets are z-scored by the <em>uncorrected</em> mean and SD, so a fall here
-      is movement removed rather than the yardstick following the data.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.motion_after') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.motion_after.src }}"
             title="motion per member over the shared clock, after correction"
             style="height:{{ figure_paths.motion_after.h }}px"></iframe>
@@ -202,11 +173,7 @@
   <summary>{% if figure_paths.motion_after %}c{% else %}b{% endif %}. Simultaneous
     movement</summary>
   <div class="details-body">
-    <p class="step-desc">A member moving alone costs that member&rsquo;s channels, which the
-      panels above already show. <b>Both moving at once is the dyad&rsquo;s problem</b>: it
-      raises any synchrony measure taken on the pair, and a shifted or scrambled copy of one
-      member does not remove it. This is what the screening synchrony below has to be read
-      against.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.motion_together') }}</p>
     <ul id="motion-list" class="qm-list"></ul>
   </div>
 </details>
@@ -215,17 +182,13 @@
 <!-- ==================================================== 3b. where on the head -->
 {% if figure_paths.head_by_condition or figure_paths.head_slider %}
 <h2 id="Head">4 &middot; Where on the head</h2>
-<p class="step-desc">The same screening verdict as the carpet above, on the montage instead
-  of on a channel axis. A long channel is a bar of discs along its source-detector path, a
-  short one an outlined square; both share one colour scale, which is what makes the short
-  channels readable as a contamination check rather than a second map.</p>
+<p class="step-desc">{{ section_note('hyper_raw.head') }}</p>
 
 {% if figure_paths.head_by_condition %}
 <details id="HeadByCondition" open>
   <summary>a. Per block</summary>
   <div class="details-body">
-    <p class="step-desc">Colour is the share of that block&rsquo;s windows in which the
-      channel was coupled, in that member.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.head_by_condition') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_by_condition.src }}"
             title="coupled-window share per member per block"
             style="height:{{ figure_paths.head_by_condition.h }}px"></iframe>
@@ -238,8 +201,7 @@
 <details id="HeadSlider" open>
   <summary>b. Over the recording <span class="hint">one head per member, with a slider</span></summary>
   <div class="details-body">
-    <p class="step-desc">Colour is that window&rsquo;s SCI. The block the slider sits in is
-      named above the heads and moves with it.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.head_slider') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_slider.src }}"
             title="SCI per channel over the recording"
             style="height:{{ figure_paths.head_slider.h }}px"></iframe>
@@ -251,14 +213,9 @@
 
 <!-- ======================================================= 4. screening sync -->
 <h2 id="Coherence">5 &middot; Screening synchrony, against its null</h2>
-<p class="step-desc">Band coherence in
-  {{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz,
-  read as each window&rsquo;s rank inside a null drawn for <em>that</em> window by pairing
-  one member against a phase-scrambled copy of the other. The estimator&rsquo;s floor moves
-  with the window length, so two windows&rsquo; raw values are not on a common scale and
-  neither is readable alone. This is a screening flag, not the analysis: the wavelet
-  coherence is on the post report{% if post_href %},
-  <a href="{{ post_href }}">here</a>{% endif %}.</p>
+<p class="step-desc">{{ section_note('hyper_raw.screening',
+  fmin="%.3f"|format(coherence_fmin), fmax="%.3f"|format(coherence_fmax),
+  post_link=section_note('hyper_raw.screening_post_link', href=post_href) if post_href else '') }}</p>
 
 {% if figure_paths.screening_strip %}
 <details id="ScreeningPanel" open>
@@ -267,9 +224,7 @@
     <iframe class="plotly-frame" src="{{ figure_paths.screening_strip.src }}"
             title="screening coherence against its null"
             style="height:{{ figure_paths.screening_strip.h }}px"></iframe>
-    <p class="qm-note">One pale dot per channel, the diamond is the window&rsquo;s own rank
-      with the channels pooled; read the diamond. A per-channel rank over a hundred
-      draws moves with the draw; the window&rsquo;s does not.</p>
+    <p class="qm-note">{{ section_note('hyper_raw.screening_strip') }}</p>
     <p class="fig-path">{{ figure_paths.screening_strip.src }}</p>
   </div>
 </details>
@@ -283,18 +238,14 @@
         <th>Channels above</th></tr></thead>
       <tbody id="screening-tbody"></tbody>
     </table>
-    <p class="qm-note"><b>A flag, not a result.</b> Shared movement, shared task structure
-      and shared physiology all raise this number and the surrogate removes none of them: it
-      removes only that the two members were together <em>at that moment</em>.</p>
+    <p class="qm-note">{{ section_note('hyper_raw.screening_flag') }}</p>
   </div>
 </details>
 {% endif %}
 
 <!-- ================================================== 1. are they comparable -->
 <h2 id="Quality">6 &middot; Are the two members comparable</h2>
-<p class="step-desc">Everything downstream matches channels by S-D label and assumes one
-  clock. A mismatch here is silent in every later panel: an unmatched label becomes a blank
-  row, and a sampling-rate difference becomes drift that alignment cannot remove.</p>
+<p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
 
 <details id="Comparable" open>
   <summary>a. Montage and rate</summary>
@@ -312,9 +263,7 @@
 <details id="MemberMetrics" open>
   <summary>b. Per-member quality metrics</summary>
   <div class="details-body">
-    <p class="step-desc">&uarr; / &darr; marks the better direction; SCI is coloured against
-      this run&rsquo;s own threshold and HbO&ndash;HbR by sign. One unheaded table: the raw
-      pass measures every channel and does not split by separation.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.member_metrics') }}</p>
     {{ subject_metrics(subject_metrics_rows) }}
   </div>
 </details>
@@ -323,9 +272,7 @@
 <details id="GroupSQM" open>
   <summary>c. Group-level quality metrics</summary>
   <div class="details-body">
-    <p class="step-desc">The dyad&rsquo;s own numbers rather than either member&rsquo;s: how
-      many channel pairs survived in both, and where the screening synchrony sits against
-      its own null.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.group_sqm') }}</p>
     <ul id="sqm-list" class="qm-list"></ul>
   </div>
 </details>
@@ -337,8 +284,7 @@
 <details id="ChannelSummary" open>
   <summary>a. Quality summary across the dyad</summary>
   <div class="details-body">
-    <p class="step-desc">Green = kept by every member, yellow = mixed, red = kept by
-      none.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.channel_summary') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
             title="channel quality summary across the group"
             style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
@@ -351,12 +297,7 @@
   <summary>{{ "b" if figure_paths.ch_summary else "a" }}. Channel decisions
     <span class="hint" id="hyper-decisions-hint">per member</span></summary>
   <div class="details-body">
-    <p class="step-desc">One row per source-detector pair, both members side by side, with
-      the columns the subject report prints and each member&rsquo;s decision at the end of
-      its own block. Rows in red were rejected by screening and Status names the criterion.
-      Click a chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s
-      JSON, and is only active when the page is served by
-      <code>fnirs-rate hyper</code>.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
     <div style="overflow-x:auto">
       <table class="qm-table cd-table" id="hyper-decisions-table">
         <thead>
@@ -388,8 +329,7 @@
   <summary>a. Both members on one set of axes
     <span class="hint">signal overlay and PSD</span></summary>
   <div class="details-body">
-    <p class="step-desc">The one view an individual report cannot give: two members on the
-      same axes.</p>
+    <p class="step-desc">{{ section_note('hyper_raw.per_channel') }}</p>
     <select id="ch-select" class="ch-select"></select>
     <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
             style="height:600px"></iframe>
@@ -567,9 +507,7 @@ function _set(id, text, cls) {
   });
   var el = document.getElementById("blocks-verdict");
   if (el) {
-    el.textContent = "Times are on the shared clock, after the crop. A block that does not "
-      + "line up between the two rows of the figure above is a trigger that landed late in "
-      + "one member, or two clocks drifting apart.";
+    el.textContent = {{ section_note('hyper_raw.blocks_verdict') | tojson }};
   }
 })();
 

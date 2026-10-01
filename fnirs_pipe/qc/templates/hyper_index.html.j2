@@ -102,43 +102,20 @@ tr.whole td.num { font-weight: 600; }
 </div>
 
 <p class="subtitle" style="margin-top:0.6rem;">
-  Coherence is the mean over the homologous channel pairs, the band mean each window's own
-  table holds; a crossed run's off-diagonal pairings are in the tables and on each page, not
-  averaged into this column. <b>inside COI</b> is the share of band cells that fell inside
-  the cone of influence, so a window near either end of the recording keeps fewer.
-  <b>ISC</b> is the mean same-channel inter-brain correlation. Unlike the coherence it is
-  cut from the recording rather than read out of a whole-record transform; a correlation has
-  no frequency axis, so a cut window carries no edge of its own. Each window is z-scored
-  inside itself, the
-  correlation over a stretch being against that stretch's mean. Open a window for its
-  coherence maps, its matrices and the phase arrows.
+  {{ section_note('hyper_index.columns') }}
   {% if has_null %}
-  <b>past null</b> counts the channel pairs whose coherence beat the {{ null_percentile }}th
-  percentile of their own surrogate draws, out of the pairs that were measured. Read it
-  before the coherence: the coherence has a floor that moves with the window length, so two
-  windows' values do not compare and neither is readable alone, while a rank inside a null
-  drawn for that window is both.
+  {{ section_note('hyper_index.past_null', pct=null_percentile) }}
   {% endif %}
   {% if rows | length >= 4 %}
-  A marked cell sits more than {{ outlier_z }} median absolute deviations from this dyad's
-  other windows on that chromophore. It says the window differs from its neighbours, not
-  that it failed.
+  {{ section_note('hyper_index.outlier', z=outlier_z) }}
   {% endif %}
 </p>
 
-<p class="subtitle">
-  The whole-run row averages across every condition under it, so for a block design it is a
-  summary and not a result. Rows marked as windows were read out of the whole-run wavelet
-  transform, which is what keeps a short condition from being inflated by edges of its own;
-  a tree whose conditions were cropped to separate files before the analysis shows them as
-  separate tasks instead, each with a whole-run row of its own.
-</p>
+<p class="subtitle">{{ section_note('hyper_index.whole_run') }}</p>
 
 {% if run_command %}
 <h2 id="Rebuilt">Rebuilt by</h2>
-<p class="step-desc">This page is assembled from the tables under <code>nirs/</code> each
-   time the dyad is analysed, so it lists whatever is on disk rather than what one command
-   produced. The command below is the one that last rebuilt it.</p>
+<p class="step-desc">{{ section_note('hyper_index.rebuilt') }}</p>
 <pre>{{ run_command }}</pre>
 {% endif %}
 

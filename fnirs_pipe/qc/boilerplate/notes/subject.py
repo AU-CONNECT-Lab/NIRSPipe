@@ -1,23 +1,8 @@
-"""Section prose for the QC reports, so a paragraph is written once and read anywhere.
-
-The per-metric hover text is next door in :mod:`~fnirs_pipe.qc.boilerplate.vocabulary`;
-this is the layer above it, the paragraphs that introduce a section or say how to read the
-panel under it.
-
-**Half the report's prose is here and half is still in the template.** A paragraph lives
-here when it is the same sentence every time, value slots included: ``{sci}`` and friends
-are filled by the caller. It stays in the template when it *branches*, when a ``{% if %}``
-decides which sentence to say. So: **if a paragraph can differ between two runs by more
-than a value, look in subject_report.html.j2.**
-
-The strings carry HTML (``<code>``, ``<b>``, ``&nbsp;``) and reach the page unescaped,
-which is what ``render()`` does with every other variable; a report environment that turned
-autoescaping on would have to wrap these.
-"""
+"""Section prose for the single-subject reports."""
 
 from __future__ import annotations
 
-SECTION_NOTES = {
+NOTES = {
     "channel_detail.picker":
         "Select a channel to view its HbO/HbR timeseries and its PSD. This channel's epoch "
         "average is in the epoch section below, on the denoised signal. Pairs "
@@ -132,17 +117,3 @@ SECTION_NOTES = {
         "<b>All</b> row.",
 }
 
-
-def section_note(key: str, **values: object) -> str:
-    """One section's paragraph, with any value slots filled.
-
-    ::
-
-      section_note("trial_qc", window="-5 to 25 s")
-
-    Returns '' for a key nothing is written for, the way
-    :func:`~fnirs_pipe.qc.boilerplate.vocabulary.metric_summary` does: a renamed key leaves
-    a missing paragraph rather than stopping the render half way down a report.
-    """
-    text = SECTION_NOTES.get(key, "")
-    return text.format(**values) if (text and values) else text
