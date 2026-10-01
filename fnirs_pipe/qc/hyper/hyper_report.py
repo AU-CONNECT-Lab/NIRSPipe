@@ -16,6 +16,7 @@ from fnirs_pipe.io.derivatives import (
 )
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
+from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
@@ -23,6 +24,7 @@ from fnirs_pipe.qc.common.channel_table import (
     channel_columns, channel_rows, format_rows, pair_rows,
 )
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label, metric_summary,
     steps_from_sidecars, template_slots,
@@ -504,6 +506,7 @@ def build_hyper_report(
         task=task,
         subject_ids=meta["subject_ids"],
         sci_threshold=sci_threshold,
+        screen_null_iter=SCREEN_NULL_ITER,
         coherence_fmin=coherence_fmin,
         coherence_fmax=coherence_fmax,
         alignment_json=json.dumps(meta["alignment"]),
@@ -856,9 +859,7 @@ def build_hyper_post_report(
     # every offset at zero, and the numbers cannot be told apart afterwards.
     align_info = alignment_params(aligned_raws)
     if align_info.get("aligned") is False:
-        note(notes, scope,
-             "these recordings were trimmed to a common length but never aligned on a "
-             "shared trigger, so every number below assumes they already shared a clock")
+        note(notes, scope, section_note("caveat.never_aligned"))
 
     # ---- is this a segment rather than a recording? ----
     # A cut carries two edges of its own, and everything this report computes from a wavelet
@@ -871,17 +872,10 @@ def build_hyper_post_report(
                  if isinstance(span, list) and len(span) == 2 and not isinstance(span[0], list)
                  else f"{crop_info['n_windows']} separate windows of the source recording")
         if crop_info["margin_s"] > 0:
-            note(notes, scope,
-                 f"Input is a cut ({where}), made with a {crop_info['margin_s']:.1f} s "
-                 f"margin on each side. --wtc-by-condition windows each block out of the "
-                 f"transform, so the margin is what absorbs the cone and is not averaged.")
+            note(notes, scope, section_note("caveat.cut_with_margin", where=where,
+                                            margin=crop_info["margin_s"]))
         else:
-            note(notes, scope,
-                 f"Input is a cut ({where}), made with no margin. A wavelet transform of a "
-                 f"segment has two edges of its own, so this run's band means are inflated "
-                 f"by an amount that grows as the segment shortens; n_valid_frac reports the "
-                 f"share of band cells that survived. Re-cut with "
-                 f"`fnirs-prep crop --margin auto --band-fmin <f>` to avoid it.")
+            note(notes, scope, section_note("caveat.cut_no_margin", where=where))
         logger.warning("cropped input: %s, margin %.1f s", where, crop_info["margin_s"])
     markers_list = markers_on_data_axis(ref_raw) if ref_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))

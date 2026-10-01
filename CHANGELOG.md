@@ -23,6 +23,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw` without `--derivatives-dir` leaves an existing fnirs-hyper `dataset_description.json` alone
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
 - Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
+- Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
+- Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
@@ -33,6 +35,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-rate hyper` help named the fnirs-pipe tree; its directory is the fnirs-hyper tree holding the raw report
 - `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
 - The per-subject run script ignored values set in `--config`
+- The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was
+- The cohort dial caption said six dyads when the cohort had fewer
 
 ## [0.53.0] - 2026-09-26
 

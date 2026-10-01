@@ -167,7 +167,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
 <iframe class="plotly-frame" src="{{ run.timeline.src }}" title="Windowed metrics over time"
         style="height:{{ run.timeline.h }}px"></iframe>
 {% endfor %}
-<p class="subtitle" style="margin-top:0.6rem;">{{ section_note('subject_index.timeline') }}</p>
+<p class="subtitle" style="margin-top:0.6rem;">{{ section_note('subject_index.timeline', smooth=condition_figures.smooth_s) }}</p>
 {% endif %}
 {% endif %}
 

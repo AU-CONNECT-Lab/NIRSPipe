@@ -70,6 +70,10 @@ import mne
 import mne.io
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.boilerplate.notes import section_note
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
@@ -983,12 +987,10 @@ def _condition_trial_qc(
         if not rows:
             reason = "the run carries no per-trial table to take rows from"
         elif not keep:
-            reason = ("the only event inside this window is the annotation that defines it, "
-                      "which is what a block design looks like")
+            reason = section_note("caveat.block_design_trials")
         else:
-            reason = (f"this condition holds {len(keep)} trial"
-                      f"{'' if len(keep) == 1 else 's'} inside its window, and one row is "
-                      f"not a comparison")
+            reason = (section_note("caveat.one_trial", n=1) if len(keep) == 1
+                      else section_note("caveat.few_trials", n=len(keep)))
         return {"trial_qc_path": None, "trial_qc_h": 0, "condition_trial_reason": reason}
     path, h = None, 0
     with _guard("Per-trial quality", errors, subject):
@@ -1805,10 +1807,7 @@ def build_subject_report(
         raw_haemo = chunk_annotations(raw_haemo, chunk)
         if after_haemo is not None:
             after_haemo = chunk_annotations(after_haemo, chunk)
-        _note(notes, subject,
-              f"Task annotations were cut into {chunk:g} s trials before epoching, so a "
-              f"trial in the epoch figures and the per-trial panel is one piece of a block "
-              f"rather than the whole block.")
+        _note(notes, subject, section_note("caveat.chunked_trials", chunk=chunk))
 
     # the "Raw Signal" section is the recording before anything was done to it, so its
     # figures come off desc-sci rather than the corrected desc-preproc the rest of the
@@ -1843,18 +1842,11 @@ def build_subject_report(
     if epoch_skip is None and getattr(config, "epoch_tmin", None) is None:
         outruns = _epoch_window_mismatch(raw_haemo, epoch_tmax)
         if outruns is not None:
-            _note(notes, subject,
-                  f"The epoch figures average a {epoch_tmin:g} to {epoch_tmax:g} s window "
-                  f"while this run's events are {outruns:g} s long, so they describe the "
-                  f"start of each block rather than the whole of it. Pass --epoch-tmin / "
-                  f"--epoch-tmax to widen it. The per-trial panel below is unaffected: it "
-                  f"scores each event over its own duration.")
+            _note(notes, subject, section_note("caveat.epoch_window", tmin=epoch_tmin,
+                                               tmax=epoch_tmax, outruns=outruns))
 
     if epoch_skip is not None:
-        _note(notes, subject,
-              f"Grand mean, evoked channel map, trial images and per-trial quality were "
-              f"skipped because {epoch_skip}. The per-channel, carpet and layout figures "
-              f"show the continuous signal instead.")
+        _note(notes, subject, section_note("caveat.epoch_skipped", reason=epoch_skip))
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0}
@@ -1894,14 +1886,8 @@ def build_subject_report(
         filtered = next((r for lab, r in (psd_stages or []) if lab == "desc-filtered"), None)
         ratio = edge_to_mid_rms(filtered) if filtered is not None else None
         if ratio is not None:
-            _note(notes, subject,
-                  f"The first and last {EDGE_S:g} s of the filtered recording carry "
-                  f"{ratio:.2f}x the RMS of everything between them. That is the "
-                  f"{l_freq:g} Hz high-pass settling, not signal: a low cutoff needs a long "
-                  f"filter. Every figure drawn on a filtered stage includes it, and a "
-                  f"detrend does not remove it. A GLM run can avoid it by leaving "
-                  f"--high-pass off and giving the low band to --drift-model cosine "
-                  f"instead, which projects rather than filters.")
+            _note(notes, subject, section_note("caveat.filter_edge", edge_s=EDGE_S,
+                                               ratio=ratio, l_freq=l_freq))
 
     unregistered = registration_note(registration_offset(raw_intensity))
     if unregistered:
@@ -1956,6 +1942,9 @@ def build_subject_report(
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
         index_href=(report_name(f"sub-{subject}", desc="index") if sqm_label else None),
         run_command=run_command,
+        # the numbers the page's prose and labels quote, from the constants that set them
+        epoch_tmin=epoch_tmin, spike_ch_frac=SPIKE_CH_FRAC, sci_window_s=SCI_WINDOW_S,
+        psp_window_s=PSP_WINDOW_S, cv_window_s=CV_WINDOW_S, gvtd_band=GVTD_MOTION_BAND,
         filled_by=_filled_by(filled_settings or [], mode),
         n_bad=n_bad,
         n_total=n_total,

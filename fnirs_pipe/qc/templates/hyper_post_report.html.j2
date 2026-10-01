@@ -232,9 +232,8 @@
 {% if isc_panel_hbo.wtc or isc_panel_hbr.wtc %}
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
-  {{ section_note('hyper_post.isc', arc_rule=isc_arc_rule,
-      scope=section_note('hyper_post.isc_scope_window') if condition_label
-            else section_note('hyper_post.isc_scope_run')) }}
+  {% if condition_label %}{{ section_note('hyper_post.isc_window', arc_rule=isc_arc_rule) }}
+  {%- else %}{{ section_note('hyper_post.isc_run', arc_rule=isc_arc_rule) }}{% endif %}
   <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
   <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
 </p>
@@ -282,9 +281,10 @@
 <!-- ============================================================== numbers -->
 {% if number_tables %}
 <h2 id="Numbers">The numbers</h2>
-<p class="step-desc">{{ section_note('hyper_post.numbers',
-    scope=section_note('hyper_post.numbers_scope_window') if condition_label
-          else section_note('hyper_post.numbers_scope_run')) }}</p>
+<p class="step-desc">
+  {%- if condition_label %}{{ section_note('hyper_post.numbers_window') }}
+  {%- else %}{{ section_note('hyper_post.numbers_run') }}{% endif %}
+  {{ section_note('hyper_post.numbers') }}</p>
 {#- one table per kind of pairing, not one grid announcing each kind on a row spanning it.
     A crossed dyad's channel table is hundreds of rows and the ROI tables are a handful, so
     they are not read side by side; separate tables let each carry only the columns it

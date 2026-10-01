@@ -214,8 +214,9 @@
 <!-- ======================================================= 4. screening sync -->
 <h2 id="Coherence">5 &middot; Screening synchrony, against its null</h2>
 <p class="step-desc">{{ section_note('hyper_raw.screening',
-  fmin="%.3f"|format(coherence_fmin), fmax="%.3f"|format(coherence_fmax),
-  post_link=section_note('hyper_raw.screening_post_link', href=post_href) if post_href else '') }}</p>
+  fmin="%.3f"|format(coherence_fmin), fmax="%.3f"|format(coherence_fmax)) }}
+  {% if post_href %}{{ section_note('hyper_raw.screening_scope_linked', href=post_href) }}
+  {%- else %}{{ section_note('hyper_raw.screening_scope') }}{% endif %}</p>
 
 {% if figure_paths.screening_strip %}
 <details id="ScreeningPanel" open>
@@ -224,7 +225,7 @@
     <iframe class="plotly-frame" src="{{ figure_paths.screening_strip.src }}"
             title="screening coherence against its null"
             style="height:{{ figure_paths.screening_strip.h }}px"></iframe>
-    <p class="qm-note">{{ section_note('hyper_raw.screening_strip') }}</p>
+    <p class="qm-note">{{ section_note('hyper_raw.screening_strip', n_iter=screen_null_iter) }}</p>
     <p class="fig-path">{{ figure_paths.screening_strip.src }}</p>
   </div>
 </details>

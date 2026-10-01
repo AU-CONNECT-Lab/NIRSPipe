@@ -21,6 +21,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
+from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+
 # ---- pipeline step -> steps.toml section ----
 
 _DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc", "hyper_coherence")
@@ -272,15 +277,15 @@ def step_summary(step: str | None) -> str:
 METRIC_SUMMARY = {
     # coupling
     "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse, near 1 being good and low meaning poor optode contact. A slow drift shared by both wavelengths lifts it, which is what sci_win_mean is beside it for.",
-    "sci_win_mean": "The same coupling measured inside 10 s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; it is printed without cutoffs, which refer to the whole-run sci_mean, and the two can disagree about which channel set coupled better.",
+    "sci_win_mean": f"The same coupling measured inside {SCI_WINDOW_S:g} s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; it is printed without cutoffs, which refer to the whole-run sci_mean, and the two can disagree about which channel set coupled better.",
     "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
-    "psp_mean": "Strength of the shared cardiac peak across the two wavelengths, averaged over 10 s windows and then over channels; higher is a more clearly detected heartbeat.",
-    "good_frac_mean": "Share of 10 s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
+    "psp_mean": f"Strength of the shared cardiac peak across the two wavelengths, averaged over {PSP_WINDOW_S:g} s windows and then over channels; higher is a more clearly detected heartbeat.",
+    "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
     "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1; higher is sharper. Experimental, and it never compares the two wavelengths, so read SCI and PSP for coupling.",
 
     # raw intensity
-    "cv_mean": "Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside 10 s windows and then averaged, lower being cleaner.",
-    "snr_mean": "Signal size relative to its fluctuation (mean / SD), the exact reciprocal of CV and on the same 10 s windows. Higher is better.",
+    "cv_mean": f"Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside {CV_WINDOW_S:g} s windows and then averaged, lower being cleaner.",
+    "snr_mean": f"Signal size relative to its fluctuation (mean / SD), the exact reciprocal of CV and on the same {CV_WINDOW_S:g} s windows. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all, flat or saturated; zero is what you want. They count as failures in snr_pass_rate but cannot enter the SNR and CV means.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
@@ -316,7 +321,7 @@ METRIC_SUMMARY = {
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
     "gvtd_mean": "Average whole-montage movement over the run, unfiltered; lower is less motion. No absolute cutoff, and gvtd_thresh does not apply to it.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
-    "gvtd_filt_mean": "Average movement after band-passing to 0.01-0.5 Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
+    "gvtd_filt_mean": f"Average movement after band-passing to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
     "gvtd_filt_p95": "The same at the worst moments. Above gvtd_thresh means motion.",
     "gvtd_vstd_mean": "Average movement with each channel scaled by its own SD first, so a few loud channels cannot dominate.",
     "gvtd_vstd_p95": "The same at the worst moments.",
@@ -328,10 +333,10 @@ METRIC_SUMMARY = {
     "gvtd_censor_retained_s": "Seconds left after censoring, in gvtd_censor_n_epochs continuous stretches; this, not the censored fraction, is what an analysis has to work with.",
     "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse; lower is better.",
     "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
-    "spike_num_frames": "Timepoints where at least a tenth of channels jumped together. Experimental.",
+    "spike_num_frames": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental.",
     "spike_pct_frames": "Those timepoints as a fraction of the recording. Experimental.",
     "motion_corrected_frac_mean": "Average fraction of each channel the motion correction actually altered. Experimental.",
-    "motion_corrected_num": "Timepoints the correction altered on at least a tenth of channels at once. Experimental.",
+    "motion_corrected_num": f"Timepoints the correction altered on at least {100 * SPIKE_CH_FRAC:g}% of channels at once. Experimental.",
     "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
 
@@ -459,15 +464,15 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # coupling
     "sci_mean":                ("Mean SCI (whole run)", ".3f", (0.75, 0.5), _HIGHER),
     # no cutoffs: the published ones are for the whole-run estimator above
-    "sci_win_mean":            ("Mean SCI (10 s)", ".3f", None, _HIGHER),
+    "sci_win_mean":            (f"Mean SCI ({SCI_WINDOW_S:g} s)", ".3f", None, _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
-    "psp_mean":                ("Mean PSP (10 s)", ".3f", None, _HIGHER),
+    "psp_mean":                (f"Mean PSP ({PSP_WINDOW_S:g} s)", ".3f", None, _HIGHER),
     "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
 
     # raw intensity
-    "cv_mean":                 ("Mean CV (10 s)", ".3f", None, _LOWER),
-    "snr_mean":                ("Mean SNR (10 s)", ".1f", (100, 20), _HIGHER),
+    "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
+    "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", (100, 20), _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),
@@ -501,8 +506,8 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # motion and spikes
     "gvtd_mean":               ("GVTD mean", ".3e", None, _LOWER),
     "gvtd_p95":                ("GVTD p95", ".3e", None, _LOWER),
-    "gvtd_filt_mean":          ("GVTD mean 0.01-0.5 Hz", ".3e", None, _LOWER),
-    "gvtd_filt_p95":           ("GVTD p95 0.01-0.5 Hz", ".3e", None, _LOWER),
+    "gvtd_filt_mean":          (f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
+    "gvtd_filt_p95":           (f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
     "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, _LOWER),
     "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, _LOWER),
     "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),

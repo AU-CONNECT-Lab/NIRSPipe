@@ -3,11 +3,6 @@
 from __future__ import annotations
 
 NOTES = {
-    # ---- Fragments several paragraphs name a channel set with ----
-    "channels.long": "long channels",
-    "channels.long_only": "long channels only",
-    "channels.every": "every channel",
-
     # ---- Subject report ----
     "summary.condition_scope":
         "Sliced out of the windowed pass the whole recording was measured with, so this page "
@@ -72,20 +67,23 @@ NOTES = {
         "along with the confounds. A weaker anticorrelation there can mean the model explained "
         "part of the shared response rather than that the data got worse, so judge the run on "
         "the before stage.",
+    "carpet.after_named":
+        "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR in one image, "
+        "a colour bar and a seam between them.",
+    "carpet.after_unnamed":
+        "Per-channel z-scored haemoglobin for the last stage on disk, HbO above HbR in one "
+        "image, a colour bar and a seam between them.",
     "carpet.after":
-        "Per-channel z-scored haemoglobin for {stage}, HbO above HbR in one image, a colour bar "
-        "and a seam between them. One GVTD row per channel set sits above on the same time "
-        "axis, each carrying the trace before and after motion correction, so a dark column "
-        "can be read against what happened at that moment. The threshold, the spike shading "
-        "and the spans the correction touched stay in the motion section above. The title "
-        "carries how far this stage's per-channel SD has fallen; the recording before any of "
-        "this is the carpet in the motion section above. Each block is scaled to itself, so it "
-        "shows the structure left at this stage rather than its amplitude. The texture is "
-        "finer here than on the raw carpet because the slow drift that made that one look "
-        "smooth has been removed, not because noise was added: what is left is the analysis "
-        "passband, and its fast end is near the limit this figure can resolve in time. The "
-        "spectrum below reads that end.",
-    "carpet.last_stage": "the last stage on disk",
+        "One GVTD row per channel set sits above on the same time axis, each carrying the trace "
+        "before and after motion correction, so a dark column can be read against what happened "
+        "at that moment. The threshold, the spike shading and the spans the correction touched "
+        "stay in the motion section above. The title carries how far this stage's per-channel SD "
+        "has fallen; the recording before any of this is the carpet in the motion section above. "
+        "Each block is scaled to itself, so it shows the structure left at this stage rather than "
+        "its amplitude. The texture is finer here than on the raw carpet because the slow drift "
+        "that made that one look smooth has been removed, not because noise was added: what is "
+        "left is the analysis passband, and its fast end is near the limit this figure can "
+        "resolve in time. The spectrum below reads that end.",
     "carpet.glm":
         "On a GLM run this is the residual, which had the task model removed as well as the "
         "confounds: it shows what the model left unexplained, not the data the betas were "
@@ -110,11 +108,14 @@ NOTES = {
     "psd.simulated":
         "No post-processing output was found for this run, so the second line is the bandpass "
         "simulated in memory rather than a file the pipeline wrote.",
-    "psd.too_short":
-        "{holder} holds fewer samples than the transform, so no spectrum is drawn here. The "
+    "psd.too_short_condition":
+        "&ldquo;{label}&rdquo; holds fewer samples than the transform, so no spectrum is drawn "
+        "here. The run's own page carries the spectrum, and the PSP row above is sliced to "
+        "this condition.",
+    "psd.too_short_cut":
+        "This cut holds fewer samples than the transform, so no spectrum is drawn here. The "
         "run's own page carries the spectrum, and the PSP row above is sliced to this "
         "condition.",
-    "psd.this_cut": "This cut",
     "psd_detail.picker": "Select a channel to compare its PSD across the stages.",
     "epoch.timeline":
         "Every event on one axis, one row per condition. The averages below cannot show a "
@@ -125,10 +126,10 @@ NOTES = {
         "failures show only against the conditions around the one you are reading.",
     "epoch.grand_mean":
         "Grand-mean HbO and HbR responses averaged across good channels, baseline-corrected to "
-        "the pre-stimulus window (−5 to 0&thinsp;s). Each condition is shown separately, on one "
-        "shared y scale, with the task block shaded. Short channels are drawn dotted: they are "
-        "too shallow to reach cortex, so a dotted line that rises with the solid one means the "
-        "response is scalp haemodynamics rather than activation.",
+        "the pre-stimulus window ({tmin} to 0&thinsp;s). Each condition is shown separately, on "
+        "one shared y scale, with the task block shaded. Short channels are drawn dotted: they "
+        "are too shallow to reach cortex, so a dotted line that rises with the solid one means "
+        "the response is scalp haemodynamics rather than activation.",
     "epoch.channel_maps":
         "The condition-averaged response painted along each channel's own source-detector path, "
         "one head per condition; drag the slider to step through the epoch window. Nothing is "
@@ -213,9 +214,12 @@ NOTES = {
         "can move a metric for reasons that are not quality.",
     "metrics.motion_split":
         "Optical density. Each channel set is measured on its own, in the table below.",
-    "metrics.motion_unsplit":
+    "metrics.motion_unsplit_long":
         "Optical density. GVTD, the spike counts and the correction footprint are measured on "
-        "{channels}.",
+        "long channels only.",
+    "metrics.motion_unsplit_every":
+        "Optical density. GVTD, the spike counts and the correction footprint are measured on "
+        "every channel.",
     "metrics.motion_one_side":
         "One side of the motion step, not both, and not the same side throughout: GVTD is "
         "measured on the corrected file, the spike and footprint counts on the uncorrected "
@@ -228,18 +232,26 @@ NOTES = {
         "an average over the set, and is the one column two rows can be compared on.",
     "metrics.gvtd_set_help":
         "Long is the set the verdict is read off and the only one coloured. Each set is its own "
-        "measurement rather than a grouping of one, with its own GVTD cutoff and its own "
-        "tenth-of-the-channels bar. Corrected per channel is the exception, an average over "
+        "measurement rather than a grouping of one, with its own GVTD cutoff and its own bar "
+        "of {pct:g}% of the channels. Corrected per channel is the exception, an average over "
         "the set.",
     "metrics.motion_extra_split":
         "What the table above has no column for. <b>Spike count</b> is a sum over channels, so "
         "a second set's would track how many channels it has; censoring names the set "
         "<code>--gvtd-censor</code> gave it.",
-    "metrics.motion_extra_unsplit":
-        "Counted on {channels}, and over the recording rather than per channel: a timepoint "
-        "counts when at least a tenth of the set was flagged.",
-    "metrics.haemo_timing":
-        "Measured after Beer-Lambert, on {channels}: what the denoising did, not what the "
+    "metrics.motion_extra_long":
+        "Counted on <b>long channels</b>, and over the recording rather than per channel: a "
+        "timepoint counts when at least {pct:g}% of the set was flagged.",
+    "metrics.motion_extra_every":
+        "Counted on every channel, and over the recording rather than per channel: a timepoint "
+        "counts when at least {pct:g}% of the set was flagged.",
+    "metrics.haemo_timing_long":
+        "Measured after Beer-Lambert, on long channels: what the denoising did, not what the "
+        "recording arrived as, so each <b>before</b> value is that channel set's row in the "
+        "table above. The global correlations are the exception, their before side being the "
+        "bandpassed signal rather than the unfiltered one.",
+    "metrics.haemo_timing_every":
+        "Measured after Beer-Lambert, on every channel: what the denoising did, not what the "
         "recording arrived as, so each <b>before</b> value is that channel set's row in the "
         "table above. The global correlations are the exception, their before side being the "
         "bandpassed signal rather than the unfiltered one.",
@@ -285,7 +297,7 @@ NOTES = {
         "it is the line a channel is rejected on, which is what the kept count above counts. "
         "One channel order over every panel, the widest mover first.",
     "subject_index.timeline":
-        "Smoothed over 60 s and sampled at that step, the trend being slower than one QC "
+        "Smoothed over {smooth:g} s and sampled at that step, the trend being slower than one QC "
         "window. Long and short only: <code>all</code> is a blend of the two and lands between "
         "them. Each band is the colour its condition wears on the run's own report.",
     "subject_index.rejections":

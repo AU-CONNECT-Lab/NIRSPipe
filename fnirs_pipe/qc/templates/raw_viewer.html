@@ -212,8 +212,7 @@ select#run-select {
 <details id="ChannelDetail" open>
   <summary>c. HbO / HbR &amp; PSD per channel</summary>
   <div class="details-body">
-    <p class="step-desc" id="detail-title">Pick a channel here or click its trace above.
-       The panel holds that channel's concentration after Beer-Lambert and its spectrum.</p>
+    <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
     <select class="ch-select" id="ch-detail-select"
             onchange="selectChannel(this.value)"></select>
     <div id="detail-placeholder">pick a channel to view HbO &amp; HbR</div>
@@ -226,8 +225,7 @@ select#run-select {
 <details id="PSD" open>
   <summary>d. Mean PSD across channels</summary>
   <div class="details-body">
-    <p class="step-desc">Averaged over every channel, on optical density, before
-       Beer-Lambert.</p>
+    <p class="step-desc">{{ section_note('raw.psd') }}</p>
     <div id="psd-plot"></div>
   </div>
 </details>
@@ -236,9 +234,7 @@ select#run-select {
 <details id="SciPsp" open>
   <summary>e. Raw Signal Quality (SCI / PSP / CV)</summary>
   <div class="details-body">
-    <p class="step-desc">Scalp coupling index, peak spectral power and coefficient of
-       variation per channel, every row on one window grid and all three measured on the
-       uncorrected optical density. Red marks a channel below the line.</p>
+    <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
   </div>
 </details>
@@ -247,16 +243,12 @@ select#run-select {
 <details id="Motion" open>
   <summary>f. Motion (Carpet / GVTD)</summary>
   <div class="details-body">
-    <p class="step-desc">Per-channel z-score carpet with the global variance of the temporal
-       derivative under it. Measured over the whole recording; a per-condition page narrows
-       the view rather than remeasuring, so its colour scale and its threshold are the run's.</p>
+    <p class="step-desc">{{ section_note('raw.motion') }}</p>
     <div id="carpet-gvtd-panel"></div>
 
     <div id="motion-detail-block" style="display:none">
       <h3 class="qm-sub">Per-channel, before and after motion correction</h3>
-      <p class="qm-note">One channel's optical density either side of the correction, under
-         its own separation class's GVTD. Measured over the whole recording like the carpet
-         above, so a per-condition page narrows the view rather than remeasuring it.</p>
+      <p class="qm-note">{{ section_note('raw.motion_detail') }}</p>
       <select id="motion-detail-select" class="ch-select"></select>
       <div id="motion-detail-plot"></div>
     </div>
@@ -267,9 +259,7 @@ select#run-select {
 <details id="Events" open>
   <summary>g. Event Timeline</summary>
   <div class="details-body">
-    <p class="step-desc">Every event on one axis, one row per condition. This is what shows a
-       condition that stopped being delivered partway through or a block started twice, which
-       no average can.</p>
+    <p class="step-desc">{{ section_note('raw.events') }}</p>
     <div id="trigger-timeline-plot"></div>
   </div>
 </details>
@@ -278,11 +268,7 @@ select#run-select {
 <details id="Epoch" open>
   <summary>h. Epoch (grand mean)</summary>
   <div class="details-body">
-    <p class="step-desc">One row per condition, every long channel averaged, with the short
-       ones dotted. The dotted trace is what this panel is read for: when it rises with the
-       solid one the response is scalp haemodynamics rather than activation, and no later
-       step separates the two. Measured before filtering and motion correction, so read the
-       relation between the two traces rather than the shape of either.</p>
+    <p class="step-desc">{{ section_note('raw.epoch') }}</p>
     <div id="epoch-mean-plot"></div>
   </div>
 </details>
@@ -290,10 +276,7 @@ select#run-select {
 <details id="TrialImage" open>
   <summary>i. Trial image: single-channel trials</summary>
   <div class="details-body">
-    <p class="step-desc">Trials down the rows, time across, one panel per condition. A
-       channel that was fine for the first half of a block and lost for the second reads as
-       a band here and is averaged away everywhere else. A condition with fewer than two
-       trials draws nothing, which is what a block design is.</p>
+    <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
     <select class="ch-select" id="trialimg-select"
             onchange="document.getElementById('trialimg-frame').src=this.value"></select>
     <iframe id="trialimg-frame" class="plotly-frame"
@@ -307,21 +290,12 @@ select#run-select {
   <ul id="sqm-list" class="qm-list"></ul>
   <div id="sqm-split-wrap" style="display:none">
     <h3 class="qm-sub">Original recording: optical density</h3>
-    <p class="qm-note">The same recording measured over three channel sets. <b>Long</b> is
-       the set the verdict is read off; <b>Short</b> is left uncoloured, a short channel's
-       coupling being high by construction, so that row
-       answers whether the regressors those channels feed are trustworthy rather than whether
-       the run is usable.</p>
+    <p class="qm-note">{{ section_note('raw.sets') }}</p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="sqm-split-table"></table></div>
   </div>
   <div id="motion-split-wrap" style="display:none">
     <h3 class="qm-sub">Motion and spikes</h3>
-    <p class="qm-note">Each set is measured on its own here rather than regrouped: GVTD is an
-       RMS across channels with its own cutoff per set, and a frame count asks how many of
-       <i>these</i> channels were flagged at once, a bar a smaller set clears more easily.
-       <b>Read those rows down a column, not across one.</b> Corrected per channel is the
-       exception, being an average over the set, and is the one column two rows can be
-       compared on.</p>
+    <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
     <p class="qm-note" id="motion-post-note"></p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
   </div>
@@ -329,25 +303,19 @@ select#run-select {
 </div>
 
 <h2 id="ChannelSummary">Channel Quality Summary</h2>
-<p class="qm-note">Status / SCI / CV / PSP / SNR per channel, green = pass and red = fail.
-   Status screens on the coupled-window share; SCI, PSP, CV and SNR are reported only.</p>
+<p class="qm-note">{{ section_note('raw.channel_summary') }}</p>
 <div id="ch-summary-plot"></div>
 
 <h2 id="TrialQC" data-card="trial-qc-card" style="display:none">Per-trial Quality</h2>
 <div id="trial-qc-wrap" style="display:none">
-  <p class="qm-note" id="trial-qc-hint">Each event window scored on its own. Colour is
-     relative within a metric row, not a threshold.</p>
+  <p class="qm-note" id="trial-qc-hint">{{ section_note('raw.trial_qc') }}</p>
   <div id="trial-qc-plot"></div>
 </div>
 
 <h2 id="Channels">Per-channel Metrics</h2>
 <div id="ch-decisions-body">
   <div id="ch-notes"></div>
-  <p class="qm-note">One row per source-detector pair: a decision applies to the pair, and
-     SCI is a property of the pair rather than of either wavelength. The per-wavelength
-     numbers are in the channel metrics CSV written beside the quality record. Rows in red
-     were rejected by screening, and Status names the criterion. Click the decision chip
-     to cycle: &#8212; &#8594; good &#8594; bad. Saves automatically.</p>
+  <p class="qm-note">{{ section_note('raw.channel_decisions') }}</p>
   <p class="qm-note" id="ch-decisions-hint"></p>
   <div style="overflow-x:auto">
   <table id="ch-decisions-table" class="qm-table">
@@ -589,7 +557,7 @@ function selectChannel(pair) {
   var sel = document.getElementById("ch-detail-select");
   if (sel && sel.value !== pair) sel.value = pair;
   document.getElementById("detail-title").innerHTML =
-    _esc(pair) + ": concentration, spectrum and epoch average, after Beer-Lambert.";
+    {{ section_note('raw.channel_detail_picked', pair='{pair}') | tojson }}.replace("{pair}", _esc(pair));
   document.getElementById("detail-placeholder").style.display = "none";
   document.getElementById("detail-plot").style.display = "block";
 
@@ -751,7 +719,7 @@ function loadTrialQc() {
   if (!has) return;
   var hint = document.getElementById("trial-qc-hint");
   if (hint && d.n_trials) {
-    hint.textContent = d.n_trials + " trials • colour is relative within a metric row, not a threshold";
+    hint.textContent = {{ section_note('raw.trial_qc_counted', n='{n}') | tojson }}.replace("{n}", d.n_trials);
   }
   _setIframeSrc("trial-qc-plot", p.src, p.h || 260);
 }
@@ -831,16 +799,11 @@ function renderSqm(d) {
   var scope = document.getElementById("sqm-scope");
   var hasSplit = !!((d.split || {}).rows || []).length;
   if (d.channel_set === "long channels") {
-    scope.innerHTML = "Measured on <b>long channels only</b>. A short channel sits a few "
-      + "millimetres from its source, so it returns far more light and a far stronger pulse "
-      + "than any long channel; averaging the two together lifts SCI, PSP and SNR and can "
-      + "make a poorly coupled recording read as a good one.";
+    scope.innerHTML = {{ section_note('raw.scope_long') | tojson }};
   } else if (hasSplit) {
-    scope.innerHTML = "Measured over <b>every channel</b>. The three channel sets are in the "
-      + "tables below; the verdict is read off the long ones.";
+    scope.innerHTML = {{ section_note('raw.scope_split') | tojson }};
   } else {
-    scope.textContent = "Measured on every channel: this montage carries no short channels "
-      + "to judge separately.";
+    scope.textContent = {{ section_note('raw.scope_every') | tojson }};
   }
   renderSqmSplit(d.split || {},        "sqm-split-wrap",    "sqm-split-table");
   renderSqmSplit(d.motion_split || {}, "motion-split-wrap", "motion-split-table");
@@ -848,8 +811,7 @@ function renderSqm(d) {
   if (mp) {
     var corrected = ((_STATIC_DATA[_run_idx] || {}).summary || {}).motion_correction;
     mp.innerHTML = (corrected && corrected !== "none")
-      ? "Each cell is <b>before &rarr; after " + _esc(corrected) + "</b>. Both sides are "
-        + "counted against the uncorrected side's cutoff."
+      ? {{ section_note('raw.motion_post', method='{method}') | tojson }}.replace("{method}", _esc(corrected))
       : "";
   }
 }
@@ -924,8 +886,7 @@ function loadIssues() {
 
   var html = "";
   if (notes.length) {
-    html += "<p class='qm-note' style='margin:0 0 0.35rem'>Sections this run skipped "
-          + "because the recording does not carry what they need. Not failures.</p>"
+    html += "<p class='qm-note' style='margin:0 0 0.35rem'>" + {{ section_note('raw.skipped') | tojson }} + "</p>"
           + "<ul class='note-list'>"
           + notes.map(function(x) { return "<li>" + _esc(x) + "</li>"; }).join("")
           + "</ul>";

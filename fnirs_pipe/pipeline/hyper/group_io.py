@@ -18,6 +18,7 @@ from fnirs_pipe.io.derivatives import write_sidecar_json
 from fnirs_pipe.io.derivatives import select_one_run
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import stage_of
@@ -287,10 +288,5 @@ def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
     if not unrecorded:
         return None
     stages = sorted({stage_of(raw) or "?" for raw in raws.values()})
-    return (
-        f"The files for {', '.join(unrecorded)} record no bandpass "
-        f"(stage {', '.join(repr(s) for s in stages)}). A whole-record correlation has no "
-        "frequency axis, so drift and systemic physiology enter it directly, and two members "
-        "recorded together drift alike. The wavelet coherence panels are unaffected. Point "
-        "--desc at a filtered stage (filtered, errts) to read these numbers as neural."
-    )
+    return section_note("caveat.isc_unfiltered", subjects=", ".join(unrecorded),
+                        stages=", ".join(repr(s) for s in stages))

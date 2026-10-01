@@ -17,6 +17,9 @@ from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from fnirs_pipe.qc.boilerplate.notes import section_note
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
@@ -235,17 +238,7 @@ def registration_note(offset: "tuple[float, float] | None") -> "str | None":
     if offset is None:
         return None
     reach, scalp = offset
-    return (
-        f"The optode positions are not registered to this recording's head coordinates: "
-        f"they sit a median of {reach:.0f} mm from the head centre while the fiducials put "
-        f"the scalp at {scalp:.0f} mm. Everything drawn from positions, the 3-D views, the "
-        f"flat maps and the topographies, is therefore not anatomical, and no channel can "
-        f"be placed on a brain region. Separations are measured between optodes rather "
-        f"than against the head, so the long / short split, the screening and every metric "
-        f"built on them are unaffected. Fixing it needs the digitised nasion and "
-        f"preauricular points the recording was taken with, or a standard montage put in "
-        f"their place; neither can be recovered from the file itself."
-    )
+    return section_note("caveat.unregistered", reach=reach, scalp=scalp)
 
 
 def separation_notes(
@@ -276,12 +269,7 @@ def separation_notes(
     notes: list[str] = []
     n_long, n_short = scalars.get("n_long_channels"), scalars.get("n_short_channels")
     if n_long == 0 and n_short == 0:
-        notes.append(
-            "No channel fell in either separation range, which is what a recording with "
-            "no registered optode positions looks like. The quantitative metrics are over "
-            "every channel rather than long channels only, and the per-channel table is "
-            "not grouped. Anything that needs positions, including short-channel "
-            "regression and the topographies, is unavailable for this run.")
+        notes.append(section_note("caveat.no_separation"))
         return notes
 
     n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
@@ -294,27 +282,17 @@ def separation_notes(
             span = f"{lo:.1f} mm" if hi - lo < 0.05 else f"{lo:.1f} to {hi:.1f} mm"
             # ceil for the short bound, floor for the long one: a bound has to reach past
             # every orphan to take them all in, and rounding the other way excludes one
-            where = (f" Theirs sit at {span}, so --short-max-dist {math.ceil(hi)} would make "
-                     f"them short channels and --long-min-dist {math.floor(lo)} would make "
-                     f"them long; which is right depends on how deep this montage's short "
-                     f"end reaches, which the separations alone do not settle.")
-        notes.append(
-            f"{n_odd} channel(s) sit at a separation the long and short ranges leave out "
-            f"({unclaimed_separations(sep_bands)}). They were screened and their row in the "
-            f"per-channel table carries the whole-montage scores, but no split claims them, "
-            f"so they are in none of the long or short scalar metrics.{where}")
+            where = " " + section_note("caveat.unclassified_where", span=span,
+                                       short_max=math.ceil(hi), long_min=math.floor(lo))
+        notes.append(section_note("caveat.unclassified", n=n_odd,
+                                  ranges=unclaimed_separations(sep_bands), where=where))
 
     if short_channel_requested:
         short_rows = [r for r in rows if r.get("separation") == "short"]
         if not n_short:
-            notes.append(
-                "Short-channel regression was requested but this montage carries no short "
-                "channel, so it did not run and no systemic signal was regressed out.")
+            notes.append(section_note("caveat.short_regression_none"))
         elif short_rows and all(r["is_bad"] for r in short_rows):
-            notes.append(
-                f"Short-channel regression was requested but all {len(short_rows)} short "
-                f"channels were rejected, so it did not run. Their scores are in the "
-                f"per-channel table.")
+            notes.append(section_note("caveat.short_regression_all_bad", n=len(short_rows)))
     return notes
 
 
@@ -375,12 +353,12 @@ CSV_FIELDS = (*(key for key, _ in channel_columns(("status",))),
 # column added to one and not the other is a difference a reader reads as a finding.
 OD_SPLIT_COLUMNS = (
     ("channel_retention_rate", "Channel retention"),
-    ("sci_win_mean",           "Mean SCI (10 s)"),
+    ("sci_win_mean",           f"Mean SCI ({SCI_WINDOW_S:g} s)"),
     ("sci_mean",               "Mean SCI (whole run)"),
     ("good_frac_mean",         "Coupled windows"),
-    ("psp_mean",               "Mean PSP (10 s)"),
-    ("snr_mean",               "Mean SNR (10 s)"),
-    ("cv_mean",                "Mean CV (10 s)"),
+    ("psp_mean",               f"Mean PSP ({PSP_WINDOW_S:g} s)"),
+    ("snr_mean",               f"Mean SNR ({CV_WINDOW_S:g} s)"),
+    ("cv_mean",                f"Mean CV ({CV_WINDOW_S:g} s)"),
     ("mean_amp_mean",          "Mean amplitude"),
     ("spike_pct",              "Spike share"),
     # a sum over the set's channels, so it is read against the row's channel count rather
@@ -398,8 +376,8 @@ OD_SPLIT_COLUMNS = (
 MOTION_SPLIT_COLUMNS = (
     ("gvtd_mean",             "GVTD mean"),
     ("gvtd_p95",              "GVTD p95"),
-    ("gvtd_filt_mean",        "GVTD mean 0.01-0.5 Hz"),
-    ("gvtd_filt_p95",         "GVTD p95 0.01-0.5 Hz"),
+    ("gvtd_filt_mean",        f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
+    ("gvtd_filt_p95",         f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
     ("gvtd_pct_above_thresh", "GVTD % motion"),
     ("gvtd_num_above_thresh", "GVTD motion frames"),
     ("gvtd_thresh",           "GVTD threshold"),

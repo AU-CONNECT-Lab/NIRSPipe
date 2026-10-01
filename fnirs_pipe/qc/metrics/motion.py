@@ -16,6 +16,9 @@ from fnirs_pipe.qc.metrics._helpers import _mask_to_segments, _mean_or_none, _sa
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.utils import is_optical_density
 
+# share of channels that must spike, or be corrected, at once for a timepoint to count
+SPIKE_CH_FRAC = 0.1
+
 
 def _spike_mask(diff_data: np.ndarray) -> np.ndarray:
     """Per-channel robust outlier mask of a temporal-derivative array.
@@ -52,7 +55,8 @@ def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
     "spike_count", "spike_pct", "spike_pct_per_channel",
     "spike_num_frames", "spike_pct_frames", "temporal_derivative_variance",
 ))
-def _spike_metrics(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> dict[str, Any]:
+def _spike_metrics(raw_intensity: mne.io.Raw,
+                   ch_frac: float = SPIKE_CH_FRAC) -> dict[str, Any]:
     """Spike diagnostics and temporal-derivative variance from the OD derivative.
 
     Parameters
@@ -138,7 +142,7 @@ def motion_correction_metrics(
     raw_before: mne.io.Raw,
     raw_after: mne.io.Raw,
     rel_thresh: float = 1.0,
-    ch_frac: float = 0.1,
+    ch_frac: float = SPIKE_CH_FRAC,
 ) -> dict[str, Any]:
     """Experimental: motion-correction footprint, the timepoints a correction repaired.
 
@@ -186,7 +190,7 @@ def motion_corrected_segments(
     raw_before: mne.io.Raw,
     raw_after: mne.io.Raw,
     rel_thresh: float = 1.0,
-    ch_frac: float = 0.1,
+    ch_frac: float = SPIKE_CH_FRAC,
 ) -> "list[tuple[float, float]]":
     """Time spans where motion correction touched >= ch_frac of channels (for plotting)."""
     corrected, times = _correction_footprint(raw_before, raw_after, rel_thresh)
@@ -194,7 +198,8 @@ def motion_corrected_segments(
     return _mask_to_segments(flagged, times)
 
 
-def spike_segments(raw_intensity: mne.io.Raw, ch_frac: float = 0.1) -> "list[tuple[float, float]]":
+def spike_segments(raw_intensity: mne.io.Raw,
+                   ch_frac: float = SPIKE_CH_FRAC) -> "list[tuple[float, float]]":
     """Time spans where >= ch_frac of channels show a motion-band OD spike (for plotting)."""
     raw_od = (raw_intensity if is_optical_density(raw_intensity)
               else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))

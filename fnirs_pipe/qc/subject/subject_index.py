@@ -419,12 +419,13 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     are of one run's channels and one run's clock and cannot be pooled.
     """
     from fnirs_pipe.qc.figures.subject.group_figures import (
-        build_channel_condition_matrix, build_condition_panels, build_condition_timeline,
+        SMOOTH_S, build_channel_condition_matrix, build_condition_panels,
+        build_condition_timeline,
     )
     from fnirs_pipe.qc.subject.group_writer import _sqm_row
 
     fig_dir = sub_dir / "figures"
-    out: dict = {"profile": None, "per_run": []}
+    out: dict = {"profile": None, "per_run": [], "smooth_s": SMOOTH_S}
 
     def _save(stem: str, name: str, fig) -> "dict | None":
         if fig is None:

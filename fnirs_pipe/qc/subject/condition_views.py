@@ -16,6 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from fnirs_pipe.io.naming import parse_path
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.condition_views")
@@ -687,10 +688,7 @@ def condition_payloads(
             "bad_rate": bad_rate,
             "badge_class": ("badge-green" if bad_rate < 10
                             else "badge-yellow" if bad_rate < 30 else "badge-red"),
-            "scope": (f"Condition “{label}” only, {t0:.0f} to {t1:.0f} s. The "
-                      f"verdict here is this condition's own, screened on its windows "
-                      f"against the run's line; the recording was processed under the "
-                      f"run's, which the run's own page carries."),
+            "scope": section_note("raw.condition_scope", label=label, t0=t0, t1=t1),
         }
         # the flat list keeps only what neither table covers, so a number is printed once.
         # Derived from the two column lists rather than written out again: a column added to
@@ -775,15 +773,9 @@ def condition_payloads(
         d["figure_paths"] = paths
 
         d["notes"] = list(payload.get("notes") or []) + [
-            f"This view describes {label} only. Its numbers are read out of the quality "
-            f"record, sliced there out of the whole recording's windowed pass rather than "
-            f"measured on a cut of it, so they sit on the same window grid and the same "
-            f"filter as every other condition and as the run.",
-            "The verdict here is this condition's own, screened on its windows against the "
-            "run's line. The recording was processed under the run's verdict, not this one; "
-            "the run's page carries it.",
-            "The spectrum is the one panel measured on a cut of the recording rather than "
-            "sliced out of the run's pass.",
+            section_note("raw.condition_sliced", label=label),
+            section_note("raw.condition_verdict"),
+            section_note("raw.condition_spectrum"),
         ]
         out.append((label, d))
     return out

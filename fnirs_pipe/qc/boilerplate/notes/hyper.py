@@ -77,13 +77,16 @@ NOTES = {
         "inside a null drawn for <em>that</em> window by pairing one member against a "
         "phase-scrambled copy of the other. The estimator&rsquo;s floor moves with the window "
         "length, so two windows&rsquo; raw values are not on a common scale and neither is "
-        "readable alone. This is a screening flag, not the analysis: the wavelet coherence is "
-        "on the post report{post_link}.",
-    "hyper_raw.screening_post_link":
-        ', <a href="{href}">here</a>',
+        "readable alone.",
+    "hyper_raw.screening_scope":
+        "This is a screening flag, not the analysis: the wavelet coherence is on the post "
+        "report.",
+    "hyper_raw.screening_scope_linked":
+        "This is a screening flag, not the analysis: the wavelet coherence is on the post "
+        'report, <a href="{href}">here</a>.',
     "hyper_raw.screening_strip":
         "One pale dot per channel, the diamond is the window&rsquo;s own rank with the channels "
-        "pooled; read the diamond. A per-channel rank over a hundred draws moves with the draw; "
+        "pooled; read the diamond. A per-channel rank over {n_iter} draws moves with the draw; "
         "the window&rsquo;s does not.",
     "hyper_raw.screening_flag":
         "<b>A flag, not a result.</b> Shared movement, shared task structure and shared "
@@ -164,14 +167,16 @@ NOTES = {
         "Band mean per channel pair, row = {row} and column = {col}: one number per map the "
         "selectors above reach, and the rows of <code>hyper-wtc.tsv</code>. There is no "
         "within-brain cell anywhere in it. Hover a cell to see which pairing it is.",
-    "hyper_post.isc":
+    "hyper_post.isc_window":
         "Pearson r between the two members' time courses, every site of one against every site "
-        "of the other, {scope}. The channel panels pair their matrix with a connectogram "
-        "({arc_rule}); the ROI matrix has no null to rank pairings by and draws none.",
-    "hyper_post.isc_scope_window":
-        "over this window only, z-scored inside it",
-    "hyper_post.isc_scope_run":
-        "over the whole recording",
+        "of the other, over this window only, z-scored inside it. The channel panels pair "
+        "their matrix with a connectogram ({arc_rule}); the ROI matrix has no null to rank "
+        "pairings by and draws none.",
+    "hyper_post.isc_run":
+        "Pearson r between the two members' time courses, every site of one against every site "
+        "of the other, over the whole recording. The channel panels pair their matrix with a "
+        "connectogram ({arc_rule}); the ROI matrix has no null to rank pairings by and draws "
+        "none.",
     "hyper_post.isc_roi_matrix":
         "The channel values of <code>hyper-isc-*.tsv</code> averaged in Fisher z inside each "
         "ROI pair, so this rests on the same channels the ROI coherence above does. Row = "
@@ -180,21 +185,20 @@ NOTES = {
         "{sides} right, on one colour scale.",
     "hyper_post.hover_pairing":
         "Hover a cell to see which pairing it is.",
+    "hyper_post.numbers_window":
+        "Every value the panels above were drawn from, one row per pairing over this window.",
+    "hyper_post.numbers_run":
+        "Every value the panels above were drawn from, one row per pairing, each condition "
+        "beside the whole run, which is the comparison no single panel above can show.",
     "hyper_post.numbers":
-        "Every value the panels above were drawn from, one row per pairing{scope}. Not rounded "
-        "anywhere but here: <code>hyper-wtc.tsv</code>, <code>hyper-wtc-roichan.tsv</code> and "
-        "<code>hyper-isc-*.tsv</code> under the group&rsquo;s <code>nirs/</code> carry the "
-        "same numbers at full precision. <b>% in COI</b> beside a column group is the share of "
-        "that window&rsquo;s band cells that survived the cone of influence, which is the one "
-        "thing behind a WTC mean that no figure here shows. It is one number per window rather "
-        "than per pairing, the cone depending on the window length and the band and not on the "
-        "channels: a coherence resting on a third of its cells is not the same measurement as "
-        "one that kept all of them.",
-    "hyper_post.numbers_scope_window":
-        " over this window",
-    "hyper_post.numbers_scope_run":
-        ", each condition beside the whole run, which is the comparison no single panel above "
-        "can show",
+        "Not rounded anywhere but here: <code>hyper-wtc.tsv</code>, "
+        "<code>hyper-wtc-roichan.tsv</code> and <code>hyper-isc-*.tsv</code> under the "
+        "group&rsquo;s <code>nirs/</code> carry the same numbers at full precision. <b>% in "
+        "COI</b> beside a column group is the share of that window&rsquo;s band cells that "
+        "survived the cone of influence, which is the one thing behind a WTC mean that no figure "
+        "here shows. It is one number per window rather than per pairing, the cone depending on "
+        "the window length and the band and not on the channels: a coherence resting on a third "
+        "of its cells is not the same measurement as one that kept all of them.",
     "hyper_post.roi_value":
         "An ROI value is the mean of the channel pairs inside the two regions, not a second "
         "analysis of an averaged signal. The ROI WTC is the plain mean of those coherences and "
@@ -238,7 +242,7 @@ NOTES = {
         "which is the one finding no single dyad page can carry.",
     "hyper_group.condition_dials":
         "The same share cut by condition on the left, comparable across dyads in a way absolute "
-        "seconds are not; on the right the six dyads that lost the most, a ring per condition "
+        "seconds are not; on the right the {n} dyads that lost the most, a ring per condition "
         "with the dyad's overall share innermost. The field says which dyads are worth "
         "opening, the dials what happened inside them.",
     "hyper_group.no_shared_pairs":

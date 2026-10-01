@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.subject.group_figures import (
     SCORE_THRESHOLD,
+    SMOOTH_S,
     _split_column,
     build_condition_matrix,
     build_condition_panels,
@@ -273,14 +275,9 @@ def _render_group(
     if spanning:
         shown = ", ".join(spanning[:6])
         more = f", and {len(spanning) - 6} more" if len(spanning) > 6 else ""
-        note(notes, out_desc,
-             f"{PRE_BANDPASS_HAEMO_STAGE}_* was measured before the bandpass and "
-             f"{'/'.join(POST_BANDPASS_HAEMO_STAGES)}_* after it, so the difference between "
-             f"such a pair is mostly the filter and not what the step did. "
-             f"{len(spanning)} metrics sit on both sides ({shown}{more}). The subject "
-             f"report's stage comparison re-applies the passband before comparing; this "
-             f"table stores each stage as it stands and does not. *_band_frac carries the "
-             f"same trap with a denominator that moves, so read *_band_power instead.")
+        note(notes, out_desc, section_note(
+            "caveat.bandpass_pairs", pre=PRE_BANDPASS_HAEMO_STAGE,
+            post="/".join(POST_BANDPASS_HAEMO_STAGES), n=len(spanning), shown=shown + more))
 
     # under figures/ so the .bidsignore line covers these as it covers every other figure
     fig_dir = output_dir / "figures"
@@ -349,12 +346,9 @@ def _render_group(
     windows = {float(v) for v in (r.get("qc_window_s") for r in full_rows)
                if isinstance(v, (int, float))}
     if windows - {SCI_WINDOW_S}:
-        note(notes, out_desc,
-             f"the table's sci_win_mean, psp_mean, cv_mean and snr_mean are measured over "
-             f"{SCI_WINDOW_S:g} s windows whatever --qc-window is set to, so they stay "
-             f"comparable across runs; this cohort binned its windowed panels at "
-             f"{', '.join(f'{w:g}' for w in sorted(windows))} s, so a panel and its column "
-             f"do not describe the same stretch of recording.")
+        note(notes, out_desc, section_note(
+            "caveat.window_mismatch", pinned=SCI_WINDOW_S,
+            windows=", ".join(f"{w:g}" for w in sorted(windows))))
 
     conditions = condition_names(full_rows)
     if not conditions:
@@ -378,6 +372,8 @@ def _render_group(
         headline_rows=_headline_rows(df) if not df.empty else [],
         small_cohort=0 < len(df) < SMALL_COHORT_N,
         score_threshold=SCORE_THRESHOLD,
+        smooth_s=SMOOTH_S,
+        sci_window_s=SCI_WINDOW_S,
         conditions=conditions,
         worst_runs=worst,
         figure_paths=figure_paths,

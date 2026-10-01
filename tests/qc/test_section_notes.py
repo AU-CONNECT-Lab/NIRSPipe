@@ -17,16 +17,31 @@ import fnirs_pipe.qc as qc_pkg
 from fnirs_pipe.qc.boilerplate.notes import SECTION_NOTES, section_note
 
 TEMPLATES = Path(qc_pkg.__file__).resolve().parent / "templates"
-CALL = re.compile(r"section_note\(\s*'([^']+)'")
+PACKAGE = Path(qc_pkg.__file__).resolve().parents[1]
+CALL = re.compile(r"""section_note\(\s*(['"])([^'"]+)\1""")
+
+
+def _keys_in(path: Path) -> "set[str]":
+    return {key for _quote, key in CALL.findall(path.read_text(encoding="utf-8"))}
 
 
 def _asked_for() -> "dict[str, set[str]]":
     """Every key the templates ask for, by template name."""
     out = {}
-    for path in TEMPLATES.glob("*.j2"):
-        keys = set(CALL.findall(path.read_text(encoding="utf-8")))
+    for path in [*TEMPLATES.glob("*.j2"), *TEMPLATES.glob("*.html")]:
+        keys = _keys_in(path)
         if keys:
             out[path.name] = keys
+    return out
+
+
+def _asked_for_by_code() -> "dict[str, set[str]]":
+    """Every key the package's Python asks for, by module path."""
+    out = {}
+    for path in PACKAGE.rglob("*.py"):
+        keys = _keys_in(path)
+        if keys:
+            out[str(path.relative_to(PACKAGE))] = keys
     return out
 
 
@@ -38,19 +53,20 @@ def test_no_note_is_empty():
 
 def test_every_key_a_template_asks_for_is_written():
     # the failure this catches is silent: an unanswered key renders an empty paragraph
-    for name, keys in _asked_for().items():
+    for name, keys in {**_asked_for(), **_asked_for_by_code()}.items():
         missing = keys - set(SECTION_NOTES)
         assert not missing, f"{name} asks for {sorted(missing)}, which nothing answers"
 
 
 def test_every_note_written_is_asked_for_somewhere():
-    asked = set().union(*_asked_for().values())
+    asked = set().union(*_asked_for().values(), *_asked_for_by_code().values())
     assert not set(SECTION_NOTES) - asked
 
 
 def test_a_note_with_slots_is_asked_for_with_them_filled():
     # a slot left unfilled reaches the page as a literal {sci}, which no reader can make
-    # sense of and no other check would see
+    # sense of and no other check would see. Python is not checked here: a call there that
+    # leaves a slot out raises KeyError on the run that reaches it
     for name, keys in _asked_for().items():
         source = (TEMPLATES / name).read_text(encoding="utf-8")
         for key in keys:
@@ -58,7 +74,8 @@ def test_a_note_with_slots_is_asked_for_with_them_filled():
             slots = set(re.findall(r"\{([a-z_]+)\}", SECTION_NOTES.get(key, "")))
             if not slots:
                 continue
-            call = re.search(r"section_note\(\s*'" + re.escape(key) + r"'(.*?)\)\s*\}\}",
+            call = re.search(r"section_note\(\s*'" + re.escape(key)
+                             + r"'(.*?)\)\s*(?:\|[^}]*)?\}\}",
                              source, re.S)
             assert call, f"{name}: no call found for {key}"
             passed = set(re.findall(r"(\w+)\s*=", call.group(1)))

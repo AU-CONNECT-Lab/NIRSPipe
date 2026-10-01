@@ -13,6 +13,7 @@ from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper_post")
@@ -221,10 +222,9 @@ def build_wtc_channel(
         spine.set_visible(False)
     flat_colorbar(fig, mesh, ax, "WTC", pad=0.015)
     # two lines: on one, the caption is wider than the map and the crop pads it with white
-    caption = (f"arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter "
-               f"cycle,\ndrawn only where coherence clears "
-               f"{_clears(wtc_data, arrow_min)}"
-               "    washed-out band: outside the cone of influence")
+    caption = (section_note("figure.phase_arrows", lead=lead,
+                            clears=_clears(wtc_data, arrow_min)).replace(", drawn", ",\ndrawn")
+               + "    " + section_note("figure.coi_band"))
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#444444",
              linespacing=1.5)
     return _png_b64(fig)
@@ -489,10 +489,8 @@ def build_wtc_map_interactive(
         annotations=arrows + [dict(
             xref="paper", yref="paper", x=0.0, y=-0.155, xanchor="left", yanchor="top",
             showarrow=False, font=dict(size=11, color="#444444"),
-            text=("arrows: right = in phase, left = antiphase, up = "
-                  f"{lead} leads by a quarter cycle, drawn only where coherence clears "
-                  f"{clears}"
-                  "&nbsp;&nbsp;&nbsp;&nbsp;washed-out band: outside the cone of influence"),
+            text=(section_note("figure.phase_arrows", lead=lead, clears=clears)
+                  + "&nbsp;&nbsp;&nbsp;&nbsp;" + section_note("figure.coi_band")),
         )],
     )
     fig.update_yaxes(minor=dict(tickvals=minor, showgrid=False))

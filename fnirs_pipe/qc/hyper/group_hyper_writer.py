@@ -34,7 +34,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
-    build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
+    N_DIALS, build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
     cohort_order,
 )
 from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
@@ -264,6 +264,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
                     nav_meta=[("dyads", len(rows))]),
         **footer_vars(versions=versions, errors=errors, notes=notes),
         n_rows=len(rows),
+        n_dials=min(N_DIALS, len(order)),
         small_cohort=len(rows) < SMALL_COHORT_N,
         no_shared_pairs="pair_field" not in figure_paths,
         alpha=rows[0]["alpha"],

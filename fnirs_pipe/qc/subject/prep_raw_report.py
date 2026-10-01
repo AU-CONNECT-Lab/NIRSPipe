@@ -14,6 +14,7 @@ from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
+from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
@@ -632,9 +633,8 @@ def _process_run(
             "dpf": list(dpf),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
             "motion_correction": motion_correction or "none",
-            "scope": ("Screened on the long channels."
-                      if sqm_split else "Screened on every channel: this montage carries "
-                                        "no short channels to judge separately."),
+            "scope": (section_note("raw.screened_long") if sqm_split
+                      else section_note("raw.screened_every")),
         },
         "ts":           ts_inline,
         "layout":       layout_inline,

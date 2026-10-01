@@ -105,7 +105,7 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
     <iframe class="plot-frame" src="{{ figure_paths.pair_field.src }}"
             style="height:{{ figure_paths.pair_field.h }}px"></iframe>
     {% if figure_paths.condition_dials %}
-    <p class="qm-note" style="margin-top:1rem">{{ section_note('hyper_group.condition_dials') }}</p>
+    <p class="qm-note" style="margin-top:1rem">{{ section_note('hyper_group.condition_dials', n=n_dials) }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.condition_dials.src }}"
             style="height:{{ figure_paths.condition_dials.h }}px"></iframe>
     {% endif %}

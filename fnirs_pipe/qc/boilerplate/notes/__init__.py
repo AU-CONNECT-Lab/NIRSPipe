@@ -2,7 +2,8 @@
 
 The per-metric hover text is next door in :mod:`~fnirs_pipe.qc.boilerplate.vocabulary`;
 this is the layer above it, the paragraphs that introduce a section or say how to read the
-panel under it. One module per report family, merged into one table here.
+panel under it, and the caveats a run attaches to them from Python (``caveats``). One
+module per report family, merged into one table here.
 
 **Every paragraph a report prints lives here.** A template keeps the ``{% if %}`` that picks
 which paragraph to say, never the sentence itself: a paragraph that differs between two runs
@@ -17,7 +18,9 @@ autoescaping on would have to wrap these.
 
 from __future__ import annotations
 
+from fnirs_pipe.qc.boilerplate.notes.caveats import NOTES as _CAVEATS
 from fnirs_pipe.qc.boilerplate.notes.hyper import NOTES as _HYPER
+from fnirs_pipe.qc.boilerplate.notes.raw import NOTES as _RAW
 from fnirs_pipe.qc.boilerplate.notes.subject import NOTES as _SUBJECT
 
 
@@ -31,7 +34,7 @@ def _merge(*tables: dict[str, str]) -> dict[str, str]:
     return merged
 
 
-SECTION_NOTES = _merge(_SUBJECT, _HYPER)
+SECTION_NOTES = _merge(_SUBJECT, _RAW, _HYPER, _CAVEATS)
 
 
 def section_note(key: str, **values: object) -> str:

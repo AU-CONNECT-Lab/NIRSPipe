@@ -219,9 +219,10 @@
 
     {% if carpet_panels %}
       <h3>Carpet after denoising</h3>
-      <p class="step-desc">{{ section_note('carpet.after',
-        stage=('<code>' ~ carpet_stage_labels[0] ~ '</code>') if carpet_stage_labels
-              else section_note('carpet.last_stage')) }}
+      <p class="step-desc">
+        {%- if carpet_stage_labels %}{{ section_note('carpet.after_named', stage=carpet_stage_labels[0]) }}
+        {%- else %}{{ section_note('carpet.after_unnamed') }}{% endif %}
+        {{ section_note('carpet.after') }}
         {%- if mode == 'glm' %} {{ section_note('carpet.glm') }}{% endif %}
         {%- if condition_label %} {{ section_note('carpet.condition') }}{% endif %}</p>
       {% for panel in carpet_panels %}
@@ -256,9 +257,9 @@
       <iframe class="plotly-frame" src="{{ psd_panel_path }}" title="PSD panel" style="height:{{ psd_panel_h }}px"></iframe>
       <p class="fig-path">{{ psd_panel_path }}</p>
     {% elif psd_too_short %}
-      <div class="placeholder">{{ section_note('psd.too_short',
-        holder=('&ldquo;' ~ condition_label ~ '&rdquo;') if condition_label
-               else section_note('psd.this_cut')) }}</div>
+      <div class="placeholder">
+        {%- if condition_label %}{{ section_note('psd.too_short_condition', label=condition_label) }}
+        {%- else %}{{ section_note('psd.too_short_cut') }}{% endif %}</div>
     {% else %}
       <div class="placeholder">Figure generation failed; see Errors section.</div>
     {% endif %}
@@ -293,7 +294,7 @@
     <p class="fig-path">{{ trigger_timeline_path }}</p>
     <h3>Grand mean</h3>
     {% endif %}
-    <p class="step-desc">{{ section_note('epoch.grand_mean') }}</p>
+    <p class="step-desc">{{ section_note('epoch.grand_mean', tmin='%g'|format(epoch_tmin)|replace('-', '−')) }}</p>
     {% if epoch_preview_path %}
       <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>
       <p class="fig-path">{{ epoch_preview_path }}</p>
@@ -547,12 +548,12 @@
   {% else %}
   <ul class="qm-list">
     {{ qm_li('channel_retention_rate', 'Channel retention') }}
-    {{ qm_li('sci_win_mean', 'Mean SCI (10 s windows)') }}
+    {{ qm_li('sci_win_mean', 'Mean SCI (%g s windows)'|format(sci_window_s)) }}
     {{ qm_li('sci_mean', 'Mean SCI (whole run)') }}
     {{ qm_li('good_frac_mean', 'Coupled windows') }}
-    {{ qm_li('psp_mean', 'Mean PSP (10 s windows)') }}
-    {{ qm_li('snr_mean', 'Mean SNR (intensity, 10 s)') }}
-    {{ qm_li('cv_mean', 'Mean CV (intensity, 10 s)') }}
+    {{ qm_li('psp_mean', 'Mean PSP (%g s windows)'|format(psp_window_s)) }}
+    {{ qm_li('snr_mean', 'Mean SNR (intensity, %g s)'|format(cv_window_s)) }}
+    {{ qm_li('cv_mean', 'Mean CV (intensity, %g s)'|format(cv_window_s)) }}
   </ul>
   {% endif %}
 
@@ -571,9 +572,8 @@
 
   <h3 class="qm-sub">Motion and spikes</h3>
   <p class="qm-note">{% if motion_split %}{{ section_note('metrics.motion_split') }}
-     {%- else %}{{ section_note('metrics.motion_unsplit',
-         channels=section_note('channels.long_only') if gvtd_channel_set == 'long'
-                  else section_note('channels.every')) }}{% endif %}</p>
+     {%- elif gvtd_channel_set == 'long' %}{{ section_note('metrics.motion_unsplit_long') }}
+     {%- else %}{{ section_note('metrics.motion_unsplit_every') }}{% endif %}</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
   {#- the GVTD threshold is explained by the gvtd_thresh tooltip, not a paragraph here -#}
   {#- A condition has one side of the motion step rather than both, and the two sides are
@@ -591,7 +591,7 @@
       columns of the table above: that table's rows are groupings of per-channel numbers. -#}
   {% if motion_split %}
   <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
-  {%- set gvtd_set_help = section_note('metrics.gvtd_set_help') %}
+  {%- set gvtd_set_help = section_note('metrics.gvtd_set_help', pct=100 * spike_ch_frac) %}
   {#- from fnirs_pipe.qc.channel_table, so this table and the raw viewer's cannot end up
       listing different metrics for the same recording -#}
   {%- set motion_rows = motion_split_columns %}
@@ -626,8 +626,8 @@
   <ul class="qm-list">
     {{ qm_li('gvtd_mean', 'GVTD mean' ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_p95', 'GVTD p95' ~ after_note, '_post', motion_note) }}
-    {{ qm_li('gvtd_filt_mean', 'GVTD mean 0.01-0.5 Hz' ~ after_note, '_post', motion_note) }}
-    {{ qm_li('gvtd_filt_p95', 'GVTD p95 0.01-0.5 Hz' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_mean', 'GVTD mean %g-%g Hz'|format(*gvtd_band) ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_filt_p95', 'GVTD p95 %g-%g Hz'|format(*gvtd_band) ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_pct_above_thresh', 'GVTD % motion' ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_num_above_thresh', 'GVTD motion frames' ~ after_note, '_post', motion_note) }}
     {% if not condition_label %}
@@ -644,9 +644,8 @@
   {% if flat_censor or not motion_split or not condition_label %}
   <p class="qm-note">
      {%- if motion_split %}{{ section_note('metrics.motion_extra_split') }}
-     {%- else %}{{ section_note('metrics.motion_extra_unsplit',
-         channels='<b>' ~ section_note('channels.long') ~ '</b>' if gvtd_channel_set == 'long'
-                  else section_note('channels.every')) }}{% endif %}</p>
+     {%- elif gvtd_channel_set == 'long' %}{{ section_note('metrics.motion_extra_long', pct=100 * spike_ch_frac) }}
+     {%- else %}{{ section_note('metrics.motion_extra_every', pct=100 * spike_ch_frac) }}{% endif %}</p>
   <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -676,8 +675,9 @@
   {% endif %}
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
-  <p class="qm-note">{{ section_note('metrics.haemo_timing',
-     channels=section_note('channels.long') if hb_split else section_note('channels.every')) }}</p>
+  <p class="qm-note">
+     {%- if hb_split %}{{ section_note('metrics.haemo_timing_long') }}
+     {%- else %}{{ section_note('metrics.haemo_timing_every') }}{% endif %}</p>
   {#- the parenthetical on a row names which step its two columns straddle, since the
       global correlations straddle the confound regression and the rest the denoising -#}
   <table class="qm-table qm-split qm-narrow qm-flat">
