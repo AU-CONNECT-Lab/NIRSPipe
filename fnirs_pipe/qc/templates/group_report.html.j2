@@ -89,9 +89,7 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
 {% block content %}
 
 {# printed under every panel whose statistic the cohort is too small to carry #}
-{%- set small_caveat %}Only {{ n_rows }} runs: a box, a robust z-score and the outlier rule
-each measure how far a run sits from the middle of its cohort, and this cohort has no middle
-to measure from. Read the panels as the runs' own values side by side.{% endset %}
+{%- set small_caveat = section_note('group.small_cohort', n=n_rows) %}
 
 {% if summary_meta or headline_rows %}
 <h2 id="Summary">Summary</h2>
@@ -118,11 +116,11 @@ to measure from. Read the panels as the runs' own values side by side.{% endset 
   </div>
   {% if outliers is defined %}
   <p class="qm-note" style="margin-top:0.9rem">
-    {% if outliers %}{{ outliers | length }} of {{ n_rows }} runs sit more than
-    {{ score_threshold }} robust SDs from the cohort median on the average metric
-    {% if worst_runs %}({{ worst_runs | join(', ') }} the furthest){% endif %}; they are listed
-    under Outliers and drawn in colour in the panels.{% else %}No run sits more than
-    {{ score_threshold }} robust SDs from the cohort median on the average metric.{% endif %}
+    {% if outliers %}{{ section_note('group.outliers', count=outliers | length, n=n_rows,
+        z=score_threshold,
+        worst=' ' ~ section_note('group.outliers_worst', runs=worst_runs | join(', '))
+              if worst_runs else '') }}
+    {%- else %}{{ section_note('group.no_outliers', z=score_threshold) }}{% endif %}
   </p>
   {% endif %}
   {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}

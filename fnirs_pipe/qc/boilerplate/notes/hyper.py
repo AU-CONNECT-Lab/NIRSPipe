@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 NOTES = {
+    # ---- Both dyad reports ----
+    "hyper.clocks":
+        "Crop offset from the first shared trigger; all recordings are then trimmed to the "
+        "shortest. A dyad window is on the aligned clock and a member&rsquo;s own record is on "
+        "its own, and the offsets are what convert between them.",
+
     # ---- Raw dyad report ----
     "hyper_raw.scope":
         "This page is the raw pass: every channel is measured, nothing is split by separation "
@@ -11,10 +17,6 @@ NOTES = {
         "not the analysis.",
     "hyper_raw.scope_post_link":
         'That is on the <a href="{href}">post report</a>.',
-    "hyper_raw.clocks":
-        "Crop offset from the first shared trigger; all recordings are then trimmed to the "
-        "shortest. A dyad window is on the aligned clock and a member&rsquo;s own record is on "
-        "its own, and these are what convert between them.",
     "hyper_raw.blocks_verdict":
         "Times are on the shared clock, after the crop. A block that does not line up between "
         "the two rows of the figure above is a trigger that landed late in one member, or two "
@@ -126,10 +128,6 @@ NOTES = {
         "this window has seen about that many times, so the low-frequency end of every number "
         "below rests on very few independent looks at it. Raise <code>--wtc-band-fmin</code>, "
         "or read that end as indicative. Nothing is masked or dropped on account of this.",
-    "hyper_post.clocks":
-        "Crop offset from the first shared trigger; all recordings are then trimmed to the "
-        "shortest. A dyad window is on the aligned clock and a member&rsquo;s own record is on "
-        "its own, and this table is what converts between them.",
     "hyper_post.roi_grouping":
         "The channel-to-region mapping from <code>--roi-mapping</code>, which is what the "
         "per-ROI panels below are averaged over.",

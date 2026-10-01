@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw` refuses an output directory that is its `--derivatives-dir`, or any fnirs-pipe tree
 - `fnirs-qc hyper-raw` without `--derivatives-dir` leaves an existing fnirs-hyper `dataset_description.json` alone
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
-- The dyad reports and the dyad window index read their section prose from `boilerplate.notes`, now one module per report family
+- Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone

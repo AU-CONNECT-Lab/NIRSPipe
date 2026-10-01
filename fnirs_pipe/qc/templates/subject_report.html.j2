@@ -86,17 +86,13 @@
   {#- a per-condition page leaves several sections empty, and an empty section with no
       explanation reads as a broken report; it belongs to Summary rather than above it -#}
   <p class="qm-note" style="margin-top:0.75rem;">
-    Sliced out of the windowed pass the whole recording was measured with, so this page sits on
-    the same window grid and the same filter as the run and as every other condition. The
-    verdict is this condition&rsquo;s own; the recording was processed under the run&rsquo;s.
-    {% if epoch_preview_path %}The epoch and topography panels are rebuilt on a crop of this
-    condition; preprocessing and GLM are empty here and are on the run&rsquo;s page.{% else %}Preprocessing,
-    epoch, topography and GLM are empty here and are on the run&rsquo;s page.{% endif %}
+    {{ section_note('summary.condition_scope') }}
+    {% if epoch_preview_path %}{{ section_note('summary.condition_rebuilt') }}{% else %}{{ section_note('summary.condition_empty') }}{% endif %}
     {%- if not (trial_qc_path or trial_image_pairs or trial_image_roi_pairs) %}
-    The trial panels are absent because
-    {{ condition_trial_reason or 'this condition holds too few trials to compare' }}.
+    {{ section_note('summary.condition_no_trials',
+                    reason=condition_trial_reason or section_note('summary.condition_few_trials')) }}
     {%- endif %}
-    {% if index_href %}<a href="{{ index_href }}">Full report for the run</a>.{% endif %}
+    {% if index_href %}{{ section_note('summary.condition_run_link', href=index_href) }}{% endif %}
   </p>
   {% endif %}
   <h3 style="margin-top:1rem;">Run command</h3>
@@ -119,16 +115,9 @@
 <details id="RawSignal" open>
   <summary>a. Raw Signal</summary>
   <div class="details-body">
-    <p class="step-desc">
-      Per-channel HbO/HbR timeseries and PSD, on
-      <code>{{ channel_detail_stage or 'desc-sci' }}</code> converted with
-      DPF = {{ config.dpf | join(', ') }}. This is the recording before motion correction
-      ({{ config.motion_correction }}) and before any filtering, the same stage the
-      sliding-window SCI/PSP and the SNR/CV numbers are measured on.
-      {%- if channel_detail_stage == 'desc-preproc' %}
-      <strong>desc-sci was not readable for this run, so these are post-correction.</strong>
-      {%- endif %}
-    </p>
+    <p class="step-desc">{{ section_note('steps.raw_signal', stage=channel_detail_stage or 'desc-sci',
+        dpf=config.dpf | join(', '), motion=config.motion_correction) }}
+      {%- if channel_detail_stage == 'desc-preproc' %} {{ section_note('steps.raw_signal_fallback') }}{% endif %}</p>
 
     {% if channel_pairs %}
     <h3>Per-channel HbO / HbR &amp; PSD</h3>
@@ -164,13 +153,8 @@
 
     {% if brain_views_path %}
       <h3>Channel quality: 3D &amp; optode map</h3>
-      <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">Red = rejected by the
-        screening, whatever its SCI; every channel that survived is then graded green to
-        amber by its own SCI against the run's line. The two are different questions: a
-        channel is rejected on how many windows it was coupled in, so one can be dropped at
-        a high SCI.{% if condition_label %} Both maps carry this condition's own SCI and its own
-        rejected channels, which is the verdict printed on this page. The recording was
-        processed under the run's; its page has that map.{% endif %}</p>
+      <p style="font-size:0.82rem; color:#666; margin:0 0 0.3rem;">{{ section_note('quality.brain_views') }}
+        {%- if condition_label %} {{ section_note('quality.brain_views_condition') }}{% endif %}</p>
       <img class="responsive" src="{{ brain_views_path }}" alt="Brain views + optode" />
       <p class="fig-path">{{ brain_views_path }}</p>
     {% endif %}
@@ -199,12 +183,8 @@
 
     {% if motion_detail_pairs %}
     <h3>Per-channel before / after motion correction</h3>
-    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-      Select a channel to compare the OD signal before and after motion correction.
-      {% if condition_label %}Measured over the whole recording and viewed over this
-      condition, like the carpet above it: the GVTD row on each figure is filtered and
-      thresholded run-wide, so it is the run's trace with the axis narrowed.{% endif %}
-    </p>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('motion_detail.picker') }}
+      {%- if condition_label %} {{ section_note('motion_detail.condition') }}{% endif %}</p>
     <select class="ch-select"
             onchange="document.getElementById('mot-det-frame').src=this.value">
       {% for ch in motion_detail_pairs %}
@@ -222,18 +202,11 @@
 <details id="HbO_HbR" open>
   <summary>d. HbO / HbR (Beer-Lambert)</summary>
   <div class="details-body">
-    <p class="step-desc">
-      Modified Beer-Lambert law applied with DPF = {{ config.dpf | join(', ') }}.
-    </p>
+    <p class="step-desc">{{ section_note('steps.beer_lambert', dpf=config.dpf | join(', ')) }}</p>
     <h3>HbO–HbR Correlation</h3>
     <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('haemo.hbo_hbr_corr') }}</p>
     {% if mode == 'glm' %}
-      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-        The after stage on this run is the GLM residual, so the task model came out of it
-        along with the confounds. A weaker anticorrelation there can mean the model explained
-        part of the shared response rather than that the data got worse, so judge the run on
-        the before stage.
-      </p>
+      <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('haemo.glm_residual') }}</p>
     {% endif %}
     {% if hbo_hbr_path %}
       <iframe class="plotly-frame" src="{{ hbo_hbr_path }}" title="HbO–HbR correlation panel, before and after denoising"
@@ -246,30 +219,11 @@
 
     {% if carpet_panels %}
       <h3>Carpet after denoising</h3>
-      <p class="step-desc">
-        Per-channel z-scored haemoglobin for
-        {% if carpet_stage_labels %}<code>{{ carpet_stage_labels[0] }}</code>{% else %}the last stage on disk{% endif %},
-        HbO above HbR in one image, a colour bar and a seam between them. One GVTD row per channel
-        set sits above on the same time axis, each carrying the trace before and after motion
-        correction, so a dark column can be read against what happened at that moment. The
-        threshold, the spike shading and the spans the correction touched stay in the motion
-        section above. The
-        title carries how far this stage's per-channel SD has fallen; the recording before
-        any of this is the carpet in the motion section above.
-        Each block is scaled to itself, so it shows the structure left at this stage rather
-        than its amplitude. The texture is finer here than on the raw carpet because the slow
-        drift that made that one look smooth has been removed, not because noise was added:
-        what is left is the analysis passband, and its fast end is near the limit this figure
-        can resolve in time. The spectrum below reads that end.
-        {% if mode == 'glm' %}
-        On a GLM run this is the residual, which had the task model removed as well as the
-        confounds: it shows what the model left unexplained, not the data the betas were
-        measured on.
-        {% endif %}
-        {% if condition_label %}The z-scoring is the whole recording's and only the columns
-        drawn are this condition's, so every condition's carpet is on one greyscale and the
-        darker stretch is the noisier one.{% endif %}
-      </p>
+      <p class="step-desc">{{ section_note('carpet.after',
+        stage=('<code>' ~ carpet_stage_labels[0] ~ '</code>') if carpet_stage_labels
+              else section_note('carpet.last_stage')) }}
+        {%- if mode == 'glm' %} {{ section_note('carpet.glm') }}{% endif %}
+        {%- if condition_label %} {{ section_note('carpet.condition') }}{% endif %}</p>
       {% for panel in carpet_panels %}
         <iframe class="plotly-frame" src="{{ panel.path }}"
                 title="Carpet after denoising"
@@ -284,38 +238,27 @@
 <details open>
   <summary>e. Power Spectral Density by stage</summary>
   <div class="details-body">
-    <p class="step-desc">
-      One row per stage file on disk, HbO and HbR together in each. Coloured bands: Mayer wave
-      (~0.1&thinsp;Hz){#- Mayer alone is a fixed visual reference with no metric behind it;
-      the other two are the configured bands the shading and the band scalars both use -#}
-      {%- if psd_resp_band %}, respiration ({{ '%g'|format(psd_resp_band[0]) }}–{{ '%g'|format(psd_resp_band[1]) }}&thinsp;Hz){% endif %}
-      {%- if psd_cardiac_band %}, cardiac ({{ '%g'|format(psd_cardiac_band[0]) }}–{{ '%g'|format(psd_cardiac_band[1]) }}&thinsp;Hz){% endif %}.
-      Faint lines are the individual channels of the first stage; dashed verticals mark the
-      filter cutoffs.
+    {#- Mayer alone is a fixed visual reference with no metric behind it; the other two bands
+    are the configured ones the shading and the band scalars both use -#}
+    <p class="step-desc">{{ section_note('psd.stages', bands=
+        (section_note('psd.band_resp', lo='%g'|format(psd_resp_band[0]), hi='%g'|format(psd_resp_band[1]))
+         if psd_resp_band else '')
+        ~ (section_note('psd.band_cardiac', lo='%g'|format(psd_cardiac_band[0]), hi='%g'|format(psd_cardiac_band[1]))
+           if psd_cardiac_band else '')) }}
       {% if psd_stage_labels %}
-        Stages after <code>desc-preproc</code>:
-        {% for label in psd_stage_labels %}<code>{{ label }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
-        {% if 'desc-errts' in psd_stage_labels %}
-          <code>desc-errts</code> is the confound regression's residual. Where a high-pass ran
-          it should sit on top of the row above it, since the drift basis has little left to
-          remove and the other regressors are measured signals rather than frequency bands; a
-          visible gap inside the analysis band means the regression reached further than
-          intended. Where no high-pass ran, this row carries the whole detrend.
-        {% endif %}
+        {{ section_note('psd.stage_list', stages='<code>' ~ psd_stage_labels | join('</code>, <code>') ~ '</code>') }}
+        {% if 'desc-errts' in psd_stage_labels %}{{ section_note('psd.errts') }}{% endif %}
       {% else %}
-        No post-processing output was found for this run, so the second line is the bandpass
-        simulated in memory rather than a file the pipeline wrote.
+        {{ section_note('psd.simulated') }}
       {% endif %}
     </p>
     {% if psd_panel_path %}
       <iframe class="plotly-frame" src="{{ psd_panel_path }}" title="PSD panel" style="height:{{ psd_panel_h }}px"></iframe>
       <p class="fig-path">{{ psd_panel_path }}</p>
     {% elif psd_too_short %}
-      <div class="placeholder">
-        {% if condition_label %}&ldquo;{{ condition_label }}&rdquo; holds{% else %}This cut holds{% endif %}
-        fewer samples than the transform, so no spectrum is drawn here. The run's own page
-        carries the spectrum, and the PSP row above is sliced to this condition.
-      </div>
+      <div class="placeholder">{{ section_note('psd.too_short',
+        holder=('&ldquo;' ~ condition_label ~ '&rdquo;') if condition_label
+               else section_note('psd.this_cut')) }}</div>
     {% else %}
       <div class="placeholder">Figure generation failed; see Errors section.</div>
     {% endif %}
@@ -343,15 +286,8 @@
   <div class="details-body">
     {% if trigger_timeline_path %}
     <h3>Event timeline</h3>
-    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">
-      Every event on one axis, one row per condition. The averages below cannot show a
-      condition that stopped being delivered partway through or a block that was started
-      twice; this can. Same panel the raw QC viewer opens with.
-      {%- if condition_label %}
-      <strong>This is the whole run, not just &ldquo;{{ condition_label }}&rdquo;</strong>:
-      both of those failures show only against the conditions around the one you are reading.
-      {%- endif %}
-    </p>
+    <p style="font-size:0.82rem;color:#666;margin:0 0 0.3rem;">{{ section_note('epoch.timeline') }}
+      {%- if condition_label %} {{ section_note('epoch.timeline_condition', label=condition_label) }}{% endif %}</p>
     <iframe class="plotly-frame" src="{{ trigger_timeline_path }}" title="Event timeline"
             style="height:{{ trigger_timeline_h }}px"></iframe>
     <p class="fig-path">{{ trigger_timeline_path }}</p>
@@ -554,13 +490,8 @@
   {% if sqm_split %}
   {#- this help is about the Channel set column rather than about any one metric, so it
       hangs off that column's header -#}
-  {%- set set_help = "Long is the set the verdict is read off. Short is left uncoloured: a"
-      ~ " short channel's coupling is high by construction,"
-      ~ " so the column answers whether the regressors those channels feed are trustworthy"
-      ~ " rather than whether the run is usable. Rejection is per channel, against the"
-      ~ " screening criteria over the whole montage, and is not read off these averages."
-      ~ (" On this page every column is this condition's, and the channel sets are the run's,"
-         ~ " since one montage has to serve every condition." if condition_label else "") %}
+  {%- set set_help = section_note('metrics.set_help')
+      ~ (' ' ~ section_note('metrics.set_help_condition') if condition_label else '') %}
 
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
@@ -628,21 +559,9 @@
   {% if stage_metrics_path %}
   <h3 class="qm-sub">What each denoising step did</h3>
   <p class="qm-note">
-    One panel per metric, each on its own scale, measured on the long channels alone: a short
-    channel is a regressor rather than a measurement, and an average over both describes
-    neither.
-    {% if stage_banded %}
-      The quality panels are recomputed with the analysis passband applied at every stage, so
-      the columns measure the same thing. They will not match the per-stage values in the
-      metrics table, which are measured on each stage as stored; the gap is largest on the
-      stage before the bandpass.
-    {% else %}
-      No passband was requested, so every panel is measured on each stage as stored and
-      differences across a filtering step should be read with that in mind.
-    {% endif %}
-    The greyed panels are not quality claims: they show what left the recording. Direction is
-    marked only across the whole chain, never on a single step, since a step can move a metric
-    for reasons that are not quality.
+    {{ section_note('metrics.stages') }}
+    {% if stage_banded %}{{ section_note('metrics.stages_banded') }}{% else %}{{ section_note('metrics.stages_unbanded') }}{% endif %}
+    {{ section_note('metrics.stages_greyed') }}
   </p>
   <iframe class="plotly-frame" src="{{ stage_metrics_path }}"
           title="Metrics by denoising stage"
@@ -651,11 +570,10 @@
   {% endif %}
 
   <h3 class="qm-sub">Motion and spikes</h3>
-  <p class="qm-note">Optical density.
-     {% if motion_split %}Each channel set is measured on its own, in the table below.
-     {% else %}GVTD, the spike counts and the correction footprint are measured on
-       {% if gvtd_channel_set == 'long' %}long channels only{% else %}every channel{% endif %}.
-     {% endif %}</p>
+  <p class="qm-note">{% if motion_split %}{{ section_note('metrics.motion_split') }}
+     {%- else %}{{ section_note('metrics.motion_unsplit',
+         channels=section_note('channels.long_only') if gvtd_channel_set == 'long'
+                  else section_note('channels.every')) }}{% endif %}</p>
   {%- set motion_note = ' (motion before&rarr;after)' %}
   {#- the GVTD threshold is explained by the gvtd_thresh tooltip, not a paragraph here -#}
   {#- A condition has one side of the motion step rather than both, and the two sides are
@@ -673,10 +591,7 @@
       columns of the table above: that table's rows are groupings of per-channel numbers. -#}
   {% if motion_split %}
   <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
-  {%- set gvtd_set_help = "Long is the set the verdict is read off and the only one coloured."
-      ~ " Each set is its own measurement rather than a grouping of one, with its own GVTD"
-      ~ " cutoff and its own tenth-of-the-channels bar."
-      ~ " Corrected per channel is the exception, an average over the set." %}
+  {%- set gvtd_set_help = section_note('metrics.gvtd_set_help') %}
   {#- from fnirs_pipe.qc.channel_table, so this table and the raw viewer's cannot end up
       listing different metrics for the same recording -#}
   {%- set motion_rows = motion_split_columns %}
@@ -728,13 +643,10 @@
   {%- set flat_censor = sqm.get('gvtd_censor_pct') is not none %}
   {% if flat_censor or not motion_split or not condition_label %}
   <p class="qm-note">
-     {%- if motion_split %}What the table above has no column for. <b>Spike count</b> is a sum
-     over channels, so a second set's would track how many channels it has; censoring names
-     the set <code>--gvtd-censor</code> gave it.
-     {%- else %}Counted on
-     {% if gvtd_channel_set == 'long' %}<b>long channels</b>{% else %}every channel{% endif %},
-     and over the recording rather than per channel: a timepoint counts when at least a tenth
-     of the set was flagged.{% endif %}</p>
+     {%- if motion_split %}{{ section_note('metrics.motion_extra_split') }}
+     {%- else %}{{ section_note('metrics.motion_extra_unsplit',
+         channels='<b>' ~ section_note('channels.long') ~ '</b>' if gvtd_channel_set == 'long'
+                  else section_note('channels.every')) }}{% endif %}</p>
   <table class="qm-table qm-split qm-narrow qm-flat">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>
@@ -764,11 +676,8 @@
   {% endif %}
 
   <h3 class="qm-sub">Haemoglobin and timing</h3>
-  <p class="qm-note">Measured after Beer-Lambert, on
-     {% if hb_split %}long channels{% else %}every channel{% endif %}: what the denoising did,
-     not what the recording arrived as, so each <b>before</b> value is that channel set's row
-     in the table above. The global correlations are the exception, their before side being
-     the bandpassed signal rather than the unfiltered one.</p>
+  <p class="qm-note">{{ section_note('metrics.haemo_timing',
+     channels=section_note('channels.long') if hb_split else section_note('channels.every')) }}</p>
   {#- the parenthetical on a row names which step its two columns straddle, since the
       global correlations straddle the confound regression and the rest the denoising -#}
   <table class="qm-table qm-split qm-narrow qm-flat">
