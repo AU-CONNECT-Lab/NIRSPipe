@@ -36,6 +36,16 @@ _NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_i
 NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
 
+def _cutoff(value: str) -> "float | str":
+    """A frequency in Hz, or ``none``, kept as the string so it outranks a file layer's value."""
+    if value.strip().lower() == "none":
+        return "none"
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r}: expected a frequency in Hz or 'none'")
+
+
 def _noise_model(value: str) -> str:
     """``ols``, ``auto``, ``arN`` for any order the library will take, or ``ar_irls``.
 
@@ -183,8 +193,12 @@ def _build_parser() -> argparse.ArgumentParser:
     post.add_argument("--config", type=Path,
                       help="TOML file of post settings, over the mode's defaults. CLI flags "
                            "override both.")
-    post.add_argument("--high-pass", type=float, help="High-pass filter cutoff in Hz, e.g. 0.01.")
-    post.add_argument("--low-pass",  type=float, help="Low-pass filter cutoff in Hz, e.g. 0.5.")
+    post.add_argument("--high-pass", type=_cutoff,
+                      help="High-pass filter cutoff in Hz, e.g. 0.01, or none to switch off the "
+                           "mode's default.")
+    post.add_argument("--low-pass",  type=_cutoff,
+                      help="Low-pass filter cutoff in Hz, e.g. 0.5, or none to switch off the "
+                           "mode's default.")
     post.add_argument("--filter-method", choices=FILTER_METHODS,
                       help=f"Bandpass design, default {DEFAULT_FILTER_METHOD!r}. 'iir' is a zero-phase "
                            "Butterworth. 'fir' is a hamming-windowed "

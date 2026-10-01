@@ -140,6 +140,11 @@ def _resolve_post_settings(args: dict[str, Any],
     for arg in [*setting_args.values(), "contrast_file"]:
         if args.get(arg) is None and layered.get(arg) is not None:
             args[arg] = layered[arg]
+    # `--low-pass none` switches a cutoff off even where a file layer sets one
+    for arg in ("high_pass", "low_pass"):
+        if args.get(arg) == "none":
+            args[arg] = None
+            layered.pop(arg, None)
     return layered, sources
 
 

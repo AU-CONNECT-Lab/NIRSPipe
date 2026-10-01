@@ -237,3 +237,15 @@ def test_glm_without_a_cutoff_stops_and_names_the_mode():
 def test_rest_needs_no_cutoff_from_the_user():
     args, _, sources = _resolved({"mode": "rest", **_BANDS})
     _refuse_cosine_without_cutoff(args, sources)
+
+
+def test_none_switches_off_a_cutoff_the_mode_would_fill():
+    args, toml, sources = _resolved({"mode": "denoise", "low_pass": "none", **_BANDS})
+    assert args["low_pass"] is None
+    assert sources["low_pass"] == "cli"
+    assert _build_post_config("01", None, args, toml).low_pass is None
+
+
+def test_none_in_the_config_file_also_switches_it_off():
+    args, toml, _ = _resolved({"mode": "rest", **_BANDS}, {"high_pass": "none"})
+    assert _build_post_config("01", None, args, toml).high_pass is None

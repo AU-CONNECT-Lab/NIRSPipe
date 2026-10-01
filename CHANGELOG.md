@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw --derivatives-dir` names the fnirs-pipe tree its motion panel reads corrected recordings from
 - `fnirs-rate hyper --derivatives-dir` keeps each member's channel decisions in the fnirs-pipe tree, beside their raw page
 - `--mode` fills in its own defaults for the post settings, under `--config` and the command line
+- `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
 - The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
 

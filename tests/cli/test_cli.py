@@ -362,3 +362,14 @@ def test_cardiac_band_stays_required(argv, capsys):
     with pytest.raises(SystemExit):
         qc_cli._build_parser().parse_args(argv)
     assert "--cardiac-l-freq" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("raw, expected", [("none", "none"), ("None", "none"), ("0.5", 0.5)])
+def test_a_cutoff_takes_a_frequency_or_none(raw, expected):
+    assert _parse(_MIN + ["--low-pass", raw]).low_pass == expected
+
+
+def test_a_cutoff_refuses_anything_else(capsys):
+    with pytest.raises(SystemExit):
+        _parse(_MIN + ["--high-pass", "off"])
+    assert "expected a frequency in Hz or 'none'" in capsys.readouterr().err
