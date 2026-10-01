@@ -17,6 +17,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.cli import _shared
+from fnirs_pipe.cli.run import mode_defaults
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
 from fnirs_pipe.io.naming import report_name, roi_map_name
 from fnirs_pipe.io.derivatives import entity_of, write_bidsignore, write_dataset_description
@@ -78,7 +79,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         noise_model=pick("noise_model", default="auto"),
         drift_model=pick("drift_model"),
         drift_high_pass=pick("drift_high_pass"),
-        drift_order=pick("drift_order"),
+        drift_order=pick("drift_order", default=1),
         fir_delays=tuple(int(x) for x in raw_fir.split(",")) if raw_fir else None,
         short_channel=sc if (sc and sc != "none") else None,
         aux=bool(pick("aux_regressors", default=False)),
@@ -92,6 +93,66 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         # the same bands prep split with, so the regression and the reports agree
         **_shared.separation_bands_from_args(args),
     )
+
+
+# ---- post settings: command line over --config over the mode's defaults ----
+
+_NOT_SETTINGS = {"subject", "session", "roi_map", "roi_map_name", "contrast_def"}
+_ARG_OF_FIELD = {"aux": "aux_regressors"}
+
+
+def _post_setting_args() -> dict[str, str]:
+    """PostConfig field -> the argument, and TOML key, that sets it."""
+    from dataclasses import fields
+    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+    return {f.name: _ARG_OF_FIELD.get(f.name, f.name)
+            for f in fields(PostConfig) if f.name not in _NOT_SETTINGS}
+
+
+def _resolve_post_settings(args: dict[str, Any],
+                           config_toml: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Fill the gaps the command line left in ``args`` from --config, then the mode's defaults.
+
+    Returns the two file layers merged, and which layer each PostConfig field came from:
+    ``cli``, ``config``, ``mode`` or ``default``. The sources are read before the fill,
+    after which every value sits in ``args`` and looks typed.
+
+    e.g. ``--mode rest --low-pass 0.08`` with no --config gives low_pass "cli" (0.08),
+    high_pass "mode" (the rest preset's 0.01) and resample_sfreq "default" (None).
+    """
+    defaults = mode_defaults(_v(args.get("mode")))
+    layered = {**defaults, **config_toml}
+    setting_args = _post_setting_args()
+
+    sources: dict[str, str] = {}
+    for field, arg in setting_args.items():
+        if args.get(arg) is not None:
+            sources[field] = "cli"
+        elif arg in config_toml:
+            sources[field] = "config"
+        elif arg in defaults:
+            sources[field] = "mode"
+        else:
+            sources[field] = "default"
+    sources["roi_map_name"] = "cli" if args.get("roi_mapping") else "default"
+
+    # one resolved set for every reader, the run script and the database included
+    for arg in [*setting_args.values(), "contrast_file"]:
+        if args.get(arg) is None and layered.get(arg) is not None:
+            args[arg] = layered[arg]
+    return layered, sources
+
+
+def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str]) -> None:
+    """Stop before any subject runs, naming the layer that chose cosine."""
+    if _v(args.get("drift_model")) != "cosine" or args.get("drift_high_pass") is not None:
+        return
+    chosen_by = {"mode": f"--mode {_v(args['mode'])} uses", "config": "--config sets"}.get(
+        sources.get("drift_model"), "--drift-model asks for")
+    raise SystemExit(
+        f"[error] {chosen_by} a cosine drift model, which needs --drift-high-pass. The "
+        "cutoff depends on the design: use 1/(2 x the slowest repeat of any condition), "
+        "or pick another --drift-model.")
 
 
 def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
@@ -158,22 +219,24 @@ def run_participant_level(args: dict[str, Any]) -> None:
     write_dataset_description(output_dir, source=bids_dir)
     write_bidsignore(output_dir)
 
-    toml: dict[str, Any] = {}
+    config_toml: dict[str, Any] = {}
     if args.get("config"):
         from fnirs_pipe.utils import load_toml
-        toml = load_toml(args["config"])
+        config_toml = load_toml(args["config"])
         logger.debug("loaded post config: %s", args["config"])
 
-    # The separation bands are resolved here rather than in either config builder because only
-    # the post builder is given the TOML, and prep is the step that stamps the bands into the
-    # record. CLI still wins. `fnirs-prep` has no --config of its own, so its bands stay CLI-only.
-    for _band in _shared.SEPARATION_BAND_KEYS:
-        if args.get(_band) is None and toml.get(_band) is not None:
-            args[_band] = toml[_band]
-
-    # cutoffs may come from CLI or TOML; resolve like PostConfig so DB log + report match what post applies
-    cfg_high_pass = args.get("high_pass") if args.get("high_pass") is not None else toml.get("high_pass")
-    cfg_low_pass  = args.get("low_pass")  if args.get("low_pass")  is not None else toml.get("low_pass")
+    # folded into args before anything reads them: prep stamps the separation bands, and the
+    # run script, the database and the report read the cutoffs straight off args
+    toml, post_sources = _resolve_post_settings(args, config_toml)
+    cfg_high_pass = args.get("high_pass")
+    cfg_low_pass  = args.get("low_pass")
+    # (argument, value, layer) for what the report lists as not typed
+    filled_settings: list[tuple[str, Any, str]] = []
+    if args.get("mode"):
+        _refuse_cosine_without_cutoff(args, post_sources)
+        filled_settings = [(arg, toml[arg], post_sources[field])
+                           for field, arg in _post_setting_args().items()
+                           if post_sources[field] in ("config", "mode")]
 
     roi_map = None
     roi_mapping = args.get("roi_mapping")
@@ -218,6 +281,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     prep_config=_make_prep_config(subject, None, args),
                     post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
                                  if args.get("mode") else None),
+                    post_sources=post_sources,
                 )
                 write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
 
@@ -237,7 +301,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     mode=_v(args["mode"]) if args.get("mode") else None,
                     high_pass=cfg_high_pass,
                     low_pass=cfg_low_pass,
-                    hrf_model=_v(args["hrf_model"]) if args.get("hrf_model") else toml.get("hrf_model"),
+                    hrf_model=_v(args.get("hrf_model")),
                 )
 
                 t0 = time.monotonic()
@@ -356,6 +420,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             after_haemo=post.get("denoised"),
                             roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
                             roi_map_name=_roi_map_name(args),
+                            filled_settings=filled_settings,
                         ) or []])
 
                     if not args.get("no_report") and prep_runs:
@@ -506,7 +571,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None):
     from fnirs_pipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -562,6 +627,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         provenance_path=provenance_path,
         sqm_label=sqm_label,
         roi_map_name=roi_map_name,
+        filled_settings=filled_settings,
     )
 
 

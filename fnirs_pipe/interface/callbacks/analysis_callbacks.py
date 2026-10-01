@@ -7,6 +7,7 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, no_update
 
+from fnirs_pipe.cli.run import mode_defaults
 from fnirs_pipe.interface import process_stream
 from fnirs_pipe.interface.callbacks._cli_run import log_panel
 from fnirs_pipe.interface.callbacks._sections import rng, summary, value
@@ -245,8 +246,7 @@ def _build_cli_args(opts: dict) -> list[str]:
         if opts.get("roi_mapping"):
             args += ["--roi-mapping", opts["roi_mapping"]]
 
-        # confound regression: honoured by every mode, and glm and rest refuse to run
-        # without a drift model
+        # confound regression: honoured by every mode; a field left empty takes the mode's default
         if opts.get("drift_model"):
             args += ["--drift-model", opts["drift_model"]]
             if opts["drift_model"] == "cosine" and opts.get("drift_high_pass") is not None:
@@ -517,6 +517,22 @@ def hide_what_does_not_apply(censor, drift):
     )
 
 
+# ── An empty field takes the mode's default, so the placeholder names it ─────
+
+@callback(
+    Output("an-high-pass",       "placeholder"),
+    Output("an-low-pass",        "placeholder"),
+    Output("an-drift-high-pass", "placeholder"),
+    Input("an-post-mode", "value"),
+)
+def mode_placeholders(mode):
+    defaults = mode_defaults(mode)
+
+    def shown(key, empty):
+        return f"{defaults[key]} ({mode} default)" if key in defaults else empty
+    return shown("high_pass", "off"), shown("low_pass", "off"), shown("drift_high_pass", "from your design")
+
+
 # ── The drift cutoff is bracketed, so say so while the form is being filled ──
 
 @callback(
@@ -529,6 +545,12 @@ def hide_what_does_not_apply(censor, drift):
 def band_note(mode, high_pass, drift_model, drift_high_pass):
     if mode in (None, "none"):
         return None
+    # what the run will use, so an empty field holding a mode default is not warned about
+    defaults = mode_defaults(mode)
+    high_pass = high_pass if high_pass is not None else defaults.get("high_pass")
+    drift_model = drift_model or defaults.get("drift_model")
+    drift_high_pass = (drift_high_pass if drift_high_pass is not None
+                       else defaults.get("drift_high_pass"))
 
     # cosine without a cutoff stops the run in PostConfig, so say it here instead
     if drift_model == "cosine" and drift_high_pass is None:

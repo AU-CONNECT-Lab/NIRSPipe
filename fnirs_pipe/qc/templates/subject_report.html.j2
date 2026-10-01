@@ -101,6 +101,15 @@
   {% endif %}
   <h3 style="margin-top:1rem;">Run command</h3>
   <pre>{{ run_command }}</pre>
+  {% if filled_by %}
+  <p class="step-desc">Not on the command line:
+    {% for source, items in filled_by -%}
+    {{ source }} set {% for arg, val in items -%}
+    <code>--{{ arg | replace('_', '-') }} {{ val }}</code>{{ ', ' if not loop.last }}
+    {%- endfor %}{{ '; ' if not loop.last else '.' }}
+    {% endfor -%}
+  </p>
+  {% endif %}
 </div>
 
 <!-- ======================================================= preprocessing -->

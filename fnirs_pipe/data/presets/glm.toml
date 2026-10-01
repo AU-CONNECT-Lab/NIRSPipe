@@ -1,0 +1,5 @@
+# What --mode glm fills in when neither the command line nor --config sets it.
+# The cosine cutoff is left to --drift-high-pass: it depends on the design.
+hrf_model = "spm"
+noise_model = "auto"
+drift_model = "cosine"

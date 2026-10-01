@@ -137,9 +137,9 @@ Preprocessing:
                                shorter is censored with the artifacts around it. [default: 30.0]
 
 Postprocessing mode:
-  --mode                       {denoise,glm,rest}
-  --config FILE                TOML file for post parameters, plus the cardiac, respiration
-                               and separation bands. CLI flags override TOML.
+  --mode                       {denoise,glm,rest}. Each fills in its own post defaults.
+  --config FILE                TOML file of post settings and separation bands, over the
+                               mode's defaults. CLI flags override both.
 
 Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).

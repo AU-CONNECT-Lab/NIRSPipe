@@ -103,6 +103,7 @@ def write_run_record(
     sub_dir: Path | None = None,
     prep_config: Any = None,
     post_config: Any = None,
+    post_sources: dict[str, str] | None = None,
 ) -> None:
     """Write a TOML run record for one subject.
 
@@ -113,6 +114,7 @@ def write_run_record(
       [execution]:   invocation: the verbatim command, paths, selection filters
       [prep]:        preprocessing parameters as resolved, from PrepConfig
       [post]:        postprocessing parameters as resolved, from PostConfig (only with --mode)
+      [post_sources]: which layer set each [post] value: cli, config, mode or default
 
     [execution] answers "what was run" and stays copy-pasteable; [prep]/[post] answer
     "what was used" and come from the config objects the pipeline actually received.
@@ -155,7 +157,12 @@ def write_run_record(
     mode = args.get("mode")
     if mode is not None and post_config is not None:
         # mode is not a PostConfig field; it selects which branch run_post takes
-        sections.append(_section("post", {"mode": _unwrap(mode), **_config_section(post_config)}))
+        post = _config_section(post_config)
+        sections.append(_section("post", {"mode": _unwrap(mode), **post}))
+        if post_sources is not None:
+            sections.append(_section("post_sources", {
+                "mode": "cli",
+                **{k: post_sources.get(k, "default") for k, v in post.items() if v is not None}}))
 
     base = sub_dir if sub_dir is not None else output_dir
     out = base / "logs" / f"sub-{subject}.toml"

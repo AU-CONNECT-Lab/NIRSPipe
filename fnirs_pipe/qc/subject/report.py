@@ -1656,6 +1656,18 @@ def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _filled_by(filled_settings: list[tuple[str, Any, str]], mode: str | None) -> list:
+    """Group the settings nobody typed by the layer that set them, for the run command note.
+
+    ``[("high_pass", 0.01, "mode"), ("hrf_model", "spm", "config")]`` under rest gives
+    ``[("the --mode rest defaults", [("high_pass", 0.01)]), ("--config", [("hrf_model", "spm")])]``.
+    """
+    labels = {"mode": f"the --mode {mode} defaults", "config": "--config"}
+    return [(labels[layer], [(arg, val) for arg, val, src in filled_settings if src == layer])
+            for layer in ("mode", "config")
+            if any(src == layer for _, _, src in filled_settings)]
+
+
 def build_subject_report(
     subject: str,
     raw_intensity: mne.io.Raw,
@@ -1687,6 +1699,7 @@ def build_subject_report(
     provenance_path: str | None = None,
     sqm_label: str | None = None,
     roi_map_name: str | None = None,
+    filled_settings: list[tuple[str, Any, str]] | None = None,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
@@ -1943,6 +1956,7 @@ def build_subject_report(
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
         index_href=(report_name(f"sub-{subject}", desc="index") if sqm_label else None),
         run_command=run_command,
+        filled_by=_filled_by(filled_settings or [], mode),
         n_bad=n_bad,
         n_total=n_total,
         bad_rate=bad_rate,

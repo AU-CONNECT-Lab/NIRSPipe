@@ -74,7 +74,18 @@ def prep_only_record(mini_bids, tmp_path_factory):
 
 
 def test_record_has_the_expected_sections(record):
-    assert set(record) == {"environment", "execution", "prep", "post"}
+    assert set(record) == {"environment", "execution", "prep", "post", "post_sources"}
+
+
+@pytest.mark.parametrize("field, expected", [
+    ("noise_model", "cli"),          # typed, over both files
+    ("hrf_model", "config"),         # in the TOML and in the glm defaults; the TOML wins
+    ("drift_order", "config"),
+    ("cardiac_l_freq", "cli"),
+    ("mode", "cli"),
+])
+def test_the_record_names_the_layer_each_post_value_came_from(record, field, expected):
+    assert record["post_sources"][field] == expected
 
 
 @pytest.mark.parametrize("field, expected", [

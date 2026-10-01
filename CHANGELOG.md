@@ -13,16 +13,25 @@ All notable changes to this project will be documented in this file.
 - IMU rows print the unit the recording stores, on the axis or beside the dyad medians
 - `fnirs-qc hyper-raw --derivatives-dir` names the fnirs-pipe tree its motion panel reads corrected recordings from
 - `fnirs-rate hyper --derivatives-dir` keeps each member's channel decisions in the fnirs-pipe tree, beside their raw page
+- `--mode` fills in its own defaults for the post settings, under `--config` and the command line
+- The run record names the layer that set each post value, and the QC report lists the settings nobody typed
+- The Analysis page's empty filter fields show the chosen mode's defaults
 
 ### Changed
 - Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
 - `fnirs-qc hyper-raw` refuses an output directory that is its `--derivatives-dir`, or any fnirs-pipe tree
 - `fnirs-qc hyper-raw` without `--derivatives-dir` leaves an existing fnirs-hyper `dataset_description.json` alone
+- `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
+
+### Removed
+- `configs/presets/`, replaced by the mode defaults shipped inside the package
 
 ### Fixed
 - `fnirs-qc hyper-raw` looked for corrected recordings in the fnirs-hyper tree, so its motion panel never had a corrected side
 - The Hyper Preparation page wrote its dyad report into the derivatives tree and restamped it; it now takes a fnirs-hyper directory
 - `fnirs-rate hyper` help named the fnirs-pipe tree; its directory is the fnirs-hyper tree holding the raw report
+- `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
+- The per-subject run script ignored values set in `--config`
 
 ## [0.53.0] - 2026-09-26
 

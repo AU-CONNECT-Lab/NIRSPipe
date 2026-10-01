@@ -89,9 +89,10 @@ def test_dpf_accepts_multiple_values():
 def test_defaults_preserved():
     args = _parse(_MIN)
     assert args.motion_correction == "tddr"
-    assert args.drift_order == 1
+    # None, so a --config or mode value is not shadowed; the config builder supplies 1
+    assert args.drift_order is None
     assert args.n_jobs == 1
-    assert args.combine_runs is False
+    assert args.combine_runs is None
     assert args.no_report is False
     assert args.participant_label is None
 

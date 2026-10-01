@@ -737,3 +737,22 @@ def test_the_raw_reports_take_a_bids_directory():
     for command in _RAW_QC:
         argv = build_raw_qc_args(command, _RAW_QC_FULL_OPTS)
         assert argv[2] == "/bids"
+
+
+# ---- an empty field takes the mode's default ----
+
+def test_the_band_note_reads_the_mode_default_for_an_empty_cutoff():
+    from fnirs_pipe.interface.callbacks.analysis_callbacks import band_note
+
+    # rest ships its own cosine cutoff; glm leaves it to the design
+    assert band_note("rest", None, "cosine", None) is None
+    assert band_note("glm", None, "cosine", None) is not None
+
+
+def test_the_placeholders_name_the_mode_defaults():
+    from fnirs_pipe.cli.run import mode_defaults
+    from fnirs_pipe.interface.callbacks.analysis_callbacks import mode_placeholders
+
+    _, low, _ = mode_placeholders("rest")
+    assert str(mode_defaults("rest")["low_pass"]) in low
+    assert mode_placeholders("none") == ("off", "off", "from your design")

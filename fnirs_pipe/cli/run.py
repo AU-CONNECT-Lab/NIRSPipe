@@ -15,6 +15,17 @@ from fnirs_pipe.pipeline.denoise import (
 
 _MOTION_CHOICES        = ["tddr", "wavelet", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
+_PRESETS_DIR           = Path(__file__).resolve().parent.parent / "data" / "presets"
+
+
+def mode_defaults(mode: str | None) -> dict:
+    """The post settings ``--mode`` fills in below ``--config`` and the command line."""
+    if mode in (None, "none"):
+        return {}
+    from fnirs_pipe.utils import load_toml
+    return load_toml(_PRESETS_DIR / f"{mode}.toml")
+
+
 _HRF_CHOICES           = [
     "spm", "spm + derivative", "spm + derivative + dispersion",
     "glover", "glover + derivative", "glover + derivative + dispersion", "fir",
@@ -165,9 +176,13 @@ def _build_parser() -> argparse.ArgumentParser:
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,
                       help="Postprocessing mode: denoise (bandpass, plus confound regression "
-                           "when --short-channel or --drift-model is given), glm or rest.")
+                           "when --short-channel or --drift-model is given), glm or rest. "
+                           "Each mode fills in its own defaults for the post settings, which "
+                           "--config and then the command line override. The run record "
+                           "names where each setting came from.")
     post.add_argument("--config", type=Path,
-                      help="TOML file providing post parameter values. CLI flags override TOML.")
+                      help="TOML file of post settings, over the mode's defaults. CLI flags "
+                           "override both.")
     post.add_argument("--high-pass", type=float, help="High-pass filter cutoff in Hz, e.g. 0.01.")
     post.add_argument("--low-pass",  type=float, help="Low-pass filter cutoff in Hz, e.g. 0.5.")
     post.add_argument("--filter-method", choices=FILTER_METHODS,
@@ -181,7 +196,8 @@ def _build_parser() -> argparse.ArgumentParser:
                            "is twice this and the cutoff sits at -6 dB.")
     post.add_argument("--resample-sfreq", type=float,
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
-    post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=False,
+    # None rather than False, here and on --drift-order, so a --config or mode value can show
+    post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=None,
                       help="Concatenate multiple runs before postprocessing.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
@@ -199,11 +215,14 @@ def _build_parser() -> argparse.ArgumentParser:
                           "pins the largest order it may choose, which otherwise follows the "
                           "same 4x rule.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
-                     help="Low-frequency drift regressors in design matrix. Required by "
-                          "--mode glm and rest; optional in denoise, where the bandpass detrends.")
-    glm.add_argument("--drift-high-pass", type=float, help="High-pass cutoff for cosine drift in Hz.")
-    glm.add_argument("--drift-order", type=int, default=1,
-                     help="Polynomial drift order (polynomial drift model only).")
+                     help="Low-frequency drift regressors in design matrix. glm and rest "
+                          "default to cosine; optional in denoise, where the bandpass detrends.")
+    glm.add_argument("--drift-high-pass", type=float,
+                     help="High-pass cutoff for cosine drift in Hz. Required by --mode glm, "
+                          "since it depends on the design: at most 1/(2 x the slowest "
+                          "condition repeat).")
+    glm.add_argument("--drift-order", type=int,
+                     help="Polynomial drift order (polynomial drift model only), default 1.")
     glm.add_argument("--fir-delays",
                      help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,

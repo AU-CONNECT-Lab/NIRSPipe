@@ -13,7 +13,13 @@ from enum import Enum
 
 import pytest
 
-from fnirs_pipe.cli.workflows import _build_post_config, _make_prep_config
+from fnirs_pipe.cli.run import _MODE_CHOICES, mode_defaults
+from fnirs_pipe.cli.workflows import (
+    _build_post_config,
+    _make_prep_config,
+    _refuse_cosine_without_cutoff,
+    _resolve_post_settings,
+)
 
 
 class _Model(Enum):
@@ -166,3 +172,68 @@ def test_the_other_drift_models_need_no_cutoff():
                  resp_l_freq=0.1, resp_h_freq=0.5)
     assert PostConfig(**bands, drift_model="polynomial", drift_order=3).drift_order == 3
     assert PostConfig(**bands).drift_model is None
+
+
+# ---- the mode's defaults, under --config and the command line ----
+
+_BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.5)
+
+
+def _resolved(args, config_toml=None):
+    args = dict(args)
+    toml, sources = _resolve_post_settings(args, config_toml or {})
+    return args, toml, sources
+
+
+@pytest.mark.parametrize("mode", _MODE_CHOICES)
+def test_every_mode_ships_defaults_that_build_a_config(mode):
+    # glm leaves the cosine cutoff to the design, so the test supplies one
+    extra = {"drift_high_pass": 0.008} if mode == "glm" else {}
+    args, toml, _ = _resolved({"mode": mode, **_BANDS, **extra})
+    config = _build_post_config("01", None, args, toml)
+    for key, value in mode_defaults(mode).items():
+        assert getattr(config, key) == value
+
+
+def test_the_mode_fills_what_nothing_else_set():
+    args, _, sources = _resolved({"mode": "rest", **_BANDS})
+    assert args["low_pass"] == mode_defaults("rest")["low_pass"]
+    assert sources["low_pass"] == "mode"
+    assert sources["resample_sfreq"] == "default"
+
+
+def test_config_beats_the_mode_and_the_cli_beats_both():
+    args, _, sources = _resolved({"mode": "rest", "high_pass": 0.02, **_BANDS},
+                                 {"high_pass": 0.05, "low_pass": 0.08})
+    assert (args["high_pass"], sources["high_pass"]) == (0.02, "cli")
+    assert (args["low_pass"], sources["low_pass"]) == (0.08, "config")
+    assert sources["drift_model"] == "mode"
+
+
+def test_a_mode_in_the_config_file_is_not_read():
+    args, _, _ = _resolved({"mode": None, **_BANDS}, {"mode": "glm"})
+    assert args["mode"] is None
+
+
+def test_no_mode_means_no_defaults():
+    args, _, sources = _resolved({"mode": None, **_BANDS})
+    assert args.get("drift_model") is None
+    assert "mode" not in sources.values()
+
+
+def test_a_config_drift_order_is_no_longer_shadowed():
+    # --drift-order used to default to 1 in argparse, which beat any TOML value
+    args, toml, _ = _resolved({"mode": "denoise", "drift_order": None, **_BANDS},
+                              {"drift_model": "polynomial", "drift_order": 3})
+    assert _build_post_config("01", None, args, toml).drift_order == 3
+
+
+def test_glm_without_a_cutoff_stops_and_names_the_mode():
+    args, _, sources = _resolved({"mode": "glm", **_BANDS})
+    with pytest.raises(SystemExit, match="--mode glm uses a cosine drift model"):
+        _refuse_cosine_without_cutoff(args, sources)
+
+
+def test_rest_needs_no_cutoff_from_the_user():
+    args, _, sources = _resolved({"mode": "rest", **_BANDS})
+    _refuse_cosine_without_cutoff(args, sources)
