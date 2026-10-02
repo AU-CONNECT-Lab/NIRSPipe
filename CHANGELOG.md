@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
 - The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
+- The Analysis page's cutoff fields take `none`, so a cutoff the mode fills in can be switched off from the GUI
 - Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
 - `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
 
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - The dyad report draws no ROI coherence map for a cell the ROI table leaves blank
 - Resting-state and hyperscanning Fisher z now share one transform, which turns a non-finite r into NaN
 - `fnirs-pipe` stops when `--roi-mapping` cannot be read, as `fnirs-hyper` does, instead of running without ROI output
+- `--high-pass` and `--low-pass` take a plain decimal or `none`, refusing negative values, `nan`, `inf` and exponent notation
 - ISC `null_abs_sd` is the sample SD (ddof=1), as the WTC and group nulls already were
 - Montage colours follow the shared long/short split, so a channel between the two ranges is drawn unclassified
 - An ROI with no good channel stays in the resting-state ROI matrix, seed map and ALFF table as a blank row

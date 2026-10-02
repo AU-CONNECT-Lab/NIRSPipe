@@ -35,15 +35,15 @@ _NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_i
 # the one rule, shared with the GUI's `pattern` so the browser refuses what argparse would
 NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
+# a plain non-negative decimal or none, shared with the GUI's `pattern` as the noise model is
+CUTOFF_PATTERN         = r"[Nn][Oo][Nn][Ee]|[0-9]+(?:\.[0-9]*)?|\.[0-9]+"
 
 def _cutoff(value: str) -> "float | str":
     """A frequency in Hz, or ``none``, kept as the string so it outranks a file layer's value."""
-    if value.strip().lower() == "none":
-        return "none"
-    try:
-        return float(value)
-    except ValueError:
+    value = value.strip()
+    if not re.fullmatch(CUTOFF_PATTERN, value):
         raise argparse.ArgumentTypeError(f"{value!r}: expected a frequency in Hz or 'none'")
+    return "none" if value.lower() == "none" else float(value)
 
 
 def _noise_model(value: str) -> str:

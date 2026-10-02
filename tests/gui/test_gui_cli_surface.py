@@ -772,3 +772,36 @@ def test_the_cutoff_follows_a_cosine_the_mode_chose():
     argv = _build_cli_args({**_FULL_OPTS, "post_mode": "glm", "drift_model": None})
     assert argv[argv.index("--drift-high-pass") + 1] == str(_FULL_OPTS["drift_high_pass"])
     assert "--drift-order" not in argv
+
+
+# ---- a cutoff the mode fills in can be switched off from the page ----
+
+def test_none_in_a_cutoff_field_reaches_the_command_as_none():
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": "rest", "high_pass": "", "low_pass": "none"})
+    assert "--high-pass" not in argv, "an empty field leaves the mode's cutoff in place"
+    assert argv[argv.index("--low-pass") + 1] == "none"
+    assert _build_parser().parse_args(argv[1:]).low_pass == "none"
+
+
+def test_the_cutoff_fields_refuse_exactly_what_the_cli_refuses():
+    import argparse
+    import re
+
+    from fnirs_pipe.cli.run import CUTOFF_PATTERN, _cutoff
+
+    for value in ("0.01", "0.5", "1", "1.", ".5", "none", "None", "NONE",
+                  "", "off", "-0.1", "nan", "inf", "1e-2", "0.1.2", "0,5"):
+        browser = bool(re.fullmatch(CUTOFF_PATTERN, value))
+        try:
+            _cutoff(value)
+            cli = True
+        except argparse.ArgumentTypeError:
+            cli = False
+        assert browser == cli, value
+
+
+def test_a_switched_off_high_pass_raises_no_glm_band_warning():
+    from fnirs_pipe.interface.callbacks.analysis_callbacks import band_note
+
+    assert band_note("glm", "none", "polynomial", None) is None
+    assert band_note("glm", "0.01", "polynomial", None) is not None

@@ -27,6 +27,7 @@ from fnirs_pipe.cli.run import (
     _HRF_CHOICES,
     _NOISE_CHOICES,
     _SHORT_CHANNEL_CHOICES,
+    CUTOFF_PATTERN,
     NOISE_MODEL_PATTERN,
 )
 
@@ -270,10 +271,13 @@ def _postprocessing():
             className="mb-3",
         ),
         params(
+            # text rather than number, so `none` can switch off a cutoff the mode fills in
             field("High-pass (Hz)",
-                  dbc.Input(id="an-high-pass", type="number", placeholder="off")),
+                  dbc.Input(id="an-high-pass", type="text", inputMode="decimal", debounce=True,
+                            placeholder="off", pattern=CUTOFF_PATTERN)),
             field("Low-pass (Hz)",
-                  dbc.Input(id="an-low-pass", type="number", placeholder="off")),
+                  dbc.Input(id="an-low-pass", type="text", inputMode="decimal", debounce=True,
+                            placeholder="off", pattern=CUTOFF_PATTERN)),
             field("Filter",
                   dbc.Select(id="an-filter-method",
                              options=[{"label": m, "value": m} for m in FILTER_METHODS],

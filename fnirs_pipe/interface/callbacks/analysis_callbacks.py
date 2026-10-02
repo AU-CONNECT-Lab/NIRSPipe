@@ -233,10 +233,10 @@ def _build_cli_args(opts: dict) -> list[str]:
     mode = opts.get("post_mode")
     if mode and mode != "none":
         args += ["--mode", mode]
-        if opts.get("high_pass") is not None:
-            args += ["--high-pass", str(opts["high_pass"])]
-        if opts.get("low_pass") is not None:
-            args += ["--low-pass", str(opts["low_pass"])]
+        for flag, key in (("--high-pass", "high_pass"), ("--low-pass", "low_pass")):
+            # text fields: empty means the mode's default, "none" switches it off
+            if str(opts.get(key) or "").strip():
+                args += [flag, str(opts[key]).strip()]
         if opts.get("filter_method"):
             args += ["--filter-method", str(opts["filter_method"])]
         if opts.get("filter_order") is not None:
@@ -514,7 +514,11 @@ def mode_placeholders(mode):
 
     def shown(key, empty):
         return f"{defaults[key]} ({mode} default)" if key in defaults else empty
-    return (shown("high_pass", "off"), shown("low_pass", "off"),
+
+    def cutoff(key):
+        return (f"{defaults[key]} ({mode} default; none switches it off)" if key in defaults
+                else "off")
+    return (cutoff("high_pass"), cutoff("low_pass"),
             shown("drift_high_pass", "from your design"), shown("drift_model", "none"),
             shown("hrf_model", "none"), shown("noise_model", "auto"))
 
@@ -533,7 +537,14 @@ def band_note(mode, high_pass, drift_model, drift_high_pass):
         return None
     # what the run will use, so an empty field holding a mode default is not warned about
     defaults = mode_defaults(mode)
-    high_pass = high_pass if high_pass is not None else defaults.get("high_pass")
+    typed = str(high_pass or "").strip().lower()
+    if typed == "none":
+        high_pass = None
+    else:
+        try:
+            high_pass = float(typed) if typed else defaults.get("high_pass")
+        except ValueError:
+            return None  # the field's pattern already marks it; nothing to compare against
     drift_model = drift_model or defaults.get("drift_model")
     drift_high_pass = (drift_high_pass if drift_high_pass is not None
                        else defaults.get("drift_high_pass"))
