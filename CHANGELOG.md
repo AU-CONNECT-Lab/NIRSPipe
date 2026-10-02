@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 - Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
 - Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
 - Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
-- `--wtc-roi-min-channels` counts each member's channels in an ROI cell, not channel pairs, for the coherence and ISC ROI tables
+- `--wtc-roi-min-channels` counts each member's channels, not channel pairs, and a thin ROI cell stays in the table as a blank row
 - Resting-state and hyperscanning Fisher z now share one transform, which turns a non-finite r into NaN
 - `fnirs-pipe` stops when `--roi-mapping` cannot be read, as `fnirs-hyper` does, instead of running without ROI output
 - ISC `null_abs_sd` is the sample SD (ddof=1), as the WTC and group nulls already were

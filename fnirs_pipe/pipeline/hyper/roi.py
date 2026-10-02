@@ -103,10 +103,12 @@ def roi_mean_of_channels(
     counts the channel pairs behind each mean, so an ROI thinned by rejection is visible.
     Channels no ROI lists are dropped.
 
-    ``min_channels`` drops a cell where either member contributes fewer than that many
+    ``min_channels`` blanks a cell where either member contributes fewer than that many
     channels with a value, so one surviving optode does not stand in for a region. On a
     crossed frame each side is counted on its own: two channels against one is two pairings
-    but one channel of the second member, and is dropped.
+    but one channel of the second member, and is blanked. A blanked cell keeps its row and
+    its ``n_ch``, with NaN in every measured column, as a channel with no map does in
+    :func:`wtc_band_mean`.
 
     ``coherence_z`` is recomputed from the averaged coherence rather than averaged itself, so
     it stays the Fisher z of the number in the same row.
@@ -138,13 +140,14 @@ def roi_mean_of_channels(
                     n_ch=("coherence", "count"))
                .reset_index()
     )
+    thin = np.zeros(len(out), dtype=bool)
     if min_channels > 1:
         per_side = grouped[sides].nunique().reset_index(drop=True)
         thin = (per_side < min_channels).any(axis=1).to_numpy()
         if thin.any():
-            logger.info("ROI means: %d cell(s) with a member under %d channels, dropped",
+            logger.info("ROI means: %d cell(s) with a member under %d channels, left blank",
                         int(thin.sum()), min_channels)
-        out = out[~thin].reset_index(drop=True)
+        out.loc[thin, ["coherence", "n_valid_frac"]] = np.nan
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
                fisher_r_to_z(out["coherence"]))
 
@@ -157,6 +160,7 @@ def roi_mean_of_channels(
         phase = (df.groupby(keys, sort=False)[["phase_angle", "phase_n"]]
                    .apply(_roi_phase).reset_index())
         out = out.merge(phase, on=keys, how="left")
+        out.loc[thin, ["phase_angle", "phase_sd"]] = np.nan
     return out
 
 

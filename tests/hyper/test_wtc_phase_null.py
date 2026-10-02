@@ -126,12 +126,16 @@ def test_a_failed_pair_keeps_its_row_with_both_values_missing():
 # ---- ROI grouping ----
 
 def test_an_roi_under_the_channel_minimum_is_dropped():
+    """Dropped from the numbers, not from the table: the row stays, blank."""
     df = wtc_band_mean(_result({"A1": _map(0.4), "A2": _map(0.6), "B1": _map(0.2)}),
                        0.06, 0.15)
     roi_map = {"roiA": ["A1", "A2"], "roiB": ["B1"]}
-    kept = roi_mean_of_channels(df, roi_map, min_channels=2)
-    assert list(kept["label"]) == ["roiA"]
-    assert list(roi_mean_of_channels(df, roi_map, min_channels=1)["label"]) == ["roiA", "roiB"]
+    kept = roi_mean_of_channels(df, roi_map, min_channels=2).set_index("label")
+    assert list(kept.index) == ["roiA", "roiB"]
+    assert np.isfinite(kept.loc["roiA", "coherence"])
+    assert kept.loc["roiB", ["coherence", "coherence_z", "n_valid_frac"]].isna().all()
+    assert kept.loc["roiB", "n_ch"] == 1
+    assert roi_mean_of_channels(df, roi_map, min_channels=1)["coherence"].notna().all()
 
 
 def _crossed_band(values):
@@ -143,9 +147,11 @@ def _crossed_band(values):
 def test_a_crossed_roi_cell_needs_channels_on_both_sides_not_just_pairings():
     roi_map = {"roiA": ["A1", "A2"], "roiB": ["B1"]}
     df = _crossed_band({(a, b): 0.4 for a in ("A1", "A2", "B1") for b in ("A1", "A2", "B1")})
-    kept = roi_mean_of_channels(df, roi_map, min_channels=2)
+    out = roi_mean_of_channels(df, roi_map, min_channels=2)
+    filled = out[out["coherence"].notna()]
     # roiA x roiB rests on two pairings but on one channel of the second member
-    assert list(zip(kept["label"], kept["label2"])) == [("roiA", "roiA")]
+    assert list(zip(filled["label"], filled["label2"])) == [("roiA", "roiA")]
+    assert len(out) == 4                  # the blank cells keep their rows
 
 
 def test_a_channel_without_a_value_does_not_count_towards_the_minimum():
@@ -153,7 +159,8 @@ def test_a_channel_without_a_value_does_not_count_towards_the_minimum():
     df = _crossed_band({("A1", "A1"): 0.4, ("A1", "A2"): float("nan"),
                         ("A2", "A1"): 0.4, ("A2", "A2"): float("nan")})
     # A2 of the second member was rejected, leaving one channel on that side
-    assert roi_mean_of_channels(df, roi_map, min_channels=2).empty
+    out = roi_mean_of_channels(df, roi_map, min_channels=2)
+    assert len(out) == 1 and np.isnan(out["coherence"].iloc[0])
 
 
 def test_the_roi_fisher_z_matches_the_roi_coherence_not_the_channel_average():
