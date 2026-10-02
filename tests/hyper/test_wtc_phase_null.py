@@ -196,8 +196,19 @@ def test_crossed_channels_group_into_an_roi_by_roi_matrix():
     table = roi_mean_of_channels(wtc_band_mean(result, 0.06, 0.15), roi_map, min_channels=1)
     assert set(zip(table["label"], table["label2"])) == {
         ("roiA", "roiA"), ("roiA", "roiB"), ("roiB", "roiA"), ("roiB", "roiB")}
-    maps = roi_maps_from_channels(result, roi_map)
+    maps = roi_maps_from_channels(result, roi_map, min_channels=1)
     assert ("roiA", "roiB") in maps.pairs[("s1", "s2")]
+
+
+def test_a_cell_the_table_leaves_blank_gets_no_map():
+    """One rule for both, so no figure stands for a region the table leaves empty."""
+    cells = {(a, b): _map(0.4) for a in ("A1", "A2", "B1") for b in ("A1", "A2", "B1")}
+    result = _result(cells)
+    roi_map = {"roiA": ["A1", "A2"], "roiB": ["B1"]}
+    table = roi_mean_of_channels(wtc_band_mean(result, 0.06, 0.15), roi_map, min_channels=2)
+    filled = set(zip(*table[table["coherence"].notna()][["label", "label2"]].T.values))
+    assert set(roi_maps_from_channels(result, roi_map).pairs[("s1", "s2")]) == filled
+    assert filled == {("roiA", "roiA")}
 
 
 def test_a_channel_two_rois_list_counts_in_both():

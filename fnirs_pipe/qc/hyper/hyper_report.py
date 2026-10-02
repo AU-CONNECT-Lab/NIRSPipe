@@ -1040,7 +1040,8 @@ def build_hyper_post_report(
         if result is not None and roi_view_of is None:
             with guard(f"ROI WTC maps from channels ({what}, {ch_type})",
                        page_errors[page], scope):
-                roi_wtc = roi_maps_from_channels(result, roi_map)
+                roi_wtc = roi_maps_from_channels(result, roi_map,
+                                                 min_channels=wtc_roi_min_channels)
         roi_pair_key = pair_key if (roi_wtc and pair_key in roi_wtc.pairs) else (
             next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None)
 

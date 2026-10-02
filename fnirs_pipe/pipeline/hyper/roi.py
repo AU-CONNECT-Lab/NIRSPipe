@@ -46,6 +46,7 @@ def _rois_of(roi_map: dict[str, list[str]]) -> dict[str, list[str]]:
 def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],
+    min_channels: int = 2,
 ) -> WTCResult:
     """Average the channel-pair WTC maps cell by cell into one map per ROI pair.
 
@@ -66,12 +67,18 @@ def roi_maps_from_channels(
     -179 degrees is 0, the one direction neither member points in. The members are summed as
     unit vectors and the angle read off the sum, so a set of members that disagree gives a
     short resultant and, drawn as an arrow, a direction no more confident than they were.
+
+    ``min_channels`` leaves out a cell where either member contributes fewer channels, the
+    rule :func:`roi_mean_of_channels` blanks the same cell by, so no map stands for a region
+    the table leaves empty.
     """
     rois_of = _rois_of(roi_map)
 
     pairs: dict = {}
     for pair_key, labels in result.pairs.items():
         bucket: dict = {}
+        # the channels behind each cell, per member, for the minimum
+        sides: dict = {}
         for label, data in labels.items():
             if data is None:
                 continue
@@ -79,13 +86,18 @@ def roi_maps_from_channels(
             label1, label2 = label if crossed else (label, label)
             for roi1 in rois_of.get(label1, ()):
                 for roi2 in (rois_of.get(label2, ()) if crossed else (roi1,)):
-                    bucket.setdefault((roi1, roi2) if crossed else roi1, []).append(data)
+                    key = (roi1, roi2) if crossed else roi1
+                    bucket.setdefault(key, []).append(data)
+                    s1, s2 = sides.setdefault(key, (set(), set()))
+                    s1.add(label1)
+                    s2.add(label2)
         pairs[pair_key] = {
             key: {"wtc": np.mean([d["wtc"] for d in members], axis=0),
                   "coi": members[0]["coi"], "sig": None,
                   "phase": _mean_phase([d["phase"] for d in members
                                        if d.get("phase") is not None])}
             for key, members in bucket.items()
+            if min(len(s) for s in sides[key]) >= min_channels
         }
 
     return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times)
