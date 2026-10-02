@@ -133,8 +133,10 @@ def get_participant_age(
 
     tsv_path = Path(layout.root) / "participants.tsv"
     if tsv_path.exists():
-        df = read_table(tsv_path)
-        row = df[df["participant_id"] == f"sub-{subject}"]
+        df = read_table(tsv_path, dtype={"participant_id": str})
+        # with or without the prefix, as the --bad-channels table is read
+        wanted = subject.removeprefix("sub-")
+        row = df[df["participant_id"].str.removeprefix("sub-") == wanted]
         if not row.empty and "age" in df.columns:
             return float(row["age"].iloc[0])
 

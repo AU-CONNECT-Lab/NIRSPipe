@@ -12,7 +12,7 @@ from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
 )
-from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, PSD_NFFT,
+from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
                                           TIMELINE_ROW_PX,
                                           decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
@@ -44,13 +44,6 @@ _MIX_COLOR  = "#FFD966"
 _NA_COLOR   = "#D3D3D3"
 _BAD_COLOR  = "#F8786E"
 
-# colors for the physiological band annotations (frequencies come from physio_bands)
-_PSD_BAND_COLORS = {
-    "Mayer":   "rgba(52,152,219,0.10)",
-    "Resp":    "rgba(39,174,96,0.08)",
-    "Cardiac": "rgba(231,76,60,0.08)",
-}
-
 
 # ---------------------------------------------------------------------------
 # Private helpers
@@ -71,7 +64,7 @@ def _psd_band_shapes(cardiac=None) -> tuple[list[dict], list[dict]]:
     bands = physio_bands(cardiac=cardiac, resp=None)
     shapes = [dict(type="rect", xref="x", yref="paper",
                    x0=x0, x1=x1, y0=0, y1=1,
-                   fillcolor=_PSD_BAND_COLORS.get(name, "rgba(120,120,120,0.08)"),
+                   fillcolor=BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
                    line=dict(width=0)) for name, x0, x1 in bands]
     annots = [dict(x=(x0 + x1) / 2, y=0.97, xref="x", yref="paper",
                    text=name, showarrow=False,

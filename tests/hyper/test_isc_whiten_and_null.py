@@ -116,6 +116,20 @@ def test_whiten_zero_is_the_unwhitened_correlation():
     assert mat[0, 0] == pytest.approx(np.corrcoef(a[0], b[0])[0, 1], abs=1e-9)
 
 
+def test_both_members_lose_the_same_transient_so_their_clocks_stay_paired():
+    """Each member's longest AR order sets how much start-up it drops. Cut apart, a member
+    with a higher-order channel would start later, and a shared row would be correlated
+    against a shifted copy of itself: near zero once whitened, instead of one."""
+    rng = np.random.default_rng(5)
+    shared = _ar(rng, np.array([0.9]))
+    a = np.array([shared, _ar(rng, np.array([0.9]))])
+    b = np.array([shared, _ar(rng, np.array([0.4, -0.3, 0.2, -0.1, 0.25]))])
+
+    mat, orders1, orders2, _ = _isc_matrix(a, b, 32)
+    assert max(orders2) > max(orders1), "the setup needs member 2 to drop more"
+    assert mat[0, 0] == pytest.approx(1.0, abs=1e-9)
+
+
 # ---- the pair table ----
 
 @pytest.fixture(scope="module")

@@ -422,7 +422,8 @@ def _add_isc_null_columns(
     with warnings.catch_warnings(), np.errstate(invalid="ignore"):
         warnings.simplefilter("ignore", RuntimeWarning)
         null_abs_mean = np.nanmean(absolute, axis=0)
-        null_abs_sd   = np.nanstd(absolute, axis=0)
+        # an estimate from a sample of draws, as the WTC and group nulls take it
+        null_abs_sd   = np.nanstd(absolute, axis=0, ddof=1)
         null_abs_p95  = np.nanpercentile(absolute, 95, axis=0)
         beaten        = (absolute < np.abs(isc_mat)[None, :, :]).mean(axis=0) * 100
     # a cell whose draws are all NaN was never ranked against anything, and a count of zero
@@ -450,10 +451,11 @@ def _isc_matrix(
     """
     orders1 = orders2 = None
     if whiten:
-        data1, orders1 = _whiten_rows(data1, whiten)
-        data2, orders2 = _whiten_rows(data2, whiten)
-        n_keep = min(data1.shape[1], data2.shape[1])
-        data1, data2 = data1[:, :n_keep], data2[:, :n_keep]
+        # one transient cut for both members, or sample t of one meets sample t + k of the other
+        n1 = data1.shape[0]
+        both, orders = _whiten_rows(np.vstack([data1, data2]), whiten)
+        data1, data2 = both[:n1], both[n1:]
+        orders1, orders2 = orders[:n1], orders[n1:]
     # a rejected channel contributed a row of NaN above, which the products carry
     isc_mat, lags = _isc_from_rows(data1, data2, max_lag)
     return isc_mat, orders1, orders2, lags

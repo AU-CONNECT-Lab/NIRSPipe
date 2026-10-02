@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
 - Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
 - Resting-state and hyperscanning Fisher z now share one transform, which turns a non-finite r into NaN
+- `fnirs-pipe` stops when `--roi-mapping` cannot be read, as `fnirs-hyper` does, instead of running without ROI output
+- ISC `null_abs_sd` is the sample SD (ddof=1), as the WTC and group nulls already were
+- Montage colours follow the shared long/short split, so a channel between the two ranges is drawn unclassified
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
@@ -27,6 +30,13 @@ All notable changes to this project will be documented in this file.
 - The per-subject run script ignored values set in `--config`
 - The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was
 - The cohort dial caption said six dyads when the cohort had fewer
+- Prewhitened ISC paired the two members a few samples apart whenever their highest AR orders differed
+- The raw report's 3-D montage drew each source-detector line from the channel midpoint to the source
+- The raw report's 2-D montage left out channels marked bad, so they were never drawn grey
+- `participants.tsv` ids without `sub-` were matched for bad channels but not for age
+- The optode layout passed over an HbO SCI of exactly 0 and took the HbR value instead
+- The dyad PSD panels shaded the physiological bands in their own colours rather than the shared ones
+- Crop, edit-markers and align kept whichever `dataset_description.json` version stamp they first found
 
 ## [0.54.0] - 2026-09-29
 

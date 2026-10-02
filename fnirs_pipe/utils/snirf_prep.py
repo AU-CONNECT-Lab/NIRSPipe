@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe import __version__
 
 NIRS_SIDECAR_SUFFIXES = ["_nirs.json", "_channels.tsv"]
 NIRS_MONTAGE_SUFFIXES = ["_optodes.tsv", "_coordsystem.json"]
@@ -79,19 +77,6 @@ def deriv_nirs_dir(derivatives_dir: Path, deriv_name: str, sub: str, ses: str | 
         parts.append(f"ses-{ses}")
     parts.append("nirs")
     return derivatives_dir / deriv_name / Path(*parts)
-
-
-def ensure_dataset_description(deriv_root: Path, name: str, generated_by: str) -> None:
-    desc_path = deriv_root / "dataset_description.json"
-    if desc_path.exists():
-        return
-    deriv_root.mkdir(parents=True, exist_ok=True)
-    desc_path.write_text(json.dumps({
-        "Name": name,
-        "BIDSVersion": "1.8.0",
-        "DatasetType": "derivative",
-        "GeneratedBy": [{"Name": generated_by, "Version": __version__}],
-    }, indent=2))
 
 
 def copy_dataset_root(bids_dir: Path, deriv_root: Path) -> None:

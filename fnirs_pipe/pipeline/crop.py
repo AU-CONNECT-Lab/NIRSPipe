@@ -14,7 +14,8 @@ import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import data_state, entity_of, write_sidecar_json
+from fnirs_pipe.io.derivatives import (data_state, entity_of, write_dataset_description,
+                                       write_sidecar_json)
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -24,7 +25,6 @@ from fnirs_pipe.utils.snirf_prep import (
     copy_dataset_root,
     copy_sidecars,
     deriv_nirs_dir,
-    ensure_dataset_description,
     find_snirf,
     read_raw_snirf,
 )
@@ -151,7 +151,8 @@ def _crop_parameters(windows, analysis_windows, margin_s) -> dict:
 
 def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
-    ensure_dataset_description(derivatives_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep crop")
+    write_dataset_description(derivatives_dir / _DERIV_NAME, name=_DERIV_NAME,
+                              generated_by="fnirs-prep crop")
     out_nirs_dir.mkdir(parents=True, exist_ok=True)
     return out_nirs_dir
 

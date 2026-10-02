@@ -12,6 +12,7 @@ do.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -54,6 +55,17 @@ def refuse_output_is_source(derivatives_dir: Path, output_dir: Path) -> None:
               "its own dataset_description.json, so one path cannot be both.",
               file=sys.stderr)
         raise SystemExit(1)
+
+
+def load_roi_mapping(path: "Path | None") -> "dict[str, list[str]] | None":
+    """The ``--roi-mapping`` JSON, or exit non-zero: a file that fails to load must not just drop the ROI output."""
+    if not path:
+        return None
+    try:
+        return json.loads(Path(path).read_text())
+    except Exception as exc:
+        print(f"Error: failed to load ROI mapping {path}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 def add_separation_bands(container, note: str = "") -> None:

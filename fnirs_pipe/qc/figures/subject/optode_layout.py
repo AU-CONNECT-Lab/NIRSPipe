@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 from fnirs_pipe.qc.metrics import SCI_PASS
 
 from fnirs_pipe.qc.figures.common._utils import head_outline
+from fnirs_pipe.qc.figures.subject.brain_views import _lookup_sci
 from fnirs_pipe.qc.figures.subject.raw_figures import sci_color, sci_legend
 
 
@@ -49,10 +50,7 @@ def optode_layout_static(
         if m is None:
             continue
         pair_id = f"{m.group(1).upper()}_{m.group(2).upper()}"
-        sci = sci_scores.get(name)
-        if sci is None:
-            base = name.split(" ")[0]
-            sci = sci_scores.get(base + " hbo") or sci_scores.get(base + " hbr")
+        sci = _lookup_sci(sci_scores, name)
         if sci is not None:
             pair_sci.setdefault(pair_id, []).append(sci)
         pair_xy[pair_id] = (
@@ -157,11 +155,7 @@ def optode_layout_figure(
             continue
         pair_id = f"{m.group(1).upper()}_{m.group(2).upper()}"
 
-        sci = sci_scores.get(name)
-        if sci is None:
-            # try matching without chromophore suffix
-            base = name.split(" ")[0]
-            sci = sci_scores.get(base + " hbo") or sci_scores.get(base + " hbr")
+        sci = _lookup_sci(sci_scores, name)
         if sci is not None:
             pair_sci.setdefault(pair_id, []).append(sci)
 

@@ -31,7 +31,7 @@ from fnirs_pipe.qc.metrics import (
     screen_channels, screening_scores,
 )
 from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
-                                           separation_bands, separation_orphans)
+                                           separation_orphans)
 from fnirs_pipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
@@ -218,8 +218,6 @@ def _process_run(
     # `sqm` stays the flat all-channel view the per-window figures below read. The record
     # written to disk is the sectioned one, built through the same function the pipeline
     # uses, and the panels read it too, so short channels stay out of the long verdict.
-    # the figures colour a channel short or not short, so only the short edge applies
-    short_thresh = (sep_bands if sep_bands is not None else separation_bands())[0]
     raw_secs, raw_pc = raw_sections(
         raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
         screen_scores.get("good_frac"))
@@ -341,7 +339,7 @@ def _process_run(
     ts_inline: dict = {}
     with guard("Raw signal", errors, label):
         fig, _mkdata, cond_colors_out, band_shapes, t_start, t_end = build_ts_figure(
-            raw, markers, bad_channels, _MAX_TS_PTS, short_thresh,
+            raw, markers, bad_channels, _MAX_TS_PTS, sep_bands,
         )
         ts_inline = {
             "figure":      fig.to_dict(),
@@ -355,7 +353,7 @@ def _process_run(
     # ── inline: layout figures (kept for click interactivity) ──────────────────
     layout_inline: dict = {}
     with guard("Optode layout", errors, label):
-        fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, short_thresh)
+        fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, sep_bands)
         layout_inline = {
             "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
             "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,

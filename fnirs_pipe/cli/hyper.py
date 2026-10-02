@@ -11,7 +11,6 @@ only the dyad tree (`<output> group`).
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -293,13 +292,7 @@ def cmd_run(
 
     groups = _select_groups(pairs_csv, group_id, task_label)
 
-    roi_map: dict[str, list[str]] | None = None
-    if roi_mapping is not None:
-        try:
-            roi_map = json.loads(Path(roi_mapping).read_text())
-        except Exception as exc:
-            print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
-            raise SystemExit(1)
+    roi_map = _shared.load_roi_mapping(roi_mapping)
     # the seg- entity every ROI table takes, so one tree can hold two ROI definitions
     roi_name = roi_map_name(roi_mapping)
 
@@ -512,7 +505,7 @@ def cmd_group_null(
     from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
 
     setup_logging(verbose=verbose)
-    roi_map = json.loads(Path(roi_mapping).read_text()) if roi_mapping else None
+    roi_map = _shared.load_roi_mapping(roi_mapping)
     for path in write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
                                  roi_map=roi_map, n_resample=n_resample, seed=seed):
         print(f"group-null -> {path}")
@@ -573,13 +566,7 @@ def cmd_pair_null(
     targets = _select_groups(pairs_csv, group_id, task_label)
     all_groups = parse_group_csv(pairs_csv)
 
-    roi_map = None
-    if roi_mapping:
-        try:
-            roi_map = json.loads(Path(roi_mapping).read_text())
-        except Exception as exc:
-            print(f"[error] failed to load ROI mapping: {exc}", file=sys.stderr)
-            raise SystemExit(1)
+    roi_map = _shared.load_roi_mapping(roi_mapping)
 
     chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
     scope_tasks = sorted({key[1] for key in all_groups})

@@ -123,13 +123,13 @@ def cmd_align(
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
     from fnirs_pipe.exceptions import AlignmentError
-    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.io.derivatives import entity_of, write_dataset_description
     from fnirs_pipe.io.snirf import read_snirf
     from fnirs_pipe.pipeline.hyper import (
         align_recordings, member_snirfs, parse_group_csv, write_aligned_member,
     )
     from fnirs_pipe.utils.snirf_prep import (
-        deriv_nirs_dir, copy_dataset_root, ensure_dataset_description,
+        deriv_nirs_dir, copy_dataset_root,
     )
 
     _DERIV_NAME = "aligned"
@@ -159,9 +159,8 @@ def cmd_align(
             n_fail += 1
             continue
 
-        ensure_dataset_description(
-            output_dir / _DERIV_NAME, _DERIV_NAME, "fnirs-prep align"
-        )
+        write_dataset_description(output_dir / _DERIV_NAME, name=_DERIV_NAME,
+                                  generated_by="fnirs-prep align")
         copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
         for entry in group:

@@ -20,7 +20,7 @@ from fnirs_pipe.qc.figures.common._utils import (
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
 )
-from fnirs_pipe.qc.metrics._helpers import epochable_events
+from fnirs_pipe.qc.metrics._helpers import Bands, epochable_events, long_short_channels
 from fnirs_pipe.qc.common.channel_table import _neither_range_title
 
 logger = get_logger("qc.figures")
@@ -41,14 +41,13 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def _ch_colors(raw: mne.io.Raw, short_thresh: float) -> list[str]:
-    picks = list(range(len(raw.ch_names)))
-    try:
-        dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
-        return [_hex_to_rgba(SHORT_COLOR, 0.78) if d <= short_thresh
-                else _hex_to_rgba(LONG_COLOR, 0.78) for d in dists]
-    except Exception:
-        return [_hex_to_rgba(LONG_COLOR, 0.78)] * len(raw.ch_names)
+def _ch_colors(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[str]:
+    """Long, short or unclassified per channel, by the split every report uses."""
+    long_names, short_names = map(set, long_short_channels(raw, sep_bands))
+    return [_hex_to_rgba(LONG_COLOR if ch in long_names
+                         else SHORT_COLOR if ch in short_names
+                         else UNCLASSIFIED_COLOR, 0.78)
+            for ch in raw.ch_names]
 
 
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
@@ -125,7 +124,7 @@ def build_ts_figure(
     markers: list[dict],
     bad_channels: set[str],
     max_ts_pts: int,
-    short_thresh: float,
+    sep_bands: "Bands | None" = None,
 ) -> tuple[go.Figure, list[dict], dict[str, str], list[dict], float, float]:
     picks = mne.pick_types(raw.info, meg=False, fnirs=True)
     if len(picks) == 0:
@@ -135,7 +134,7 @@ def build_ts_figure(
     data, times = _decimate(data, times, max_ts_pts)
     times_list = times.tolist()
 
-    all_colors = _ch_colors(raw, short_thresh)
+    all_colors = _ch_colors(raw, sep_bands)
     cond_colors_ = condition_colors(markers)
 
     traces = []
@@ -405,12 +404,12 @@ def build_layout_figure(
     raw: mne.io.Raw,
     bad_channels: set[str],
     sci_scores: dict[str, float],
-    short_thresh: float,
+    sep_bands: "Bands | None" = None,
     sci_threshold: float = SCI_PASS,
 ) -> tuple[go.Figure | None, go.Figure | None]:
     chs = raw.info["chs"]
     ch_names = raw.ch_names
-    colors = _ch_colors(raw, short_thresh)
+    colors = _ch_colors(raw, sep_bands)
 
     ch_locs = np.array([ch["loc"][:3] for ch in chs])
     has_positions = np.any(ch_locs != 0)
@@ -418,7 +417,9 @@ def build_layout_figure(
     fig_2d = fig_3d = None
 
     if has_positions:
-        picks_2d = list(mne.pick_types(raw.info, meg=False, fnirs=True)) or list(range(len(chs)))
+        # bads stay in, or the grey they are drawn in below never reaches them
+        picks_2d = (list(mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[]))
+                    or list(range(len(chs))))
         names_2d = [ch_names[i] for i in picks_2d]
         chs_2d   = [chs[i] for i in picks_2d]
 
@@ -500,7 +501,8 @@ def build_layout_figure(
         seen3: set = set()
         lx, ly, lz = [], [], []
         for ch in chs:
-            src, det = ch["loc"][:3], ch["loc"][3:6]
+            # loc[:3] is the channel midpoint; the source and detector follow it
+            src, det = ch["loc"][3:6], ch["loc"][6:9]
             key = tuple(round(float(v), 5) for v in np.concatenate([src, det]))
             if key in seen3 or not (np.any(src) or np.any(det)):
                 continue

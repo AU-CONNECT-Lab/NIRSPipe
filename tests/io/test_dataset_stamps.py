@@ -103,3 +103,17 @@ def test_the_stamp_is_rewritten_when_the_source_changes(tmp_path):
     write_dataset_description(out, source=b)
 
     assert _description(out)["SourceDatasets"][0]["URL"].endswith("/b")
+
+
+def test_a_prep_tree_restamps_a_description_an_older_version_left(tmp_path):
+    """The crop, edit-markers and aligned trees used to keep whatever stamp first wrote them."""
+    from fnirs_pipe import __version__
+    from fnirs_pipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
+
+    root = tmp_path / _DERIV_NAME
+    root.mkdir()
+    (root / "dataset_description.json").write_text(json.dumps(
+        {"Name": _DERIV_NAME, "GeneratedBy": [{"Name": "fnirs-prep crop", "Version": "0.0.1"}]}))
+    _setup_deriv_dir(tmp_path, "01", None)
+
+    assert _description(root)["GeneratedBy"][0]["Version"] == __version__

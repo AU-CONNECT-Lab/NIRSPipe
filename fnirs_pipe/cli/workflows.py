@@ -243,14 +243,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                            for field, arg in _post_setting_args().items()
                            if post_sources[field] in ("config", "mode")]
 
-    roi_map = None
-    roi_mapping = args.get("roi_mapping")
-    if roi_mapping is not None:
-        import json
-        try:
-            roi_map = json.loads(Path(roi_mapping).read_text())
-        except Exception as exc:
-            logger.warning("failed to load ROI mapping %s: %s", roi_mapping, exc)
+    roi_map = _shared.load_roi_mapping(args.get("roi_mapping"))
 
     tasks: list[str | None] = task_label if task_label else [None]
 
