@@ -36,6 +36,12 @@ NOTES = {
         "Short-channel regression was requested but all {n} short channels were rejected, so "
         "it did not run. Their scores are in the per-channel table.",
 
+    # ---- ROI mapping ----
+    "caveat.roi_overlap":
+        "The ROI mapping lists {n} channel(s) in more than one ROI: {channels}. Each counts in "
+        "every ROI that lists it, so those ROIs average part of the same signal, and the "
+        "connectivity between them is raised by it.",
+
     # ---- Epochs and trials ----
     "caveat.chunked_trials":
         "Task annotations were cut into {chunk:g} s trials before epoching, so a trial in the "

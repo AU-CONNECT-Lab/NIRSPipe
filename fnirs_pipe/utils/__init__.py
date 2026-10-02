@@ -30,6 +30,25 @@ def fisher_r_to_z(r: Any) -> np.ndarray:
     return np.where(finite, np.arctanh(np.clip(np.where(finite, r, 0.0), -_R_CLIP, _R_CLIP)), np.nan)
 
 
+def bare_roi_map(roi_map: "dict[str, list[str]]") -> "dict[str, list[str]]":
+    """ROI entries as S-D pairs: a trailing " hbo" / " hbr" is dropped, repeats collapse.
+
+    {"L": ["S1_D1 hbo", "S1_D1", "S2_D2"]}  ->  {"L": ["S1_D1", "S2_D2"]}
+    """
+    def _bare(ch: str) -> str:
+        return ch[:-4] if ch.endswith((" hbo", " hbr")) else ch
+    return {roi: list(dict.fromkeys(_bare(str(ch)) for ch in chs)) for roi, chs in roi_map.items()}
+
+
+def roi_overlaps(roi_map: "dict[str, list[str]]") -> "dict[str, list[str]]":
+    """Each channel more than one ROI lists, with the ROIs that list it, in map order."""
+    listed: dict[str, list[str]] = {}
+    for roi, chs in bare_roi_map(roi_map).items():
+        for ch in chs:
+            listed.setdefault(ch, []).append(roi)
+    return {ch: rois for ch, rois in listed.items() if len(rois) > 1}
+
+
 def load_toml(path: Path) -> dict[str, Any]:
     try:
         import tomllib

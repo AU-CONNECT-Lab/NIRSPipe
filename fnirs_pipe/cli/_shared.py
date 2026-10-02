@@ -16,6 +16,9 @@ import json
 import sys
 from pathlib import Path
 
+from fnirs_pipe.utils import bare_roi_map, roi_overlaps
+from fnirs_pipe.utils.logging import get_logger
+
 
 class BidsLabel(str):
     """A BIDS entity label with its ``sub-``/``ses-``/``task-`` prefix taken off.
@@ -58,14 +61,25 @@ def refuse_output_is_source(derivatives_dir: Path, output_dir: Path) -> None:
 
 
 def load_roi_mapping(path: "Path | None") -> "dict[str, list[str]] | None":
-    """The ``--roi-mapping`` JSON, or exit non-zero: a file that fails to load must not just drop the ROI output."""
+    """The ``--roi-mapping`` JSON as S-D pairs, or exit non-zero if it cannot be read.
+
+    A file that fails to load must not just drop the ROI output. Entries lose any chromophore
+    suffix, which every path ignores anyway: the chromophore comes from the pass, not the map.
+    """
     if not path:
         return None
     try:
-        return json.loads(Path(path).read_text())
+        roi_map = bare_roi_map(json.loads(Path(path).read_text()))
     except Exception as exc:
         print(f"Error: failed to load ROI mapping {path}: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
+    shared = roi_overlaps(roi_map)
+    if shared:
+        get_logger("cli").warning(
+            "ROI mapping %s lists %d channel(s) in more than one ROI; each counts in all of "
+            "them: %s", path, len(shared),
+            ", ".join(f"{ch} ({', '.join(rois)})" for ch, rois in shared.items()))
+    return roi_map
 
 
 def add_separation_bands(container, note: str = "") -> None:

@@ -30,6 +30,19 @@ def _mean_phase(phases: "list[np.ndarray]") -> "np.ndarray | None":
     return np.angle(np.exp(1j * stack).mean(axis=0)).astype(np.float32)
 
 
+def _rois_of(roi_map: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Channel -> every ROI that lists it, so a channel two ROIs share counts in both.
+
+    {"L": ["S1_D1", "S1_D2"], "R": ["S1_D2"]}  ->  {"S1_D1": ["L"], "S1_D2": ["L", "R"]}
+    """
+    out: dict[str, list[str]] = {}
+    for roi, chs in roi_map.items():
+        for ch in chs:
+            if roi not in out.setdefault(ch, []):
+                out[ch].append(roi)
+    return out
+
+
 def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],
@@ -54,7 +67,7 @@ def roi_maps_from_channels(
     unit vectors and the angle read off the sum, so a set of members that disagree gives a
     short resultant and, drawn as an arrow, a direction no more confident than they were.
     """
-    ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
+    rois_of = _rois_of(roi_map)
 
     pairs: dict = {}
     for pair_key, labels in result.pairs.items():
@@ -62,12 +75,11 @@ def roi_maps_from_channels(
         for label, data in labels.items():
             if data is None:
                 continue
-            label1, label2 = label if isinstance(label, tuple) else (label, label)
-            roi1, roi2 = ch_to_roi.get(label1), ch_to_roi.get(label2)
-            if roi1 is None or roi2 is None:
-                continue
-            key = (roi1, roi2) if isinstance(label, tuple) else roi1
-            bucket.setdefault(key, []).append(data)
+            crossed = isinstance(label, tuple)
+            label1, label2 = label if crossed else (label, label)
+            for roi1 in rois_of.get(label1, ()):
+                for roi2 in (rois_of.get(label2, ()) if crossed else (roi1,)):
+                    bucket.setdefault((roi1, roi2) if crossed else roi1, []).append(data)
         pairs[pair_key] = {
             key: {"wtc": np.mean([d["wtc"] for d in members], axis=0),
                   "coi": members[0]["coi"], "sig": None,
@@ -105,12 +117,13 @@ def roi_mean_of_channels(
     large one here. ``phase_n`` stays a cell count and is summed. The columns are absent when
     the frame has none, so a caller that built one by hand is unaffected.
     """
-    ch_to_roi = {ch: roi for roi, chs in roi_map.items() for ch in chs}
+    rois_of = _rois_of(roi_map)
     df = band_df.copy()
     label_cols = ["label"] + (["label2"] if "label2" in df.columns else [])
     for col in label_cols:
-        df[col] = df[col].map(ch_to_roi)
-    df = df.dropna(subset=label_cols)
+        # one row per ROI the channel is in; a channel no ROI lists drops out
+        df[col] = df[col].map(rois_of)
+        df = df.dropna(subset=[col]).explode(col, ignore_index=True)
 
     keys = ["sub1", "sub2"] + label_cols
     out = (

@@ -77,7 +77,7 @@ from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
-    registration_note, save_channel_csv, separation_blocks, separation_notes,
+    registration_note, roi_overlap_note, save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
@@ -1892,6 +1892,9 @@ def build_subject_report(
     unregistered = registration_note(registration_offset(raw_intensity))
     if unregistered:
         _note(notes, subject, unregistered)
+    overlap = roi_overlap_note(roi_map)
+    if overlap:
+        _note(notes, subject, overlap)
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),

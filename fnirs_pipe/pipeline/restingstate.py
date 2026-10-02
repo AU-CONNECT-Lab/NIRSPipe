@@ -138,20 +138,24 @@ def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
 
     Rejected channels are dropped before averaging rather than propagating NaN, the way every
     other ROI-level product here drops them; ``n_channels`` records how many survived, without
-    which a thinly covered ROI reads like a well covered one.
+    which a thinly covered ROI reads like a well covered one. An ROI with nothing left keeps its
+    row, ``n_channels`` 0 and the measures blank, so every subject's table has the same rows.
     """
     if alff_df is None or alff_df.empty or not roi_map:
         return pd.DataFrame()
     by_channel = alff_df.set_index("channel")
     rows = []
     for chromophore in ("hbo", "hbr"):
-        for roi, picks in _roi_members(raw, roi_map, chromophore).items():
-            picks = [c for c in picks if c in by_channel.index]
+        members = _roi_members(raw, roi_map, chromophore)
+        for roi in roi_map:
+            picks = [c for c in members.get(roi, []) if c in by_channel.index]
             values = by_channel.loc[picks, list(_ALFF_COLUMNS)]
             # a channel blanked after the fact (a short channel regressed out of itself) is
             # still a member, so count what actually carried a value rather than len(picks)
             usable = values.dropna(how="all")
             if usable.empty:
+                rows.append({"roi": roi, "chromophore": chromophore, "n_channels": 0,
+                             **{c: np.nan for c in _ALFF_COLUMNS}})
                 continue
             rows.append({"roi": roi, "chromophore": chromophore, "n_channels": len(usable),
                          **usable.mean().to_dict()})
@@ -205,7 +209,8 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     # only a square matrix has a self-correlation diagonal; a seed map is ROI x channel, where
     # position (i, i) is an ordinary pair and zeroing it would delete a real value
     if z.ndim == 2 and z.shape[0] == z.shape[1]:
-        np.fill_diagonal(z, 0.0)
+        # a blank row (bad channel, empty ROI) keeps a blank diagonal rather than a 0
+        np.fill_diagonal(z, np.where(np.isfinite(np.diag(z)), 0.0, np.nan))
     return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 
@@ -220,13 +225,19 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
     Averages signals first (higher SNR) rather than averaging channel correlations; roi_map is
     {ROI label: [channel names]}, matched by S-D base ("S1_D1"), with any chromophore suffix on
     the map entry replaced by the requested one so the same map serves hbo and hbr.
+
+    Every ROI the map lists keeps its row and column; one with no good channel is blank, so
+    every subject's matrix has the same shape. Empty when fewer than two ROIs resolve, since
+    no correlation is left to compute.
     """
     members = _roi_members(raw, roi_map, chromophore)
     if len(members) < 2:
         return pd.DataFrame()
     names = list(members)
     signals = [raw.get_data(picks=picks).mean(axis=0) for picks in members.values()]
-    return pd.DataFrame(np.corrcoef(np.vstack(signals)), index=names, columns=names)
+    fc = pd.DataFrame(np.corrcoef(np.vstack(signals)), index=names, columns=names)
+    labels = list(roi_map)
+    return fc.reindex(index=labels, columns=labels)
 
 
 def _roi_members(
@@ -237,7 +248,8 @@ def _roi_members(
     e.g. roi_map {"L-PFC": ["S1_D1 hbo", "S2_D2 hbo"]} with chromophore "hbr" and S2_D2 bad
     gives {"L-PFC": ["S1_D1 hbr"]}. Map entries are matched by S-D base, so any chromophore
     suffix on them is replaced rather than required, and the same map serves hbo and hbr.
-    An ROI with no good channel is dropped with a warning rather than kept empty.
+    An ROI with no good channel is left out of the members with a warning; the products built
+    from them keep it as a blank row.
     """
     suffix = f" {chromophore}"
     # a bad channel in the average would travel into every correlation this ROI takes part in
@@ -254,7 +266,7 @@ def _roi_members(
         if picks:
             members[roi] = picks
         else:
-            logger.warning("ROI %s has no good %s channel - excluded from ROI connectivity", roi, chromophore)
+            logger.warning("ROI %s has no good %s channel - left blank in the ROI outputs", roi, chromophore)
     return members
 
 
@@ -278,7 +290,8 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     Returns
     -------
     pd.DataFrame
-        ROI x channel correlations. Empty frame if no ROI resolves to a good channel.
+        ROI x channel correlations, one row per listed ROI, blank for one with no good
+        channel. Empty frame if no ROI resolves to a good channel.
 
     Notes
     -----
@@ -311,4 +324,5 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
         r[[col_index[c] for c in picks]] = np.nan
         r[bad_cols] = np.nan
         rows.append(r)
-    return pd.DataFrame(np.vstack(rows), index=list(members), columns=cols)
+    seed_map = pd.DataFrame(np.vstack(rows), index=list(members), columns=cols)
+    return seed_map.reindex(index=list(roi_map))

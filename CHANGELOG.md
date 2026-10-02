@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
 - The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
+- Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
 
 ### Changed
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
@@ -21,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-pipe` stops when `--roi-mapping` cannot be read, as `fnirs-hyper` does, instead of running without ROI output
 - ISC `null_abs_sd` is the sample SD (ddof=1), as the WTC and group nulls already were
 - Montage colours follow the shared long/short split, so a channel between the two ranges is drawn unclassified
+- An ROI with no good channel stays in the resting-state ROI matrix, seed map and ALFF table as a blank row
+- Fisher z leaves the diagonal of a blank row (a bad channel, an empty ROI) blank instead of 0
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
@@ -37,6 +40,8 @@ All notable changes to this project will be documented in this file.
 - The optode layout passed over an HbO SCI of exactly 0 and took the HbR value instead
 - The dyad PSD panels shaded the physiological bands in their own colours rather than the shared ones
 - Crop, edit-markers and align kept whichever `dataset_description.json` version stamp they first found
+- WTC ROI means counted a channel two ROIs list in the last one only; it now counts in both, as in ISC
+- An ROI mapping entry written with an ` hbo` or ` hbr` suffix matched nothing in `fnirs-hyper`
 
 ## [0.54.0] - 2026-09-29
 

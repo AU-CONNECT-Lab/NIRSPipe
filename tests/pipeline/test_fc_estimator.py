@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.pipeline.restingstate import (
+    compute_alff_roi,
     compute_fc,
     compute_fc_roi,
     compute_fc_seed,
@@ -107,3 +108,49 @@ def test_fisher_z_leaves_a_rectangular_frame_alone(haemo, roi_map):
     assert z.shape == seed.shape
     assert not (z.to_numpy()[np.eye(*z.shape, dtype=bool)] == 0).all()
     assert np.allclose(np.diag(fisher_z(compute_fc(haemo, "hbo")).to_numpy()), 0.0)
+
+
+# ---- an ROI with no good channel ----
+
+@pytest.fixture
+def lost_roi(haemo, roi_map):
+    """The map plus an ROI whose only channel is rejected."""
+    raw = haemo.copy()
+    hbo = [c for c in raw.ch_names if c.endswith("hbo")]
+    raw.info["bads"] = [hbo[4]]
+    return raw, {**roi_map, "C": [hbo[4]]}
+
+
+def test_an_roi_with_no_good_channel_stays_in_the_matrix_as_blank(lost_roi):
+    """Same shape for every subject, so a group stack lines up by position as well as label."""
+    raw, rois = lost_roi
+    fc = compute_fc_roi(raw, rois, "hbo")
+
+    assert list(fc.index) == list(fc.columns) == ["A", "B", "C"]
+    assert fc.loc["C"].isna().all() and fc["C"].isna().all()
+    assert np.isfinite(fc.loc[["A", "B"], ["A", "B"]].to_numpy()).all()
+
+
+def test_its_fisher_z_diagonal_is_blank_rather_than_zero(lost_roi):
+    raw, rois = lost_roi
+    z = np.diag(fisher_z(compute_fc_roi(raw, rois, "hbo")).to_numpy())
+    assert z[:2] == pytest.approx([0.0, 0.0]) and np.isnan(z[2])
+
+
+def test_its_seed_row_is_kept_and_blank(lost_roi):
+    raw, rois = lost_roi
+    seed = compute_fc_seed(raw, rois, "hbo")
+    assert list(seed.index) == ["A", "B", "C"] and seed.loc["C"].isna().all()
+
+
+def test_its_amplitude_row_is_kept_with_no_channels(lost_roi):
+    import pandas as pd
+
+    raw, rois = lost_roi
+    names = [c for c in raw.ch_names if c.endswith(("hbo", "hbr"))]
+    alff = pd.DataFrame({"channel": names, "alff": 1.0, "falff": 0.5,
+                         "malff": 1.0, "zalff": 0.0})
+    row = compute_alff_roi(alff, raw, rois)
+    row = row[(row["roi"] == "C") & (row["chromophore"] == "hbo")].iloc[0]
+
+    assert row["n_channels"] == 0 and np.isnan(row["alff"])

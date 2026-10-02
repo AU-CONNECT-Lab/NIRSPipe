@@ -21,7 +21,7 @@ from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
 from fnirs_pipe.qc.common.channel_table import (
-    channel_columns, channel_rows, format_rows, pair_rows,
+    channel_columns, channel_rows, format_rows, pair_rows, roi_overlap_note,
 )
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.boilerplate.notes import section_note
@@ -860,6 +860,9 @@ def build_hyper_post_report(
     align_info = alignment_params(aligned_raws)
     if align_info.get("aligned") is False:
         note(notes, scope, section_note("caveat.never_aligned"))
+    overlap = roi_overlap_note(roi_map)
+    if overlap:
+        note(notes, scope, overlap)
 
     # ---- is this a segment rather than a recording? ----
     # A cut carries two edges of its own, and everything this report computes from a wavelet

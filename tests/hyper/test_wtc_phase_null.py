@@ -171,6 +171,19 @@ def test_crossed_channels_group_into_an_roi_by_roi_matrix():
     assert ("roiA", "roiB") in maps.pairs[("s1", "s2")]
 
 
+def test_a_channel_two_rois_list_counts_in_both():
+    """The rule ISC and resting state follow. Mapped one-to-one, the shared channel would
+    land only in the last ROI and the first would average one channel fewer than it lists."""
+    result = _result({"A1": _map(0.2), "S": _map(0.8), "B1": _map(0.4)})
+    roi_map = {"roiA": ["A1", "S"], "roiB": ["S", "B1"]}
+    table = roi_mean_of_channels(wtc_band_mean(result, 0.06, 0.15), roi_map, min_channels=2)
+    means = dict(zip(table["label"], table["coherence"]))
+
+    assert means == pytest.approx({"roiA": 0.5, "roiB": 0.6})
+    maps = wtc_band_mean(roi_maps_from_channels(result, roi_map), 0.06, 0.15)
+    assert dict(zip(maps["label"], maps["coherence"])) == pytest.approx(means)
+
+
 def test_a_group_of_three_is_refused_rather_than_half_scrambled():
     """Only one subject is scrambled, so a third member would leave real pairs in the null."""
     from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_phase_null

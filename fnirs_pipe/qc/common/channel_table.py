@@ -20,6 +20,7 @@ from typing import Any
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from fnirs_pipe.utils import roi_overlaps
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
@@ -239,6 +240,15 @@ def registration_note(offset: "tuple[float, float] | None") -> "str | None":
         return None
     reach, scalp = offset
     return section_note("caveat.unregistered", reach=reach, scalp=scalp)
+
+
+def roi_overlap_note(roi_map: "dict[str, list[str]] | None") -> "str | None":
+    """What to say when a channel sits in two ROIs, or None. One wording for both reports."""
+    shared = roi_overlaps(roi_map or {})
+    if not shared:
+        return None
+    channels = ", ".join(f"{ch} ({', '.join(rois)})" for ch, rois in shared.items())
+    return section_note("caveat.roi_overlap", n=len(shared), channels=channels)
 
 
 def separation_notes(
