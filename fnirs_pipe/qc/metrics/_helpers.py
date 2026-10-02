@@ -10,6 +10,7 @@ import functools
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.helpers")
@@ -273,6 +274,17 @@ def registration_offset(
         return None
     reach = float(np.median(np.linalg.norm(locs - centre, axis=1)))
     return (reach * 1e3, scalp * 1e3) if reach > max_ratio * scalp else None
+
+
+def as_optical_density(raw: mne.io.Raw) -> mne.io.Raw:
+    """The recording in optical density: itself when it already is, else a converted copy.
+
+    The same metric can then be taken on a motion-corrected file, which is OD already, and on
+    the raw intensity it came from. The input is never modified.
+    """
+    if is_optical_density(raw):
+        return raw
+    return mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
 
 
 def require_cardiac_below_nyquist(sfreq: float, cardiac_h_freq: float) -> None:

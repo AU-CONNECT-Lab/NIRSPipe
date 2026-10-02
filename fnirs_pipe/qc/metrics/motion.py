@@ -14,7 +14,7 @@ import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import _mask_to_segments, _mean_or_none, _safe_metrics
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, _band_derivative
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics._helpers import as_optical_density
 
 # share of channels that must spike, or be corrected, at once for a timepoint to count
 SPIKE_CH_FRAC = 0.1
@@ -77,8 +77,7 @@ def _spike_metrics(raw_intensity: mne.io.Raw,
     derivative energy, the squared DVARS-vstd normaliser) for flagging noisy channels,
     not a standard named metric and not motion detection.
     """
-    raw_od = (raw_intensity if is_optical_density(raw_intensity)
-              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    raw_od = as_optical_density(raw_intensity)
     od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
     diff_raw = np.diff(od_data, axis=1)  # unfiltered: for the per-channel derivative energy
     spikes = _spike_mask(_motion_band_diff(od_data, float(raw_od.info["sfreq"])))
@@ -194,8 +193,7 @@ def motion_corrected_segments(
 def spike_segments(raw_intensity: mne.io.Raw,
                    ch_frac: float = SPIKE_CH_FRAC) -> "list[tuple[float, float]]":
     """Time spans where >= ch_frac of channels show a motion-band OD spike (for plotting)."""
-    raw_od = (raw_intensity if is_optical_density(raw_intensity)
-              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    raw_od = as_optical_density(raw_intensity)
     diff_data = _motion_band_diff(raw_od.get_data(), float(raw_od.info["sfreq"]))
     flagged = _spike_mask(diff_data).mean(axis=0) >= ch_frac
     return _mask_to_segments(flagged, raw_od.times[1:])

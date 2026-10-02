@@ -21,7 +21,7 @@ from fnirs_pipe.qc.figures.common._utils import line_xy as _line_xy
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics._helpers import as_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.motion_panel")
@@ -153,8 +153,7 @@ def _matched_od_after(
     if raw_after is None:
         return None
     try:
-        od = (raw_after if is_optical_density(raw_after)
-              else mne.preprocessing.nirs.optical_density(raw_after.copy()))
+        od = as_optical_density(raw_after)
         if not set(ch_names) <= set(od.ch_names):            # same channels
             logger.warning("corrected file is missing channels the panel draws; "
                            "before/after comparison dropped")

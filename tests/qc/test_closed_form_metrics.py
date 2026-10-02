@@ -679,3 +679,17 @@ def test_an_h_freq_at_nyquist_degrades_the_bandpass_to_a_high_pass():
     assert_allclose(gvtd_timetrace(data, SFREQ, l_freq=0.1, h_freq=SFREQ / 2),
                     gvtd_timetrace(data, SFREQ, l_freq=0.1, h_freq=None), atol=0)
 
+
+
+# ---- optical density, from either end ----
+
+def test_as_optical_density_converts_intensity_and_passes_od_through():
+    from fnirs_pipe.qc.metrics._helpers import as_optical_density
+
+    raw = synth_raw("01", "hold", duration=20.0, motion_onset=None)
+    before = raw.get_data().copy()
+    od = as_optical_density(raw)
+
+    assert od is not raw and set(od.get_channel_types()) == {"fnirs_od"}
+    np.testing.assert_array_equal(raw.get_data(), before)
+    assert as_optical_density(od) is od

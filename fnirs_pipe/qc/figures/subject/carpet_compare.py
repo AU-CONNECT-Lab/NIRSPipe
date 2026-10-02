@@ -10,7 +10,7 @@ from fnirs_pipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
     carpet_coloraxis, carpet_z,
 )
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics._helpers import as_optical_density
 from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
 _CARPET_ROW_PX = 190
@@ -71,7 +71,7 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
     def _od(raw):
         if raw is None:
             return None
-        return raw if is_optical_density(raw) else             mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+        return as_optical_density(raw)
 
     od_b, od_a = _od(raw_before), _od(raw_after)
     if od_b is None:

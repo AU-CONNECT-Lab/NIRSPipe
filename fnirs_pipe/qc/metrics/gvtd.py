@@ -14,7 +14,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import long_short_channels, _mask_to_segments, _safe_metrics
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics._helpers import as_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.gvtd")
@@ -270,8 +270,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
     original recording. ``optical_density`` raises on anything that is not continuous-wave
     amplitude, so the guard is what makes that second call possible at all.
     """
-    raw_od = (raw_intensity if is_optical_density(raw_intensity)
-              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    raw_od = as_optical_density(raw_intensity)
     sfreq = float(raw_od.info["sfreq"])
     od_data = raw_od.get_data()
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
@@ -312,8 +311,7 @@ def gvtd_above_segments(raw_intensity: mne.io.Raw, sep_bands=None,
     channels, so each set has its own trace and its own threshold and the spans of one set
     cannot be derived from another's.
     """
-    raw_od = (raw_intensity if is_optical_density(raw_intensity)
-              else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
+    raw_od = as_optical_density(raw_intensity)
     if picks is None:
         picks, _ = gvtd_channel_picks(raw_od, sep_bands)
     if picks and len(picks) < len(raw_od.ch_names):

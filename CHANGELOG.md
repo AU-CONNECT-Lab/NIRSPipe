@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - QC figures share one matplotlib-to-PNG encoder, one colour-to-rgba helper and the report's PNG saving
 - Sidecar reads, post-stage sidecars, subject folder listing, repeated CLI flags, rating files and the GUI run status each have one implementation
 - A SNIRF's sidecar is read as UTF-8 on every platform
+- QC metrics and figures that accept intensity or optical density convert through one `as_optical_density`
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone

@@ -15,7 +15,7 @@ from fnirs_pipe.qc.metrics._helpers import SNR_PASS
 from fnirs_pipe.qc.metrics._helpers import (
     _mean_or_none, _safe_metrics, require_cardiac_below_nyquist,
 )
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.qc.metrics._helpers import as_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.coupling")
@@ -76,8 +76,7 @@ def compute_sci_scores(
     .. footbibliography::
     """
     require_cardiac_below_nyquist(raw.info["sfreq"], cardiac_h_freq)
-    raw_od = (raw if is_optical_density(raw)
-              else mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False))
+    raw_od = as_optical_density(raw)
     try:
         sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
             raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
@@ -100,8 +99,7 @@ def _sci_win_metrics(
     """
     from fnirs_pipe.qc.metrics.windowed import compute_windowed_sci
 
-    raw_od = (raw if is_optical_density(raw)
-              else mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False))
+    raw_od = as_optical_density(raw)
     scores, _times = compute_windowed_sci(
         raw_od, cardiac_l_freq, cardiac_h_freq, SCI_WINDOW_S)
     with np.errstate(invalid="ignore"):
@@ -286,8 +284,7 @@ def compute_psp_scores(
     same measurement.
     """
     import mne_nirs.preprocessing as nirs_prep
-    raw_od = (raw if is_optical_density(raw)
-              else mne.preprocessing.nirs.optical_density(raw.copy()))
+    raw_od = as_optical_density(raw)
     _, psp_scores, _ = nirs_prep.peak_power(
         raw_od.copy(), time_window=PSP_WINDOW_S,
         l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
@@ -344,7 +341,7 @@ def _cardiac_power_metrics(
     .. footbibliography::
     """
     # CP is defined in the OD domain (aligns with SCI/PSP); convert unless input is already OD
-    raw_od = raw if is_optical_density(raw) else mne.preprocessing.nirs.optical_density(raw.copy())
+    raw_od = as_optical_density(raw)
     fmax = min(cardiac_h_freq, raw_od.info["sfreq"] / 2)
     # PSD restricted to the cardiac band, so the ±0.2/±0.5 windows below are auto-clipped to it
     # (equivalent to Bizzego's pre-bandpass; keeps respiration/Mayer power out of the ratio)
