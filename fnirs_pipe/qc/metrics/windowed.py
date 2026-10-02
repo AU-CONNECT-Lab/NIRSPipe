@@ -10,6 +10,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import long_short_channels
+from fnirs_pipe.qc.metrics.coupling import _windowed_cv
 from fnirs_pipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
@@ -104,11 +105,8 @@ def compute_windowed_cv(
     n = int(round(window_s * sfreq))
     if n < 2 or data.shape[1] < n:
         raise ValueError(f"window of {window_s} s does not fit the recording")
-    m = data.shape[1] // n
-    w = data[:, :m * n].reshape(data.shape[0], m, n)
-    mu, sd = w.mean(axis=2), w.std(axis=2)
-    cv = np.divide(sd, mu, out=np.full_like(sd, np.nan), where=mu != 0)
-    starts = np.arange(m) * (n / sfreq)
+    cv = _windowed_cv(data, n)
+    starts = np.arange(cv.shape[1]) * (n / sfreq)
     return cv, np.stack([starts, starts + n / sfreq], axis=1)
 
 
@@ -156,10 +154,6 @@ def attach_windowed_series(
     are derived from ``window_s`` the same way, so the series stay time-aligned across the
     two files as long as neither was resampled.
     """
-    def _center_times(t):
-        a = np.asarray(t)
-        return (a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a).tolist()
-
     series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None,
               "cv_matrix": None, "cv_times": None}
     # recorded even when every series below fails: it describes the request, not the result,
@@ -220,22 +214,22 @@ def attach_windowed_series(
     # SCI/PSP matrices are channel × window; collapse to a per-window mean over channels
     if sci_matrix is not None and sci_times is not None:
         sqm["sci_per_window"]      = np.asarray(sci_matrix).mean(axis=0).tolist()
-        sqm["sci_window_times_s"]  = _center_times(sci_times)
+        sqm["sci_window_times_s"]  = window_centers(sci_times).tolist()
     if psp_matrix is not None and psp_times is not None:
         sqm["psp_per_window"]      = np.asarray(psp_matrix).mean(axis=0).tolist()
-        sqm["psp_window_times_s"]  = _center_times(psp_times)
+        sqm["psp_window_times_s"]  = window_centers(psp_times).tolist()
     if cv_matrix is not None and cv_times is not None:
         with np.errstate(invalid="ignore", divide="ignore"):
             cv_mean = np.nanmean(np.asarray(cv_matrix), axis=0)
         sqm["cv_per_window"]      = cv_mean.tolist()
         # 1/CV rather than a second aggregation, so the pair stays exact reciprocals
         sqm["snr_per_window"]     = np.where(cv_mean > 0, 1.0 / cv_mean, np.nan).tolist()
-        sqm["cv_window_times_s"]  = _center_times(cv_times)
+        sqm["cv_window_times_s"]  = window_centers(cv_times).tolist()
 
     if gvtd_per_window is not None and len(gvtd_per_window):
         sqm["gvtd_per_window"]     = np.asarray(gvtd_per_window).tolist()
         sqm["gvtd_p95_per_window"] = np.asarray(gvtd_p95_per_window).tolist()
-        sqm["gvtd_window_times_s"] = _center_times(gvtd_t)
+        sqm["gvtd_window_times_s"] = window_centers(gvtd_t).tolist()
     if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
         sqm["gvtd_filt_per_window"]     = np.asarray(gvtd_filt_per_window).tolist()
         sqm["gvtd_filt_p95_per_window"] = np.asarray(gvtd_filt_p95_per_window).tolist()
@@ -478,9 +472,7 @@ def condition_window_means(
     to midpoints here by the same rule that function records. Without that, an (n, 2) array
     would broadcast against the window bounds and mask nothing correctly.
     """
-    matrix, centers = np.asarray(matrix), np.asarray(centers)
-    if centers.ndim == 2 and centers.shape[1] == 2:
-        centers = centers.mean(axis=1)
+    matrix, centers = np.asarray(matrix), window_centers(centers)
     out: dict[str, np.ndarray] = {}
     for window in windows:
         keep = _in_scope(centers, [window])

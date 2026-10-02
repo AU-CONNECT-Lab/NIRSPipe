@@ -203,6 +203,12 @@ def _cnr_metrics(
     }
 
 
+def _band_mean(freqs: np.ndarray, psd: np.ndarray, fmin: float, fmax: float) -> "float | None":
+    """Mean PSD density over the bins inside [fmin, fmax], all channels pooled; None if none fall there."""
+    mask = (freqs >= fmin) & (freqs <= fmax)
+    return float(psd[:, mask].mean()) if (psd.size and mask.any()) else None
+
+
 @_safe_metrics("PSD metrics", (
     "cardiac_band_power_hbo", "cardiac_band_power_hbr",
     "cardiac_band_frac_hbo", "cardiac_band_frac_hbr",
@@ -254,8 +260,7 @@ def _spectral_metrics(
 
         def _power(fmin: float, fmax: float) -> float | None:
             # absolute: mean PSD density inside the band
-            mask = (freqs >= fmin) & (freqs <= fmax)
-            return float(chrom[:, mask].mean()) if mask.any() else None
+            return _band_mean(freqs, chrom, fmin, fmax)
 
         def _frac(fmin: float, fmax: float) -> float | None:
             # relative: fraction of this chromophore's total power in the band (sum/sum, in [0,1])

@@ -4,6 +4,7 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
+from fnirs_pipe.qc.metrics.windowed import window_centers
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._utils import AXIS_TEXT_COLOR
@@ -308,16 +309,6 @@ def lollipop_scores_figure(
 # Here rather than with the raw-intensity figures: only the subject pages draw it,
 # and the lollipop it ends with is this module's.
 
-def _window_centers(win_times) -> np.ndarray:
-    """[start, end] window pairs -> one centre per window; already-1-D input passes through.
-
-    e.g. [(0.0, 10.1), (10.1, 20.2)] -> [5.05, 15.15]. Flattening instead would hand a
-    heatmap twice as many x values as it has columns, halving the plotted time axis.
-    """
-    a = np.asarray(win_times, dtype=float)
-    return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
-
-
 def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
@@ -427,7 +418,7 @@ def build_sci_psp_figure(
 
     for i, (name, _heat_title, _mean_title, matrix, win_times, means,
             threshold, higher_better, hover, zrange) in enumerate(rows, start=1):
-        centers = _window_centers(win_times)
+        centers = window_centers(win_times)
         z = np.asarray(matrix, dtype=float)
         # SNR is 1/CV by construction, so the row that has it hands it to the hover rather
         # than repeating the same matrix reflected as a fourth row

@@ -17,8 +17,8 @@ from fnirs_pipe.qc.metrics.coupling import (
 )
 from fnirs_pipe.qc.metrics.gvtd import _motion_metrics
 from fnirs_pipe.qc.metrics.haemo import (
-    gcor_metrics, haemo_quality_metrics, _cnr_metrics, _drift_metrics, _retention_metrics,
-    _spectral_metrics,
+    gcor_metrics, haemo_quality_metrics, _band_mean, _cnr_metrics, _drift_metrics,
+    _retention_metrics, _spectral_metrics,
 )
 from fnirs_pipe.qc.metrics.motion import _spike_metrics
 from fnirs_pipe.utils import is_optical_density
@@ -192,8 +192,11 @@ def comparable_stage_metrics(
     # is what the recording lost, so it belongs with the quality rows.
     resp_lo = max(resp_l_freq, l_freq) if l_freq else resp_l_freq
     resp_hi = min(resp_h_freq, h_freq) if h_freq else resp_h_freq
+    # one spectrum per stage, shared by the two bands read off it below
+    psds = ([r.compute_psd(verbose=False) for r in raws]
+            if resp_lo < resp_hi or l_freq else [])
     if resp_lo < resp_hi:
-        in_band = [_band_power(r, "hbo", resp_lo, resp_hi) for r in raws]
+        in_band = [_band_power(p, "hbo", resp_lo, resp_hi) for p in psds]
         if any(isinstance(v, (int, float)) for v in in_band):
             quality["resp_band_power_hbo"] = in_band
 
@@ -207,7 +210,7 @@ def comparable_stage_metrics(
     if any(isinstance(v, (int, float)) for v in cardiac):
         removed["cardiac_band_power_hbo"] = cardiac
     if l_freq:
-        drift = [_band_power(r, "hbo", 0.0, l_freq) for r in raws]
+        drift = [_band_power(p, "hbo", 0.0, l_freq) for p in psds]
         if any(isinstance(v, (int, float)) for v in drift):
             removed["drift_band_power_hbo"] = drift
 
@@ -217,14 +220,11 @@ def comparable_stage_metrics(
                                          for h in haemo]}
 
 
-def _band_power(raw_haemo: mne.io.Raw, chroma: str, fmin: float, fmax: float) -> "float | None":
-    """Mean PSD density in [fmin, fmax], on the same footing as ``_spectral_metrics``."""
-    if chroma not in raw_haemo.get_channel_types():
+def _band_power(psd, chroma: str, fmin: float, fmax: float) -> "float | None":
+    """Mean PSD density in [fmin, fmax] of one stage's spectrum, as ``_spectral_metrics`` takes it."""
+    if chroma not in psd.get_channel_types():
         return None
-    psd = raw_haemo.compute_psd(verbose=False)
-    data = psd.get_data(picks=chroma)
-    mask = (psd.freqs >= fmin) & (psd.freqs <= fmax)
-    return float(data[:, mask].mean()) if (data.size and mask.any()) else None
+    return _band_mean(psd.freqs, psd.get_data(picks=chroma), fmin, fmax)
 
 
 def _variance_remaining(raws: "list[mne.io.Raw]") -> "list[float | None]":

@@ -141,7 +141,7 @@ def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
 
 # ---- the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
-    from fnirs_pipe.qc.figures.subject.sci_psp_panel import _window_centers
+    from fnirs_pipe.qc.metrics.windowed import window_centers as _window_centers
 
     pairs = [(0.0, 10.1), (10.1, 20.2), (20.2, 30.3)]
     assert np.allclose(_window_centers(pairs), [5.05, 15.15, 25.25])

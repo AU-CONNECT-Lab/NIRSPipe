@@ -143,6 +143,17 @@ def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, A
     }
 
 
+def _windowed_cv(data: np.ndarray, n: int) -> np.ndarray:
+    """(channel x window) sigma/mu over consecutive ``n``-sample windows, NaN where mu is 0.
+
+    A tail shorter than ``n`` is dropped, so this grid is the one the SCI and PSP series use.
+    """
+    m = data.shape[1] // n
+    w = data[:, :m * n].reshape(data.shape[0], m, n)
+    mu, sd = w.mean(axis=2), w.std(axis=2)
+    return np.divide(sd, mu, out=np.full_like(sd, np.nan), where=mu != 0)
+
+
 def channel_cv_windowed(data: np.ndarray, sfreq: float,
                         window_s: float = CV_WINDOW_S) -> np.ndarray:
     """Per-channel CV averaged over non-overlapping windows; whole-run if one does not fit.
@@ -154,10 +165,7 @@ def channel_cv_windowed(data: np.ndarray, sfreq: float,
     n = int(round(window_s * float(sfreq)))
     if n < 2 or data.shape[1] < n:
         return channel_cv(data)
-    m = data.shape[1] // n
-    w = data[:, :m * n].reshape(data.shape[0], m, n)
-    mu, sd = w.mean(axis=2), w.std(axis=2)
-    cv = np.divide(sd, mu, out=np.full_like(sd, np.nan), where=mu != 0)
+    cv = _windowed_cv(data, n)
     with np.errstate(invalid="ignore"):
         return np.nanmean(cv, axis=1)
 

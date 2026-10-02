@@ -25,6 +25,24 @@ GVTD_MOTION_BAND = (0.01, 0.5)
 GVTD_N_STD = 3.0  # one constant: the figures draw this threshold, the record stores it
 
 
+def _band_derivative(data: np.ndarray, sfreq: float,
+                     l_freq: "float | None" = None, h_freq: "float | None" = None) -> np.ndarray:
+    """Each row's sample-to-sample difference after an optional 4th-order Butterworth band-pass.
+
+    NaN/inf are zeroed first, since either would poison the filter and the difference. An
+    ``h_freq`` at or above Nyquist is dropped rather than passed to a filter that would refuse it.
+    """
+    d = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
+    if h_freq is not None and h_freq >= sfreq / 2:
+        h_freq = None
+    if l_freq is not None or h_freq is not None:
+        d = mne.filter.filter_data(
+            d, sfreq, l_freq, h_freq, method="iir",
+            iir_params=dict(order=4, ftype="butter"), verbose=False,
+        )
+    return np.diff(d, axis=1)
+
+
 def gvtd_timetrace(
     data: np.ndarray,
     sfreq: float,
@@ -75,22 +93,7 @@ def gvtd_timetrace(
     ----------
     .. footbibliography::
     """
-    # NaN/inf would poison filter + diff
-    d = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
-
-    # drop an h_freq at/above Nyquist (sfreq/2): not a valid IIR cutoff, the butterworth would error
-    if h_freq is not None and h_freq >= sfreq / 2:
-        h_freq = None
-
-    # Bandpass filter the data before differencing (temporal derivative) to isolate motion-band fluctuations (optional).
-    if l_freq is not None or h_freq is not None:
-        d = mne.filter.filter_data(
-            d, sfreq, l_freq, h_freq, method="iir",
-            iir_params=dict(order=4, ftype="butter"), verbose=False,
-        )
-        
-    # Compute the temporal derivative along time (axis=1) and then the RMS across channels (axis=0).
-    diff = np.diff(d, axis=1)  # temporal derivative along time (x[:,i] - x[:,i-1])
+    diff = _band_derivative(data, sfreq, l_freq, h_freq)
 
     # Optional channel-wise standardization (DVARS-vstd analog): divide each channel's derivative by its own SD before the RMS, 
     # so high-dynamic-range channels don't dominate the global value.
@@ -270,7 +273,7 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
     raw_od = (raw_intensity if is_optical_density(raw_intensity)
               else mne.preprocessing.nirs.optical_density(raw_intensity.copy()))
     sfreq = float(raw_od.info["sfreq"])
-    od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
+    od_data = raw_od.get_data()
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
     gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
@@ -316,8 +319,7 @@ def gvtd_above_segments(raw_intensity: mne.io.Raw, sep_bands=None,
     if picks and len(picks) < len(raw_od.ch_names):
         raw_od = raw_od.copy().pick(picks)
     sfreq = float(raw_od.info["sfreq"])
-    od_data = np.nan_to_num(raw_od.get_data(), nan=0.0, posinf=0.0, neginf=0.0)
-    gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)
+    gvtd_filt = gvtd_timetrace(raw_od.get_data(), sfreq, *GVTD_MOTION_BAND)
     thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
     if thresh is None:
         return []
@@ -360,7 +362,7 @@ def gvtd_censor_spans(
     .. footbibliography::
     """
     picks, picked_set = gvtd_channel_picks(raw_od, sep_bands, channel_set)
-    data = np.nan_to_num(raw_od.get_data(picks=picks), nan=0.0, posinf=0.0, neginf=0.0)
+    data = raw_od.get_data(picks=picks)
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])
     empty = {

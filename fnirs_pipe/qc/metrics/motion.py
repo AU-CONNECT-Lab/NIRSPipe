@@ -13,7 +13,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import _mask_to_segments, _mean_or_none, _safe_metrics
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, _band_derivative
 from fnirs_pipe.utils import is_optical_density
 
 # share of channels that must spike, or be corrected, at once for a timepoint to count
@@ -39,16 +39,9 @@ def _motion_band_diff(od_data: np.ndarray, sfreq: float) -> np.ndarray:
     """Temporal derivative of OD band-limited to the motion band (cardiac removed first).
 
     Filters out the ~1 Hz cardiac band so the derivative reflects motion, not pulsation.
-    Uses the same GVTD motion band.
+    The same filter and band as the filtered GVTD trace, so spikes and GVTD see one signal.
     """
-    d = np.nan_to_num(od_data, nan=0.0, posinf=0.0, neginf=0.0)
-    h_freq = GVTD_MOTION_BAND[1]
-    if h_freq >= sfreq / 2:  # not a valid IIR cutoff at/above Nyquist
-        h_freq = None
-    d = mne.filter.filter_data(
-        d, sfreq, GVTD_MOTION_BAND[0], h_freq, method="iir",
-        iir_params=dict(order=4, ftype="butter"), verbose=False)
-    return np.diff(d, axis=1)
+    return _band_derivative(od_data, sfreq, *GVTD_MOTION_BAND)
 
 
 @_safe_metrics("Spike metrics", (
