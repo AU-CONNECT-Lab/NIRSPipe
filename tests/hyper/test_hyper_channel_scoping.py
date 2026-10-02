@@ -426,7 +426,8 @@ def test_a_rejected_channel_thins_a_roi_cell_rather_than_voiding_it():
     off what survived, which is how the ROI coherence treats the same gap."""
     mat = np.full((4, 4), 0.5)
     mat[0, :] = np.nan
-    out, _ = _isc_roi(mat, min_channels=2)
+    # the minimum is its own test; at 1 the survivor of region L still carries it
+    out, _ = _isc_roi(mat, min_channels=1)
     assert np.isfinite(out).all()
     assert out[0, 0] == pytest.approx(0.5)
 
@@ -438,6 +439,16 @@ def test_a_roi_cell_under_the_minimum_is_left_blank():
     out, labels = _isc_roi(mat, min_channels=2)
     assert np.isnan(out[labels.index("L")]).all()
     assert np.isfinite(out[labels.index("R")]).all()
+
+
+def test_a_crossed_roi_correlation_cell_needs_channels_on_both_sides():
+    """Counted per member as the ROI coherence counts them: two pairings off one of the
+    second member's channels is still one optode standing in for that region."""
+    mat = np.full((4, 4), 0.5)
+    mat[:, 3] = np.nan                    # sub2 keeps one channel of region R
+    out, labels = _isc_roi(mat, min_channels=2)
+    assert np.isnan(out[labels.index("L"), labels.index("R")])
+    assert np.isfinite(out[labels.index("L"), labels.index("L")])
 
 
 def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():

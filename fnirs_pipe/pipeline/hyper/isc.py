@@ -480,8 +480,8 @@ def roi_mean_of_isc(
     roi_map : dict
         ``{region: [channel label, ...]}``. Its key order is the returned axis.
     min_channels : int
-        Least channel pairs a cell may rest on; thinner cells come back NaN. Counts pairs,
-        so a crossed cell needs that many combinations rather than that many channels a side.
+        Least channels with a value each member must contribute to a cell; thinner cells
+        come back NaN. Each side is counted on its own, as the ROI coherence counts them.
 
     Returns
     -------
@@ -502,13 +502,16 @@ def roi_mean_of_isc(
             if not picks[a] or not picks[b]:
                 continue
             block = mat[np.ix_(picks[a], picks[b])]
-            z = fisher_r_to_z(block.ravel())
+            valid = np.isfinite(block)
+            # channels with a value on each member's side of the block
+            n_side = min(int(valid.any(axis=1).sum()), int(valid.any(axis=0).sum()))
+            z = fisher_r_to_z(block[valid])
             z = z[np.isfinite(z)]
-            if z.size < max(1, min_channels):
+            if z.size == 0 or n_side < max(1, min_channels):
                 thin += z.size > 0
                 continue
             out[i, j] = float(np.tanh(z.mean()))
     if thin:
-        logger.info("ROI ISC: %d cell(s) under %d channel pairs, left blank",
+        logger.info("ROI ISC: %d cell(s) with a member under %d channels, left blank",
                     thin, min_channels)
     return out, labels

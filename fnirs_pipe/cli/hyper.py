@@ -707,8 +707,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "panel between the chromophores at once. The null of "
                           "--wtc-phase-null follows.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
-                     help="Drop an ROI cell resting on fewer than N channel pairs, so one "
-                          "surviving optode does not stand in for a region (default 2).")
+                     help="Drop an ROI cell where either member contributes fewer than N "
+                          "channels, so one surviving optode does not stand in for a region "
+                          "(default 2). Each side of a crossed cell is counted on its own.")
     run.add_argument("--wtc-arrow-min", type=float, default=0.5, metavar="R",
                      help="Coherence a cell has to reach before its phase arrow is drawn on "
                           "the WTC maps, when neither null was computed (default 0.5). "
@@ -950,8 +951,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "--wtc-channel-cross; a crossed null costs one full run per channel "
                            "pair. --no-wtc-pair-cross draws the homologous pairings only.")
     pair.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
-                      help="Drop an ROI cell resting on fewer than N channel pairs "
-                           "(default 2). Match the value the real tables used.")
+                      help="Drop an ROI cell where either member contributes fewer than N "
+                           "channels (default 2). Match the value the real tables used.")
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in fnirs-hyper.")

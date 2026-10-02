@@ -134,6 +134,28 @@ def test_an_roi_under_the_channel_minimum_is_dropped():
     assert list(roi_mean_of_channels(df, roi_map, min_channels=1)["label"]) == ["roiA", "roiB"]
 
 
+def _crossed_band(values):
+    return pd.DataFrame([{"sub1": "a", "sub2": "b", "label": l1, "label2": l2,
+                          "coherence": v, "n_valid_frac": 1.0}
+                         for (l1, l2), v in values.items()])
+
+
+def test_a_crossed_roi_cell_needs_channels_on_both_sides_not_just_pairings():
+    roi_map = {"roiA": ["A1", "A2"], "roiB": ["B1"]}
+    df = _crossed_band({(a, b): 0.4 for a in ("A1", "A2", "B1") for b in ("A1", "A2", "B1")})
+    kept = roi_mean_of_channels(df, roi_map, min_channels=2)
+    # roiA x roiB rests on two pairings but on one channel of the second member
+    assert list(zip(kept["label"], kept["label2"])) == [("roiA", "roiA")]
+
+
+def test_a_channel_without_a_value_does_not_count_towards_the_minimum():
+    roi_map = {"roiA": ["A1", "A2"]}
+    df = _crossed_band({("A1", "A1"): 0.4, ("A1", "A2"): float("nan"),
+                        ("A2", "A1"): 0.4, ("A2", "A2"): float("nan")})
+    # A2 of the second member was rejected, leaving one channel on that side
+    assert roi_mean_of_channels(df, roi_map, min_channels=2).empty
+
+
 def test_the_roi_fisher_z_matches_the_roi_coherence_not_the_channel_average():
     """arctanh is nonlinear, so averaging z per channel would not equal z of the average."""
     df = wtc_band_mean(_result({"A1": _map(0.2), "A2": _map(0.8)}), 0.06, 0.15)

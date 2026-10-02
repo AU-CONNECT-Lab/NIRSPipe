@@ -103,9 +103,10 @@ def roi_mean_of_channels(
     counts the channel pairs behind each mean, so an ROI thinned by rejection is visible.
     Channels no ROI lists are dropped.
 
-    ``min_channels`` drops a cell resting on fewer than that many channel pairs, so one
-    surviving optode does not stand in for a region. It counts pairs, so on a crossed frame a
-    cell needs ``min_channels`` combinations rather than that many channels on each side.
+    ``min_channels`` drops a cell where either member contributes fewer than that many
+    channels with a value, so one surviving optode does not stand in for a region. On a
+    crossed frame each side is counted on its own: two channels against one is two pairings
+    but one channel of the second member, and is dropped.
 
     ``coherence_z`` is recomputed from the averaged coherence rather than averaged itself, so
     it stays the Fisher z of the number in the same row.
@@ -120,23 +121,28 @@ def roi_mean_of_channels(
     rois_of = _rois_of(roi_map)
     df = band_df.copy()
     label_cols = ["label"] + (["label2"] if "label2" in df.columns else [])
+    # each side's channel names, kept before they become ROI names, blank where no value
+    sides = [f"_side{i}" for i in range(len(label_cols))]
+    for col, side in zip(label_cols, sides):
+        df[side] = df[col].where(df["coherence"].notna())
     for col in label_cols:
         # one row per ROI the channel is in; a channel no ROI lists drops out
         df[col] = df[col].map(rois_of)
         df = df.dropna(subset=[col]).explode(col, ignore_index=True)
 
     keys = ["sub1", "sub2"] + label_cols
+    grouped = df.groupby(keys, sort=False)
     out = (
-        df.groupby(keys, sort=False)
-          .agg(coherence=("coherence", "mean"),
-               n_valid_frac=("n_valid_frac", "mean"),
-               n_ch=("coherence", "count"))
-          .reset_index()
+        grouped.agg(coherence=("coherence", "mean"),
+                    n_valid_frac=("n_valid_frac", "mean"),
+                    n_ch=("coherence", "count"))
+               .reset_index()
     )
     if min_channels > 1:
-        thin = out["n_ch"] < min_channels
+        per_side = grouped[sides].nunique().reset_index(drop=True)
+        thin = (per_side < min_channels).any(axis=1).to_numpy()
         if thin.any():
-            logger.info("ROI means: %d cell(s) under %d channel pairs, dropped",
+            logger.info("ROI means: %d cell(s) with a member under %d channels, dropped",
                         int(thin.sum()), min_channels)
         out = out[~thin].reset_index(drop=True)
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
