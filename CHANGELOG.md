@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
 - The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
 - Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
+- `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
 
 ### Changed
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`

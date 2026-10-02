@@ -237,6 +237,62 @@ def test_a_region_is_the_mean_of_its_own_channels(tmp_path):
         assert cohort.loc[level, "coherence"] == pytest.approx(0.40)
 
 
+# ---- the crossed region matrix ----
+
+
+def _full_cross(frame, value=None):
+    """Every channel against every channel, as a crossed run writes it."""
+    out = pd.concat([frame.assign(label2=c) for c in CHANNELS], ignore_index=True)
+    if value is not None:
+        out["coherence"] = [value(a, b) for a, b in zip(out.label, out.label2)]
+    return out
+
+
+def _write_crossed_tree(root, value):
+    for occ in OCCASIONS:
+        d = root / f"group-{occ}" / "nirs"
+        d.mkdir(parents=True)
+        draws = _full_cross(_draws()[lambda f: f.occasion == occ]).drop(columns=["occasion"])
+        real = _full_cross(_real(0.40)[lambda f: f.occasion == occ], value)
+        draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"), sep=SEP, index=False)
+        real.drop(columns=["occasion"]).to_csv(d / name(occ, "main", "wtcbycond"),
+                                               sep=SEP, index=False)
+
+
+def test_a_crossed_null_with_a_region_map_tests_every_ordered_region_pair():
+    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), ROI)
+           if g == "roi" and pr == "all"]
+    # "thin" has one channel, so it pairs with nothing
+    assert got == ["front>front", "front>back", "back>front", "back>back"]
+
+
+def test_a_homologous_null_offers_no_region_pairs():
+    d = _draws().assign(label2=lambda f: f.label)
+    assert not [lv for g, lv, pr, _, _ in _variants(d, d, ROI) if g == "roi" and pr == "all"]
+
+
+def test_a_region_pair_needs_channels_on_both_sides_not_just_pairings():
+    roi = {"front": ["S1_D1", "S1_D2"], "one": ["S2_D1"]}
+    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), roi)
+           if g == "roi" and pr == "all"]
+    # front>one rests on two pairings, but on one channel of the second member
+    assert got == ["front>front"]
+
+
+def test_a_region_pair_is_the_mean_of_every_pairing_between_them(tmp_path):
+    front = set(ROI["front"])
+    _write_crossed_tree(tmp_path, lambda a, b: 0.6 if a in front and b not in front else 0.4)
+    written = write_group_null(tmp_path, "main", roi_map=ROI, n_resample=500, seed=3)
+    cohort = _resample_rows(pd.read_csv(written[1], sep=SEP))
+    pairs = cohort[(cohort.granularity == "roi") & (cohort.pairings == "all")].set_index("level")
+    assert pairs.loc["front>back", "coherence"] == pytest.approx(0.6)
+    assert pairs.loc["back>front", "coherence"] == pytest.approx(0.4)
+    # the region pairs are one family, corrected apart from the homologous regions
+    assert set(pairs["family"]) == {4}
+    homologous = cohort[(cohort.granularity == "roi") & (cohort.pairings == "homologous")]
+    assert set(homologous["family"]) == {2}
+
+
 # ---- what the guards refuse ----
 
 def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):

@@ -13,8 +13,9 @@ stage:
               draws one stand-in per occasion. This needs every occasion's draws at once,
               which is why it cannot live in a stage that runs one dyad at a time.
 
-Homologous pairings only when the draws carry a ``label2``: those are the ones the re-paired
-null draws, and a crossed real table's other cells have no null behind them.
+A homologous null tests the homologous pairings only, since a crossed real table's other
+cells have no null behind it. A crossed null also tests every pairing and, given a region
+map, every ordered region pair.
 """
 
 from __future__ import annotations
@@ -122,6 +123,16 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         # a thinly covered region is not a region
         if d["label"].nunique() >= min_channels and r["label"].nunique() >= min_channels:
             yield "roi", name, "homologous", d, r
+    # with the null drawn crossed, every ordered region pair as the crossed ROI matrix groups it
+    if all_pairings:
+        for a, chans_a in (roi_map or {}).items():
+            for b, chans_b in (roi_map or {}).items():
+                d = draws[draws["label"].isin(chans_a) & draws["label2"].isin(chans_b)]
+                r = real[real["label"].isin(chans_a) & real["label2"].isin(chans_b)]
+                # each member's side needs its own channels, not just enough pairings
+                sides = (d["label"], d["label2"], r["label"], r["label2"])
+                if min(s.nunique() for s in sides) >= min_channels:
+                    yield "roi", f"{a}>{b}", "all", d, r
     # one test per channel pairing, pooled over occasions
     for label in sorted(hom_d["label"].unique()):
         d = hom_d[hom_d["label"] == label]

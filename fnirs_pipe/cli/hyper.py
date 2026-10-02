@@ -887,8 +887,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                             help="Region to channel map, the same file the other stages "
                                  "take. Given it, each region is reported as its own level "
                                  "beside the whole-brain mean: the region's homologous "
-                                 "pairings averaged. Omitted, only the whole-brain levels "
-                                 "are written.")
+                                 "pairings averaged. When the null was drawn crossed, every "
+                                 "ordered region pair is a level too (region A of the first "
+                                 "member against region B of the second, every pairing "
+                                 "between them averaged), as one family per condition. "
+                                 "Omitted, only the whole-brain levels are written.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
                                  "picks one stand-in per occasion, so the finest p it can "
