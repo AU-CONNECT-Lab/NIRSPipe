@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
@@ -1320,7 +1321,7 @@ def build_evoked_topo_figure(
     if not hbo_entries:
         return None
 
-    pairs = [ch.rsplit(" ", 1)[0] for _, ch in hbo_entries]
+    pairs = [pair_of(ch) for _, ch in hbo_entries]
     n = len(pairs)
 
     locs = np.array([raw_haemo.info["chs"][i]["loc"][:2] for i, _ in hbo_entries])

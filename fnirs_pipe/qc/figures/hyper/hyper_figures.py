@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
@@ -1035,7 +1036,7 @@ def build_signal_overlay(
     if not len(hbo_picks):
         return None
 
-    ch_pairs = [ref_raw.ch_names[p].rsplit(" ", 1)[0] for p in hbo_picks]
+    ch_pairs = [pair_of(ref_raw.ch_names[p]) for p in hbo_picks]
 
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
@@ -1222,7 +1223,7 @@ def build_channel_summary(
     ch_set: set[str] = set()
     for sid in subject_ids:
         for k in sci_of(sqm_data, sid):
-            ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
+            ch_set.add(pair_of(k))
 
     if not ch_set:
         return None

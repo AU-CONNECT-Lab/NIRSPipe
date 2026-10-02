@@ -12,7 +12,6 @@ does not carry is asking for a metric that was never stored.
 from __future__ import annotations
 
 import csv
-import re
 from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -20,7 +19,7 @@ from typing import Any
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from fnirs_pipe.utils import roi_overlaps
+from fnirs_pipe.utils import pair_of, roi_overlaps
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
@@ -35,18 +34,6 @@ _PER_CHANNEL_KEYS = (
 # the split values win over the whole-file ones. It mirrors the scalar merge in the subject
 # report's SQM section; a raw-only record simply carries none of the later ones.
 _LONG_MERGE_SECTIONS = ("motion", "preproc", "preproc_long", "censor")
-
-
-def _pair_of(ch: str) -> str:
-    """Channel name without its wavelength or chromophore suffix.
-
-    "S1_D1 760" -> "S1_D1",  "S1_D1 hbo" -> "S1_D1"
-
-    Raw intensity names its channels by wavelength and haemoglobin names them by
-    chromophore, so a metric stored under one naming is looked up from the other only
-    through here.
-    """
-    return re.sub(r"\s+(\d+|hbo|hbr)$", "", ch, flags=re.IGNORECASE)
 
 
 def _long_per_channel(record: dict) -> dict:
@@ -133,7 +120,7 @@ def channel_rows(
             "snr":        value_of("snr_per_channel"),
             "cv":         value_of("cv_per_channel"),
             "spike":      value_of("spike_pct_per_channel"),
-            "corr":       corr_pc.get(_pair_of(ch)),
+            "corr":       corr_pc.get(pair_of(ch)),
             "is_bad":     ch in bad,
             "separation": sep,
         }
@@ -156,7 +143,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
     """
     by_pair: dict[str, list[dict]] = {}
     for row in rows:
-        by_pair.setdefault(_pair_of(row["name"]), []).append(row)
+        by_pair.setdefault(pair_of(row["name"]), []).append(row)
 
     def _first(group: list[dict], key: str):
         for row in group:

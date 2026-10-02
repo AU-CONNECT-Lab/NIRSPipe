@@ -27,7 +27,7 @@ from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.utils import is_optical_density, pair_of
 from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
@@ -76,8 +76,8 @@ def _expand_bad_pairs(raw: mne.io.Raw, labels: list[str]) -> list[str]:
     760/850 ratio either. Beer-Lambert then renames the marks to "S1_D1 hbo" / "S1_D1 hbr",
     which is what keeps a manual rejection from surviving into only one chromophore.
     """
-    wanted = {lbl.rsplit(" ", 1)[0] for lbl in labels}
-    return [ch for ch in raw.ch_names if ch.rsplit(" ", 1)[0] in wanted]
+    wanted = {pair_of(lbl) for lbl in labels}
+    return [ch for ch in raw.ch_names if pair_of(ch) in wanted]
 
 
 def mark_bad_channels(

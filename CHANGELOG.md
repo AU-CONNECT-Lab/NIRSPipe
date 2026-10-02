@@ -33,6 +33,7 @@ All notable changes to this project will be documented in this file.
 - Sidecar reads, post-stage sidecars, subject folder listing, repeated CLI flags, rating files and the GUI run status each have one implementation
 - A SNIRF's sidecar is read as UTF-8 on every platform
 - QC metrics and figures that accept intensity or optical density convert through one `as_optical_density`
+- A channel's source-detector pair is read through one `pair_of`, replacing about 45 inline splits and four local helpers
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone

@@ -693,3 +693,10 @@ def test_as_optical_density_converts_intensity_and_passes_od_through():
     assert od is not raw and set(od.get_channel_types()) == {"fnirs_od"}
     np.testing.assert_array_equal(raw.get_data(), before)
     assert as_optical_density(od) is od
+
+
+def test_pair_of_drops_the_wavelength_or_chromophore_and_keeps_a_bare_pair():
+    from fnirs_pipe.utils import pair_of
+
+    assert [pair_of(n) for n in ("S1_D1 760", "S12_D3 hbo", "S1_D1 hbr", "S1_D1")] == \
+        ["S1_D1", "S12_D3", "S1_D1", "S1_D1"]

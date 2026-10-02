@@ -15,6 +15,7 @@ import mne
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.io.derivatives import group_output_path, read_json
 from fnirs_pipe.pipeline.hyper.group_io import (
@@ -101,7 +102,7 @@ def apply_group_bads(
       ->  raw.info["bads"] == ["S6_D5 hbo", "S6_D5 hbr"]
     """
     for subject_id, raw in raws.items():
-        labels = {ch.rsplit(" ", 1)[0]
+        labels = {pair_of(ch)
                   for ch in (sqm_by_subject.get(subject_id, {}).get("bad_channels") or [])}
         if not labels:
             continue
@@ -167,7 +168,7 @@ def compute_group_sqm_raw(
 
         sci_scores: dict[str, float] = {}
         for ch, val in sci_cw.items():
-            pair = ch.rsplit(" ", 1)[0]
+            pair = pair_of(ch)
             sci_scores[f"{pair} hbo"] = val
             sci_scores[pair] = val
 
@@ -544,7 +545,7 @@ def _pairwise(per_wavelength: dict) -> dict[str, float]:
     """
     by_pair: dict[str, list[float]] = {}
     for ch, value in per_wavelength.items():
-        by_pair.setdefault(str(ch).rsplit(" ", 1)[0], []).append(float(value))
+        by_pair.setdefault(pair_of(ch), []).append(float(value))
     out: dict[str, float] = {}
     for pair, values in by_pair.items():
         out[pair] = out[f"{pair} hbo"] = sum(values) / len(values)

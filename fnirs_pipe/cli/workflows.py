@@ -24,7 +24,7 @@ from fnirs_pipe.io.derivatives import entity_of, write_bidsignore, write_dataset
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.utils import unwrap_enum as _v
+from fnirs_pipe.utils import pair_of, unwrap_enum as _v
 from fnirs_pipe.utils import job_db as _jdb
 from fnirs_pipe.utils.logging import get_logger, setup_logging, thread_log_file
 from fnirs_pipe.utils.run_record import write_run_record
@@ -578,8 +578,8 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         last_result.raw_haemo.info["chs"][i]["loc"][:3] for i in hbo_picks
     ])
     hbo_names = [last_result.raw_haemo.ch_names[i] for i in hbo_picks]
-    bad_bases = {bc.rsplit(" ", 1)[0] for bc in last_result.bad_channels}
-    good_mask = np.array([n.rsplit(" ", 1)[0] not in bad_bases for n in hbo_names])
+    bad_bases = {pair_of(bc) for bc in last_result.bad_channels}
+    good_mask = np.array([pair_of(n) not in bad_bases for n in hbo_names])
 
     bad_annots: dict = {}
     for annot in last_raw.annotations:

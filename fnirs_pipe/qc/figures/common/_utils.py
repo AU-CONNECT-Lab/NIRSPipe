@@ -4,6 +4,7 @@ import numpy as np
 import mne
 import plotly.graph_objects as go
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.utils")
@@ -338,7 +339,7 @@ def _optode_positions(chs, ch_names) -> tuple[dict, dict, list[tuple[str, str]]]
     pairs: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for ch, name in zip(chs, ch_names):
-        pair = name.split(" ")[0]
+        pair = pair_of(name)
         if "_" not in pair:
             continue
         s_name, d_name = pair.split("_")[:2]

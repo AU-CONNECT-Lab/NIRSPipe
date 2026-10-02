@@ -52,6 +52,7 @@ Report sections
 import base64
 import json
 from contextlib import contextmanager
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
@@ -380,7 +381,7 @@ def _section_channel_detail(
     # the selector mixed the two separations under names that do not say which is which, so
     # picking a short pair showed scalp haemodynamics with nothing on the page saying so
     _, short_names = long_short_channels(raw_haemo, sep_bands)
-    short_pairs = {n.split(" ")[0] for n in short_names}
+    short_pairs = {pair_of(n) for n in short_names}
     saved = []
     for pair in pairs:
         with _guard(f"Channel detail {pair}", errors, subject):
@@ -1409,8 +1410,8 @@ def _good_mask_for(
     names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
     if not names:
         return fallback
-    bad_bases = {str(ch).rsplit(" ", 1)[0] for ch in bad_channels}
-    return np.array([n.rsplit(" ", 1)[0] not in bad_bases for n in names])
+    bad_bases = {pair_of(ch) for ch in bad_channels}
+    return np.array([pair_of(n) not in bad_bases for n in names])
 
 
 def _section_brain(

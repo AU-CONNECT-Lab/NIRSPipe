@@ -20,6 +20,14 @@ def is_optical_density(raw: Any) -> bool:
     return "fnirs_od" in types and "fnirs_cw_amplitude" not in types
 
 
+def pair_of(ch: Any) -> str:
+    """A channel's source-detector pair: its name without the wavelength or chromophore.
+
+    "S1_D1 760" -> "S1_D1",  "S1_D1 hbo" -> "S1_D1",  "S1_D1" -> "S1_D1"
+    """
+    return str(ch).rsplit(" ", 1)[0]
+
+
 def fisher_r_to_z(r: Any) -> np.ndarray:
     """Fisher r-to-z, elementwise; r is clipped below +/-1 and a non-finite r gives NaN.
 

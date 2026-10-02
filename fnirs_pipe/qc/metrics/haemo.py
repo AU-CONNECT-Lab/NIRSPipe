@@ -11,6 +11,7 @@ from typing import Any
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.metrics._helpers import (
     _mean_or_none, _safe_metrics, epochable_events,
 )
@@ -114,8 +115,8 @@ def haemo_quality_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
     hbr_names = [raw_haemo.ch_names[i] for i in hbr_picks]
 
     # key on the source-detector pair (drop the chromophore token) to pair HbO with its HbR
-    hbo_map = {n.rsplit(" ", 1)[0]: hbo_data[i] for i, n in enumerate(hbo_names)}
-    hbr_map = {n.rsplit(" ", 1)[0]: hbr_data[i] for i, n in enumerate(hbr_names)}
+    hbo_map = {pair_of(n): hbo_data[i] for i, n in enumerate(hbo_names)}
+    hbr_map = {pair_of(n): hbr_data[i] for i, n in enumerate(hbr_names)}
     corr_per_ch = {
         key: float(np.corrcoef(hbo_map[key], hbr_map[key])[0, 1])
         for key in hbo_map if key in hbr_map

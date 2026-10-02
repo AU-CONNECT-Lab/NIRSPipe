@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
@@ -140,9 +141,9 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
     """
     for subject_id, raw in aligned_raws.items():
         sqm = group_sqm.get(subject_id, {})
-        pairs = {ch.rsplit(" ", 1)[0] for ch in raw.ch_names
+        pairs = {pair_of(ch) for ch in raw.ch_names
                  if ch.endswith(" hbo") or ch.endswith(" hbr")}
-        bad = {ch.rsplit(" ", 1)[0] for ch in raw.info["bads"]}
+        bad = {pair_of(ch) for ch in raw.info["bads"]}
         kept = len(long_channel_picks(raw, "hbo", sep_bands=sep_bands))  # bads already dropped
 
         scores = [v for v in (sqm.get("sci_per_channel") or {}).values()

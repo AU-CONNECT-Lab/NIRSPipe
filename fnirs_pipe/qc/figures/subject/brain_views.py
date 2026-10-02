@@ -16,6 +16,7 @@ import mne
 import numpy as np
 from PIL import Image as _PILImage
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common._brain_utils import (
@@ -72,7 +73,7 @@ def _link_color(sci: float | None, good: bool | None, threshold: float = SCI_PAS
 
 def _lookup_sci(sci_scores: dict, name: str) -> float | None:
     """SCI for a channel, trying the chromophore-suffixed names of its base."""
-    base = name.split(" ")[0]
+    base = pair_of(name)
     for key in (name, base + " hbo", base + " hbr"):
         v = sci_scores.get(key)
         if v is not None:
@@ -109,7 +110,7 @@ def _collect_pairs(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict) -> tup
         sci = _lookup_sci(sci_scores, name)
         if sci is not None:
             scis.setdefault(pair_id, []).append(sci)
-        good = good_by_base.get(name.split(" ")[0])
+        good = good_by_base.get(pair_of(name))
         if good is not None:
             goods[pair_id] = goods.get(pair_id, True) and good
 
@@ -215,7 +216,7 @@ def quality_brain_views(
 
     A failed render raises, so the report lists it rather than leaving the panel blank.
     """
-    good_by_base = {n.split(" ")[0]: bool(g) for n, g in zip(ch_names, good_mask)}
+    good_by_base = {pair_of(n): bool(g) for n, g in zip(ch_names, good_mask)}
     data_meshes: list = []
     if raw is not None:
         try:

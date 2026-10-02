@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from fnirs_pipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
@@ -44,8 +45,8 @@ def _roi_order(names: list[str], roi_map: "dict | None"):
     for label, chans in roi_map.items():
         for ch in chans:
             ch_to_roi[ch] = label
-            ch_to_roi.setdefault(ch.rsplit(" ", 1)[0], label)
-    labels = [str(ch_to_roi.get(c, ch_to_roi.get(c.rsplit(" ", 1)[0], "unassigned")))
+            ch_to_roi.setdefault(pair_of(ch), label)
+    labels = [str(ch_to_roi.get(c, ch_to_roi.get(pair_of(c), "unassigned")))
               for c in names]
     ordered = sorted(set(labels))
     if "unassigned" in ordered:  # keep it last rather than wherever it sorts

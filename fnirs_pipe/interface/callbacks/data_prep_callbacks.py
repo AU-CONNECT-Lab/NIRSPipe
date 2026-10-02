@@ -13,6 +13,7 @@ import dash_bootstrap_components as dbc
 import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
 from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
@@ -48,11 +49,6 @@ def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
 
 # bump whenever a cached figure's builder changes, or the disk cache keeps serving the old one
 _CACHE_VERSION = 9
-
-
-def _pair_name(ch_name: str) -> str:
-    """Strip a channel's chromophore or wavelength suffix: 'S1_D1 760' -> 'S1_D1'."""
-    return ch_name.rsplit(" ", 1)[0] if " " in ch_name else ch_name
 
 
 def _make_cache_key(snirf_path: str, sci_thresh: float, cardiac_l: float, cardiac_h: float,
@@ -399,7 +395,7 @@ def on_ts_click(click_data, store):
     if curve_num >= len(trace_names):
         return no_update
     trace_name = trace_names[curve_num]
-    pair = _pair_name(trace_name)
+    pair = pair_of(trace_name)
     print(f"[DEBUG on_ts_click] pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update
 
@@ -424,7 +420,7 @@ def highlight_ts_from_selector(channel_pair, store):
     patched = Patch()
     for i, name in enumerate(trace_names):
         patched["data"][i]["opacity"] = 1.0 if (
-            not channel_pair or _pair_name(name) == channel_pair
+            not channel_pair or pair_of(name) == channel_pair
         ) else 0.05
     return patched
 
@@ -456,7 +452,7 @@ def highlight_optode_3d(channel_pair, store):
 
         # this figure is built on the CW object, so its channels are 'S1_D1 760', not ' hbo'
         idx = next((i for i, ch in enumerate(customdata)
-                    if _pair_name(ch) == channel_pair), None) if channel_pair else None
+                    if pair_of(ch) == channel_pair), None) if channel_pair else None
         if idx is None:
             hx, hy, hz = [], [], []
         else:
@@ -889,9 +885,9 @@ def highlight_optode_2d(channel_pair, store):
             return no_update
 
         sel       = channel_pair or ""
-        sizes     = [15 if _pair_name(ch) == sel else 10  for ch in customdata]
-        opacities = [1.0 if _pair_name(ch) == sel else 0.55 for ch in customdata]
-        lw        = [2.0 if _pair_name(ch) == sel else 0.8  for ch in customdata]
+        sizes     = [15 if pair_of(ch) == sel else 10  for ch in customdata]
+        opacities = [1.0 if pair_of(ch) == sel else 0.55 for ch in customdata]
+        lw        = [2.0 if pair_of(ch) == sel else 0.8  for ch in customdata]
 
         patched = Patch()
         patched["data"][1]["marker"]["size"]          = sizes
@@ -920,7 +916,7 @@ def on_layout_2d_click(click_data, store):
     if not points:
         return no_update
     ch_name = points[0].get("customdata", "")
-    pair    = _pair_name(ch_name)
+    pair    = pair_of(ch_name)
     print(f"[DEBUG on_layout_2d_click] ch_name={ch_name!r}, pair={pair!r}, valid={pair in valid_pairs}")
     return pair if pair in valid_pairs else no_update
 

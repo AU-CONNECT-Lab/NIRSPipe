@@ -9,6 +9,7 @@ import hashlib
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
 from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
@@ -342,7 +343,7 @@ def _compute_sci_from_cw(raws: dict, subject_ids: list, cardiac_l_freq, cardiac_
                 raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
             pair_sci: dict = {}
             for i, ch in enumerate(raw.ch_names):
-                pair = ch.rsplit(" ", 1)[0] if " " in ch else ch
+                pair = pair_of(ch)
                 pair_sci.setdefault(pair, []).append(float(sci_arr[i]))
             sci_by_sid[sid] = {p: round(sum(v) / len(v), 3) for p, v in pair_sci.items()}
         except Exception:
@@ -408,7 +409,7 @@ def _ha_ch_pairs_from_haemo(aligned_raws: dict, subject_ids: list) -> list:
     if ref:
         for pick in mne.pick_types(ref.info, fnirs="hbo"):
             ch = ref.ch_names[pick]
-            pair = ch.rsplit(" ", 1)[0] if " " in ch else ch
+            pair = pair_of(ch)
             if pair not in ch_pairs:
                 ch_pairs.append(pair)
     return ch_pairs

@@ -21,6 +21,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
@@ -39,11 +40,6 @@ _MEAN_LINE_COLOR = "#555555"
 
 # an unsigned magnitude, so one hue ramped rather than a diverging pair
 _ALFF_SCALE = "Viridis"
-
-
-def _pair_of(ch: str) -> str:
-    """"S1_D1 hbo" -> "S1_D1"; the head draws pairs, the frames are keyed by channel."""
-    return ch.split(" ")[0]
 
 
 # The blocks a rest panel's channels are laid out in, and what each is called. Same split and
@@ -70,8 +66,8 @@ def _pair_blocks(pairs, raw, sep_bands):
     if raw is not None:
         from fnirs_pipe.qc.metrics import long_short_channels
         long_names, short_names = long_short_channels(raw, sep_bands)
-        of = {_pair_of(c): "long" for c in long_names}
-        of.update({_pair_of(c): "short" for c in short_names})
+        of = {pair_of(c): "long" for c in long_names}
+        of.update({pair_of(c): "short" for c in short_names})
         for p in pairs:
             groups.setdefault(of.get(p, "mid"), []).append(p)
         blocks = [(key, label) for key, label in _SEP_BLOCKS if groups.get(key)]
@@ -205,7 +201,7 @@ def rest_channel_panel(
     if not frames:
         return None
 
-    pairs = sorted({_pair_of(str(c)) for f in frames.values() for c in f.columns})
+    pairs = sorted({pair_of(c) for f in frames.values() for c in f.columns})
     order, xs, spans = _pair_blocks(pairs, raw, sep_bands)
     if not order:
         return None
@@ -330,7 +326,7 @@ def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":
     from fnirs_pipe.qc.metrics import long_short_channels
 
     long_names, _ = long_short_channels(raw, sep_bands)
-    pairs = sorted({_pair_of(ch) for ch in (long_names or raw.ch_names)})
+    pairs = sorted({pair_of(ch) for ch in (long_names or raw.ch_names)})
     geo = head_geometry(raw, pairs)
     if geo is None or "long" not in geo:
         return None
@@ -401,7 +397,7 @@ def fc_seed_topo_figure(
         return None
 
     rois = list(dict.fromkeys([r for frame, _ in panels for r in frame.index]))
-    dim = {_pair_of(ch) for ch in raw.info["bads"]}
+    dim = {pair_of(ch) for ch in raw.info["bads"]}
     n_rows, n_cols = len(rois), len(panels)
     titles = [f"{roi} - {lab}" for roi in rois for _, lab in panels]
     fig = _head_grid(n_rows, n_cols, titles, geo)
@@ -492,7 +488,7 @@ def alff_topo_figure(
     rows = _alff_rows(alff_df)
     if not cols or not rows:
         return None
-    dim = {_pair_of(ch) for ch in raw.info["bads"]}
+    dim = {pair_of(ch) for ch in raw.info["bads"]}
     blank = [n in dim for n in geo["long"]["names"]]
 
     def column(measure: str, chromo: str) -> np.ndarray:

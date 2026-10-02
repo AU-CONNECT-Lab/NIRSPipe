@@ -11,6 +11,7 @@ from pathlib import Path
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir, subject_nirs_dirs,
 )
@@ -1277,7 +1278,7 @@ def build_hyper_post_report(
     bad_pairs_all: set[str] = set()
     if bad_channels:
         for chs in bad_channels.values():
-            bad_pairs_all |= {c.rsplit(" ", 1)[0] for c in chs}
+            bad_pairs_all |= {pair_of(c) for c in chs}
 
     # A condition keeps the run's task- entity and takes a cond- of its own,
     # `..._task-experiment_cond-baseline_report.html`, which is the rule the subject

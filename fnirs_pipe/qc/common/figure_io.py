@@ -17,6 +17,7 @@ from pathlib import Path
 
 import mne
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.io.naming import figure_name
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
@@ -290,7 +291,7 @@ def get_channel_pairs(raw: mne.io.Raw) -> list[str]:
     seen: set[str] = set()
     pairs: list[str] = []
     for i in picks:
-        pair = raw.ch_names[i].rsplit(" ", 1)[0]
+        pair = pair_of(raw.ch_names[i])
         if pair not in seen:
             seen.add(pair)
             pairs.append(pair)

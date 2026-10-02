@@ -10,6 +10,7 @@ import mne
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.hyper")
@@ -47,7 +48,7 @@ def _rejected_pairs(sqm_data: dict, sid: str) -> "set[str] | None":
     bad = sqm_data.get(sid, {}).get("bad_channels")
     if bad is None:
         return None
-    return {str(ch).rsplit(" ", 1)[0] for ch in bad}
+    return {pair_of(ch) for ch in bad}
 
 
 def _ch_kept_by_member(
@@ -148,14 +149,14 @@ def coupled_grid(
     for sid in subject_ids:
         member = sqm_data.get(sid) or {}
         order = list((member.get("screen_windows") or {}).get("channel_order") or [])
-        long_names = {k.rsplit(" ", 1)[0]
+        long_names = {pair_of(k)
                       for k in (member.get("per_channel_long") or {})
                       .get("sci_per_channel", {})}
         if not order:
             return None
         by_pair: dict[str, list[int]] = {}
         for i, name in enumerate(order):
-            by_pair.setdefault(name.rsplit(" ", 1)[0], []).append(i)
+            by_pair.setdefault(pair_of(name), []).append(i)
         if not pairs:
             pairs = list(by_pair)
             long_pairs = [p for p in pairs if p in long_names] or list(pairs)
@@ -198,7 +199,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
     if not order or sw.get("centers") is None:
         return {}
     long_pairs = set(grid.get("long_pairs") or grid["pairs"])
-    rows = [i for i, name in enumerate(order) if name.rsplit(" ", 1)[0] in long_pairs]
+    rows = [i for i, name in enumerate(order) if pair_of(name) in long_pairs]
     t = np.asarray(sw["centers"], dtype=float) - float(offset)
     keep = np.isin(np.round(t, 2), np.round(np.asarray(grid["t"], dtype=float), 2))
     out = {"t": t[keep]}
@@ -215,7 +216,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
         sci_m = np.asarray(sci_m, dtype=float)[:, keep]
         by_pair: dict[str, list[int]] = {}
         for i, name in enumerate(order):
-            by_pair.setdefault(name.rsplit(" ", 1)[0], []).append(i)
+            by_pair.setdefault(pair_of(name), []).append(i)
         # a pair is one SCI, stored once per wavelength; the mean over its rows is that
         # number and not an average of two different ones
         out["per_pair_sci"] = {pair: sci_m[idx].mean(axis=0)
@@ -303,7 +304,7 @@ def compute_hyper_sqm(
     ch_set: set[str] = set()
     for sid in subject_ids:
         for k in sci_of(sqm_data, sid):
-            ch_set.add(k.rsplit(" ", 1)[0] if " " in k else k)
+            ch_set.add(pair_of(k))
 
     n_all_good = n_mixed = n_all_bad = n_unknown = 0
     for ch in ch_set:

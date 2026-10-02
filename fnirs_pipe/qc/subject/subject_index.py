@@ -23,6 +23,7 @@ import json
 import statistics
 from pathlib import Path
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
@@ -244,7 +245,7 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
         bad: set[str] = set()
         with path.open(encoding="utf-8", newline="") as fh:
             for entry in csv.DictReader(fh, delimiter="	"):
-                pair = (entry.get("name") or "").rsplit(" ", 1)[0]
+                pair = pair_of(entry.get("name") or "")
                 if not pair:
                     continue
                 if pair not in order:

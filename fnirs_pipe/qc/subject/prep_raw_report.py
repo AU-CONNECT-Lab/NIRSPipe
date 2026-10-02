@@ -8,6 +8,7 @@ from pathlib import Path
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
 from fnirs_pipe.io.naming import report_name
@@ -524,7 +525,7 @@ def _process_run(
                     raw_haemo, ch, view_windows, fig_tmin, fig_tmax)
                 if not by_label:
                     continue
-                pair = ch.rsplit(" ", 1)[0]
+                pair = pair_of(ch)
                 fname = fig_name("trialimage", channel=_pair_fname(pair))
                 figs = [f for figs in by_label.values() for f in figs]
                 h = _save_multi_fig_html(figs, fig_dir / fname)

@@ -21,7 +21,7 @@ from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.pipeline.hyper.whiten import _yule_walker, autocov
-from fnirs_pipe.utils import fisher_r_to_z
+from fnirs_pipe.utils import fisher_r_to_z, pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -168,7 +168,7 @@ def _isc_rows(
 
     def _by_label(raw: mne.io.Raw) -> dict[str, int]:
         """{label: index} over what this member kept, bads dropped: what gets correlated."""
-        return {raw.ch_names[p].rsplit(" ", 1)[0]: p
+        return {pair_of(raw.ch_names[p]): p
                 for p in long_channel_picks(raw, ch_type, sep_bands=sep_bands)}
 
     # the axis is the montage, the maps are what survived: one shape, blanks where a channel

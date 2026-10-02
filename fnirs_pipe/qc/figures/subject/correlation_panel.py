@@ -23,6 +23,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
@@ -60,10 +61,6 @@ _DUMBBELL_PX = 300
 _V_SPACING_PX = 130
 
 
-def _pair_key(ch_name: str) -> str:
-    return ch_name.rsplit(" ", 1)[0]
-
-
 def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
     """Map each S-D pair to ``long`` / ``mid`` / ``short``.
 
@@ -75,9 +72,9 @@ def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
     from fnirs_pipe.qc.metrics import long_short_channels
 
     long_names, short_names = long_short_channels(raw_haemo, sep_bands)
-    groups = {_pair_key(n): "mid" for n in raw_haemo.ch_names}
-    groups.update({_pair_key(n): "long" for n in long_names})
-    groups.update({_pair_key(n): "short" for n in short_names})
+    groups = {pair_of(n): "mid" for n in raw_haemo.ch_names}
+    groups.update({pair_of(n): "long" for n in long_names})
+    groups.update({pair_of(n): "short" for n in short_names})
     return groups
 
 
@@ -90,8 +87,8 @@ def _channel_order(raw_haemo: mne.io.Raw, groups: "dict[str, str]") -> "list[str
     rank = {g: i for i, g in enumerate(_GROUP_ORDER)}
     names = [n for n in raw_haemo.ch_names if n.endswith(("hbo", "hbr"))]
     return sorted(names, key=lambda n: (n.endswith("hbr"),
-                                        rank.get(groups.get(_pair_key(n), "mid"), 9),
-                                        _pair_key(n)))
+                                        rank.get(groups.get(pair_of(n), "mid"), 9),
+                                        pair_of(n)))
 
 
 def _stage(raw: mne.io.Raw, order: "list[str]"):
@@ -116,7 +113,7 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
     by_name = dict(zip(order, data))
     pair_r = {}
     for name in order:
-        k = _pair_key(name)
+        k = pair_of(name)
         hbo, hbr = f"{k} hbo", f"{k} hbr"
         if k not in pair_r and hbo in by_name and hbr in by_name:
             pair_r[k] = float(np.corrcoef(by_name[hbo], by_name[hbr])[0, 1])
@@ -154,7 +151,7 @@ def _add_dividers(fig, groups, order, n_hbo, col):
     _divider(n_hbo - 0.5, "#888", "dash", 0.8)
     # separation boundaries inside each chromophore block, lighter than the HbO/HbR one
     for offset, names in ((0, order[:n_hbo]), (n_hbo, order[n_hbo:])):
-        seen = [groups.get(_pair_key(n), "mid") for n in names]
+        seen = [groups.get(pair_of(n), "mid") for n in names]
         for i in range(1, len(seen)):
             if seen[i] != seen[i - 1]:
                 _divider(offset + i - 0.5, "#ccc", "dot", 0.7)

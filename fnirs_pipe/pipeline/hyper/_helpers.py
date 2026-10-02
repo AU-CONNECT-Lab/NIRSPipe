@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import mne
 import numpy as np
 
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.io.snirf import long_channel_picks
 
 
@@ -47,7 +48,7 @@ def _long_by_label(
             f"no usable long {ch_type.upper()} channel: every one is either short-distance "
             "or marked bad"
         )
-    return {raw.ch_names[p].rsplit(" ", 1)[0]: p for p in picks}
+    return {pair_of(raw.ch_names[p]): p for p in picks}
 
 
 def _long_signals(
@@ -84,7 +85,7 @@ def long_axis_over(
     axis: list[str] = []
     for raw in raws:
         for p in long_channel_picks(raw, ch_type, exclude=[], sep_bands=sep_bands):
-            label = raw.ch_names[p].rsplit(" ", 1)[0]
+            label = pair_of(raw.ch_names[p])
             if label not in axis:
                 axis.append(label)
     return axis
