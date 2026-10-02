@@ -118,7 +118,8 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         else:
             all_pairings = True
             yield "whole", "whole", "all", draws, real
-    for name, channels in bare_roi_map(roi_map or {}).items():
+    roi_map = bare_roi_map(roi_map or {})
+    for name, channels in roi_map.items():
         d = hom_d[hom_d["label"].isin(channels)]
         r = hom_r[hom_r["label"].isin(channels)]
         # a thinly covered region is not a region
@@ -126,8 +127,8 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
             yield "roi", name, "homologous", d, r
     # with the null drawn crossed, every ordered region pair as the crossed ROI matrix groups it
     if all_pairings:
-        for a, chans_a in (roi_map or {}).items():
-            for b, chans_b in (roi_map or {}).items():
+        for a, chans_a in roi_map.items():
+            for b, chans_b in roi_map.items():
                 d = draws[draws["label"].isin(chans_a) & draws["label2"].isin(chans_b)]
                 r = real[real["label"].isin(chans_a) & real["label2"].isin(chans_b)]
                 # each member's side needs its own channels, not just enough pairings

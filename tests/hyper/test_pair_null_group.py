@@ -549,3 +549,11 @@ def test_the_written_cohort_table_carries_the_corrections(tmp_path):
     # the sidecar has to name the family, the count being uninterpretable without it
     side = json.loads(Path(str(written[1]).replace(".tsv", ".json")).read_text())
     assert "cohort_correction_family" in side["parameters"]
+
+
+def test_a_suffixed_region_map_gives_the_same_levels_as_a_bare_one():
+    """Called straight, not through the CLI's loader: " hbo" on an entry must not hide its pair."""
+    suffixed = {roi: [f"{ch} hbo" for ch in chans] for roi, chans in ROI.items()}
+    draws, real = _full_cross(_draws()), _full_cross(_real(0.4))
+    levels = lambda m: [(g, lv, pr) for g, lv, pr, _, _ in _variants(draws, real, m)]
+    assert levels(suffixed) == levels(ROI)
