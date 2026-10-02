@@ -55,6 +55,34 @@ def _serve_forever(app, port: int, log_name: str, ready_delay: float = 1.0, on_r
         logger.info("shutting down")
 
 
+def _read_rating_file(path: Path) -> dict:
+    """A page's saved ratings and notes, or empty ones when it was never rated or is unreadable."""
+    if not path.exists():
+        return {"ratings": {}, "notes": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
+    except Exception:
+        return {"ratings": {}, "notes": {}}
+
+
+def _write_rating_file(path: Path, stem: str, ratings: dict, notes: dict) -> None:
+    record = {"stem": stem, "rated_at": _utc_now_iso(), "ratings": ratings, "notes": notes}
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _serve_viewer(app, port: "int | None", default_port: int, label: str, log_name: str) -> None:
+    """Serve one viewer and open it in the browser once it answers."""
+    served = resolve_port(port or default_port, explicit=port is not None)
+
+    def _on_ready():
+        url = f"http://localhost:{served}/"
+        logger.info("%s -> %s", label, url)
+        webbrowser.open(url)
+
+    _serve_forever(app, served, log_name, on_ready=_on_ready)
+
+
 class FNIRSRatingApp:
     def __init__(self, output_dir: Path, subjects: list[str]):
         self.output_dir = output_dir
@@ -200,14 +228,7 @@ class RawRatingApp:
         return rating_path(self.output_dir, stem)
 
     def _load_ratings(self, stem: "str | None" = None) -> dict:
-        path = self._ratings_path(stem) if stem else self.ratings_path
-        if not path.exists():
-            return {"ratings": {}, "notes": {}}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
-        except Exception:
-            return {"ratings": {}, "notes": {}}
+        return _read_rating_file(self._ratings_path(stem) if stem else self.ratings_path)
 
     def _append_jsonl(self, stem: str, ratings: dict, notes: dict) -> None:
         """One line per save, so a tree's raw ratings can be read without walking it.
@@ -279,15 +300,7 @@ class RawRatingApp:
         stem = data.get("id") or self.stem
         try:
             ratings, notes = data.get("ratings", {}), data.get("notes", {})
-            record = {
-                "stem":     stem,
-                "rated_at": _utc_now_iso(),
-                "ratings":  ratings,
-                "notes":    notes,
-            }
-            self._ratings_path(stem).write_text(
-                json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            _write_rating_file(self._ratings_path(stem), stem, ratings, notes)
             self._append_jsonl(stem, ratings, notes)
             return jsonify({"status": "success"})
         except Exception as exc:
@@ -308,14 +321,7 @@ class RawRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int | None = None) -> None:
-        served = resolve_port(port or RAW_PORT, explicit=port is not None)
-
-        def _on_ready():
-            url = f"http://localhost:{served}/"
-            logger.info("raw viewer -> %s", url)
-            webbrowser.open(url)
-
-        _serve_forever(self.app, served, "fnirs-rate raw", on_ready=_on_ready)
+        _serve_viewer(self.app, port, RAW_PORT, "raw viewer", "fnirs-rate raw")
 
 
 class HyperRatingApp:
@@ -353,14 +359,7 @@ class HyperRatingApp:
         return rating_path(self.output_dir, stem)
 
     def _load_ratings(self, stem: "str | None" = None) -> dict:
-        path = self._ratings_path(stem) if stem else self.ratings_path
-        if not path.exists():
-            return {"ratings": {}, "notes": {}}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            return {"ratings": data.get("ratings", {}), "notes": data.get("notes", {})}
-        except Exception:
-            return {"ratings": {}, "notes": {}}
+        return _read_rating_file(self._ratings_path(stem) if stem else self.ratings_path)
 
     def _decisions_path(self, sid: str) -> Path:
         return channel_decisions_path(self.decisions_dir, sid,
@@ -424,15 +423,8 @@ class HyperRatingApp:
         # the page says which report it is; a condition page must not write into the run's
         stem = data.get("id") or self.html_path.stem
         try:
-            record = {
-                "stem":     stem,
-                "rated_at": _utc_now_iso(),
-                "ratings":  data.get("ratings", {}),
-                "notes":    data.get("notes", {}),
-            }
-            self._ratings_path(stem).write_text(
-                json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
+            _write_rating_file(self._ratings_path(stem), stem,
+                               data.get("ratings", {}), data.get("notes", {}))
             return jsonify({"status": "success"})
         except Exception as exc:
             logger.exception("save_hyper_ratings failed")
@@ -468,11 +460,4 @@ class HyperRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int | None = None) -> None:
-        served = resolve_port(port or HYPER_PORT, explicit=port is not None)
-
-        def _on_ready():
-            url = f"http://localhost:{served}/"
-            logger.info("hyper viewer -> %s", url)
-            webbrowser.open(url)
-
-        _serve_forever(self.app, served, "fnirs-rate hyper", on_ready=_on_ready)
+        _serve_viewer(self.app, port, HYPER_PORT, "hyper viewer", "fnirs-rate hyper")

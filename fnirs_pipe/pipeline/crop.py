@@ -14,7 +14,7 @@ import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import (data_state, entity_of, write_dataset_description,
+from fnirs_pipe.io.derivatives import (data_state, entity_of, read_json, write_dataset_description,
                                        write_sidecar_json)
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
@@ -98,10 +98,7 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
     gets no left margin however much was asked for.
     """
     src = source_path.with_suffix(".json")
-    try:
-        parameters = (json.loads(src.read_text(encoding="utf-8")).get("parameters") or {})
-    except (OSError, json.JSONDecodeError):
-        parameters = {}
+    parameters = read_json(src).get("parameters") or {}
     write_sidecar_json(out_snirf, {
         "pipeline_version": __version__,
         "step": "crop",
@@ -128,10 +125,7 @@ def _retitle_recording_sidecar(out_snirf: Path, raw_seg, source_path: Path,
     has to carry that name too. The crop windows go where :func:`_write_crop_sidecar` puts
     them, since that is where a later stage looks to tell a segment from a whole recording.
     """
-    try:
-        side = json.loads(out_snirf.with_suffix(".json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        side = {}
+    side = read_json(out_snirf.with_suffix(".json"))
     side.update(TaskName=entity_of(out_snirf.name, "task"),
                 RecordingDuration=round(float(raw_seg.times[-1]), 3),
                 Sources=[source_path.as_posix()],

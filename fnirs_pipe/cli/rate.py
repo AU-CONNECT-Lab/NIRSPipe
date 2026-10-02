@@ -8,22 +8,16 @@ from pathlib import Path
 
 from fnirs_pipe import __version__
 
+from fnirs_pipe.io.derivatives import subject_labels
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
-
-
-def _discover_subjects(output_dir: Path) -> list[str]:
-    return sorted(
-        d.name[4:] for d in output_dir.iterdir()
-        if d.is_dir() and d.name.startswith("sub-")
-    )
 
 
 def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
     """Launch QC rating interface for fnirs-pipe reports."""
     from fnirs_pipe.qc.rating.app import FNIRSRatingApp
 
-    subjects = participant_label or _discover_subjects(output_dir)
+    subjects = participant_label or subject_labels(output_dir)
     if not subjects:
         print("No subjects found in output directory.", file=sys.stderr)
         raise SystemExit(1)

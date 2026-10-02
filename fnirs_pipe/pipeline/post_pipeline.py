@@ -6,7 +6,6 @@ All steps within a mode are still individually controllable via PostConfig field
 """
 
 from __future__ import annotations
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -32,7 +31,7 @@ from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.io.derivatives import (
-    write_sidecar_json, build_output_path, carry_entities, data_state,
+    read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
 )
 from fnirs_pipe.io.snirf import write_snirf
 
@@ -474,16 +473,6 @@ def run_post(
     # reads `filtered` -> `errts`.
     return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
 
-def _deriv_sidecar(path: Path, step: str, source: str | None, bads: list[str], **params) -> None:
-    write_sidecar_json(path, {
-        "pipeline_version": __version__,
-        "step": step,
-        "Sources": [source] if source else [],
-        "parameters": params,
-        "bad_channels": bads,
-    })
-
-
 def _write_fc_derivatives(
     raw_resid: mne.io.Raw,
     config: PostConfig,
@@ -528,7 +517,7 @@ def _write_fc_derivatives(
         return {**extra, "segmentation": config.roi_map_name}
 
     def _sidecar(path: Path, step: str, **params) -> None:
-        _deriv_sidecar(path, step, src_bp, bads, **params)
+        write_step_sidecar(path, step, src_bp, bads, **params)
 
     fc_hbo_df = fc_hbr_df = None
     fc_roi: dict[str, pd.DataFrame] = {}
@@ -634,7 +623,7 @@ def _write_rest_derivatives(
             entities={**entities, "statistic": "alff"}, suffix="nirsmap", extension=".tsv",
         )
         alff_df.to_csv(alff_path, sep="	", index=False)
-        _deriv_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
+        write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
                        list(raw_resid.info["bads"]),
                        low_pass=config.low_pass, high_pass=config.high_pass)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
@@ -649,7 +638,7 @@ def _write_rest_derivatives(
                     suffix="nirsmap", extension=".tsv",
                 )
                 alff_roi_df.to_csv(alff_roi_path, sep="	", index=False)
-                _deriv_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
+                write_step_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
                                list(raw_resid.info["bads"]),
                                low_pass=config.low_pass, high_pass=config.high_pass,
                                roi_channels={c: _roi_members(raw_resid_bb, config.roi_map, c)
@@ -684,10 +673,7 @@ def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subjec
     sidecar = out_path.with_suffix(".json")
     if not sidecar.exists():
         return
-    try:
-        old = (json.loads(sidecar.read_text(encoding="utf-8")).get("parameters") or {})
-    except (OSError, json.JSONDecodeError):
-        return
+    old = read_json(sidecar).get("parameters") or {}
     changed = {k: (old.get(k), parameters.get(k))
                for k in _ANALYSIS_KEYS if k in old and old.get(k) != parameters.get(k)}
     if not changed:

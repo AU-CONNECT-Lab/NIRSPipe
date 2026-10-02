@@ -3,13 +3,12 @@ snirf file read/write (wraps MNE-NIRS + h5py).
 """
 
 
-import json
 from pathlib import Path
 from typing import Any
 
 import mne
 
-from fnirs_pipe.io.derivatives import entity_of
+from fnirs_pipe.io.derivatives import entity_of, read_json
 from fnirs_pipe.utils.lineage import stamp
 
 
@@ -46,13 +45,7 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
 
 def _sidecar(path: Path) -> dict:
     """The JSON written beside a SNIRF, or {} when it is missing or unreadable."""
-    sidecar = path.with_suffix(".json")
-    if not sidecar.exists():
-        return {}
-    try:
-        return json.loads(sidecar.read_text())
-    except (OSError, json.JSONDecodeError):
-        return {}
+    return read_json(path.with_suffix(".json"))
 
 
 def _restore_bads(raw: mne.io.Raw, sidecar: dict) -> None:

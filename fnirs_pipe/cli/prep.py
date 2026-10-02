@@ -244,14 +244,8 @@ def _add_selection(sp) -> None:
                     help="Task label.")
     sp.add_argument("--run-label", "--run_label", default=None, type=_shared.BidsLabel,
                     help="Run label.")
-    # --nprocs / --n_cpus are what the BIDS Apps interface calls this one
-    sp.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus", dest="n_jobs",
-                    type=int, default=1, help="Parallel subject jobs.")
-    sp.add_argument(
-        "--skip-bids-validation", "--skip_bids_validation",
-        "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False,
-        help="Do not check the input with bids-validator.")
+    _shared.add_n_jobs(sp)
+    _shared.add_skip_bids_validation(sp)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -302,11 +296,7 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Where the derived tree goes. An `aligned/` subtree is created under it.")
     align.add_argument("--group-csv", type=Path, required=True,
                        help="CSV with group_id, subject_id, task columns.")
-    align.add_argument(
-        "--skip-bids-validation", "--skip_bids_validation",
-        "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False,
-        help="Do not check the input with bids-validator.")
+    _shared.add_skip_bids_validation(align)
     align.set_defaults(func=cmd_align)
 
     markers = sub.add_parser("edit-markers", help="Edit markers in SNIRF files.")

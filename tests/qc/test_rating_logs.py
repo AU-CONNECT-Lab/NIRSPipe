@@ -21,3 +21,12 @@ def test_the_raw_rating_log_goes_under_logs(tmp_path):
 def test_logs_is_one_of_the_exemptions(tmp_path):
     write_bidsignore(tmp_path)
     assert "logs" in (tmp_path / ".bidsignore").read_text(encoding="utf-8").split()
+
+
+def test_a_rating_file_reads_back_what_was_written(tmp_path):
+    from fnirs_pipe.qc.rating.app import _read_rating_file, _write_rating_file
+
+    path = tmp_path / "r.json"
+    assert _read_rating_file(path) == {"ratings": {}, "notes": {}}
+    _write_rating_file(path, "sub-01_task-rest", {"overall": "good"}, {"overall": "fine"})
+    assert _read_rating_file(path) == {"ratings": {"overall": "good"}, "notes": {"overall": "fine"}}

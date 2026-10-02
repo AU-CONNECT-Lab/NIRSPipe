@@ -82,6 +82,21 @@ def load_roi_mapping(path: "Path | None") -> "dict[str, list[str]] | None":
     return roi_map
 
 
+def add_skip_bids_validation(container) -> None:
+    """``--skip-bids-validation`` for a command that reads a BIDS dataset, with a ``--no-`` form."""
+    container.add_argument(
+        "--skip-bids-validation", "--skip_bids_validation",
+        "--skip_bids_validator", dest="skip_bids_validation",
+        action=argparse.BooleanOptionalAction, default=False,
+        help="Do not check the input with bids-validator.")
+
+
+def add_n_jobs(container) -> None:
+    """``--n-jobs``, parallel subjects; --nprocs / --n_cpus are what the BIDS Apps interface calls it."""
+    container.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus", dest="n_jobs",
+                           type=int, default=1, help="Parallel subject jobs.")
+
+
 def add_separation_bands(container, note: str = "") -> None:
     """``--short-max-dist`` / ``--long-min-dist`` / ``--long-max-dist``, in mm.
 

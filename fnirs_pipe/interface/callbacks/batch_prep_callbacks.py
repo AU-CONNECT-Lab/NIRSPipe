@@ -8,7 +8,8 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, ctx, no_update
 
 from fnirs_pipe.interface import process_stream
-from fnirs_pipe.interface.callbacks._cli_run import log_panel, preview_text
+from fnirs_pipe.io.derivatives import subject_labels
+from fnirs_pipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
 from fnirs_pipe.interface.cli_args import build_prep_args, missing_prep
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.utils.logging import get_logger
@@ -78,10 +79,7 @@ def manage_subjects(detect_clicks, select_all_clicks, clear_clicks, bids_dir, cu
     if trigger == "bp-detect-btn":
         if not bids_dir or not Path(bids_dir).is_dir():
             return dbc.Alert("Invalid BIDS directory.", color="warning"), []
-        subjects = sorted(
-            d.name[4:] for d in Path(bids_dir).iterdir()
-            if d.is_dir() and d.name.startswith("sub-")
-        )
+        subjects = subject_labels(Path(bids_dir))
         if not subjects:
             return dbc.Alert("No subjects found.", color="warning"), []
         checklist = dbc.Checklist(
@@ -298,22 +296,7 @@ def generate_command(
     prevent_initial_call=True,
 )
 def run_batch(n_clicks, cmd_data):
-    if not cmd_data or not cmd_data.get("argv"):
-        return (dbc.Alert("Click 'Generate command' first.", color="warning",
-                          className="mb-0"), None, True, True, False)
-
-    argv = cmd_data["argv"]
-    try:
-        run_id = process_stream.start(argv)
-    except FileNotFoundError:
-        return (dbc.Alert(f"`{argv[0]}` not found on PATH.", color="danger",
-                          className="mb-0"), None, True, True, False)
-    except Exception as exc:
-        return (dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"),
-                None, True, True, False)
-
-    logger.info("started %s as run %s", argv[0], run_id)
-    return log_panel("Running...", [], 0, "info"), run_id, False, False, True
+    return start_run(cmd_data, "Generate command", "`{exe}` not found on PATH.")
 
 
 @callback(
@@ -326,21 +309,7 @@ def run_batch(n_clicks, cmd_data):
     prevent_initial_call=True,
 )
 def stream_run_output(_n, run_id):
-    if not run_id:
-        return no_update, True, True, False
-
-    lines, returncode, dropped = process_stream.poll(run_id)
-    if returncode is None:
-        return log_panel("Running...", lines, dropped, "info"), False, False, True
-
-    if returncode == 0:
-        header, color = "Finished.", "success"
-    elif returncode < 0:
-        header, color = f"Stopped (signal {-returncode}).", "warning"
-    else:
-        header, color = f"Failed (exit {returncode}).", "danger"
-    process_stream.forget(run_id)
-    return log_panel(header, lines, dropped, color), True, True, False
+    return poll_run(run_id)
 
 
 @callback(

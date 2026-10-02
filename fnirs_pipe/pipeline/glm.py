@@ -17,9 +17,8 @@ from fnirs_pipe.pipeline.denoise import (
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
-from fnirs_pipe.io.derivatives import entity_of, write_sidecar_json
+from fnirs_pipe.io.derivatives import entity_of, write_step_sidecar
 from fnirs_pipe.io.naming import derivative_path
 
 logger = get_logger("post.glm")
@@ -532,15 +531,6 @@ def _save_glm_outputs(
 ) -> None:
     bads = bads or []
 
-    def _sidecar(path: Path, step: str) -> None:
-        write_sidecar_json(path, {
-            "pipeline_version": __version__,
-            "step": step,
-            "Sources": [source_path] if source_path else [],
-            "parameters": params,
-            "bad_channels": bads,
-        })
-
     def _mark_bads(df: pd.DataFrame) -> pd.DataFrame:
         # the fit runs on every channel, so the rejected ones are kept and flagged rather
         # than dropped: removing rows would change the shape group analysis expects
@@ -560,11 +550,11 @@ def _save_glm_outputs(
 
     dm_path = _named("design")
     design_matrix.to_csv(dm_path, index=False, sep=_TAB)
-    _sidecar(dm_path, "design_matrix")
+    write_step_sidecar(dm_path, "design_matrix", source_path, bads, **params)
 
     res_path = _named("nirsmap", desc="glm")
     _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False, sep=_TAB)
-    _sidecar(res_path, "glm_fit")
+    write_step_sidecar(res_path, "glm_fit", source_path, bads, **params)
 
     if contrasts:
         frames = []
@@ -574,6 +564,6 @@ def _save_glm_outputs(
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")
         pd.concat(frames, ignore_index=True).to_csv(con_path, index=False, sep=_TAB)
-        _sidecar(con_path, "contrasts")
+        write_step_sidecar(con_path, "contrasts", source_path, bads, **params)
 
     logger.info("GLM outputs written to %s", output_dir)

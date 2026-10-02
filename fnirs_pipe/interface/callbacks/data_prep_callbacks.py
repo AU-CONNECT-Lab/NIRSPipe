@@ -18,7 +18,7 @@ from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
-from fnirs_pipe.io.derivatives import channel_decisions_path
+from fnirs_pipe.io.derivatives import channel_decisions_path, subject_labels
 from fnirs_pipe.qc.common.channel_table import channel_columns
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
@@ -114,10 +114,7 @@ def detect_subjects(detect_clicks, manual_input, clear_clicks, bids_dir):
     if trigger == "dp-detect-btn":
         if not bids_dir or not Path(bids_dir).is_dir():
             return dbc.Alert("Invalid BIDS directory.", color="warning"), "", ""
-        subjects = sorted(
-            d.name[4:] for d in Path(bids_dir).iterdir()
-            if d.is_dir() and d.name.startswith("sub-")
-        )
+        subjects = subject_labels(Path(bids_dir))
         if not subjects:
             return dbc.Alert("No subjects found.", color="warning"), "", ""
         radio = dbc.RadioItems(

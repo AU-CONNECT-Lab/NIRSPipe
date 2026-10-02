@@ -151,6 +151,27 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
     sidecar_path.write_text(json.dumps(provenance, indent=2))
 
 
+def read_json(path: Path) -> dict[str, Any]:
+    """A JSON object off disk, or {} when the file is missing, unreadable or not an object."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def write_step_sidecar(path: Path, step: str, source: "str | None", bads: "list[str]",
+                       **params: Any) -> None:
+    """The sidecar of one post-stage output: the step, the file it came from, its settings, the bads."""
+    write_sidecar_json(path, {
+        "pipeline_version": __version__,
+        "step": step,
+        "Sources": [source] if source else [],
+        "parameters": params,
+        "bad_channels": bads,
+    })
+
+
 
 def entity_of(path: "Path | str", name: str) -> str | None:
     """Read one BIDS entity back out of a filename, or None when it carries no such key.
@@ -207,6 +228,12 @@ def select_one_run(
            "which one to use." if varies
            else "They cannot be told apart by session or run; remove the duplicates.")
     )
+
+
+def subject_labels(root: Path) -> list[str]:
+    """The bare labels of a tree's ``sub-*`` folders, sorted: ``sub-01/``, ``sub-02/`` -> ["01", "02"]."""
+    return sorted(d.name[4:] for d in Path(root).iterdir()
+                  if d.is_dir() and d.name.startswith("sub-"))
 
 
 def subject_nirs_dirs(

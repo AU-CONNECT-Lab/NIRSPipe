@@ -37,3 +37,25 @@ def test_the_sidecar_timestamps_itself(tmp_path):
     write_sidecar_json(out, {"step": "od_conversion", "Sources": []})
 
     assert "timestamp" in json.loads(out.with_suffix(".json").read_text())
+
+
+# ---- reading what is beside an output ----
+
+def test_read_json_gives_an_empty_object_for_anything_it_cannot_use(tmp_path):
+    from fnirs_pipe.io.derivatives import read_json
+
+    (tmp_path / "ok.json").write_text('{"parameters": {"a": 1}}', encoding="utf-8")
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    (tmp_path / "list.json").write_text("[1, 2]", encoding="utf-8")
+    assert read_json(tmp_path / "ok.json") == {"parameters": {"a": 1}}
+    for name in ("bad.json", "list.json", "missing.json"):
+        assert read_json(tmp_path / name) == {}
+
+
+def test_subject_labels_are_the_bare_sorted_sub_folders(tmp_path):
+    from fnirs_pipe.io.derivatives import subject_labels
+
+    for name in ("sub-02", "sub-01", "logs"):
+        (tmp_path / name).mkdir()
+    (tmp_path / "sub-03.txt").write_text("")
+    assert subject_labels(tmp_path) == ["01", "02"]

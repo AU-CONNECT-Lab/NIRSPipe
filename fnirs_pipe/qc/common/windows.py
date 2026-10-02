@@ -5,12 +5,12 @@ Shared by both report paths.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import mne
 
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.io.derivatives import read_json
 from fnirs_pipe.qc.common.figure_io import _pair_fname, extract_markers
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
@@ -35,11 +35,7 @@ def crop_provenance(raw: "mne.io.Raw") -> "dict | None":
     path = path_from(raw)
     if not path:
         return None
-    try:
-        side = json.loads(Path(path).with_suffix(".json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    params = (side.get("parameters") or {})
+    params = read_json(Path(path).with_suffix(".json")).get("parameters") or {}
     windows = params.get("crop_windows_s")
     if not windows:
         return None

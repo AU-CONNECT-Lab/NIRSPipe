@@ -265,9 +265,7 @@ def _build_parser() -> argparse.ArgumentParser:
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")
     out.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
-    # --nprocs / --n_cpus are what the BIDS Apps interface calls this one
-    out.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus",
-                     dest="n_jobs", type=int, default=1, help="Parallel subject jobs.")
+    _shared.add_n_jobs(out)
     out.add_argument("--work-dir", "--work_dir", type=Path, help="Hash cache directory.")
 
     esc = p.add_argument_group("escape hatches")

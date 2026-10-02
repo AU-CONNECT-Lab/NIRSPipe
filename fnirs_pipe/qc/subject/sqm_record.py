@@ -63,7 +63,7 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.io.derivatives import entity_of
+from fnirs_pipe.io.derivatives import entity_of, read_json
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.qc.subject.condition_views import (
@@ -156,10 +156,7 @@ def record_label(path: "Path | str") -> str:
 
 
 def _sidecar(path: Path) -> dict[str, Any]:
-    try:
-        return json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    return read_json(path.with_suffix(".json"))
 
 
 def _bids_input(stages: dict[str, Path], bids_root: Path | None = None) -> Path | None:

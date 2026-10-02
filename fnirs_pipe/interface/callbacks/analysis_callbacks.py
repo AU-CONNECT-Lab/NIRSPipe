@@ -9,7 +9,7 @@ from dash import Input, Output, State, callback, no_update
 
 from fnirs_pipe.cli.run import mode_defaults
 from fnirs_pipe.interface import process_stream
-from fnirs_pipe.interface.callbacks._cli_run import log_panel
+from fnirs_pipe.interface.callbacks._cli_run import poll_run, start_run
 from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.utils.logging import get_logger
 
@@ -392,23 +392,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
     prevent_initial_call=True,
 )
 def run_pipeline(n_clicks, cmd_data):
-    if not cmd_data or not cmd_data.get("argv"):
-        return (dbc.Alert("Click 'Generate Command' first.", color="warning",
-                          className="mb-0"), None, True, True, False)
-
-    argv = cmd_data["argv"]
-    try:
-        run_id = process_stream.start(argv)
-    except FileNotFoundError:
-        return (dbc.Alert(
-            f"`{argv[0]}` not found on PATH - make sure fnirs-pipe is installed.",
-            color="danger", className="mb-0"), None, True, True, False)
-    except Exception as exc:
-        return (dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"),
-                None, True, True, False)
-
-    logger.info("started %s as run %s", argv[0], run_id)
-    return log_panel("Running...", [], 0, "info"), run_id, False, False, True
+    return start_run(cmd_data, "Generate Command",
+                     "`{exe}` not found on PATH - make sure fnirs-pipe is installed.")
 
 
 @callback(
@@ -421,21 +406,7 @@ def run_pipeline(n_clicks, cmd_data):
     prevent_initial_call=True,
 )
 def stream_run_output(_n, run_id):
-    if not run_id:
-        return no_update, True, True, False
-
-    lines, returncode, dropped = process_stream.poll(run_id)
-    if returncode is None:
-        return log_panel("Running...", lines, dropped, "info"), False, False, True
-
-    if returncode == 0:
-        header, color = "Pipeline finished.", "success"
-    elif returncode < 0:
-        header, color = f"Pipeline stopped (signal {-returncode}).", "warning"
-    else:
-        header, color = f"Pipeline failed (exit {returncode}).", "danger"
-    process_stream.forget(run_id)
-    return log_panel(header, lines, dropped, color), True, True, False
+    return poll_run(run_id, "Pipeline")
 
 
 @callback(

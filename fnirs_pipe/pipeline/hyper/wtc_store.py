@@ -17,7 +17,7 @@ from fnirs_pipe.pipeline.hyper.alignment import alignment_params
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.io.derivatives import read_json, write_sidecar_json
 from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
 from fnirs_pipe.utils.lineage import paths_from
 
@@ -200,11 +200,7 @@ def reband(path: Path, fmin: float, fmax: float, mask_coi: bool = True) -> pd.Da
 
 def _maps_params(npz_path: Path) -> dict:
     """The parameters a saved map's sidecar records, or none for a map saved without one."""
-    try:
-        side = json.loads(npz_path.with_suffix(".json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return side.get("parameters") or {}
+    return read_json(npz_path.with_suffix(".json")).get("parameters") or {}
 
 
 def reband_tree(

@@ -345,6 +345,16 @@ def cmd_provenance(output_dir: Path) -> None:
         print("no provenance sidecars found - run the pipeline first")
 
 
+def _add_dpf_and_cardiac(parser) -> None:
+    """The optics and cardiac band both raw reports need, required: they are population values."""
+    parser.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
+                        help="Differential pathlength factor. One value or one per wavelength.")
+    parser.add_argument("--cardiac-l-freq", type=float, required=True,
+                        help="Lower bound of cardiac band in Hz (required; population-dependent).")
+    parser.add_argument("--cardiac-h-freq", type=float, required=True,
+                        help="Upper bound of cardiac band in Hz (required; population-dependent).")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="fnirs-qc",
@@ -365,12 +375,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Session label(s) to include.")
     pr.add_argument("--task-label", "--task_label",    nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Task label(s) to include.")
-    pr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
-                    help="Differential pathlength factor. One value or one per wavelength.")
-    pr.add_argument("--cardiac-l-freq", type=float, required=True,
-                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
-    pr.add_argument("--cardiac-h-freq", type=float, required=True,
-                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
+    _add_dpf_and_cardiac(pr)
     pr.add_argument("--window-length", type=float, default=10.0,
                     help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     pr.add_argument("--epoch-qc", action="store_true",
@@ -400,11 +405,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "coupling metric still describe the recording as delivered. "
                          "Default none, which reports it uncorrected, with no corrected-stage "
                          "counts or GVTD series.")
-    pr.add_argument(
-        "--skip-bids-validation", "--skip_bids_validation",
-        "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False,
-        help="Do not check the input with bids-validator.")
+    _shared.add_skip_bids_validation(pr)
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",
@@ -418,12 +419,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "writes.")
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
-    hr.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
-                    help="Differential pathlength factor. One value or one per wavelength.")
-    hr.add_argument("--cardiac-l-freq", type=float, required=True,
-                    help="Lower bound of cardiac band in Hz (required; population-dependent).")
-    hr.add_argument("--cardiac-h-freq", type=float, required=True,
-                    help="Upper bound of cardiac band in Hz (required; population-dependent).")
+    _add_dpf_and_cardiac(hr)
     # named for what they set; --fmin / --fmax stay as aliases
     hr.add_argument("--coh-fmin", "--fmin", dest="coherence_fmin", type=float, default=0.01,
                     help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
@@ -432,11 +428,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Session label(s) to include.")
-    hr.add_argument(
-        "--skip-bids-validation", "--skip_bids_validation",
-        "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False,
-        help="Do not check the input with bids-validator.")
+    _shared.add_skip_bids_validation(hr)
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "

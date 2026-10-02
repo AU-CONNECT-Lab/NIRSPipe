@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.io.derivatives import group_output_path, read_json
 from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
@@ -492,18 +492,12 @@ def _bad_from_sidecar(json_path: Path) -> list[str]:
     detections with any manual --bad-channels, and writes it whether or not a report was
     asked for. The channel-metrics CSV carries the same set, but the report writes that one.
     """
-    try:
-        return list(json.loads(json_path.read_text(encoding="utf-8")).get("bad_channels") or [])
-    except (OSError, json.JSONDecodeError):
-        return []
+    return list(read_json(json_path).get("bad_channels") or [])
 
 
 def _sci_from_sidecar(json_path: Path) -> dict[str, float]:
     """The per-channel SCI prep recorded for a run, from the same sidecar."""
-    try:
-        scores = json.loads(json_path.read_text(encoding="utf-8")).get("sci_scores") or {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    scores = read_json(json_path).get("sci_scores") or {}
     return {str(k): float(v) for k, v in scores.items()}
 
 
@@ -516,10 +510,7 @@ def _screen_cutoffs(json_path: Path) -> dict:
     registry defaults or ``fnirs-hyper``'s own ``--sci-threshold``, which only colours the
     dyad page.
     """
-    try:
-        params = json.loads(json_path.read_text(encoding="utf-8")).get("parameters") or {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    params = read_json(json_path).get("parameters") or {}
     named = {"sci": params.get("sci_threshold"), "psp": params.get("psp_threshold"),
              "good_frac": params.get("min_good_frac")}
     return {k: float(v) for k, v in named.items() if v is not None}

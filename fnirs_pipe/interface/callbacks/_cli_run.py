@@ -6,9 +6,13 @@ import subprocess
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import html
+from dash import html, no_update
 
+from fnirs_pipe.interface import process_stream
 from fnirs_pipe.interface.report_serve import report_url
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("interface.cli_run")
 
 
 def log_panel(header: str, lines, dropped: int, color: str):
@@ -19,6 +23,49 @@ def log_panel(header: str, lines, dropped: int, color: str):
         html.Div(header, className="fw-bold"),
         html.Pre(body, className="fp-run-tail"),
     ], color=color, className="mb-0")
+
+
+def start_run(cmd_data, generate_label: str, not_found: str):
+    """Launch a page's built argv: (status, run_id, tick off, stop off, run off) for its outputs.
+
+    ``generate_label`` is the page's button for building the command, ``not_found`` what to
+    say when the executable is missing, with ``{exe}`` for its name.
+    """
+    if not cmd_data or not cmd_data.get("argv"):
+        return (dbc.Alert(f"Click '{generate_label}' first.", color="warning",
+                          className="mb-0"), None, True, True, False)
+    argv = cmd_data["argv"]
+    try:
+        run_id = process_stream.start(argv)
+    except FileNotFoundError:
+        return (dbc.Alert(not_found.format(exe=argv[0]), color="danger", className="mb-0"),
+                None, True, True, False)
+    except Exception as exc:
+        return (dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"),
+                None, True, True, False)
+    logger.info("started %s as run %s", argv[0], run_id)
+    return log_panel("Running...", [], 0, "info"), run_id, False, False, True
+
+
+def poll_run(run_id, noun: str = ""):
+    """One tick of a running command: (status, tick off, stop off, run off).
+
+    ``noun`` leads the outcome line, "Pipeline finished." against a bare "Finished.".
+    """
+    if not run_id:
+        return no_update, True, True, False
+    lines, returncode, dropped = process_stream.poll(run_id)
+    if returncode is None:
+        return log_panel("Running...", lines, dropped, "info"), False, False, True
+    if returncode == 0:
+        outcome, color = "finished.", "success"
+    elif returncode < 0:
+        outcome, color = f"stopped (signal {-returncode}).", "warning"
+    else:
+        outcome, color = f"failed (exit {returncode}).", "danger"
+    header = f"{noun} {outcome}" if noun else outcome[0].upper() + outcome[1:]
+    process_stream.forget(run_id)
+    return log_panel(header, lines, dropped, color), True, True, False
 
 
 def preview_text(argv: list[str], shell: str) -> str:
