@@ -29,6 +29,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from fnirs_pipe.pipeline.restingstate import fisher_z
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.qc.metrics import (
     _cardiac_power_metrics,
     _drift_metrics,
@@ -357,6 +358,18 @@ def test_the_labels_survive():
     fc = pd.DataFrame(np.eye(2) * 0.5, index=["a", "b"], columns=["a", "b"])
     z = fisher_z(fc)
     assert list(z.index) == ["a", "b"] and list(z.columns) == ["a", "b"]
+
+
+def test_the_shared_transform_works_elementwise_on_any_shape():
+    r = np.array([[0.0, 0.5], [-0.5, 1.0]])
+    assert_allclose(fisher_r_to_z(r), np.arctanh(r.clip(-0.999999, 0.999999)))
+    assert fisher_r_to_z(0.5).shape == ()
+
+
+def test_a_non_finite_r_becomes_nan_rather_than_a_clipped_value():
+    """inf is not a correlation, so it must not pass as the largest possible one."""
+    z = fisher_r_to_z([np.nan, np.inf, -np.inf, 0.5])
+    assert np.isnan(z[:3]).all() and np.isfinite(z[3])
 
 
 # ---- GVTD threshold: deterministic, and robust by construction ----

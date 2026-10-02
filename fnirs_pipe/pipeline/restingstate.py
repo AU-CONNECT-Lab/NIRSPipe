@@ -5,6 +5,7 @@ import pandas as pd
 import mne
 from scipy import signal
 
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("post.restingstate")
@@ -200,8 +201,7 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     Variance-stabilises correlations so they can be averaged / tested across subjects;
     r is clipped just below :math:`\pm 1` to keep perfect correlations from diverging.
     """
-    r = fc.to_numpy().clip(-0.999999, 0.999999)  # clip to keep perfect corr from → inf
-    z = np.arctanh(r)
+    z = fisher_r_to_z(fc.to_numpy())
     # only a square matrix has a self-correlation diagonal; a seed map is ROI x channel, where
     # position (i, i) is an ordinary pair and zeroing it would delete a real value
     if z.ndim == 2 and z.shape[0] == z.shape[1]:

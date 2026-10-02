@@ -19,9 +19,10 @@ from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
 from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _shared_sfreq, long_axis_over
+from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.pipeline.hyper.whiten import autocov
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -365,7 +366,7 @@ def compute_isc_pairs(
              "r": float(isc_mat[i, j])}
             for i, a in enumerate(ch_names) for j, b in enumerate(ch_names)]
     frame = pd.DataFrame(rows)
-    frame.insert(frame.columns.get_loc("r") + 1, "r_z", frame["r"].map(_fisher_z))
+    frame.insert(frame.columns.get_loc("r") + 1, "r_z", fisher_r_to_z(frame["r"]))
     index = {name: i for i, name in enumerate(ch_names)}
     if orders1 is not None:
         frame["ar_order"]  = frame["label"].map(lambda c: orders1[index[c]])
@@ -513,7 +514,7 @@ def roi_mean_of_isc(
             if not picks[a] or not picks[b]:
                 continue
             block = mat[np.ix_(picks[a], picks[b])]
-            z = np.array([_fisher_z(r) for r in block.ravel()])
+            z = fisher_r_to_z(block.ravel())
             z = z[np.isfinite(z)]
             if z.size < max(1, min_channels):
                 thin += z.size > 0

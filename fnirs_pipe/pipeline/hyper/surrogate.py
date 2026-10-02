@@ -17,7 +17,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.hyper._helpers import _fisher_z, _long_signals, long_axis_over
+from fnirs_pipe.pipeline.hyper._helpers import _long_signals, long_axis_over
 from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_homologous
 from fnirs_pipe.pipeline.hyper.wtc import (
     WTCResult,
@@ -26,6 +26,7 @@ from fnirs_pipe.pipeline.hyper.wtc import (
     wtc_band_mean,
     window_result,
 )
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.surrogate")
@@ -455,7 +456,7 @@ def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
                   .reset_index())
     draws = {key: part.to_numpy(dtype=float) for key, part in grouped["coherence"]}
     out.insert(out.columns.get_loc("null_sd"), "null_mean_z",
-               out["null_mean"].map(_fisher_z))
+               fisher_r_to_z(out["null_mean"]))
     out.insert(out.columns.get_loc("n_iter"), "null_p95",
                [_p95(draws[k]) for k in _row_keys(out, keys)])
     if real is not None:

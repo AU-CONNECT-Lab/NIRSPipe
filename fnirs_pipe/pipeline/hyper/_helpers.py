@@ -1,4 +1,4 @@
-"""What the coherence modules share: the channel axis, the sampling rate, Fisher z."""
+"""What the coherence modules share: the channel axis and the sampling rate."""
 
 from __future__ import annotations
 
@@ -88,10 +88,3 @@ def long_axis_over(
             if label not in axis:
                 axis.append(label)
     return axis
-
-
-def _fisher_z(r: float) -> float:
-    """Fisher r-to-z of one value, clipped as :func:`restingstate.fisher_z` clips a matrix."""
-    if not np.isfinite(r):
-        return float("nan")
-    return float(np.arctanh(np.clip(r, -0.999999, 0.999999)))

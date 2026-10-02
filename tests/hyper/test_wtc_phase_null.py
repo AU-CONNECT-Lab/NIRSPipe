@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper._helpers import _fisher_z
 from fnirs_pipe.pipeline.hyper.roi import roi_maps_from_channels, roi_mean_of_channels
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean
@@ -122,12 +121,6 @@ def test_a_failed_pair_keeps_its_row_with_both_values_missing():
     assert len(df) == 1
     assert np.isnan(df["coherence"].iloc[0])
     assert np.isnan(df["coherence_z"].iloc[0])
-
-
-def test_fisher_z_of_one_is_finite():
-    """Clipping, not arctanh(1), so a perfectly locked pair does not become inf."""
-    assert np.isfinite(_fisher_z(1.0))
-    assert np.isnan(_fisher_z(float("nan")))
 
 
 # ---- ROI grouping ----

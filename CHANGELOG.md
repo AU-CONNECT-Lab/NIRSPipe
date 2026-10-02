@@ -7,37 +7,46 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- The carpet and per-channel motion figures draw the gyroscope's angular speed above the GVTD rows when the recording carries one
-- The same figures draw the accelerometer's jerk as a second IMU row when the recording carries one
-- The dyad motion panel draws each member's gyroscope and accelerometer on the shared clock, each divided by its own median
-- IMU rows print the unit the recording stores, on the axis or beside the dyad medians
-- `fnirs-qc hyper-raw --derivatives-dir` names the fnirs-pipe tree its motion panel reads corrected recordings from
-- `fnirs-rate hyper --derivatives-dir` keeps each member's channel decisions in the fnirs-pipe tree, beside their raw page
 - `--mode` fills in its own defaults for the post settings, under `--config` and the command line
 - `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
 - The run record names the layer that set each post value, and the QC report lists the settings nobody typed
 - The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
 
 ### Changed
-- Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
-- `fnirs-qc hyper-raw` refuses an output directory that is its `--derivatives-dir`, or any fnirs-pipe tree
-- `fnirs-qc hyper-raw` without `--derivatives-dir` leaves an existing fnirs-hyper `dataset_description.json` alone
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
 - Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
 - Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
 - Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
+- Resting-state and hyperscanning Fisher z now share one transform, which turns a non-finite r into NaN
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
 
 ### Fixed
-- `fnirs-qc hyper-raw` looked for corrected recordings in the fnirs-hyper tree, so its motion panel never had a corrected side
-- The Hyper Preparation page wrote its dyad report into the derivatives tree and restamped it; it now takes a fnirs-hyper directory
-- `fnirs-rate hyper` help named the fnirs-pipe tree; its directory is the fnirs-hyper tree holding the raw report
 - `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
 - The per-subject run script ignored values set in `--config`
 - The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was
 - The cohort dial caption said six dyads when the cohort had fewer
+
+## [0.54.0] - 2026-09-29
+
+### Added
+- The carpet and per-channel motion figures draw the gyroscope's angular speed above the GVTD rows when the recording carries one
+- The same figures draw the accelerometer's jerk as a second IMU row when the recording carries one
+- The dyad motion panel draws each member's gyroscope and accelerometer on the shared clock, each divided by its own median
+- IMU rows print the unit the recording stores, on the axis or beside the dyad medians
+- `fnirs-qc hyper-raw --derivatives-dir` names the fnirs-pipe tree its motion panel reads corrected recordings from
+- `fnirs-rate hyper --derivatives-dir` keeps each member's channel decisions in the fnirs-pipe tree, beside their raw page
+
+### Changed
+- Carpets detrend each row linearly before z-scoring, so the grey shows fluctuation rather than drift
+- `fnirs-qc hyper-raw` refuses an output directory that is its `--derivatives-dir`, or any fnirs-pipe tree
+- `fnirs-qc hyper-raw` without `--derivatives-dir` leaves an existing fnirs-hyper `dataset_description.json` alone
+
+### Fixed
+- `fnirs-qc hyper-raw` looked for corrected recordings in the fnirs-hyper tree, so its motion panel never had a corrected side
+- The Hyper Preparation page wrote its dyad report into the derivatives tree and restamped it; it now takes a fnirs-hyper directory
+- `fnirs-rate hyper` help named the fnirs-pipe tree; its directory is the fnirs-hyper tree holding the raw report
 
 ## [0.53.0] - 2026-09-26
 

@@ -25,8 +25,8 @@ import pandas as pd
 from scipy.fft import next_fast_len
 from scipy.signal import convolve2d
 
-from fnirs_pipe.pipeline.hyper._helpers import (_fisher_z, _long_signals, _shared_sfreq,
-                                                long_axis_over)
+from fnirs_pipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.wtc")
@@ -829,7 +829,7 @@ def wtc_band_mean(
             rows.append({
                 **head,
                 "coherence": coherence,
-                "coherence_z": _fisher_z(coherence),
+                "coherence_z": float(fisher_r_to_z(coherence)),
                 "n_valid_frac": n_valid_frac,
                 "phase_angle": np.degrees(angle),
                 "phase_sd": np.degrees(spread),

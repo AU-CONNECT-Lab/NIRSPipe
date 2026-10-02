@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.hyper._helpers import _fisher_z
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, _circular_stats
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.roi")
@@ -127,7 +127,7 @@ def roi_mean_of_channels(
                         int(thin.sum()), min_channels)
         out = out[~thin].reset_index(drop=True)
     out.insert(out.columns.get_loc("n_valid_frac"), "coherence_z",
-               out["coherence"].map(_fisher_z))
+               fisher_r_to_z(out["coherence"]))
 
     if "phase_angle" in df.columns:
         def _roi_phase(g: pd.DataFrame) -> pd.Series:
