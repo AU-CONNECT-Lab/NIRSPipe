@@ -227,7 +227,9 @@ def test_the_gui_field_takes_what_the_cli_takes():
     from fnirs_pipe.cli.run import NOISE_MODEL_PATTERN, _noise_model
 
     src = Path("fnirs_pipe/interface/pages/analysis.py").read_text(encoding="utf-8")
-    assert 'id="an-noise-model"' in src and 'value="auto"' in src, "the page must default to auto"
+    # empty by default, so the chosen mode's default fills it in rather than a value the page picked
+    assert 'id="an-noise-model"' in src and 'placeholder="mode default"' in src
+    assert 'value="auto"' not in src, "a typed default here would override the mode's"
     assert "pattern=NOISE_MODEL_PATTERN" in src, "the page must use the CLI's rule, not its own copy"
     assert 'pattern="' not in src, "a literal pattern here is the second copy of the rule"
     pattern = NOISE_MODEL_PATTERN

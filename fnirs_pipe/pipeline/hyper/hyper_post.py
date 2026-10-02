@@ -223,7 +223,7 @@ def run_hyper_post(
         wtc_phase_by_scale,
     )
     from fnirs_pipe.qc.common.report_shell import guard, note
-    from fnirs_pipe.utils.lineage import path_from
+    from fnirs_pipe.utils.lineage import paths_from
 
     errors = errors if errors is not None else []
     notes  = notes  if notes  is not None else []
@@ -276,7 +276,7 @@ def run_hyper_post(
                                      "relmat", ".tsv")
         df.to_csv(tsv_path, sep="\t", index=False)
         _hyper_sidecar(tsv_path, step,
-                       [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                       paths_from(aligned_raws.values()),
                        **_wtc_params(), **extra)
         tables[tsv_path.name] = tsv_path
         return tsv_path
@@ -348,7 +348,7 @@ def run_hyper_post(
             save_wtc(result, npz_path)
             # what `fnirs-hyper band` carries onto the tables it re-averages from this
             _hyper_sidecar(npz_path, "hyper_wtc_maps",
-                           [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                           paths_from(aligned_raws.values()),
                            **_wtc_params())
 
     def _level_path(ch_type: str, nulldist: str) -> Path:
@@ -796,7 +796,7 @@ def run_hyper_post(
             if label:
                 pairs_df.insert(0, "condition", label)
             isc_pair_frames.append(pairs_df)
-            sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
+            sources = paths_from(aligned_raws.values())
             # the cond- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
             common = {"task": task,
@@ -851,7 +851,7 @@ def run_hyper_post(
                                                                  index=False)
             _hyper_sidecar(
                 tsv_path, "hyper_isc_pairs",
-                [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                paths_from(aligned_raws.values()),
                 **_isc_params(), seed=wtc_seed,
                 chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
                 **align_info,

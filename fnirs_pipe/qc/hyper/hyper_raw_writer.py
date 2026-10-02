@@ -39,7 +39,7 @@ from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.common.report_shell import guard, note
 from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
-from fnirs_pipe.utils.lineage import path_from
+from fnirs_pipe.utils.lineage import paths_from
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 
@@ -67,7 +67,7 @@ def _write_coherence_tsv(
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, sep="\t", index=False)
     _hyper_sidecar(path, step,
-                   [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+                   paths_from(aligned_raws.values()),
                    **alignment_params(aligned_raws), **params)
     logger.info("coherence table -> %s", path)
 
@@ -89,7 +89,7 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     return {
         "pipeline_version": __version__,
         "step": "hyper_sqm",
-        "Sources": [p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+        "Sources": paths_from(aligned_raws.values()),
         "data": {"metrics": metrics, "n_metrics": len(metrics)},
         "alignment": alignment_params(aligned_raws),
         **sqm,
@@ -319,7 +319,7 @@ def _process_hyper_raw_group(
             write_usable_table(
                 _table(sqm_dir, {"desc": "usable"}, suffix="qc"),
                 grid, subject_ids, conditions,
-                sources=[p for p in (path_from(raw) for raw in aligned_raws.values()) if p],
+                sources=paths_from(aligned_raws.values()),
                 sci_threshold=sci_threshold)
     sqm_path = record_path(sqm_dir, label)
     sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,

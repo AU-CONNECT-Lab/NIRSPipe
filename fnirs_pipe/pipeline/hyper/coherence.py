@@ -65,9 +65,7 @@ def compute_pairwise_coherence(
                 rows.append({"ch_name": label, "sub1": sub1, "sub2": sub2,
                              "coherence": float("nan")})
                 continue
-            freqs, coh = coherence(data1[i], data2[j], fs=sfreq, nperseg=nperseg)
-            mask = (freqs >= fmin) & (freqs <= fmax)
-            mean_coh = float(np.mean(coh[mask])) if mask.any() else float("nan")
+            mean_coh = _band_coherence(data1[i], data2[j], sfreq, nperseg, fmin, fmax)
             rows.append({"ch_name": label, "sub1": sub1, "sub2": sub2, "coherence": mean_coh})
 
     return pd.DataFrame(rows, columns=["ch_name", "sub1", "sub2", "coherence"])

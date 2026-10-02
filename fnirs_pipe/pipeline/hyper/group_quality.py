@@ -20,6 +20,7 @@ from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
+from fnirs_pipe.pipeline.prep_pipeline import _expand_bad_pairs
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
 
@@ -104,7 +105,7 @@ def apply_group_bads(
                   for ch in (sqm_by_subject.get(subject_id, {}).get("bad_channels") or [])}
         if not labels:
             continue
-        marked = [ch for ch in raw.ch_names if ch.rsplit(" ", 1)[0] in labels]
+        marked = _expand_bad_pairs(raw, list(labels))
         raw.info["bads"] = sorted(set(raw.info["bads"]) | set(marked))
         logger.info("%s: %d channel(s) marked bad from the quality record: %s",
                     subject_id, len(marked), ", ".join(sorted(labels)))

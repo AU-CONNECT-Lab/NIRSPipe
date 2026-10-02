@@ -16,6 +16,7 @@ import numpy as np
 from fnirs_pipe.exceptions import AlignmentError
 from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.io.snirf import write_snirf
+from fnirs_pipe.pipeline.hyper._helpers import _zscore_rows
 from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import path_from
@@ -393,9 +394,6 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     result: dict[str, mne.io.Raw] = {}
     for sid, raw in raws.items():
         r = raw.copy()
-        data = r.get_data()
-        mu = data.mean(axis=1, keepdims=True)
-        sd = data.std(axis=1, keepdims=True)
-        r._data[:] = (data - mu) / np.where(sd < 1e-12, 1.0, sd)
+        r._data[:] = _zscore_rows(r.get_data())
         result[sid] = r
     return result

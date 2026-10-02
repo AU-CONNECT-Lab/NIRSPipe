@@ -1,4 +1,4 @@
-"""What the coherence modules share: the channel axis and the sampling rate."""
+"""What the coherence modules share: the channel axis, the sampling rate, row z-scoring."""
 
 from __future__ import annotations
 
@@ -88,3 +88,10 @@ def long_axis_over(
             if label not in axis:
                 axis.append(label)
     return axis
+
+
+def _zscore_rows(x: np.ndarray) -> np.ndarray:
+    """Each row to zero mean and unit deviation, a flat row left alone rather than divided by 0."""
+    mu  = x.mean(axis=1, keepdims=True)
+    std = x.std(axis=1, keepdims=True)
+    return (x - mu) / np.where(std < 1e-12, 1.0, std)

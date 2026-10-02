@@ -695,6 +695,18 @@ def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
     return float(np.arctan2(Y, X)), float(np.sqrt(-2.0 * np.log(resultant))), int(a.size)
 
 
+def _in_coi(freqs: np.ndarray, coi: np.ndarray) -> np.ndarray:
+    """(frequency x time) mask of the cells inside the cone of influence.
+
+    ``coi`` is a period in seconds per column, so 1/coi is the lowest frequency still reliable
+    there; a coi of 0, at the very edges, leaves nothing reliable.
+    """
+    coi = np.asarray(coi, dtype=float)
+    with np.errstate(divide="ignore"):
+        f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
+    return np.asarray(freqs, dtype=float)[:, None] >= f_edge[None, :]
+
+
 def _band_rows(sig, band: np.ndarray) -> "np.ndarray | None":
     """``sig`` cut to the band's rows, or None when no level was computed or it is the wrong length."""
     if sig is None:
@@ -803,12 +815,7 @@ def wtc_band_mean(
                 continue
 
             wtc = wtc_raw = np.asarray(data["wtc"], dtype=float)[band]
-            coi = np.asarray(data["coi"], dtype=float)
-            # coi is a period in seconds; 1/coi is the lowest frequency still reliable at
-            # that time. A coi of 0 (the very edges) leaves nothing reliable there.
-            with np.errstate(divide="ignore"):
-                f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
-            in_coi = band_freqs[:, None] >= f_edge[None, :]
+            in_coi = _in_coi(band_freqs, data["coi"])
             # measured whether or not it is applied, so the share stays a reportable number
             n_valid_frac = float(in_coi.mean()) if in_coi.size else 0.0
             if mask_coi:
@@ -890,10 +897,7 @@ def wtc_phase_by_scale(
                 head["label2"] = label2
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]
-            coi = np.asarray(data["coi"], dtype=float)
-            with np.errstate(divide="ignore"):
-                f_edge = np.where(coi > 1e-10, 1.0 / coi, np.inf)
-            in_coi = band_freqs[:, None] >= f_edge[None, :]
+            in_coi = _in_coi(band_freqs, data["coi"])
             keep = _phase_cells(wtc, in_coi, _band_rows(data.get("sig"), band), mask_coi)
             phase = np.asarray(data["phase"], dtype=float)[band]
 

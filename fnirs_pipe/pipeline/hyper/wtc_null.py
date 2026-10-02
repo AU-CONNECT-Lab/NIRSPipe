@@ -76,7 +76,7 @@ def run_wtc_null(
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
     from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
     from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_null_levels
-    from fnirs_pipe.utils.lineage import path_from
+    from fnirs_pipe.utils.lineage import paths_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
@@ -107,7 +107,7 @@ def run_wtc_null(
                  "statistic": "wtc", "desc": "level"}, "relmat", ".npz"))
             # what the report checks before it thresholds its arrows against this level
             _hyper_sidecar(path, "hyper_wtc_phasenull_level",
-                           [p for p in (path_from(r) for r in aligned_raws.values()) if p],
+                           paths_from(aligned_raws.values()),
                            **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
                                           mask_coi=mask_coi, whiten_s=whiten_s),
                            n_iter=n_iter, seed=seed)
@@ -159,7 +159,7 @@ def write_wtc_null(
     """
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-    from fnirs_pipe.utils.lineage import path_from
+    from fnirs_pipe.utils.lineage import paths_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
@@ -209,7 +209,7 @@ def write_wtc_null(
                 roi_cond_part.insert(0, "chromophore", ch_type)
                 roi_cond_frames.append(roi_cond_part)
 
-    sources = [p for p in (path_from(r) for r in aligned_raws.values()) if p]
+    sources = paths_from(aligned_raws.values())
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}

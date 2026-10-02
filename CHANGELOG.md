@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Montage colours follow the shared long/short split, so a channel between the two ranges is drawn unclassified
 - An ROI with no good channel stays in the resting-state ROI matrix, seed map and ALFF table as a blank row
 - Fisher z leaves the diagonal of a blank row (a bad channel, an empty ROI) blank instead of 0
+- The hyperscanning modules share one band filter, cone-of-influence mask, row z-score, Yule-Walker step and source list instead of copies
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone

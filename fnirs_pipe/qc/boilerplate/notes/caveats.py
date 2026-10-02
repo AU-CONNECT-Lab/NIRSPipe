@@ -39,8 +39,8 @@ NOTES = {
     # ---- ROI mapping ----
     "caveat.roi_overlap":
         "The ROI mapping lists {n} channel(s) in more than one ROI: {channels}. Each counts in "
-        "every ROI that lists it, so those ROIs average part of the same signal, and the "
-        "connectivity between them is raised by it.",
+        "every ROI that lists it, so those ROIs share part of what they average and the values "
+        "between them are not independent.",
 
     # ---- Epochs and trials ----
     "caveat.chunked_trials":

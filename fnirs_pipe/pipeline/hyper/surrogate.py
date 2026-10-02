@@ -22,6 +22,7 @@ from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_homologous
 from fnirs_pipe.pipeline.hyper.wtc import (
     WTCResult,
     _ChannelWavelet,
+    _in_coi,
     _wtc_over_pairs,
     wtc_band_mean,
     window_result,
@@ -166,8 +167,7 @@ def _accumulate_null_hist(hists: dict, result: "WTCResult", mask_coi: bool) -> N
             wtc = np.asarray(data["wtc"], dtype=float)
             if wtc.shape[0] != len(freqs):
                 continue
-            keep = (freqs[:, None] >= 1.0 / np.asarray(data["coi"], dtype=float)[None, :]
-                    if mask_coi else np.ones(wtc.shape, dtype=bool))
+            keep = _in_coi(freqs, data["coi"]) if mask_coi else np.ones(wtc.shape, dtype=bool)
             if not keep.any():
                 continue
             # one bincount over the whole map rather than one per row: the row index is

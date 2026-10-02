@@ -29,6 +29,19 @@ def autocov(centred: np.ndarray, n_lag: int) -> np.ndarray:
                                            for k in range(1, n_lag + 1)]) / n
 
 
+def _yule_walker(acov: np.ndarray, order: int) -> "tuple[np.ndarray, float] | None":
+    """AR coefficients of ``order`` and the residual variance, from a biased autocovariance.
+
+    None when the Toeplitz system is singular or the fit leaves no positive variance.
+    """
+    try:
+        coef = solve_toeplitz((acov[:order], acov[:order]), acov[1:order + 1])
+    except np.linalg.LinAlgError:
+        return None
+    resid_var = float(acov[0] - coef @ acov[1:order + 1])
+    return (coef, resid_var) if resid_var > 0 else None
+
+
 def ar_whiten_fixed(x: np.ndarray, order: int) -> "np.ndarray | None":
     """Residuals of an order-``order`` Yule-Walker fit, the input's length, or None.
 
@@ -47,12 +60,10 @@ def ar_whiten_fixed(x: np.ndarray, order: int) -> "np.ndarray | None":
     acov = autocov(centred, order)
     if acov[0] <= 0:
         return None
-    try:
-        coef = solve_toeplitz((acov[:order], acov[:order]), acov[1:order + 1])
-    except np.linalg.LinAlgError:
+    fit = _yule_walker(acov, order)
+    if fit is None:
         return None
-    if acov[0] - coef @ acov[1:order + 1] <= 0:
-        return None
+    coef, _ = fit
     resid = lfilter(np.r_[1.0, -coef], [1.0], centred)
     resid[:order] = 0.0
     return resid

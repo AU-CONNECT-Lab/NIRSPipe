@@ -15,13 +15,12 @@ import warnings
 import mne
 import numpy as np
 import pandas as pd
-from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
 from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, long_axis_over
+from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
-from fnirs_pipe.pipeline.hyper.whiten import autocov
+from fnirs_pipe.pipeline.hyper.whiten import _yule_walker, autocov
 from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
@@ -72,13 +71,10 @@ def _ar_whiten(x: np.ndarray, max_order: int = ISC_MAX_AR_ORDER) -> tuple[np.nda
 
     best_bic, best_coef, best_order = np.inf, None, 0
     for p in range(1, n_lag + 1):
-        try:
-            coef = solve_toeplitz((acov[:p], acov[:p]), acov[1:p + 1])
-        except np.linalg.LinAlgError:
+        fit = _yule_walker(acov, p)
+        if fit is None:
             break
-        resid_var = acov[0] - coef @ acov[1:p + 1]
-        if resid_var <= 0:
-            break
+        coef, resid_var = fit
         bic = n * np.log(resid_var) + p * np.log(n)
         if bic < best_bic:
             best_bic, best_coef, best_order = bic, coef, p
@@ -101,13 +97,6 @@ def _whiten_rows(data: np.ndarray, max_order: int) -> tuple[np.ndarray, list[int
         orders.append(order)
     drop = max(orders) if orders else 0
     return (out[:, drop:] if drop else out), orders
-
-
-def _zscore_rows(x: np.ndarray) -> np.ndarray:
-    """Each row to zero mean and unit deviation, a flat row left alone rather than divided by 0."""
-    mu  = x.mean(axis=1, keepdims=True)
-    std = x.std(axis=1, keepdims=True)
-    return (x - mu) / np.where(std < 1e-12, 1.0, std)
 
 
 def _isc_from_rows(
@@ -301,15 +290,12 @@ def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
     lo, hi = band
     if lo is None and hi is None:
         return data
-    from mne.filter import filter_data
-
-    from fnirs_pipe.pipeline.denoise import filter_kwargs
+    from fnirs_pipe.pipeline.denoise import filter_array
 
     out = data.copy()
     usable = ~np.isnan(data).any(axis=1)
     if usable.any():
-        kwargs = filter_kwargs(sfreq, data.shape[1], lo, hi)
-        out[usable] = filter_data(data[usable], sfreq, lo, hi, verbose="error", **kwargs)
+        out[usable] = filter_array(data[usable], sfreq, lo, hi)
     return out
 
 

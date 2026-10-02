@@ -345,7 +345,7 @@ def run_pair_null(
                                                    alignment_params)
     from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
     from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-    from fnirs_pipe.utils.lineage import path_from
+    from fnirs_pipe.utils.lineage import paths_from
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
 
@@ -502,7 +502,7 @@ def run_pair_null(
 
     _log_draw_quality(partners, refused, len(candidates))
 
-    sources = [p for p in (path_from(r) for r in aligned_real.values()) if p]
+    sources = paths_from(aligned_real.values())
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}

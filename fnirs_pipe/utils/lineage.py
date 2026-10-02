@@ -14,6 +14,8 @@ rather than threaded through by hand.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -79,6 +81,11 @@ def path_from(raw: mne.io.Raw) -> str | None:
     """File this object was read from, or None if it was produced in memory."""
     lin = lineage_of(raw)
     return lin.path if lin else None
+
+
+def paths_from(raws: "Iterable[mne.io.Raw]") -> list[str]:
+    """Files these objects were read from, in order, skipping any produced in memory."""
+    return [p for p in (path_from(raw) for raw in raws) if p]
 
 
 def lineage_of(raw: "mne.io.Raw | None") -> Lineage | None:

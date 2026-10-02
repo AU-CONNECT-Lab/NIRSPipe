@@ -361,7 +361,7 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
             continue
         # the real value counted into its own null, as everywhere else here
         beaten = frame["percentile"] / 100 * frame["n_iter"]
-        frame["p"] = (frame["n_iter"] - beaten + 1) / (frame["n_iter"] + 1)
+        frame["p"] = _exact_p(beaten, frame["n_iter"])
         frame["q"] = np.nan
         for cond, part in frame.groupby("condition"):
             frame.loc[part.index, "q"] = multipletests(part["p"], method="fdr_bh")[1]
