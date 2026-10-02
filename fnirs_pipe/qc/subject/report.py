@@ -80,7 +80,7 @@ from fnirs_pipe.qc.common.channel_table import (
     registration_note, roi_overlap_note, save_channel_csv, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.common.figure_io import (
-    CENTER_FIGURE_CSS, _fig_href, _pair_fname, _save_b64_png,
+    CENTER_FIGURE_CSS, _fig_href, _pair_fname, save_png,
     _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
@@ -655,9 +655,8 @@ def _section_motion(
                 ch_names=rep_chs or raw_long.ch_names[:3],
                 raw_before=raw_before_motion,
             )
-            zoom_name = fig_name("badsegmentzoom", extension=".png")
-            _save_b64_png(b64, figures_dir / zoom_name)
-            bad_segment_zoom_path = _fig_href(zoom_name)
+            bad_segment_zoom_path = save_png(b64, figures_dir,
+                                             fig_name("badsegmentzoom", extension=".png"))
 
     return {
         "carpet_gvtd_path": carpet_gvtd_path,
@@ -1461,13 +1460,11 @@ def _section_brain(
                 out.convert("RGB").save(buf, format="PNG", optimize=True)
                 buf.seek(0)
                 combined_b64 = base64.b64encode(buf.read()).decode()
-                _save_b64_png(combined_b64, figures_dir / views_name)
+                brain_views_path = save_png(combined_b64, figures_dir, views_name)
             elif brain_b64:
-                _save_b64_png(brain_b64, figures_dir / views_name)
+                brain_views_path = save_png(brain_b64, figures_dir, views_name)
             else:
                 raise RuntimeError("brain_b64 is None")
-
-            brain_views_path = _fig_href(views_name)
     return {"brain_views_path": brain_views_path}
 
 
@@ -1496,14 +1493,12 @@ def _section_glm(
         ]
         with _guard("GLM design matrix (timeseries)", errors, subject):
             b64 = design_matrix_static_figure(design_matrix, conditions, segments=segments)
-            name = fig_name("timeseries", suffix="design", extension=".png")
-            _save_b64_png(b64, figures_dir / name)
-            glm_design_path = _fig_href(name)
+            glm_design_path = save_png(b64, figures_dir,
+                                       fig_name("timeseries", suffix="design", extension=".png"))
         with _guard("GLM design matrix (heatmap)", errors, subject):
             b64 = design_matrix_heatmap(design_matrix, conditions=conditions)
-            name = fig_name("heatmap", suffix="design", extension=".png")
-            _save_b64_png(b64, figures_dir / name)
-            glm_design_heatmap_path = _fig_href(name)
+            glm_design_heatmap_path = save_png(b64, figures_dir,
+                                               fig_name("heatmap", suffix="design", extension=".png"))
 
     # One file per condition behind a switch, not one tall image: five conditions stacked
     # reach ~3500 px, where a condition cannot be looked at on its own and two cannot be
@@ -1534,11 +1529,10 @@ def _section_glm(
                     if slug in used:
                         slug = f"{slug}{len(used) + 1}"
                     used.add(slug)
-                    name = fig_name("glmactivation", suffix="nirsmap",
-                                    extension=".png", condition=slug)
-                    _save_b64_png(b64, figures_dir / name)
-                    glm_activation_conditions.append(
-                        {"label": label, "path": _fig_href(name)})
+                    path = save_png(b64, figures_dir, fig_name("glmactivation", suffix="nirsmap",
+                                                                extension=".png", condition=slug))
+                    if path:
+                        glm_activation_conditions.append({"label": label, "path": path})
                 # the first condition is what the img element loads before anything is
                 # picked, and it is also what still gates the GLM section being open
                 if glm_activation_conditions:

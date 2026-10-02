@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import io
 
 import matplotlib
 matplotlib.use("Agg")
@@ -13,6 +11,7 @@ from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
+from fnirs_pipe.qc.common.figure_io import fig_png_b64
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.utils.logging import get_logger
 
@@ -227,7 +226,7 @@ def build_wtc_channel(
                + "    " + section_note("figure.coi_band"))
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#444444",
              linespacing=1.5)
-    return _png_b64(fig)
+    return fig_png_b64(fig, facecolor="white")
 
 
 # Height only. The panel has no width of its own: it fills whatever the report's iframe is,
@@ -510,14 +509,6 @@ def flat_colorbar(fig, mappable, ax, label: str, **kwargs):
     bar = fig.colorbar(mappable, ax=ax, label=label, **kwargs)
     bar.outline.set_visible(False)
     return bar
-
-
-def _png_b64(fig) -> str:
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
 
 
 # Node colours for the two members, on every circle this report draws: purple and green

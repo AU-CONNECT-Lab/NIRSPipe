@@ -13,6 +13,7 @@ from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the pa
     NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
 )
 from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
+                                          _hex_to_rgba,
                                           TIMELINE_ROW_PX,
                                           decimate as _decimate, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
@@ -48,12 +49,6 @@ _BAD_COLOR  = "#F8786E"
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
-
 
 def _cond_colors(descriptions: list[str]) -> dict[str, str]:
     return {d: _COND_PALETTE[i % len(_COND_PALETTE)] for i, d in enumerate(descriptions)}

@@ -27,9 +27,11 @@ All notable changes to this project will be documented in this file.
 - Fisher z leaves the diagonal of a blank row (a bad channel, an empty ROI) blank instead of 0
 - The hyperscanning modules share one band filter, cone-of-influence mask, row z-score, Yule-Walker step and source list instead of copies
 - Windowed CV, window centres, the motion-band derivative and band PSD means each have one definition in the QC metrics
+- QC figures share one matplotlib-to-PNG encoder, one colour-to-rgba helper and the report's PNG saving
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
+- `optode_layout_figure`, the Plotly optode map nothing called
 
 ### Fixed
 - `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults

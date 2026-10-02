@@ -20,6 +20,7 @@ from PIL import Image as _PILImage
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
+from fnirs_pipe.qc.common.figure_io import fig_png_b64
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
@@ -691,11 +692,7 @@ def design_matrix_static_figure(
     fig.suptitle(title, fontsize=10)
     plt.tight_layout()
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return fig_png_b64(fig)
 
 
 def design_matrix_heatmap(
@@ -709,11 +706,7 @@ def design_matrix_heatmap(
     _plot_dm(design_matrix, axes=ax)
     ax.tick_params(axis="x", labelsize=5)
     ax.tick_params(axis="y", labelsize=7)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return fig_png_b64(fig)
 
 
 def glm_betas_figure(
@@ -786,8 +779,4 @@ def glm_betas_figure(
 
     fig.suptitle(title, fontsize=11, y=1.01)
     plt.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return fig_png_b64(fig)

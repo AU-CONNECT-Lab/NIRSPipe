@@ -3,8 +3,6 @@
 The OD/GVTD carpet is the pre-processing (raw) motion view; post-denoising uses carpet_compare_figure.
 """
 
-import base64
-import io
 
 import matplotlib
 matplotlib.use("Agg")
@@ -15,6 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.signal import detrend
 
+from fnirs_pipe.qc.common.figure_io import fig_png_b64
 from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
 from fnirs_pipe.qc.figures.common._utils import decimate as _decimate
@@ -720,11 +719,7 @@ def bad_segment_zoom_figure(
         fontsize=9, y=1.01,
     )
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
+    return fig_png_b64(fig)
 
 
 def build_motion_detail_figure(

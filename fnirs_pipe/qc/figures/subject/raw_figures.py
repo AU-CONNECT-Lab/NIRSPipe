@@ -12,7 +12,7 @@ from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import mni_trans
 from fnirs_pipe.qc.figures.common._utils import (
-    BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR,
+    BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
     TIMELINE_ROW_PX, block_duration_labels,
     decimate as _decimate, line_xy,
@@ -22,6 +22,7 @@ from fnirs_pipe.qc.figures.common._utils import (
 )
 from fnirs_pipe.qc.metrics._helpers import Bands, epochable_events, long_short_channels
 from fnirs_pipe.qc.common.channel_table import _neither_range_title
+from fnirs_pipe.qc.common.figure_io import extract_markers
 
 logger = get_logger("qc.figures")
 
@@ -33,12 +34,6 @@ _PSD_FMAX = 2.0
 EPOCH_MIN_TRIALS = 2
 
 
-
-
-def _hex_to_rgba(hex_color: str, alpha: float) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
 
 
 def _ch_colors(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[str]:
@@ -986,13 +981,7 @@ def build_epoch_preview_figure(
     ``sep_bands`` is this run's separations from :func:`separation_bands`; None takes the
     package defaults.
     """
-    anns = raw_haemo.annotations
-    markers = [
-        {"onset": float(a["onset"]), "duration": float(a["duration"]),
-         "description": str(a["description"])}
-        for a in anns
-        if not str(a["description"]).upper().startswith("BAD")
-    ]
+    markers = extract_markers(raw_haemo)
     if not markers:
         return None
 

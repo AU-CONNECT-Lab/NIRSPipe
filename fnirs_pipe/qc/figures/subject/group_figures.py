@@ -7,7 +7,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.figures.common._utils import CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR
+from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
+                                                  _hex_to_rgba)
 
 
 # Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are
@@ -482,12 +483,6 @@ def build_window_grid(
     return fig
 
 
-def _rgba(hex_colour: str, alpha: float) -> str:
-    """``"#e74c3c", 0.1 -> "rgba(231,76,60,0.1)"``, for a band drawn under a line."""
-    r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
-    return f"rgba({r},{g},{b},{alpha})"
-
-
 def condition_colours(conditions: list[str]) -> dict[str, str]:
     """One colour per condition, by the rule the run report's markers already follow.
 
@@ -540,7 +535,7 @@ def build_condition_timeline(
         fig.update_yaxes(title_text=label, title_font=dict(size=10), row=r, col=1)
 
     for name, t0, t1 in windows:
-        fig.add_vrect(x0=t0, x1=t1, fillcolor=_rgba(colours[name], 0.10), line_width=0,
+        fig.add_vrect(x0=t0, x1=t1, fillcolor=_hex_to_rgba(colours[name], 0.10), line_width=0,
                       layer="below", row="all", col=1)
         # named once, on the top panel
         fig.add_annotation(x=(t0 + t1) / 2, y=1.0, yref="y domain", text=name,

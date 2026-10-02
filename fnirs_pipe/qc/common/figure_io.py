@@ -10,6 +10,7 @@ looked at.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import re
 from pathlib import Path
@@ -227,6 +228,17 @@ def _fig_href(name: str) -> str:
 def _save_b64_png(b64: str, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(base64.b64decode(b64))
+
+
+def fig_png_b64(fig, dpi: int = 300, **savefig_kw) -> str:
+    """A matplotlib figure as a base64 PNG, closed afterwards so pyplot lets go of it."""
+    # the caller drew it through pyplot, so this import is already loaded and picks no backend
+    import matplotlib.pyplot as plt
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", **savefig_kw)
+    plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode()
 
 
 def save_png(b64: str, figures_dir: Path, name: str) -> "str | None":

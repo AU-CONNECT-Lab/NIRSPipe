@@ -8,6 +8,13 @@ from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.utils")
 
+
+def _hex_to_rgba(hex_color: str, alpha: float) -> str:
+    """``"#e74c3c", 0.1 -> "rgba(231,76,60,0.1)"``; the leading ``#`` is optional."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 HBO_COLOR      = "#e74c3c"
 HBR_COLOR      = "#3498db"
 HBO_MEAN_COLOR = "#c0392b"   # darker HbO for bold mean line
