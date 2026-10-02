@@ -74,6 +74,7 @@ def run_wtc_null(
     # that defines them, which only a lookup made at call time can see
     from fnirs_pipe.io.derivatives import group_output_path
     from fnirs_pipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
+    from fnirs_pipe.pipeline.hyper._helpers import _chroma_tuple
     from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
     from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_null_levels
     from fnirs_pipe.utils.lineage import paths_from
@@ -81,9 +82,7 @@ def run_wtc_null(
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
 
-    chroma = tuple(dict.fromkeys(chroma))
-    if not chroma or set(chroma) - {"hbo", "hbr"}:
-        raise ValueError(f"chroma must be some of ('hbo', 'hbr'), got {chroma!r}")
+    chroma = _chroma_tuple(chroma, "chroma")
 
     logger.info(
         "Phase-scrambled WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "

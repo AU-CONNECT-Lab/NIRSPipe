@@ -21,6 +21,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.io.tables import read_tsv_or_none
 from fnirs_pipe.io.naming import report_name, derivative_path, parse_path
 from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
@@ -29,6 +30,9 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.derivatives import entity_of
 
 logger = get_logger("qc.hyper_index")
+
+# what an unreadable table costs this page, for the warning
+_LOST = "its rows go unlisted"
 
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
@@ -62,16 +66,6 @@ def _table(stem: str, **entities) -> str:
                            group=entity_of(stem, "group"),
                            session=entity_of(stem, "ses"),
                            task=entity_of(stem, "task"), **entities).name
-
-
-def _read_tsv(path: Path) -> "pd.DataFrame | None":
-    if not path.exists():
-        return None
-    try:
-        return pd.read_csv(path, sep="\t")
-    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
-        logger.warning("unreadable table, its rows go unlisted: %s (%s)", path.name, exc)
-        return None
 
 
 def _band(path: Path) -> str:
@@ -184,9 +178,9 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
     """
     out: dict = {}
     for chroma in ("hbo", "hbr"):
-        df = _read_tsv(nirs_dir / _table(
+        df = read_tsv_or_none(nirs_dir / _table(
             stem, pairing=slug.lstrip("_") or None, chromophore=chroma,
-            condition=_pair_fname(label) if label else None, statistic="isc"))
+            condition=_pair_fname(label) if label else None, statistic="isc"), _LOST)
         if df is None or df.empty:
             continue
         values = df.set_index(df.columns[0]).to_numpy(dtype=float)
@@ -239,12 +233,14 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
 
     for task in _tasks(nirs_dir, group_id):
         stem = f"group-{group_id}_task-{task}"
-        whole = _read_tsv(nirs_dir / _table(stem, statistic="wtc"))
-        bycond = _read_tsv(nirs_dir / _table(stem, condition="all", statistic="wtc"))
+        whole = read_tsv_or_none(nirs_dir / _table(stem, statistic="wtc"), _LOST)
+        bycond = read_tsv_or_none(nirs_dir / _table(stem, condition="all", statistic="wtc"),
+                                  _LOST)
         # written only when the run drew a null; a tree without one keeps the column empty
-        whole_null = _read_tsv(nirs_dir / _table(stem, nulldist="phase", statistic="wtc"))
-        bycond_null = _read_tsv(nirs_dir / _table(stem, condition="all",
-                                                  nulldist="phase", statistic="wtc"))
+        whole_null = read_tsv_or_none(nirs_dir / _table(stem, nulldist="phase", statistic="wtc"),
+                                      _LOST)
+        bycond_null = read_tsv_or_none(nirs_dir / _table(stem, condition="all",
+                                                  nulldist="phase", statistic="wtc"), _LOST)
         # every inter-brain number is of two members, so a group of three contributes three
         # rows per window, one per pairing, rather than one row averaging across them
         pairings = _pairings(whole, bycond)

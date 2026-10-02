@@ -23,8 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 from fnirs_pipe.io.naming import parse_path, derivative_path
 
 logger = get_logger("pipeline.wtc_aggregate")
@@ -273,19 +272,15 @@ def write_aggregate_wtc(output_dir: Path, sources: "list[Path]") -> Path | None:
 
     # the band is uniform by the time we get here, so one file's parameters describe them all
     band = next((_band_params(p) for p in sources), {})
-    write_sidecar_json(out_path, {
-        "pipeline_version": __version__,
-        "step": "hyper_merge",
-        "Sources": [p.as_posix() for p in sources],
-        "parameters": {
-            "n_tables": len(sources),
-            "n_dyads": int(merged["group_id"].nunique()),
-            "tasks": sorted(merged["task"].unique()),
-            "entities": {k: str(v) for k, v in sorted(parse_path(out_path.name).items())
-                         if k not in ("suffix", "extension")},
-            **{k: band[k] for k in _MUST_AGREE if k in band},
-        },
-    })
+    _hyper_sidecar(
+        out_path, "hyper_merge", [p.as_posix() for p in sources],
+        n_tables=len(sources),
+        n_dyads=int(merged["group_id"].nunique()),
+        tasks=sorted(merged["task"].unique()),
+        entities={k: str(v) for k, v in sorted(parse_path(out_path.name).items())
+                  if k not in ("suffix", "extension")},
+        **{k: band[k] for k in _MUST_AGREE if k in band},
+    )
     logger.info("merged %d tables -> %s", len(sources), out_path.name)
     return out_path
 

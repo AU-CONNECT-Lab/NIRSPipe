@@ -11,9 +11,18 @@ from fnirs_pipe.utils import unwrap_enum as _unwrap
 from fnirs_pipe import __version__
 
 
+# a run's id, made when it starts and read back wherever its time is printed
+RUN_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
+
+
 def _fwd(p: Any) -> str | None:
     """Forward-slash-normalized string of a path, or None if falsy."""
     return str(p).replace("\\", "/") if p else None
+
+
+def _command_line() -> str:
+    """The command this process was started with, slashes forward so it reads the same on every OS."""
+    return " ".join(sys.argv).replace("\\", "/")
 
 
 def _toml_scalar(v: Any) -> str:
@@ -127,8 +136,8 @@ def write_run_record(
 
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
-        "run_timestamp": datetime.strptime(timestamp, "%Y%m%d_%H%M%S").isoformat(),
-        "run_command": " ".join(sys.argv).replace("\\", "/"),
+        "run_timestamp": datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).isoformat(),
+        "run_command": _command_line(),
         "bids_dir": _fwd(args["bids_dir"]),
         "output_dir": _fwd(output_dir),
         "work_dir": _fwd(args.get("work_dir")),
@@ -195,8 +204,8 @@ def write_group_run_record(
     """
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
-        "run_timestamp": datetime.strptime(timestamp, "%Y%m%d_%H%M%S").isoformat(),
-        "run_command": " ".join(sys.argv).replace("\\", "/"),
+        "run_timestamp": datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).isoformat(),
+        "run_command": _command_line(),
         "output_dir": _fwd(output_dir),
         "log_dir": _fwd(group_dir / "logs"),
         "group_id": group_id,

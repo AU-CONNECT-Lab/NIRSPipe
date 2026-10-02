@@ -249,7 +249,7 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
 
     for (group_id, task), info in cache["groups"].items():
         write_dataset_description(deriv_path / _DERIV_NAME, name=_DERIV_NAME,
-                                  generated_by="fnirs-gui hyper-align")
+                                  generated_by="fnirs-gui hyper-align", source=Path(bids_dir))
         for sid in info["subject_ids"]:
             path = info["paths"][sid]
             out_dir = deriv_nirs_dir(deriv_path, _DERIV_NAME, sid.removeprefix("sub-"),

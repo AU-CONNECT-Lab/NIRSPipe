@@ -34,7 +34,7 @@ from fnirs_pipe.qc.common.report_shell import (
     page_vars,
     render,
 )
-from fnirs_pipe.io.naming import derivative_path, report_name
+from fnirs_pipe.io.naming import derivative_path
 from fnirs_pipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,

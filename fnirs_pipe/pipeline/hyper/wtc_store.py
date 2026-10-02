@@ -14,10 +14,10 @@ import pandas as pd
 import json
 
 from fnirs_pipe.pipeline.hyper.alignment import alignment_params
+from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import read_json, write_sidecar_json
+from fnirs_pipe.io.derivatives import read_json
 from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
 from fnirs_pipe.utils.lineage import paths_from
 
@@ -241,14 +241,10 @@ def reband_tree(
                if k not in ("suffix", "extension", "datatype")},
             band=tag)
         df.to_csv(out_path, sep="\t", index=False)
-        write_sidecar_json(out_path, {
-            "pipeline_version": __version__,
-            "step": "wtc_reband",
-            "Sources": [str(npz_path)],
-            # everything the maps were computed with, which a new band changes none of
-            "parameters": {**_maps_params(npz_path),
-                           "band_fmin": fmin, "band_fmax": fmax, "mask_coi": mask_coi},
-        })
+        # everything the maps were computed with, which a new band changes none of
+        _hyper_sidecar(out_path, "wtc_reband", [str(npz_path)],
+                       **{**_maps_params(npz_path),
+                          "band_fmin": fmin, "band_fmax": fmax, "mask_coi": mask_coi})
         logger.info("reband -> %s (%d rows)", out_path, len(df))
         written.append(out_path)
     return written

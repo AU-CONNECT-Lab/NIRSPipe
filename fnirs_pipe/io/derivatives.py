@@ -334,6 +334,17 @@ def write_bidsignore(output_dir: Path) -> None:
     (output_dir / ".bidsignore").write_text("\n".join(_BIDSIGNORE) + "\n", encoding="utf-8")
 
 
+def dataset_root_of(path: Path) -> "Path | None":
+    """The nearest folder above ``path`` holding a dataset_description.json, or None.
+
+    ``bids/sub-01/nirs/sub-01_task-rest_nirs.snirf`` -> ``bids``
+    """
+    for parent in Path(path).resolve().parents:
+        if (parent / "dataset_description.json").is_file():
+            return parent
+    return None
+
+
 def _source_dataset(source: Path) -> dict:
     """One SourceDatasets entry for the tree this output was computed from.
 

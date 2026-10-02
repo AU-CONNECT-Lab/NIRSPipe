@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, _circular_stats
-from fnirs_pipe.utils import fisher_r_to_z
+from fnirs_pipe.utils import bare_roi_map, fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.roi")
@@ -36,7 +36,8 @@ def _rois_of(roi_map: dict[str, list[str]]) -> dict[str, list[str]]:
     {"L": ["S1_D1", "S1_D2"], "R": ["S1_D2"]}  ->  {"S1_D1": ["L"], "S1_D2": ["L", "R"]}
     """
     out: dict[str, list[str]] = {}
-    for roi, chs in roi_map.items():
+    # a map passed in directly may still carry " hbo" / " hbr"; the labels here are pairs
+    for roi, chs in bare_roi_map(roi_map).items():
         for ch in chs:
             if roi not in out.setdefault(ch, []):
                 out[ch].append(roi)

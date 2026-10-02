@@ -27,6 +27,7 @@ import json
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.utils import bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.naming import derivative_path
 
@@ -117,7 +118,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         else:
             all_pairings = True
             yield "whole", "whole", "all", draws, real
-    for name, channels in (roi_map or {}).items():
+    for name, channels in bare_roi_map(roi_map or {}).items():
         d = hom_d[hom_d["label"].isin(channels)]
         r = hom_r[hom_r["label"].isin(channels)]
         # a thinly covered region is not a region

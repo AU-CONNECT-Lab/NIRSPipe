@@ -96,3 +96,11 @@ def _zscore_rows(x: np.ndarray) -> np.ndarray:
     mu  = x.mean(axis=1, keepdims=True)
     std = x.std(axis=1, keepdims=True)
     return (x - mu) / np.where(std < 1e-12, 1.0, std)
+
+
+def _chroma_tuple(chroma, name: str) -> "tuple[str, ...]":
+    """The chromophores asked for, in order and once each, or a ValueError naming ``name``."""
+    out = tuple(dict.fromkeys(chroma))
+    if not out or set(out) - {"hbo", "hbr"}:
+        raise ValueError(f"{name} must be some of ('hbo', 'hbr'), got {chroma!r}")
+    return out

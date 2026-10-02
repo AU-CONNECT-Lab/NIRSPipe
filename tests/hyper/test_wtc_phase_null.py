@@ -459,3 +459,19 @@ def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
 
     assert len(whole) == 1
     assert whole["null_mean"].iloc[0] == pytest.approx(0.4)
+
+
+def test_a_suffixed_map_passed_straight_to_the_api_matches_the_bare_one():
+    """The CLI strips suffixes on load; a caller going straight to these functions does not
+    pass through it, and a "A1 hbo" entry used to match no channel at all."""
+    from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_isc
+
+    df = wtc_band_mean(_result({"A1": _map(0.2), "A2": _map(0.8)}), 0.06, 0.15)
+    bare = roi_mean_of_channels(df, {"roiA": ["A1", "A2"]}, min_channels=2)
+    suffixed = roi_mean_of_channels(df, {"roiA": ["A1 hbo", "A2 hbr"]}, min_channels=2)
+    pd.testing.assert_frame_equal(bare, suffixed)
+
+    mat = np.array([[0.5, 0.1], [0.2, 0.4]])
+    a, _ = roi_mean_of_isc(mat, ["A1", "A2"], {"r": ["A1", "A2"]}, min_channels=1)
+    b, _ = roi_mean_of_isc(mat, ["A1", "A2"], {"r": ["A1 hbo", "A2 hbo"]}, min_channels=1)
+    np.testing.assert_array_equal(a, b)

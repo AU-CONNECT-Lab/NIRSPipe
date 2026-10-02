@@ -15,9 +15,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.utils import bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.pipeline.hyper._helpers import _chroma_tuple
 from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
 from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
 from fnirs_pipe.pipeline.hyper.whiten import whiten_order, whiten_raws
@@ -70,10 +72,7 @@ class HyperPostConfig:
     cond_pad_s: "float | None" = field(init=False)
 
     def __post_init__(self) -> None:
-        self.chroma = tuple(dict.fromkeys(self.wtc_chroma))
-        if not self.chroma or set(self.chroma) - {"hbo", "hbr"}:
-            raise ValueError(
-                f"wtc_chroma must be some of ('hbo', 'hbr'), got {self.wtc_chroma!r}")
+        self.chroma = _chroma_tuple(self.wtc_chroma, "wtc_chroma")
         self.band_fmin = (self.wtc_band_fmin if self.wtc_band_fmin is not None
                           else self.wtc_fmin)
         self.band_fmax = (self.wtc_band_fmax if self.wtc_band_fmax is not None
@@ -471,6 +470,7 @@ def run_hyper_post(
     roi_rows: list[dict] = []
     roi_labels: list[str] = list(roi_map.keys()) if roi_map else []
     if roi_map:
+        roi_map = bare_roi_map(roi_map)
         assigned = {ch for chs in roi_map.values() for ch in chs}
         for roi_name, chs in roi_map.items():
             roi_rows.append({"roi": roi_name, "channels": chs})

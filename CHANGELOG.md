@@ -34,6 +34,9 @@ All notable changes to this project will be documented in this file.
 - A SNIRF's sidecar is read as UTF-8 on every platform
 - QC metrics and figures that accept intensity or optical density convert through one `as_optical_density`
 - A channel's source-detector pair is read through one `pair_of`, replacing about 45 inline splits and four local helpers
+- The crop, edit-markers and aligned trees name the dataset they were made from under `SourceDatasets`
+- The hyperscanning ROI functions drop an ` hbo`/` hbr` suffix from map entries themselves, not only on load
+- Dyad sidecars, the chromophore check, dyad table reads and the run id format each have one definition
 
 ### Removed
 - `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone

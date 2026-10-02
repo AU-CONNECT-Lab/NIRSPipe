@@ -10,7 +10,7 @@ import pandas as pd
 import mne
 
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import write_dataset_description
+from fnirs_pipe.io.derivatives import dataset_root_of, write_dataset_description
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -52,7 +52,8 @@ def apply_markers_from_df(
     stem = bids_stem(snirf_path)
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
     write_dataset_description(derivatives_dir / _DERIV_NAME, name=_DERIV_NAME,
-                              generated_by="fnirs-prep edit-markers")
+                              generated_by="fnirs-prep edit-markers",
+                              source=dataset_root_of(snirf_path))
     out_nirs_dir.mkdir(parents=True, exist_ok=True)
     copy_sidecars(snirf_path, stem, out_nirs_dir)
 

@@ -259,13 +259,13 @@ def cmd_run(
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
     from fnirs_pipe.qc.common.windows import condition_windows, split_windows
     from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
-    from fnirs_pipe.utils.run_record import write_group_run_record
+    from fnirs_pipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
 
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="fnirs-hyper output",
                               generated_by="fnirs-hyper", source=derivatives_dir)
     write_bidsignore(output_dir)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
 
     if wtc_window_s is not None:
         if not wtc_by_condition:

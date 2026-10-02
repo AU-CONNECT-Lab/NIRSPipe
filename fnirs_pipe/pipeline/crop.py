@@ -14,8 +14,8 @@ import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import (data_state, entity_of, read_json, write_dataset_description,
-                                       write_sidecar_json)
+from fnirs_pipe.io.derivatives import (data_state, dataset_root_of, entity_of, read_json,
+                                       write_dataset_description, write_sidecar_json)
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -143,10 +143,13 @@ def _crop_parameters(windows, analysis_windows, margin_s) -> dict:
                if analysis_windows is not None else {})}
 
 
-def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None) -> Path:
+def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None,
+                     snirf_path: "Path | None" = None) -> Path:
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
+    # the dataset the cut file sits in, found the same way from the CLI and the GUI
     write_dataset_description(derivatives_dir / _DERIV_NAME, name=_DERIV_NAME,
-                              generated_by="fnirs-prep crop")
+                              generated_by="fnirs-prep crop",
+                              source=dataset_root_of(snirf_path) if snirf_path else None)
     out_nirs_dir.mkdir(parents=True, exist_ok=True)
     return out_nirs_dir
 
@@ -294,7 +297,7 @@ def crop_snirf_from_path(
     unwidened span in the sidecar. Returns list of written SNIRF paths.
     """
     stem = bids_stem(snirf_path)
-    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
+    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses, snirf_path)
     # read_snirf restores the bad-channel marks from the sidecar, which a derivative carries
     # and a raw recording does not
     raw = read_snirf(snirf_path) if derivative else read_raw_snirf(snirf_path)
@@ -349,7 +352,7 @@ def crop_snirf(
     snirf_path = find_snirf(bids_dir, sub, ses, task, run,
                             validate=validate and not derivative, desc=input_desc)
     stem = bids_stem(snirf_path)
-    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses)
+    out_nirs_dir = _setup_deriv_dir(derivatives_dir, sub, ses, snirf_path)
     copy_dataset_root(bids_dir, derivatives_dir / _DERIV_NAME)
     raw = read_snirf(snirf_path) if derivative else read_raw_snirf(snirf_path)
 

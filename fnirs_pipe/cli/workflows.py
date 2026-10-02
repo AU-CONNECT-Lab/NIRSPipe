@@ -27,7 +27,7 @@ from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.utils import pair_of, unwrap_enum as _v
 from fnirs_pipe.utils import job_db as _jdb
 from fnirs_pipe.utils.logging import get_logger, setup_logging, thread_log_file
-from fnirs_pipe.utils.run_record import write_run_record
+from fnirs_pipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
 from fnirs_pipe.utils.run_script import write_run_script
 from fnirs_pipe import __version__
 
@@ -267,7 +267,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     try:
         def _one(subject: str) -> None:
-            sub_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            sub_timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
             sub_dir = output_dir / f"sub-{subject}"
             log_file = sub_dir / "logs" / f"sub-{subject}.log"
             with thread_log_file(log_file), _isolate(subject, failed):

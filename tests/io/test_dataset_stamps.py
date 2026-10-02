@@ -117,3 +117,29 @@ def test_a_prep_tree_restamps_a_description_an_older_version_left(tmp_path):
     _setup_deriv_dir(tmp_path, "01", None)
 
     assert _description(root)["GeneratedBy"][0]["Version"] == __version__
+
+
+def test_a_crop_tree_names_the_dataset_its_input_sat_in(tmp_path):
+    """Found from the file, so the CLI, which knows the BIDS root, and the GUI, which only has
+    the file, stamp the same source and do not overwrite each other's."""
+    from fnirs_pipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
+
+    bids = tmp_path / "bids"
+    (bids / "sub-01" / "nirs").mkdir(parents=True)
+    (bids / "dataset_description.json").write_text(json.dumps({"Name": "raw"}))
+    snirf = bids / "sub-01" / "nirs" / "sub-01_task-rest_nirs.snirf"
+    _setup_deriv_dir(tmp_path / "derivatives", "01", None, snirf)
+
+    entry = _description(tmp_path / "derivatives" / _DERIV_NAME)["SourceDatasets"][0]
+    assert entry["URL"] == bids.resolve().as_uri()
+
+
+def test_dataset_root_of_stops_at_the_nearest_description(tmp_path):
+    from fnirs_pipe.io.derivatives import dataset_root_of
+
+    inner = tmp_path / "outer" / "derivatives" / "fnirs-pipe"
+    (inner / "sub-01").mkdir(parents=True)
+    for root in (tmp_path / "outer", inner):
+        (root / "dataset_description.json").write_text("{}")
+    assert dataset_root_of(inner / "sub-01" / "x.snirf") == inner.resolve()
+    assert dataset_root_of(tmp_path / "nowhere" / "x.snirf") is None

@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.io.tables import read_tsv_or_none
 from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
@@ -94,16 +95,6 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def _read_tsv(path: Path) -> "pd.DataFrame | None":
-    if not path.exists():
-        return None
-    try:
-        return pd.read_csv(path, sep="\t")
-    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
-        logger.warning("unreadable table, its panel loses a row: %s (%s)", path.name, exc)
-        return None
-
-
 def _shares(table: "pd.DataFrame | None", key: str) -> dict:
     """``{pair: share}`` or ``{condition: share}``, averaged over the other column."""
     if table is None or table.empty or key not in table.columns:
@@ -139,7 +130,7 @@ def collect_rows(output_dir: Path) -> list[dict]:
             continue
         label = record_label(record_path)
         group_dir = record_path.parent.parent
-        table = _read_tsv(record_path.parent / _usable_name(label))
+        table = read_tsv_or_none(record_path.parent / _usable_name(label), "its panel loses a row")
         screening = record.get("screening") or {}
         percentile = {name: float(v["percentile"])
                       for name, v in (screening.get("windows") or {}).items()

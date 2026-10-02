@@ -21,7 +21,7 @@ from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.pipeline.hyper.whiten import _yule_walker, autocov
-from fnirs_pipe.utils import fisher_r_to_z, pair_of
+from fnirs_pipe.utils import bare_roi_map, fisher_r_to_z, pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -493,7 +493,8 @@ def roi_mean_of_isc(
     mat = np.asarray(isc_mat, dtype=float)
     labels = list(roi_map.keys())
     index = {name: i for i, name in enumerate(ch_names)}
-    picks = {roi: [index[ch] for ch in chs if ch in index] for roi, chs in roi_map.items()}
+    picks = {roi: [index[ch] for ch in chs if ch in index]
+             for roi, chs in bare_roi_map(roi_map).items()}
 
     out = np.full((len(labels), len(labels)), np.nan)
     thin = 0

@@ -160,7 +160,7 @@ def cmd_align(
             continue
 
         write_dataset_description(output_dir / _DERIV_NAME, name=_DERIV_NAME,
-                                  generated_by="fnirs-prep align")
+                                  generated_by="fnirs-prep align", source=bids_dir)
         copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
         for entry in group:

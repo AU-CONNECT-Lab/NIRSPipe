@@ -20,8 +20,7 @@ import pandas as pd
 
 from fnirs_pipe.qc.metrics.hyper import dyad_status
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import write_sidecar_json
+from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 
 logger = get_logger("qc.hyper_usable")
 
@@ -127,12 +126,8 @@ def write_usable_table(path: Path, grid: dict, subject_ids: list[str],
     if table.empty:
         return None
     table.to_csv(path, sep="\t", index=False)
-    write_sidecar_json(path, {
-        "pipeline_version": __version__,
-        "step": "hyper_usable",
-        "Sources": sources or [],
-        "parameters": {"window_s": round(_window_s(grid), 3),
-                       "n_long_pairs": len(_long_rows(grid)), **params},
-    })
+    _hyper_sidecar(path, "hyper_usable", sources or [],
+                   **{"window_s": round(_window_s(grid), 3),
+                      "n_long_pairs": len(_long_rows(grid)), **params})
     logger.info("usable-time table -> %s", path)
     return path

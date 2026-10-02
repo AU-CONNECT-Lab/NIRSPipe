@@ -7,6 +7,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("io.tables")
+
 # Extensions that name their own delimiter. Anything else is sniffed.
 _BY_EXTENSION = {".tsv": "\t", ".csv": ","}
 
@@ -46,3 +50,17 @@ def read_table(path: str | Path, **kwargs) -> pd.DataFrame:
     path = Path(path)
     sep = _BY_EXTENSION.get(path.suffix.lower()) or _sniff_delimiter(path)
     return pd.read_csv(path, sep=sep, engine="python", **kwargs)
+
+
+def read_tsv_or_none(path: Path, lost: str) -> "pd.DataFrame | None":
+    """A tab-separated table the package wrote, or None when absent or unreadable.
+
+    ``lost`` says what an unreadable one costs the caller, for the warning.
+    """
+    if not path.exists():
+        return None
+    try:
+        return pd.read_csv(path, sep="	")
+    except (OSError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+        logger.warning("unreadable table, %s: %s (%s)", lost, path.name, exc)
+        return None
