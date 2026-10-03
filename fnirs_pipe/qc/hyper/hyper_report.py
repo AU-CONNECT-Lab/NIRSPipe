@@ -40,6 +40,7 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html,
     save_png,
 )
+from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 from fnirs_pipe.qc.figures.hyper.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
 from fnirs_pipe.qc.common.report_shell import (
@@ -486,6 +487,16 @@ def build_hyper_report(
     post = output_path.with_name(report_name(label))
     post_href = post.name if post.exists() else None
 
+    # after the writer's passes, so every sidecar the scan reads is on disk; the same name
+    # `fnirs-qc provenance` gives it, so re-running that refreshes the image this page links
+    provenance_path = None
+    with guard("Provenance diagram", errors, meta["label"]):
+        scope = f"group-{group_id}_task-{task}"
+        for written in write_provenance(meta["sqm_dir"], output_path.parent / "figures",
+                                        figure_namer(scope), title=scope):
+            if written.suffix == ".png":
+                provenance_path = f"figures/{written.name}"
+
     html = render(
         "hyper_report.html.j2",
         **page_vars(
@@ -500,7 +511,7 @@ def build_hyper_report(
         ),
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
-            nirs_dir=meta["sqm_dir"],
+            nirs_dir=meta["sqm_dir"], provenance_path=provenance_path,
             methods=methods, versions=versions,
         ),
         group_id=group_id,
@@ -1300,8 +1311,6 @@ def build_hyper_post_report(
     # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
-        from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
-
         for written in write_provenance(
             group_data_dir(output_dir, group_id),
             group_report_dir(output_dir, group_id) / "figures",

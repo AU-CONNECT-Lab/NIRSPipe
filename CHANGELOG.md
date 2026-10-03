@@ -46,6 +46,7 @@ All notable changes to this project will be documented in this file.
 - `optode_layout_figure`, the Plotly optode map nothing called
 
 ### Fixed
+- The dyad and subject raw reports draw and embed their provenance graph instead of a placeholder
 - `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
 - The per-subject run script ignored values set in `--config`
 - The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was

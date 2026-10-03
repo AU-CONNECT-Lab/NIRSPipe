@@ -112,4 +112,10 @@ NOTES = {
         "arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter cycle, "
         "drawn only where coherence clears {clears}",
     "figure.coi_band": "washed-out band: outside the cone of influence",
+
+    # ---- Every report's footer ----
+    "footer.provenance_not_rendered":
+        "Diagram not rendered: drawing it failed when this page was written. The reason is "
+        "under Errors, or in the log on a page without that section; write the page again "
+        "once it is fixed.",
 }

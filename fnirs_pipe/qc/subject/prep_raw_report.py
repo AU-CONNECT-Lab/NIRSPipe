@@ -21,6 +21,7 @@ from fnirs_pipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
+from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
     heatmap_args, pair_rows, registration_note, save_channel_csv, separation_blocks,
@@ -835,8 +836,36 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         logger.info("condition %s \u2192 %s", label, out.name)
 
 
+def _nirs_dir(runs: list[dict], sub_dir: Path) -> Path:
+    session = runs[0].get("session") if runs else None
+    return sub_dir / (f"ses-{session}" if session else "") / "nirs"
+
+
+def _page_provenance(runs: list[dict], output_path: Path, sub_dir: Path) -> "str | None":
+    """The page's provenance graph, drawn over the same ``nirs/`` its table reads.
+
+    Only the label differs from the pipeline report's graph: one page holds every run of a
+    task, so the graph is the page's rather than one run's, exactly as the table is.
+    """
+    if not runs:
+        return None
+    run = runs[0]
+    name = "_".join([f"sub-{run['subject_id']}"]
+                    + [f"{key}-{run[field]}" for key, field in (("ses", "session"),
+                                                               ("task", "task"))
+                       if run.get(field)])
+    href = None
+    # the viewer prints no errors block of its own, so a failure lands in the log only
+    with guard("Provenance diagram", [], output_path.stem):
+        for written in write_provenance(_nirs_dir(runs, sub_dir), sub_dir / "figures",
+                                        figure_namer(name, prefix="raw"), title=name):
+            if written.suffix == ".png":
+                href = f"figures/{written.name}"
+    return href
+
+
 def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
-                sci_threshold: float) -> dict:
+                sci_threshold: float, provenance_path: "str | None" = None) -> dict:
     """The head, nav bar and four closing sections every QC report shares.
 
     The raw viewer is the one report that cannot extend ``_report_base.html.j2``, being a
@@ -849,7 +878,7 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
     pipeline that has not happened yet.
     """
     session = runs[0].get("session") if runs else None
-    nirs_dir = sub_dir / (f"ses-{session}" if session else "") / "nirs"
+    nirs_dir = _nirs_dir(runs, sub_dir)
     versions = collect_software_versions()
     meta = [("runs", str(len(runs)))]
     if session:
@@ -862,7 +891,7 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
         ),
         **footer_vars(
-            scope=output_path.stem, nirs_dir=nirs_dir,
+            scope=output_path.stem, nirs_dir=nirs_dir, provenance_path=provenance_path,
             methods=generate_methods_text(versions=versions, nirs_dir=nirs_dir),
             versions=versions,
         ),
@@ -901,7 +930,8 @@ def build_prep_raw_report(
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole
     sub_dir     = output_path.parent
     static_data = []
-    shell       = _shell_vars(runs, output_path, sub_dir, sci_threshold)
+    shell       = _shell_vars(runs, output_path, sub_dir, sci_threshold,
+                              _page_provenance(runs, output_path, sub_dir))
 
     for i, run in enumerate(runs):
         label = run["label"]

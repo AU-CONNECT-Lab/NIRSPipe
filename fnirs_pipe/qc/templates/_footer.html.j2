@@ -35,7 +35,7 @@
   <p class="fig-path">{{ provenance_path }} &bull; mermaid source: {{ provenance_path[:-4] }}.mmd</p>
 {% else %}
   <div class="placeholder">
-    Diagram not rendered. Regenerate with <code>fnirs-qc provenance OUTPUT_DIR</code>.
+    {{ section_note('footer.provenance_not_rendered') }}
   </div>
 {% endif %}
 
