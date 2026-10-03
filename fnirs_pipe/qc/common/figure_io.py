@@ -43,9 +43,12 @@ _RESIZE_JS = (
     # the last one, where it is a hairline of white under a figure that fits exactly
     "for(var i=0;i<d.length;i++)h+=d[i].offsetHeight+(i?2:0);"
     "parent.postMessage({type:'iframe-resize',h:h||document.body.scrollHeight},'*');}"
-    "window.addEventListener('load',_h);"
+    # the plot divs themselves, once they exist: this runs in the head, and the page has no
+    # doctype, so in quirks mode its root never shrinks below the frame that holds it
+    "window.addEventListener('load',function(){_h();try{var o=new ResizeObserver(_h);"
+    "document.querySelectorAll('.plotly-graph-div').forEach(function(d){o.observe(d);});"
+    "}catch(e){}});"
     "setTimeout(_h,300);"
-    "try{new ResizeObserver(_h).observe(document.body);}catch(e){}"
     "})();</script>"
 )
 

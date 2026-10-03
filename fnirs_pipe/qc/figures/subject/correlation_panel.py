@@ -330,35 +330,47 @@ def fit_js(fig: "go.Figure") -> str:
     square in it, and move the row domains so the dumbbell keeps its own height rather than
     scaling with the figure.
 
-    Idempotent and re-run on resize. A page where the width cannot be read leaves the written
-    height alone.
+    Idempotent and re-run after every resize Plotly makes. A page where the width cannot be
+    read leaves the written height alone.
+
+    Two Plotly behaviours shape it. A relayout that sets a height also pins the width the
+    figure has at that moment, and a pinned width switches off its responsive resize, so the
+    pin is dropped once the relayout lands. And the window resize event arrives before Plotly
+    has redrawn, so the refit hangs off Plotly's own autosize relayout instead.
     """
     heat = sorted({_axis_name(tr.yaxis) for tr in fig.data if tr.type == "heatmap"})
     dumb = sorted({_axis_name(tr.yaxis) for tr in fig.data} - set(heat))
     # a montage with no pairs to dumbbell leaves an empty second row whose domain this has
     # nothing to set, so the figure keeps the height it was written with
-    if not heat or not dumb:
+    # the share of the plot width make_subplots gave the first heatmap's column, taken here
+    # because Plotly writes the square constraint's narrower domain back into the layout
+    domain = fig.layout.xaxis.domain
+    if not heat or not dumb or not domain:
         return ""
+    col = domain[1] - domain[0]
     return (
         "<script>(function(){"
         f"var HEAT={heat!r}.map(String),DUMB={(dumb[0] if dumb else '')!r},"
-        f"MIN={_HEAT_MIN_PX},MAX={_HEAT_MAX_PX},D={_DUMBBELL_PX},GAP={_V_SPACING_PX},n=0;"
+        f"COL={col!r},MAX={_HEAT_MAX_PX},D={_DUMBBELL_PX},GAP={_V_SPACING_PX},n=0;"
         "function fit(){"
         "var gd=document.querySelector('.plotly-graph-div');"
-        "if(!gd||typeof Plotly==='undefined'||!gd.layout)return;"
-        # the first subplot's drag layer is its plot area, so this is the width the matrix
-        # actually got, after the axis constraint and the colour bar
-        "var L=gd.layout,m=L.margin||{},drag=gd.querySelector('.nsewdrag');"
-        "if(!drag)return;"
-        "var w=drag.getBoundingClientRect().width;"
+        "if(!gd||typeof Plotly==='undefined'||!gd.layout||!gd._fullLayout)return;"
+        "if(!gd._fitHooked){gd._fitHooked=1;"
+        "gd.on('plotly_relayout',function(e){if(e&&e.autosize){n=0;fit();}});}"
+        # the column, not the matrix drawn in it: the matrix's width is capped by the height,
+        # so measuring it could only ever shrink the figure
+        "var L=gd.layout,F=gd._fullLayout,m=L.margin||{};"
+        "var w=F._size?COL*F._size.w:0;"
         "if(!(w>0))return;"
-        "var heat=Math.min(Math.max(w,MIN),MAX);"
+        "var heat=Math.min(w,MAX);"
         "var h=Math.round(heat+(DUMB?GAP+D:0)+(m.t||0)+(m.b||0));"
         "if(Math.abs(h-(L.height||0))<4)return;"
         "var inner=h-(m.t||0)-(m.b||0),up={height:h};"
         "HEAT.forEach(function(a){up[a+'.domain']=[1-heat/inner,1];});"
         "if(DUMB){up[DUMB+'.domain']=[0,D/inner];up['legend.y']=D/inner;}"
         "Plotly.relayout(gd,up).then(function(){"
+        # the div keeps the height it was written with, and the page sizes its frame off it
+        "delete gd.layout.width;gd.style.height=h+'px';"
         "var i=gd.data.findIndex(function(t){return t.type==='heatmap'&&t.showscale;});"
         "if(i>=0)Plotly.restyle(gd,{'colorbar.len':heat*0.92},[i]);"
         # the height it just set can move the width: a page tall enough to scroll takes the
@@ -366,6 +378,5 @@ def fit_js(fig: "go.Figure") -> str:
         "if(++n<3)setTimeout(fit,0);});}"
         "if(document.readyState==='complete')fit();"
         "else window.addEventListener('load',fit);"
-        "window.addEventListener('resize',function(){n=0;fit();});"
         "})();</script>"
     )
