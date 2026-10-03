@@ -56,6 +56,62 @@ def binary_heatmap_figure(
     return fig
 
 
+_MISSING_COLOR = "#D3D3D3"
+
+
+def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_frac_thresh):
+    """(row label, heatmap_args key, hover format, pass test) for every channel-grid row.
+
+    Status has no key and no test: it is read off ``is_bad``, the screening verdict.
+    """
+    return [
+        ("Status",  None,               None,  None),
+        ("Coupled", "good_frac_per_ch", ".3f", lambda v: v >= good_frac_thresh),
+        ("SCI",     "sci_per_ch",       ".3f", lambda v: v >= sci_thresh),
+        ("CV",      "cv_per_ch",        ".3f", lambda v: v <= cv_thresh),
+        ("PSP",     "psp_per_ch",       ".3f", lambda v: v >= psp_thresh),
+        ("SNR",     "snr_per_ch",       ".1f", lambda v: v >= snr_thresh),
+    ]
+
+
+def _channel_cell(metric, value, fmt, check, ch) -> tuple[str, str]:
+    """Colour and hover for one cell; ``value`` is the bad flag on the Status row."""
+    if metric == "Status":
+        if value is None:
+            return _MISSING_COLOR, f"{ch} · Status: —"
+        return (_BAD_COLOR if value else _GOOD_COLOR), f"{ch} · Status: {'BAD' if value else 'OK'}"
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return _MISSING_COLOR, f"{ch} · {metric}: —"
+    return (_GOOD_COLOR if check(value) else _BAD_COLOR), f"{ch} · {metric}: {value:{fmt}}"
+
+
+def _channel_xaxis(ch_names: list[str]) -> dict:
+    n_ch = len(ch_names)
+    return dict(
+        tickvals=[i * _SPACING for i in range(n_ch)],
+        ticktext=ch_names,
+        tickangle=-45, tickfont=dict(size=9, color=AXIS_TEXT_COLOR),
+        showgrid=False, zeroline=False,
+        range=[-_SPACING, n_ch * _SPACING],
+    )
+
+
+def _long_short_divider(fig: go.Figure, split_at: "int | None", n_ch: int) -> bool:
+    """Draw the long/short divider and name both sides; False when there is no split."""
+    if split_at is None or not 0 < split_at < n_ch:
+        return False
+    # the line sits in the gap between the last long column and the first short one
+    x_div = (split_at - 0.5) * _SPACING
+    fig.add_vline(x=x_div, line_dash="dot", line_color="#888", line_width=1)
+    # pixels above the plot rather than a paper fraction, so a tall grid does not lift them
+    # out of the margin
+    for centre, text in (((split_at - 1) / 2, "long"),
+                         ((split_at + n_ch - 1) / 2, "short")):
+        fig.add_annotation(x=centre * _SPACING, y=1.0, yshift=14, xref="x", yref="paper",
+                           text=text, showarrow=False, font=dict(size=10, color="#666"))
+    return True
+
+
 def channel_quality_heatmap(
     ch_names: list[str],
     is_bad: list[bool],
@@ -83,37 +139,22 @@ def channel_quality_heatmap(
     it are drawn against the cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers` and none of
     them prunes.
     """
-    _MISSING = "#D3D3D3"
-    metrics = ["Status", "Coupled", "SCI", "CV", "PSP", "SNR"]
+    lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
+               "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
+    specs = _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh,
+                                 good_frac_thresh)
     n_ch  = len(ch_names)
-    n_met = len(metrics)
-
-    specs = [
-        (None,               None,   None),
-        (good_frac_per_ch or {}, ".3f", lambda v: v >= good_frac_thresh),
-        (sci_per_ch, ".3f",  lambda v: v >= sci_thresh),
-        (cv_per_ch,  ".3f",  lambda v: v <= cv_thresh),
-        (psp_per_ch, ".3f",  lambda v: v >= psp_thresh),
-        (snr_per_ch, ".1f",  lambda v: v >= snr_thresh),
-    ]
+    n_met = len(specs)
 
     xs, ys, colors, hover = [], [], [], []
-    for m_idx, (metric, (lookup, fmt, chk)) in enumerate(zip(metrics, specs)):
+    for m_idx, (metric, key, fmt, chk) in enumerate(specs):
         for i, ch in enumerate(ch_names):
+            value = is_bad[i] if key is None else lookups[key].get(ch)
+            color, text = _channel_cell(metric, value, fmt, chk, ch)
             xs.append(i * _SPACING)
             ys.append(m_idx * _SPACING)
-            if metric == "Status":
-                bad = is_bad[i]
-                colors.append(_BAD_COLOR if bad else _GOOD_COLOR)
-                hover.append(f"{ch} · Status: {'BAD' if bad else 'OK'}")
-            else:
-                v = lookup.get(ch)
-                if v is None or (isinstance(v, float) and np.isnan(v)):
-                    colors.append(_MISSING)
-                    hover.append(f"{ch} · {metric}: —")
-                else:
-                    colors.append(_GOOD_COLOR if chk(v) else _BAD_COLOR)
-                    hover.append(f"{ch} · {metric}: {v:{fmt}}")
+            colors.append(color)
+            hover.append(text)
 
     fig = go.Figure(go.Scatter(
         x=xs, y=ys,
@@ -125,16 +166,10 @@ def channel_quality_heatmap(
         showlegend=False,
     ))
     fig.update_layout(
-        xaxis=dict(
-            tickvals=[i * _SPACING for i in range(n_ch)],
-            ticktext=ch_names,
-            tickangle=-45, tickfont=dict(size=9, color=AXIS_TEXT_COLOR),
-            showgrid=False, zeroline=False,
-            range=[-_SPACING, n_ch * _SPACING],
-        ),
+        xaxis=_channel_xaxis(ch_names),
         yaxis=dict(
             tickvals=[m * _SPACING for m in range(n_met)],
-            ticktext=metrics,
+            ticktext=[spec[0] for spec in specs],
             autorange="reversed",
             tickfont=dict(size=10, color=AXIS_TEXT_COLOR),
             showgrid=False, zeroline=False,
@@ -143,16 +178,87 @@ def channel_quality_heatmap(
         margin=dict(l=70, r=20, t=20, b=100),
         height=260,
     )
-    if split_at is not None and 0 < split_at < n_ch:
-        # the line sits in the gap between the last long column and the first short one
-        x_div = (split_at - 0.5) * _SPACING
-        fig.add_vline(x=x_div, line_dash="dot", line_color="#888", line_width=1)
-        for centre, text in (((split_at - 1) / 2, "long"),
-                             ((split_at + n_ch - 1) / 2, "short")):
-            fig.add_annotation(x=centre * _SPACING, y=1.10, xref="x", yref="paper",
-                               text=text, showarrow=False, font=dict(size=10, color="#666"))
+    if _long_short_divider(fig, split_at, n_ch):
         # the extra top margin is what the raised labels sit in
         fig.update_layout(margin=dict(l=70, r=20, t=52, b=100))
+    return fig
+
+
+# the pitch of one condition row, in pixels; the figure sets its own height from it
+_CONDITION_ROW_PX = 18
+
+
+def condition_quality_heatmap(
+    conditions: "list[tuple[str, dict]]",
+    sci_thresh: float = SCI_PASS,
+    cv_thresh: float = CV_PASS,
+    snr_thresh: float = SNR_PASS,
+    psp_thresh: float = PSP_PASS,
+    good_frac_thresh: float = GOOD_FRAC_PASS,
+) -> "go.Figure | None":
+    """Every condition's channel grid, regrouped: one block per metric, one row per condition.
+
+    ``conditions`` pairs each label with the :func:`heatmap_args` dict its own page draws
+    from, and the pass rule is :func:`channel_quality_heatmap`'s, so a cell here is that
+    page's cell. Grouping by metric puts one channel's conditions in a column, which is the
+    comparison this figure exists for.
+
+    Example: [("rest", args_a), ("task", args_b)] -> six blocks (Status ... SNR), each two
+    rows deep, channels across.
+
+    Columns follow the first condition's order. Returns None under two conditions, where
+    the run's own grid already says everything.
+    """
+    if len(conditions) < 2:
+        return None
+    first = conditions[0][1]
+    ch_names = first["ch_names"]
+    n_ch = len(ch_names)
+    specs = _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh,
+                                 good_frac_thresh)
+    # one empty row above each block carries the metric's name
+    depth = len(conditions) + 1
+
+    xs, ys, colors, hover, tickvals, ticktext = [], [], [], [], [], []
+    for m_idx, (metric, key, fmt, chk) in enumerate(specs):
+        top = m_idx * depth + 1
+        for c_idx, (label, args) in enumerate(conditions):
+            y = (top + c_idx) * _SPACING
+            tickvals.append(y)
+            ticktext.append(label)
+            lookup = (dict(zip(args["ch_names"], args["is_bad"])) if key is None
+                      else args.get(key) or {})
+            for i, ch in enumerate(ch_names):
+                color, text = _channel_cell(metric, lookup.get(ch), fmt, chk, ch)
+                xs.append(i * _SPACING)
+                ys.append(y)
+                colors.append(color)
+                hover.append(f"{label} · {text}")
+
+    fig = go.Figure(go.Scatter(
+        x=xs, y=ys, mode="markers",
+        marker=dict(symbol="square", size=12, color=colors, line=dict(width=0)),
+        text=hover, hovertemplate="%{text}<extra></extra>", showlegend=False,
+    ))
+    for m_idx, (metric, *_rest) in enumerate(specs):
+        # in the label column, on the block's empty top row, so it reads as a group heading
+        fig.add_annotation(x=0, xref="paper", xanchor="right", xshift=-6,
+                           y=m_idx * depth * _SPACING, yref="y",
+                           text=f"<b>{metric}</b>", showarrow=False,
+                           font=dict(size=10, color=AXIS_TEXT_COLOR))
+    n_rows = len(specs) * depth
+    left = max(70, 7 * max(len(label) for label, _ in conditions) + 20)
+    top_px = 52 if _long_short_divider(fig, first.get("split_at"), n_ch) else 20
+    fig.update_layout(
+        xaxis=_channel_xaxis(ch_names),
+        yaxis=dict(tickvals=tickvals, ticktext=ticktext,
+                   tickfont=dict(size=9, color=AXIS_TEXT_COLOR),
+                   showgrid=False, zeroline=False,
+                   range=[(n_rows - 0.5) * _SPACING, -0.5 * _SPACING]),
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=left, r=20, t=top_px, b=100),
+        height=top_px + 100 + n_rows * _CONDITION_ROW_PX,
+    )
     return fig
 
 

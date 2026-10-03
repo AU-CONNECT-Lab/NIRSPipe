@@ -36,6 +36,7 @@ PANELS = [
     ("trialimage", {"segmentation": "aal", "label": "PFC"}),
     ("trialqc", {"suffix": "qc"}),
     ("chsummary", {"suffix": "qc"}),
+    ("condsummary", {"suffix": "qc"}),
     ("evokedtopo", {"suffix": "nirsmap"}),
     ("topo", {"suffix": "nirsmap", "statistic": "alff"}),
     ("timeseries", {"suffix": "design", "extension": ".png"}),

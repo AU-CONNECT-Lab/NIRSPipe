@@ -19,6 +19,7 @@ from fnirs_pipe.qc.figures.subject.sci_psp_panel import (
     binary_heatmap_figure,
     lollipop_scores_figure,
     channel_quality_heatmap,
+    condition_quality_heatmap,
     trial_quality_heatmap,
 )
 from fnirs_pipe.qc.figures.subject.brain_views import quality_brain_views
@@ -65,6 +66,7 @@ __all__ = [
     "binary_heatmap_figure",
     "lollipop_scores_figure",
     "channel_quality_heatmap",
+    "condition_quality_heatmap",
     "trial_quality_heatmap",
     "quality_brain_views",
     "carpet_gvtd_figure",

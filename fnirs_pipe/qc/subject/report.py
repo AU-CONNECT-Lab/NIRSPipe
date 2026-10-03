@@ -42,6 +42,9 @@ Report sections
     SQM scalar summary (channel retention, SCI, PSP, SNR, HbO–HbR corr, etc.)
     + per-channel table; CSV sidecar saved to nirs/ output directory.
 
+  Per-condition Channel Quality
+    Each condition page's channel grid, one block per metric, one row per condition.
+
   Per-trial Quality
     Every trial window scored on its own, over the epoch window, on the intensity
     recording.
@@ -117,6 +120,7 @@ from fnirs_pipe.qc.figures import (
     build_channel_figure,
     build_motion_detail_figure,
     channel_quality_heatmap,
+    condition_quality_heatmap,
     alff_topo_figure,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
@@ -1390,6 +1394,40 @@ def _section_channel_summary(
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
+def _condition_channel_rows(record: dict, entry: dict, sci_scores: dict) -> list:
+    """One condition's channel rows, read the way its own page reads them."""
+    sliced = entry.get("per_channel") or {}
+    cond_record = with_condition_corr(slice_record(record, sliced),
+                                      sliced.get("hbo_hbr_corr_per_channel") or {})
+    return channel_rows(cond_record, sci_scores, set(entry.get("bad_channels") or ()))
+
+
+def _section_condition_summary(
+    record: dict,
+    sci_scores: dict,
+    config: Any,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+) -> dict:
+    """Every condition page's channel grid on the run page, regrouped by metric."""
+    path, h = None, 0
+    by_condition = record.get("by_condition") or {}
+    if len(by_condition) >= 2:
+        with _guard("Per-condition channel quality", errors, subject):
+            conditions = [
+                (label, heatmap_args(_condition_channel_rows(record, entry, sci_scores)))
+                for label, entry in by_condition.items()]
+            # the condition pages' own cutoff, so a cell here matches the cell there
+            fig = condition_quality_heatmap(conditions,
+                                            sci_thresh=resolve_cutoffs(config)["sci"])
+            if fig is not None:
+                path, h = _save_plotly_html(fig, figures_dir / fig_name("condsummary",
+                                                                        suffix="qc"))
+    return {"condition_summary_path": path, "condition_summary_h": h}
+
+
 def _good_mask_for(
     bad_channels: "set[str] | list[str]",
     ch_names_brain: "list[str] | None",
@@ -1899,6 +1937,10 @@ def build_subject_report(
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir, fig_name,
                             sci_thresh=getattr(config, "sci_threshold", SCI_PASS))
+    cond_summary_vars = (_section_condition_summary(record, sci_scores, config, subject,
+                                                    errors, figures_dir, fig_name)
+                         if by_condition else
+                         {"condition_summary_path": None, "condition_summary_h": 0})
 
     n_bad    = len(bad_channels)
     n_total  = len(sci_scores)
@@ -1969,6 +2011,7 @@ def build_subject_report(
         **glm_vars,
         **rest_vars,
         **ch_summary_vars,
+        **cond_summary_vars,
         **carpet_vars,
         gvtd_set=gvtd_set,
         # the set GVTD was actually measured on, so the note says so on a per-condition page
@@ -1988,7 +2031,7 @@ def build_subject_report(
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
                               topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
-                              glm_vars, rest_vars, carpet_vars),
+                              glm_vars, rest_vars, carpet_vars, cond_summary_vars),
                 config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores, errors=errors,
@@ -2398,8 +2441,6 @@ def _write_condition_reports(
         # the long set, as the run's own scalar panel is, so the two pages compare
         scalars = condition_verdict_view(entry)
         haemo_by_set = entry.get("haemo_by_set") or {}
-        cond_record = with_condition_corr(slice_record(record, sliced),
-                                          sliced.get("hbo_hbr_corr_per_channel") or {})
         t0, t1 = entry["window_s"]
         span = (t0, t1)
         slug = _pair_fname(label)
@@ -2409,7 +2450,7 @@ def _write_condition_reports(
         cropped: dict = {}
         if remake_cropped is not None:
             cropped = remake_cropped(cond_name, span)
-        rows = channel_rows(cond_record, sci_scores, cond_bad)
+        rows = _condition_channel_rows(record, entry, sci_scores)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cond_name, cutoffs["sci"])

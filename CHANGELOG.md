@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - The Analysis page's cutoff fields take `none`, so a cutoff the mode fills in can be switched off from the GUI
 - Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
 - `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
+- The subject report's run page shows every condition's channel pass/fail grid, one block per metric
 
 ### Changed
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`

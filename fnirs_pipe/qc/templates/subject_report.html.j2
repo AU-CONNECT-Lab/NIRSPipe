@@ -26,6 +26,9 @@
 {% if channel_summary_path %}
   {% set _ = _sections.append(("ChannelSummary", "Ch. Summary")) %}
 {% endif %}
+{% if condition_summary_path %}
+  {% set _ = _sections.append(("ConditionSummary", "Per-condition")) %}
+{% endif %}
 {% if trial_qc_path %}{% set _ = _sections.append(("TrialQC", "Per-trial")) %}{% endif %}
 {% set _ = _sections.append(("Errors", "Errors")) %}
 
@@ -772,6 +775,18 @@
           width="100%" height="{{ channel_summary_h + 20 }}px"
           style="border:none;min-width:500px;display:block;"></iframe>
 </div>
+{% endif %}
+
+{% if condition_summary_path %}
+<!-- ==================================================== per-condition channel quality -->
+<h2 id="ConditionSummary">Per-condition Channel Quality</h2>
+<p class="qm-note">{{ section_note('condition_summary', sci="%.2f"|format(config.sci_threshold)) }}</p>
+<div style="overflow-x:auto;">
+  <iframe src="{{ condition_summary_path }}"
+          width="100%" height="{{ condition_summary_h + 20 }}px"
+          style="border:none;min-width:500px;display:block;"></iframe>
+</div>
+<p class="fig-path">{{ condition_summary_path }}</p>
 {% endif %}
 
 {% if trial_qc_path %}

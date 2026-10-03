@@ -267,6 +267,11 @@ NOTES = {
         "red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data. Only Status rejects a channel: it "
         "is the share of windows in which SCI (<code>--sci-threshold</code> {sci}) and PSP both "
         "pass, against <code>--min-good-frac</code>; the other rows are reported, not enforced.",
+    "condition_summary":
+        "Each condition page's channel grid, regrouped so one metric's conditions sit in "
+        "adjacent rows: a channel that fails in one condition only shows as a lone red cell "
+        "in its column. Same cells and cutoffs as the condition pages (<code>--sci-threshold"
+        "</code> {sci}), and Status is each condition's own screening verdict.",
     "trial_qc":
         "Every trial window scored on its own, over {window}, on the intensity recording. "
         "Colour is relative within a row rather than a threshold: red marks the worse end of "
