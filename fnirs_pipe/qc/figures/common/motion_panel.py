@@ -536,7 +536,7 @@ def carpet_gvtd_figure(
         _add_imu_row(fig, imu_row + k, sensor, imu[sensor], float(times[0]), float(times[-1]))
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
+        xs, ys = _span_polygons(corrected_segments, 0.15, 0.85)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
@@ -812,7 +812,7 @@ def build_motion_detail_figure(
                      float(t_full[0]), float(t_full[-1]))
 
     if has_strip:
-        xs, ys = _span_polygons(corrected_segments, 0.30, 0.70)
+        xs, ys = _span_polygons(corrected_segments, 0.15, 0.85)
         fig.add_trace(go.Scatter(
             x=xs, y=ys, fill="toself", mode="lines", name="corrected",
             fillcolor=_CORRECTED, line=dict(width=0),
