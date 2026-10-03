@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The subject report's run page shows every condition's channel pass/fail grid, one block per metric
 
 ### Changed
+- The 3D brain views are lit with white light and drawn matte, no longer yellow-tinted and glossy
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
 - Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
 - Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`

@@ -156,3 +156,18 @@ def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_bra
             bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci)
     finally:
         _brain_utils._head_to_mri.cache_clear()
+
+
+def test_the_brain_is_lit_white_and_drawn_matte():
+    # the default light kit's key light is warm and tints the grey surface yellow, and a tight
+    # specular highlight on a smooth-shaded mesh reads as an oily sheen
+    import pyvista as pv
+
+    plotter = bv._build_3d_scene([pv.Sphere()], [])
+    try:
+        assert all(light.GetDiffuseColor() == (1.0, 1.0, 1.0)
+                   for light in plotter.renderer.GetLights())
+        brain = next(iter(plotter.actors.values()))
+        assert brain.prop.specular == 0.0
+    finally:
+        plotter.close()

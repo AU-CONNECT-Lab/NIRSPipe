@@ -181,9 +181,12 @@ def _build_3d_scene(brain_meshes, data_meshes):
 
     plotter = pv.Plotter(off_screen=True, window_size=list(_VIEW_SIZE))
     plotter.set_background("white")
+    # the light kit's placement, but white: its key light is warm and tints the grey yellow
+    for light in plotter.renderer.GetLights():
+        light.SetColor(1.0, 1.0, 1.0)
     for mesh in brain_meshes:
         plotter.add_mesh(mesh, color="#e8e8e8", smooth_shading=True,
-                         ambient=0.3, diffuse=0.75, specular=0.12)
+                         ambient=0.3, diffuse=0.75, specular=0.0)
     for mesh, color in data_meshes:
         plotter.add_mesh(mesh, color=color, smooth_shading=True)
     return plotter
