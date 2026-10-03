@@ -486,9 +486,10 @@ def build_sci_psp_figure(
     # (short name, heat title, mean title, matrix, window times, channel means,
     #  threshold, higher is better, hover line, colour range)
     #
-    # SCI and PSP centre their scale on the threshold; CV pins its range to twice it
-    # instead, since CV is unbounded above and one flat window would stretch a `zmid` scale.
-    # Pinned, the line sits mid-scale and anything twice as bad saturates.
+    # Every row pins its range with the threshold at mid-scale, so the line is the same
+    # colour on every recording and anything far past it saturates. An open `zmid` scale
+    # widens symmetrically to the farthest window, which ran PSP's bar below zero and SCI's
+    # above one. SCI tops out at 1, so its range ends there; PSP and CV start at 0.
     # the mean beside a row is that row's own mean, not the scalar of the same name: the
     # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
     # to 10 s. Here the dot is the row, averaged along time.
@@ -498,9 +499,11 @@ def build_sci_psp_figure(
 
     rows = [
         ("SCI", "SCI (windowed)", "Row mean", sci_matrix, sci_win_times,
-         _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}", None),
+         _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}",
+         (2 * sci_threshold - 1.0, 1.0)),
         ("PSP", "PSP (windowed)", "Row mean", psp_matrix, psp_win_times,
-         _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}", None),
+         _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}",
+         (0.0, 2 * psp_threshold)),
     ]
     if cv_matrix is not None and cv_win_times is not None:
         rows.append(("CV", "CV (windowed)", "Row mean", cv_matrix, cv_win_times,
@@ -536,9 +539,7 @@ def build_sci_psp_figure(
             z=z, x=centers.tolist(), y=ch_names,
             customdata=customdata,
             colorscale="RdYlGn" if higher_better else "RdYlGn_r",
-            zmid=None if zrange else threshold,
-            zmin=zrange[0] if zrange else None,
-            zmax=zrange[1] if zrange else None,
+            zmin=zrange[0], zmax=zrange[1],
             colorbar=dict(title=name, thickness=10,
                           len=0.88 / n_rows, y=1.0 - (i - 0.5) / n_rows, x=1.01),
             hovertemplate="Ch: %{y}<br>t=%{x:.1f}s<br>" + hover + "<extra></extra>",
