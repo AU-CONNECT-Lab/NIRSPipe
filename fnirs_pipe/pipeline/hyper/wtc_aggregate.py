@@ -32,9 +32,7 @@ logger = get_logger("pipeline.wtc_aggregate")
 # ever appear on a null's sidecar, and a file without a key carries no opinion, so listing
 # them guards the null merges without touching the real tables.
 # n_iter is not here: it is a column of the table, not a property of one, so mixing it
-# leaves every row readable and separable. `_warn_mixed_iterations` says what it costs.
-# desc, bads_scope and roi_min_channels are absent from tables older than the record, which
-# then carry no opinion either
+# leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
 _MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s",
                "desc", "bads_scope", "roi_min_channels")
 # an unwhitened table carries no wtc_whiten_s, and that absence is an opinion: it was not

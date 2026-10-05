@@ -23,8 +23,8 @@ All notable changes to this project will be documented in this file.
 - **`--wtc-roi-min-channels` defaults to 1, so one surviving channel keeps a region; pass 2 for the earlier rule**
 - `fnirs-hyper-groupnull` leaves a thin region out only for the occasions and conditions whose own ROI table blanks it
 - `fnirs-hyper-merge` refuses dyads run on a different stage, rejection scope or ROI minimum
-- **`fnirs-hyper-pairnull` takes its stage, rejection scope, crossing and ROI minimum from the real tables, and refuses a retyped value that differs**
-- `fnirs-hyper-groupnull` keeps a region by the ROI minimum the real tables recorded instead of a fixed two channels
+- **`fnirs-hyper-pairnull` takes its stage, rejection scope, crossing and ROI minimum from the real tables, refusing tables that lack them or a retyped value that differs**
+- `fnirs-hyper-groupnull` keeps a region by the ROI minimum the real tables recorded, refusing tables that lack it
 - The crossed ROI table, not the homologous one, is described as the ROI number to report
 - The Hyper Analysis re-paired null form drops the fields it now reads off the tables and offers a homologous-only switch
 - The windowed SCI and PSP colour bars are pinned with the threshold mid-scale, as CV's already was

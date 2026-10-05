@@ -27,7 +27,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, UNRECORDED_ROI_MIN_CHANNELS, bare_roi_map
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.naming import derivative_path
 
@@ -223,20 +223,20 @@ def _roi_min_of(paths: "set[str]") -> int:
 
       three tables recording 2  ->  2
       one recording 2, one 3    ->  ValueError
-
-    Tables written before they recorded it count as the value they were grouped under then.
+      one recording nothing     ->  ValueError
     """
-    found = {int(v) for tsv in paths
-             if (v := _params_of(tsv).get("roi_min_channels")) is not None}
+    recorded = {tsv: _params_of(tsv).get("roi_min_channels") for tsv in paths}
+    unrecorded = sorted(Path(tsv).name for tsv, v in recorded.items() if v is None)
+    if unrecorded:
+        raise ValueError(
+            f"{len(unrecorded)} real table(s) do not record the ROI minimum they were grouped "
+            f"under, e.g. {unrecorded[0]}. Rerun `fnirs-hyper` for those dyads on current code.")
+    found = {int(v) for v in recorded.values()}
     if len(found) > 1:
         raise ValueError(
             f"the real tables were grouped into regions under different minimums: "
             f"{sorted(found)}. A region thinned out in one dyad and kept in another is not "
             f"one level. Rerun the dyads on one --wtc-roi-min-channels before reading this.")
-    if not found:
-        logger.warning("the real tables do not record their ROI minimum; using %d",
-                       UNRECORDED_ROI_MIN_CHANNELS)
-        return UNRECORDED_ROI_MIN_CHANNELS
     return found.pop()
 
 

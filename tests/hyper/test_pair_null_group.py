@@ -118,6 +118,13 @@ def _write_tree(root, crossed=False):
         draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"),
                      sep="\t", index=False)
         real.to_csv(d / name(occ, "main", "wtcbycond"), sep="\t", index=False)
+        _record_minimum(d / name(occ, "main", "wtcbycond"))
+
+
+def _record_minimum(real_tsv, minimum=2):
+    """The sidecar a real run writes, carrying the ROI minimum the cohort reads back."""
+    real_tsv.with_suffix(".json").write_text(
+        json.dumps({"parameters": {"roi_min_channels": minimum}}))
 
 
 def test_both_tables_and_their_sidecars_are_written(tmp_path):
@@ -258,6 +265,7 @@ def _write_crossed_tree(root, value):
         draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"), sep=SEP, index=False)
         real.drop(columns=["occasion"]).to_csv(d / name(occ, "main", "wtcbycond"),
                                                sep=SEP, index=False)
+        _record_minimum(d / name(occ, "main", "wtcbycond"))
 
 
 def test_a_crossed_null_with_a_region_map_tests_every_ordered_region_pair():
@@ -587,10 +595,13 @@ def test_real_tables_grouped_under_two_minimums_are_refused(tmp_path):
         _roi_min_of(paths)
 
 
-def test_real_tables_that_predate_the_record_keep_the_old_minimum(tmp_path):
+def test_a_real_table_that_does_not_record_the_minimum_is_refused(tmp_path):
     from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
 
-    assert _roi_min_of({_recorded(tmp_path, "G01", band_fmin=0.06, band_fmax=0.15)}) == 2
+    paths = {_recorded(tmp_path, "G01", roi_min_channels=2),
+             _recorded(tmp_path, "G03", band_fmin=0.06, band_fmax=0.15)}
+    with pytest.raises(ValueError, match="do not record the ROI minimum"):
+        _roi_min_of(paths)
 
 
 # ---- the region gate, one occasion at a time ----

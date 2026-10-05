@@ -20,7 +20,6 @@ import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.utils import UNRECORDED_ROI_MIN_CHANNELS
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations, _p95
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
@@ -145,7 +144,8 @@ def real_table_params(real_tsv: Path) -> dict:
     except (OSError, json.JSONDecodeError) as exc:
         raise StageError(f"unreadable sidecar {sidecar}: {exc}") from exc
 
-    missing = [k for k in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi")
+    missing = [k for k in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi",
+                           "channel_cross", "roi_min_channels", "desc", "bads_scope")
                if params.get(k) is None]
     if missing:
         raise StageError(
@@ -154,22 +154,14 @@ def real_table_params(real_tsv: Path) -> dict:
     return params
 
 
-def _follow_real(flag: str, given, recorded, fallback):
+def _follow_real(flag: str, given, recorded):
     """The value the real table recorded for ``flag``; a given one that differs is refused.
 
     ::
 
-      _follow_real("--desc", None, "errts", "preproc")       -> "errts"
-      _follow_real("--desc", "preproc", "errts", "preproc")  -> StageError
-
-    A table written before it recorded the value takes the given one, or ``fallback``.
+      _follow_real("--desc", None, "errts")       -> "errts"
+      _follow_real("--desc", "preproc", "errts")  -> StageError
     """
-    if recorded is None:
-        if given is None:
-            logger.warning("the real table does not record %s; using %r. Rerun fnirs-hyper "
-                           "for this group to have it recorded", flag, fallback)
-            return fallback
-        return given
     if given is not None and given != recorded:
         raise StageError(
             f"{flag} {given!r} disagrees with the real table, which was computed with "
@@ -395,14 +387,11 @@ def run_pair_null(
     # absent means the real table was never whitened
     whiten_s = float(real_params.get("wtc_whiten_s") or 0.0)
 
-    desc = _follow_real("--desc", desc, real_params.get("desc"), "preproc")
-    bads_scope = _follow_real("--bads-scope", bads_scope, real_params.get("bads_scope"), "run")
-    if roi_map:
-        roi_min_channels = _follow_real("--wtc-roi-min-channels", roi_min_channels,
-                                        real_params.get("roi_min_channels"),
-                                        UNRECORDED_ROI_MIN_CHANNELS)
-    # read off the rows rather than the sidecar, so a table that predates the record says too
-    real_crossed = "label2" in pd.read_csv(real_wtc, sep="\t", nrows=0).columns
+    desc = _follow_real("--desc", desc, real_params["desc"])
+    bads_scope = _follow_real("--bads-scope", bads_scope, real_params["bads_scope"])
+    roi_min_channels = _follow_real("--wtc-roi-min-channels", roi_min_channels,
+                                    int(real_params["roi_min_channels"]))
+    real_crossed = bool(real_params["channel_cross"])
     if cross is None:
         cross = real_crossed
     elif cross and not real_crossed:

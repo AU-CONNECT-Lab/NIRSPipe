@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, UNRECORDED_ROI_MIN_CHANNELS, pair_of
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
@@ -935,9 +935,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "ROI minimum.")
     pair.add_argument("--desc", default=None,
                       help="desc entity of the per-subject stage the null reads. Unset, it "
-                           "is the one the real tables recorded; a different one is refused. "
-                           "Pass it only for real tables written before they recorded it "
-                           "(those fall back to 'preproc').")
+                           "is the one the real tables recorded; a different one is refused.")
     pair.add_argument("--roi-mapping", type=Path, default=None,
                       help="JSON file mapping ROI labels to channel names, to also write the "
                            "null of the homologous ROI means and, when the null and the real "
@@ -945,9 +943,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     pair.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default=None,
                       help="Which rejected channels are excluded, as in fnirs-hyper. Unset, "
                            "it is the scope the real tables recorded; a different one is "
-                           "refused. Real tables that predate the record fall back to 'run'. "
-                           "A stand-in with no quality record is refused rather than kept "
-                           "whole.")
+                           "refused. A stand-in with no quality record is refused rather than "
+                           "kept whole.")
     pair.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                       help="Chromophore(s) to draw the null on (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
@@ -971,8 +968,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     pair.add_argument("--wtc-roi-min-channels", type=int, default=None, metavar="N",
                       help="Drop an ROI cell where either member contributes fewer than N "
                            "channels. Unset, it is the value the real tables recorded; a "
-                           "different one is refused. Real tables that predate the record "
-                           f"fall back to {UNRECORDED_ROI_MIN_CHANNELS}.")
+                           "different one is refused.")
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in fnirs-hyper.")

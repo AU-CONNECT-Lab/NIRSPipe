@@ -26,7 +26,8 @@ def _merge(root, kind):
     return aggregate_wtc(root, merge_kinds(root)[key])
 
 _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.20,
-         "mask_coi": True, "aligned_duration_s": 900.0}
+         "mask_coi": True, "aligned_duration_s": 900.0, "channel_cross": False,
+         "roi_min_channels": 1, "desc": "preproc", "bads_scope": "run"}
 
 
 def _real_table(root, gid="G01", task="main", params=None, kind="wtc"):
@@ -231,24 +232,23 @@ def test_the_real_table_records_the_window_it_describes():
 def test_an_unset_value_follows_the_real_table():
     from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
 
-    assert _follow_real("--desc", None, "errts", "preproc") == "errts"
-    assert _follow_real("--desc", "errts", "errts", "preproc") == "errts"
+    assert _follow_real("--desc", None, "errts") == "errts"
+    assert _follow_real("--desc", "errts", "errts") == "errts"
 
 
 def test_a_value_that_disagrees_with_the_real_table_is_refused():
     from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
 
     with pytest.raises(StageError, match="--wtc-roi-min-channels 2 disagrees"):
-        _follow_real("--wtc-roi-min-channels", 2, 3, 2)
+        _follow_real("--wtc-roi-min-channels", 2, 3)
 
 
-def test_a_table_that_predates_the_record_takes_the_given_value_or_the_old_default(caplog):
-    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
-
-    assert _follow_real("--bads-scope", "subject", None, "run") == "subject"
-    with caplog.at_level("WARNING"):
-        assert _follow_real("--bads-scope", None, None, "run") == "run"
-    assert "does not record --bads-scope" in caplog.text
+@pytest.mark.parametrize("key", ["channel_cross", "roi_min_channels", "desc", "bads_scope"])
+def test_a_real_table_that_does_not_record_one_is_refused(tmp_path, key):
+    """Nothing is guessed: the null is built the way the table says, or not at all."""
+    tsv = _real_table(tmp_path, params={k: v for k, v in _REAL.items() if k != key})
+    with pytest.raises(StageError, match=key):
+        real_table_params(tsv)
 
 
 def _haemo(seed: int):
@@ -355,8 +355,3 @@ def test_dyads_run_on_different_settings_refuse_to_merge(tmp_path, key, a, b):
     with pytest.raises(ValueError, match=f"disagree on {key}"):
         _merge(tmp_path, "wtc")
 
-
-def test_a_table_older_than_the_record_still_merges(tmp_path):
-    _real_table(tmp_path, gid="G01", params={**_REAL, "desc": "errts"})
-    _real_table(tmp_path, gid="G02")
-    assert sorted(_merge(tmp_path, "wtc")["group_id"]) == ["G01", "G02"]
