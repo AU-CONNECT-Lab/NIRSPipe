@@ -85,7 +85,6 @@ NOTES = {
         "survived. Re-cut the stage this run reads with `fnirs-prep crop --input-desc "
         "&lt;desc&gt; --margin auto --band-fmin &lt;f&gt;`; the per-condition rows then "
         "exclude the margin.",
-    # TODO(review): attached even when --isc-fmin/--isc-fmax band-limit the correlation; skip it then
     "caveat.isc_unfiltered":
         "The files for {subjects} record no bandpass (stage {stages}). A correlation has "
         "no frequency axis, so unless --isc-fmin/--isc-fmax limit its band, drift and "

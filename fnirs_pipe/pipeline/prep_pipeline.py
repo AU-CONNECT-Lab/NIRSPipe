@@ -205,7 +205,8 @@ def run_prep(
     if source_path is not None:
         rec.register_input(source_path, raw)
 
-    def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None) -> Path:
+    def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None,
+              extra_parameters: dict | None = None) -> Path:
         lin = lineage_of(raw_step)
         if lin is None or lin.stage != desc:
             raise StageError(f"_save({desc!r}) got an object stamped {stage_of(raw_step)!r}")
@@ -222,7 +223,7 @@ def run_prep(
             "pipeline_version": __version__,
             "step": lin.step,
             "Sources": rec.sources_of(raw_step),
-            "parameters": _config_dict(config),
+            "parameters": {**_config_dict(config), **(extra_parameters or {})},
             "data": data_state(raw_step),
             # read back by read_snirf: SNIRF itself cannot carry the marks
             "bad_channels": list(raw_step.info["bads"]),
@@ -311,12 +312,15 @@ def run_prep(
     # second of them and the more important one: it is the line a channel is rejected on,
     # and unlike SCI it cannot be recomputed from the OD file alone, since the count depends
     # on both thresholds and on the screening scope this run used.
+    # what the screening counted over, which a "task" request falls back from without blocks
+    counted = ("task" if (lineage_of(raw_od).params or {}).get("screen_scope_windows")
+               else "run")
     _save(raw_od, "sci", extra_provenance={
         "bad_channels": bad_chs,
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
         "good_frac_scores": {k: float(v) for k, v in good_frac_scores.items()},
         **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
-    })
+    }, extra_parameters={"screen_scope_counted": counted})
 
     # step 3: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)

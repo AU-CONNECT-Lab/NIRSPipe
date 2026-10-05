@@ -433,12 +433,22 @@ def run_glm_pipeline(
             "desc-preproc file the haemoglobin was read from)."
         )
     # explicit events take precedence; then external TSV; then snirf annotations
+    from_annotations = events is None and not events_path
     if events is None:
         events = read_table(events_path) if events_path else None
     if events is None:
         events = _annotation_events(haemo, stim_dur)
     # recorded so a reader of the residual can tell a task GLM from a confound regression
     conditions = sorted({str(t) for t in events["trial_type"]})
+    # and, where there is a task model, what shaped its regressors
+    design_params: dict = {}
+    if conditions:
+        if from_annotations:
+            design_params["stim_dur"] = stim_dur
+        elif events_path:
+            design_params["event_table"] = True
+        if hrf_model == "fir":
+            design_params["fir_delays"] = [int(d) for d in (fir_delays or (0,))]
 
     # short-channel confounds come from `haemo` itself, so they have been through whatever
     # filter it has and cannot re-inject variance the filter removed. External confounds
@@ -496,14 +506,14 @@ def run_glm_pipeline(
           conditions=conditions,
           # the HRF only shapes a design that holds conditions
           **({"hrf_model": hrf_model} if conditions else {}),
-          **drift_params)
+          **design_params, **drift_params)
 
     contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
                           source_path=source_path, bads=list(haemo.info["bads"]),
-                          hrf_model=hrf_model, conditions=conditions,
+                          hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
                           short_channel=short_channel_used,

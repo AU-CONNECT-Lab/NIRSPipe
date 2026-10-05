@@ -4,7 +4,6 @@ from __future__ import annotations
 
 NOTES = {
     # ---- Both dyad reports ----
-    # TODO(review): under fnirs-qc hyper-raw --tstart the recordings are cut but the usable grid subtracts only the offset (metrics/hyper.py), so carpet and head maps sit tstart seconds off
     "hyper.clocks":
         "Offset at which each recording was cropped, at its first shared trigger (zero "
         "under <code>--no-align</code>, where recordings are only trimmed to the "
@@ -118,9 +117,9 @@ NOTES = {
         "One row per source-detector pair, both members side by side, with the columns the "
         "subject report prints and each member&rsquo;s decision at the end of its own "
         "block. Rows tinted red were rejected in the first member; each member&rsquo;s "
-        "Status cell says whether that member rejected it. Click a chip to cycle: &mdash; "
-        "&rarr; good &rarr; bad. Saves to each member&rsquo;s JSON, and is only active "
-        "when the page is served by <code>fnirs-rate hyper</code>.",
+        "Status cell says whether that member rejected it and on which criterion. Click a "
+        "chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s JSON, "
+        "and is only active when the page is served by <code>fnirs-rate hyper</code>.",
     "hyper_raw.per_channel":
         "The one view an individual report cannot give: two members on the same axes.",
 
@@ -138,7 +137,6 @@ NOTES = {
     "hyper_post.scope_whole":
         "The coherence over the whole recording, averaged across every condition in it. The "
         "per-condition pages are the ones to read for a block design.",
-    # TODO(review): never shown when --wtc-band-fmin is omitted: hyper_report passes the raw CLI value (None) rather than the resolved band
     "hyper_post.too_short":
         "This window holds only {cycles} cycles of <code>--wtc-band-fmin</code>, the slowest "
         "frequency being averaged. A coherence there is a statement about a phase relationship "
@@ -205,7 +203,6 @@ NOTES = {
     "hyper_post.numbers_run":
         "Every value the panels above were drawn from, one row per pairing, each condition "
         "beside the whole run, which is the comparison no single panel above can show.",
-    # TODO(review): the package says 'inside the COI' for the reliable cells (column labels, n_valid_frac, --wtc-mask-coi help) while the standard definition is the edge region; flip the labels and help, or define it once
     "hyper_post.numbers":
         "Rounded here only: the <code>stat-wtc_relmat.tsv</code>, "
         "<code>agg-roi_stat-wtc_relmat.tsv</code> and <code>stat-isc_relmat.tsv</code> "

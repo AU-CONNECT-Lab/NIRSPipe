@@ -47,13 +47,11 @@ NOTES = {
         "row where low is good, and its hover also gives SNR, which is 1/CV exactly; its "
         "colour scale tops out at twice the <strong>{cv}</strong> line. SCI threshold: "
         "<strong>{sci}</strong>.",
-    # TODO(review): pass config.sci_threshold to quality_brain_views and optode_layout_static, then drop the clause about the default line
     "quality.brain_views":
-        "Red = rejected by the screening, whatever its SCI; a kept channel is graded green "
-        "to red by its own SCI against the package&rsquo;s default line, which is not "
-        "<code>--sci-threshold</code>. The two are different questions: a channel is "
-        "rejected on how many windows it was coupled in, so one can be dropped at a high "
-        "SCI.",
+        "Red = rejected by the screening, whatever its SCI; every channel that survived is "
+        "then graded green to red by its own SCI against the run&rsquo;s line. The two are "
+        "different questions: a channel is rejected on how many windows it was coupled in, "
+        "so one can be dropped at a high SCI.",
     "quality.brain_views_condition":
         "Both maps carry this condition's own SCI and its own rejected channels, which is the "
         "verdict printed on this page. The recording was processed under the run's; its page "
@@ -133,14 +131,13 @@ NOTES = {
     "epoch.timeline_condition":
         "<strong>This is the whole run, not just &ldquo;{label}&rdquo;</strong>: both of those "
         "failures show only against the conditions around the one you are reading.",
-    # TODO(review): rejected channels enter the grand mean (mne.Epochs gets no picks); decide whether they should
     "epoch.grand_mean":
-        "Grand-mean HbO and HbR responses averaged across every long channel, rejected "
-        "ones included, baseline-corrected to the pre-stimulus window ({tmin} to "
-        "0&thinsp;s). Each condition is shown separately, on one shared y scale, with the "
-        "task block shaded. Short channels are drawn dotted: they are too shallow to reach "
-        "cortex, so a dotted line that rises with the solid one means at least part of the "
-        "response is scalp haemodynamics.",
+        "Grand-mean HbO and HbR responses averaged across the good long channels, "
+        "baseline-corrected to the pre-stimulus window ({tmin} to 0&thinsp;s). Each "
+        "condition is shown separately, on one shared y scale, with the task block shaded. "
+        "Short channels are drawn dotted: they are too shallow to reach cortex, so a "
+        "dotted line that rises with the solid one means at least part of the response is "
+        "scalp haemodynamics.",
     "epoch.channel_maps":
         "The condition-averaged response painted along each channel&rsquo;s own "
         "source-detector path, one head per condition; drag the slider to step through the "
@@ -222,7 +219,6 @@ NOTES = {
     "metrics.stages_unbanded":
         "No passband was requested, so every panel is measured on each stage as stored and "
         "differences across a filtering step should be read with that in mind.",
-    # TODO(review): on a condition page every stage is band-limited before the cut, so the greyed panels show the stopband, not what left the recording
     "metrics.stages_greyed":
         "The greyed panels are not quality claims: they show what left the recording. "
         "Direction is marked only across the whole chain, never on a single step, since a step "
@@ -281,21 +277,19 @@ NOTES = {
         "so a short channel marked BAD should not be used as a regressor. Screening counts "
         "the windows in which SCI and PSP both pass, so a row can be BAD with a passing "
         "whole-run SCI; channels rejected by hand show as BAD too.",
-    # TODO(review): the report passes only the SCI line to the grid, so Coupled and PSP cells use the package defaults
     "channel_summary":
         "Per-channel pass/fail, long channels then short ones. Green&nbsp;=&nbsp;pass, "
         "red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data. Only Status rejects a "
         "channel: it fails when the Coupled share, the windows in which SCI "
         "(<code>--sci-threshold</code> {sci}) and PSP both pass, falls below "
         "<code>--min-good-frac</code>, or when the channel was rejected by hand. The other "
-        "rows are reported, not enforced, and the Coupled and PSP cells are coloured "
-        "against the package defaults.",
+        "rows are reported, not enforced; every row is coloured against this run&rsquo;s "
+        "lines.",
     "condition_summary":
         "Each condition page's channel grid, regrouped so one metric's conditions sit in "
         "adjacent rows: a channel that fails in one condition only shows as a lone red cell "
         "in its column. Same cells and cutoffs as the condition pages (<code>--sci-threshold"
         "</code> {sci}), and Status is each condition's own screening verdict.",
-    # TODO(review): {window} renders empty on condition pages: _condition_trial_qc does not return the trial window
     "trial_qc":
         "Every trial window scored on its own, over {window}, on the intensity recording. "
         "Colour is relative within a row rather than a threshold: red marks the worse end of "

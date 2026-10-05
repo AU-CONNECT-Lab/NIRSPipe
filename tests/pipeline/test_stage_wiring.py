@@ -126,6 +126,8 @@ def test_a_task_glm_records_its_conditions_and_its_hrf(od):
     params = _residual_params(od, events)
     assert params["conditions"] == ["rest", "tap"]
     assert params["hrf_model"] == "glover"
+    # durations came from the table handed in, not from --stim-dur, so neither is claimed
+    assert "stim_dur" not in params and "fir_delays" not in params
 
 
 # ---- the bandpass cutoffs are not swapped ----

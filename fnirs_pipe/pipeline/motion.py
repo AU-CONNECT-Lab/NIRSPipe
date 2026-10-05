@@ -15,6 +15,12 @@ MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 
 
 # ---- Wavelet (Molavi 2012) ----
+
+WAVELET = "db2"
+# detail coefficients this many interquartile ranges beyond the quartiles of their level are zeroed
+WAVELET_IQR_FACTOR = 1.5
+
+
 def _wl_clip_iqr(block: np.ndarray, iqr_factor: float) -> None:
     """Zero motion-artifact outliers in one detail-coefficient block, in place."""
     q25, q75 = np.percentile(block, [25, 75])
@@ -36,7 +42,8 @@ def _wl_filter_coeffs(coeffs, iqr_factor: float, signal_length: int):
     return out
 
 
-def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = "db2", iqr_factor: float = 1.5,
+def _wavelet_motion_correct(raw_od: mne.io.Raw, wavelet: str = WAVELET,
+                            iqr_factor: float = WAVELET_IQR_FACTOR,
                             level: int | None = None) -> mne.io.Raw:
     """Wavelet motion correction (Molavi 2012), per channel in OD space.
 

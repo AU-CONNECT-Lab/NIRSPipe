@@ -136,8 +136,8 @@ def test_the_glm_sentence_names_every_nuisance_column_and_the_hrf_in_words():
         "aux_regressors": ["aux_GYRO_X", "aux_GYRO_Y"],
         "drift_model": "cosine", "drift_high_pass": 0.01,
     })
-    assert slots["hrf_model"] == ("the Glover haemodynamic response function and its time "
-                                  "derivative")
+    assert slots["conditions"] == ("with the Glover haemodynamic response function and its "
+                                   "time derivative")
     assert slots["regressors"] == (
         "the mean of the retained short channels for each chromophore, the auxiliary signals "
         "GYRO_X and GYRO_Y and a discrete cosine drift basis (high-pass cutoff: 0.01 Hz)")
@@ -190,7 +190,8 @@ def test_the_screening_sentence_quotes_the_pinned_window_not_the_qc_grid():
 def test_the_screening_sentence_names_the_band_the_scope_and_any_hand_marks():
     slots = template_slots("sci_marking", {
         "sci_threshold": 0.8, "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5,
-        "screen_scope": "task", "bad_channels": ["S1_D1 760", "S1_D1 850", "S2_D2"],
+        "screen_scope": "task", "screen_scope_counted": "task",
+        "bad_channels": ["S1_D1 760", "S1_D1 850", "S2_D2"],
     })
     assert slots["cardiac_band"] == "in the 0.7–1.5 Hz cardiac band"
     assert slots["scope"] == "the windows inside annotated task blocks"
@@ -199,6 +200,9 @@ def test_the_screening_sentence_names_the_band_the_scope_and_any_hand_marks():
 
     plain = template_slots("sci_marking", {"sci_threshold": 0.8})
     assert plain["scope"] == "their windows" and plain["manual"] == ""
+    # task asked for but no block long enough: the run counted the whole recording
+    fell_back = {"sci_threshold": 0.8, "screen_scope": "task", "screen_scope_counted": "run"}
+    assert template_slots("sci_marking", fell_back)["scope"] == "their windows"
 
 
 # ---- what a run actually did ----
@@ -220,7 +224,7 @@ def test_the_glm_paragraph_gathers_slots_from_several_files(tmp_path):
              conditions=["tap"], drift_model="cosine", drift_high_pass=0.01)
 
     slots = dict(steps_from_sidecars(tmp_path))["glm"]
-    assert slots["hrf_model"] == "the SPM canonical haemodynamic response function"
+    assert slots["conditions"] == "with the SPM canonical haemodynamic response function"
     assert slots["regressors"] == "a discrete cosine drift basis (high-pass cutoff: 0.01 Hz)"
 
 
@@ -485,3 +489,23 @@ def test_a_dyad_reads_coherence_then_correlation_then_regions(tmp_path):
 
     assert [k for k, _ in steps_from_sidecars(tmp_path, label="group-G1_task-hold")] == [
         "hyper_wtc_crossed", "hyper_isc", "hyper_roi"]
+
+
+@pytest.mark.parametrize("params, expected", [
+    ({"hrf_model": "glover", "stim_dur": 20.0},
+     "as 20 s boxcars convolved with the Glover haemodynamic response function"),
+    ({"hrf_model": "spm", "event_table": True},
+     "as boxcars of the events table's durations convolved with the SPM canonical "
+     "haemodynamic response function"),
+    ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3]},
+     "with a finite impulse response (FIR) basis at delays of 0 to 3 scans"),
+])
+def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expected):
+    assert template_slots("glm", params)["conditions"] == expected
+
+
+def test_the_wavelet_sentence_states_the_package_design():
+    from fnirs_pipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
+
+    line = step_sentence("motion_correction", {"motion_correction": "wavelet"})
+    assert f"({WAVELET})" in line and f"{WAVELET_IQR_FACTOR:g} interquartile ranges" in line

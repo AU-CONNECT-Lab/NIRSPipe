@@ -51,9 +51,9 @@ NOTES = {
         "stopped being delivered partway through or a block started twice, which no average "
         "can.",
     "raw.epoch":
-        "One row per condition, every long channel averaged, with the short ones dotted. "
-        "The dotted trace is what this panel is read for: when it rises with the solid "
-        "one, part of the response is scalp haemodynamics, which only short-channel "
+        "One row per condition, the good long channels averaged, with the good short ones "
+        "dotted. The dotted trace is what this panel is read for: when it rises with the "
+        "solid one, part of the response is scalp haemodynamics, which only short-channel "
         "regression (<code>--short-channel</code>) separates later. Measured before "
         "filtering and motion correction, so read the relation between the two traces "
         "rather than the shape of either.",
@@ -84,25 +84,22 @@ NOTES = {
         "Each cell is <b>before &rarr; after {method}</b>. GVTD counts use the uncorrected "
         "side's cutoff on both sides; spike counts use each side's own per-channel cutoff, "
         "and the threshold's after value is not the one applied.",
-    # TODO(review): the viewer passes only the SCI line to the grid, so Coupled and PSP cells use the package defaults rather than the run's lines
     "raw.channel_summary":
         "Status / Coupled / SCI / CV / PSP / SNR per channel, green = pass and red = fail. "
         "Status is the screening verdict, read off the Coupled row; the others are "
-        "reported only, and the Coupled and PSP cells are coloured against the package "
-        "defaults.",
+        "reported only. Every row is coloured against this run's lines.",
     "raw.trial_qc":
         "Each event window scored on its own. Colour is relative within a metric row, not a "
         "threshold.",
     "raw.trial_qc_counted":
         "{n} trials • colour is relative within a metric row, not a threshold",
-    # TODO(review): pair rows drop good_frac, so Status prints BAD without its criterion; carry good_frac into pair_rows to name it on the page
     "raw.channel_decisions":
         "One row per source-detector pair: a decision applies to the pair, and SCI is a "
         "property of the pair rather than of either wavelength. SNR, CV and spike show the "
         "first wavelength; both are in the channel TSV (<code>_desc-channel_qc.tsv</code>) "
-        "beside the quality record, which also names the criterion a red row failed. Click "
-        "the decision chip to cycle: &#8212; &#8594; good &#8594; bad. Saves "
-        "automatically.",
+        "beside the quality record. Rows in red were rejected by screening, and Status "
+        "names the criterion. Click the decision chip to cycle: &#8212; &#8594; good "
+        "&#8594; bad. Saves automatically.",
     "raw.skipped":
         "Notes on what this page shows and leaves out. Failures are listed below them.",
 }

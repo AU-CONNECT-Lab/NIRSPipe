@@ -21,6 +21,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from fnirs_pipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
@@ -158,6 +159,29 @@ def _hrf_phrase(value: Any) -> str:
     return _HRF_PHRASE.get(value, f"the '{value}' haemodynamic response model")
 
 
+def _conditions_phrase(params: dict[str, Any]) -> str:
+    """How the task regressors were built: boxcars and the HRF, or an FIR basis.
+
+    {"hrf_model": "glover", "stim_dur": 20.0}
+      -> "as 20 s boxcars convolved with the Glover haemodynamic response function"
+    """
+    hrf = str(params.get("hrf_model") or "").strip().lower()
+    if hrf == "fir":
+        delays = [int(d) for d in params.get("fir_delays") or []]
+        if not delays:
+            return f"with {_hrf_phrase(hrf)}"
+        whole = delays == list(range(delays[0], delays[-1] + 1))
+        span = (f"{delays[0]} to {delays[-1]}" if whole and len(delays) > 1
+                else _series([str(d) for d in delays]))
+        return f"with {_hrf_phrase(hrf)} at delays of {span} scans"
+    if params.get("stim_dur") is not None:
+        return f"as {_num(params['stim_dur'])} s boxcars convolved with {_hrf_phrase(hrf)}"
+    if params.get("event_table"):
+        return ("as boxcars of the events table's durations convolved with "
+                f"{_hrf_phrase(hrf)}")
+    return f"with {_hrf_phrase(hrf)}"
+
+
 def _regressor_phrase(params: dict[str, Any]) -> str:
     """Name the nuisance columns a regression actually carried.
 
@@ -190,6 +214,17 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
 _CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR"}
 
 
+def _screening_scope(params: dict[str, Any]) -> str:
+    """Which windows the coupled share was counted over, as the run recorded it."""
+    counted = params.get("screen_scope_counted")
+    if counted == "task":
+        return "the windows inside annotated task blocks"
+    if counted is None and params.get("screen_scope") == "task":
+        # asked for task blocks, and a tree this old does not say whether it found any
+        return "the windows the screening counted"
+    return "their windows"
+
+
 def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     """The screening sentence's numbers, its counting scope and any channels marked by hand."""
     # Each line falls back to the criteria table for a record that does not carry it.
@@ -211,8 +246,7 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
         "window_s": f"{SCREEN_WINDOW_S:g}",
         "cardiac_band": (f"in the {_num(low)}–{_num(high)} Hz cardiac band"
                          if low is not None and high is not None else "in the cardiac band"),
-        "scope": ("the windows inside annotated task blocks"
-                  if params.get("screen_scope") == "task" else "their windows"),
+        "scope": _screening_scope(params),
         "manual": (f" {'Channels' if len(manual) > 1 else 'Channel'} {_series(manual)} "
                    f"{'were' if len(manual) > 1 else 'was'} also marked as bad by hand."
                    if manual else ""),
@@ -279,6 +313,9 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """
     if key == "sci_marking":
         return _screening_slots(params)
+    if key == "motion_wavelet":
+        # constants of the package rather than of the run, so they are read here
+        return {"wavelet": WAVELET, "iqr_factor": f"{WAVELET_IQR_FACTOR:g}"}
     if key == "beer_lambert":
         return {"dpf": _dpf_phrase(params.get("dpf"))}
     if key == "bandpass":
@@ -294,7 +331,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"))}
     if key == "glm":
-        return {"hrf_model": _hrf_phrase(params.get("hrf_model")),
+        return {"conditions": _conditions_phrase(params),
                 "regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"))}
     if key in ("hyper_wtc", "hyper_wtc_crossed"):
@@ -329,6 +366,9 @@ def _num(value: Any) -> str:
 
 STEP_SUMMARY = {
     "load": "Read from disk; the pipeline stage comes from the filename.",
+    "crop": "A stretch cut out of the recording; its window and margin are in the sidecar.",
+    "aux_extract": "The recording's auxiliary channels, copied to a table beside the haemoglobin file.",
+    "wtc_reband": "Band means re-averaged over a new band from the saved coherence maps.",
     "od_passthrough": "Input was already optical density, so the conversion was skipped.",
     "motion_correction": "Motion correction, using the method named in the settings.",
     "sqm_raw": "Quality metrics measured on the original intensity recording.",
@@ -590,8 +630,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
 
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
-    # TODO(review): a mean of reciprocals, so one near-constant channel lifts it past these lines while cv_mean has none; drop them or fix the aggregation
-    "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", (100, 20), _HIGHER),
+    "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", None, _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),
