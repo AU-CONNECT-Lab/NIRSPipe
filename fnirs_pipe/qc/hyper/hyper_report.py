@@ -12,9 +12,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
-from fnirs_pipe.io.derivatives import (
-    group_data_dir, group_report_dir, subject_report_dir, subject_nirs_dirs,
-)
+from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
@@ -28,7 +26,7 @@ from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_method
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label, metric_summary,
-    steps_from_sidecars, template_slots,
+    steps_from_lineage, steps_from_sidecars, template_slots,
 )
 from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.io.naming import report_name
@@ -51,6 +49,7 @@ from fnirs_pipe.qc.common.report_shell import (
     render,
 )
 from fnirs_pipe.qc.common.windows import crop_provenance, markers_on_data_axis
+from fnirs_pipe.utils.lineage import paths_from
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.common.record_views import condition_set_view
 from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
@@ -326,55 +325,46 @@ def _band_cycles(window: "tuple[float, float] | None", band_fmin: float) -> "flo
     return (float(window[1]) - float(window[0])) * float(band_fmin)
 
 
-def _member_nirs_dir(output_dir: Path, entry: GroupEntry) -> Path:
-    """A member's ``nirs/``, laid out the way :func:`group_data_dir` lays out a group's.
-
-    An entry naming no session still finds a session folder, so a tree with one unnamed
-    session yields a Methods paragraph rather than the "no sidecars found" note.
-    """
-    found = subject_nirs_dirs(output_dir, entry.subject_id, entry.session)
-    if found:
-        return found[0]
-    folder = subject_report_dir(output_dir, entry.subject_id)
-    if entry.session:
-        folder = folder / f"ses-{entry.session}"
-    return folder / "nirs"
-
-
 def group_methods(
-    output_dir: Path,
-    group: list[GroupEntry],
+    read: list[str],
     group_nirs: Path,
-    own_steps: list[tuple[str, dict]],
+    label: str,
+    align_info: dict,
+    desc: str | None,
     versions: dict[str, str],
     notes: list,
     scope: str,
 ) -> dict[str, str]:
-    """Methods prose for a dyad: a member's preprocessing, then the group's own steps.
+    """Methods prose for a dyad: what made the files read, the clock, then the group's steps.
 
-    Three sources in the order a reader needs them: what was done to each recording (read
-    from a member's sidecars), what was done to bring them onto one clock (``own_steps``,
-    which leaves no file to scan), then what was measured across the two (read from the
-    group's sidecars).
-
-    The paragraph describes **one** preprocessing pipeline. When the members were not
-    processed the same way, that becomes a note saying which subject it describes.
+    ``read`` is the member files the inter-brain measures were computed on. Each is followed
+    up its own ``Sources``, so a run that read ``desc-preproc`` is not described as filtered
+    because a later stage of the same recording was. The paragraph describes **one** chain:
+    members processed differently get a note naming the one it describes, and a chain that
+    cannot be read is named by its stage rather than guessed.
     """
-    per_member = {e.subject_id: steps_from_sidecars(_member_nirs_dir(output_dir, e))
-                  for e in group}
-    chains = list(per_member.values())
-    if chains and any(chain != chains[0] for chain in chains[1:]):
+    chains = {path: steps_from_lineage(path) for path in read}
+    readable = [chain for chain in chains.values() if chain is not None]
+    if not readable or len(readable) < len(chains):
+        lost = sorted(Path(path).name for path, chain in chains.items() if chain is None)
         note(notes, scope,
-             "the members of this group were not preprocessed identically, so the Methods "
-             f"paragraph describes sub-{next(iter(per_member))} only")
-    if not any(chains):
-        note(notes, scope,
-             "no preprocessing sidecars found for the members, so the Methods paragraph "
-             "covers the group-level steps only")
+             f"the processing records of {', '.join(lost) or 'the members'} could not be "
+             "read, so the Methods paragraph names the stage the inter-brain measures read "
+             "instead of describing its preprocessing")
+        steps = [("hyper_input", template_slots("hyper_input", {"desc": desc}))]
+    else:
+        if any(chain != readable[0] for chain in readable[1:]):
+            note(notes, scope,
+                 "the members of this group were not processed identically, so the Methods "
+                 f"paragraph describes {Path(read[0]).name} only")
+        steps = list(readable[0])
 
-    steps = list(chains[0]) if chains else []
-    steps += own_steps
-    steps += steps_from_sidecars(group_nirs)
+    # the stamp says which route put the members on one clock; with no stamp there is no
+    # claim to make
+    aligned = align_info.get("aligned")
+    if aligned is not None:
+        steps.append(("hyper_alignment" if aligned else "hyper_trim", {}))
+    steps += steps_from_sidecars(group_nirs, label=label)
     return generate_methods_text(versions=versions, steps=steps)
 
 
@@ -464,15 +454,9 @@ def build_hyper_report(
         sep_bands=sep_bands, errors=errors, notes=notes,
     )
 
+    # no Methods on the raw pass: it screens the recordings, and the screening coherence is a
+    # flag rather than a measure a paper reports
     versions = collect_software_versions()
-    # only the alignment is passed in: it leaves no file, so no sidecar describes it.
-    # The coherence sentence comes off the table the writer just wrote.
-    own_steps = [
-        ("hyper_alignment", template_slots(
-            "hyper_alignment", {"n_subjects": len(meta["subject_ids"])})),
-    ]
-    methods = group_methods(output_dir, group, meta["sqm_dir"], own_steps,
-                            versions, notes, meta["label"])
 
     name_parts = [f"group-{group_id}"]
     if session:
@@ -512,7 +496,7 @@ def build_hyper_report(
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
             nirs_dir=meta["sqm_dir"], provenance_path=provenance_path,
-            methods=methods, versions=versions,
+            versions=versions,
         ),
         group_id=group_id,
         task=task,
@@ -1323,10 +1307,9 @@ def build_hyper_post_report(
                 provenance_path = f"figures/{written.name}"
 
     versions = collect_software_versions()
-    own_steps = [("hyper_alignment", template_slots(
-        "hyper_alignment", {"n_subjects": len(subject_ids)}))]
-    methods = group_methods(output_dir, group, group_data_dir(output_dir, group_id),
-                            own_steps, versions, notes, scope)
+    methods = group_methods(paths_from(aligned_raws.values()),
+                            group_data_dir(output_dir, group_id), scope, align_info, desc,
+                            versions, notes, scope)
 
     def _render_page(figs: dict, matrices: dict, number_scopes: list, label: "str | None",
                      window: "tuple[float, float] | None",

@@ -267,6 +267,19 @@ def _aux_regressors(
     return out
 
 
+def _annotation_events(raw: mne.io.Raw, stim_dur: float | None) -> pd.DataFrame:
+    """The recording's own annotations as design events, each lasting ``stim_dur`` seconds."""
+    if stim_dur is None:
+        raise ValueError("stim_dur required when no events DataFrame provided")
+    # BAD_/EDGE_ spans mark unusable frames, not conditions
+    keep = [i for i, d in enumerate(raw.annotations.description)
+            if not str(d).lower().startswith(("bad", "edge"))]
+    conditions = raw.annotations.description[keep]
+    onsets = raw.annotations.onset[keep] - raw.first_time
+    duration = stim_dur * np.ones(len(conditions))
+    return pd.DataFrame({"trial_type": conditions, "onset": onsets, "duration": duration})
+
+
 def build_design_matrix(
     raw: mne.io.Raw,
     stim_dur: float | None,
@@ -299,15 +312,7 @@ def build_design_matrix(
     frame_times = raw.times
 
     if events is None:
-        if stim_dur is None:
-            raise ValueError("stim_dur required when no events DataFrame provided")
-        # BAD_/EDGE_ spans mark unusable frames, not conditions
-        keep = [i for i, d in enumerate(raw.annotations.description)
-                if not str(d).lower().startswith(("bad", "edge"))]
-        conditions = raw.annotations.description[keep]
-        onsets = raw.annotations.onset[keep] - raw.first_time
-        duration = stim_dur * np.ones(len(conditions))
-        events = pd.DataFrame({"trial_type": conditions, "onset": onsets, "duration": duration})
+        events = _annotation_events(raw, stim_dur)
 
     # nilearn reads these four and warns about every other column a BIDS events.tsv carries
     events = events[[c for c in ("trial_type", "onset", "duration", "modulation")
@@ -430,6 +435,10 @@ def run_glm_pipeline(
     # explicit events take precedence; then external TSV; then snirf annotations
     if events is None:
         events = read_table(events_path) if events_path else None
+    if events is None:
+        events = _annotation_events(haemo, stim_dur)
+    # recorded so a reader of the residual can tell a task GLM from a confound regression
+    conditions = sorted({str(t) for t in events["trial_type"]})
 
     # short-channel confounds come from `haemo` itself, so they have been through whatever
     # filter it has and cannot re-inject variance the filter removed. External confounds
@@ -484,6 +493,9 @@ def run_glm_pipeline(
           noise_model=noise_model, drift_model=drift_model,
           short_channel=short_channel_used,
           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")),
+          conditions=conditions,
+          # the HRF only shapes a design that holds conditions
+          **({"hrf_model": hrf_model} if conditions else {}),
           **drift_params)
 
     contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
@@ -491,7 +503,7 @@ def run_glm_pipeline(
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
                           source_path=source_path, bads=list(haemo.info["bads"]),
-                          hrf_model=hrf_model,
+                          hrf_model=hrf_model, conditions=conditions,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
                           short_channel=short_channel_used,

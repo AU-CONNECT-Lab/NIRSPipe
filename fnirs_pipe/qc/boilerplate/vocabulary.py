@@ -7,8 +7,8 @@ rather than renames:
   while ``steps.toml`` needs one paragraph per method because the citations differ
 - the pipeline records one ``bandpass`` step with two cutoffs, while the prose splits
   into bandpass / highpass / lowpass depending on which cutoff was given
-- ``design_matrix``, ``glm_fit``, ``glm_residuals`` and ``contrasts`` are four files from
-  one method described in a single paragraph
+- ``glm_fit`` and ``glm_residuals`` are two files from one regression described in a single
+  paragraph, a task GLM or a confound regression depending on the conditions they record
 
 Steps with no paragraph are not omissions: reading a file or recording quality metrics is
 bookkeeping, not method, and putting it in ``steps.toml`` would leak it into the Methods
@@ -25,19 +25,23 @@ from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from fnirs_pipe.utils import pair_of
 
 # ---- pipeline step -> steps.toml section ----
 
-_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc", "hyper_coherence")
+_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_coherence")
 
-# A dyad's coherence is written once per grouping (channels, ROI means, per condition); they
-# are one method sentence. The nulls stay out: they record their own crossing, not the table's.
-_WTC_STEPS = ("hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_roihom",
-              "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
-              "hyper_wtc_bycondition_roihom")
+# A dyad's coherence is written once for the whole run and once per condition; they are one
+# method sentence. The nulls stay out: they record their own crossing, not the table's.
+_WTC_STEPS = ("hyper_wtc", "hyper_wtc_bycondition")
+
+# Every table that groups channel pairs into regions, for either measure: one sentence says
+# how a region value is formed.
+_ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_roichan",
+              "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
 
-def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None = None) -> str | None:
+def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     """Section of steps.toml describing this step, or None when it has no method prose."""
     if not step:
         return None
@@ -55,20 +59,32 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
         if low_edge:
             return "highpass"
         return "lowpass" if high_edge else None
-    if step == "glm_fit":
-        # rest and denoise run this same code to regress confounds out; only a task run is a
-        # first-level GLM, and nothing in the sidecar separates the two
-        return "glm" if mode == "glm" else "confound_regression"
+    if step in ("glm_fit", "glm_residuals"):
+        # every mode runs this regression; the conditions it modelled are what make it a task
+        # GLM, and a tree that never recorded them cannot say which it was
+        conditions = params.get("conditions")
+        if conditions is None:
+            return "regression_unrecorded"
+        return "glm" if conditions else "confound_regression"
     if step in _WTC_STEPS:
         return "hyper_wtc_crossed" if params.get("channel_cross") else "hyper_wtc"
-    if step in ("hyper_isc_roichan", "hyper_isc_pairs"):
-        # the same correlation, grouped into regions or listed pair by pair; one sentence
-        # covers all three
+    if step in _ROI_STEPS:
+        return "hyper_roi"
+    if step in ("hyper_isc", "hyper_isc_pairs"):
+        # the same correlation as a matrix and as one row per pair
         return "hyper_isc"
     if step == "hyper_coherence_windowed":
         # the same measure, taken in windows; one sentence covers both
         return "hyper_coherence"
     return None
+
+
+def _series(items: Sequence[str]) -> str:
+    """['a'] -> 'a';  ['a', 'b', 'c'] -> 'a, b and c'"""
+    items = list(items)
+    if len(items) < 2:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
 
 
 def _drift_phrase(params: dict[str, Any]) -> str | None:
@@ -109,36 +125,150 @@ def _noise_phrase(value: Any) -> str:
     value = str(value or "").strip().lower()
     if value == "auto":
         return ("an autoregressive noise model whose order is four times the sampling rate "
-                "(the 'auto' setting of MNE-NIRS)")
+                "in Hz (the MNE-NIRS 'auto' setting)")
+    if value.startswith("ar_irls"):
+        cap = value[len("ar_irls"):]
+        cap = cap if cap.isdigit() else "four times the sampling rate in Hz"
+        return ("a robust autoregressive model fitted by iteratively reweighted least squares "
+                f"(AR-IRLS), its order chosen by BIC up to {cap}")
     if value.startswith("ar") and value[2:].isdigit():
         return f"an autoregressive noise model of order {value[2:]}"
     if value == "ols":
-        return "ordinary least squares and no prewhitening"
+        return "ordinary least squares without prewhitening"
     return "an unspecified noise model"
 
 
+_HRF_PHRASE = {
+    "spm": "the SPM canonical haemodynamic response function",
+    "spm + derivative":
+        "the SPM canonical haemodynamic response function and its time derivative",
+    "spm + derivative + dispersion":
+        "the SPM canonical haemodynamic response function and its time and dispersion "
+        "derivatives",
+    "glover": "the Glover haemodynamic response function",
+    "glover + derivative": "the Glover haemodynamic response function and its time derivative",
+    "glover + derivative + dispersion":
+        "the Glover haemodynamic response function and its time and dispersion derivatives",
+    "fir": "a finite impulse response (FIR) basis",
+}
+
+
+def _hrf_phrase(value: Any) -> str:
+    value = str(value or "").strip().lower()
+    return _HRF_PHRASE.get(value, f"the '{value}' haemodynamic response model")
+
+
 def _regressor_phrase(params: dict[str, Any]) -> str:
-    """Name the nuisance columns a confound regression actually carried.
+    """Name the nuisance columns a regression actually carried.
 
     {"short_channel": "mean", "drift_model": "cosine", "drift_high_pass": 0.01}
-      -> "the mean short-channel time course of each chromophore and a discrete cosine
-          drift basis (high-pass cutoff: 0.01 Hz)"
+      -> "the mean of the retained short channels for each chromophore and a discrete
+          cosine drift basis (high-pass cutoff: 0.01 Hz)"
     """
     parts = []
     sc = params.get("short_channel")
-    if sc == "mean":
-        parts.append("the mean short-channel time course of each chromophore")
+    # a --config TOML can record `true`, which the regression reads as "mean"
+    if sc == "mean" or sc is True:
+        parts.append("the mean of the retained short channels for each chromophore")
     # not "principal components": every component is kept, so the basis is no reduction
     elif sc == "pca":
-        parts.append("an orthogonal basis of every short-channel time course, both "
-                     "chromophores decomposed together")
+        parts.append("an orthogonal basis spanning the retained short channels "
+                     "(HbO and HbR decomposed together)")
+
+    aux = [str(name).removeprefix("aux_") for name in params.get("aux_regressors") or []]
+    if aux:
+        parts.append(f"the auxiliary signals {_series(aux)}")
 
     if (drift := _drift_phrase(params)) is not None:
         parts.append(drift)
 
     # the design matrix always holds an intercept, so there is something to say even when
     # neither flag was given, and the sentence stays true rather than naming absent columns
-    return " and ".join(parts) if parts else "a constant term only"
+    return _series(parts) if parts else "only a constant term"
+
+
+_CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR"}
+
+
+def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
+    """The screening sentence's numbers, its counting scope and any channels marked by hand."""
+    # Each line falls back to the criteria table for a record that does not carry it.
+    from fnirs_pipe.qc.metrics import criterion_cutoffs
+    cutoffs = criterion_cutoffs()
+    psp = params.get("psp_threshold")
+    good_frac = params.get("min_good_frac")
+    good_frac = cutoffs["good_frac"] if good_frac is None else good_frac
+    low, high = params.get("cardiac_l_freq"), params.get("cardiac_h_freq")
+    manual = list(dict.fromkeys(pair_of(c) for c in params.get("bad_channels") or []))
+    return {
+        "threshold": _num(params.get("sci_threshold")),
+        "psp_threshold": _num(psp if psp is not None else cutoffs["psp"]),
+        # a share reads as a percentage in a Methods paragraph, and it is formatted from
+        # the same value the screening used rather than written out beside it
+        "min_good_frac": f"{float(good_frac) * 100:g}%",
+        # the screening window, which is pinned and does not follow --window-length. The
+        # record's `qc_window_s` is the QC grid and would be the wrong number to quote
+        "window_s": f"{SCREEN_WINDOW_S:g}",
+        "cardiac_band": (f"in the {_num(low)}–{_num(high)} Hz cardiac band"
+                         if low is not None and high is not None else "in the cardiac band"),
+        "scope": ("the windows inside annotated task blocks"
+                  if params.get("screen_scope") == "task" else "their windows"),
+        "manual": (f" {'Channels' if len(manual) > 1 else 'Channel'} {_series(manual)} "
+                   f"{'were' if len(manual) > 1 else 'was'} also marked as bad by hand."
+                   if manual else ""),
+    }
+
+
+def _dpf_phrase(dpf: Any) -> str:
+    """'a differential pathlength factor (DPF) of 6', or one per wavelength when they differ."""
+    values = list(dict.fromkeys(_num(d) for d in (dpf if isinstance(dpf, (list, tuple))
+                                                  else [dpf])))
+    if len(values) == 1:
+        return f"a differential pathlength factor (DPF) of {values[0]}"
+    # MNE pairs the factors with the wavelengths sorted ascending, whatever order they came in
+    return (f"differential pathlength factors (DPF) of {_series(values)}, in ascending order "
+            "of wavelength")
+
+
+def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
+    """The coherence sentence's band and the clauses only some runs need."""
+    wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
+    whiten_s, window = params.get("wtc_whiten_s"), params.get("analysis_window_s")
+    return {
+        "chroma": _series([_CHROMA_NAME.get(c, c) for c in params.get("chroma") or ["hbo"]]),
+        # a run that gave no band averaged the whole computed axis
+        "band_fmin": _num(params.get("band_fmin", wtc_lo)),
+        "band_fmax": _num(params.get("band_fmax", wtc_hi)),
+        "coi": " inside the cone of influence" if params.get("mask_coi") else "",
+        "whiten": (" Before the transform, each long channel was prewhitened with an "
+                   f"autoregressive model of order {params.get('wtc_whiten_order')} "
+                   f"({_num(whiten_s)} s)." if whiten_s else ""),
+        "window": (f" Only {_num(window[0])}–{_num(window[1])} s of the aligned recordings "
+                   "were analysed." if window else ""),
+        "bads": (" A channel rejected in any of a member's runs was left out of all of them."
+                 if params.get("bads_scope") == "subject" else ""),
+    }
+
+
+def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
+    """The correlation's optional steps, in the order they ran: band limit, whitening, lag."""
+    before = []
+    low, high = params.get("isc_band_hz") or (None, None)
+    if low is not None and high is not None:
+        before.append(f"band-pass filtered to {_num(low)}–{_num(high)} Hz")
+    elif low is not None:
+        before.append(f"high-pass filtered at {_num(low)} Hz")
+    elif high is not None:
+        before.append(f"low-pass filtered at {_num(high)} Hz")
+    if params.get("isc_whiten_max_order"):
+        before.append("prewhitened with an autoregressive model whose order was chosen by BIC "
+                      f"(at most {params['isc_whiten_max_order']})")
+    options = (f" Before correlating, each signal was {' and '.join(before)}."
+               if before else "")
+    if params.get("isc_max_lag_s"):
+        options += (" The correlation was taken at the lag of largest magnitude within "
+                    f"±{_num(params['isc_max_lag_s'])} s, keeping its sign.")
+    return {"options": options}
 
 
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
@@ -148,64 +278,40 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     filter templates call ``l_freq``.
     """
     if key == "sci_marking":
-        # All three numbers the screening uses: SCI and PSP are the per-window lines and
-        # `min_good_frac` is what actually rejects a channel. Each falls back to the criteria
-        # table for a record that does not carry it.
-        from fnirs_pipe.qc.metrics import criterion_cutoffs
-        from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
-        cutoffs = criterion_cutoffs()
-        psp = params.get("psp_threshold")
-        good_frac = params.get("min_good_frac")
-        good_frac = cutoffs["good_frac"] if good_frac is None else good_frac
-        return {
-            "threshold": str(params.get("sci_threshold", "")),
-            "psp_threshold": str(psp if psp is not None else cutoffs["psp"]),
-            # a share reads as a percentage in a Methods paragraph, and it is formatted from
-            # the same value the screening used rather than written out beside it
-            "min_good_frac": f"{float(good_frac) * 100:g}%",
-            # the screening window, which is pinned and does not follow --window-length. The
-            # record's `qc_window_s` is the QC grid and would be the wrong number to quote
-            "window_s": f"{SCREEN_WINDOW_S:g}",
-            "action": "marked as bad and excluded from further analysis",
-        }
+        return _screening_slots(params)
     if key == "beer_lambert":
-        dpf = params.get("dpf")
-        return {"dpf": ", ".join(str(d) for d in dpf) if isinstance(dpf, (list, tuple)) else str(dpf)}
+        return {"dpf": _dpf_phrase(params.get("dpf"))}
     if key == "bandpass":
-        return {"l_freq": str(params.get("high_pass")), "h_freq": str(params.get("low_pass")),
+        return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
                 "filter": _filter_phrase(params)}
     if key == "highpass":
-        return {"l_freq": str(params.get("high_pass")), "filter": _filter_phrase(params)}
+        return {"l_freq": _num(params.get("high_pass")), "filter": _filter_phrase(params)}
     if key == "lowpass":
-        return {"h_freq": str(params.get("low_pass")), "filter": _filter_phrase(params)}
+        return {"h_freq": _num(params.get("low_pass")), "filter": _filter_phrase(params)}
     if key == "resample":
-        return {"sfreq": str(params.get("sfreq") or params.get("resample_sfreq", ""))}
+        return {"sfreq": _num(params.get("sfreq") or params.get("resample_sfreq"))}
     if key == "confound_regression":
         return {"regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"))}
     if key == "glm":
-        # the drift phrase carries its own parameter, so a polynomial is never described by a
-        # cosine's cutoff
-        return {
-            "hrf_model": str(params.get("hrf_model", "")),
-            "noise_model": _noise_phrase(params.get("noise_model")),
-            "drift": _drift_phrase(params) or "no drift term",
-        }
+        return {"hrf_model": _hrf_phrase(params.get("hrf_model")),
+                "regressors": _regressor_phrase(params),
+                "noise_model": _noise_phrase(params.get("noise_model"))}
     if key in ("hyper_wtc", "hyper_wtc_crossed"):
-        # the axis the transform covered and the band it was collapsed over are different
-        # numbers and the sentence names both; a run that gave no band averaged the whole axis
-        wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
-        return {
-            "wtc_fmin":  _num(wtc_lo),
-            "wtc_fmax":  _num(wtc_hi),
-            "band_fmin": _num(params.get("band_fmin", wtc_lo)),
-            "band_fmax": _num(params.get("band_fmax", wtc_hi)),
-        }
+        return _wtc_slots(params)
+    if key == "hyper_isc":
+        return _isc_slots(params)
+    if key == "hyper_roi":
+        least = int(params.get("roi_min_channels") or 1)
+        return {"min_channels": (" A region pair was left empty where either member "
+                                 f"contributed fewer than {least} channels."
+                                 if least > 1 else "")}
+    if key == "hyper_input":
+        desc = params.get("desc")
+        return {"stage": f"desc-{desc}" if desc else "input"}
     if key == "hyper_coherence":
         return {"coh_fmin": _num(params.get("coherence_fmin")),
                 "coh_fmax": _num(params.get("coherence_fmax"))}
-    if key == "hyper_alignment":
-        return {"n_subjects": str(params.get("n_subjects", "member"))}
     return {}
 
 
@@ -646,36 +752,64 @@ def metric_rows(
 
 # ---- what a run actually did ----
 
+# Within one depth of the graph, the order a dyad's sentences read in: the coherence, the
+# correlation, then how both were grouped into regions.
+_RANK = {"hyper_isc": 1, "hyper_roi": 2}
+
+
+def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
+    """(steps.toml key, filled slots) for the method steps among ``nodes``, in data order.
+
+    A step that ran more than once contributes one entry, the later files filling only what
+    the earlier ones left out (a regression's fit table and its residual each carry part of
+    the picture).
+    """
+    keyed = [(node, boilerplate_key(node.step, node.params)) for node in nodes]
+    keyed = sorted(((node, key) for node, key in keyed if key is not None),
+                   key=lambda nk: (nk[0].depth, _RANK.get(nk[1], 0), nk[0].label))
+    merged: dict[str, dict[str, Any]] = {}
+    for node, key in keyed:
+        merged[key] = {**node.params, **merged.get(key, {})}
+    return [(key, template_slots(key, params)) for key, params in merged.items()]
+
+
 def steps_from_sidecars(
-    nirs_dir: "Path | Sequence[Path]",
-    mode: str | None = None,
+    nirs_dir: Path, label: str | None = None,
 ) -> list[tuple[str, dict[str, str]]]:
-    """(steps.toml key, filled slots) for every method step a run recorded, in run order.
+    """Every method step the sidecars under ``nirs_dir`` record, ordered by graph depth.
 
-    Ordered by depth in the provenance graph, so the sentences follow the data rather than
-    the filenames. A step that ran more than once contributes one entry, with the later
-    parameters filling anything the first was missing (the GLM's four outputs each carry
-    part of the picture).
-
-    Several directories are scanned in the order given and merged the same way, which is
-    how a dyad's Methods paragraph continues from a member subject's preprocessing into
-    the group's own steps. Directories the caller passes in the wrong order produce
-    sentences in the wrong order; nothing here re-sorts across them.
+    ``label`` is a run stem (``sub-01_task-rest``) and keeps another run's files out of the
+    paragraph, the way :func:`~fnirs_pipe.qc.common.provenance.scan` scopes its graph.
     """
     from fnirs_pipe.qc.common.provenance import scan
 
-    dirs = [nirs_dir] if isinstance(nirs_dir, (str, Path)) else list(nirs_dir)
+    return _describe(scan(nirs_dir, label=label).values())
 
-    merged: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    for directory in dirs:
-        for node in sorted(scan(directory).values(), key=lambda n: (n.depth, n.label)):
-            key = boilerplate_key(node.step, node.params, mode)
-            if key is None:
-                continue
-            if key not in merged:
-                merged[key] = {}
-                order.append(key)
-            merged[key] = {**node.params, **merged[key]}
 
-    return [(key, template_slots(key, merged[key])) for key in order]
+def steps_from_lineage(path: "str | Path") -> "list[tuple[str, dict[str, str]]] | None":
+    """The method steps behind one file, read up its chain of ``Sources``.
+
+    ::
+
+      .../sub-01_task-rest_desc-preproc_nirs.snirf
+        -> od_conversion, sci_marking, motion_tddr, beer_lambert   (no filter, no regression)
+
+    What a later stage did to the same recording is not in the chain, so a reader of an
+    earlier stage is never described as having read the later one. None when the file's own
+    record cannot be found, which is a moved tree or an input this package did not write.
+    """
+    from fnirs_pipe.qc.common.provenance import _key, scan
+
+    nodes = scan(Path(path).parent)
+    start = _key(path)
+    if start not in nodes or nodes[start].step is None:
+        return None
+    chain: dict = {}
+    todo = [start]
+    while todo:
+        key = todo.pop()
+        if key in chain or key not in nodes:
+            continue
+        chain[key] = nodes[key]
+        todo += nodes[key].sources
+    return _describe(chain.values())

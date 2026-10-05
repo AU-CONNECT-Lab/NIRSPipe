@@ -4,9 +4,9 @@
 # {ver} is replaced with the installed fnirs-pipe version.
 
 [header]
-plain    = "fNIRS data were preprocessed using fnirs-pipe v{ver}."
-markdown = "fNIRS data were preprocessed using **fnirs-pipe** v{ver}."
-latex    = "fNIRS data were preprocessed using \\texttt{{fnirs-pipe}} v{ver}."
+plain    = "fNIRS data were processed using fnirs-pipe v{ver}."
+markdown = "fNIRS data were processed using **fnirs-pipe** v{ver}."
+latex    = "fNIRS data were processed using \\texttt{{fnirs-pipe}} v{ver}."
 
 #
 #
@@ -16,29 +16,34 @@ latex    = "fNIRS data were preprocessed using \\texttt{{fnirs-pipe}} v{ver}."
 #
 # A missing section means the step is omitted from the Methods (e.g. motion_none).
 # {citations} is removed automatically when the citations list is empty.
+# Slots holding a whole optional sentence ({manual}, {whiten}, {options}, ...) are filled in
+# vocabulary.py and are empty when the run did not use that option.
 
 [od_conversion]
 plain = "Raw intensity signals were converted to optical density (OD) using MNE-Python {citations}."
 citations = ["Gramfort2013"]
 
 [sci_marking]
-plain = "Channel signal quality was assessed by pairing the scalp coupling index (SCI) {citations} with the peak spectral power (PSP) of the cardiac band within each {window_s} s window: a window was counted as well coupled when its SCI was at least {threshold} and its PSP at least {psp_threshold}. Channels well coupled in fewer than {min_good_frac} of their windows were {action}."
+plain = "Channels were screened in non-overlapping {window_s} s windows: a window counted as coupled when its scalp coupling index (SCI) was at least {threshold} and its peak spectral power (PSP) at least {psp_threshold}, both measured {cardiac_band} {citations}. Channels coupled in fewer than {min_good_frac} of {scope} were marked as bad and excluded from further analysis.{manual}"
 citations = ["Pollonini2014"]
+# TODO(review): --screen-scope task falls back to the whole run when no annotation holds two windows, and the sidecar does not record the fallback, so {scope} can claim task blocks that were not used.
 
 [motion_tddr]
-plain = "Motion artifacts were corrected using temporal derivative distribution repair (TDDR) {citations}."
+plain = "Motion artifacts in the OD were corrected with temporal derivative distribution repair (TDDR) {citations}."
 citations = ["Fishburn2019"]
 
 [motion_wavelet]
-plain = "Motion artifacts were suppressed using wavelet-based filtering."
+plain = "Motion artifacts in the OD were corrected with wavelet filtering {citations}."
 citations = ["Molavi2012"]
+# TODO(review): state the implementation (db2 stationary wavelet transform, detail coefficients beyond 1.5 IQR zeroed)? Both are function defaults in pipeline/motion.py, not named constants, so they cannot be slotted yet.
 
 [motion_spline]
 plain = "Motion artifacts were suppressed using spline interpolation."
 citations = ["Scholkmann2010"]
+# TODO(review): unreachable, spline has no backend (pipeline/motion.py raises). Delete, or rewrite once an implementation exists.
 
 [beer_lambert]
-plain = "Haemoglobin concentration changes (HbO, HbR) were estimated from OD using the modified Beer-Lambert law {citations} with a differential path length factor (DPF) of {dpf}."
+plain = "Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law {citations}, using {dpf}."
 citations = ["Delpy1988", "Cope1988"]
 
 [bandpass]
@@ -58,35 +63,54 @@ plain = "Data were resampled to {sfreq} Hz."
 citations = ["Pinti2018"]
 
 [confound_regression]
-plain = "Systemic physiology was removed by regressing {regressors} out of the haemodynamic time series in a model containing no condition regressors, fitted with {noise_model}; all subsequent analysis used the residuals {citations}."
+plain = "Nuisance signals were removed by regressing {regressors} out of each channel in a model with no task regressors, fitted with {noise_model}; all subsequent analysis used the residuals {citations}."
 citations = ["Yucel2021"]
 
 [glm]
-plain = "A first-level general linear model (GLM) was fitted to the haemodynamic time series using a {hrf_model} haemodynamic response function, {drift} and {noise_model} {citations}."
+plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled with {hrf_model}, the design also held {regressors}, and the model was fitted with {noise_model}."
 citations = ["Santosa2018"]
+# TODO(review): an FIR model's delays (--fir-delays) and the boxcar duration (--stim-dur or the events file) are not recorded in the sidecars, so the sentence cannot state them.
+
+# A tree written before the regression recorded its conditions; it cannot say which model ran.
+[regression_unrecorded]
+plain = "A regression was applied whose design this derivatives tree does not record; re-run fnirs-pipe to describe it here."
+citations = []
 
 # ---- Hyperscanning ----
 #
-# These describe a dyad rather than a subject, and they are appended after the member
-# subjects' own steps so the paragraph reads as one pipeline. Their citations are
+# These describe a dyad rather than a subject, and they follow the steps behind the member
+# files the analysis read, so the paragraph reads as one pipeline. Their citations are
 # placeholders (see references.bib); the prose is real.
 
+[hyper_input]
+plain = "The inter-brain measures were computed on the members' {stage} files, whose processing records could not be read, so their preprocessing is not described here."
+citations = []
+
 [hyper_alignment]
-plain = "The {n_subjects} recordings of each group were aligned on their first shared event marker and trimmed to the shortest, so every cross-brain measure was taken over one common time base {citations}."
+plain = "The recordings of each group were aligned on their first shared event marker and trimmed to a common length {citations}."
 citations = ["TODO_HyperAlignment"]
 
+[hyper_trim]
+plain = "The recordings of each group were not aligned on an event marker; they were trimmed to a common length, assuming they started together."
+citations = []
+
 [hyper_wtc]
-plain = "Inter-brain coupling was quantified as wavelet transform coherence between homologous channels of the two recordings over {wtc_fmin}–{wtc_fmax} Hz, and each channel's coherence map was averaged over {band_fmin}–{band_fmax} Hz to give one value per channel {citations}."
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{window}{bads}"
 citations = ["TODO_Wavelet"]
+# TODO(review): per-condition values are read out of the whole-run transform by default and transformed on their own under --wtc-cond-transform; the tables do not record which, so the sentence does not say.
 
 [hyper_wtc_crossed]
-plain = "Inter-brain coupling was quantified as wavelet transform coherence between every channel of one recording and every channel of the other over {wtc_fmin}–{wtc_fmax} Hz, and each channel pair's coherence map was averaged over {band_fmin}–{band_fmax} Hz to give one value per channel pair {citations}."
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every long channel of one member and every long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{window}{bads}"
 citations = ["TODO_Wavelet"]
 
 [hyper_coherence]
-plain = "Inter-brain coupling was screened with the magnitude-squared coherence of each homologous channel pair, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
+plain = "Inter-brain coupling was screened with the magnitude-squared coherence (Welch's method) between homologous long HbO channels, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
 citations = ["TODO_Coherence"]
 
 [hyper_isc]
-plain = "Inter-subject correlation was computed as the Pearson correlation of each channel of one brain with every channel of the other over the aligned recordings, separately for HbO and HbR {citations}."
+plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every long channel of one member and every long channel of another, separately for HbO and HbR {citations}.{options}"
 citations = ["TODO_ISC"]
+
+[hyper_roi]
+plain = "Region-of-interest (ROI) values averaged the channel-pair values between each pair of regions, coherence directly and correlation in Fisher z; the homologous ROI coherence averaged only same-channel pairs.{min_channels}"
+citations = []

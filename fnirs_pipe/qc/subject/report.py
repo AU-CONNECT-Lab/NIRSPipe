@@ -1962,10 +1962,10 @@ def build_subject_report(
         ),
         **footer_vars(
             scope=f"sub-{subject}", errors=errors, notes=notes,
-            nirs_dir=nirs_dir, mode=mode, label=sqm_label,
+            nirs_dir=nirs_dir, label=sqm_label,
             provenance_path=provenance_path,
-            methods=generate_methods_text(config, versions=versions, mode=mode,
-                                          nirs_dir=nirs_dir),
+            methods=generate_methods_text(versions=versions, nirs_dir=nirs_dir,
+                                          label=sqm_label),
             versions=versions,
         ),
         metric_summary=metric_summary,

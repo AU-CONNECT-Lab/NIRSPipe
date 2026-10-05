@@ -8,7 +8,9 @@ from importlib.resources import files
 from typing import Any
 
 from fnirs_pipe import __version__
-from fnirs_pipe.qc.boilerplate.vocabulary import boilerplate_key, step_summary, template_slots
+from fnirs_pipe.qc.boilerplate.vocabulary import (
+    boilerplate_key, step_summary, steps_from_sidecars, template_slots,
+)
 
 
 # ---- Citation rendering ----
@@ -143,65 +145,6 @@ def _load_refs() -> dict[str, dict]:
 
 # ---- Step assembly ----
 
-def _active_steps(prep_config: Any, post_config: Any, mode: str | None) -> list[tuple[str, dict]]:
-    # the fallback describes what a run was asked to do, which only a config can say. A
-    # caller with no config (a group-level report, say) has only the sidecars to go on.
-    if prep_config is None:
-        return []
-    # every section goes through template_slots, so a template that grows a slot is filled
-    # the same way here as on the sidecar path
-    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
-
-    def slots(key: str, params: dict) -> tuple[str, dict]:
-        return key, template_slots(key, params)
-
-    result = [
-        ("od_conversion", {}),
-        slots("sci_marking", {
-            "sci_threshold": prep_config.sci_threshold,
-            "psp_threshold": getattr(prep_config, "psp_threshold", None),
-            "min_good_frac": getattr(prep_config, "min_good_frac", None),
-        }),
-    ]
-
-    mc = prep_config.motion_correction
-    if mc != "none":
-        result.append((f"motion_{mc}", {}))
-
-    result.append(slots("beer_lambert", {"dpf": prep_config.dpf}))
-
-    if post_config is not None:
-        hp = getattr(post_config, "high_pass", None)
-        lp = getattr(post_config, "low_pass", None)
-        band = {"high_pass": hp, "low_pass": lp,
-                "filter_method": getattr(post_config, "filter_method", None),
-                "filter_order": getattr(post_config, "filter_order", None)}
-        if hp and lp:
-            result.append(slots("bandpass", band))
-        elif hp:
-            result.append(slots("highpass", band))
-        elif lp:
-            result.append(slots("lowpass", band))
-
-        if getattr(post_config, "resample_sfreq", None):
-            result.append(slots("resample", {"resample_sfreq": post_config.resample_sfreq}))
-
-        regression = {
-            "short_channel": post_config.short_channel,
-            "drift_model": post_config.drift_model,
-            "drift_high_pass": post_config.drift_high_pass,
-            "drift_order": post_config.drift_order,
-            "noise_model": post_config.noise_model,
-        }
-        if mode == "glm":
-            result.append(slots("glm", {**regression, "hrf_model": post_config.hrf_model}))
-        elif mode in ("rest", "denoise") and (
-                post_config.short_channel or post_config.drift_model not in (None, "none")):
-            result.append(slots("confound_regression", regression))
-
-    return result
-
-
 def _render_step(template: str, params: dict, citations: str) -> str:
     if citations:
         params = {**params, "citations": citations}
@@ -293,33 +236,26 @@ def _build_reflist(active: list[tuple[str, dict]], steps: dict, refs: dict) -> s
 # ---- Public API ----
 
 def generate_methods_text(
-    prep_config: Any = None,
-    post_config: Any = None,
-    mode: str | None = None,
     versions: dict[str, str] | None = None,
     nirs_dir: Any = None,
+    label: str | None = None,
     steps: "list[tuple[str, dict]] | None" = None,
 ) -> dict[str, str]:
-    """Methods prose for one run.
+    """Methods prose for one run, from what its sidecars record.
 
-    Three ways to say what ran, most specific first. ``steps`` is the step list itself,
-    already slot-filled (see :func:`~fnirs_pipe.qc.boilerplate.vocabulary.template_slots`),
-    for a caller that assembles it from more than one place: a dyad's paragraph continues
-    from a member's preprocessing into steps that left no file. ``nirs_dir`` reads the
-    steps from the sidecars a run wrote, so the text describes what actually happened.
-    The config is the fallback for a tree with no sidecars, and it can only describe what
-    was requested.
+    ``steps`` is the step list itself, already slot-filled (see
+    :func:`~fnirs_pipe.qc.boilerplate.vocabulary.template_slots`), for a caller that
+    assembles it from more than one place: a dyad's paragraph continues from the files its
+    members were read from into steps that left no file. Otherwise ``nirs_dir`` is scanned,
+    scoped to the run ``label`` names.
     """
     templates = _load_steps()
     refs = _load_refs()
     ver = (versions or {}).get("fnirs-pipe", "unknown")
 
-    active = list(steps) if steps else []
-    if not active and nirs_dir is not None:
-        from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
-        active = steps_from_sidecars(nirs_dir, mode)
-    if not active:
-        active = _active_steps(prep_config, post_config, mode)
+    active = list(steps) if steps is not None else []
+    if steps is None and nirs_dir is not None:
+        active = steps_from_sidecars(nirs_dir, label=label)
 
     prose_plain = _with_connectives(_collect_prose(active, templates, refs, "plain"))
     prose_md    = _with_connectives(_collect_prose(active, templates, refs, "markdown"))
@@ -327,7 +263,7 @@ def generate_methods_text(
     reflist     = _build_reflist(active, templates, refs)
 
     header = templates.get("header", {})
-    header_plain = header.get("plain", "fNIRS data were preprocessed using fnirs-pipe v{ver}.").format(ver=ver)
+    header_plain = header.get("plain", "fNIRS data were processed using fnirs-pipe v{ver}.").format(ver=ver)
     header_md    = header.get("markdown", header_plain).format(ver=ver)
     header_latex = header.get("latex", header_plain).format(ver=ver)
 
@@ -344,7 +280,7 @@ def generate_methods_text(
 
     para_latex = " ".join([header_latex] + prose_latex)
     latex = (
-        "\\subsection{fNIRS Preprocessing}\n"
+        "\\subsection{fNIRS Processing}\n"
         f"{para_latex}\n"
         "% BibTeX keys: see fnirs_pipe/qc/boilerplate/references.bib"
     )
@@ -354,13 +290,13 @@ def generate_methods_text(
     return {"plain": plain, "markdown": markdown, "latex": latex, "html": html}
 
 
-def step_sentence(step: str | None, params: dict, mode: str | None = None) -> str:
+def step_sentence(step: str | None, params: dict) -> str:
     """One line saying what a step did, for a table rather than a paragraph.
 
     The Methods sentence where there is one, without its citations; otherwise the plain
     description of a bookkeeping step. Empty for a step this module has never heard of.
     """
-    key = boilerplate_key(step, params, mode)
+    key = boilerplate_key(step, params)
     section = _load_steps().get(key) if key else None
     if not section:
         return step_summary(step)

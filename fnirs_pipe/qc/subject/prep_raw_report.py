@@ -39,7 +39,7 @@ from fnirs_pipe.qc.common.report_shell import (
 )
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
 from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 from fnirs_pipe.qc.subject.sqm_record import (
@@ -873,9 +873,8 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
     includes the same footer partial instead. The errors block is deliberately left out:
     those are per run here and the viewer renders them itself.
 
-    The Methods prose and the provenance table are read from the sidecars in ``nirs/``, so
-    on a tree where only this command has run they describe that one step rather than a
-    pipeline that has not happened yet.
+    No Methods: this is a quality view of the recording, and what it screened is in the
+    pipeline report's Methods. The provenance table is read from the sidecars in ``nirs/``.
     """
     session = runs[0].get("session") if runs else None
     nirs_dir = _nirs_dir(runs, sub_dir)
@@ -892,7 +891,6 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
         ),
         **footer_vars(
             scope=output_path.stem, nirs_dir=nirs_dir, provenance_path=provenance_path,
-            methods=generate_methods_text(versions=versions, nirs_dir=nirs_dir),
             versions=versions,
         ),
         # the subject index is rebuilt by the same command, so the bar can always point at it

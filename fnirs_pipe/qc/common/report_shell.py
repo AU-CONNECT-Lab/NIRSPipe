@@ -241,7 +241,6 @@ def nav_bar(
 
 def provenance_rows(
     nirs_dir: Path,
-    mode: str | None = None,
     *,
     scope: str = "",
     errors: list | None = None,
@@ -264,7 +263,7 @@ def provenance_rows(
             if not node.step:
                 continue
             row = (node.label, node.step,
-                   step_sentence(node.step, node.params, mode),
+                   step_sentence(node.step, node.params),
                    node.detail.replace("\n", " "))
             # only bites when no label was given and the scan spans several tasks, which
             # repeat every step with the same settings
@@ -297,7 +296,6 @@ def footer_vars(
     errors: list | None = None,
     notes: list | None = None,
     nirs_dir: Path | None = None,
-    mode: str | None = None,
     label: str | None = None,
     provenance_path: str | None = None,
     methods: dict | None = None,
@@ -315,7 +313,7 @@ def footer_vars(
         out["errors"] = collapse_messages(errors)
         out["notes"] = collapse_messages(notes) if notes is not None else []
     if nirs_dir is not None:
-        rows = provenance_rows(nirs_dir, mode, scope=scope, errors=errors, label=label)
+        rows = provenance_rows(nirs_dir, scope=scope, errors=errors, label=label)
         # a tree with no sidecars has no provenance to show, and a heading over an empty
         # table plus a "diagram not rendered" placeholder says less than nothing
         if rows or provenance_path is not None:

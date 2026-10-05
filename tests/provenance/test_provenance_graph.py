@@ -311,7 +311,7 @@ def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     from fnirs_pipe.qc.common.report_shell import provenance_rows
 
     _chain_plus_record(tmp_path)
-    rows = provenance_rows(tmp_path, "denoise", scope="sub-01")
+    rows = provenance_rows(tmp_path, scope="sub-01")
 
     row = next(r for r in rows if r["step"] == "sqm")
     assert "metrics" not in row

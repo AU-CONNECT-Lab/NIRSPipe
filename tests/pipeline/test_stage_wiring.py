@@ -104,6 +104,30 @@ def test_a_glm_that_writes_nothing_needs_no_source_file(od):
                      events=pd.DataFrame(columns=["trial_type", "onset", "duration"]))
 
 
+# ---- the residual says whether a task model was in it ----
+
+def _residual_params(od, events):
+    haemo = od_to_haemo(od.copy(), [6.0])
+    *_, resid = run_glm_pipeline(haemo, stim_dur=None, hrf_model="glover", noise_model="ols",
+                                 drift_model="polynomial", high_pass=None, drift_order=1,
+                                 fir_delays=None, events=events)
+    return lineage_of(resid).params
+
+
+def test_a_confound_regression_records_no_conditions_and_no_hrf(od):
+    params = _residual_params(od, pd.DataFrame(columns=["trial_type", "onset", "duration"]))
+    assert params["conditions"] == []
+    assert "hrf_model" not in params
+
+
+def test_a_task_glm_records_its_conditions_and_its_hrf(od):
+    events = pd.DataFrame({"trial_type": ["tap", "rest", "tap"], "onset": [20.0, 60.0, 100.0],
+                           "duration": [10.0, 10.0, 10.0]})
+    params = _residual_params(od, events)
+    assert params["conditions"] == ["rest", "tap"]
+    assert params["hrf_model"] == "glover"
+
+
 # ---- the bandpass cutoffs are not swapped ----
 
 SFREQ = 10.0
