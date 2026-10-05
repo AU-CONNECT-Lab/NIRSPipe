@@ -200,7 +200,7 @@ def gyro_speed(
 
     ::
 
-        {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} at 98.67 Hz, in o/s  ->  (t, |omega|, "°/s")
+        {GYRO_X_1, GYRO_Y_1, GYRO_Z_1} in o/s  ->  (t, |omega|, "°/s")
 
     Each axis has its median taken off first, since a gyroscope at rest reads a small
     constant offset rather than zero.

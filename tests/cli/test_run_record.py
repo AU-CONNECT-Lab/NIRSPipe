@@ -155,10 +155,10 @@ def group_record(tmp_path):
 
     out = write_group_run_record(
         {"pairs_csv": tmp_path / "pairs.csv", "wtc_fmin": 0.004, "wtc_fmax": 0.2,
-         "wtc_channel_cross": False, "task_label": ["chat"], "roi_mapping": None,
+         "wtc_channel_cross": False, "task_label": ["main"], "roi_mapping": None,
          "output_dir": tmp_path, "verbose": False, "func": None,
          "roi_map": {"L": ["S1_D1"]}},
-        "D01", "chat", "20260907_120000", tmp_path, tmp_path / "group-D01",
+        "G01", "main", "20260101_120000", tmp_path, tmp_path / "group-G01",
         members=["01", "02"],
     )
     return out, tomllib.loads(out.read_text(encoding="utf-8"))
@@ -167,14 +167,14 @@ def group_record(tmp_path):
 def test_the_group_record_lands_beside_the_group_reports(group_record):
     out, _ = group_record
     assert out.parent.name == "logs"
-    assert out.parent.parent.name == "group-D01"
-    assert out.name == "group-D01_task-chat.toml"
+    assert out.parent.parent.name == "group-G01"
+    assert out.name == "group-G01_task-main.toml"
 
 
 def test_the_group_record_names_the_group_and_its_members(group_record):
     _, record = group_record
-    assert record["execution"]["group_id"] == "D01"
-    assert record["execution"]["task_label"] == "chat"
+    assert record["execution"]["group_id"] == "G01"
+    assert record["execution"]["task_label"] == "main"
     assert record["execution"]["participant_label"] == ["01", "02"]
 
 
