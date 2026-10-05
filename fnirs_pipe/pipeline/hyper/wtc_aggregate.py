@@ -32,8 +32,11 @@ logger = get_logger("pipeline.wtc_aggregate")
 # ever appear on a null's sidecar, and a file without a key carries no opinion, so listing
 # them guards the null merges without touching the real tables.
 # n_iter is not here: it is a column of the table, not a property of one, so mixing it
-# leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
-_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s")
+# leaves every row readable and separable. `_warn_mixed_iterations` says what it costs.
+# desc, bads_scope and roi_min_channels are absent from tables older than the record, which
+# then carry no opinion either
+_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s",
+               "desc", "bads_scope", "roi_min_channels")
 # an unwhitened table carries no wtc_whiten_s, and that absence is an opinion: it was not
 # whitened, so it must not merge with one that was
 _ABSENT_MEANS = {"wtc_whiten_s": 0.0}
@@ -112,8 +115,8 @@ def _refuse_mixed_bands(seen: dict[str, dict]) -> None:
             raise ValueError(
                 f"the WTC tables disagree on {key}, so their coherence columns are not "
                 f"comparable and merging them would hide it:\n{spread}\n"
-                f"Re-run `fnirs-hyper` for the odd ones out with a matching band, or aggregate "
-                f"them separately."
+                f"Re-run `fnirs-hyper` for the odd ones out with matching settings, or "
+                f"aggregate them separately."
             )
 
 

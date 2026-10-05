@@ -423,3 +423,15 @@ def test_a_crossed_null_ranks_the_crossed_roi_matrix_only_against_a_crossed_one(
         got = pd.read_csv(cross_path, sep="\t")
         assert list(got[["label", "label2"]].iloc[0]) == ["r1", "r1"]
         assert got["percentile"].iloc[0] == 100.0
+
+
+def test_one_surviving_channel_keeps_a_region_by_default():
+    """The region's mean of channel coherences rests on fewer channels, not on a biased one."""
+    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels
+    from fnirs_pipe.utils import ROI_MIN_CHANNELS
+
+    assert _hyper().wtc_roi_min_channels == ROI_MIN_CHANNELS == 1
+    frame = pd.DataFrame({"sub1": ["a"] * 2, "sub2": ["b"] * 2, "label": ["S1_D1", "S2_D1"],
+                          "coherence": [0.3, 0.5], "n_valid_frac": [1.0] * 2})
+    roi = roi_mean_of_channels(frame, TWO_REGIONS).set_index("label")
+    assert roi.loc["r2", "coherence"] == 0.5 and roi.loc["r2", "n_ch"] == 1

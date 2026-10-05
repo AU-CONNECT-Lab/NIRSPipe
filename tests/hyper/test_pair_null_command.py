@@ -341,3 +341,22 @@ def test_a_crossed_null_over_an_uncrossed_table_says_so(tmp_path, monkeypatch, c
     with caplog.at_level("WARNING"), pytest.raises(_Loaded):
         _draw((tmp_path, group), cross=True)
     assert "crossed null over an uncrossed real table" in caplog.text
+
+
+
+# ---- the merge checks what the tables now record ----
+
+@pytest.mark.parametrize("key, a, b", [("desc", "errts", "preproc"),
+                                       ("bads_scope", "subject", "run"),
+                                       ("roi_min_channels", 1, 2)])
+def test_dyads_run_on_different_settings_refuse_to_merge(tmp_path, key, a, b):
+    _real_table(tmp_path, gid="G01", params={**_REAL, key: a})
+    _real_table(tmp_path, gid="G02", params={**_REAL, key: b})
+    with pytest.raises(ValueError, match=f"disagree on {key}"):
+        _merge(tmp_path, "wtc")
+
+
+def test_a_table_older_than_the_record_still_merges(tmp_path):
+    _real_table(tmp_path, gid="G01", params={**_REAL, "desc": "errts"})
+    _real_table(tmp_path, gid="G02")
+    assert sorted(_merge(tmp_path, "wtc")["group_id"]) == ["G01", "G02"]

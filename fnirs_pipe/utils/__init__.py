@@ -7,6 +7,11 @@ import numpy as np
 
 _R_CLIP = 0.999999
 
+# channels each member must keep in a region for its ROI cell to be reported
+ROI_MIN_CHANNELS = 1
+# the minimum dyad tables were grouped under before their sidecars recorded it
+UNRECORDED_ROI_MIN_CHANNELS = 2
+
 
 def unwrap_enum(val: Any, default: Any = None) -> Any:
     if val is None:

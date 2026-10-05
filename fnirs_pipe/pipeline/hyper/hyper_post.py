@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import bare_roi_map
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
@@ -52,7 +52,7 @@ class HyperPostConfig:
     wtc_limit_scales: bool = True
     wtc_save_maps: bool = False
     wtc_mask_coi: bool = True
-    wtc_roi_min_channels: int = 2
+    wtc_roi_min_channels: int = ROI_MIN_CHANNELS
     wtc_chroma: Any = ("hbo", "hbr")
     # seconds of AR order for prewhitening before the coherence, 0 for none
     wtc_whiten_s: float = 0.0

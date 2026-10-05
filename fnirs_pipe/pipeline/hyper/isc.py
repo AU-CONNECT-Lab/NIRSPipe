@@ -21,7 +21,7 @@ from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
 from fnirs_pipe.pipeline.hyper.whiten import _yule_walker, autocov
-from fnirs_pipe.utils import bare_roi_map, fisher_r_to_z, pair_of
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
@@ -451,7 +451,7 @@ def roi_mean_of_isc(
     isc_mat,
     ch_names: list[str],
     roi_map: dict[str, list[str]],
-    min_channels: int = 2,
+    min_channels: int = ROI_MIN_CHANNELS,
 ) -> "tuple[np.ndarray, list[str]] | tuple[None, None]":
     """Average the channel-level ISC inside each ROI pair: the ROI number beside the ROI WTC.
 

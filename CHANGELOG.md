@@ -17,8 +17,12 @@ All notable changes to this project will be documented in this file.
 - The subject report's run page shows every condition's channel pass/fail grid, one block per metric
 - A crossed WTC null also writes a null for each dyad's crossed ROI x ROI matrix
 - Dyad WTC sidecars record the channel crossing, the ROI minimum, the input stage and the rejection scope
+- `fnirs-hyper-groupnull` corrects the crossed ROI null's cells in its per-cell table, as a family of their own
 
 ### Changed
+- **`--wtc-roi-min-channels` defaults to 1, so one surviving channel keeps a region; pass 2 for the earlier rule**
+- `fnirs-hyper-groupnull` leaves a thin region out only for the occasions and conditions whose own ROI table blanks it
+- `fnirs-hyper-merge` refuses dyads run on a different stage, rejection scope or ROI minimum
 - **`fnirs-hyper-pairnull` takes its stage, rejection scope, crossing and ROI minimum from the real tables, and refuses a retyped value that differs**
 - `fnirs-hyper-groupnull` keeps a region by the ROI minimum the real tables recorded instead of a fixed two channels
 - The crossed ROI table, not the homologous one, is described as the ROI number to report

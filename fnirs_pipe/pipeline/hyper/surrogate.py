@@ -27,7 +27,7 @@ from fnirs_pipe.pipeline.hyper.wtc import (
     wtc_band_mean,
     window_result,
 )
-from fnirs_pipe.utils import fisher_r_to_z
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.surrogate")
@@ -106,7 +106,7 @@ class NullDraws:
     def summarise_roi(self, roi_map: dict[str, list[str]],
                       real: "pd.DataFrame | None" = None,
                       real_by_cond: "pd.DataFrame | None" = None,
-                      min_channels: int = 2,
+                      min_channels: int = ROI_MIN_CHANNELS,
                       crossed: bool = False,
                       ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
         """The same two tables at ROI level, for :func:`roi_mean_of_homologous`.

@@ -11,7 +11,7 @@ from pathlib import Path
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.io.derivatives import (
     group_data_dir, group_report_dir, subject_report_dir, subject_nirs_dirs,
 )
@@ -745,7 +745,7 @@ def build_hyper_post_report(
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = True,
-    wtc_roi_min_channels: int = 2,
+    wtc_roi_min_channels: int = ROI_MIN_CHANNELS,
     wtc_arrow_min: "float | None" = None,
     wtc_chroma: "tuple[str, ...] | list[str]" = ("hbo", "hbr"),
     wtc_whiten_s: float = 0.0,

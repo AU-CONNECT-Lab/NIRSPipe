@@ -214,7 +214,8 @@ def test_a_crossed_draw_also_offers_every_pairing():
 
 
 def test_a_region_map_adds_one_level_per_region_that_has_the_channels():
-    got = [lv for g, lv, _, _, _ in _variants(_draws(), _real(0.4), ROI) if g == "roi"]
+    got = [lv for g, lv, _, _, _ in _variants(_draws(), _real(0.4), ROI, min_channels=2)
+           if g == "roi"]
     assert got == ["front", "back"]          # "thin" has one channel, below min_channels
 
 
@@ -260,7 +261,8 @@ def _write_crossed_tree(root, value):
 
 
 def test_a_crossed_null_with_a_region_map_tests_every_ordered_region_pair():
-    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), ROI)
+    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), ROI,
+                                               min_channels=2)
            if g == "roi" and pr == "all"]
     # "thin" has one channel, so it pairs with nothing
     assert got == ["front>front", "front>back", "back>front", "back>back"]
@@ -273,7 +275,8 @@ def test_a_homologous_null_offers_no_region_pairs():
 
 def test_a_region_pair_needs_channels_on_both_sides_not_just_pairings():
     roi = {"front": ["S1_D1", "S1_D2"], "one": ["S2_D1"]}
-    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), roi)
+    got = [lv for g, lv, pr, _, _ in _variants(_full_cross(_draws()), _full_cross(_real(0.4)), roi,
+                                               min_channels=2)
            if g == "roi" and pr == "all"]
     # front>one rests on two pairings, but on one channel of the second member
     assert got == ["front>front"]
@@ -588,3 +591,42 @@ def test_real_tables_that_predate_the_record_keep_the_old_minimum(tmp_path):
     from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
 
     assert _roi_min_of({_recorded(tmp_path, "G01", band_fmin=0.06, band_fmax=0.15)}) == 2
+
+
+# ---- the region gate, one occasion at a time ----
+
+def test_by_default_one_surviving_channel_keeps_a_region():
+    got = [lv for g, lv, _, _, _ in _variants(_draws(), _real(0.4), ROI) if g == "roi"]
+    assert got == ["front", "back", "thin"]
+
+
+def test_a_region_thin_in_one_occasion_leaves_out_that_occasion_only():
+    """Its own ROI table blanks the region there, so the cohort must not rank it there."""
+    real = _real(0.4)
+    real = real[~((real.occasion == "G03") & (real.label == "S1_D2"))]
+
+    levels = {lv: (d, r) for g, lv, _, d, r in _variants(_draws(), real, ROI, min_channels=2)
+              if g == "roi"}
+
+    d, r = levels["front"]
+    assert set(r.occasion) == set(d.occasion) == {"G01", "G04"}
+    assert set(levels["back"][1].occasion) == set(OCCASIONS)
+
+
+def test_the_crossed_roi_cells_are_corrected_as_their_own_family(tmp_path):
+    """Its (front, front) cell holds the cross pairings, so it is not the homologous front."""
+    _write_cells(tmp_path, [[100, 100, 100, 100]] * 3)
+    for occ in OCCASIONS:
+        rows = [{"chromophore": "hbo", "condition": "game", "sub1": "a", "sub2": "b",
+                 "label": a, "label2": b, "coherence": 0.3, "percentile": 100.0, "n_iter": 9}
+                for a in ("front", "back") for b in ("front", "back")]
+        pd.DataFrame(rows).to_csv(tmp_path / f"group-{occ}" / "nirs"
+                                  / name(occ, "main", "wtcbycond-roichan-pairnull"),
+                                  sep="	", index=False)
+
+    out = by_cell(tmp_path, "main", "hbo", "repaired")
+
+    crossed = out[out.level == "roi_crossed"]
+    assert len(crossed) == 12 and set(crossed.family) == {12}     # 3 occasions x 4 pairs
+    assert set(out[out.level == "channel"].family) == {12}
+    assert set(crossed.label2) == {"front", "back"}

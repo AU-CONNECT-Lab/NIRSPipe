@@ -22,6 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.utils import ROI_MIN_CHANNELS
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +132,7 @@ def write_wtc_null(
     analysis_window: "tuple[float, float] | None" = None,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
-    roi_min_channels: int = 2,
+    roi_min_channels: int = ROI_MIN_CHANNELS,
     whiten_s: float = 0.0,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.

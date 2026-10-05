@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, _circular_stats
-from fnirs_pipe.utils import bare_roi_map, fisher_r_to_z
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.roi")
@@ -47,7 +47,7 @@ def _rois_of(roi_map: dict[str, list[str]]) -> dict[str, list[str]]:
 def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],
-    min_channels: int = 2,
+    min_channels: int = ROI_MIN_CHANNELS,
 ) -> WTCResult:
     """Average the channel-pair WTC maps cell by cell into one map per ROI pair.
 
@@ -107,7 +107,7 @@ def roi_maps_from_channels(
 def roi_mean_of_channels(
     band_df: pd.DataFrame,
     roi_map: dict[str, list[str]],
-    min_channels: int = 2,
+    min_channels: int = ROI_MIN_CHANNELS,
 ) -> pd.DataFrame:
     """Average channel-level band means within each ROI.
 
@@ -117,7 +117,7 @@ def roi_mean_of_channels(
     Channels no ROI lists are dropped.
 
     ``min_channels`` blanks a cell where either member contributes fewer than that many
-    channels with a value, so one surviving optode does not stand in for a region. On a
+    channels with a value; at one, only a member with no channel left blanks it. On a
     crossed frame each side is counted on its own: two channels against one is two pairings
     but one channel of the second member, and is blanked. A blanked cell keeps its row and
     its ``n_ch``, with NaN in every measured column, as a channel with no map does in
@@ -180,7 +180,7 @@ def roi_mean_of_channels(
 def roi_mean_of_homologous(
     band_df: pd.DataFrame,
     roi_map: dict[str, list[str]],
-    min_channels: int = 2,
+    min_channels: int = ROI_MIN_CHANNELS,
 ) -> pd.DataFrame:
     """Average an ROI's *homologous* channel pairs: one value per ROI, however the run was made.
 

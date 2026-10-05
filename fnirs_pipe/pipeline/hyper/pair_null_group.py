@@ -27,7 +27,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import bare_roi_map
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, UNRECORDED_ROI_MIN_CHANNELS, bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.naming import derivative_path
 
@@ -53,11 +53,14 @@ def _tail(**entities) -> str:
 
 _BY_COND = {"condition": "all", "statistic": "wtc"}
 _ROI = {"segmentation": "*", "aggregation": "homologous"}
+_ROI_CROSSED = {"segmentation": "*", "aggregation": "roi"}
 
 REAL_SUFFIX = _tail(**_BY_COND)
+# each cell table a null writes, under the level its cells are corrected as one family in
 CELL_SUFFIX = {
-    kind: (_tail(**_BY_COND, nulldist=null),
-           _tail(**_ROI, **_BY_COND, nulldist=null))
+    kind: {"channel": _tail(**_BY_COND, nulldist=null),
+           "roi": _tail(**_ROI, **_BY_COND, nulldist=null),
+           "roi_crossed": _tail(**_ROI_CROSSED, **_BY_COND, nulldist=null)}
     for kind, null in _NULL.items()
 }
 DRAWS_SUFFIX = {kind: _tail(**_BY_COND, nulldist=null, desc="draws")
@@ -83,8 +86,29 @@ def _homologous(frame: pd.DataFrame) -> pd.DataFrame:
     return frame[frame["label"] == frame["label2"].fillna(frame["label"])]
 
 
+def _thick(level: str, d: pd.DataFrame, r: pd.DataFrame, sides: "tuple[str, ...]",
+           min_channels: int) -> "tuple[pd.DataFrame, pd.DataFrame]":
+    """Both frames cut to the occasion-conditions whose real rows keep the region.
+
+    ::
+
+      right_tpj, one valid channel in G03's game  ->  G03/game dropped, every other kept
+
+    The rule each dyad's own ROI table blanks a cell by, taken one occasion and condition at
+    a time, so a region one dyad left blank is not ranked for that dyad here.
+    """
+    keys = ["occasion", "condition"]
+    counts = r.groupby(keys)[list(sides)].nunique()
+    kept = counts[(counts >= min_channels).all(axis=1)].reset_index()[keys]
+    if len(kept) < len(counts):
+        logger.info("level %s: %d of %d occasion-condition(s) under %d channel(s) per "
+                    "member left out", level, len(counts) - len(kept), len(counts),
+                    min_channels)
+    return d.merge(kept, on=keys), r.merge(kept, on=keys)
+
+
 def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
-              min_channels: int = 2):
+              min_channels: int = ROI_MIN_CHANNELS):
     """Every aggregate the draws support, as (granularity, level, pairings, draws, real).
 
     Emitted rather than selected, because which ones exist is a property of the draws and not
@@ -120,20 +144,20 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
             yield "whole", "whole", "all", draws, real
     roi_map = bare_roi_map(roi_map or {})
     for name, channels in roi_map.items():
-        d = hom_d[hom_d["label"].isin(channels)]
-        r = hom_r[hom_r["label"].isin(channels)]
-        # a thinly covered region is not a region
-        if d["label"].nunique() >= min_channels and r["label"].nunique() >= min_channels:
+        d, r = _thick(name, hom_d[hom_d["label"].isin(channels)],
+                      hom_r[hom_r["label"].isin(channels)], ("label",), min_channels)
+        if not d.empty and not r.empty:
             yield "roi", name, "homologous", d, r
     # with the null drawn crossed, every ordered region pair as the crossed ROI matrix groups it
     if all_pairings:
         for a, chans_a in roi_map.items():
             for b, chans_b in roi_map.items():
-                d = draws[draws["label"].isin(chans_a) & draws["label2"].isin(chans_b)]
-                r = real[real["label"].isin(chans_a) & real["label2"].isin(chans_b)]
                 # each member's side needs its own channels, not just enough pairings
-                sides = (d["label"], d["label2"], r["label"], r["label2"])
-                if min(s.nunique() for s in sides) >= min_channels:
+                d, r = _thick(f"{a}>{b}",
+                              draws[draws["label"].isin(chans_a) & draws["label2"].isin(chans_b)],
+                              real[real["label"].isin(chans_a) & real["label2"].isin(chans_b)],
+                              ("label", "label2"), min_channels)
+                if not d.empty and not r.empty:
                     yield "roi", f"{a}>{b}", "all", d, r
     # one test per channel pairing, pooled over occasions
     for label in sorted(hom_d["label"].unique()):
@@ -200,7 +224,7 @@ def _roi_min_of(paths: "set[str]") -> int:
       three tables recording 2  ->  2
       one recording 2, one 3    ->  ValueError
 
-    Tables written before they recorded it count as the old fixed value, 2.
+    Tables written before they recorded it count as the value they were grouped under then.
     """
     found = {int(v) for tsv in paths
              if (v := _params_of(tsv).get("roi_min_channels")) is not None}
@@ -210,8 +234,9 @@ def _roi_min_of(paths: "set[str]") -> int:
             f"{sorted(found)}. A region thinned out in one dyad and kept in another is not "
             f"one level. Rerun the dyads on one --wtc-roi-min-channels before reading this.")
     if not found:
-        logger.warning("the real tables do not record their ROI minimum; using 2")
-        return 2
+        logger.warning("the real tables do not record their ROI minimum; using %d",
+                       UNRECORDED_ROI_MIN_CHANNELS)
+        return UNRECORDED_ROI_MIN_CHANNELS
     return found.pop()
 
 
@@ -385,12 +410,13 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
       percentile 94.74 off 19 draws  ->  p 0.1, because 18 of 19 beaten is rank 2 of 20
 
     The stage that writes a cell's percentile runs one dyad at a time and so cannot correct
-    across cells. One family per condition and level.
+    across cells. One family per condition and level, so the crossed ROI matrix is corrected
+    apart from the homologous regions: its diagonal is a different quantity from theirs.
     """
     from statsmodels.stats.multitest import multipletests
 
     parts = []
-    for suffix, level in zip(CELL_SUFFIX[null], ("channel", "roi")):
+    for level, suffix in CELL_SUFFIX[null].items():
         try:
             frame = _read_tree(output_dir, suffix, task, chroma, needs=("percentile",))
         except FileNotFoundError:
@@ -439,7 +465,7 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
             f"averaged over one band cannot be subtracted from a value averaged over "
             f"another. Finish whichever rerun is in progress before reading this.")
 
-    min_channels = _roi_min_of(set(real.source)) if roi_map else 2
+    min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
 
     occ_parts, coh_parts = [], []
     for gran, level, pairings, d, r in _variants(draws, real, roi_map,

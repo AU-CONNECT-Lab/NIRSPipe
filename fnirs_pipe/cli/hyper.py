@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, UNRECORDED_ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
@@ -709,10 +709,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "column, and the report gains a switch that moves every coherence "
                           "panel between the chromophores at once. The null of "
                           "--wtc-phase-null follows.")
-    run.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
+    run.add_argument("--wtc-roi-min-channels", type=int, default=ROI_MIN_CHANNELS, metavar="N",
                      help="Drop an ROI cell where either member contributes fewer than N "
-                          "channels, so one surviving optode does not stand in for a region "
-                          "(default 2). Each side of a crossed cell is counted on its own.")
+                          f"channels (default {ROI_MIN_CHANNELS}). The default keeps a region "
+                          "one surviving channel stands in for; the n_ch column says how many "
+                          "pairings each value rests on. Each side of a crossed cell is counted "
+                          "on its own.")
     run.add_argument("--wtc-arrow-min", type=float, default=0.5, metavar="R",
                      help="Coherence a cell has to reach before its phase arrow is drawn on "
                           "the WTC maps, when neither null was computed (default 0.5). "
@@ -897,7 +899,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "member against region B of the second, every pairing "
                                  "between them averaged), as one family per condition. A "
                                  "region needs as many channels per member as the real "
-                                 "tables' --wtc-roi-min-channels, read off their sidecars. "
+                                 "tables' --wtc-roi-min-channels, read off their sidecars, in "
+                                 "each occasion and condition it is ranked for. "
                                  "Omitted, only the whole-brain levels are written.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
@@ -969,7 +972,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Drop an ROI cell where either member contributes fewer than N "
                            "channels. Unset, it is the value the real tables recorded; a "
                            "different one is refused. Real tables that predate the record "
-                           "fall back to 2.")
+                           f"fall back to {UNRECORDED_ROI_MIN_CHANNELS}.")
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in fnirs-hyper.")

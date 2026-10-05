@@ -12,6 +12,7 @@ from fnirs_pipe.interface.components import (
     PATH, actions, band, card, field, params, section, split, switches,
 )
 from fnirs_pipe.qc.common.provenance import _DOMAIN
+from fnirs_pipe.utils import ROI_MIN_CHANNELS
 
 dash.register_page(__name__, path="/hyper-analysis", name="Hyper Analysis")
 
@@ -102,7 +103,7 @@ def _run_section():
                                    placeholder="both")),
                 field("Min channels per ROI",
                       dbc.Input(id="hy-wtc-roi-min-channels", type="number", min=1, step=1,
-                                placeholder="2")),
+                                placeholder=str(ROI_MIN_CHANNELS))),
                 # left empty the condition is the unit, which is what the CLI defaults to
                 field("Equal windows (s)",
                       dbc.Input(id="hy-wtc-window-s", type="number", min=1, step=5,

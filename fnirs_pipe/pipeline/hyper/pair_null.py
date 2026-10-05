@@ -20,6 +20,7 @@ import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.utils import UNRECORDED_ROI_MIN_CHANNELS
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations, _p95
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
@@ -398,7 +399,8 @@ def run_pair_null(
     bads_scope = _follow_real("--bads-scope", bads_scope, real_params.get("bads_scope"), "run")
     if roi_map:
         roi_min_channels = _follow_real("--wtc-roi-min-channels", roi_min_channels,
-                                        real_params.get("roi_min_channels"), 2)
+                                        real_params.get("roi_min_channels"),
+                                        UNRECORDED_ROI_MIN_CHANNELS)
     # read off the rows rather than the sidecar, so a table that predates the record says too
     real_crossed = "label2" in pd.read_csv(real_wtc, sep="\t", nrows=0).columns
     if cross is None:
