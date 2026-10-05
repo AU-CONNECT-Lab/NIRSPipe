@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Condition-page GVTD tooltips name the corrected file their windows come from
 - Mean SNR has no colour cutoffs
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
+- The GVTD motion band is 0.02-0.5 Hz, the published task band, and `gvtd_threshold` defaults to the reported multiplier
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials

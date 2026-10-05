@@ -20,8 +20,8 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.metrics.gvtd")
 
 
-# Hz, Sherafati 2020; the same for every --mode
-GVTD_MOTION_BAND = (0.01, 0.5)
+# Hz, the task band of Sherafati 2020; the same for every --mode
+GVTD_MOTION_BAND = (0.02, 0.5)
 GVTD_N_STD = 10.0  # one constant: the figures draw this threshold, the record stores it
 
 
@@ -105,7 +105,7 @@ def gvtd_timetrace(
     return np.sqrt(np.mean(diff ** 2, axis=0))  # axis=0: RMS across channels -> one value per timepoint
 
 
-def gvtd_threshold(gvtd: np.ndarray, n_std: float = 3.0) -> float | None:
+def gvtd_threshold(gvtd: np.ndarray, n_std: float = GVTD_N_STD) -> float | None:
     r"""GVTD motion threshold, histogram-mode :footcite:`Sherafati2020`.
 
     .. math::

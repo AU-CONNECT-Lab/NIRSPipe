@@ -398,12 +398,13 @@ def test_spikes_do_not_move_the_threshold_the_way_they_move_mean_plus_3std():
     few[:5] += 50.0
     many[:50] += 50.0
 
-    clean, spiked = gvtd_threshold(_REST), gvtd_threshold(many)
+    # the control's multiplier, so the two statistics differ in form only
+    clean, spiked = gvtd_threshold(_REST, 3.0), gvtd_threshold(many, 3.0)
     assert abs(spiked - clean) / clean < 0.10
 
     naive = lambda g: g.mean() + 3.0 * g.std()          # noqa: E731
     assert naive(many) > 3.0 * naive(_REST)
-    assert gvtd_threshold(few) < naive(few) / 2
+    assert gvtd_threshold(few, 3.0) < naive(few) / 2
 
 
 def test_the_threshold_sits_above_the_resting_level_and_below_the_spikes():

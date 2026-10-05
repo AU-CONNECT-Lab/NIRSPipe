@@ -23,7 +23,7 @@ from fnirs_pipe.qc.figures.common.motion_panel import (
     carpet_gvtd_figure, carpet_z,
 )
 from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.qc.metrics import _mask_to_segments
+from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, _mask_to_segments
 from tests._synth import synth_raw
 
 CARDIAC_HZ = 1.0
@@ -83,7 +83,7 @@ def test_carpet_draws_only_the_motion_band_gvtd(od_with_cardiac):
     labels = _panel_labels(fig)
     assert len([t for t in labels if "GVTD" in t]) == 1
     # the band and the channel set are printed beside the panel, not inside its axis title
-    assert any("0.01" in t for t in labels)
+    assert any(f"{GVTD_MOTION_BAND[0]:g}" in t for t in labels)
     assert any("ch" in t for t in labels)
 
 

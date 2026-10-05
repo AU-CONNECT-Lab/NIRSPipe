@@ -192,12 +192,12 @@ GVTD_STAT_SLOT = "gvtd-stat-"
 def _gvtd_row_label(name: str, n_ch: int) -> str:
     """Row title: the channel set large, its size and band small beside it.
 
-    ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.01-0.5 Hz``. GVTD is an RMS
+    ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.02-0.5 Hz``. GVTD is an RMS
     across channels, so which channels went in changes every value on the row and the
     threshold with them.
     """
     return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
-            f"{n_ch} ch · 0.01–0.5 Hz</span>")
+            f"{n_ch} ch · {GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz</span>")
 
 
 def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> float:
@@ -420,7 +420,7 @@ def carpet_gvtd_figure(
     rows, the one record of movement that does not come from the optical data; a sensor the
     recording lacks gets no row rather than an empty one.
 
-    Only the 0.01-0.5 Hz GVTD is drawn, since the unfiltered trace is dominated by the
+    Only the motion-band GVTD is drawn, since the unfiltered trace is dominated by the
     cardiac component; ``gvtd_mean`` and ``gvtd_p95`` still report it.
     ``corrected_segments`` (motion-correction footprint) is a bar on a thin strip at the very
     top, over the IMU row where there is one and otherwise directly over the trace.
@@ -472,7 +472,7 @@ def carpet_gvtd_figure(
     has_after = od_after is not None
 
     # GVTD full-res for the threshold/metric; plotted trace is max-pooled for display only.
-    # 0.01-0.5 Hz motion band, the band the threshold is set on.
+    # motion band, the band the threshold is set on.
     t_gvtd = times[1:]
     rows: list[dict] = []
     start = 0
