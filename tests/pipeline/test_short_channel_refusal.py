@@ -86,8 +86,8 @@ def test_the_methods_text_names_short_channels_only_when_they_were_built():
     skipped = template_slots("confound_regression",
                              {"short_channel": None, "drift_model": "cosine",
                               "drift_high_pass": 0.01})
-    assert "short-channel" in built["regressors"]
-    assert "short-channel" not in skipped["regressors"]
+    assert "short channels" in built["regressors"]
+    assert "short channels" not in skipped["regressors"]
     assert "cosine" in skipped["regressors"]
 
 

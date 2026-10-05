@@ -6,6 +6,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- GLM sidecars record the boxcar length or the events table, and an FIR model's delays
+- The screening sidecar records whether the coupled share was counted over task blocks or the whole run
+
+### Changed
+- Coherence labels and help call the edge-affected region the cone of influence, so kept cells read "outside COI"
+- Stage comparisons band-limit with the pipeline's own filter design rather than MNE's default FIR
+- The pass/fail grids, brain views and optode flat map colour with the run's own screening lines
+- The grand mean averages the good channels only
+- Methods state the wavelet design, the boxcar length or FIR delays, and the screening scope actually counted
+- Condition-page GVTD tooltips name the corrected file their windows come from
+- Mean SNR has no colour cutoffs
+
+### Removed
+- The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials
+
+### Fixed
+- `fnirs-qc hyper-raw --tstart` drew the usable-time carpet and head maps tstart seconds off the other panels
+- The too-short window warning never showed when `--wtc-band-fmin` was left unset
+- The unfiltered-ISC caveat showed even when `--isc-fmin` high-passed the correlation
+- A rejected pair's Status in the channel decisions tables did not name the criterion
+- Condition pages printed an empty trial window and measured the filter's stopband in their greyed stage panels
+- Raw condition pages dropped the motion numbers on a montage without short channels
+- A flat channel at a non-zero level lowered `cv_mean`
+- The orphan-separation caveat counted each wavelength and suggested bounds the CLI refuses
+- The chunked-trials caveat showed when no annotation was long enough to cut
+- The raw-signal caption claimed uncorrected data when it had fallen back to `desc-preproc`
+
 ## [0.57.0] - 2026-10-05
 
 ### Added
