@@ -15,8 +15,14 @@ All notable changes to this project will be documented in this file.
 - Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
 - `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
 - The subject report's run page shows every condition's channel pass/fail grid, one block per metric
+- A crossed WTC null also writes a null for each dyad's crossed ROI x ROI matrix
+- Dyad WTC sidecars record the channel crossing, the ROI minimum, the input stage and the rejection scope
 
 ### Changed
+- **`fnirs-hyper-pairnull` takes its stage, rejection scope, crossing and ROI minimum from the real tables, and refuses a retyped value that differs**
+- `fnirs-hyper-groupnull` keeps a region by the ROI minimum the real tables recorded instead of a fixed two channels
+- The crossed ROI table, not the homologous one, is described as the ROI number to report
+- The Hyper Analysis re-paired null form drops the fields it now reads off the tables and offers a homologous-only switch
 - The windowed SCI and PSP colour bars are pinned with the threshold mid-scale, as CV's already was
 - The 3D brain views are lit with white light and drawn matte, no longer yellow-tinted and glossy
 - `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
@@ -48,6 +54,9 @@ All notable changes to this project will be documented in this file.
 - `optode_layout_figure`, the Plotly optode map nothing called
 
 ### Fixed
+- The phase-scrambled ROI null ignored `--wtc-roi-min-channels` and always required two channels per region
+- The Methods paragraph called a crossed dyad's coherence homologous
+- The `--wtc-channel-cross` help said the coherence maps stay on homologous pairs
 - The HbO–HbR correlation panel and its frame shrink and grow with the browser window
 - The dyad and subject raw reports draw and embed their provenance graph instead of a placeholder
 - `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults

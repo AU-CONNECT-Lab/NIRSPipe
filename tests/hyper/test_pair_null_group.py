@@ -557,3 +557,34 @@ def test_a_suffixed_region_map_gives_the_same_levels_as_a_bare_one():
     draws, real = _full_cross(_draws()), _full_cross(_real(0.4))
     levels = lambda m: [(g, lv, pr) for g, lv, pr, _, _ in _variants(draws, real, m)]
     assert levels(suffixed) == levels(ROI)
+
+
+# ---- the region minimum comes off the real tables ----
+
+def _recorded(root: Path, gid: str, **params) -> str:
+    tsv = root / f"{gid}.tsv"
+    tsv.write_text("label\tcoherence\nS1_D1\t0.3\n")
+    tsv.with_suffix(".json").write_text(json.dumps({"parameters": params}))
+    return str(tsv)
+
+
+def test_the_region_minimum_is_the_one_the_real_tables_recorded(tmp_path):
+    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+
+    paths = {_recorded(tmp_path, g, roi_min_channels=3) for g in OCCASIONS}
+    assert _roi_min_of(paths) == 3
+
+
+def test_real_tables_grouped_under_two_minimums_are_refused(tmp_path):
+    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+
+    paths = {_recorded(tmp_path, "G01", roi_min_channels=2),
+             _recorded(tmp_path, "G03", roi_min_channels=3)}
+    with pytest.raises(ValueError, match="different minimums"):
+        _roi_min_of(paths)
+
+
+def test_real_tables_that_predate_the_record_keep_the_old_minimum(tmp_path):
+    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+
+    assert _roi_min_of({_recorded(tmp_path, "G01", band_fmin=0.06, band_fmax=0.15)}) == 2

@@ -352,3 +352,74 @@ def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
     _write_table(tmp_path, "G01", "main", kind="wtc-phasenull")
     _write_table(tmp_path, "G01", "main", kind="wtcbycond-phasenull")
     assert len(merge_kinds(tmp_path)) == 2
+
+
+# ---- the ROI tables follow the run ----
+
+TWO_REGIONS = {"r1": ["S1_D1", "S1_D2"], "r2": ["S2_D1"]}
+
+
+def _write_roi_null(tmp_path, make_raw, frame, **kwargs):
+    from fnirs_pipe.pipeline.hyper import wtc_null
+
+    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
+    return wtc_null.write_wtc_null(
+        {"hbo": _null(frame)}, group_id="G01", task="main", aligned_raws=raws,
+        output_dir=tmp_path, n_iter=1, **kwargs)
+
+
+@pytest.mark.parametrize("minimum, r2_kept", [(1, True), (2, False)])
+def test_the_roi_null_groups_under_the_runs_minimum(tmp_path, make_raw, minimum, r2_kept):
+    """The real ROI table blanks a thin region by --wtc-roi-min-channels; the null has to
+    blank the same one, or a cell is ranked on one side and empty on the other."""
+    frame = pd.DataFrame({"sub1": ["a"] * 3, "sub2": ["b"] * 3,
+                          "label": ["S1_D1", "S1_D2", "S2_D1"],
+                          "coherence": [0.3, 0.4, 0.5], "n_valid_frac": [1.0] * 3})
+
+    out = _write_roi_null(tmp_path, make_raw, frame, roi_map=TWO_REGIONS,
+                          roi_min_channels=minimum)
+
+    roi_path = out.with_name(name("G01", "main", "wtc-roihom-phasenull"))
+    roi = pd.read_csv(roi_path, sep="\t").set_index("label")
+    assert pd.notna(roi.loc["r2", "null_mean"]) is r2_kept
+    params = json.loads(roi_path.with_suffix(".json").read_text())["parameters"]
+    assert params["roi_min_channels"] == minimum
+
+
+def _crossed_frame(value):
+    pairs = [(a, b) for a in ("S1_D1", "S1_D2") for b in ("S1_D1", "S1_D2")]
+    return pd.DataFrame({"sub1": ["a"] * 4, "sub2": ["b"] * 4,
+                         "label": [p[0] for p in pairs], "label2": [p[1] for p in pairs],
+                         "coherence": [value] * 4, "n_valid_frac": [1.0] * 4})
+
+
+def _real_roi_table(root, crossed):
+    nirs = root / "group-G01" / "nirs"
+    nirs.mkdir(parents=True, exist_ok=True)
+    real = pd.DataFrame({"chromophore": ["hbo"], "sub1": ["a"], "sub2": ["b"],
+                         "label": ["r1"], "coherence": [0.9], "n_valid_frac": [1.0]})
+    if crossed:
+        real.insert(4, "label2", ["r1"])
+    real.to_csv(nirs / name("G01", "main", "wtc-roichan"), sep="\t", index=False)
+
+
+@pytest.mark.parametrize("null_crossed, real_crossed, written", [
+    (True, True, True),
+    # a homologous null never drew the off-diagonal pairings the matrix averages
+    (False, True, False),
+    # an uncrossed run's ROI diagonal is the homologous mean, not every pairing
+    (True, False, False),
+])
+def test_a_crossed_null_ranks_the_crossed_roi_matrix_only_against_a_crossed_one(
+        tmp_path, make_raw, null_crossed, real_crossed, written):
+    _real_roi_table(tmp_path, real_crossed)
+
+    out = _write_roi_null(tmp_path, make_raw, _crossed_frame(0.5),
+                          roi_map={"r1": ["S1_D1", "S1_D2"]}, cross=null_crossed)
+
+    cross_path = out.with_name(name("G01", "main", "wtc-roichan-phasenull"))
+    assert cross_path.exists() is written
+    if written:
+        got = pd.read_csv(cross_path, sep="\t")
+        assert list(got[["label", "label2"]].iloc[0]) == ["r1", "r1"]
+        assert got["percentile"].iloc[0] == 100.0

@@ -87,9 +87,16 @@ def test_the_draw_count_is_unbounded_unless_capped():
     assert _parse("--wtc-pair-max", "5").wtc_pair_max == 5
 
 
-def test_the_null_is_crossed_unless_told_otherwise():
-    """Independent of the real run's crossing: crossing multiplies the cost per draw."""
-    assert _parse().wtc_pair_cross is True
+@pytest.mark.parametrize("dest", ["wtc_pair_cross", "desc", "bads_scope",
+                                  "wtc_roi_min_channels"])
+def test_what_the_real_table_recorded_is_left_unset_to_be_read_off_it(dest):
+    """None here; `run_pair_null` resolves each against the real table's sidecar."""
+    assert getattr(_parse(), dest) is None
+
+
+def test_the_crossing_can_still_be_set_either_way():
+    """A homologous null over a crossed table is a cheaper one, not a different statistic."""
+    assert _parse("--wtc-pair-cross").wtc_pair_cross is True
     assert _parse("--no-wtc-pair-cross").wtc_pair_cross is False
 
 
@@ -217,3 +224,120 @@ def test_the_real_table_records_the_window_it_describes():
     src = inspect.getsource(hyper_post.run_hyper_post)
     assert "analysis_window_s" in src, (
         "the real WTC table's sidecar no longer records the window it describes")
+
+
+# ---- what the null takes from the real table rather than the command line ----
+
+def test_an_unset_value_follows_the_real_table():
+    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
+
+    assert _follow_real("--desc", None, "errts", "preproc") == "errts"
+    assert _follow_real("--desc", "errts", "errts", "preproc") == "errts"
+
+
+def test_a_value_that_disagrees_with_the_real_table_is_refused():
+    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
+
+    with pytest.raises(StageError, match="--wtc-roi-min-channels 2 disagrees"):
+        _follow_real("--wtc-roi-min-channels", 2, 3, 2)
+
+
+def test_a_table_that_predates_the_record_takes_the_given_value_or_the_old_default(caplog):
+    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
+
+    assert _follow_real("--bads-scope", "subject", None, "run") == "subject"
+    with caplog.at_level("WARNING"):
+        assert _follow_real("--bads-scope", None, None, "run") == "run"
+    assert "does not record --bads-scope" in caplog.text
+
+
+def _haemo(seed: int):
+    """Two 30 mm pairs of noise, enough for a crossed table and a two-channel region."""
+    import mne
+    import numpy as np
+
+    names = [f"{label} {c}" for label in ("S1_D1", "S2_D2") for c in ("hbo", "hbr")]
+    info = mne.create_info(names, 5.0, [n.split()[1] for n in names])
+    for i, ch in enumerate(info["chs"]):
+        loc = np.zeros(12)
+        loc[3:6] = [i * 0.05, 0.0, 0.0]
+        loc[6:9] = [i * 0.05 + 0.03, 0.0, 0.0]
+        loc[:3] = (loc[3:6] + loc[6:9]) / 2
+        ch["loc"] = loc
+    data = 1e-6 * np.random.default_rng(seed).standard_normal((len(names), 2000))
+    return mne.io.RawArray(data, info, verbose="ERROR")
+
+
+@pytest.fixture(scope="module")
+def real_tree(tmp_path_factory):
+    """One dyad's real tables, crossed, as `fnirs-hyper` writes them for the null to read."""
+    from fnirs_pipe.pipeline.hyper import GroupEntry
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+
+    out = tmp_path_factory.mktemp("real")
+    group = [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]
+    build_hyper_post_report(
+        group_id="G01", task="tap", group=group,
+        aligned_raws={"sub-01": _haemo(1), "sub-02": _haemo(2)},
+        offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
+        wtc_chroma=("hbo",), wtc_channel_cross=True, roi_map={"L": ["S1_D1", "S2_D2"]},
+        wtc_roi_min_channels=1, no_report=True, desc="errts", bads_scope="subject")
+    return out, group
+
+
+def test_the_real_table_records_what_the_null_reads_back(real_tree):
+    out, _ = real_tree
+    params = real_table_params(out / "group-G01" / "nirs" / name("G01", "tap"))
+    assert (params["channel_cross"], params["roi_min_channels"],
+            params["desc"], params["bads_scope"]) == (True, 1, "errts", "subject")
+
+
+class _Loaded(Exception):
+    """Raised where the null starts loading recordings, carrying what it was asked for."""
+
+
+def _stop_at_load(monkeypatch):
+    from fnirs_pipe.pipeline.hyper import group_io
+
+    def _load(derivatives_dir, members, desc):
+        raise _Loaded(desc)
+
+    monkeypatch.setattr(group_io, "load_group_haemo", _load)
+
+
+def _draw(real_tree, **kwargs):
+    from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
+
+    out, group = real_tree
+    run_pair_null("G01", "tap", group, {("G01", "tap"): group}, out, out,
+                  roi_map={"L": ["S1_D1", "S2_D2"]}, **kwargs)
+
+
+def test_the_null_loads_the_stage_the_real_table_was_computed_from(real_tree, monkeypatch):
+    _stop_at_load(monkeypatch)
+    with pytest.raises(_Loaded, match="errts"):
+        _draw(real_tree)
+
+
+def test_a_retyped_stage_that_differs_is_refused_before_anything_loads(real_tree, monkeypatch):
+    _stop_at_load(monkeypatch)
+    with pytest.raises(StageError, match="--desc 'preproc' disagrees"):
+        _draw(real_tree, desc="preproc")
+
+
+def test_a_retyped_roi_minimum_that_differs_is_refused(real_tree, monkeypatch):
+    _stop_at_load(monkeypatch)
+    with pytest.raises(StageError, match="--wtc-roi-min-channels 2 disagrees"):
+        _draw(real_tree, roi_min_channels=2)
+
+
+def test_a_crossed_null_over_an_uncrossed_table_says_so(tmp_path, monkeypatch, caplog):
+    from fnirs_pipe.pipeline.hyper import GroupEntry
+
+    _real_table(tmp_path, gid="G01", task="tap")
+    group = [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]
+    _stop_at_load(monkeypatch)
+    with caplog.at_level("WARNING"), pytest.raises(_Loaded):
+        _draw((tmp_path, group), cross=True)
+    assert "crossed null over an uncrossed real table" in caplog.text

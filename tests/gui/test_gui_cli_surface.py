@@ -360,7 +360,10 @@ QC_NOT_EXPOSED = {
         "--verbose",
         # a speed setting whose kept scales land on pycwt's own grid, so the coherences
         # match the unrestricted ones bit for bit. Nothing about the result moves with it
-        "--wtc-limit-scales", "--no-wtc-limit-scales"},
+        "--wtc-limit-scales", "--no-wtc-limit-scales",
+        # read off the real tables; a control here could only disagree with them, which the
+        # command refuses
+        "--desc", "--bads-scope", "--wtc-roi-min-channels"},
     "group-null": {"--verbose"},
     "merge": {"--verbose"},
     # every group-* directory by default, which is the whole shape of the aggregate form
@@ -378,7 +381,7 @@ _QC_FULL_OPTS = dict(
     hyper_flags=["wtc_significance", "wtc_no_mask_coi", "wtc_channel_cross", "wtc_phase_null_cross",
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
-    wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_cross"],
+    wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_homologous"],
     gn_task="main", gn_chroma="hbo", gn_null="repaired",
     gn_roi_mapping="/roi.json", gn_resample=20000, gn_seed=7,
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",

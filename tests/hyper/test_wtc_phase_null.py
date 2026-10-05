@@ -461,6 +461,26 @@ def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
     assert whole["null_mean"].iloc[0] == pytest.approx(0.4)
 
 
+def test_a_crossed_roi_null_groups_every_pairing_like_the_crossed_matrix():
+    """The (roi, roi) cell of the crossed matrix holds the cross pairings too, so its null must."""
+    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+
+    rows = [("S1_D1", "S1_D1", 0.4), ("S1_D2", "S1_D2", 0.4),
+            ("S1_D1", "S1_D2", 0.9), ("S1_D2", "S1_D1", 0.9)]
+    frame = pd.DataFrame({"sub1": ["s1"] * 4, "sub2": ["s2"] * 4,
+                          "label": [r[0] for r in rows], "label2": [r[1] for r in rows],
+                          "coherence": [r[2] for r in rows], "n_valid_frac": [1.0] * 4})
+    null = NullDraws(draws=[frame], cond_draws=[],
+                      keys=["sub1", "sub2", "label", "label2"], levels={})
+    real = roi_mean_of_channels(frame.assign(coherence=0.7), ROI_MAP, min_channels=1)
+
+    whole, _ = null.summarise_roi(ROI_MAP, real=real, min_channels=1, crossed=True)
+
+    assert list(whole[["label", "label2"]].iloc[0]) == ["r1", "r1"]
+    assert whole["null_mean"].iloc[0] == pytest.approx(0.65)
+    assert whole["percentile"].iloc[0] == pytest.approx(100.0)
+
+
 def test_a_suffixed_map_passed_straight_to_the_api_matches_the_bare_one():
     """The CLI strips suffixes on load; a caller going straight to these functions does not
     pass through it, and a "A1 hbo" entry used to match no channel at all."""

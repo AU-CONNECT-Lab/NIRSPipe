@@ -272,11 +272,40 @@ def test_both_regressor_families_are_named_when_both_ran():
 
 @pytest.mark.parametrize("step", [
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_bycondition",
-    "hyper_wtc_bycondition_roichan", "hyper_wtc_phasenull",
+    "hyper_wtc_bycondition_roichan",
 ])
 def test_every_coherence_output_maps_to_the_one_coherence_sentence(step):
-    # five files, one method; the band is the same for all of them
+    # four files, one method; the band is the same for all of them
     assert boilerplate_key(step, {}) == "hyper_wtc"
+    assert boilerplate_key(step, {"channel_cross": True}) == "hyper_wtc_crossed"
+
+
+@pytest.mark.parametrize("step", [
+    "hyper_wtc_phasenull", "hyper_wtc_roihom_phasenull", "hyper_wtc_roichan_phasenull",
+    "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_bycondition_roichan_phasenull",
+    "hyper_wtc_bycondition_roichan_pairnull",
+])
+def test_a_null_keeps_its_own_line_and_no_coherence_sentence(step):
+    # a null's sidecar records how the null was drawn, so it cannot pick the sentence
+    assert boilerplate_key(step, {"cross": True}) is None
+    assert STEP_SUMMARY[step]
+
+
+def test_a_crossed_run_says_so_once_whatever_its_null_did(tmp_path):
+    _sidecar(tmp_path, "group-G01_task-main_stat-wtc_relmat", "hyper_wtc",
+             sources=["/in.snirf"], channel_cross=True, wtc_fmin=0.01, wtc_fmax=0.2)
+    _sidecar(tmp_path, "group-G01_task-main_null-phase_stat-wtc_relmat",
+             "hyper_wtc_phasenull", sources=["/in.snirf"], cross=False)
+
+    assert [k for k, _ in steps_from_sidecars(tmp_path)] == ["hyper_wtc_crossed"]
+
+
+def test_the_crossed_sentence_fills_the_same_slots():
+    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+
+    params = {"wtc_fmin": 0.01, "wtc_fmax": 0.2, "band_fmin": 0.02, "band_fmax": 0.1}
+    assert template_slots("hyper_wtc_crossed", params) == template_slots("hyper_wtc", params)
+    assert "every channel of one recording" in _load_steps()["hyper_wtc_crossed"]["plain"]
 
 
 def test_the_coherence_sentence_names_the_axis_and_the_band_apart():
@@ -296,7 +325,8 @@ def test_the_hyper_sentences_all_exist():
     from fnirs_pipe.qc.boilerplate.generate import _load_steps
 
     steps = _load_steps()
-    for key in ("hyper_alignment", "hyper_wtc", "hyper_coherence", "hyper_isc"):
+    for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_coherence",
+                "hyper_isc"):
         assert key in steps, f"{key} has no prose"
         assert "{citations}" in steps[key]["plain"]
 
