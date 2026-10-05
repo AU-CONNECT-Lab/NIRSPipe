@@ -6,18 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-10-05
+
 ### Added
-- `--mode` fills in its own defaults for the post settings, under `--config` and the command line
-- `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
-- The run record names the layer that set each post value, and the QC report lists the settings nobody typed
-- The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
-- The Analysis page's cutoff fields take `none`, so a cutoff the mode fills in can be switched off from the GUI
-- Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
-- `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
-- The subject report's run page shows every condition's channel pass/fail grid, one block per metric
 - A crossed WTC null also writes a null for each dyad's crossed ROI x ROI matrix
 - Dyad WTC sidecars record the channel crossing, the ROI minimum, the input stage and the rejection scope
 - `fnirs-hyper-groupnull` corrects the crossed ROI null's cells in its per-cell table, as a family of their own
+- The GLM fit table and residual record the design's conditions, and its HRF when it holds any
 
 ### Changed
 - **`--wtc-roi-min-channels` defaults to 1, so one surviving channel keeps a region; pass 2 for the earlier rule**
@@ -27,12 +22,32 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper-groupnull` keeps a region by the ROI minimum the real tables recorded, refusing tables that lack it
 - The crossed ROI table, not the homologous one, is described as the ROI number to report
 - The Hyper Analysis re-paired null form drops the fields it now reads off the tables and offers a homologous-only switch
+- A dyad's Methods follow the member files the analysis read, so `--desc` sets which preprocessing they describe
+- Methods name the cardiac band, screening scope, hand-marked channels, every nuisance regressor, the ISC options and the COI exclusion
+- `fnirs-qc prep-raw` and `fnirs-qc hyper-raw` reports carry no Methods paragraph
+- Report captions and metric tooltips that disagreed with the computation are rewritten
+- Spike count has no colour cutoffs; var-normalised GVTD and CP have no better end
+
+### Fixed
+- The phase-scrambled ROI null ignored `--wtc-roi-min-channels` and always required two channels per region
+- The Methods paragraph called a crossed dyad's coherence homologous
+- The `--wtc-channel-cross` help said the coherence maps stay on homologous pairs
+- The dyad Methods left out the members' preprocessing
+- The Methods said recordings were aligned under `--no-align`, and named `ar_irls` an unspecified noise model
+- The raw viewer's Methods called a task GLM a regression with no condition regressors
+- Windowed CV cut its windows a sample shorter than SCI and PSP at rates like 7.8125 Hz, so the grids drifted apart
+
+## [0.56.0] - 2026-10-02
+
+### Added
+- The Analysis page's cutoff fields take `none`, so a cutoff the mode fills in can be switched off from the GUI
+- Subject and dyad reports note each channel the ROI mapping lists in more than one ROI
+- `fnirs-hyper-groupnull` tests every ordered region pair against a crossed null, as its own corrected family
+- The subject report's run page shows every condition's channel pass/fail grid, one block per metric
+
+### Changed
 - The windowed SCI and PSP colour bars are pinned with the threshold mid-scale, as CV's already was
 - The 3D brain views are lit with white light and drawn matte, no longer yellow-tinted and glossy
-- `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
-- Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
-- Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
-- Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
 - `--wtc-roi-min-channels` counts each member's channels, not channel pairs, and a thin ROI cell stays in the table as a blank row
 - The dyad report draws no ROI coherence map for a cell the ROI table leaves blank
 - Resting-state and hyperscanning Fisher z now share one transform, which turns a non-finite r into NaN
@@ -54,19 +69,11 @@ All notable changes to this project will be documented in this file.
 - Dyad sidecars, the chromophore check, dyad table reads and the run id format each have one definition
 
 ### Removed
-- `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
 - `optode_layout_figure`, the Plotly optode map nothing called
 
 ### Fixed
-- The phase-scrambled ROI null ignored `--wtc-roi-min-channels` and always required two channels per region
-- The Methods paragraph called a crossed dyad's coherence homologous
-- The `--wtc-channel-cross` help said the coherence maps stay on homologous pairs
 - The HbO–HbR correlation panel and its frame shrink and grow with the browser window
 - The dyad and subject raw reports draw and embed their provenance graph instead of a placeholder
-- `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
-- The per-subject run script ignored values set in `--config`
-- The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was
-- The cohort dial caption said six dyads when the cohort had fewer
 - Prewhitened ISC paired the two members a few samples apart whenever their highest AR orders differed
 - The raw report's 3-D montage drew each source-detector line from the channel midpoint to the source
 - The raw report's 2-D montage left out channels marked bad, so they were never drawn grey
@@ -76,6 +83,29 @@ All notable changes to this project will be documented in this file.
 - Crop, edit-markers and align kept whichever `dataset_description.json` version stamp they first found
 - WTC ROI means counted a channel two ROIs list in the last one only; it now counts in both, as in ISC
 - An ROI mapping entry written with an ` hbo` or ` hbr` suffix matched nothing in `fnirs-hyper`
+
+## [0.55.0] - 2026-10-01
+
+### Added
+- `--mode` fills in its own defaults for the post settings, under `--config` and the command line
+- `--high-pass none` and `--low-pass none` switch off a cutoff the mode or `--config` would fill in
+- The run record names the layer that set each post value, and the QC report lists the settings nobody typed
+- The Analysis page starts its filter, drift, HRF and noise-model fields empty and shows the chosen mode's defaults in them
+
+### Changed
+- `--mode glm` stops before the first subject when its cosine drift model has no `--drift-high-pass`
+- Every QC report template reads its section prose from `boilerplate.notes`, now one module per report family
+- Run caveats and the phase-arrow caption read their wording from `boilerplate.notes`
+- Prose and labels that quote a window length, band, channel share or draw count read it from the constant that sets it
+
+### Removed
+- `configs/`: the presets are now the mode defaults shipped inside the package, and the example config is gone
+
+### Fixed
+- `drift_order` and `combine_runs` in a `--config` file were overridden by their command-line defaults
+- The per-subject run script ignored values set in `--config`
+- The grand-mean caption named a −5 s baseline whatever `--epoch-tmin` was
+- The cohort dial caption said six dyads when the cohort had fewer
 
 ## [0.54.0] - 2026-09-29
 

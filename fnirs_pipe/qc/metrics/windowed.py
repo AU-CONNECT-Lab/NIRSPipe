@@ -10,7 +10,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import long_short_channels
-from fnirs_pipe.qc.metrics.coupling import _windowed_cv
+from fnirs_pipe.qc.metrics.coupling import _window_samples, _windowed_cv
 from fnirs_pipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
@@ -102,7 +102,7 @@ def compute_windowed_cv(
     """
     data = raw_intensity.get_data()
     sfreq = float(raw_intensity.info["sfreq"])
-    n = int(round(window_s * sfreq))
+    n = _window_samples(window_s, sfreq)
     if n < 2 or data.shape[1] < n:
         raise ValueError(f"window of {window_s} s does not fit the recording")
     cv = _windowed_cv(data, n)

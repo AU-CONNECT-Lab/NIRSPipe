@@ -365,7 +365,7 @@ def test_the_coherence_sentence_names_the_band_it_averaged_and_nothing_unasked()
     })
     assert (slots["band_fmin"], slots["band_fmax"]) == ("0.03", "0.1")
     assert slots["chroma"] == "HbO and HbR"
-    assert slots["coi"] == " inside the cone of influence"
+    assert slots["coi"] == ", excluding the cone of influence"
     # options this run did not use leave no sentence behind
     assert slots["whiten"] == slots["window"] == slots["bads"] == ""
 

@@ -28,7 +28,7 @@ PSP_WINDOW_S = 10.0
 # the same stretch of recording.
 CV_WINDOW_S = 10.0
 # SCI on that same pinned grid. `sci_mean` is the whole-run correlation of the two
-# wavelengths, which a slow drift shared by both inflates; both are reported, and the
+# wavelengths, which a few loud stretches shared by both outweigh; both are reported, and the
 # windowed one is what the windowed panels and the per-condition slices show.
 SCI_WINDOW_S = 10.0
 
@@ -141,6 +141,11 @@ def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, A
     }
 
 
+def _window_samples(window_s: float, sfreq: float) -> int:
+    """Samples per window, rounded up the way mne-nirs cuts its SCI and PSP windows."""
+    return int(np.ceil(window_s * float(sfreq)))
+
+
 def _windowed_cv(data: np.ndarray, n: int) -> np.ndarray:
     """(channel x window) sigma/mu over consecutive ``n``-sample windows, NaN where mu is 0.
 
@@ -160,7 +165,7 @@ def channel_cv_windowed(data: np.ndarray, sfreq: float,
 
         3900 s at 10 Hz, 10 s windows  ->  mean of 390 CVs per channel
     """
-    n = int(round(window_s * float(sfreq)))
+    n = _window_samples(window_s, sfreq)
     if n < 2 or data.shape[1] < n:
         return channel_cv(data)
     cv = _windowed_cv(data, n)

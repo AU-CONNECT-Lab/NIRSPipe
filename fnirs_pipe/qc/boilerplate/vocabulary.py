@@ -239,7 +239,7 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
         # a run that gave no band averaged the whole computed axis
         "band_fmin": _num(params.get("band_fmin", wtc_lo)),
         "band_fmax": _num(params.get("band_fmax", wtc_hi)),
-        "coi": " inside the cone of influence" if params.get("mask_coi") else "",
+        "coi": ", excluding the cone of influence" if params.get("mask_coi") else "",
         "whiten": (" Before the transform, each long channel was prewhitened with an "
                    f"autoregressive model of order {params.get('wtc_whiten_order')} "
                    f"({_num(whiten_s)} s)." if whiten_s else ""),
@@ -333,11 +333,11 @@ STEP_SUMMARY = {
     "motion_correction": "Motion correction, using the method named in the settings.",
     "sqm_raw": "Quality metrics measured on the original intensity recording.",
     "sqm": "Quality metrics for this run, grouped by the stage each was measured on.",
-    "design_matrix": "Regressors assembled for the fit: conditions, drift and confounds.",
+    "design_matrix": "Regressors assembled for the fit: the conditions on a task run, plus drift and confounds.",
     "glm_fit": "Per-channel model fit; rejected channels are flagged, not dropped.",
     "contrasts": "Contrast estimates derived from the fitted model.",
     "glm_residuals": "What the model left behind, once the fitted signal was removed.",
-    "glm_residuals_broadband": "The same regression without the low-pass, so fALFF keeps a full spectrum.",
+    "glm_residuals_broadband": "The same confound regression on data that skipped the bandpass entirely, the drift model its only detrend, so fALFF keeps a full spectrum.",
     "alff": "Amplitude of low-frequency fluctuation, per channel.",
     "alff_roi": "Amplitude of low-frequency fluctuation averaged over each ROI's channels.",
     "fc": "Channel-by-channel correlation within one chromophore.",
@@ -350,8 +350,8 @@ STEP_SUMMARY = {
     "hyper_sqm": "Quality metrics for the dyad: alignment, coupling and the members' own.",
     "hyper_screening": "Each window's coherence beside the surrogate null drawn for that window.",
     "hyper_usable": "How much of each channel pair both members could use at once, per condition.",
-    "group_sqm_raw": "Quality metrics pooled across the members of a dyad.",
-    "group_sqm_raw_channels": "The same pooling, kept per channel.",
+    "group_sqm_raw": "Each member's quality metrics, one row per member.",
+    "group_sqm_raw_channels": "Per member and channel: whole-run SCI and whether the channel was rejected.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_phasenull": "The same average against a phase-scrambled partner: the null.",
     "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, or per pair of ROIs on a crossed run, every pairing between them: the ROI number to report.",
@@ -385,18 +385,18 @@ def step_summary(step: str | None) -> str:
 # Per-channel keys are not listed; they are the same quantity as their scalar sibling.
 METRIC_SUMMARY = {
     # coupling
-    "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse, near 1 being good and low meaning poor optode contact. A slow drift shared by both wavelengths lifts it, which is what sci_win_mean is beside it for.",
-    "sci_win_mean": f"The same coupling measured inside {SCI_WINDOW_S:g} s windows and then averaged, on the grid psp_mean and cv_mean use. Read this one for coupling; it is printed without cutoffs, which refer to the whole-run sci_mean, and the two can disagree about which channel set coupled better.",
-    "channel_retention_rate": "Fraction of channels that survived screening. Higher is better.",
+    "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse, near 1 being good and low meaning poor optode contact. A few loud stretches shared by both wavelengths, such as movement, outweigh the rest of a whole-run correlation, which is what sci_win_mean is beside it for.",
+    "sci_win_mean": f"The same coupling measured inside {SCI_WINDOW_S:g} s windows and then averaged, on the window grid psp_mean and cv_mean use. Read this one for coupling; it and sci_mean can disagree about which channel set coupled better.",
+    "channel_retention_rate": "Fraction of channels not marked bad, by screening, by --bad-channels or for non-finite samples. Higher is better.",
     "psp_mean": f"Strength of the shared cardiac peak across the two wavelengths, averaged over {PSP_WINDOW_S:g} s windows and then over channels; higher is a more clearly detected heartbeat.",
     "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
-    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1; higher is sharper. Experimental, and it never compares the two wavelengths, so read SCI and PSP for coupling.",
+    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1. Experimental: it never compares the two wavelengths, so read SCI and PSP for coupling, and it rises when the pulse is removed, so it has no better end.",
 
     # raw intensity
     "cv_mean": f"Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside {CV_WINDOW_S:g} s windows and then averaged, lower being cleaner.",
-    "snr_mean": f"Signal size relative to its fluctuation (mean / SD), the exact reciprocal of CV and on the same {CV_WINDOW_S:g} s windows. Higher is better.",
+    "snr_mean": f"Mean / SD per channel, the reciprocal of that channel's {CV_WINDOW_S:g} s CV, then averaged over channels, so it is not 1 / cv_mean and one near-constant channel can inflate it. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
-    "n_flat_channels": "How many channels carry no variation at all, flat or saturated; zero is what you want. They count as failures in snr_pass_rate but cannot enter the SNR and CV means.",
+    "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of the SNR mean but enter cv_mean as 0, and a saturated channel with any residual noise is not counted here and inflates snr_mean.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
 
     # geometry
@@ -405,7 +405,7 @@ METRIC_SUMMARY = {
     "ch_dist_max": "Longest source-detector separation in metres.",
 
     # haemoglobin
-    "hbo_hbr_corr_mean": "Correlation between HbO and HbR. Strongly negative is physiologically expected; near zero or positive suggests artifact.",
+    "hbo_hbr_corr_mean": "Correlation between HbO and HbR. A cortical response pushes it negative and shared systemic or motion signals push it positive, and it moves with the passband, so compare runs at the same stage rather than against a fixed value.",
     "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels; higher is better. Absent on a run with no stimulus annotations.",
     "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
     "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
@@ -428,24 +428,25 @@ METRIC_SUMMARY = {
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
-    "gvtd_mean": "Average whole-montage movement over the run, unfiltered; lower is less motion. No absolute cutoff, and gvtd_thresh does not apply to it.",
+    "gvtd_mean": "Unfiltered GVTD of this channel set, averaged over the run. Not validated as a motion index and with no cutoff of its own (gvtd_thresh does not apply), so read gvtd_filt_mean for movement.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
     "gvtd_filt_mean": f"Average movement after band-passing to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
-    "gvtd_filt_p95": "The same at the worst moments. Above gvtd_thresh means motion.",
-    "gvtd_vstd_mean": "Average movement with each channel scaled by its own SD first, so a few loud channels cannot dominate.",
-    "gvtd_vstd_p95": "The same at the worst moments.",
-    "gvtd_thresh": "Motion cutoff derived from this recording's own band-passed GVTD histogram; compare it with gvtd_filt_p95, not gvtd_mean. Each side of a pair derives its own, so a fall here is the cutoff following the recording rather than motion being removed.",
+    "gvtd_filt_p95": "The same at the worst moments, the 95th percentile.",
+    "gvtd_vstd_mean": "Unfiltered GVTD with each channel's derivative scaled to unit SD, so loud channels cannot dominate. Its mean square is 1 by construction, so the run mean shows how bursty the trace is rather than how much it moved, and it falls as motion concentrates.",
+    "gvtd_vstd_p95": "The same at the 95th percentile, which also falls when motion fills under 5% of the run.",
+    "gvtd_thresh": "Motion cutoff from this recording's own band-passed GVTD histogram; read it against gvtd_filt_p95. Each side of a pair sets its own, so a change here is not motion removed.",
     "gvtd_thresh_applied": "The cutoff the counts below were actually taken against: the uncorrected recording's on both sides of a pair, so the two share one yardstick.",
     "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds gvtd_thresh_applied.",
-    "gvtd_pct_above_thresh": "Those timepoints as a fraction of the recording, roughly how much is motion-contaminated; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
-    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd, larger than gvtd_pct_above_thresh because it also takes the surviving stretches too short to analyse. Nothing was deleted.",
+    # TODO(review): on uncorrected OD this cutoff usually sits below the trace mean, so a large share of frames counts as motion; open method question, see handoff
+    "gvtd_pct_above_thresh": "Timepoints above gvtd_thresh_applied as a fraction of the recording; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
+    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd: samples above the censoring cutoff, which --gvtd-censor-n-std sets well above gvtd_thresh, plus surviving stretches too short to analyse. Nothing was deleted.",
     "gvtd_censor_retained_s": "Seconds left after censoring, in gvtd_censor_n_epochs continuous stretches; this, not the censored fraction, is what an analysis has to work with.",
     "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse; lower is better.",
     "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
     "spike_num_frames": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental.",
     "spike_pct_frames": "Those timepoints as a fraction of the recording. Experimental.",
-    "motion_corrected_frac_mean": "Average fraction of each channel the motion correction actually altered. Experimental.",
-    "motion_corrected_num": f"Timepoints the correction altered on at least {100 * SPIKE_CH_FRAC:g}% of channels at once. Experimental.",
+    "motion_corrected_frac_mean": "Average fraction of each channel's samples where the correction changed abruptly, its frame-to-frame change exceeding the channel's own noise. Experimental.",
+    "motion_corrected_num": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels were corrected abruptly at once. Experimental.",
     "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
 
@@ -482,8 +483,8 @@ _STAGE_PREPROC = (
     "Measured after Beer-Lambert and before filtering."
 )
 _STAGE_BOTH = (
-    "Measured on every haemoglobin file the run wrote, so which stage you are reading is the "
-    "section it sits in."
+    "Measured on each haemoglobin stage the record covers (preproc, filtered, resampled, "
+    "errts), so which stage you are reading is the section it sits in."
 )
 _STAGE_RAW_AND_CORRECTED = (
     "Measured on the recording as it arrived and again on the motion-corrected file, over the "
@@ -530,6 +531,7 @@ METRIC_STAGE = {
 }
 
 
+# TODO(review): condition pages reuse these stage lines, but their motion numbers come from the corrected file alone, their p95 is a mean of window p95s and their threshold is the corrected file's own
 def metric_summary(metric: str) -> str:
     """What a metric is, which way is good, and what stage it was measured on.
 
@@ -577,10 +579,11 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
     "psp_mean":                (f"Mean PSP ({PSP_WINDOW_S:g} s)", ".3f", None, _HIGHER),
     "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
-    "cp_mean":                 ("Mean CP (exp.)", ".3f", None, _HIGHER),
+    "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
 
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
+    # TODO(review): a mean of reciprocals, so one near-constant channel lifts it past these lines while cv_mean has none; drop them or fix the aggregation
     "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", (100, 20), _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
@@ -617,15 +620,15 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "gvtd_p95":                ("GVTD p95", ".3e", None, _LOWER),
     "gvtd_filt_mean":          (f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
     "gvtd_filt_p95":           (f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
-    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, _LOWER),
-    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, _LOWER),
+    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, None),
+    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, None),
     "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),
     "gvtd_thresh_applied":     ("GVTD threshold applied", ".3e", None, None),
     "gvtd_num_above_thresh":   ("GVTD motion frames", "d", None, _LOWER),
     "gvtd_pct_above_thresh":   ("GVTD % motion", "pct", None, _LOWER),
     "gvtd_censor_pct":         ("GVTD censored %", "pct", None, _LOWER),
     "gvtd_censor_retained_s":  ("GVTD retained (s)", ".0f", None, _HIGHER),
-    "spike_count":             ("Spike count", "d", (1, 10), _LOWER),
+    "spike_count":             ("Spike count", "d", None, _LOWER),
     "spike_pct":               ("Spike % (exp.)", "pct", None, _LOWER),
     "spike_num_frames":        ("Spike frames", "d", None, _LOWER),
     "spike_pct_frames":        ("Spike % frames", "pct", None, _LOWER),
