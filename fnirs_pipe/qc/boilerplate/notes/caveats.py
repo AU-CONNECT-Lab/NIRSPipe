@@ -20,21 +20,15 @@ NOTES = {
         "exclude every channel. The quantitative metrics are over every channel rather "
         "than long channels only, the per-channel table is not grouped, and short-channel "
         "regression is unavailable for this run.",
-    # TODO(review): the raw viewer passes per-wavelength rows, so n counts each orphan pair twice
     "caveat.unclassified":
         "{n} channel(s) sit at a separation the long and short ranges leave out ({ranges}). "
         "They were screened and their row in the per-channel table carries the whole-montage "
         "scores, but no split claims them, so they are in none of the long or short scalar "
         "metrics.{where}",
-    # TODO(review): the advice is right only for orphans between the two ranges; orphans past --long-max-dist or at zero separation get flags validate_bands refuses
     "caveat.unclassified_where":
         "Theirs sit at {span}, so --short-max-dist {short_max} would make them short channels "
         "and --long-min-dist {long_min} would make them long; which is right depends on how "
         "deep this montage's short end reaches, which the separations alone do not settle.",
-    # TODO(review): unreachable: the post stage refuses --short-channel on a montage with no short channel (pipeline/glm.py); delete with its caller
-    "caveat.short_regression_none":
-        "Short-channel regression was requested but this montage carries no short channel, so "
-        "it did not run and no systemic signal was regressed out.",
     "caveat.short_regression_all_bad":
         "Short-channel regression was requested but all {n} short channels were rejected, so "
         "it did not run. Their scores are in the per-channel table.",
@@ -46,7 +40,6 @@ NOTES = {
         "between them are not independent.",
 
     # ---- Epochs and trials ----
-    # TODO(review): attached whenever --epoch-chunk-duration is given, including when no annotation was long enough to cut
     "caveat.chunked_trials":
         "Annotations at least twice {chunk:g} s long were cut into {chunk:g} s trials "
         "before epoching, so such a trial in the epoch figures and the per-trial panel is "
@@ -65,9 +58,6 @@ NOTES = {
         "one, and events with no duration are scored only with --epoch-tmin/--epoch-tmax",
     "caveat.one_trial":
         "this condition holds {n} trial inside its window, and one row is not a comparison",
-    # TODO(review): unreachable today: min_trials is only ever 1 or 2
-    "caveat.few_trials":
-        "this condition holds {n} trials inside its window, fewer than a panel needs",
 
     # ---- Filtering ----
     # TODO(review): attached at any ratio, including near or below 1; attach only above a stated ratio

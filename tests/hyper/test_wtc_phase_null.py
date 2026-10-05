@@ -83,7 +83,7 @@ def test_white_noise_decorrelates_but_a_dominant_rhythm_does_not():
 # ---- wtc_band_mean ----
 
 def _half_outside_the_cone():
-    """A map whose second half is padding: 0.5 inside the cone, 1.0 outside it."""
+    """A map whose second half is padding: 0.5 clear of the cone, 1.0 within it."""
     data = _map(0.5)
     data["coi"] = np.where(np.arange(len(TIMES)) < 15, 1e6, 1e-12)
     data["wtc"][:, 15:] = 1.0

@@ -645,7 +645,6 @@ def condition_payloads(
                     if k not in WHOLE_RUN_ONLY_COLUMNS)
     motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS
                         if k not in WHOLE_RUN_ONLY_COLUMNS)
-    _TABLE_KEYS = {k for k, _ in od_cols} | {k for k, _ in motion_cols}
 
     out: list[tuple[str, dict]] = []
     for label, entry in by_condition.items():
@@ -661,17 +660,20 @@ def condition_payloads(
         rows = channel_rows(slice_record(record, sliced), sci_scores, cond_bad)
         pair_cells = format_rows(pair_rows(rows, channel_pairs or None), sci_threshold,
                                  name_key="pair", psp_threshold=cutoffs["psp"])
+        # split on the montage, not on whether a Short entry exists: one is returned for
+        # every montage, all None where there are no short channels
+        has_short = bool(scalars.get("n_short_channels"))
         split = split_table([
             ("All",   len(rows),                        od_by_set.get("all") or {},   False),
             ("Long",  scalars.get("n_long_channels"),   od_by_set.get("long") or {},  True),
             ("Short", scalars.get("n_short_channels"),  od_by_set.get("short") or {}, False),
-        ], od_cols) if od_by_set.get("short") else {}
+        ], od_cols) if has_short else {}
 
         motion_split = split_table([
             ("All",   len(rows),                       motion_by_set.get("all") or {},   False),
             ("Long",  scalars.get("n_long_channels"),  motion_by_set.get("long") or {},  True),
             ("Short", scalars.get("n_short_channels"), motion_by_set.get("short") or {}, False),
-        ], motion_cols) if motion_by_set.get("short") else {}
+        ], motion_cols) if has_short and motion_by_set.get("short") else {}
 
         d = dict(payload)
         # what the page is, for the panels that stay whole and have to say why
@@ -693,10 +695,11 @@ def condition_payloads(
         # the flat list keeps only what neither table covers, so a number is printed once.
         # Derived from the two column lists rather than written out again: a column added to
         # either table leaves the list on its own.
-        flat_keys = (tuple(k for k in COND_SCALAR_KEYS if k not in _TABLE_KEYS)
-                     if split else COND_SCALAR_KEYS)
+        covered = (({k for k, _ in od_cols} if split else set())
+                   | ({k for k, _ in motion_cols} if motion_split else set()))
+        flat_keys = tuple(k for k in COND_SCALAR_KEYS if k not in covered)
         d["sqm"] = {
-            "rows": metric_rows(scalars, flat_keys, skip_missing=True),
+            "rows": metric_rows(scalars, flat_keys, skip_missing=True, condition=True),
             "split": split,
             "motion_split": motion_split,
             # every channel, and the three sets are in the tables. Not "no short channels":
@@ -734,7 +737,9 @@ def condition_payloads(
                 bad_channels, sci_threshold, series, window)
             for key, fig in (("sci_psp", sci_fig),
                              ("ch_summary", channel_quality_heatmap(
-                                 sci_thresh=sci_threshold, **heatmap_args(rows)))):
+                                 sci_thresh=sci_threshold, psp_thresh=cutoffs["psp"],
+                                 good_frac_thresh=cutoffs["good_frac"],
+                                 **heatmap_args(rows)))):
                 saved = save_figure(key, slug, fig) if fig is not None else None
                 if saved:
                     paths[key] = saved

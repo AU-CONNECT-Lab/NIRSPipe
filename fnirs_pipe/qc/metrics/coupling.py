@@ -224,7 +224,9 @@ def _intensity_metrics(raw_intensity: mne.io.Raw,
     # 1/CV rather than a second windowed pass, so the two stay exact reciprocals
     snr = np.divide(1.0, cv, out=np.full_like(cv, np.nan), where=np.isfinite(cv) & (cv > 0))
     mean_amp = int_data.mean(axis=1)
-    cv_per_ch = {ch: float(cv[i]) for i, ch in enumerate(names) if np.isfinite(cv[i])}
+    # a CV of 0 is a flat channel, counted below with the others rather than averaged in
+    cv_per_ch = {ch: float(cv[i]) for i, ch in enumerate(names)
+                 if np.isfinite(cv[i]) and cv[i] > 0}
     snr_per_ch = {ch: float(snr[i]) for i, ch in enumerate(names) if np.isfinite(snr[i])}
     mean_amp_per_ch = {ch: float(mean_amp[i]) for i, ch in enumerate(names)}
     # group per-channel CV by wavelength (last token of the channel name)

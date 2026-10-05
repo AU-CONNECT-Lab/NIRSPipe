@@ -210,7 +210,7 @@ NOTES = {
         "Rounded here only: the <code>stat-wtc_relmat.tsv</code>, "
         "<code>agg-roi_stat-wtc_relmat.tsv</code> and <code>stat-isc_relmat.tsv</code> "
         "tables under the group&rsquo;s <code>nirs/</code> carry the same numbers at full "
-        "precision. <b>% in COI</b> beside a column group is the share of that "
+        "precision. <b>% outside COI</b> beside a column group is the share of that "
         "window&rsquo;s band cells clear of the record&rsquo;s edges, the one thing behind "
         "a WTC mean no figure here shows. It is one number per window, set by where the "
         "window sits in the recording and by the band rather than by the channels: a "
@@ -276,7 +276,7 @@ NOTES = {
     # ---- A dyad's window index ----
     "hyper_index.columns":
         "Coherence: the mean band WTC over the homologous pairs; a crossed run&rsquo;s "
-        "other pairings are on each window&rsquo;s page. <b>inside COI</b>: the share of "
+        "other pairings are on each window&rsquo;s page. <b>outside COI</b>: the share of "
         "band cells clear of the recording&rsquo;s edges, smaller for a window near either "
         "end. <b>ISC</b>: the mean same-channel correlation, computed on the cut window "
         "and z-scored inside it. Open a window for its maps, matrices and phase arrows.",

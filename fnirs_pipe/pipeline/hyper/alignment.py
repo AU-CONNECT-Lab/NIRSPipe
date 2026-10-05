@@ -258,6 +258,22 @@ def align_like(
     return out
 
 
+def aligned_offsets(
+    raws: dict[str, mne.io.Raw], aligned_raws: dict[str, mne.io.Raw],
+) -> dict[str, float]:
+    """Seconds into each original recording at which its aligned copy starts.
+
+    ::
+
+      trigger at 22.4 s, then a window from 60 s  ->  {"sub-02": 82.4}
+
+    The aligner's own offsets stop at the trigger. A window cut afterwards moves the shared
+    clock's zero again, and this is the offset that converts after both.
+    """
+    return {sid: _aligned_shift(raws[sid], ref) for sid, ref in aligned_raws.items()
+            if sid in raws}
+
+
 def _aligned_shift(raw: mne.io.Raw, aligned: mne.io.Raw) -> float:
     """Seconds into ``raw`` at which ``aligned`` starts; ``crop`` accumulates into first_samp."""
     return float(aligned.first_time) - float(raw.first_time)

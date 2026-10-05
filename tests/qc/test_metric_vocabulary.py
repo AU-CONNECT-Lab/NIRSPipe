@@ -290,3 +290,12 @@ def test_the_scan_reaches_every_metric_module():
     """
     assert {p.stem for p in _metric_modules()} >= {"coupling", "gvtd", "haemo", "motion"}
     assert {"psp_mean", "gvtd_thresh", "cnr_hbo_mean", "spike_pct"} <= _declared_metric_keys()
+
+
+def test_a_condition_page_names_the_one_file_its_gvtd_comes_from():
+    whole_run = metric_summary("gvtd_filt_p95")
+    condition = metric_summary("gvtd_filt_p95", condition=True)
+    assert "again on the motion-corrected file" in whole_run
+    assert "motion-corrected file's windows" in condition and "again" not in condition
+    # a metric the condition page does not re-read keeps its own stage line
+    assert metric_summary("cv_mean", condition=True) == metric_summary("cv_mean")

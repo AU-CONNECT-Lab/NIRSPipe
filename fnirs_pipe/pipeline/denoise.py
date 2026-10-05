@@ -169,6 +169,25 @@ def filter_array(
     return mne.filter.filter_data(data, sfreq, l_freq, h_freq, verbose="error", **kwargs)
 
 
+def band_limited(
+    raw: mne.io.Raw,
+    l_freq: float | None,
+    h_freq: float | None,
+    method: str = DEFAULT_FILTER_METHOD,
+    order: int = DEFAULT_FILTER_ORDER,
+) -> mne.io.Raw:
+    """A copy of ``raw`` through the same filter design `bandpass_filter` writes with.
+
+    For measuring a stage on the analysis band, not for writing one, so nothing is stamped.
+    MNE's own default is a FIR whose low-pass transition is at least 2 Hz wide, which leaves a
+    haemodynamic low-pass all but open.
+    """
+    copy = raw.copy().load_data()
+    copy.filter(l_freq=l_freq, h_freq=h_freq, verbose=False,
+                **filter_kwargs(copy.info["sfreq"], copy.n_times, l_freq, h_freq, method, order))
+    return copy
+
+
 def bandpass_filter(
     haemo: mne.io.Raw,
     l_freq: float | None = None,

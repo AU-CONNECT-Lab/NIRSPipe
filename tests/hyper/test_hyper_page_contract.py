@@ -355,6 +355,25 @@ def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
     assert COUNT not in run_html and CAVEAT not in run_html
 
 
+def test_an_unstated_band_is_counted_from_the_axis_it_falls_back_to(dyad, tmp_path_factory):
+    """No --wtc-band-fmin means the whole axis from --wtc-fmin is averaged, the case that most
+    needs the warning, so the count reads the band the analysis resolved, not the flag."""
+    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+
+    out = tmp_path_factory.mktemp("hyper_short_axis")
+    path = build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
+        wtc_fmin=0.01, wtc_fmax=0.2, wtc_chroma=("hbo",), wtc_by_condition=True,
+    )
+    condition_pages = [p for p in path.parent.glob("*.html")
+                       if "index" not in p.name and _window_of(p)]
+    assert condition_pages, "no condition page was written"
+    for page in condition_pages:
+        assert CAVEAT in page.read_text(encoding="utf-8"), page.name
+
+
 # ---- a failure belongs to the page that lost the panel ----
 
 def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkeypatch):
@@ -464,7 +483,7 @@ def test_the_conditions_do_not_all_print_the_run_s_numbers(pages):
 
 
 def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
-    """It is the share of band cells inside the cone, which depends on the window length and
+    """It is the share of band cells outside the cone, which depends on the window length and
     the band and not on the channels, so as a column it would be one number repeated down
     every row of the table and again for the second chromophore."""
     for page in pages:
@@ -473,7 +492,7 @@ def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
         table = _table_of(html, "Channel pairs")
         notes = re.findall(r'<span class="hdr-note">(.*?)</span>', table)
         assert len(notes) == len(_scope_headers(table)), page.name
-        assert all(n.endswith("% in COI") for n in notes), (page.name, notes)
+        assert all(n.endswith("% outside COI") for n in notes), (page.name, notes)
 
 
 def test_the_roi_rows_carry_an_isc_of_their_own(pages):

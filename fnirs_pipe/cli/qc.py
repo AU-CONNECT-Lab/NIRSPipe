@@ -203,6 +203,7 @@ def cmd_hyper_raw(
         _raw_to_haemo,
         align_imu_like,
         align_like,
+        aligned_offsets,
         align_recordings,
         compute_group_sqm_raw,
         crop_aligned_window,
@@ -235,6 +236,8 @@ def cmd_hyper_raw(
         else:
             aligned_raws, offsets = align_recordings(raws_haemo, task)
         aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
+        # --tstart moves the shared clock's zero, so each member's crop point moves with it
+        offsets = aligned_offsets(raws_haemo, aligned_raws)
         if normalize:
             aligned_raws = normalize_raws(aligned_raws)
         # the motion panel needs optical density, which the haemoglobin conversion above

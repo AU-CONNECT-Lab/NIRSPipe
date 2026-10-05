@@ -6,7 +6,7 @@ record onto its start. What it has to clear is how far the widest wavelet reache
 edge, and a power of two is not that number.
 
 The failure this guards against is silent. Too little padding does not raise; it returns a
-coherence that is wrong at the edges and, at the shortest paddings, wrong well inside the cone
+coherence that is wrong at the edges and, at the shortest paddings, wrong well clear of the cone
 of influence too. So the tests below assert `array_equal` against the power-of-two transform
 rather than a tolerance, and one of them pins the minimum itself, since a rule that stopped
 clearing the cone would still return plausible numbers.

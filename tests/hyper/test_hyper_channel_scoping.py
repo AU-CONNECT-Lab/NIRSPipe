@@ -259,7 +259,7 @@ def test_cells_outside_the_cone_of_influence_do_not_enter_the_mean():
     unmasked = wtc_band_mean(_result(), 0.04, 0.25, mask_coi=False).iloc[0]
     assert masked["coherence"] == pytest.approx(2 / 8)
     assert unmasked["coherence"] == pytest.approx(6 / 12)
-    # n_valid_frac is the share inside the cone, measured whether or not the mask is
+    # n_valid_frac is the share outside the cone, measured whether or not the mask is
     # applied, so it does not tell you which of the two numbers above you are holding
     assert masked["n_valid_frac"] == pytest.approx(8 / 12)
     assert unmasked["n_valid_frac"] == pytest.approx(8 / 12)

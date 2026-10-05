@@ -21,7 +21,7 @@ TRUE = ("sub-01G01", "sub-02G01")
 
 
 def _map(value):
-    """One flat WTC map; a huge coi keeps every cell inside the cone."""
+    """One flat WTC map; a huge coi keeps every cell clear of the cone."""
     return {"wtc": np.full((len(FREQS), len(TIMES)), float(value)),
             "coi": np.full(len(TIMES), 1e6), "sig": None,
             "phase": np.zeros((len(FREQS), len(TIMES)))}

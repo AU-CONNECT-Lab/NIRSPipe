@@ -163,6 +163,9 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
             "cv":         _first(group, "cv"),
             "spike":      _first(group, "spike"),
             "corr":       _first(group, "corr"),
+            # the share a pair is rejected on, so its Status can name the criterion
+            "good_frac":  min((row["good_frac"] for row in group
+                               if row.get("good_frac") is not None), default=None),
             # either wavelength failing is the pair failing, which is how screening treats it
             "is_bad":     any(row["is_bad"] for row in group),
             "separation": group[0]["separation"] if group else "",
@@ -253,7 +256,7 @@ def separation_notes(
     with real positions that happens to use separations the two ranges leave out; those
     channels are screened and scored like any other but sit in none of the split scalars.
     The third is a run that asked for
-    short-channel regression and had no short channel to build it from, which the pipeline
+    short-channel regression and had every short channel rejected, which the pipeline
     treats as a warning and carries on past.
 
     ``orphan_mm`` is :func:`separation_orphans`' output, name -> mm. Given, the second note
@@ -269,11 +272,18 @@ def separation_notes(
         notes.append(section_note("caveat.no_separation"))
         return notes
 
-    n_odd = sum(1 for r in rows if r.get("separation") == "unclassified")
+    odd = [r for r in rows if r.get("separation") == "unclassified"]
+    # a pair, not each of its wavelengths: the raw viewer hands over one row per wavelength
+    n_odd = len({r.get("pair") or (pair_of(r["name"]) if r.get("name") else i)
+                 for i, r in enumerate(odd)})
     if n_odd:
-        from fnirs_pipe.qc.metrics import unclaimed_separations
+        from fnirs_pipe.qc.metrics import separation_bands, unclaimed_separations
         where = ""
-        if orphan_mm:
+        short_max, long_min = (sep_bands or separation_bands())[:2]
+        # the two flags can only take in channels between the ranges; one past --long-max-dist
+        # or at zero separation is not made short or long by moving them
+        if orphan_mm and all(1000 * short_max < mm < 1000 * long_min
+                             for mm in orphan_mm.values()):
             import math
             lo, hi = min(orphan_mm.values()), max(orphan_mm.values())
             span = f"{lo:.1f} mm" if hi - lo < 0.05 else f"{lo:.1f} to {hi:.1f} mm"
@@ -286,9 +296,7 @@ def separation_notes(
 
     if short_channel_requested:
         short_rows = [r for r in rows if r.get("separation") == "short"]
-        if not n_short:
-            notes.append(section_note("caveat.short_regression_none"))
-        elif short_rows and all(r["is_bad"] for r in short_rows):
+        if short_rows and all(r["is_bad"] for r in short_rows):
             notes.append(section_note("caveat.short_regression_all_bad", n=len(short_rows)))
     return notes
 

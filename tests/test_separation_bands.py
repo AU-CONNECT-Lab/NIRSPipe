@@ -628,3 +628,19 @@ def test_a_rejected_channel_in_neither_range_prints_why_it_went():
     assert out["O 760"]["reason"] == "coupled windows"
     assert out["O 760"]["status"] == "BAD (coupled windows)"
     assert out["L 760"]["status"] == "OK"
+
+
+def test_orphans_are_counted_by_pair_and_advised_only_between_the_ranges():
+    from fnirs_pipe.qc.common.channel_table import separation_notes
+
+    scalars = {"n_long_channels": 1, "n_short_channels": 1}
+    # one orphan pair, handed over the way the raw viewer does, one row per wavelength
+    rows = [{"name": "S3_D3 760", "separation": "unclassified"},
+            {"name": "S3_D3 850", "separation": "unclassified"}]
+    assert separation_notes(scalars, rows)[0].startswith("1 channel(s)")
+
+    # past a --long-max-dist of 45 mm: moving --short-max-dist or --long-min-dist takes in
+    # nothing, so no such advice
+    past = separation_notes(scalars, rows, sep_bands=(0.010, 0.015, 0.045),
+                            orphan_mm={"S3_D3": 52.0})[0]
+    assert "Theirs sit" not in past

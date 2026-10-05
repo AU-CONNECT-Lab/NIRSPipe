@@ -28,3 +28,18 @@ def test_window_past_the_end_is_still_dropped():
     raw = _raw()
     longer = _raw(13000)
     assert align_like({"sub-01": raw}, {"sub-01": longer.copy().crop(tmin=1.0)}) == {}
+
+
+def test_a_window_cut_after_alignment_moves_the_offset_with_it():
+    # the dyad raw report cuts the aligned recordings to --tstart/--tend; the offsets it
+    # converts each member's own clock with have to include that cut
+    from fnirs_pipe.pipeline.hyper.alignment import aligned_offsets, crop_aligned_window
+
+    raws = {"sub-01": _raw(), "sub-02": _raw()}
+    aligned = {"sub-01": raws["sub-01"].copy().crop(tmin=10.0),
+               "sub-02": raws["sub-02"].copy().crop(tmin=30.0)}
+    cut = crop_aligned_window(aligned, 60.0, None)
+
+    offsets = aligned_offsets(raws, cut)
+    assert abs(offsets["sub-01"] - 70.0) < 1 / SFREQ
+    assert abs(offsets["sub-02"] - 90.0) < 1 / SFREQ

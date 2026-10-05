@@ -557,7 +557,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     ::
 
       {"hbo": band frame, "hbr": ...} + {"hbo": (matrix, names), ...}
-        -> {"kind": "channel", "valid": "87% in COI",
+        -> {"kind": "channel", "valid": "87% outside COI",
             "rows": [{"a": "S1_D1", "b": "S1_D2",
                       "cells": {"HbO WTC": "0.241", "HbO ISC": "+0.067"}}]}
 
@@ -632,8 +632,8 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     used = {col for row in rows for col in row["cells"]}
     lo, hi = (min(fracs), max(fracs)) if fracs else (None, None)
     valid = "" if lo is None else (
-        f"{100 * lo:.0f}% in COI" if lo == hi
-        else f"{100 * lo:.0f}–{100 * hi:.0f}% in COI")
+        f"{100 * lo:.0f}% outside COI" if lo == hi
+        else f"{100 * lo:.0f}–{100 * hi:.0f}% outside COI")
     return ({"kind": kind, "columns": [c for c in order if c in used],
              "rows": rows, "valid": valid} if rows else {})
 
@@ -644,7 +644,7 @@ def _merge_scopes(kind: str, axis: list[str], per_scope: list) -> dict:
     ::
 
       [("Whole run", table), ("rest", table)]
-        -> {"scopes": [{"label": "Whole run", "valid": "87% in COI"}, ...],
+        -> {"scopes": [{"label": "Whole run", "valid": "87% outside COI"}, ...],
             "rows": [{"a": "S1_D1", "b": "S1_D2",
                       "cells": {"Whole run": {"HbO WTC": "0.241"}, "rest": {...}}}]}
 
@@ -795,8 +795,8 @@ def build_hyper_post_report(
     exists for a caller who wants per-condition transforms, and 0 gives the unpadded cut.
     Costs one transform per condition per chromophore.
 
-    ``wtc_mask_coi`` restricts each band mean to the cone of influence. On by default; the
-    share inside the cone is reported either way as ``n_valid_frac``.
+    ``wtc_mask_coi`` leaves the cone of influence out of each band mean. On by default; the
+    share outside the cone is reported either way as ``n_valid_frac``.
 
     ``wtc_chroma`` is the chromophores to run, ``("hbo",)``, ``("hbr",)`` or both. Both is
     the default and costs exactly twice as much, since the two are the same computation run
@@ -1254,7 +1254,7 @@ def build_hyper_post_report(
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC
     # does not care. Said on the page as well as in the log, since the two are read by
     # different people
-    isc_unfiltered_note = unfiltered_stage_note(aligned_raws)
+    isc_unfiltered_note = unfiltered_stage_note(aligned_raws, isc_band)
     if isc_unfiltered_note:
         logger.warning("ISC: %s", isc_unfiltered_note)
 
@@ -1439,7 +1439,7 @@ def build_hyper_post_report(
                               if window else ""),
             analysis_window=(f"{analysis_window[0]:.1f}–{analysis_window[1]:.1f} s"
                              if analysis_window else ""),
-            window_cycles=_band_cycles(window or analysis_window, wtc_band_fmin),
+            window_cycles=_band_cycles(window or analysis_window, band_fmin),
             min_band_cycles=MIN_BAND_CYCLES,
             run_href=_page_path(None, pair).name,
             # this page's own name, which is what the rating server files a verdict under

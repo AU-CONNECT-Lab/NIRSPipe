@@ -21,6 +21,7 @@ from fnirs_pipe.qc.metrics.haemo import (
     _retention_metrics, _spectral_metrics,
 )
 from fnirs_pipe.qc.metrics.motion import _spike_metrics
+from fnirs_pipe.pipeline.denoise import band_limited
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import require_stage
 from fnirs_pipe.utils.logging import get_logger
@@ -145,6 +146,8 @@ def comparable_stage_metrics(
     cardiac_h_freq: float,
     resp_l_freq: float,
     resp_h_freq: float,
+    limited: "list[mne.io.Raw] | None" = None,
+    design: "dict[str, Any] | None" = None,
 ) -> dict[str, Any]:
     """Stage-by-stage metrics that may be compared with each other.
 
@@ -163,6 +166,11 @@ def comparable_stage_metrics(
     is False when no passband was given and the quality rows fall back to as-stored, which
     the caller should say out loud.
 
+    ``limited`` is the stages already band-limited, one per stage, for a caller that had to
+    filter before cutting a stretch out; the quality rows read them and ``removed`` still
+    reads ``stages`` as stored. ``design`` is the run's ``method`` and ``order``, so the band
+    is applied with the filter the data went through; None takes the pipeline's default.
+
     Returns
     -------
     dict
@@ -173,8 +181,9 @@ def comparable_stage_metrics(
     labels = [label for label, _ in stages]
     raws = [raw for _, raw in stages]
     banded = l_freq is not None or h_freq is not None
-    limited = [raw.copy().filter(l_freq, h_freq, verbose=False) if banded else raw
-               for raw in raws]
+    if limited is None:
+        limited = [band_limited(raw, l_freq, h_freq, **(design or {})) if banded else raw
+                   for raw in raws]
 
     haemo = [haemo_quality_metrics(r) for r in limited]
     quality: dict[str, list] = {}

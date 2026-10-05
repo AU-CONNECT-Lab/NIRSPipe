@@ -142,7 +142,7 @@ def _morlet():
 
 
 def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
-    r"""Seconds of recording to keep either side of a window so its band is inside the cone.
+    r"""Seconds of recording to keep either side of a window so its band is clear of the cone.
 
     ::
 
@@ -696,7 +696,7 @@ def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
 
 
 def _in_coi(freqs: np.ndarray, coi: np.ndarray) -> np.ndarray:
-    """(frequency x time) mask of the cells inside the cone of influence.
+    """(frequency x time) mask of the cells outside the cone of influence, clear of the edges.
 
     ``coi`` is a period in seconds per column, so 1/coi is the lowest frequency still reliable
     there; a coi of 0, at the very edges, leaves nothing reliable.
@@ -718,7 +718,7 @@ def _band_rows(sig, band: np.ndarray) -> "np.ndarray | None":
 def _phase_cells(
     wtc: np.ndarray, in_coi: np.ndarray, sig: "np.ndarray | None", mask_coi: bool,
 ) -> np.ndarray:
-    """Which band cells a phase angle may be averaged over: inside the cone, above the level.
+    """Which band cells a phase angle may be averaged over: outside the cone, above the level.
 
     The relative phase of two uncorrelated series is a uniformly random direction, so a mean
     taken over cells that are not coupled measures the shape of the map rather than a lead.
@@ -748,17 +748,17 @@ def wtc_band_mean(
 
         \overline{R^2} = \frac{1}{|V|} \sum_{(f, t) \in V} R^2(f, t),
 
-    where :math:`V` is the set of cells inside the band and, with ``mask_coi``, inside the
+    where :math:`V` is the set of cells inside the band and, with ``mask_coi``, outside the
     cone of influence. pycwt reports the COI as the longest period still free of edge effects
-    at each time point, so a cell is kept when :math:`f \ge 1 / \mathrm{coi}(t)`. Cells outside
-    it are wavelet coefficients padded against the edges of the record: near 1 whatever the
-    data does, and enough of them at the low-frequency end to carry a whole row.
+    at each time point, so a cell is kept when :math:`f \ge 1 / \mathrm{coi}(t)`. Cells inside
+    the cone are wavelet coefficients padded against the edges of the record: near 1 whatever
+    the data does, and enough of them at the low-frequency end to carry a whole row.
 
-    ``mask_coi`` is **on by default**; cells outside the cone are padding. Masking discards
+    ``mask_coi`` is **on by default**; cells inside the cone are padding. Masking discards
     more of a short segment than of a long one, so ``n_valid_frac`` is reported either way.
     ``--no-wtc-mask-coi`` averages the whole band.
 
-    ``n_valid_frac`` is the share of band cells that lie inside the cone of influence. **It is
+    ``n_valid_frac`` is the share of band cells that lie outside the cone of influence. **It is
     reported whether or not the mask is applied**, so the share is visible as a quality number
     even when every cell was averaged.
 
@@ -781,7 +781,7 @@ def wtc_band_mean(
     did, and the homologous rows are the ones where they agree.
     A label with no map behind it keeps its row, with NaN in every measured column. That
     covers both a pairing one member had no usable channel at and one the transform failed
-    on. ``n_valid_frac`` is NaN there rather than 0: the share of band cells inside the cone
+    on. ``n_valid_frac`` is NaN there rather than 0: the share of band cells outside the cone
     is undefined when there are no cells, and a 0 would be averaged as a real share by
     :func:`roi_mean_of_channels`, pulling an ROI's reported share down by however many of
     its channels were rejected.

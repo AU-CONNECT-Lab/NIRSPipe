@@ -99,3 +99,16 @@ def test_the_same_band_is_quiet(caplog):
 
 def test_no_coherence_band_means_nothing_to_compare(caplog):
     assert _warnings(caplog, None, wtc=(None, None)) == []
+
+
+@pytest.mark.parametrize("isc_band, warned", [
+    (None, True),
+    ((None, 0.1), True),     # a low-pass alone leaves the drift in
+    ((0.01, None), False),   # a low edge on the correlation keeps it out
+    ((0.01, 0.1), False),
+])
+def test_the_unfiltered_note_stands_down_when_the_correlation_is_high_passed(isc_band, warned):
+    from fnirs_pipe.pipeline.hyper.group_io import unfiltered_stage_note
+
+    raws = _pair(0.05)
+    assert (unfiltered_stage_note(raws, isc_band) is not None) is warned

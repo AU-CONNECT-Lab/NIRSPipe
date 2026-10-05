@@ -16,6 +16,7 @@ from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     _stamp_alignment,
     align_imu_like,
     align_like,
+    aligned_offsets,
     align_recordings,
     alignment_params,
     crop_aligned_window,

@@ -47,7 +47,7 @@ tr.whole td.num { font-weight: 600; }
       {% if has_null %}
       {% for c in chroma %}<th>past null {{ chroma_labels[c] }}</th>{% endfor %}
       {% endif %}
-      {% for c in chroma %}<th>inside COI {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>outside COI {{ chroma_labels[c] }}</th>{% endfor %}
       {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th>{% endfor %}
     </tr>
   </thead>

@@ -656,11 +656,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                 "fnirs-hyper; required for fnirs-hyper-band.")
     band_opts.add_argument("--wtc-mask-coi", action=argparse.BooleanOptionalAction,
                            default=True,
-                           help="Average each band mean only over cells inside the cone of "
-                                "influence (default on), so cells affected by the edges of "
-                                "the record are left out. --no-wtc-mask-coi averages the "
-                                "whole band instead; the share inside the cone is reported "
-                                "as n_valid_frac either way.")
+                           help="Average each band mean only over cells outside the cone "
+                                "of influence, the region the edges of the record reach "
+                                "(default on). --no-wtc-mask-coi averages the whole band "
+                                "instead; the share outside the cone is reported as "
+                                "n_valid_frac either way.")
 
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--verbose", action="store_true")

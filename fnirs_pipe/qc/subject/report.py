@@ -61,6 +61,7 @@ from fnirs_pipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
 )
 from fnirs_pipe.io.derivatives import entity_of
+from fnirs_pipe.pipeline.denoise import band_limited
 from fnirs_pipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
@@ -131,6 +132,7 @@ from fnirs_pipe.qc.common.report_shell import (
 )
 from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
+from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
 from fnirs_pipe.qc.boilerplate.vocabulary import (
@@ -771,21 +773,22 @@ def _section_haemo(
             return raw.copy().pick(names)
 
         with _guard("Denoising stage metrics", errors, subject):
+            design = _filter_design(stages)
             banded_here = crop is not None and (l_freq is not None or h_freq is not None)
             if banded_here:
-                # filter over the whole run, cut after
-                staged = [(label, _cut(_long_only(raw).copy()
-                                       .filter(l_freq, h_freq, verbose=False)))
-                          for label, raw in stages]
+                # filter over the whole run and cut after, for the quality rows; what left
+                # the recording is read off the stages as stored, cut the same way
+                limited = [_cut(band_limited(_long_only(raw), l_freq, h_freq, **design))
+                           for _, raw in stages]
                 stage_metrics = comparable_stage_metrics(
-                    staged, None, None,
+                    [(label, _cut(_long_only(raw))) for label, raw in stages], l_freq, h_freq,
                     config.cardiac_l_freq, config.cardiac_h_freq,
-                    config.resp_l_freq, config.resp_h_freq)
+                    config.resp_l_freq, config.resp_h_freq, limited=limited)
             else:
                 stage_metrics = comparable_stage_metrics(
                     [(label, _long_only(raw)) for label, raw in stages], l_freq, h_freq,
                     config.cardiac_l_freq, config.cardiac_h_freq,
-                    config.resp_l_freq, config.resp_h_freq)
+                    config.resp_l_freq, config.resp_h_freq, design=design)
             # the rows are band-limited either way; `banded` only reports whether that
             # function did it, and here it was done before the cut instead
             stage_banded = banded_here or bool(stage_metrics["banded"])
@@ -969,8 +972,12 @@ def _condition_trial_qc(
     figures_dir: Path,
     fig_name,
     min_trials: int,
+    window: str = "",
 ) -> dict:
     """The run's per-trial table cut to the trials whose onset falls in one condition.
+
+    ``window`` is the run's trial window as its caption prints it, carried over because the
+    condition page blanks the run's own section variables.
 
     Nothing is rescored. A trial's SQM is measured on a crop of its own window and reads
     nothing outside it, so a condition's rows are the run's rows and recomputing them could
@@ -993,16 +1000,18 @@ def _condition_trial_qc(
         elif not keep:
             reason = section_note("caveat.block_design_trials")
         else:
-            reason = (section_note("caveat.one_trial", n=1) if len(keep) == 1
-                      else section_note("caveat.few_trials", n=len(keep)))
-        return {"trial_qc_path": None, "trial_qc_h": 0, "condition_trial_reason": reason}
+            # min_trials is 1 or 2, so a short window here holds exactly one trial
+            reason = section_note("caveat.one_trial", n=len(keep))
+        return {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": window,
+                "condition_trial_reason": reason}
     path, h = None, 0
     with _guard("Per-trial quality", errors, subject):
         fig = trial_quality_heatmap([label for label, _ in keep], [sqm for _, sqm in keep])
         if fig is not None:
             path, h = _save_plotly_html(fig, figures_dir / fig_name("trialqc",
                                                                        suffix="qc"))
-    return {"trial_qc_path": path, "trial_qc_h": h, "condition_trial_reason": ""}
+    return {"trial_qc_path": path, "trial_qc_h": h, "trial_qc_window": window,
+            "condition_trial_reason": ""}
 
 
 def _section_condition_trial_images(
@@ -1378,6 +1387,20 @@ def _note_separation(
         _note(notes, subject, message)
 
 
+def _filter_design(stages: "list[tuple[str, mne.io.Raw]]") -> dict:
+    """The filter a run's stages went through, read off the stamp of the first that records it.
+
+    ``{"method": "iir", "order": 4}``, or ``{}`` for the pipeline's default when none does.
+    """
+    for _, raw in stages:
+        params = (lineage_of(raw).params if lineage_of(raw) else None) or {}
+        method = params.get("filter_method")
+        if method:
+            order = params.get("filter_order")
+            return {"method": method, **({"order": int(order)} if order is not None else {})}
+    return {}
+
+
 def _section_channel_summary(
     rows: list,
     subject: str,
@@ -1385,11 +1408,18 @@ def _section_channel_summary(
     figures_dir: Path,
     fig_name,
     sci_thresh: float = SCI_PASS,
+    psp_thresh: "float | None" = None,
+    good_frac_thresh: "float | None" = None,
 ) -> dict:
-    """``fig_name`` so a per-condition page writes its own grid instead of overwriting the run's."""
+    """``fig_name`` so a per-condition page writes its own grid instead of overwriting the run's.
+
+    The PSP and coupled-share lines colour their rows; None keeps the package default.
+    """
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
-        fig = channel_quality_heatmap(sci_thresh=sci_thresh, **heatmap_args(rows))
+        lines = {k: v for k, v in (("psp_thresh", psp_thresh),
+                                   ("good_frac_thresh", good_frac_thresh)) if v is not None}
+        fig = channel_quality_heatmap(sci_thresh=sci_thresh, **lines, **heatmap_args(rows))
         path, h = _save_plotly_html(fig, figures_dir / fig_name("chsummary", suffix="qc"))
     return {"channel_summary_path": path, "channel_summary_h": h}
 
@@ -1463,6 +1493,7 @@ def _section_brain(
     figures_dir: Path,
     fig_name,
     ch_names_brain: list[str] | None = None,
+    sci_threshold: float = SCI_PASS,
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
 
@@ -1480,11 +1511,13 @@ def _section_brain(
             views_name = fig_name("brainviews", extension=".png")
             ch_names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
             brain_b64 = quality_brain_views(ch_names, coords_head, good_mask,
-                                            raw=raw_intensity, sci_scores=sci_scores)
+                                            raw=raw_intensity, sci_scores=sci_scores,
+                                            sci_threshold=sci_threshold)
 
             optode_b64 = None
             with _guard("Optode flat map", errors, subject):
-                optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels)
+                optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
+                                                  sci_threshold=sci_threshold)
 
             if brain_b64 and optode_b64:
                 brain_pil = _PILImage.open(_io.BytesIO(base64.b64decode(brain_b64))).convert("RGBA")
@@ -1836,11 +1869,14 @@ def build_subject_report(
     # one set of trials. A raw with no long annotation, or no flag, comes back unchanged.
     chunk = getattr(config, "epoch_chunk_duration", None)
     if chunk:
+        n_events = len(raw_intensity.annotations)
         raw_intensity = chunk_annotations(raw_intensity, chunk)
         raw_haemo = chunk_annotations(raw_haemo, chunk)
         if after_haemo is not None:
             after_haemo = chunk_annotations(after_haemo, chunk)
-        _note(notes, subject, section_note("caveat.chunked_trials", chunk=chunk))
+        # said only when a block was long enough to be cut
+        if len(raw_intensity.annotations) > n_events:
+            _note(notes, subject, section_note("caveat.chunked_trials", chunk=chunk))
 
     # the "Raw Signal" section is the recording before anything was done to it, so its
     # figures come off desc-sci rather than the corrected desc-preproc the rest of the
@@ -1862,7 +1898,8 @@ def build_subject_report(
     brain_vars        = _section_brain(
                             sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,
-                            ch_names_brain=ch_names_brain)
+                            ch_names_brain=ch_names_brain,
+                            sci_threshold=resolve_cutoffs(config)["sci"])
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
@@ -1934,9 +1971,11 @@ def build_subject_report(
                      sep_bands=sep_bands)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors,
                                                   figures_dir, fig_name)
+    run_cutoffs       = resolve_cutoffs(config)
     ch_summary_vars   = _section_channel_summary(
                             sqm_vars["channel_rows"], subject, errors, figures_dir, fig_name,
-                            sci_thresh=getattr(config, "sci_threshold", SCI_PASS))
+                            sci_thresh=run_cutoffs["sci"], psp_thresh=run_cutoffs["psp"],
+                            good_frac_thresh=run_cutoffs["good_frac"])
     cond_summary_vars = (_section_condition_summary(record, sci_scores, config, subject,
                                                     errors, figures_dir, fig_name)
                          if by_condition else
@@ -2057,7 +2096,7 @@ def build_subject_report(
                     sci_pc, sorted(cond_bad), coords_head,
                     _good_mask_for(cond_bad, ch_names_brain, sci_pc, good_mask),
                     raw_intensity, subject, errors, figures_dir, cond_name,
-                    ch_names_brain=ch_names_brain),
+                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"]),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda cond_name, span: _section_stage_carpets(
@@ -2069,7 +2108,8 @@ def build_subject_report(
                 remake_trial_qc=lambda cond_name, span: _condition_trial_qc(
                     trial_qc_vars.get("trial_qc_rows") or [], span,
                     subject, errors, figures_dir, cond_name,
-                    min_trials=1 if epoch_single_trial else 2),
+                    min_trials=1 if epoch_single_trial else 2,
+                    window=trial_qc_vars.get("trial_qc_window") or ""),
                 # a run with nothing to epoch has no trial images on its own page either,
                 # and the pass costs one figure per HbO channel per condition
                 remake_trial_images=None if epoch_skip is not None else (
@@ -2453,7 +2493,8 @@ def _write_condition_reports(
         rows = _condition_channel_rows(record, entry, sci_scores)
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         summary = _section_channel_summary(
-            rows, subject, errors, figures_dir, cond_name, cutoffs["sci"])
+            rows, subject, errors, figures_dir, cond_name, cutoffs["sci"],
+            psp_thresh=cutoffs["psp"], good_frac_thresh=cutoffs["good_frac"])
         # the SCI/PSP panel over this condition's columns: a real slice, since the figure
         # is handed its matrices and derives nothing from a recording
         panels: dict = {}

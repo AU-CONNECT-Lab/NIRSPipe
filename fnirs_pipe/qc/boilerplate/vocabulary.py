@@ -396,7 +396,7 @@ METRIC_SUMMARY = {
     "cv_mean": f"Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside {CV_WINDOW_S:g} s windows and then averaged, lower being cleaner.",
     "snr_mean": f"Mean / SD per channel, the reciprocal of that channel's {CV_WINDOW_S:g} s CV, then averaged over channels, so it is not 1 / cv_mean and one near-constant channel can inflate it. Higher is better.",
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
-    "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of the SNR mean but enter cv_mean as 0, and a saturated channel with any residual noise is not counted here and inflates snr_mean.",
+    "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of both means; a saturated channel with any residual noise is not counted here and inflates snr_mean.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
 
     # geometry
@@ -491,6 +491,13 @@ _STAGE_RAW_AND_CORRECTED = (
     "same channels both times."
 )
 
+# A condition page reads GVTD off the corrected file's windows alone, so the whole-run line
+# above would name a second file and a percentile the page does not hold.
+_STAGE_CONDITION_MOTION = (
+    "On a condition page: the motion-corrected file's windows sliced to this condition, so a "
+    "95th percentile is the mean of the windows' own and the threshold is that file's own."
+)
+
 _RAW_METRICS = (
     # good_frac_mean sits here and not with sci/psp, which it is built from: those two are
     # measured again on the corrected file, and the coupled-window count is taken once, at
@@ -531,17 +538,17 @@ METRIC_STAGE = {
 }
 
 
-# TODO(review): condition pages reuse these stage lines, but their motion numbers come from the corrected file alone, their p95 is a mean of window p95s and their threshold is the corrected file's own
-def metric_summary(metric: str) -> str:
+def metric_summary(metric: str, condition: bool = False) -> str:
     """What a metric is, which way is good, and what stage it was measured on.
 
     Returns '' for an undescribed metric, so the report renders a bare number rather than
-    an empty tooltip.
+    an empty tooltip. ``condition`` is a condition page, whose GVTD numbers come from one file.
     """
     text = METRIC_SUMMARY.get(metric, "")
     if not text:
         return ""
-    stage = METRIC_STAGE.get(metric, "")
+    stage = (_STAGE_CONDITION_MOTION if condition and metric.startswith("gvtd_")
+             and metric in _RAW_AND_CORRECTED_METRICS else METRIC_STAGE.get(metric, ""))
     return f"{text} {stage}".rstrip()
 
 
@@ -723,6 +730,7 @@ def metric_rows(
     keys: "Sequence[str] | None" = None,
     *,
     skip_missing: bool = False,
+    condition: bool = False,
 ) -> list[dict[str, Any]]:
     """A scalar panel's rows, ready for whatever renders them.
 
@@ -747,7 +755,7 @@ def metric_rows(
             "label":      metric_label(key),
             "value":      format_metric(key, value),
             "cls":        metric_class(key, value),
-            "tip":        metric_summary(key),
+            "tip":        metric_summary(key, condition),
             "key_metric": is_key_metric(key),
         })
     return rows

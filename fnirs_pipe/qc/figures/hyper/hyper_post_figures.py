@@ -96,7 +96,7 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
 
 
 def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
-    """Where a phase arrow is worth drawing: inside the cone, and above the noise.
+    """Where a phase arrow is worth drawing: outside the cone, and above the noise.
 
     ::
 

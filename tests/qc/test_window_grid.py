@@ -28,3 +28,19 @@ def test_cv_windows_are_the_sci_and_psp_windows(sfreq):
     cv_starts = np.asarray(cv_times)[:, 0]
     np.testing.assert_allclose(cv_starts, np.asarray(sci_times)[:, 0])
     np.testing.assert_allclose(cv_starts, np.asarray(psp_times)[:, 0])
+
+
+def test_a_flat_channel_is_counted_and_kept_out_of_both_means():
+    import mne
+
+    from fnirs_pipe.qc.metrics.coupling import _intensity_metrics
+
+    rng = np.random.default_rng(0)
+    data = np.vstack([1.0 + 0.02 * rng.standard_normal(400),   # a real channel, CV ~ 2%
+                      np.full(400, 1.0)])                      # flat at a non-zero level
+    raw = mne.io.RawArray(data, mne.create_info(["S1_D1 760", "S1_D1 850"], 10.0,
+                                                "fnirs_cw_amplitude"), verbose="error")
+    out = _intensity_metrics(raw)
+    assert out["n_flat_channels"] == 1
+    assert out["cv_mean"] == pytest.approx(out["cv_per_channel"]["S1_D1 760"])
+    assert "S1_D1 850" not in out["cv_per_channel"]

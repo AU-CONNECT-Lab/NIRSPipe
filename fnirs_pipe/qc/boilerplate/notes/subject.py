@@ -28,10 +28,10 @@ NOTES = {
         "DPF = {dpf}. This is the recording before motion correction ({motion}) and before "
         "any filtering, the stage the sliding-window SCI/PSP are measured on; SNR and CV "
         "come from the raw intensity before OD conversion.",
-    # TODO(review): the template appends this after steps.raw_signal, which still says before motion correction; show it instead of that paragraph
     "steps.raw_signal_fallback":
-        "<strong>desc-sci was not readable for this run, so these are post-correction."
-        "</strong>",
+        "Per-channel HbO/HbR timeseries and PSD. <strong><code>desc-sci</code> was not "
+        "readable for this run, so these are drawn on <code>desc-preproc</code>, after motion "
+        "correction ({motion}) and Beer-Lambert with DPF = {dpf}.</strong>",
     "channel_detail.picker":
         "Select a channel to view its HbO/HbR timeseries and its PSD. This channel&rsquo;s "
         "epoch average is in the epoch section below, on the bandpassed signal before "
@@ -82,10 +82,6 @@ NOTES = {
     "carpet.after_named":
         "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR in one image, "
         "a colour bar and a seam between them.",
-    # TODO(review): unreachable: the stage carpet always names its stage; delete with its template branch
-    "carpet.after_unnamed":
-        "Per-channel z-scored haemoglobin for the last stage on disk, HbO above HbR in one "
-        "image, a colour bar and a seam between them.",
     "carpet.after":
         "One GVTD row per channel set sits above on the same time axis, each carrying the "
         "trace before and after motion correction, so a dark or light column can be read "

@@ -264,7 +264,10 @@ def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float)
                            subject_id, fmin, fmax, " and ".join(outside))
 
 
-def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
+def unfiltered_stage_note(
+    raws: dict[str, mne.io.Raw],
+    isc_band: "tuple[float | None, float | None] | None" = None,
+) -> "str | None":
     """A sentence for the ISC panel when the files record no bandpass, else None.
 
     ISC is a whole-record zero-lag correlation and so has no frequency axis to keep drift
@@ -279,7 +282,10 @@ def unfiltered_stage_note(raws: dict[str, mne.io.Raw]) -> "str | None":
     one that was never filtered. The wording says "record no bandpass" rather than "are
     unfiltered" for that reason. A cosine drift basis counts: it empties the band below its
     cutoff just as the filter does, so a run that used one and no bandpass is not warned about.
+    Nor is one whose ``isc_band`` has a low edge: the correlation is then high-passed itself.
     """
+    if isc_band and isc_band[0] is not None:
+        return None
     unrecorded = []
     for subject_id, raw in sorted(raws.items()):
         lin = lineage_of(raw)

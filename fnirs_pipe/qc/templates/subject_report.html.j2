@@ -118,9 +118,10 @@
 <details id="RawSignal" open>
   <summary>a. Raw Signal</summary>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('steps.raw_signal', stage=channel_detail_stage or 'desc-sci',
+    <p class="step-desc">{% if channel_detail_stage == 'desc-preproc' %}{{ section_note('steps.raw_signal_fallback',
         dpf=config.dpf | join(', '), motion=config.motion_correction) }}
-      {%- if channel_detail_stage == 'desc-preproc' %} {{ section_note('steps.raw_signal_fallback') }}{% endif %}</p>
+      {%- else %}{{ section_note('steps.raw_signal', stage=channel_detail_stage or 'desc-sci',
+        dpf=config.dpf | join(', '), motion=config.motion_correction) }}{% endif %}</p>
 
     {% if channel_pairs %}
     <h3>Per-channel HbO / HbR &amp; PSD</h3>
@@ -223,8 +224,7 @@
     {% if carpet_panels %}
       <h3>Carpet after denoising</h3>
       <p class="step-desc">
-        {%- if carpet_stage_labels %}{{ section_note('carpet.after_named', stage=carpet_stage_labels[0]) }}
-        {%- else %}{{ section_note('carpet.after_unnamed') }}{% endif %}
+        {{- section_note('carpet.after_named', stage=carpet_stage_labels[0]) }}
         {{ section_note('carpet.after') }}
         {%- if mode == 'glm' %} {{ section_note('carpet.glm') }}{% endif %}
         {%- if condition_label %} {{ section_note('carpet.condition') }}{% endif %}</p>
@@ -447,7 +447,7 @@
     written here, where a header has room to say more than a registry default can. -#}
 {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
 {% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
-      title="{{ metric_summary(key) }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
+      title="{{ metric_summary(key, (condition_label|default('')) != '') }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
 
 {% macro mv(key, v, fmt=none) %}{% if v is not none %}{{ format_metric(key, v, fmt) }}{% else %}<span style="color:#aaa">n/a</span>{% endif %}{% endmacro %}
 

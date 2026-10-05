@@ -99,3 +99,12 @@ def test_too_few_trials_names_the_count(tmp_path):
     out = _condition_trial_qc(rows, (20.0, 170.0), "01", [], tmp_path, TALK, min_trials=2)
     assert out["trial_qc_path"] is None
     assert "1 trial inside its window" in out["condition_trial_reason"]
+
+
+def test_a_condition_page_carries_the_runs_trial_window(tmp_path):
+    # the page blanks the run's own section variables, so the caption's {window} has to
+    # come back with the condition's rows or it prints "over , on the intensity recording"
+    rows = [(30.0, "trial-002", {"sci_mean": 0.9}), (55.0, "trial-003", {"sci_mean": 0.8})]
+    out = _condition_trial_qc(rows, (20.0, 170.0), "01", [], tmp_path, TALK, min_trials=2,
+                              window="each event's own duration")
+    assert out["trial_qc_window"] == "each event's own duration"

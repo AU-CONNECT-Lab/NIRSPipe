@@ -974,7 +974,7 @@ def build_epoch_preview_figure(
     epoch_tmax: float = 25.0,
     sep_bands=None,
 ) -> go.Figure | None:
-    """Grand mean per condition: every long channel averaged, with the short ones dotted.
+    """Grand mean per condition: every good long channel averaged, the good short ones dotted.
 
     The short channels are drawn rather than dropped, as the scalp reference for the
     long-channel mean.
@@ -1000,8 +1000,10 @@ def build_epoch_preview_figure(
         from fnirs_pipe.qc.metrics import long_short_channels
         long_names, short_names = long_short_channels(raw_haemo, sep_bands)
 
+        bads = set(raw_haemo.info["bads"])
+
         def _picks(names, chromo):
-            keep = {n for n in names if n.endswith(chromo)}
+            keep = {n for n in names if n.endswith(chromo) and n not in bads}
             return [i for i, n in enumerate(epochs.ch_names) if n in keep]
 
         # every channel in one figure when the montage has no short channels to split off

@@ -443,7 +443,9 @@ def _process_run(
         # long block first with the divider between the two, from the same helper the
         # subject report uses, so the grid and the per-channel table below it read in one
         # order and a short channel never lands in a long channel's verdict
-        fig = channel_quality_heatmap(sci_thresh=sci_threshold, **heatmap_args(ch_rows))
+        fig = channel_quality_heatmap(sci_thresh=cutoffs["sci"], psp_thresh=cutoffs["psp"],
+                                      good_frac_thresh=cutoffs["good_frac"],
+                                      **heatmap_args(ch_rows))
         fname = fig_name("chsummary", suffix="qc")
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"figures/{fname}", "h": h}
