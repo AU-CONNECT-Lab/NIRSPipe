@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Methods state the wavelet design, the boxcar length or FIR delays, and the screening scope actually counted
 - Condition-page GVTD tooltips name the corrected file their windows come from
 - Mean SNR has no colour cutoffs
+- The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials

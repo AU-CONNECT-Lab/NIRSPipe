@@ -23,7 +23,7 @@ from typing import Any
 
 from fnirs_pipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
 from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.utils import pair_of
@@ -474,12 +474,11 @@ METRIC_SUMMARY = {
     "gvtd_filt_p95": "The same at the worst moments, the 95th percentile.",
     "gvtd_vstd_mean": "Unfiltered GVTD with each channel's derivative scaled to unit SD, so loud channels cannot dominate. Its mean square is 1 by construction, so the run mean shows how bursty the trace is rather than how much it moved, and it falls as motion concentrates.",
     "gvtd_vstd_p95": "The same at the 95th percentile, which also falls when motion fills under 5% of the run.",
-    "gvtd_thresh": "Motion cutoff from this recording's own band-passed GVTD histogram; read it against gvtd_filt_p95. Each side of a pair sets its own, so a change here is not motion removed.",
+    "gvtd_thresh": f"Motion cutoff from this recording's own band-passed GVTD histogram: its mode plus {GVTD_N_STD:g} times the spread below the mode; read it against gvtd_filt_p95. Each side of a pair sets its own, so a change here is not motion removed.",
     "gvtd_thresh_applied": "The cutoff the counts below were actually taken against: the uncorrected recording's on both sides of a pair, so the two share one yardstick.",
     "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds gvtd_thresh_applied.",
-    # TODO(review): on uncorrected OD this cutoff usually sits below the trace mean, so a large share of frames counts as motion; open method question, see handoff
-    "gvtd_pct_above_thresh": "Timepoints above gvtd_thresh_applied as a fraction of the recording; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
-    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd: samples above the censoring cutoff, which --gvtd-censor-n-std sets well above gvtd_thresh, plus surviving stretches too short to analyse. Nothing was deleted.",
+    "gvtd_pct_above_thresh": "Timepoints well clear of the run's own quiet level (above gvtd_thresh_applied) as a fraction of the recording, not every frame with some movement in it; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
+    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd: samples above the censoring cutoff, which --gvtd-censor-n-std sets and which by default is the gvtd_thresh rule, plus surviving stretches too short to analyse. Nothing was deleted.",
     "gvtd_censor_retained_s": "Seconds left after censoring, in gvtd_censor_n_epochs continuous stretches; this, not the censored fraction, is what an analysis has to work with.",
     "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse; lower is better.",
     "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
@@ -500,7 +499,7 @@ METRIC_SUMMARY = {
 KEY_METRICS = frozenset({
     "channel_retention_rate",   # enough channels
     "pct_data_retained",        # enough time
-    "gvtd_pct_above_thresh",    # ... and how much of it is motion
+    "gvtd_pct_above_thresh",    # ... and how much of it clearly moved
     "gvtd_filt_p95",            # ... and how bad it got, in units nothing adaptive sets
     "sci_win_mean",             # the optodes were coupled
     "good_frac_mean",           # ... and stayed coupled, which is what rejects a channel
@@ -670,8 +669,8 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, None),
     "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),
     "gvtd_thresh_applied":     ("GVTD threshold applied", ".3e", None, None),
-    "gvtd_num_above_thresh":   ("GVTD motion frames", "d", None, _LOWER),
-    "gvtd_pct_above_thresh":   ("GVTD % motion", "pct", None, _LOWER),
+    "gvtd_num_above_thresh":   ("GVTD frames above threshold", "d", None, _LOWER),
+    "gvtd_pct_above_thresh":   ("GVTD % above threshold", "pct", None, _LOWER),
     "gvtd_censor_pct":         ("GVTD censored %", "pct", None, _LOWER),
     "gvtd_censor_retained_s":  ("GVTD retained (s)", ".0f", None, _HIGHER),
     "spike_count":             ("Spike count", "d", None, _LOWER),

@@ -22,7 +22,7 @@ logger = get_logger("qc.metrics.gvtd")
 
 # Hz, Sherafati 2020; the same for every --mode
 GVTD_MOTION_BAND = (0.01, 0.5)
-GVTD_N_STD = 3.0  # one constant: the figures draw this threshold, the record stores it
+GVTD_N_STD = 10.0  # one constant: the figures draw this threshold, the record stores it
 
 
 def _band_derivative(data: np.ndarray, sfreq: float,
@@ -345,7 +345,8 @@ def gvtd_censor_spans(
     ``[(0.0, 28.0)]`` and one surviving epoch of 72 s, where the threshold alone would have
     left three epochs.
 
-    ``n_std`` defaults to 10, not the 3.0 the reports score with.
+    ``n_std`` defaults to the same 10 the reports score with; changing it moves only the
+    censoring.
 
     Returns
     -------

@@ -631,8 +631,8 @@
     {{ qm_li('gvtd_p95', 'GVTD p95' ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_filt_mean', 'GVTD mean %g-%g Hz'|format(*gvtd_band) ~ after_note, '_post', motion_note) }}
     {{ qm_li('gvtd_filt_p95', 'GVTD p95 %g-%g Hz'|format(*gvtd_band) ~ after_note, '_post', motion_note) }}
-    {{ qm_li('gvtd_pct_above_thresh', 'GVTD % motion' ~ after_note, '_post', motion_note) }}
-    {{ qm_li('gvtd_num_above_thresh', 'GVTD motion frames' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_pct_above_thresh', 'GVTD % above threshold' ~ after_note, '_post', motion_note) }}
+    {{ qm_li('gvtd_num_above_thresh', 'GVTD frames above threshold' ~ after_note, '_post', motion_note) }}
     {% if not condition_label %}
     {{ qm_li('gvtd_thresh', 'GVTD threshold', '_post', motion_note) }}
     {% endif %}

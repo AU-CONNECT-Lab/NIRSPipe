@@ -198,7 +198,7 @@ def carpet_fig():
 
     raw = synth_raw("01", "tapping", duration=600.0)
     rng = np.random.default_rng(0)
-    scale = 1 + np.where(raw.times < 300, 1.0, 20.0) * 1e-3 * rng.standard_normal(
+    scale = 1 + np.where(raw.times < 300, 1.0, 100.0) * 1e-3 * rng.standard_normal(
         raw.get_data().shape)
     raw = mne.io.RawArray(raw.get_data() * scale, raw.info, verbose="error")
     blocks = gvtd_channel_blocks(raw)
