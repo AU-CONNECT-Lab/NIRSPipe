@@ -64,6 +64,9 @@ class HyperPostConfig:
     roi_map_name: str = "custom"
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
+    # the stage and the rejection scope the recordings were loaded with, for the sidecars
+    desc: str | None = None
+    bads_scope: str | None = None
 
     # resolved in __post_init__, never passed in
     chroma: tuple = field(init=False)
@@ -291,6 +294,11 @@ def run_hyper_post(
             **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
                if config.wtc_window_s else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
+            # what the re-paired null and the Methods read back rather than take again
+            channel_cross=bool(wtc_channel_cross),
+            roi_min_channels=int(wtc_roi_min_channels),
+            **({"desc": config.desc} if config.desc else {}),
+            **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
             **wtc_grid_params(aligned_raws), **align_info, **_whiten_params(),
         )
 

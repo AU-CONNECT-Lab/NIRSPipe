@@ -181,14 +181,15 @@ def _pair_null_section():
                             placeholder="every eligible one")),
             switches(dbc.Checklist(
                 id="hy-pair-flags",
-                options=[{"label": "Every channel pair, not homologous only",
-                          "value": "wtc_pair_cross"}],
-                value=["wtc_pair_cross"], inline=True, switch=True,
+                options=[{"label": "Homologous pairings only, even over a crossed table",
+                          "value": "wtc_pair_homologous"}],
+                value=[], inline=True, switch=True,
             )),
         ),
         subtitle="Pairs one member with people from the other groups who did the same task. "
-                 "Run it after fnirs-hyper: the band, the mask and the window come off the "
-                 "tables fnirs-hyper wrote, not off this form. The number of draws is the number of "
+                 "Run it after fnirs-hyper: the band, the mask, the window, the stage, the "
+                 "rejected channels, the ROI minimum and the crossing come off the tables "
+                 "fnirs-hyper wrote, not off this form. The number of draws is the number of "
                  "other groups, which is what limits how finely it can rank.",
     ))
 

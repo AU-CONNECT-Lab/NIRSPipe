@@ -6,7 +6,8 @@ per-dyad pass; re-pairing needs the rest of the cohort, so it reads the pairs ta
 finished derivatives tree and runs after them.
 
 Its parameters are read back off the real table's sidecar instead of being taken from the
-command line, so the null and the table it is subtracted from cannot disagree.
+command line, so the null and the table it is subtracted from cannot disagree. The few the
+command line still takes are checked against that sidecar.
 """
 
 from __future__ import annotations
@@ -150,6 +151,30 @@ def real_table_params(real_tsv: Path) -> dict:
             f"{sidecar} does not record {', '.join(missing)}, so the null cannot be built to "
             "match it. Rerun `fnirs-hyper` for this group on current code.")
     return params
+
+
+def _follow_real(flag: str, given, recorded, fallback):
+    """The value the real table recorded for ``flag``; a given one that differs is refused.
+
+    ::
+
+      _follow_real("--desc", None, "errts", "preproc")       -> "errts"
+      _follow_real("--desc", "preproc", "errts", "preproc")  -> StageError
+
+    A table written before it recorded the value takes the given one, or ``fallback``.
+    """
+    if recorded is None:
+        if given is None:
+            logger.warning("the real table does not record %s; using %r. Rerun fnirs-hyper "
+                           "for this group to have it recorded", flag, fallback)
+            return fallback
+        return given
+    if given is not None and given != recorded:
+        raise StageError(
+            f"{flag} {given!r} disagrees with the real table, which was computed with "
+            f"{recorded!r}. A null built another way ranks a different statistic; drop "
+            f"{flag} to follow the table.")
+    return recorded
 
 
 def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
@@ -312,15 +337,15 @@ def run_pair_null(
     *,
     pool: str = "position",
     n_max: "int | None" = None,
-    desc: str = "preproc",
-    bads_scope: str = "run",
+    desc: "str | None" = None,
+    bads_scope: "str | None" = None,
     scope_tasks: "list[str] | None" = None,
     chroma: "tuple[str, ...]" = ("hbo", "hbr"),
-    cross: bool = False,
+    cross: "bool | None" = None,
     limit_scales: bool = True,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
-    roi_min_channels: int = 2,
+    roi_min_channels: "int | None" = None,
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
@@ -329,14 +354,18 @@ def run_pair_null(
 
     Writes ``..._cond-all_null-pair_stat-wtc_relmat.tsv`` with the columns the
     phase-scrambled table has, plus the per-condition and homologous-ROI tables where the
-    real side has them. Returns the whole-run path.
+    real side has them, and the crossed ROI table when both sides are crossed. Returns the
+    whole-run path.
 
     The re-paired ISC rides along on the same draws.
 
     Unlike the phase-scrambled null this runs after the real table rather than around it,
-    and takes its band, its mask, its frequency range and its window off that sidecar. Draw
-    and write are one step for the same reason: there is nothing to write between them, the
-    table being ranked against is already on disk.
+    and takes its band, its mask, its frequency range and its window off that sidecar. Its
+    stage, its rejection scope and its ROI minimum come off it too unless given, and a given
+    one that differs is refused; its crossing follows the table unless given, since a
+    homologous null over a crossed table is a legitimate cheaper one. Draw and write are one
+    step for the same reason: there is nothing to write between them, the table being ranked
+    against is already on disk.
     """
     from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
     from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
@@ -348,6 +377,7 @@ def run_pair_null(
     from fnirs_pipe.utils.lineage import paths_from
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
+    cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
 
     def _path(entities: dict) -> Path:
         return group_output_path(output_dir, group_id, {"task": task, **entities},
@@ -363,6 +393,19 @@ def run_pair_null(
     analysis_window = tuple(window_s) if window_s else None
     # absent means the real table was never whitened
     whiten_s = float(real_params.get("wtc_whiten_s") or 0.0)
+
+    desc = _follow_real("--desc", desc, real_params.get("desc"), "preproc")
+    bads_scope = _follow_real("--bads-scope", bads_scope, real_params.get("bads_scope"), "run")
+    if roi_map:
+        roi_min_channels = _follow_real("--wtc-roi-min-channels", roi_min_channels,
+                                        real_params.get("roi_min_channels"), 2)
+    # read off the rows rather than the sidecar, so a table that predates the record says too
+    real_crossed = "label2" in pd.read_csv(real_wtc, sep="\t", nrows=0).columns
+    if cross is None:
+        cross = real_crossed
+    elif cross and not real_crossed:
+        logger.warning("crossed null over an uncrossed real table: the off-diagonal draws "
+                       "have no real value to be ranked against")
 
     isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
         _path({"statistic": "isc"}).with_suffix(".json"),
@@ -417,8 +460,13 @@ def run_pair_null(
     real_by_cond = _real_table(real_by_cond_path)
     real_roi_by_cond = _real_table(
         _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
+    real_cross_by_cond = (_real_table(_path({**cross_entities, "condition": "all",
+                                             "statistic": "wtc"}))
+                          if roi_map and cross else None)
+    # an uncrossed run's ROI diagonal is the homologous mean, not what a crossed null groups
+    roi_crossed = real_cross_by_cond is not None and "label2" in real_cross_by_cond.columns
 
-    cond_frames, roi_cond_frames = [], []
+    cond_frames, roi_cond_frames, cross_cond_frames = [], [], []
     draw_frames: list = []
     isc_draw_frames: list = []
     isc_frames: list = []
@@ -494,7 +542,14 @@ def run_pair_null(
                 roi_map, real=None,
                 real_by_cond=_for_chroma(real_roi_by_cond, ch_type),
                 min_channels=roi_min_channels)
-            for part, bucket in ((roi_cond, roi_cond_frames),):
+            cross_cond = None
+            if roi_crossed:
+                _, cross_cond = null.summarise_roi(
+                    roi_map, real=None,
+                    real_by_cond=_for_chroma(real_cross_by_cond, ch_type),
+                    min_channels=roi_min_channels, crossed=True)
+            for part, bucket in ((roi_cond, roi_cond_frames),
+                                 (cross_cond, cross_cond_frames)):
                 if part is not None:
                     part = part.copy()
                     part.insert(0, "chromophore", ch_type)
@@ -508,6 +563,8 @@ def run_pair_null(
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=len(partners), cross=cross,
+        desc=desc, bads_scope=bads_scope,
+        **({"roi_min_channels": int(roi_min_channels)} if roi_map else {}),
         chroma=list(chroma), null_kind="repaired", pair_pool=pool,
         pair_partners=sorted(partners), pair_candidates=len(candidates),
         pair_refused={reason: sorted(set(subs)) for reason, subs in sorted(refused.items())},
@@ -539,6 +596,9 @@ def run_pair_null(
              {"conditions": [w[0] for w in windows]}),
             (roi_cond_frames, {**roi_entities, **cond_null},
              "hyper_wtc_bycondition_roihom_pairnull",
+             {"conditions": [w[0] for w in windows]}),
+            (cross_cond_frames, {**cross_entities, **cond_null},
+             "hyper_wtc_bycondition_roichan_pairnull",
              {"conditions": [w[0] for w in windows]})):
         if not bucket:
             continue

@@ -30,12 +30,11 @@ from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 
 _DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_isc", "hyper_coherence")
 
-# A dyad's coherence is written once per grouping (channels, ROI means, per condition) and
-# once more for the null; they are one method sentence, and the band is the same for all.
+# A dyad's coherence is written once per grouping (channels, ROI means, per condition); they
+# are one method sentence. The nulls stay out: they record their own crossing, not the table's.
 _WTC_STEPS = ("hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_roihom",
               "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
-              "hyper_wtc_bycondition_roihom", "hyper_wtc_phasenull",
-              "hyper_wtc_roihom_phasenull", "hyper_wtc_bycondition_roihom_phasenull")
+              "hyper_wtc_bycondition_roihom")
 
 
 def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None = None) -> str | None:
@@ -61,7 +60,7 @@ def boilerplate_key(step: str | None, params: dict[str, Any], mode: str | None =
         # first-level GLM, and nothing in the sidecar separates the two
         return "glm" if mode == "glm" else "confound_regression"
     if step in _WTC_STEPS:
-        return "hyper_wtc"
+        return "hyper_wtc_crossed" if params.get("channel_cross") else "hyper_wtc"
     if step in ("hyper_isc_roichan", "hyper_isc_pairs"):
         # the same correlation, grouped into regions or listed pair by pair; one sentence
         # covers all three
@@ -192,7 +191,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
             "noise_model": _noise_phrase(params.get("noise_model")),
             "drift": _drift_phrase(params) or "no drift term",
         }
-    if key == "hyper_wtc":
+    if key in ("hyper_wtc", "hyper_wtc_crossed"):
         # the axis the transform covered and the band it was collapsed over are different
         # numbers and the sentence names both; a run that gave no band averaged the whole axis
         wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
@@ -249,9 +248,13 @@ STEP_SUMMARY = {
     "group_sqm_raw_channels": "The same pooling, kept per channel.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_phasenull": "The same average against a phase-scrambled partner: the null.",
-    "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, every pairing inside it.",
-    "hyper_wtc_roihom": "The same, over an ROI's homologous channel pairs alone: the ROI number to report.",
+    "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, or per pair of ROIs on a crossed run, every pairing between them: the ROI number to report.",
+    "hyper_wtc_roihom": "Channel-level coherences averaged over each ROI's homologous channel pairs alone, the subset a homologous-only design reports.",
     "hyper_wtc_roihom_phasenull": "The null for that ROI mean, its iterations grouped into regions before they were summarised.",
+    "hyper_wtc_bycondition_roihom_phasenull": "The phase-scrambled null for each condition's homologous ROI means, each iteration grouped into regions before the iterations were summarised.",
+    "hyper_wtc_roichan_phasenull": "The phase-scrambled null for the ROI x ROI coherence matrix, each iteration grouped into region pairs before the iterations were summarised.",
+    "hyper_wtc_bycondition_roichan_phasenull": "The phase-scrambled null for each condition's ROI x ROI coherence matrix, each iteration grouped into region pairs before the iterations were summarised.",
+    "hyper_wtc_bycondition_roichan_pairnull": "The re-paired null for each condition's ROI x ROI coherence matrix, each stand-in grouped into region pairs before the stand-ins were summarised.",
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",
     "hyper_isc_pairs": "The same correlations as one row per channel pair.",

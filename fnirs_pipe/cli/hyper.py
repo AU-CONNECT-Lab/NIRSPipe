@@ -431,6 +431,8 @@ def cmd_run(
             sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
+            desc=desc,
+            bads_scope=bads_scope,
         )
         try:
             # the resolved bands under the keys the SQM record stamps them with, so the two
@@ -543,14 +545,14 @@ def cmd_pair_null(
     pairs_csv: Path,
     group_id: str | None,
     task_label: list[str] | None,
-    desc: str,
+    desc: str | None,
     roi_mapping: str | None,
-    bads_scope: str,
+    bads_scope: str | None,
     wtc_chroma: str,
     wtc_pair_pool: str,
     wtc_pair_max: int | None,
-    wtc_pair_cross: bool,
-    wtc_roi_min_channels: int,
+    wtc_pair_cross: bool | None,
+    wtc_roi_min_channels: int | None,
     wtc_limit_scales: bool,
     verbose: bool,
 ) -> None:
@@ -720,9 +722,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     run.add_argument("--wtc-channel-cross", action=argparse.BooleanOptionalAction, default=True,
                      help="Cross every long channel with every other across the two brains "
                           "(default on), so n channels give n^2 coherence values rather than "
-                          "n. The extra pairs reach the channel TSV with a label2 column; the "
-                          "time-frequency heatmaps stay on the homologous pairs. "
-                          "--no-wtc-channel-cross pairs each channel with its counterpart only.")
+                          "n. The extra pairs reach the channel TSV with a label2 column, and "
+                          "the time-frequency maps get a second selector for the partner's "
+                          "channel. --no-wtc-channel-cross pairs each channel with its "
+                          "counterpart only.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length "
                           "and make the window the unit instead of the condition. Needs "
@@ -892,7 +895,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "pairings averaged. When the null was drawn crossed, every "
                                  "ordered region pair is a level too (region A of the first "
                                  "member against region B of the second, every pairing "
-                                 "between them averaged), as one family per condition. "
+                                 "between them averaged), as one family per condition. A "
+                                 "region needs as many channels per member as the real "
+                                 "tables' --wtc-roi-min-channels, read off their sidecars. "
                                  "Omitted, only the whole-brain levels are written.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
@@ -922,16 +927,24 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "null keeps the shared task response. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
                     "the percentile can rank. Run it after `fnirs-hyper`, whose tables "
-                    "it reads its band, its mask, its frequency range and its window off.")
-    pair.add_argument("--desc", default="preproc",
-                      help="desc entity of the per-subject stage the null reads. Must match "
-                           "the one the real tables were computed from.")
+                    "it reads its band, its mask, its frequency range and its window off, "
+                    "and by default its stage, its rejection scope, its crossing and its "
+                    "ROI minimum.")
+    pair.add_argument("--desc", default=None,
+                      help="desc entity of the per-subject stage the null reads. Unset, it "
+                           "is the one the real tables recorded; a different one is refused. "
+                           "Pass it only for real tables written before they recorded it "
+                           "(those fall back to 'preproc').")
     pair.add_argument("--roi-mapping", type=Path, default=None,
                       help="JSON file mapping ROI labels to channel names, to also write the "
-                           "null of the homologous ROI means. Optional.")
-    pair.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
-                      help="Which rejected channels are excluded, as in fnirs-hyper. A stand-in "
-                           "with no quality record is refused rather than kept whole.")
+                           "null of the homologous ROI means and, when the null and the real "
+                           "tables are both crossed, of the ROI x ROI matrix. Optional.")
+    pair.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default=None,
+                      help="Which rejected channels are excluded, as in fnirs-hyper. Unset, "
+                           "it is the scope the real tables recorded; a different one is "
+                           "refused. Real tables that predate the record fall back to 'run'. "
+                           "A stand-in with no quality record is refused rather than kept "
+                           "whole.")
     pair.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                       help="Chromophore(s) to draw the null on (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
@@ -946,14 +959,17 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Stop after N draws. The pool is finite, so this is a ceiling "
                            "rather than a count: without it every eligible stand-in is "
                            "used, which is what gives the percentile its best resolution.")
-    pair.add_argument("--wtc-pair-cross", action=argparse.BooleanOptionalAction, default=True,
-                      help="Draw the null over every channel pair (default on) rather than "
-                           "homologous ones only. Independent of the real run's "
-                           "--wtc-channel-cross; a crossed null costs one full run per channel "
-                           "pair. --no-wtc-pair-cross draws the homologous pairings only.")
-    pair.add_argument("--wtc-roi-min-channels", type=int, default=2, metavar="N",
+    pair.add_argument("--wtc-pair-cross", action=argparse.BooleanOptionalAction, default=None,
+                      help="Draw the null over every channel pair rather than homologous "
+                           "ones only. Unset, it follows the real table: crossed when that "
+                           "table is. A crossed null costs one full run per channel pair, so "
+                           "--no-wtc-pair-cross over a crossed table draws the homologous "
+                           "pairings only and ranks that table's diagonal.")
+    pair.add_argument("--wtc-roi-min-channels", type=int, default=None, metavar="N",
                       help="Drop an ROI cell where either member contributes fewer than N "
-                           "channels (default 2). Match the value the real tables used.")
+                           "channels. Unset, it is the value the real tables recorded; a "
+                           "different one is refused. Real tables that predate the record "
+                           "fall back to 2.")
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in fnirs-hyper.")

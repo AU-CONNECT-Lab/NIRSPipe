@@ -176,17 +176,43 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
     return pd.concat(frames, ignore_index=True)
 
 
+def _params_of(tsv: str) -> dict:
+    """One table's sidecar parameters, empty when it has no sidecar."""
+    side = Path(tsv).with_suffix(".json")
+    return json.loads(side.read_text()).get("parameters", {}) if side.exists() else {}
+
+
 def _band_of(paths: "set[str]") -> set:
     """The band each table's sidecar records, as a set so a mismatch is visible."""
     bands = set()
     for tsv in paths:
-        side = Path(tsv).with_suffix(".json")
-        if not side.exists():
-            continue
-        params = json.loads(side.read_text()).get("parameters", {})
+        params = _params_of(tsv)
         if params.get("band_fmin") is not None:
             bands.add((params["band_fmin"], params["band_fmax"]))
     return bands
+
+
+def _roi_min_of(paths: "set[str]") -> int:
+    """The ROI minimum the real tables were grouped under, so a region here is one there too.
+
+    ::
+
+      three tables recording 2  ->  2
+      one recording 2, one 3    ->  ValueError
+
+    Tables written before they recorded it count as the old fixed value, 2.
+    """
+    found = {int(v) for tsv in paths
+             if (v := _params_of(tsv).get("roi_min_channels")) is not None}
+    if len(found) > 1:
+        raise ValueError(
+            f"the real tables were grouped into regions under different minimums: "
+            f"{sorted(found)}. A region thinned out in one dyad and kept in another is not "
+            f"one level. Rerun the dyads on one --wtc-roi-min-channels before reading this.")
+    if not found:
+        logger.warning("the real tables do not record their ROI minimum; using 2")
+        return 2
+    return found.pop()
 
 
 def _exact_p(beaten: int, n: int) -> float:
@@ -413,8 +439,11 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
             f"averaged over one band cannot be subtracted from a value averaged over "
             f"another. Finish whichever rerun is in progress before reading this.")
 
+    min_channels = _roi_min_of(set(real.source)) if roi_map else 2
+
     occ_parts, coh_parts = [], []
-    for gran, level, pairings, d, r in _variants(draws, real, roi_map):
+    for gran, level, pairings, d, r in _variants(draws, real, roi_map,
+                                                 min_channels=min_channels):
         if gran != "channel":
             logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
                         null, level, pairings, d.occasion.nunique(), d.label.nunique())
@@ -435,6 +464,7 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
 
     params = dict(null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
+                  **({"roi_min_channels": min_channels} if roi_map else {}),
                   granularities=sorted(pd.concat(coh_parts).granularity.unique()),
                   statistic="mean over channel pairings, then over occasions",
                   cell_fdr_family="one condition and level, over occasions and pairings",

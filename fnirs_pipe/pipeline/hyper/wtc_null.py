@@ -1,9 +1,9 @@
 """The phase-scrambled null, computed and written on its own.
 
 Called from ``fnirs-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
-stage, band and window by construction. Crossing is the one thing it does not inherit: it is
-the null's own decision, ``--wtc-phase-null-cross``, off by default, and n channels crossed
-give n^2 pairings and so n times the surrogate cost of the n homologous ones.
+stage, band, window and ROI minimum by construction. Crossing follows the real table unless
+``--wtc-phase-null-cross`` says otherwise, and n channels crossed give n^2 pairings and so n
+times the surrogate cost of the n homologous ones.
 
 The chromophores are inherited, unlike crossing, so no half of the real table is left with
 nothing to be tested against.
@@ -131,6 +131,7 @@ def write_wtc_null(
     analysis_window: "tuple[float, float] | None" = None,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
+    roi_min_channels: int = 2,
     whiten_s: float = 0.0,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
@@ -144,8 +145,10 @@ def write_wtc_null(
     means beside it. It is free: the iterations are grouped into
     regions before they are summarised, so no surrogate is transformed a second time, and
     grouping inside the iteration is what makes it the null of the ROI mean rather than a
-    bracket around it. The crossed ``-roichan`` matrix has no null and cannot get one from
-    here; see :func:`~fnirs_pipe.pipeline.hyper.roi.roi_mean_of_homologous`.
+    bracket around it. A null drawn crossed also writes the ``agg-roi`` twin, the null for
+    the crossed ROI x ROI matrix, when the real ROI table is crossed too; a homologous null
+    never drew the off-diagonal pairings that matrix averages. Both group their cells under
+    ``roi_min_channels``, the rule the real ROI tables were blanked by.
 
     ``windows`` adds a second table, the ``cond-all`` twin, with a ``condition``
     column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
@@ -165,21 +168,42 @@ def write_wtc_null(
     chroma = tuple(nulls)
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
+    cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
 
     def _path(entities: dict, extension: str = ".tsv") -> Path:
         return group_output_path(output_dir, group_id, {"task": task, **entities},
                                  "relmat", extension)
 
-    # the four real tables this null is ranked against, each the same name minus `null-`
+    # the real tables this null is ranked against, each the same name minus `null-`
     real = _real_table(_path({"statistic": "wtc"}))
     real_by_cond = _real_table(_path({"condition": "all", "statistic": "wtc"}))
     real_roi = _real_table(_path({**roi_entities, "statistic": "wtc"}))
     real_roi_by_cond = _real_table(
         _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
+    real_cross = real_cross_by_cond = None
+    if roi_map and cross:
+        real_cross = _real_table(_path({**cross_entities, "statistic": "wtc"}))
+        real_cross_by_cond = _real_table(
+            _path({**cross_entities, "condition": "all", "statistic": "wtc"}))
+    # an uncrossed run's ROI diagonal is the homologous mean, not what a crossed null groups
+    roi_crossed = any(t is not None and "label2" in t.columns
+                      for t in (real_cross, real_cross_by_cond))
+    if roi_map and cross and not roi_crossed:
+        logger.info("crossed null over an uncrossed ROI table: no crossed ROI null written")
 
     frames, cond_frames = [], []
     roi_frames, roi_cond_frames = [], []
+    cross_frames, cross_cond_frames = [], []
     draw_frames: list = []
+
+    def _put(bucket: list, part: "pd.DataFrame | None", ch_type: str) -> None:
+        # tagged after the averaging, which groups on the columns it knows and drops the
+        # rest, and on a copy, since the frame is not ours to mutate
+        if part is not None:
+            part = part.copy()
+            part.insert(0, "chromophore", ch_type)
+            bucket.append(part)
+
     for ch_type, null in nulls.items():
         # every iteration kept, not only their summary: a test that averages the draws over
         # channels before ranking cannot be rebuilt from null_mean and null_p95
@@ -187,26 +211,22 @@ def write_wtc_null(
             draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
         part, cond_part = null.summarise(real=_for_chroma(real, ch_type),
                                          real_by_cond=_for_chroma(real_by_cond, ch_type))
-        # tagged after the averaging, which groups on the columns it knows and drops the
-        # rest, and on a copy, since the frame is not ours to mutate
-        part = part.copy()
-        part.insert(0, "chromophore", ch_type)
-        frames.append(part)
-        if cond_part is not None:
-            cond_part = cond_part.copy()
-            cond_part.insert(0, "chromophore", ch_type)
-            cond_frames.append(cond_part)
+        _put(frames, part, ch_type)
+        _put(cond_frames, cond_part, ch_type)
         if roi_map:
             roi_part, roi_cond_part = null.summarise_roi(
                 roi_map, real=_for_chroma(real_roi, ch_type),
-                real_by_cond=_for_chroma(real_roi_by_cond, ch_type))
-            roi_part = roi_part.copy()
-            roi_part.insert(0, "chromophore", ch_type)
-            roi_frames.append(roi_part)
-            if roi_cond_part is not None:
-                roi_cond_part = roi_cond_part.copy()
-                roi_cond_part.insert(0, "chromophore", ch_type)
-                roi_cond_frames.append(roi_cond_part)
+                real_by_cond=_for_chroma(real_roi_by_cond, ch_type),
+                min_channels=roi_min_channels)
+            _put(roi_frames, roi_part, ch_type)
+            _put(roi_cond_frames, roi_cond_part, ch_type)
+        if roi_crossed:
+            cross_part, cross_cond_part = null.summarise_roi(
+                roi_map, real=_for_chroma(real_cross, ch_type),
+                real_by_cond=_for_chroma(real_cross_by_cond, ch_type),
+                min_channels=roi_min_channels, crossed=True)
+            _put(cross_frames, cross_part, ch_type)
+            _put(cross_cond_frames, cross_cond_part, ch_type)
 
     sources = paths_from(aligned_raws.values())
     params = dict(
@@ -215,6 +235,7 @@ def write_wtc_null(
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
         **({"wtc_whiten_s": float(whiten_s)} if whiten_s else {}),
+        **({"roi_min_channels": int(roi_min_channels)} if roi_map else {}),
         chroma=list(chroma), **wtc_grid_params(aligned_raws),
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything
@@ -245,6 +266,13 @@ def write_wtc_null(
              {**roi_entities, "condition": "all", "nulldist": "phase",
               "statistic": "wtc"},
              "hyper_wtc_bycondition_roihom_phasenull",
+             {"conditions": [w[0] for w in (windows or [])]}),
+            (cross_frames, {**cross_entities, "nulldist": "phase", "statistic": "wtc"},
+             "hyper_wtc_roichan_phasenull", {}),
+            (cross_cond_frames,
+             {**cross_entities, "condition": "all", "nulldist": "phase",
+              "statistic": "wtc"},
+             "hyper_wtc_bycondition_roichan_phasenull",
              {"conditions": [w[0] for w in (windows or [])]})):
         if not group:
             continue

@@ -79,6 +79,10 @@ citations = ["TODO_HyperAlignment"]
 plain = "Inter-brain coupling was quantified as wavelet transform coherence between homologous channels of the two recordings over {wtc_fmin}–{wtc_fmax} Hz, and each channel's coherence map was averaged over {band_fmin}–{band_fmax} Hz to give one value per channel {citations}."
 citations = ["TODO_Wavelet"]
 
+[hyper_wtc_crossed]
+plain = "Inter-brain coupling was quantified as wavelet transform coherence between every channel of one recording and every channel of the other over {wtc_fmin}–{wtc_fmax} Hz, and each channel pair's coherence map was averaged over {band_fmin}–{band_fmax} Hz to give one value per channel pair {citations}."
+citations = ["TODO_Wavelet"]
+
 [hyper_coherence]
 plain = "Inter-brain coupling was screened with the magnitude-squared coherence of each homologous channel pair, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
 citations = ["TODO_Coherence"]

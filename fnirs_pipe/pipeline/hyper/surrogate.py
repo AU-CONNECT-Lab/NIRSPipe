@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.pipeline.hyper._helpers import _long_signals, long_axis_over
-from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_homologous
+from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
 from fnirs_pipe.pipeline.hyper.wtc import (
     WTCResult,
     _ChannelWavelet,
@@ -107,6 +107,7 @@ class NullDraws:
                       real: "pd.DataFrame | None" = None,
                       real_by_cond: "pd.DataFrame | None" = None,
                       min_channels: int = 2,
+                      crossed: bool = False,
                       ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
         """The same two tables at ROI level, for :func:`roi_mean_of_homologous`.
 
@@ -116,19 +117,20 @@ class NullDraws:
         The draws being averaged are the ones already taken for the channel table; no
         surrogate is transformed twice.
 
-        Only the homologous ROI value can be ranked this way. A crossed ``(roi, roi)`` cell
-        also holds the within-region cross pairings, which a homologous null never draws.
+        By default this is the homologous ROI value. A crossed ``(roi, roi)`` cell also holds
+        the within-region cross pairings, which a homologous null never draws. ``crossed``
+        groups every pairing instead, :func:`roi_mean_of_channels`'s ROI x ROI matrix, and
+        is only meaningful on draws that were themselves crossed.
         """
-        keys = ["sub1", "sub2", "label"]
-        whole = [roi_mean_of_homologous(f, roi_map, min_channels=min_channels)
-                 for f in self.draws]
+        keys = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
+        group = roi_mean_of_channels if crossed else roi_mean_of_homologous
+        whole = [group(f, roi_map, min_channels=min_channels) for f in self.draws]
         cond = None
         if self.cond_draws:
             cond = []
             for frame in self.cond_draws:
                 for condition, part in frame.groupby("condition", sort=False):
-                    grouped = roi_mean_of_homologous(part, roi_map,
-                                                     min_channels=min_channels)
+                    grouped = group(part, roi_map, min_channels=min_channels)
                     grouped.insert(0, "condition", condition)
                     cond.append(grouped)
         return (

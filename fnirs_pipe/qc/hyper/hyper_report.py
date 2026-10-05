@@ -763,6 +763,8 @@ def build_hyper_post_report(
     analysis_window: "tuple[float, float] | None" = None,
     no_report: bool = False,
     result: "HyperPostResult | None" = None,
+    desc: str | None = None,
+    bads_scope: str | None = None,
 ) -> "Path | None":
     """Build hyperscanning post-QC report.
 
@@ -780,10 +782,10 @@ def build_hyper_post_report(
     group analysis reads the same values the figures were drawn from.
 
     ``wtc_channel_cross`` crosses every long channel with every other, n channels giving n^2
-    rows in ``stat-wtc_relmat.tsv`` instead of n. The extra pairs reach the TSV and the crossed
-    matrix, while the map selector keeps the homologous ones: a full frequency × time map for
-    each crossed pair per chromophore would be most of what the figures cost. Crossing is also what produces the
-    ROI × ROI matrix, since the ROI numbers are grouped from the channel ones.
+    rows in ``stat-wtc_relmat.tsv`` instead of n. The extra pairs reach the TSV, the crossed
+    matrix and the map selectors, whose second selector picks the partner's channel. Crossing
+    is also what produces the ROI × ROI matrix, since the ROI numbers are grouped from the
+    channel ones.
 
     ``wtc_by_condition`` repeats the whole coherence analysis inside each task annotation's
     own window, on top of the whole-run pass, which stays as it was. The band means of every
@@ -1171,7 +1173,7 @@ def build_hyper_post_report(
                 isc_max_lag_s=isc_max_lag_s, isc_phase_null=isc_phase_null,
                 isc_band=isc_band,
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
-                analysis_window=analysis_window,
+                analysis_window=analysis_window, desc=desc, bads_scope=bads_scope,
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
@@ -1183,7 +1185,8 @@ def build_hyper_post_report(
             wtc_fmax=wtc_fmax, band_fmin=wtc_band_fmin, band_fmax=wtc_band_fmax,
             seed=wtc_seed, cross=wtc_phase_null_cross, mask_coi=wtc_mask_coi,
             windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
-            roi_map_name=roi_map_name, whiten_s=wtc_whiten_s)
+            roi_map_name=roi_map_name, roi_min_channels=wtc_roi_min_channels,
+            whiten_s=wtc_whiten_s)
     # Everything above is the analysis and has already written its tables; everything below
     # draws them.
     if no_report:
@@ -1367,8 +1370,7 @@ def build_hyper_post_report(
         for kind, key, axis, values in (
             ("Channel pairs", "chan", chan_axis, isc_values),
             ("ROI pairs", "roichan", roi_labels, isc_roi_values),
-            # the homologous ROI mean, which is the reported number and the only ROI
-            # value the null can rank; the table above is every pairing in the region
+            # the homologous subset of the table above, for a homologous-only reading
             ("ROI homologous pairs", "roihom", roi_labels, isc_roi_values),
         ):
             per_scope = []

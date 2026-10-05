@@ -66,17 +66,13 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _text("--pairs-csv", opts.get("pairs_csv"))
         args += _text("--group-id", opts.get("group_id"))
         args += _split("--task-label", opts.get("hyper_task"))
-        args += _text("--desc", opts.get("desc"))
         args += _text("--roi-mapping", opts.get("roi_mapping"))
         args += _text("--wtc-chroma", opts.get("wtc_chroma"))
-        args += _num("--wtc-roi-min-channels", opts.get("wtc_roi_min_channels"))
         args += _text("--wtc-pair-pool", opts.get("wtc_pair_pool"))
         args += _num("--wtc-pair-max", opts.get("wtc_pair_max"))
-        # crossing is the default, so an unticked switch has to say so
-        args.append("--wtc-pair-cross" if "wtc_pair_cross" in (opts.get("pair_flags") or [])
-                    else "--no-wtc-pair-cross")
-        if "bads_subject" in (opts.get("hyper_flags") or []):
-            args += ["--bads-scope", "subject"]
+        # unticked, the crossing follows the real table
+        if "wtc_pair_homologous" in (opts.get("pair_flags") or []):
+            args.append("--no-wtc-pair-cross")
         return args
 
     # reads the draws `pair-null` wrote, so the band, the mask and the window are whatever
