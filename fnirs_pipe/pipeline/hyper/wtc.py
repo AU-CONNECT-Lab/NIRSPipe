@@ -695,7 +695,7 @@ def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
     return float(np.arctan2(Y, X)), float(np.sqrt(-2.0 * np.log(resultant))), int(a.size)
 
 
-def _in_coi(freqs: np.ndarray, coi: np.ndarray) -> np.ndarray:
+def _outside_coi(freqs: np.ndarray, coi: np.ndarray) -> np.ndarray:
     """(frequency x time) mask of the cells outside the cone of influence, clear of the edges.
 
     ``coi`` is a period in seconds per column, so 1/coi is the lowest frequency still reliable
@@ -716,7 +716,7 @@ def _band_rows(sig, band: np.ndarray) -> "np.ndarray | None":
 
 
 def _phase_cells(
-    wtc: np.ndarray, in_coi: np.ndarray, sig: "np.ndarray | None", mask_coi: bool,
+    wtc: np.ndarray, outside_coi: np.ndarray, sig: "np.ndarray | None", mask_coi: bool,
 ) -> np.ndarray:
     """Which band cells a phase angle may be averaged over: outside the cone, above the level.
 
@@ -726,7 +726,7 @@ def _phase_cells(
     the band rows; without one only the cone is required and the caller reads ``phase_n`` to
     see how weak the mask was.
     """
-    keep = in_coi if mask_coi else np.ones(wtc.shape, dtype=bool)
+    keep = outside_coi if mask_coi else np.ones(wtc.shape, dtype=bool)
     if sig is not None and np.asarray(sig).shape[:1] == wtc.shape[:1]:
         keep = keep & (wtc >= np.asarray(sig, dtype=float)[:, None])
     return keep
@@ -815,11 +815,11 @@ def wtc_band_mean(
                 continue
 
             wtc = wtc_raw = np.asarray(data["wtc"], dtype=float)[band]
-            in_coi = _in_coi(band_freqs, data["coi"])
+            outside_coi = _outside_coi(band_freqs, data["coi"])
             # measured whether or not it is applied, so the share stays a reportable number
-            n_valid_frac = float(in_coi.mean()) if in_coi.size else 0.0
+            n_valid_frac = float(outside_coi.mean()) if outside_coi.size else 0.0
             if mask_coi:
-                wtc = np.where(in_coi, wtc, np.nan)
+                wtc = np.where(outside_coi, wtc, np.nan)
 
             valid = np.isfinite(wtc)
             coherence = float(wtc[valid].mean()) if valid.any() else float("nan")
@@ -828,7 +828,7 @@ def wtc_band_mean(
             if phase is None:
                 angle, spread, n_phase = float("nan"), float("nan"), 0
             else:
-                keep = _phase_cells(wtc_raw, in_coi, _band_rows(data.get("sig"), band),
+                keep = _phase_cells(wtc_raw, outside_coi, _band_rows(data.get("sig"), band),
                                     mask_coi)
                 angle, spread, n_phase = _circular_stats(
                     np.asarray(phase, dtype=float)[band][keep])
@@ -897,8 +897,8 @@ def wtc_phase_by_scale(
                 head["label2"] = label2
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]
-            in_coi = _in_coi(band_freqs, data["coi"])
-            keep = _phase_cells(wtc, in_coi, _band_rows(data.get("sig"), band), mask_coi)
+            outside_coi = _outside_coi(band_freqs, data["coi"])
+            keep = _phase_cells(wtc, outside_coi, _band_rows(data.get("sig"), band), mask_coi)
             phase = np.asarray(data["phase"], dtype=float)[band]
 
             for i, f in enumerate(band_freqs):
