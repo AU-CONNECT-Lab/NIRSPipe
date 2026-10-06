@@ -665,3 +665,32 @@ def test_both_nulls_read_after_the_regions_phase_first(tmp_path):
         _sidecar(tmp_path, f"group-G01_task-main_{name}", step, sources=["/in.snirf"], **extra)
     assert [k for k, _ in steps_from_sidecars(tmp_path)] == [
         "hyper_wtc", "hyper_roi", "hyper_phasenull", "hyper_pairnull"]
+
+
+# ---- the phase per frequency, and the cohort test ----
+
+@pytest.mark.parametrize("step", ["hyper_wtc_phasescale", "hyper_wtc_bycondition_phasescale"])
+def test_the_phase_per_frequency_has_one_sentence(step):
+    assert boilerplate_key(step, {}) == "hyper_phasescale"
+    assert template_slots("hyper_phasescale", {"mask_coi": True})["coi"] \
+        == " outside the cone of influence"
+    assert template_slots("hyper_phasescale", {"mask_coi": False})["coi"] == ""
+
+
+def test_the_phase_reads_after_the_coherence_and_before_the_correlation(tmp_path):
+    for name, step in (("stat-isc_relmat", "hyper_isc_pairs"),
+                       ("stat-wtcphase_relmat", "hyper_wtc_phasescale"),
+                       ("stat-wtc_relmat", "hyper_wtc")):
+        _sidecar(tmp_path, f"group-G01_task-main_{name}", step, sources=["/in.snirf"])
+    assert [k for k, _ in steps_from_sidecars(tmp_path)] == [
+        "hyper_wtc", "hyper_phasescale", "hyper_isc"]
+
+
+@pytest.mark.parametrize("null, said", [("repaired", "re-paired"),
+                                        ("phase", "phase-randomised")])
+@pytest.mark.parametrize("table", ["by_cell", "by_occasion", "cohort"])
+def test_every_cohort_table_maps_to_one_test_sentence(null, said, table):
+    step = f"hyper_{null}_null_{table}"
+    assert boilerplate_key(step, {}) == "hyper_groupnull"
+    slots = template_slots("hyper_groupnull", {"null_kind": null, "n_resample": 20000})
+    assert slots == {"null": said, "n_resample": "20000"}

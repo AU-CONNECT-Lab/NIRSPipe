@@ -649,3 +649,18 @@ def test_the_crossed_roi_cells_are_corrected_as_their_own_family(tmp_path):
     assert len(crossed) == 12 and set(crossed.family) == {12}     # 3 occasions x 4 pairs
     assert set(out[out.level == "channel"].family) == {12}
     assert set(crossed.label2) == {"front", "back"}
+
+
+def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
+    """No report carries a cohort test, so its paragraph lands beside the tables."""
+    from fnirs_pipe.cli.hyper import cmd_group_null
+
+    _write_tree(tmp_path)
+    cmd_group_null(tmp_path, task="main", wtc_chroma="hbo", null="repaired",
+                   roi_mapping=None, n_resample=500, seed=3, verbose=False)
+
+    written = list((tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md"))
+    assert len(written) == 1
+    text = written[0].read_text(encoding="utf-8")
+    assert "Cohort-level coupling was tested against the re-paired null" in text
+    assert "among 500 cohort means" in text

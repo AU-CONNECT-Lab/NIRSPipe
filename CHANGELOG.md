@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - Methods describe ALFF/fALFF and functional connectivity when a run computed them
 - Methods describe the re-paired null: who stood in, how many, how each condition was cut, and how stand-ins were summarised
 - Methods describe the phase-scrambled nulls of the coherence and of the correlation
+- Methods describe the relative phase per frequency
+- `fnirs-hyper-groupnull` writes its cohort test's Methods paragraph to `logs/<cohort table>_methods.md`
 
 ### Changed
 - Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths

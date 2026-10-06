@@ -43,6 +43,10 @@ _ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_ro
               "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
 
+# The cohort tables fnirs-hyper-groupnull writes from either null's draws: one test.
+_GROUPNULL_STEPS = tuple(f"hyper_{null}_null_{table}" for null in ("repaired", "phase")
+                         for table in ("by_cell", "by_occasion", "cohort"))
+
 # Every table the phase-scrambled null writes; its level file, like the re-paired one's, is
 # left out.
 _PHASENULL_STEPS = ("hyper_wtc_phasenull", "hyper_wtc_bycondition_phasenull",
@@ -95,6 +99,11 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
         # one correlation over channels, regions or a seed, and its z transform
         return "fc"
+    if step in ("hyper_wtc_phasescale", "hyper_wtc_bycondition_phasescale"):
+        # the phase per frequency, whole run and per condition
+        return "hyper_phasescale"
+    if step in _GROUPNULL_STEPS:
+        return "hyper_groupnull"
     if step in _PHASENULL_STEPS:
         return "hyper_phasenull"
     if step in _PAIRNULL_STEPS:
@@ -419,6 +428,12 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return _isc_slots(params)
     if key == "hyper_phasenull":
         return _phasenull_slots(params)
+    if key == "hyper_phasescale":
+        return {"coi": " outside the cone of influence" if params.get("mask_coi") else ""}
+    if key == "hyper_groupnull":
+        return {"null": "re-paired" if params.get("null_kind") == "repaired"
+                else "phase-randomised",
+                "n_resample": str(int(params.get("n_resample") or 0))}
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":
@@ -900,11 +915,11 @@ def metric_rows(
 
 # ---- what a run actually did ----
 
-# Within one depth of the graph, the order sentences read in: a dyad's coherence, its
-# correlation, how both were grouped into regions, then its nulls; a run's regression before
-# ALFF and FC.
-_RANK = {"hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3, "hyper_pairnull": 4,
-         "alff": 3, "fc": 4}
+# Within one depth of the graph, the order sentences read in: a dyad's coherence and its
+# phase, its correlation, how both were grouped into regions, then its nulls; a run's
+# regression before ALFF and FC.
+_RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3,
+         "hyper_pairnull": 4, "alff": 3, "fc": 4}
 
 
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:

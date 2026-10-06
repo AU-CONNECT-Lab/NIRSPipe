@@ -25,7 +25,8 @@ from fnirs_pipe import __version__
 from fnirs_pipe.cli._shared import separation_bands_from_args
 from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
 from fnirs_pipe.io.derivatives import (
-    LINK_PREPROCESSED, group_report_dir, write_bidsignore, write_dataset_description,
+    LINK_PREPROCESSED, entity_of, group_report_dir, read_json, write_bidsignore,
+    write_dataset_description,
 )
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper import (
@@ -512,9 +513,30 @@ def cmd_group_null(
 
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
-    for path in write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
-                                 roi_map=roi_map, n_resample=n_resample, seed=seed):
+    written = write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
+                               roi_map=roi_map, n_resample=n_resample, seed=seed)
+    for path in written:
         print(f"group-null -> {path}")
+    cohort = next((p for p in written if entity_of(p.name, "desc") == "cohort"), None)
+    if cohort is not None:
+        print(f"group-null methods -> {_write_group_null_methods(cohort)}")
+
+
+def _write_group_null_methods(cohort: Path) -> Path:
+    """The Methods paragraph for a cohort test, in logs/ beside its tables, as the BIDS apps
+    leave theirs: no report carries it, the tables being cross-dyad."""
+    from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
+    from fnirs_pipe.qc.boilerplate.vocabulary import boilerplate_key, template_slots
+
+    side = read_json(cohort.with_suffix(".json"))
+    params = side.get("parameters") or {}
+    key = boilerplate_key(side.get("step"), params)
+    text = generate_methods_text(versions=collect_software_versions(),
+                                 steps=[(key, template_slots(key, params))])
+    out = cohort.parent / "logs" / f"{cohort.stem}_methods.md"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(text["markdown"] + "\n", encoding="utf-8")
+    return out
 
 
 def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:

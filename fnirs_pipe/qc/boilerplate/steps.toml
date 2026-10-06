@@ -102,6 +102,10 @@ citations = ["TODO_Wavelet"]
 plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
 citations = ["TODO_Wavelet"]
 
+[hyper_phasescale]
+plain = "The relative phase was summarised by its circular mean over the band cells{coi}, restricted to cells above the per-frequency significance level where one had been drawn, for the band and for each frequency within it; at each frequency it was also expressed as a time lag, positive when the first member leads."
+citations = []
+
 [hyper_coherence]
 plain = "Inter-brain coupling was screened with the magnitude-squared coherence (Welch's method) between homologous retained long HbO channels, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
 citations = ["TODO_Coherence"]
@@ -117,6 +121,11 @@ citations = ["TODO_PhaseNull"]
 [hyper_pairnull]
 plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins."
 citations = ["TODO_RepairedNull"]
+
+# Written beside the cohort tables by fnirs-hyper-groupnull, not into any report
+[hyper_groupnull]
+plain = "Cohort-level coupling was tested against the {null} null {citations}: coherence was averaged over channel pairs within each occasion (one group on one task) and then over occasions, and compared with the null in two ways, a one-tailed paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion. P values were corrected by the Benjamini–Hochberg false discovery rate within each condition, level and test."
+citations = ["TODO_GroupNull"]
 
 [hyper_roi]
 plain = "Region-of-interest (ROI) values averaged the channel-pair values between each pair of regions, coherence directly and correlation in Fisher z; the homologous ROI coherence averaged only same-channel pairs.{min_channels}"
