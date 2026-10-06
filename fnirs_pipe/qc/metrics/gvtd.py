@@ -406,27 +406,38 @@ def gvtd_censor_spans(
     return spans, metrics
 
 
+def window_grid(n_times: int, sfreq: float,
+                window_s: float) -> "tuple[int, np.ndarray, np.ndarray]":
+    """``(samples per window, first sample, last sample)`` of each window on the shared grid.
+
+    The grid the windowed SCI/PSP use, so every series binned on it lands on the same time
+    axis: ``ceil`` samples per window, whole windows only. Deriving it independently drifts,
+    because ``window_s * sfreq`` is rarely an integer and the rounding difference accumulates
+    over the recording::
+
+        n_times 100, sfreq 10, window_s 3  ->  (30, [0, 30, 60], [30, 60, 90])
+    """
+    win_samples = max(1, int(np.ceil(window_s * sfreq)))
+    # leftover tail dropped; capped so no window falls past a derivative, one sample shorter
+    # than the recording, which only bites at a window of one sample
+    n_windows = min(n_times // win_samples, -(-(n_times - 1) // win_samples))
+    starts = np.arange(max(n_windows, 0)) * win_samples
+    return win_samples, starts, np.minimum(starts + win_samples, n_times - 1)
+
+
 def _windowed_gvtd(
     raw_od: mne.io.Raw,
     window_s: float,
     l_freq: float | None,
     h_freq: float | None,
 ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
-    """GVTD trace binned into non-overlapping windows. Returns (mean, p95, center_times).
-
-    The window grid is the one the windowed SCI/PSP use, so all four series land on the same
-    time axis: ``ceil`` samples per window, whole windows only, centres read off the real
-    sample times. Deriving it independently drifts, because ``window_s * sfreq`` is rarely an
-    integer and the rounding difference accumulates over the recording.
-    """
+    """GVTD trace binned into non-overlapping windows on :func:`window_grid`. Returns
+    (mean, p95, center_times), the centres read off the real sample times."""
     sfreq = float(raw_od.info["sfreq"])
     # per-sample GVTD trace, one value shorter than the recording (it is a difference)
     gvtd_ts = gvtd_timetrace(raw_od.get_data(), sfreq, l_freq=l_freq, h_freq=h_freq)
-    n_times = len(raw_od.times)
-    win_samples = max(1, int(np.ceil(window_s * sfreq)))
-    # whole windows only, leftover tail dropped; capped so no window falls past the trace,
-    # which only bites at a window of one sample and would otherwise give an all-NaN row
-    n_windows = min(n_times // win_samples, -(-len(gvtd_ts) // win_samples))
+    win_samples, starts, ends = window_grid(len(raw_od.times), sfreq, window_s)
+    n_windows = len(starts)
     if n_windows == 0 or len(gvtd_ts) == 0:
         return np.array([]), np.array([]), np.array([])
 
@@ -440,8 +451,6 @@ def _windowed_gvtd(
     gvtd_mean = np.nanmean(grid, axis=1)
     gvtd_p95 = np.nanpercentile(grid, 95, axis=1)
 
-    starts = np.arange(n_windows) * win_samples
-    ends = np.minimum(starts + win_samples, n_times - 1)
     window_times = (raw_od.times[starts] + raw_od.times[ends]) / 2.0
     return gvtd_mean, gvtd_p95, window_times
 

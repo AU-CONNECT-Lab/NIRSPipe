@@ -49,7 +49,7 @@ from fnirs_pipe.qc.metrics._helpers import (  # noqa: F401
 from fnirs_pipe.qc.metrics.gvtd import (  # noqa: F401
     GVTD_MOTION_BAND, GVTD_N_STD, gvtd_timetrace, gvtd_threshold,
     gvtd_channel_picks, gvtd_channel_blocks, _motion_metrics, gvtd_above_segments,
-    gvtd_censor_spans, _windowed_gvtd,
+    gvtd_censor_spans, _windowed_gvtd, window_grid,
     compute_windowed_gvtd, compute_windowed_filtered_gvtd,
 )
 from fnirs_pipe.qc.metrics.screening import (  # noqa: F401
@@ -75,7 +75,7 @@ from fnirs_pipe.qc.metrics.windowed import (  # noqa: F401
     compute_windowed_sci, compute_windowed_psp, attach_windowed_series,
 )
 from fnirs_pipe.qc.metrics.imu import (  # noqa: F401
-    IMU_QUANTITIES, IMU_STAT_KEYS, imu_scalars, imu_gvtd_agreement, imu_section,
+    IMU_QUANTITIES, IMU_STAT_KEYS, imu_scalars, imu_windowed, imu_gvtd_agreement, imu_section,
 )
 from fnirs_pipe.qc.metrics.aggregate import (  # noqa: F401
     compute_raw_sqm, compute_haemo_sqm, compute_prep_haemo_sqm, comparable_stage_metrics,

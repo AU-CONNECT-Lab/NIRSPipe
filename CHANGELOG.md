@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - GLM sidecars record the boxcar length or the events table, and an FIR model's delays
 - The screening sidecar records whether the coupled share was counted over task blocks or the whole run
 - WTC sidecars record `wtc_cond_pad_s`, the per-condition route (null when windowed out of the whole run)
-- Quality records keep IMU gyroscope speed and accelerometer jerk (mean, median, p95) per run and condition, and their frame-level agreement with GVTD
+- Quality records keep IMU gyroscope speed and accelerometer jerk (mean, p95) per run, condition and window, and their frame-level agreement with GVTD
 - Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
 
 ### Changed

@@ -18,8 +18,8 @@ def test_imu_columns_get_their_own_chart_and_the_check_only_ones_none():
         "censor_gvtd_censor_pct", "censor_gvtd_censor_n_std",
     ])
     charts = dict(groups)
-    assert charts["Gyroscope speed"] == ["imu_gyro_speed_mean"]
-    assert charts["Accelerometer jerk"] == ["imu_accel_jerk_p95"]
+    assert charts["Motion sensor: gyroscope speed"] == ["imu_gyro_speed_mean"]
+    assert charts["Motion sensor: accelerometer jerk"] == ["imu_accel_jerk_p95"]
     assert "censor_gvtd_censor_pct" in charts["Motion & spike fraction"]
     assert "Other" not in charts
     assert "imu_gyro_speed_gvtd_rho" not in ordered

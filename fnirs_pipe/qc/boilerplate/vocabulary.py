@@ -506,12 +506,10 @@ METRIC_SUMMARY = {
     "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
 
-    # head movement, from the motion sensor rather than the optical data
+    # motion, measured by the sensor rather than inferred from the optical data
     "gyro_speed_mean": "Descriptive: how fast the head turned on average, from the gyroscope (each axis minus its median, then the magnitude), in the unit the recording declares (gyro_speed_unit). Not optical, so it belongs to no channel set.",
-    "gyro_speed_median": "Descriptive: the same at the typical moment, which a few large turns cannot pull up.",
     "gyro_speed_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
     "accel_jerk_mean": "Descriptive: how abruptly the head's acceleration changed on average, from the accelerometer's time derivative, which removes gravity, in the unit the recording declares (accel_jerk_unit). Not optical, so it belongs to no channel set.",
-    "accel_jerk_median": "Descriptive: the same at the typical moment, which a few jolts cannot pull up.",
     "accel_jerk_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
     "gyro_speed_gvtd_rho": f"Spearman correlation, frame by frame, between the band-passed GVTD of the channel set a run is judged on and the gyroscope speed averaged over {AGREEMENT_HALF_WINDOW_S:g} s either side: how closely the optical motion index follows the sensor on this run. Recorded, not shown in the reports.",
     "accel_jerk_gvtd_rho": "The same against the accelerometer jerk.",
@@ -709,12 +707,10 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "motion_corrected_pct":        ("Motion corrected % (exp.)", "pct", None, None),
     "motion_corrected_n_segments": ("Motion corrected segments", "d", None, None),
 
-    # head movement; descriptive, since how much a head moved is not a verdict on the data
+    # motion from the sensor; descriptive, since how much a head moved is not a verdict on the data
     "gyro_speed_mean":         ("Gyroscope speed mean", ".3g", None, None),
-    "gyro_speed_median":       ("Gyroscope speed median", ".3g", None, None),
     "gyro_speed_p95":          ("Gyroscope speed p95", ".3g", None, None),
     "accel_jerk_mean":         ("Accelerometer jerk mean", ".3g", None, None),
-    "accel_jerk_median":       ("Accelerometer jerk median", ".3g", None, None),
     "accel_jerk_p95":          ("Accelerometer jerk p95", ".3g", None, None),
 
     # time

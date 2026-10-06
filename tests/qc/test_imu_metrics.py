@@ -10,7 +10,8 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.qc.metrics import IMU_STAT_KEYS, imu_gvtd_agreement, imu_scalars, imu_section
+from fnirs_pipe.qc.metrics import (IMU_STAT_KEYS, compute_windowed_gvtd, imu_gvtd_agreement,
+                                   imu_scalars, imu_section, imu_windowed, window_grid)
 from fnirs_pipe.qc.metrics.imu import _window_mean
 from tests._synth import synth_raw
 
@@ -23,7 +24,6 @@ def test_the_summary_is_the_trace_statistics_over_the_stretch():
     t = np.arange(10.0)
     s = imu_scalars(_gyro(t, t), 2.0, 5.0)
     assert s["gyro_speed_mean"] == 3.5
-    assert s["gyro_speed_median"] == 3.5
     assert_allclose(s["gyro_speed_p95"], np.percentile([2.0, 3.0, 4.0, 5.0], 95))
 
 
@@ -71,3 +71,32 @@ def test_the_run_section_carries_the_unit_beside_the_numbers():
     assert section["gyro_speed_unit"] == "°/s"
     assert "accel_jerk_unit" not in section
     assert -1.0 <= section["gyro_speed_gvtd_rho"] <= 1.0
+
+
+# ---- per window, on the grid the GVTD series use ----
+
+def test_the_grid_is_whole_windows_of_ceil_samples():
+    win, starts, ends = window_grid(100, 10.0, 3.0)
+    assert win == 30
+    assert starts.tolist() == [0, 30, 60] and ends.tolist() == [30, 60, 90]
+
+
+def test_imu_windows_are_the_gvtd_windows():
+    """A trace equal to its own clock averages to each window's centre, so the IMU's window
+    means land on the GVTD's window times one for one."""
+    raw = synth_raw("01", "tapping", duration=120.0)
+    _, _, gvtd_times = compute_windowed_gvtd(raw, 10.0)
+    t = np.arange(0.0, raw.times[-1], 0.001)
+    series = imu_windowed(_gyro(t, t), raw.times, raw.info["sfreq"], 10.0)
+    assert len(series["gyro_speed_per_window"]) == len(gvtd_times)
+    assert_allclose(series["gyro_speed_per_window"], gvtd_times, atol=0.01)
+    assert "accel_jerk_per_window" not in series
+
+
+def test_a_window_the_sensor_missed_is_nan_not_dropped():
+    raw = synth_raw("01", "tapping", duration=120.0)
+    t = np.arange(0.0, 50.0, 0.01)
+    series = imu_windowed(_gyro(t, np.ones_like(t)), raw.times, raw.info["sfreq"], 10.0)
+    means = np.asarray(series["gyro_speed_per_window"])
+    assert len(means) == len(window_grid(len(raw.times), raw.info["sfreq"], 10.0)[1])
+    assert np.all(means[:4] == 1.0) and np.all(np.isnan(means[6:]))

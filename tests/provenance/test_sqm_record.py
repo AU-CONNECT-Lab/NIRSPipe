@@ -310,8 +310,8 @@ def test_censoring_off_leaves_no_marks_and_no_section(run):
 
 # ---- The IMU, where the recording carried one ----
 # A gyroscope still except for one 10 s turn at 5 deg/s inside the "talk" block, so every
-# number the section holds has a closed form: the run's mean is 5 x 10 / 400, its median and
-# p95 are zero, and the turn belongs to one condition and not the other.
+# number the section holds has a closed form: the run's mean is 5 x 10 / 400, its p95 is
+# zero, and the turn belongs to one condition and not the other.
 
 _BLOCKS = [(20.0, 150.0, "rest"), (200.0, 150.0, "talk")]
 _TURN = (250.0, 260.0)
@@ -346,7 +346,7 @@ def test_the_imu_section_is_the_trace_over_the_run(imu_run):
     imu = imu_run["imu"]
     duration = 400.0
     assert np.isclose(imu["gyro_speed_mean"], 5.0 * (_TURN[1] - _TURN[0]) / duration, rtol=0.01)
-    assert imu["gyro_speed_median"] == 0.0 and imu["gyro_speed_p95"] == 0.0
+    assert imu["gyro_speed_p95"] == 0.0
     assert imu["gyro_speed_unit"] == "°/s"
     assert imu["accel_jerk_mean"] == 0.0
     # a sensor that never moved has no rank order to agree with
@@ -359,6 +359,15 @@ def test_each_condition_holds_its_own_stretch_of_the_imu(imu_run):
     assert by_condition["rest"]["scalars"]["gyro_speed_mean"] == 0.0
     talk = by_condition["talk"]["scalars"]["gyro_speed_mean"]
     assert np.isclose(talk, 5.0 * (_TURN[1] - _TURN[0]) / 150.0, rtol=0.01)
+
+
+def test_the_imu_windows_sit_on_the_gvtd_grid(imu_run):
+    windowed = imu_run["windowed"]
+    means = np.asarray(windowed["gyro_speed_per_window"])
+    centres = np.asarray(windowed["gvtd_window_times_s"])
+    assert len(means) == len(centres) == len(windowed["gyro_speed_p95_per_window"])
+    turned = centres[means > 0]
+    assert turned.size and np.all((turned > _TURN[0] - 10) & (turned < _TURN[1] + 10))
 
 
 def test_the_group_table_flattens_the_numbers_and_drops_the_units(imu_run):

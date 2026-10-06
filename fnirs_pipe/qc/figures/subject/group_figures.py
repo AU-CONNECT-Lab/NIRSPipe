@@ -33,8 +33,8 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
      ["gvtd_num_above_thresh", "spike_count", "spike_num_frames",
       "gvtd_censor_n_spans", "motion_corrected_num", "motion_corrected_n_segments"]),
     ("Retained recording (s)", ["gvtd_censor_retained_s"]),
-    ("Gyroscope speed", ["gyro_speed_mean", "gyro_speed_median", "gyro_speed_p95"]),
-    ("Accelerometer jerk", ["accel_jerk_mean", "accel_jerk_median", "accel_jerk_p95"]),
+    ("Motion sensor: gyroscope speed", ["gyro_speed_mean", "gyro_speed_p95"]),
+    ("Motion sensor: accelerometer jerk", ["accel_jerk_mean", "accel_jerk_p95"]),
     ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
     ("Global correlation", ["gcor_hbo", "gcor_hbr"]),
     ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
@@ -569,7 +569,7 @@ def build_condition_timeline(
 _CONDITION_METRICS = [
     ("sci_win_mean", "SCI"), ("psp_mean", "PSP"), ("cv_mean", "CV"), ("snr_mean", "SNR"),
     ("gvtd_mean", "GVTD"), ("gvtd_pct_above_thresh", "GVTD above threshold"),
-    ("gyro_speed_median", "Gyroscope speed"),
+    ("gyro_speed_mean", "Motion sensor: gyroscope speed"),
 ]
 
 def condition_names(rows: list[dict]) -> list[str]:

@@ -30,7 +30,7 @@ from fnirs_pipe.qc.common.channel_table import (
 )
 from fnirs_pipe.qc.metrics import (
     IMU_STAT_KEYS, SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    imu_section, resolve_cutoffs, screen_channels, screening_scores,
+    imu_section, imu_windowed, resolve_cutoffs, screen_channels, screening_scores,
 )
 from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
                                            separation_orphans)
@@ -377,6 +377,10 @@ def _process_run(
     if imu:
         with guard("IMU summary", errors, label):
             imu_sec = imu_section(imu, raw, sep_bands)
+            # on the grid the GVTD series above were binned on, from the file they came off
+            gvtd_od = raw_motcorr if raw_motcorr is not None else raw_od
+            windowed.update(imu_windowed(imu, gvtd_od.times, float(gvtd_od.info["sfreq"]),
+                                         window_s))
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
