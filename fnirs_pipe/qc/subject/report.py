@@ -82,7 +82,7 @@ from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
-    registration_note, roi_overlap_note, save_channel_csv, separation_blocks, separation_notes,
+    registration_note, roi_overlap_note, separation_blocks, separation_notes,
 )
 from fnirs_pipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, save_png,
@@ -1336,11 +1336,7 @@ def _section_sqm(
         }
 
     rows = channel_rows(record_read, sci_scores, bad_channels)
-    if out_dir is not None and sqm:
-        with _guard("Channel metrics CSV", errors, subject):
-            save_channel_csv(rows, sqm_label or f"sub-{subject}", out_dir, sci_threshold,
-                             psp_threshold=psp_threshold)
-    # the raw rows stay for the CSV and the quality grid, which want the numbers; the
+    # the raw rows stay for the quality grid, which wants the numbers; the
     # template gets them formatted, so the per-channel table prints the same widths and the
     # same SCI verdict as the raw viewer and the GUI
     cells = format_rows(rows, sci_threshold, psp_threshold=psp_threshold)

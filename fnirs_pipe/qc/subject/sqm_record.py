@@ -68,6 +68,7 @@ from fnirs_pipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces
 from fnirs_pipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.qc.common.channel_table import channel_rows, save_channel_csv
 from fnirs_pipe.qc.subject.condition_views import (
     PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
     condition_slices_from_record, span_counts,
@@ -1225,6 +1226,21 @@ def write_run_sqm(
     return out_path
 
 
+def write_channel_table(
+    nirs_dir: Path,
+    label: str,
+    stages: dict[str, Path],
+    sections: dict[str, Any],
+) -> None:
+    """Write ``<label>_desc-channel_qc.tsv`` from the record and the sci sidecar, report or not."""
+    sci = _sidecar(stages["sci"]) if "sci" in stages else {}
+    params = sci.get("parameters") or {}
+    scores = ((sections.get("per_channel") or {}).get("raw") or {}).get("sci_per_channel") or {}
+    rows = channel_rows(sections, scores, sci.get("bad_channels") or [])
+    save_channel_csv(rows, label, nirs_dir, params.get("sci_threshold"),
+                     psp_threshold=params.get("psp_threshold"))
+
+
 def build_sqm_records(
     nirs_dir: Path,
     *,
@@ -1278,4 +1294,9 @@ def build_sqm_records(
                 write_run_sqm(Path(nirs_dir), label, stages, sections, bids_root))
         except Exception:
             logger.error("%s: SQM record could not be written", label, exc_info=True)
+            continue
+        try:
+            write_channel_table(Path(nirs_dir), label, stages, sections)
+        except Exception:
+            logger.error("%s: channel table could not be written", label, exc_info=True)
     return written

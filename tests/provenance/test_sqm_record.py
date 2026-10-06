@@ -36,6 +36,7 @@ import pytest
 from fnirs_pipe.io.auxiliary import aux_table_path
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.metrics import long_short_channels
 from fnirs_pipe.qc.subject.group_writer import _scalars
 from fnirs_pipe.qc.subject.sqm_record import (
@@ -223,6 +224,17 @@ def test_a_tree_alone_rebuilds_the_same_numbers(run):
                 assert on_disk[name][key] == pytest.approx(value, rel=1e-9), f"{name}.{key}"
             else:
                 assert on_disk[name][key] == value, f"{name}.{key}"
+
+
+def test_the_channel_table_is_written_without_a_report(run):
+    """The index and the dyad pages read is_bad from it, so it cannot depend on --no-report."""
+    prep, nirs_dir, _, _ = run
+    table = nirs_dir / ("sub-01_task-tapping" + CHANNEL_METRICS_SUFFIX)
+    table.unlink(missing_ok=True)
+    build_sqm_records(nirs_dir)
+    rows = pd.read_csv(table, sep="\t")
+    assert list(rows["name"]) == list(prep.sci_scores)
+    assert set(rows.loc[rows["is_bad"], "name"]) == set(prep.bad_channels)
 
 
 def test_two_tasks_get_two_records_not_one(tmp_path_factory):
