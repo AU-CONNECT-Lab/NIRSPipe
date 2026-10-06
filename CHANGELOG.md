@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Methods say whether per-condition WTC was read out of the whole-run transform or transformed on its own
 - Methods say bad channels were marked rather than excluded, and that a GLM fits and flags them
 - Methods give an FIR model's boxcar durations and name no input file
+- The filter-edge caveat states the high-pass's reach, one period of the cutoff, instead of an edge-to-middle RMS ratio
 - Condition-page GVTD tooltips name the corrected file their windows come from
 - Mean SNR has no colour cutoffs
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"

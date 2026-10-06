@@ -90,7 +90,7 @@ from fnirs_pipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import (
-    CV_PASS, EDGE_S, IMU_STAT_KEYS, SCI_PASS, edge_to_mid_rms, gvtd_channel_blocks,
+    CV_PASS, IMU_STAT_KEYS, SCI_PASS, gvtd_channel_blocks,
     registration_offset, separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
@@ -1951,15 +1951,10 @@ def build_subject_report(
                                      sqm_label=sqm_label,
                                      sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
                                      psp_threshold=getattr(config, "psp_threshold", None))
-    # No threshold: the ratio is meaningful on every run that filtered, and a cutoff here
-    # would be a number nothing backs. Reported when the run wrote a filtered stage and a
-    # high-pass produced it, since the transient is the low cutoff's doing.
-    if l_freq is not None:
-        filtered = next((r for lab, r in (psd_stages or []) if lab == "desc-filtered"), None)
-        ratio = edge_to_mid_rms(filtered) if filtered is not None else None
-        if ratio is not None:
-            _note(notes, subject, section_note("caveat.filter_edge", edge_s=EDGE_S,
-                                               ratio=ratio, l_freq=l_freq))
+    # a property of the high-pass, so stated on every run it filtered rather than measured
+    if l_freq and any(lab == "desc-filtered" for lab, _ in (psd_stages or [])):
+        _note(notes, subject, section_note("caveat.filter_edge", edge_s=round(1.0 / l_freq),
+                                           l_freq=l_freq))
 
     unregistered = registration_note(registration_offset(raw_intensity))
     if unregistered:

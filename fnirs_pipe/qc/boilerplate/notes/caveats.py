@@ -60,14 +60,11 @@ NOTES = {
         "this condition holds {n} trial inside its window, and one row is not a comparison",
 
     # ---- Filtering ----
-    # TODO(review): attached at any ratio, including near or below 1; attach only above a stated ratio
     "caveat.filter_edge":
-        "The first and last {edge_s:g} s of the filtered recording carry {ratio:.2f}x the "
-        "RMS of everything between them. Well above 1 this is usually the {l_freq:g} Hz "
-        "high-pass settling rather than signal: a low cutoff needs a long filter, every "
-        "figure drawn on a filtered stage includes it, and a detrend does not remove it. A "
-        "GLM run can avoid it by leaving --high-pass off and giving the low band to "
-        "--drift-model cosine with --drift-high-pass, which projects rather than filters.",
+        "The first and last {edge_s:g} s of the filtered recording, one period of the "
+        "{l_freq:g} Hz high-pass, are partly the filter settling at the ends rather than "
+        "signal. A GLM run avoids this with --drift-model cosine and --drift-high-pass in "
+        "place of --high-pass.",
 
     # ---- Dyads ----
     "caveat.never_aligned":

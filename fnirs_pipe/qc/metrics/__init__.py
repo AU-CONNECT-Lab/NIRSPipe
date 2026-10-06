@@ -69,7 +69,6 @@ from fnirs_pipe.qc.metrics.motion import (  # noqa: F401
 from fnirs_pipe.qc.metrics.haemo import (  # noqa: F401
     CNR_BASELINE_S, CNR_RESPONSE_S, haemo_quality_metrics, _cnr_metrics, _spectral_metrics,
     _gcor, gcor_metrics, _drift_metrics, _retention_metrics,
-    EDGE_S, edge_to_mid_rms,
 )
 from fnirs_pipe.qc.metrics.windowed import (  # noqa: F401
     compute_windowed_sci, compute_windowed_psp, attach_windowed_series,

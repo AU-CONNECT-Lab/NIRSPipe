@@ -96,3 +96,9 @@ def test_a_note_without_slots_survives_being_handed_values():
     # the template passes what a note needs; a note that stopped needing one must not raise
     plain = section_note("psd_detail.picker")
     assert section_note("psd_detail.picker", unused="x") == plain
+
+
+def test_the_filter_edge_note_states_the_reach_of_the_high_pass():
+    """One period of the cutoff, as the report fills it: no measured ratio to threshold."""
+    note = section_note("caveat.filter_edge", edge_s=round(1.0 / 0.01), l_freq=0.01)
+    assert "first and last 100 s" in note and "0.01 Hz high-pass" in note
