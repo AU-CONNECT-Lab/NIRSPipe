@@ -75,6 +75,11 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in ("hyper_isc", "hyper_isc_pairs"):
         # the same correlation as a matrix and as one row per pair
         return "hyper_isc"
+    if step in ("alff", "alff_roi"):
+        return "alff"
+    if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
+        # one correlation over channels, regions or a seed, and its z transform
+        return "fc"
     if step == "hyper_coherence_windowed":
         # the same measure, taken in windows; one sentence covers both
         return "hyper_coherence"
@@ -174,12 +179,18 @@ def _conditions_phrase(params: dict[str, Any]) -> str:
         whole = delays == list(range(delays[0], delays[-1] + 1))
         span = (f"{delays[0]} to {delays[-1]}" if whole and len(delays) > 1
                 else _series([str(d) for d in delays]))
+        # each delay's column is the event's boxcar shifted, so the duration is part of it
+        if params.get("stim_dur") is not None:
+            return (f"with {_hrf_phrase(hrf)} ({_num(params['stim_dur'])} s boxcars at "
+                    f"delays of {span} scans)")
+        if params.get("event_table"):
+            return (f"with {_hrf_phrase(hrf)} (boxcars of each event's own duration at "
+                    f"delays of {span} scans)")
         return f"with {_hrf_phrase(hrf)} at delays of {span} scans"
     if params.get("stim_dur") is not None:
         return f"as {_num(params['stim_dur'])} s boxcars convolved with {_hrf_phrase(hrf)}"
     if params.get("event_table"):
-        return ("as boxcars of the events table's durations convolved with "
-                f"{_hrf_phrase(hrf)}")
+        return f"as boxcars of each event's own duration convolved with {_hrf_phrase(hrf)}"
     return f"with {_hrf_phrase(hrf)}"
 
 
@@ -276,7 +287,7 @@ def _condition_route(params: dict[str, Any]) -> str:
         return (" Per-condition values came from a separate transform of each condition, cut "
                 "at its own boundaries.")
     return (" Per-condition values came from a separate transform of each condition, cut "
-            f"with {_num(round(float(pad), 1))} s of recording on either side and averaged "
+            f"with up to {_num(round(float(pad), 1))} s of recording on either side and averaged "
             "over the condition's span only.")
 
 
@@ -355,6 +366,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return _wtc_slots(params)
     if key == "hyper_isc":
         return _isc_slots(params)
+    if key == "alff":
+        return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass"))}
     if key == "hyper_roi":
         least = int(params.get("roi_min_channels") or 1)
         return {"min_channels": (" A region pair was left empty where either member "
@@ -832,9 +845,9 @@ def metric_rows(
 
 # ---- what a run actually did ----
 
-# Within one depth of the graph, the order a dyad's sentences read in: the coherence, the
-# correlation, then how both were grouped into regions.
-_RANK = {"hyper_isc": 1, "hyper_roi": 2}
+# Within one depth of the graph, the order sentences read in: a dyad's coherence, its
+# correlation, then how both were grouped into regions; a run's regression before ALFF and FC.
+_RANK = {"hyper_isc": 1, "hyper_roi": 2, "alff": 3, "fc": 4}
 
 
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:

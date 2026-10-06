@@ -18,6 +18,7 @@ from fnirs_pipe.cli.workflows import (
     _build_post_config,
     _make_prep_config,
     _refuse_cosine_without_cutoff,
+    _refuse_glm_without_durations,
     _resolve_post_settings,
 )
 
@@ -232,6 +233,23 @@ def test_glm_without_a_cutoff_stops_and_names_the_mode():
     args, _, sources = _resolved({"mode": "glm", **_BANDS})
     with pytest.raises(SystemExit, match="--mode glm uses a cosine drift model"):
         _refuse_cosine_without_cutoff(args, sources)
+
+
+def test_glm_without_durations_stops_before_any_subject_runs():
+    args, _, _ = _resolved({"mode": "glm", **_BANDS})
+    with pytest.raises(SystemExit, match="--stim-dur .* or --events-path"):
+        _refuse_glm_without_durations(args)
+
+
+@pytest.mark.parametrize("given", [{"stim_dur": 10.0}, {"events_path": "events.tsv"}])
+def test_either_duration_source_lets_a_glm_through(given):
+    args, _, _ = _resolved({"mode": "glm", **_BANDS, **given})
+    _refuse_glm_without_durations(args)
+
+
+def test_a_config_file_stim_dur_counts():
+    args, _, _ = _resolved({"mode": "glm", **_BANDS}, {"stim_dur": 10.0})
+    _refuse_glm_without_durations(args)
 
 
 def test_rest_needs_no_cutoff_from_the_user():

@@ -359,7 +359,7 @@ def test_the_crossed_sentence_fills_the_same_slots():
 
     params = {"wtc_fmin": 0.01, "wtc_fmax": 0.2, "band_fmin": 0.02, "band_fmax": 0.1}
     assert template_slots("hyper_wtc_crossed", params) == template_slots("hyper_wtc", params)
-    assert "every long channel of one member" in _load_steps()["hyper_wtc_crossed"]["plain"]
+    assert "every retained long channel of one member" in _load_steps()["hyper_wtc_crossed"]["plain"]
 
 
 def test_the_coherence_sentence_names_the_band_it_averaged_and_nothing_unasked():
@@ -398,7 +398,8 @@ def test_the_correlation_sentence_states_each_option_that_changed_it():
 
 @pytest.mark.parametrize("pad, said, unsaid", [
     (None, "the same maps over each condition's span", "separate transform"),
-    (47.14, "47.1 s of recording on either side", "the same maps"),
+    # the cut stops at the recording's ends, so the pad is a ceiling
+    (47.14, "up to 47.1 s of recording on either side", "the same maps"),
     (0.0, "cut at its own boundaries", "of recording on either side"),
 ])
 def test_the_condition_sentence_names_the_route_the_tables_record(pad, said, unsaid):
@@ -514,10 +515,16 @@ def test_a_dyad_reads_coherence_then_correlation_then_regions(tmp_path):
     ({"hrf_model": "glover", "stim_dur": 20.0},
      "as 20 s boxcars convolved with the Glover haemodynamic response function"),
     ({"hrf_model": "spm", "event_table": True},
-     "as boxcars of the events table's durations convolved with the SPM canonical "
+     "as boxcars of each event's own duration convolved with the SPM canonical "
      "haemodynamic response function"),
     ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3]},
      "with a finite impulse response (FIR) basis at delays of 0 to 3 scans"),
+    # nilearn's FIR shifts the event's boxcar, so the duration belongs in the sentence
+    ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3], "stim_dur": 10.0},
+     "with a finite impulse response (FIR) basis (10 s boxcars at delays of 0 to 3 scans)"),
+    ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3], "event_table": True},
+     "with a finite impulse response (FIR) basis (boxcars of each event's own duration at "
+     "delays of 0 to 3 scans)"),
 ])
 def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expected):
     assert template_slots("glm", params)["conditions"] == expected
@@ -528,3 +535,49 @@ def test_the_wavelet_sentence_states_the_package_design():
 
     line = step_sentence("motion_correction", {"motion_correction": "wavelet"})
     assert f"({WAVELET})" in line and f"{WAVELET_IQR_FACTOR:g} interquartile ranges" in line
+
+
+def test_bad_channels_are_described_as_marked_and_a_glm_says_it_fitted_them():
+    """mne-nirs fits every fNIRS channel and the estimates carry a `bad` column."""
+    screening = step_sentence("sci_pruning", {"sci_threshold": 0.8, "psp_threshold": 0.1,
+                                              "min_good_frac": 0.75})
+    assert "were marked as bad." in screening and "excluded" not in screening
+    assert "fitted as well and flagged" in _load_steps_plain("glm")
+    for key in ("hyper_wtc", "hyper_wtc_crossed", "hyper_isc", "hyper_coherence"):
+        assert "retained long" in _load_steps_plain(key)
+
+
+def _load_steps_plain(key):
+    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+
+    return _load_steps()[key]["plain"]
+
+
+@pytest.mark.parametrize("step", ["alff", "alff_roi"])
+def test_every_alff_table_maps_to_one_sentence_with_its_band(step):
+    assert boilerplate_key(step, {}) == "alff"
+    slots = template_slots("alff", {"high_pass": 0.01, "low_pass": 0.08})
+    assert (slots["l_freq"], slots["h_freq"]) == ("0.01", "0.08")
+
+
+@pytest.mark.parametrize("step", ["fc", "fc_roi", "fc_seed", "fisher_z"])
+def test_every_connectivity_table_maps_to_one_sentence(step):
+    assert boilerplate_key(step, {}) == "fc"
+
+
+def test_a_rest_run_reads_regression_then_alff_then_connectivity(tmp_path):
+    """Same depth from the recording: the ranks, not the file names, set the order."""
+    _sidecar(tmp_path, "sub-01_task-rest_desc-preproc_nirs", "beer_lambert", dpf=[6.0])
+    pre = str(tmp_path / "sub-01_task-rest_desc-preproc_nirs.snirf")
+    _sidecar(tmp_path, "sub-01_task-rest_desc-filtered_nirs", "bandpass", sources=[pre],
+             high_pass=0.01, low_pass=0.08)
+    filt = str(tmp_path / "sub-01_task-rest_desc-filtered_nirs.snirf")
+    _sidecar(tmp_path, "sub-01_task-rest_desc-errts_nirs", "glm_residuals", sources=[filt],
+             conditions=[], drift_model="cosine", drift_high_pass=0.01, noise_model="ols")
+    _sidecar(tmp_path, "sub-01_task-rest_desc-errtsbroad_nirs", "glm_residuals_broadband",
+             sources=[pre])
+    broad = str(tmp_path / "sub-01_task-rest_desc-errtsbroad_nirs.snirf")
+    _sidecar(tmp_path, "sub-01_task-rest_stat-alff_nirsmap", "alff", sources=[broad],
+             high_pass=0.01, low_pass=0.08)
+    keys = [k for k, _ in steps_from_sidecars(tmp_path)]
+    assert keys[-2:] == ["confound_regression", "alff"]

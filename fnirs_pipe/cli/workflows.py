@@ -160,6 +160,15 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
         "or pick another --drift-model.")
 
 
+def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
+    """Stop before any subject runs when a GLM has no way to set its event durations."""
+    if _v(args.get("mode")) != "glm" or args.get("stim_dur") is not None or args.get("events_path"):
+        return
+    raise SystemExit(
+        "[error] --mode glm needs --stim-dur (one duration for every annotation) or "
+        "--events-path (a table of onsets and durations).")
+
+
 def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     """Stop a run whose input was cut into one file per condition before preprocessing.
 
@@ -239,6 +248,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     filled_settings: list[tuple[str, Any, str]] = []
     if args.get("mode"):
         _refuse_cosine_without_cutoff(args, post_sources)
+        _refuse_glm_without_durations(args)
         filled_settings = [(arg, toml[arg], post_sources[field])
                            for field, arg in _post_setting_args().items()
                            if post_sources[field] in ("config", "mode")]

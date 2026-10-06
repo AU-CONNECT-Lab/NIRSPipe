@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - WTC sidecars record `wtc_cond_pad_s`, the per-condition route (null when windowed out of the whole run)
 - Quality records keep IMU gyroscope speed and accelerometer jerk (mean, p95) per run, condition and window, and their frame-level agreement with GVTD
 - Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
+- Methods describe ALFF/fALFF and functional connectivity when a run computed them
 
 ### Changed
 - Coherence labels and help call the edge-affected region the cone of influence, so kept cells read "outside COI"
@@ -20,6 +21,8 @@ All notable changes to this project will be documented in this file.
 - The grand mean averages the good channels only
 - Methods state the wavelet design, the boxcar length or FIR delays, and the screening scope actually counted
 - Methods say whether per-condition WTC was read out of the whole-run transform or transformed on its own
+- Methods say bad channels were marked rather than excluded, and that a GLM fits and flags them
+- Methods give an FIR model's boxcar durations and name no input file
 - Condition-page GVTD tooltips name the corrected file their windows come from
 - Mean SNR has no colour cutoffs
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
@@ -30,6 +33,8 @@ All notable changes to this project will be documented in this file.
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials
 
 ### Fixed
+- `--mode glm` without `--stim-dur` or `--events-path` failed per subject after preprocessing instead of stopping first
+- The broadband rest residual's sidecar recorded a passband it never went through
 - `fnirs-qc hyper-raw --tstart` drew the usable-time carpet and head maps tstart seconds off the other panels
 - The too-short window warning never showed when `--wtc-band-fmin` was left unset
 - The unfiltered-ISC caveat showed even when `--isc-fmin` high-passed the correlation

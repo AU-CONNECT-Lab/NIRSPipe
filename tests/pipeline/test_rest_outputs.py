@@ -247,3 +247,16 @@ def test_the_sidecar_names_the_members_of_both_chromophores(rest_out, roi_map):
     assert meta["step"] == "alff_roi"
     assert set(meta["parameters"]["roi_channels"]) == {"hbo", "hbr"}
     assert list(meta["parameters"]["roi_channels"]["hbo"]) == list(roi_map)
+
+
+# ---- the broadband residual says it skipped the bandpass ----
+def test_the_broadband_residual_records_no_passband(rest_out):
+    def params(desc):
+        path = derivative_path(rest_out, "nirs", ".json", subject="01", task="rest", desc=desc)
+        return json.loads(path.read_text())["parameters"]
+
+    broad, errts = params("errtsbroad"), params("errts")
+    assert {k: broad[k] for k in ("high_pass", "low_pass", "filter_method", "filter_order")} \
+        == dict.fromkeys(("high_pass", "low_pass", "filter_method", "filter_order"))
+    assert (errts["high_pass"], errts["low_pass"]) == (0.01, 0.1)
+    assert broad["drift_model"] == errts["drift_model"] == "polynomial"

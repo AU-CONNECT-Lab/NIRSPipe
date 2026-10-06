@@ -422,10 +422,14 @@ def run_post(
                 # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
                 # stage with the bandpassed residual, whose file it would otherwise be credited to.
                 # carry the regression's own parameters over; a bare re-stamp overwrites them
+                # and say it skipped the bandpass, which the stage writer would otherwise
+                # fill in from the run's config
                 stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband",
                       source=raw_haemo,
                       **{**carried_params(raw_resid_bb),
-                         "resample_sfreq": config.resample_sfreq})
+                         "resample_sfreq": config.resample_sfreq,
+                         "high_pass": None, "low_pass": None,
+                         "filter_method": None, "filter_order": None})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities)
 

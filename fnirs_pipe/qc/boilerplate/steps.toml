@@ -24,7 +24,7 @@ plain = "Raw intensity signals were converted to optical density (OD) using MNE-
 citations = ["Gramfort2013"]
 
 [sci_marking]
-plain = "Channels were screened in non-overlapping {window_s} s windows: a window counted as coupled when its scalp coupling index (SCI) was at least {threshold} and its peak spectral power (PSP) at least {psp_threshold}, both measured {cardiac_band} {citations}. Channels coupled in fewer than {min_good_frac} of {scope} were marked as bad and excluded from further analysis.{manual}"
+plain = "Channels were screened in non-overlapping {window_s} s windows: a window counted as coupled when its scalp coupling index (SCI) was at least {threshold} and its peak spectral power (PSP) at least {psp_threshold}, both measured {cardiac_band} {citations}. Channels coupled in fewer than {min_good_frac} of {scope} were marked as bad.{manual}"
 citations = ["Pollonini2014"]
 
 [motion_tddr]
@@ -60,8 +60,16 @@ plain = "Nuisance signals were removed by regressing {regressors} out of each ch
 citations = ["Yucel2021"]
 
 [glm]
-plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}."
+plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}. Channels marked as bad were fitted as well and flagged in the results."
 citations = ["Santosa2018"]
+
+[alff]
+plain = "The amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF) were computed for each channel over {l_freq}–{h_freq} Hz."
+citations = []
+
+[fc]
+plain = "Functional connectivity was computed as the Pearson correlation between channels, separately for HbO and HbR."
+citations = []
 
 # A tree written before the regression recorded its conditions; it cannot say which model ran.
 [regression_unrecorded]
@@ -87,19 +95,19 @@ plain = "The recordings of each group were not aligned on an event marker; they 
 citations = []
 
 [hyper_wtc]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
 citations = ["TODO_Wavelet"]
 
 [hyper_wtc_crossed]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every long channel of one member and every long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
 citations = ["TODO_Wavelet"]
 
 [hyper_coherence]
-plain = "Inter-brain coupling was screened with the magnitude-squared coherence (Welch's method) between homologous long HbO channels, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
+plain = "Inter-brain coupling was screened with the magnitude-squared coherence (Welch's method) between homologous retained long HbO channels, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
 citations = ["TODO_Coherence"]
 
 [hyper_isc]
-plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every long channel of one member and every long channel of another, separately for HbO and HbR {citations}.{options}"
+plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every retained long channel of one member and every retained long channel of another, separately for HbO and HbR {citations}.{options}"
 citations = ["TODO_ISC"]
 
 [hyper_roi]
