@@ -24,7 +24,9 @@ from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
 from fnirs_pipe.cli._shared import separation_bands_from_args
 from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
-from fnirs_pipe.io.derivatives import group_report_dir, write_bidsignore, write_dataset_description
+from fnirs_pipe.io.derivatives import (
+    LINK_PREPROCESSED, group_report_dir, write_bidsignore, write_dataset_description,
+)
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper import (
     parse_group_csv, resolve_analysis_window, resolve_group_bands, write_group_bads,
@@ -263,7 +265,8 @@ def cmd_run(
 
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=derivatives_dir)
+                              generated_by="fnirs-hyper", source=derivatives_dir,
+                              link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
     timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
 
@@ -561,7 +564,8 @@ def cmd_pair_null(
 
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=derivatives_dir)
+                              generated_by="fnirs-hyper", source=derivatives_dir,
+                              link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
 
     # the pool comes from every group in the table, the targets from the selection: a null

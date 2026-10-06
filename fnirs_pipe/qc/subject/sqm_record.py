@@ -65,7 +65,7 @@ import numpy as np
 
 from fnirs_pipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
-from fnirs_pipe.io.derivatives import entity_of, read_json
+from fnirs_pipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.qc.subject.condition_views import (
@@ -165,18 +165,17 @@ def _sidecar(path: Path) -> dict[str, Any]:
 def _bids_input(stages: dict[str, Path], bids_root: Path | None = None) -> Path | None:
     """The original recording: the OD file is the only derivative whose source is it.
 
-    ``Sources`` holds the absolute path the run saw, so a tree that has been copied to
-    another machine, or whose input has moved, names a file that is no longer there. The
-    name is still right, so fall back to finding it under ``bids_root``. Without that
-    fallback the three ``raw*`` sections vanish from every rebuilt record, with one
-    warning to say why.
+    ``Sources`` holds a BIDS URI resolved through the tree's ``raw`` link, so trees moved
+    together still find it. A raw dataset moved on its own leaves the name right, so fall
+    back to finding it under ``bids_root``. Without that fallback the three ``raw*``
+    sections vanish from every rebuilt record, with one warning to say why.
     """
     if "od" not in stages:
         return None
     sources = _sidecar(stages["od"]).get("Sources") or []
     if not sources:
         return None
-    src = Path(sources[0])
+    src = resolve_bids_uri(sources[0], stages["od"])
     if src.exists():
         return src
     if bids_root is not None:
@@ -1218,8 +1217,8 @@ def write_run_sqm(
     if bids_input is not None:
         sources.insert(0, bids_input.as_posix())
 
-    record = sqm_record_dict(sections, sources)
     out_path = record_path(nirs_dir, label)
+    record = sqm_record_dict(sections, bids_uris(sources, out_path))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("SQM record -> %s", out_path)

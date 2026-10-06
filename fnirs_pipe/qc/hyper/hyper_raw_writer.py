@@ -8,7 +8,7 @@ from pathlib import Path
 import mne
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
+from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
@@ -322,8 +322,9 @@ def _process_hyper_raw_group(
                 sources=paths_from(aligned_raws.values()),
                 sci_threshold=sci_threshold)
     sqm_path = record_path(sqm_dir, label)
-    sqm_path.write_text(json.dumps(_hyper_sqm_record(sqm, aligned_raws), indent=2,
-                                  default=str), encoding="utf-8")
+    record = _hyper_sqm_record(sqm, aligned_raws)
+    record["Sources"] = bids_uris(record["Sources"], sqm_path)
+    sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
     logger.info("Hyper SQM JSON -> %s", sqm_path)
 
     member_info = [

@@ -14,8 +14,9 @@ import mne
 
 from fnirs_pipe import __version__
 from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import (data_state, dataset_root_of, entity_of, read_json,
-                                       write_dataset_description, write_sidecar_json)
+from fnirs_pipe.io.derivatives import (bids_uris, data_state, dataset_root_of, entity_of,
+                                       read_json, write_dataset_description,
+                                       write_sidecar_json)
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.io.tables import read_table
 from fnirs_pipe.utils.logging import get_logger
@@ -128,7 +129,7 @@ def _retitle_recording_sidecar(out_snirf: Path, raw_seg, source_path: Path,
     side = read_json(out_snirf.with_suffix(".json"))
     side.update(TaskName=entity_of(out_snirf.name, "task"),
                 RecordingDuration=round(float(raw_seg.times[-1]), 3),
-                Sources=[source_path.as_posix()],
+                Sources=bids_uris([source_path], out_snirf),
                 parameters={**(side.get("parameters") or {}),
                             **_crop_parameters(windows, analysis_windows, margin_s)})
     out_snirf.with_suffix(".json").write_text(json.dumps(side, indent=4), encoding="utf-8")

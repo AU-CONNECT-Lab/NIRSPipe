@@ -41,6 +41,9 @@ def cmd_prep_raw(
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
+    from fnirs_pipe.io.derivatives import LINK_RAW, write_dataset_description
+    # the records it writes name the raw recordings, which resolve through this link
+    write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
@@ -182,15 +185,17 @@ def cmd_hyper_raw(
     if not skip_bids_validation:
         from fnirs_pipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from fnirs_pipe.io.derivatives import write_bidsignore, write_dataset_description
+    from fnirs_pipe.io.derivatives import (
+        LINK_PREPROCESSED, LINK_RAW, write_bidsignore, write_dataset_description,
+    )
 
-    # this writes group-*/ too, so the tree it lands in gets the stamp fnirs-hyper gives it
-    # when both name the fnirs-pipe tree they read. Without --derivatives-dir an existing
-    # stamp is left alone, or its SourceDatasets would flip between the two commands
-    if derivatives_dir is not None or not made_by:
+    # the same stamp fnirs-hyper gives the tree, plus the raw recordings this also reads
+    write_dataset_description(output_dir, name="fnirs-hyper output",
+                              generated_by="fnirs-hyper", source=bids_dir, link=LINK_RAW)
+    if derivatives_dir is not None:
         write_dataset_description(output_dir, name="fnirs-hyper output",
-                                  generated_by="fnirs-hyper",
-                                  source=derivatives_dir or bids_dir)
+                                  generated_by="fnirs-hyper", source=derivatives_dir,
+                                  link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
 
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({

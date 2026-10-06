@@ -7,9 +7,9 @@ import time
 from datetime import datetime, timezone
 from uuid import uuid4
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
-from fnirs_pipe.exceptions import MissingDerivativesError
+from fnirs_pipe.exceptions import MissingDerivativesError, StageError
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 
@@ -136,13 +136,15 @@ def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
       - pipeline_version
       - step (e.g. 'od_conversion')
       - parameters (dict of relevant config values)
-      - Sources (BIDS field: list of source paths as strings)
+      - Sources (BIDS field: source paths, written as BIDS URIs; see to_bids_uri)
       - data (channel count, sampling rate, duration; see data_state)
       - timestamp (ISO-8601, auto-added if missing)
     """
     provenance.setdefault(
         "timestamp", datetime.now(timezone.utc).isoformat()
     )
+    if provenance.get("Sources"):
+        provenance["Sources"] = bids_uris(provenance["Sources"], out_path)
     # a .tsv.gz would otherwise get a .tsv.json sidecar, which nothing would find
     name = out_path.name
     if name.endswith(".gz"):
@@ -345,13 +347,112 @@ def dataset_root_of(path: Path) -> "Path | None":
     return None
 
 
-def _source_dataset(source: Path) -> dict:
+# ---- BIDS URIs ----
+
+# DatasetLinks names, as the BIDS apps use them: the raw input, and the subject-level tree a
+# group analysis reads
+LINK_RAW = "raw"
+LINK_PREPROCESSED = "preprocessed"
+
+
+def _tree_root(path: Path) -> "Path | None":
+    """The dataset a file sits in: the folder above its sub-/group- folder, else the nearest
+    folder holding a dataset_description.json.
+
+    ``out/sub-01/ses-1/nirs/x.snirf`` -> ``out``;  ``out/desc-subjects_qc.tsv`` -> ``out``
+    """
+    resolved = Path(path).resolve()
+    for parent in resolved.parents:
+        if parent.name.startswith(("sub-", "group-")):
+            return parent.parent
+    return dataset_root_of(resolved)
+
+
+def _link_target(root: Path, value: str) -> Path:
+    if value.startswith("file:"):
+        from urllib.parse import unquote, urlparse
+        from urllib.request import url2pathname
+        return Path(url2pathname(unquote(urlparse(value).path))).resolve()
+    return (root / value).resolve()
+
+
+def _linked_roots(root: Path) -> dict[str, Path]:
+    """``{"": root, name: linked dataset}``, from root's DatasetLinks."""
+    links = read_json(root / "dataset_description.json").get("DatasetLinks") or {}
+    return {"": root.resolve(), **{name: _link_target(root, value)
+                                   for name, value in links.items()}}
+
+
+def to_bids_uri(path: "str | Path", written: Path) -> str:
+    """``path`` as a BIDS URI, relative to the dataset ``written`` sits in.
+
+    ::
+
+      out/sub-01/nirs/sub-01_desc-od_nirs.snirf         -> bids::sub-01/nirs/sub-01_desc-od_nirs.snirf
+      bids/sub-01/nirs/sub-01_nirs.snirf, raw: ../bids -> bids:raw:sub-01/nirs/sub-01_nirs.snirf
+
+    The nearest dataset wins, so a tree inside its raw dataset still names its own files
+    with ``bids::``. A string that is already a BIDS URI passes through, as the BIDS apps
+    leave them. A path in no linked dataset raises: it has no BIDS URI.
+    """
+    if str(path).startswith("bids:"):
+        return str(path)
+    root = _tree_root(written)
+    if root is None:
+        raise StageError(f"{written} is in no BIDS dataset (no sub-/group- folder and no "
+                         "dataset_description.json above it), so its Sources cannot be BIDS URIs")
+    target = Path(path).resolve()
+    best = None
+    for name, base in _linked_roots(root).items():
+        if target.is_relative_to(base):
+            rel = target.relative_to(base)
+            if best is None or len(rel.parts) < len(best[1].parts):
+                best = (name, rel)
+    if best is None:
+        raise StageError(
+            f"{target} is in no dataset that {root / 'dataset_description.json'} links to, so "
+            f"{Path(written).name} cannot name it as a source. Write the description with "
+            "write_dataset_description(..., source=<that dataset>) first; the commands do.")
+    return f"bids:{best[0]}:{best[1].as_posix()}"
+
+
+def bids_uris(paths: "Iterable[str | Path]", written: Path) -> list[str]:
+    return [to_bids_uri(path, written) for path in paths]
+
+
+def resolve_bids_uri(uri: str, written: Path) -> Path:
+    """The file a Sources entry of a sidecar at ``written`` names.
+
+    ``bids:raw:sub-01/nirs/sub-01_nirs.snirf`` -> ``<the raw link>/sub-01/nirs/sub-01_nirs.snirf``
+    """
+    match = re.fullmatch(r"bids:([^:]*):(.+)", str(uri))
+    if match is None:
+        raise StageError(f"{uri!r} in the sidecar of {Path(written).name} is not a BIDS URI: "
+                         "the tree was written before Sources used them. Rerun the command "
+                         "that wrote it.")
+    root = _tree_root(written)
+    roots = _linked_roots(root) if root is not None else {}
+    if match.group(1) not in roots:
+        raise StageError(f"{uri} names a dataset {match.group(1)!r} that the description of "
+                         f"{root} does not link")
+    return roots[match.group(1)] / match.group(2)
+
+
+def _link_value(source: Path, root: Path) -> str:
+    """Relative where both trees share a drive, so moving them together keeps the link."""
+    try:
+        return Path(os.path.relpath(source.resolve(), root.resolve())).as_posix()
+    except ValueError:
+        return source.resolve().as_uri()
+
+
+def _source_dataset(source: Path, url: str) -> dict:
     """One SourceDatasets entry for the tree this output was computed from.
 
     Reads the source's own description so the entry carries which tool and which version
     wrote it, which is the thing a reader cannot recover from the dyad tables themselves.
     """
-    entry: dict = {"URL": source.resolve().as_uri()}
+    entry: dict = {"URL": url}
     try:
         desc = json.loads((source / "dataset_description.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -367,6 +468,7 @@ def _source_dataset(source: Path) -> dict:
 def write_dataset_description(
     output_dir: Path, *, name: str = "fnirs-pipe output",
     generated_by: str = "fnirs-pipe", source: "Path | None" = None,
+    link: "str | None" = None,
 ) -> None:
     """Write dataset_description.json for the derivatives dataset.
 
@@ -380,7 +482,11 @@ def write_dataset_description(
 
     ``source`` is the tree this one was computed from. It is what lets a reader of a dyad
     result recover which preprocessing produced its inputs, and it has no correct value while
-    a tool writes back into the tree it read.
+    a tool writes back into the tree it read. It goes into ``DatasetLinks`` under ``link``
+    (by default ``raw`` for a raw dataset, ``preprocessed`` for a derivative), which is what
+    the BIDS URIs in every ``Sources`` resolve against. Links and source datasets already in
+    the file are kept, so tools writing into one tree add to it rather than take turns; a
+    link that would point elsewhere raises, since every URI written under it would move.
     """
     desc = {
         "Name": name,
@@ -388,10 +494,31 @@ def write_dataset_description(
         "DatasetType": "derivative",
         "GeneratedBy": [{"Name": generated_by, "Version": __version__}],
     }
-    if source is not None:
-        desc["SourceDatasets"] = [_source_dataset(Path(source))]
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"
+    existing = read_json(path)
+    links = dict(existing.get("DatasetLinks") or {})
+    sources = list(existing.get("SourceDatasets") or [])
+    if source is not None:
+        source = Path(source)
+        if link is None:
+            kind = read_json(source / "dataset_description.json").get("DatasetType")
+            link = LINK_PREPROCESSED if kind == "derivative" else LINK_RAW
+        value = _link_value(source, output_dir)
+        if links.get(link, value) != value:
+            raise StageError(
+                f"{path} links {link!r} to {links[link]}, and this run reads {source}. The "
+                "Sources already written there resolve through that link; write this run "
+                "into a new output directory.")
+        links[link] = value
+        # one entry per source tree, however its URL was spelled when it was written
+        sources = [s for s in sources
+                   if _link_target(output_dir, str(s.get("URL", ""))) != source.resolve()]
+        sources.append(_source_dataset(source, value))
+    if links:
+        desc["DatasetLinks"] = links
+    if sources:
+        desc["SourceDatasets"] = sources
     text = json.dumps(desc, indent=2)
     try:
         if path.read_text() == text:

@@ -20,7 +20,9 @@ from fnirs_pipe.cli import _shared
 from fnirs_pipe.cli.run import mode_defaults
 from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
 from fnirs_pipe.io.naming import report_name, roi_map_name
-from fnirs_pipe.io.derivatives import entity_of, write_bidsignore, write_dataset_description
+from fnirs_pipe.io.derivatives import (
+    LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
+)
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -230,7 +232,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         if missing:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
-    write_dataset_description(output_dir, source=bids_dir)
+    write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
 
     config_toml: dict[str, Any] = {}

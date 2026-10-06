@@ -17,7 +17,7 @@ from fnirs_pipe.pipeline.hyper.alignment import alignment_params
 from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import read_json
+from fnirs_pipe.io.derivatives import bids_uris, read_json
 from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
 from fnirs_pipe.utils.lineage import paths_from
 
@@ -170,7 +170,7 @@ def level_mismatch(path: Path, expected: dict, raws: dict) -> "str | None":
         side = json.loads(sidecar.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return f"{sidecar.name} is unreadable: {exc}"
-    sources = sorted(paths_from(raws.values()))
+    sources = sorted(bids_uris(paths_from(raws.values()), path))
     if sorted(side.get("Sources") or []) != sources:
         return "its Sources differ from the recordings this run read"
     recorded = side.get("parameters") or {}
