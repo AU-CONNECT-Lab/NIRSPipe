@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Quality records keep IMU gyroscope speed and accelerometer jerk (mean, p95) per run, condition and window, and their frame-level agreement with GVTD
 - Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
 - Methods describe ALFF/fALFF and functional connectivity when a run computed them
+- Methods describe the re-paired null: who stood in, how many, how each condition was cut, and how stand-ins were summarised
 
 ### Changed
 - Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths

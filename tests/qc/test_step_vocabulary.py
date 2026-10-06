@@ -337,7 +337,6 @@ def test_every_region_table_shares_the_one_roi_sentence(step):
 @pytest.mark.parametrize("step", [
     "hyper_wtc_phasenull", "hyper_wtc_roihom_phasenull", "hyper_wtc_roichan_phasenull",
     "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_bycondition_roichan_phasenull",
-    "hyper_wtc_bycondition_roichan_pairnull",
 ])
 def test_a_null_keeps_its_own_line_and_no_coherence_sentence(step):
     # a null's sidecar records how the null was drawn, so it cannot pick the sentence
@@ -581,3 +580,54 @@ def test_a_rest_run_reads_regression_then_alff_then_connectivity(tmp_path):
              high_pass=0.01, low_pass=0.08)
     keys = [k for k, _ in steps_from_sidecars(tmp_path)]
     assert keys[-2:] == ["confound_regression", "alff"]
+
+
+# ---- the re-paired null ----
+
+_PAIRNULL = {"n_iter": 22, "pair_candidates": 22, "pair_pool": "position", "cross": False,
+             "pair_cond_pad_s": 141.421}
+
+
+@pytest.mark.parametrize("step", [
+    "hyper_wtc_bycondition_pairnull", "hyper_wtc_bycondition_pairnull_draws",
+    "hyper_wtc_bycondition_roihom_pairnull", "hyper_wtc_bycondition_roichan_pairnull",
+    "hyper_isc_pairnull", "hyper_isc_bycondition_pairnull",
+    "hyper_isc_bycondition_pairnull_draws",
+])
+def test_every_re_paired_table_maps_to_one_null_sentence(step):
+    assert boilerplate_key(step, {"cross": True}) == "hyper_pairnull"
+
+
+def test_the_level_file_does_not_fill_the_sentence():
+    assert boilerplate_key("hyper_wtc_bycondition_pairnull_level", {}) is None
+
+
+def test_the_null_sentence_names_the_pool_the_pairs_the_count_and_the_pad():
+    slots = template_slots("hyper_pairnull", _PAIRNULL)
+    assert slots["pool"] == "the member in the same position of each other group"
+    assert slots["pairs"] == "homologous channel pairs"
+    assert slots["count"] == "All 22 eligible stand-ins were used."
+    assert slots["pad"] == "141.4"
+    # no correlation settings recorded: only the coherence was re-paired
+    assert slots["measures"] == "coherence was"
+
+
+def test_a_capped_any_pool_crossed_null_with_the_correlation_says_so():
+    slots = template_slots("hyper_pairnull", {
+        **_PAIRNULL, "n_iter": 10, "pair_candidates": 44, "pair_pool": "any", "cross": True,
+        "isc_whiten_max_order": 0})
+    assert slots["pool"] == "each member of every other group"
+    assert slots["pairs"] == "every channel pair"
+    assert slots["count"] == "10 of the 44 eligible stand-ins were used."
+    assert slots["measures"] == "coherence and the inter-subject correlation were"
+
+
+def test_a_dyad_reads_its_null_after_its_regions(tmp_path):
+    for name, step, extra in (
+            ("cond-all_null-pair_stat-wtc_relmat", "hyper_wtc_bycondition_pairnull", _PAIRNULL),
+            ("seg-a_agg-roi_stat-wtc_relmat", "hyper_wtc_roichan", {}),
+            ("stat-isc_relmat", "hyper_isc_pairs", {}),
+            ("stat-wtc_relmat", "hyper_wtc", {})):
+        _sidecar(tmp_path, f"group-G01_task-main_{name}", step, sources=["/in.snirf"], **extra)
+    assert [k for k, _ in steps_from_sidecars(tmp_path)] == [
+        "hyper_wtc", "hyper_isc", "hyper_roi", "hyper_pairnull"]

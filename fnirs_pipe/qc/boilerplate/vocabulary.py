@@ -43,6 +43,14 @@ _ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_ro
               "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
 
+# Every table the re-paired null writes, coherence and correlation, summary and draws: one
+# sentence says how its stand-ins were drawn. The level file carries too little to fill it.
+_PAIRNULL_STEPS = ("hyper_wtc_bycondition_pairnull", "hyper_wtc_bycondition_pairnull_draws",
+                   "hyper_wtc_bycondition_roihom_pairnull",
+                   "hyper_wtc_bycondition_roichan_pairnull", "hyper_isc_pairnull",
+                   "hyper_isc_bycondition_pairnull", "hyper_isc_bycondition_pairnull_draws")
+
+
 def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     """Section of steps.toml describing this step, or None when it has no method prose."""
     if not step:
@@ -80,6 +88,8 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
         # one correlation over channels, regions or a seed, and its z transform
         return "fc"
+    if step in _PAIRNULL_STEPS:
+        return "hyper_pairnull"
     if step == "hyper_coherence_windowed":
         # the same measure, taken in windows; one sentence covers both
         return "hyper_coherence"
@@ -312,6 +322,23 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
+    """Who stood in, how many, and over what, as the re-paired null's sidecars record it."""
+    n, pool_size = int(params.get("n_iter") or 0), params.get("pair_candidates")
+    return {
+        "pool": ("each member of every other group" if params.get("pair_pool") == "any"
+                 else "the member in the same position of each other group"),
+        # the correlation's tables carry its own settings; without them only coherence ran
+        "measures": ("coherence and the inter-subject correlation were"
+                     if "isc_whiten_max_order" in params else "coherence was"),
+        "pairs": "every channel pair" if params.get("cross") else "homologous channel pairs",
+        "count": (f"{n} of the {pool_size} eligible stand-ins were used."
+                  if pool_size is not None and n < int(pool_size)
+                  else f"All {n} eligible stand-ins were used."),
+        "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
+    }
+
+
 def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The correlation's optional steps, in the order they ran: band limit, whitening, lag."""
     before = []
@@ -366,6 +393,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return _wtc_slots(params)
     if key == "hyper_isc":
         return _isc_slots(params)
+    if key == "hyper_pairnull":
+        return _pairnull_slots(params)
     if key == "alff":
         return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass"))}
     if key == "hyper_roi":
@@ -846,8 +875,9 @@ def metric_rows(
 # ---- what a run actually did ----
 
 # Within one depth of the graph, the order sentences read in: a dyad's coherence, its
-# correlation, then how both were grouped into regions; a run's regression before ALFF and FC.
-_RANK = {"hyper_isc": 1, "hyper_roi": 2, "alff": 3, "fc": 4}
+# correlation, how both were grouped into regions, then its null; a run's regression before
+# ALFF and FC.
+_RANK = {"hyper_isc": 1, "hyper_roi": 2, "hyper_pairnull": 3, "alff": 3, "fc": 4}
 
 
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
