@@ -43,6 +43,13 @@ _ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_ro
               "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
 
+# Every table the phase-scrambled null writes; its level file, like the re-paired one's, is
+# left out.
+_PHASENULL_STEPS = ("hyper_wtc_phasenull", "hyper_wtc_bycondition_phasenull",
+                    "hyper_wtc_bycondition_phasenull_draws", "hyper_wtc_roihom_phasenull",
+                    "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_roichan_phasenull",
+                    "hyper_wtc_bycondition_roichan_phasenull")
+
 # Every table the re-paired null writes, coherence and correlation, summary and draws: one
 # sentence says how its stand-ins were drawn. The level file carries too little to fill it.
 _PAIRNULL_STEPS = ("hyper_wtc_bycondition_pairnull", "hyper_wtc_bycondition_pairnull_draws",
@@ -88,6 +95,8 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
         # one correlation over channels, regions or a seed, and its z transform
         return "fc"
+    if step in _PHASENULL_STEPS:
+        return "hyper_phasenull"
     if step in _PAIRNULL_STEPS:
         return "hyper_pairnull"
     if step == "hyper_coherence_windowed":
@@ -322,6 +331,16 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
+    """How many surrogates, over which pairs, and the seed that makes them repeatable."""
+    seed = params.get("seed")
+    return {
+        "pairs": "every channel pair" if params.get("cross") else "homologous channel pairs",
+        "n_iter": str(int(params.get("n_iter") or 0)),
+        "seed": f" (random seed {seed})" if seed is not None else "",
+    }
+
+
 def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
     """Who stood in, how many, and over what, as the re-paired null's sidecars record it."""
     n, pool_size = int(params.get("n_iter") or 0), params.get("pair_candidates")
@@ -357,6 +376,11 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
     if params.get("isc_max_lag_s"):
         options += (" The correlation was taken at the lag of largest magnitude within "
                     f"±{_num(params['isc_max_lag_s'])} s, keeping its sign.")
+    if params.get("isc_phase_null_iter"):
+        options += (f" Its null repeated the correlation {int(params['isc_phase_null_iter'])} "
+                    "times against the second member's channels, each phase-randomised "
+                    "independently, and was summarised by the mean and the 95th percentile of "
+                    "the absolute correlation.")
     return {"options": options}
 
 
@@ -393,6 +417,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return _wtc_slots(params)
     if key == "hyper_isc":
         return _isc_slots(params)
+    if key == "hyper_phasenull":
+        return _phasenull_slots(params)
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":
@@ -875,9 +901,10 @@ def metric_rows(
 # ---- what a run actually did ----
 
 # Within one depth of the graph, the order sentences read in: a dyad's coherence, its
-# correlation, how both were grouped into regions, then its null; a run's regression before
+# correlation, how both were grouped into regions, then its nulls; a run's regression before
 # ALFF and FC.
-_RANK = {"hyper_isc": 1, "hyper_roi": 2, "hyper_pairnull": 3, "alff": 3, "fc": 4}
+_RANK = {"hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3, "hyper_pairnull": 4,
+         "alff": 3, "fc": 4}
 
 
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:

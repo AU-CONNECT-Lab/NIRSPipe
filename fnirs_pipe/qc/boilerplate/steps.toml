@@ -110,6 +110,10 @@ citations = ["TODO_Coherence"]
 plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every retained long channel of one member and every retained long channel of another, separately for HbO and HbR {citations}.{options}"
 citations = ["TODO_ISC"]
 
+[hyper_phasenull]
+plain = "A phase-randomised null was drawn {citations}: each channel of the second-listed member was replaced by a surrogate with the same amplitude spectrum and randomised Fourier phases, drawn independently per channel, and coherence was recomputed against the first member's unaltered recording over {pairs}, {n_iter} times{seed}. Each channel pair's null was summarised by the mean and the 95th percentile of its iterations."
+citations = ["TODO_PhaseNull"]
+
 [hyper_pairnull]
 plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins."
 citations = ["TODO_RepairedNull"]

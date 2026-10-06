@@ -339,8 +339,9 @@ def test_every_region_table_shares_the_one_roi_sentence(step):
     "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_bycondition_roichan_phasenull",
 ])
 def test_a_null_keeps_its_own_line_and_no_coherence_sentence(step):
-    # a null's sidecar records how the null was drawn, so it cannot pick the sentence
-    assert boilerplate_key(step, {"cross": True}) is None
+    # a null's sidecar records how the null was drawn, so it gets its own sentence and never
+    # picks the coherence one
+    assert boilerplate_key(step, {"cross": True}) == "hyper_phasenull"
     assert STEP_SUMMARY[step]
 
 
@@ -350,7 +351,10 @@ def test_a_crossed_run_says_so_once_whatever_its_null_did(tmp_path):
     _sidecar(tmp_path, "group-G01_task-main_null-phase_stat-wtc_relmat",
              "hyper_wtc_phasenull", sources=["/in.snirf"], cross=False)
 
-    assert [k for k, _ in steps_from_sidecars(tmp_path)] == ["hyper_wtc_crossed"]
+    steps = dict(steps_from_sidecars(tmp_path))
+    assert list(steps) == ["hyper_wtc_crossed", "hyper_phasenull"]
+    # the null's own crossing reaches its own sentence and nothing else
+    assert steps["hyper_phasenull"]["pairs"] == "homologous channel pairs"
 
 
 def test_the_crossed_sentence_fills_the_same_slots():
@@ -631,3 +635,33 @@ def test_a_dyad_reads_its_null_after_its_regions(tmp_path):
         _sidecar(tmp_path, f"group-G01_task-main_{name}", step, sources=["/in.snirf"], **extra)
     assert [k for k, _ in steps_from_sidecars(tmp_path)] == [
         "hyper_wtc", "hyper_isc", "hyper_roi", "hyper_pairnull"]
+
+
+# ---- the phase-scrambled nulls ----
+
+def test_the_level_file_of_the_phase_null_does_not_fill_the_sentence():
+    assert boilerplate_key("hyper_wtc_phasenull_level", {}) is None
+
+
+def test_the_phase_null_sentence_names_the_pairs_the_count_and_the_seed():
+    slots = template_slots("hyper_phasenull", {"n_iter": 100, "seed": 1, "cross": True})
+    assert slots == {"pairs": "every channel pair", "n_iter": "100",
+                     "seed": " (random seed 1)"}
+    assert template_slots("hyper_phasenull", {"n_iter": 50, "seed": None})["seed"] == ""
+
+
+def test_the_correlation_names_its_own_null_only_when_one_ran():
+    assert "50 times against the second member" in template_slots(
+        "hyper_isc", {"isc_phase_null_iter": 50})["options"]
+    assert template_slots("hyper_isc", {"isc_phase_null_iter": 0})["options"] == ""
+
+
+def test_both_nulls_read_after_the_regions_phase_first(tmp_path):
+    for name, step, extra in (
+            ("cond-all_null-pair_stat-wtc_relmat", "hyper_wtc_bycondition_pairnull", _PAIRNULL),
+            ("null-phase_stat-wtc_relmat", "hyper_wtc_phasenull", {"n_iter": 5}),
+            ("seg-a_agg-roi_stat-wtc_relmat", "hyper_wtc_roichan", {}),
+            ("stat-wtc_relmat", "hyper_wtc", {})):
+        _sidecar(tmp_path, f"group-G01_task-main_{name}", step, sources=["/in.snirf"], **extra)
+    assert [k for k, _ in steps_from_sidecars(tmp_path)] == [
+        "hyper_wtc", "hyper_roi", "hyper_phasenull", "hyper_pairnull"]

@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
 - Methods describe ALFF/fALFF and functional connectivity when a run computed them
 - Methods describe the re-paired null: who stood in, how many, how each condition was cut, and how stand-ins were summarised
+- Methods describe the phase-scrambled nulls of the coherence and of the correlation
 
 ### Changed
 - Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths
