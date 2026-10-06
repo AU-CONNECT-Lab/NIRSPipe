@@ -32,6 +32,7 @@ from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, SQM_DESCS, entities_of,
 )
@@ -202,7 +203,7 @@ def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
     out: list[tuple[str, dict]] = []
     for label, path in sorted(by_run.items()):
         try:
-            out.append((label, json.loads(path.read_text(encoding="utf-8"))))
+            out.append((label, read_record(path)))
         except (OSError, json.JSONDecodeError) as exc:
             logger.warning("skip %s: %s", path.name, exc)
     return out

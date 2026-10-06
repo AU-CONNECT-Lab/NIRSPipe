@@ -145,6 +145,17 @@ def report_name(label: str, *, desc: "str | None" = None,
                            pairing=pairing, **_label_entities(label)).name
 
 
+def record_table_name(label: str, desc: str, suffix: str,
+                      statistic: "str | None" = None) -> str:
+    """One table a quality record keeps beside its JSON.
+
+    ``("sub-01_task-rest", "sqm", "timeseries", statistic="sci")``
+        -> ``"sub-01_task-rest_stat-sci_desc-sqm_timeseries.tsv"``
+    """
+    return derivative_path("", suffix, ".tsv", desc=desc, statistic=statistic,
+                           **_label_entities(label)).name
+
+
 def rating_path(output_dir, report_stem: str):
     """Where the human ratings of one report page are kept.
 

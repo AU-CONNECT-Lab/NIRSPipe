@@ -3,7 +3,6 @@ TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel.""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +34,9 @@ from fnirs_pipe.qc.common.report_shell import (
     page_vars,
     render,
 )
+from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.naming import derivative_path
+from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
@@ -180,7 +181,9 @@ def _collect_sqm(
     descs: set[str] = set()
     for bids_name, (sqm_path, desc) in sorted(by_run.items()):
         try:
-            sqm = json.loads(sqm_path.read_text(encoding="utf-8"))
+            sqm = read_record(sqm_path)
+        except StageError:
+            raise
         except Exception as exc:
             logger.warning("skip %s: %s", sqm_path, exc)
             continue

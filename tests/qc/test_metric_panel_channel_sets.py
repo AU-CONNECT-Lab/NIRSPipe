@@ -11,9 +11,9 @@ is the same either way, which is why the invariant is pinned here as a property 
 assembled panel rather than as an expected value.
 """
 
-import json
 
 from fnirs_pipe.qc.subject.report import _section_sqm
+from fnirs_pipe.qc.subject.record_io import write_record
 
 # a record whose three channel sets disagree on every metric the panel reads, so a row that
 # picked the wrong one cannot coincide with the right one
@@ -38,8 +38,7 @@ RECORD = {
 def _panel(tmp_path, record=None) -> dict:
     nirs = tmp_path / "nirs"
     nirs.mkdir(parents=True, exist_ok=True)
-    (nirs / "sub-01_task-main_desc-sqm_qc.json").write_text(
-        json.dumps(RECORD if record is None else record), encoding="utf-8")
+    write_record(nirs / "sub-01_task-main_desc-sqm_qc.json", RECORD if record is None else record)
     errors: list = []
     out = _section_sqm({}, [], "01", errors, nirs, sqm_label="sub-01_task-main")
     assert not errors, errors

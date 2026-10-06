@@ -53,7 +53,6 @@ Report sections
 """
 
 import base64
-import json
 from contextlib import contextmanager
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.exceptions import StageError
@@ -131,6 +130,7 @@ from fnirs_pipe.qc.figures import (
 from fnirs_pipe.qc.common.report_shell import (
     footer_vars, guard, note, page_vars, render,
 )
+from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
 from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
 from fnirs_pipe.utils.lineage import lineage_of
@@ -1155,7 +1155,7 @@ def _load_record(
     # its own label, so a missing record is not reported twice over: _section_sqm reads the
     # same file again and is the one that must say the metrics table has nothing to show
     with _guard("Reading the SQM record", errors, subject):
-        return json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+        return read_record(_sqm_record_path(out_dir, sqm_label))
     return {}
 
 
@@ -1268,7 +1268,7 @@ def _section_sqm(
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
         record_file = _sqm_record_path(out_dir, sqm_label)
-        record = record_read = json.loads(record_file.read_text(encoding="utf-8"))
+        record = record_read = read_record(record_file)
         per_channel = record.get("per_channel") or {}
         raw_key = "raw_long" if "raw_long" in record else "raw"
         keys = (raw_key, "motion", "preproc")
@@ -2446,7 +2446,7 @@ def _write_condition_reports(
     if out_dir is None or sqm_label is None:
         logger.warning("sub-%s | no quality record location; no per-condition pages", subject)
         return
-    record = json.loads(_sqm_record_path(out_dir, sqm_label).read_text(encoding="utf-8"))
+    record = read_record(_sqm_record_path(out_dir, sqm_label))
     by_condition = record.get("by_condition") or {}
     if not by_condition:
         logger.info("sub-%s | the record carries no by_condition section; no per-condition "

@@ -716,6 +716,70 @@ def is_key_metric(metric: str) -> bool:
     return metric in KEY_METRICS
 
 
+# ---- the tables a quality record keeps beside its JSON ----
+# Column descriptions for their sidecars, one whole sentence each.
+
+_RECORD_STAGES = {
+    "raw": "The recording as it arrived, intensity and optical density, bad channels included.",
+    "motion": "The motion-correction step, measured on the optical density either side of it, bad channels included.",
+    "motion_post": "The motion-corrected optical density, bad channels included.",
+    "preproc": "Haemoglobin after Beer-Lambert and before filtering, bad channels excluded.",
+    "filtered": "Haemoglobin after the bandpass, bad channels excluded.",
+    "resampled": "Haemoglobin after the resample, bad channels excluded.",
+    "errts": "The confound-regression residual, bad channels excluded.",
+}
+_RECORD_SETS = {"": "", "_long": " Long channels only.", "_short": " Short channels only."}
+RECORD_SECTIONS = {f"{stage}{suffix}": text + phrase
+                   for stage, text in _RECORD_STAGES.items()
+                   for suffix, phrase in _RECORD_SETS.items()}
+
+RECORD_CHANNEL_METRICS = {
+    "sci_per_channel": "Scalp coupling index over the whole run: the correlation of the two wavelengths in the cardiac band.",
+    "sci_win_per_channel": f"The same correlation inside {SCI_WINDOW_S:g} s windows, averaged over the windows.",
+    "good_frac_per_channel": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass; a channel is rejected on this.",
+    "ch_dist_per_channel": "Source-detector separation in metres.",
+    "psp_per_channel": f"Strength of the cardiac peak the two wavelengths share, averaged over {PSP_WINDOW_S:g} s windows.",
+    "cp_per_channel": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental.",
+    "cv_per_channel": f"Standard deviation over mean of the raw intensity inside {CV_WINDOW_S:g} s windows, averaged over the windows.",
+    "snr_per_channel": "Mean over standard deviation, the reciprocal of the channel's CV.",
+    "mean_amp_per_channel": "Mean raw intensity reaching the detector.",
+    "spike_pct_per_channel": "Fraction of samples flagged as sudden jumps on the motion-band-filtered derivative. Experimental.",
+    "temporal_derivative_variance": "Variance of the unfiltered sample-to-sample change in optical density.",
+    "motion_corrected_frac_per_channel": "Fraction of samples where the correction changed the signal abruptly, its frame-to-frame change exceeding the channel's own noise. Experimental.",
+    "hbo_hbr_corr_per_channel": "Correlation between HbO and HbR, one value per source-detector pair.",
+    "cnr_per_channel": "How far the evoked response clears its own noise, averaged over the stimulus epochs.",
+}
+
+RECORD_CHANNEL_COLUMNS = {
+    "name": "Channel name as in the recording; a value taken over both chromophores names the source-detector pair alone.",
+    "section": "The file the value was measured on, and over which channel set.",
+    "metric": "What was measured.",
+    "value": "The measured value.",
+}
+
+_GVTD_FAMILIES = {
+    "gvtd_per_window": "Unfiltered GVTD averaged within each window",
+    "gvtd_p95_per_window": "The 95th percentile of unfiltered GVTD within each window",
+    "gvtd_filt_per_window": f"GVTD band-passed to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, averaged within each window",
+    "gvtd_filt_p95_per_window": "The 95th percentile of the band-passed GVTD within each window",
+}
+_GVTD_SETS = {"": ", over the long channels.", "_short": ", over the short channels.",
+              "_all": ", over every channel."}
+_GVTD_FILE = " Measured on the motion-corrected optical density when the run corrected motion."
+RECORD_WINDOW_COLUMNS = {
+    "sci_per_window": "Scalp coupling index in each window, averaged over every channel.",
+    "psp_per_window": "Strength of the shared cardiac peak in each window, averaged over every channel.",
+    "cv_per_window": "Standard deviation over mean of the raw intensity in each window, averaged over every channel.",
+    "snr_per_window": "The reciprocal of cv_per_window.",
+    **{f"{family}{suffix}": text + phrase + _GVTD_FILE
+       for family, text in _GVTD_FAMILIES.items() for suffix, phrase in _GVTD_SETS.items()},
+    "gyro_speed_per_window": "Gyroscope speed averaged within each window.",
+    "gyro_speed_p95_per_window": "The 95th percentile of the gyroscope speed within each window.",
+    "accel_jerk_per_window": "Accelerometer jerk averaged within each window.",
+    "accel_jerk_p95_per_window": "The 95th percentile of the accelerometer jerk within each window.",
+}
+
+
 # ---- how a metric is printed ----
 #
 # One row per metric: the label a panel prints, the number format, and where the colouring

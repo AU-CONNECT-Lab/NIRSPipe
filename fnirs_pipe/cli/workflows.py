@@ -358,7 +358,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     # one SQM record per run, written once both passes have finished so the
                     # post-Beer-Lambert sections can measure the files post actually produced.
                     # The database takes one row per section.
-                    import json as _json
+                    from fnirs_pipe.qc.subject.record_io import read_record
                     from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
                     try:
                         # one nirs/ per session the runs came from
@@ -379,7 +379,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         logger.info("sub-%s | SQM record -> %s", subject, path.name)
                         # the record is on disk either way; only the database rows are at risk here
                         try:
-                            record = _json.loads(path.read_text(encoding="utf-8"))
+                            record = read_record(path)
                             ents = entities_of(path.stem)
                             for section in SECTIONS:
                                 if record.get(section):

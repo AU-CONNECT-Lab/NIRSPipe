@@ -43,6 +43,7 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
 from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+from fnirs_pipe.qc.subject.record_io import read_record, write_record
 from fnirs_pipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
 )
@@ -94,7 +95,8 @@ _CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
 def _store_matrices(windowed: dict, series: dict) -> None:
     """The channel-by-window matrices into the record, under the pipeline's own key names."""
     for key in ("sci_matrix", "psp_matrix", "cv_matrix",
-                "sci_times", "psp_times", "cv_times"):
+                "sci_times", "psp_times", "cv_times",
+                "sci_channels", "psp_channels", "cv_channels"):
         if series.get(key) is not None:
             windowed[key] = np.asarray(series[key]).tolist()
 
@@ -626,7 +628,7 @@ def _process_run(
     record = sqm_record_dict(sections, bids_uris([run["snirf_path"]], sqm_path))
     if by_cond:
         record["by_condition"] = by_cond
-    sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
 
@@ -782,7 +784,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     if sqm_path is None or not Path(sqm_path).exists():
         logger.warning("%s | no quality record; no per-condition pages", run_label)
         return
-    record = json.loads(Path(sqm_path).read_text(encoding="utf-8"))
+    record = read_record(Path(sqm_path))
     by_condition = record.get("by_condition") or {}
     if not by_condition:
         logger.info("%s | the record carries no by_condition section; no per-condition "

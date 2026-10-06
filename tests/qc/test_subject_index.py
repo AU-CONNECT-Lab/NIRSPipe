@@ -10,6 +10,7 @@ import json
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
+from fnirs_pipe.qc.subject.record_io import write_record
 from fnirs_pipe.qc.subject.subject_index import (
     _COLUMNS,
     _condition_pages,
@@ -27,12 +28,12 @@ def _run(sub_dir, task, *, sci=0.96, gvtd=9e-3, bad_pairs=(), channels=("S1_D1",
     nirs = sub_dir / "nirs"
     nirs.mkdir(parents=True, exist_ok=True)
 
-    (nirs / f"{label}_desc-sqm_qc.json").write_text(json.dumps({
+    write_record(nirs / f"{label}_desc-sqm_qc.json", {
         "step": "sqm",
         "raw": {"sci_mean": sci, "channel_retention_rate": 1.0, "gvtd_p95": gvtd},
         "motion": {"motion_corrected_pct": 0.1},
         "preproc": {"hbo_hbr_corr_mean": 0.2},
-    }))
+    })
     (nirs / f"{label}_desc-preproc_nirs.json").write_text(json.dumps({
         "step": "beer_lambert",
         "data": {"n_channels": 2 * len(channels), "n_bad": 2 * len(bad_pairs),
@@ -155,8 +156,8 @@ def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, con
     """Drive the raw viewer's page writer with the payloads stubbed, which is all it names."""
     from fnirs_pipe.qc.subject import condition_views, prep_raw_report as prr
 
-    record = sub_dir / f"{run_label}_record.json"
-    record.write_text(json.dumps({"by_condition": {c: {} for c in conditions}}))
+    record = sub_dir / f"{run_label}_desc-sqmraw_qc.json"
+    write_record(record, {"by_condition": {c: {} for c in conditions}})
     monkeypatch.setattr(condition_views, "condition_payloads",
                         lambda payload, **kw: [(c, {}) for c in conditions])
     out = sub_dir / report_name(report_stem, desc="raw")

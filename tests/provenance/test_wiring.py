@@ -16,7 +16,6 @@ downstream fails when they trip, the report just loses a panel, so only a test t
 demands success will ever notice.
 """
 
-import json
 
 import numpy as np
 import pytest
@@ -26,6 +25,7 @@ from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, compute_sci, run_prep
 from fnirs_pipe.qc.subject.sqm_record import build_sqm_records
+from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.utils import is_optical_density
 from fnirs_pipe.utils.lineage import stage_of
 
@@ -190,7 +190,7 @@ def test_the_windowed_metrics_actually_ran(baseline):
     """
     _, nirs_dir = baseline
     written = build_sqm_records(nirs_dir)
-    record = json.loads(written[0].read_text(encoding="utf-8"))
+    record = read_record(written[0])
     windowed = record.get("windowed") or {}
     for name in ("sci_matrix", "sci_times", "psp_matrix", "psp_times", "qc_window_s",
                  "spike_spans_s", "motion_corrected_spans_s"):

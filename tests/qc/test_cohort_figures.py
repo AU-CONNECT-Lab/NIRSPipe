@@ -10,14 +10,15 @@ import re
 from fnirs_pipe.io.naming import parse_path
 from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
 from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
+from fnirs_pipe.qc.subject.record_io import write_record
 
 
 def _tree(out):
     for sub, sci in (("01", 0.9), ("02", 0.7)):
         nirs = out / f"sub-{sub}" / "nirs"
         nirs.mkdir(parents=True)
-        (nirs / f"sub-{sub}_task-rest_desc-sqm_qc.json").write_text(json.dumps(
-            {"step": "sqm", "raw": {"sci_mean": sci, "gvtd_p95": 1e-3}}))
+        write_record(nirs / f"sub-{sub}_task-rest_desc-sqm_qc.json",
+                     {"step": "sqm", "raw": {"sci_mean": sci, "gvtd_p95": 1e-3}})
     for group in ("G1", "G2"):
         nirs = out / f"group-{group}" / "nirs"
         nirs.mkdir(parents=True)

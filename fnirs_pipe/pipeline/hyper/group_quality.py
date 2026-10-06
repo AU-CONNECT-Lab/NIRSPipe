@@ -318,6 +318,7 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
+    from fnirs_pipe.qc.subject.record_io import read_record
     from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, raw_verdict_view
 
     result: dict[str, dict] = {}
@@ -328,7 +329,7 @@ def load_group_sqm(
         records = _member_sqm_files(output_dir, entry, f"{entry.subject_id}*{RECORD_SUFFIX}")
         for record_path in _for_task(records, entry.task):
             try:
-                record = json.loads(record_path.read_text(encoding="utf-8"))
+                record = read_record(record_path)
             except (OSError, json.JSONDecodeError):
                 continue
             # Whole-file section underneath its long-channel split in both families, rather
@@ -344,12 +345,9 @@ def load_group_sqm(
             # the channel-by-window matrices a per-condition view selects columns from,
             # nested under one key so they cannot collide with a scalar name
             sqm["windowed"] = record.get("windowed") or {}
-            sqm["channel_order"] = list(
-                ((record.get("per_channel") or {}).get("raw") or {})
-                .get("sci_per_channel") or {})
-            # the record's whole per-channel section, not only the SCI its row order is read
-            # from: the dyad's channel table prints the same columns the subject report does,
-            # and those come from PSP, SNR, CV and the spike share alongside it
+            sqm["channel_order"] = list(sqm["windowed"].get("sci_channels") or [])
+            # the record's whole per-channel section: the dyad's channel table prints the
+            # same columns the subject report does, PSP, SNR, CV and the spike share among them
             per_ch = record.get("per_channel") or {}
             # every section, not only the all-channel one: a short channel's scores live in
             # `raw_short` and the dyad's channel table prints short rows too
@@ -473,8 +471,7 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
            "sci": np.asarray(sci, dtype=float), "psp": np.asarray(psp, dtype=float),
            **({"cv": np.asarray(windowed["cv_matrix"], dtype=float)}
               if windowed.get("cv_matrix") else {}),
-           "channel_order": list(((record.get("per_channel") or {}).get("raw") or {})
-                                 .get("sci_per_channel") or {})}
+           "channel_order": list(windowed.get("sci_channels") or [])}
     # GVTD is an RMS across channels, so it has no matrix and rides along as one series.
     # Only a stored record carries it; the dyad's own pass does not measure motion, and a
     # panel that draws it has to cope with the row being absent rather than assume it.

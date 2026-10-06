@@ -56,7 +56,6 @@ always complete, every channel, whichever section they sit under.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +68,7 @@ from fnirs_pipe.io.derivatives import bids_uris, entity_of, read_json, resolve_b
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
 from fnirs_pipe.qc.common.channel_table import channel_rows, save_channel_csv
+from fnirs_pipe.qc.subject.record_io import write_record
 from fnirs_pipe.qc.subject.condition_views import (
     PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
     condition_slices_from_record, span_counts,
@@ -1105,7 +1105,8 @@ def compute_run_sections(
             for key in ("sci_matrix", "psp_matrix", "cv_matrix"):
                 if series.get(key) is not None:
                     windowed[key] = np.asarray(series[key]).tolist()
-            for key in ("sci_times", "psp_times", "cv_times"):
+            for key in ("sci_times", "psp_times", "cv_times",
+                        "sci_channels", "psp_channels", "cv_channels"):
                 if series.get(key) is not None:
                     windowed[key] = np.asarray(series[key]).tolist()
         except Exception:
@@ -1207,7 +1208,7 @@ def write_run_sqm(
     sections: dict[str, Any],
     bids_root: Path | None = None,
 ) -> Path:
-    """Write ``<label>_desc-sqm_qc.json``, provenance keys included.
+    """Write ``<label>_desc-sqm_qc.json`` and its tables, provenance keys included.
 
     The provenance lives in the same file rather than a sidecar beside it: a sidecar for
     ``x.json`` would resolve to ``x.json`` itself. A top-level ``step`` is all the
@@ -1219,9 +1220,7 @@ def write_run_sqm(
         sources.insert(0, bids_input.as_posix())
 
     out_path = record_path(nirs_dir, label)
-    record = sqm_record_dict(sections, bids_uris(sources, out_path))
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    write_record(out_path, sqm_record_dict(sections, bids_uris(sources, out_path)))
     logger.info("SQM record -> %s", out_path)
     return out_path
 

@@ -38,13 +38,19 @@ from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.metrics import long_short_channels
+from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.qc.boilerplate.vocabulary import (
+    RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
+)
 from fnirs_pipe.qc.subject.group_writer import _scalars
+from fnirs_pipe.qc.subject.record_io import read_record, write_record
 from fnirs_pipe.qc.subject.sqm_record import (
     SECTIONS,
     build_sqm_records,
     compute_run_sections,
     record_path,
     scan_runs,
+    sqm_record_dict,
 )
 
 from tests._synth import SFREQ, synth_raw
@@ -217,7 +223,7 @@ def test_a_tree_alone_rebuilds_the_same_numbers(run):
     _, nirs_dir, _, sections = run
     written = build_sqm_records(nirs_dir)
     assert written == [record_path(nirs_dir, "sub-01_task-tapping")]
-    on_disk = json.loads(written[0].read_text(encoding="utf-8"))
+    on_disk = read_record(written[0])
     for name in SECTIONS:
         for key, value in sections[name].items():
             if isinstance(value, float):
@@ -245,6 +251,107 @@ def test_two_tasks_get_two_records_not_one(tmp_path_factory):
     labels = set(scan_runs(out / "sub-01" / "nirs"))
     assert labels == {"sub-01_task-tapping", "sub-01_task-rest"}
     assert len(build_sqm_records(out / "sub-01" / "nirs")) == 2
+
+
+# ---- The record on disk: scalars in the JSON, arrays in tables beside it ----
+
+_LABEL = "sub-01_task-tapping"
+
+
+def _table(path, stat=None, suffix="timeseries", ext=".tsv"):
+    stat_part = f"_stat-{stat}" if stat else ""
+    return path.parent / f"{_LABEL}{stat_part}_desc-sqm_{suffix}{ext}"
+
+
+@pytest.fixture(scope="module")
+def on_disk(run, tmp_path_factory):
+    _, _, _, sections = run
+    record = sqm_record_dict(sections, ["bids::sub-01/nirs/sub-01_task-tapping_nirs.snirf"])
+    path = tmp_path_factory.mktemp("record_io") / f"{_LABEL}_desc-sqm_qc.json"
+    write_record(path, record)
+    return record, path
+
+
+def test_the_tables_fold_back_into_the_record_the_writer_was_handed(on_disk):
+    record, path = on_disk
+    back = read_record(path)
+    back["data"].pop("tables")
+    np.testing.assert_equal(back, record)
+
+
+def test_the_json_keeps_no_array_a_table_holds(on_disk):
+    _, path = on_disk
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert "per_channel" not in stored
+    assert not [k for k in stored["windowed"]
+                if k.endswith(("_matrix", "_channels")) or "_per_window" in k]
+    expected = [_table(path, stat).name for stat in ("cv", "psp", "sci", "summary")]
+    assert stored["data"]["tables"] == sorted([*expected, _table(path, suffix="nirsmap").name])
+    for name in stored["data"]["tables"]:
+        assert (path.parent / name).with_suffix(".json").exists(), name
+
+
+def test_a_matrix_table_is_headed_by_the_channels_its_rows_used_to_follow(on_disk):
+    """The names make explicit the order readers used to borrow from per_channel."""
+    record, path = on_disk
+    frame = pd.read_csv(_table(path, "sci"), sep="\t")
+    assert list(frame.columns) == list(record["per_channel"]["raw"]["sci_per_channel"])
+    assert len(frame) == len(record["windowed"]["sci_times"])
+
+
+def test_the_window_tables_say_how_long_a_row_is(on_disk):
+    record, path = on_disk
+    start, stop = record["windowed"]["sci_times"][0]
+    for stat in ("sci", "psp", "cv", "summary"):
+        side = json.loads(_table(path, stat, ext=".json").read_text(encoding="utf-8"))
+        assert side["WindowLength"] == pytest.approx(stop - start), stat
+        assert side["SamplingFrequency"] == pytest.approx(1.0 / (stop - start)), stat
+        assert side["Sources"] == record["Sources"], stat
+
+
+def test_every_column_and_level_written_is_described(on_disk):
+    _, path = on_disk
+    summary = pd.read_csv(_table(path, "summary"), sep="\t")
+    side = json.loads(_table(path, "summary", ext=".json").read_text(encoding="utf-8"))
+    assert [c for c in summary.columns if "Description" not in side.get(c, {})] == []
+
+    channels = pd.read_csv(_table(path, suffix="nirsmap"), sep="\t")
+    side = json.loads(_table(path, suffix="nirsmap", ext=".json").read_text(encoding="utf-8"))
+    assert set(side["section"]["Levels"]) == set(channels["section"])
+    assert set(side["metric"]["Levels"]) == set(channels["metric"])
+
+
+def test_imu_columns_carry_their_unit_and_a_missing_window_stays_missing(tmp_path):
+    path = tmp_path / "sub-01_task-rest_desc-sqm_qc.json"
+    write_record(path, {
+        "Sources": [], "data": {}, "imu": {"gyro_speed_unit": "deg/s"},
+        "windowed": {"gvtd_window_times_s": [5.0, 15.0],
+                     "gyro_speed_per_window": [1.0, float("nan")],
+                     "gyro_speed_p95_per_window": [2.0, 3.0]},
+    })
+    table = tmp_path / "sub-01_task-rest_stat-summary_desc-sqm_timeseries.tsv"
+    side = json.loads(table.with_suffix(".json").read_text(encoding="utf-8"))
+    assert side["gyro_speed_per_window"]["Units"] == "deg/s"
+    assert side["WindowLength"] == 10.0
+    assert "n/a" in table.read_text(encoding="utf-8")
+    np.testing.assert_equal(read_record(path)["windowed"]["gyro_speed_per_window"],
+                            [1.0, float("nan")])
+
+
+def test_a_record_with_its_arrays_inline_is_refused(tmp_path):
+    path = tmp_path / "sub-01_task-rest_desc-sqm_qc.json"
+    path.write_text(json.dumps({"step": "sqm", "windowed": {"sci_matrix": [[0.9]]}}))
+    with pytest.raises(StageError, match="rerun"):
+        read_record(path)
+
+
+def test_a_listed_table_missing_from_disk_is_an_error(tmp_path):
+    path = tmp_path / "sub-01_task-rest_desc-sqm_qc.json"
+    write_record(path, {"Sources": [], "data": {},
+                        "per_channel": {"raw": {"sci_per_channel": {"S1_D1 760": 0.9}}}})
+    (tmp_path / "sub-01_task-rest_desc-sqm_nirsmap.tsv").unlink()
+    with pytest.raises(StageError, match="missing"):
+        read_record(path)
 
 
 # ---- GVTD censoring ----

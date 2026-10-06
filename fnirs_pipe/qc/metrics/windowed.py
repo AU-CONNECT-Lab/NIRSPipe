@@ -140,7 +140,7 @@ def attach_windowed_series(
     -------
     dict
         Raw series (sci_matrix/sci_times/psp_matrix/psp_times) for callers that
-        also plot them; all None on failure.
+        also plot them, and each matrix's row names (sci_channels etc.); all None on failure.
 
     Notes
     -----
@@ -155,7 +155,8 @@ def attach_windowed_series(
     two files as long as neither was resampled.
     """
     series = {"sci_matrix": None, "sci_times": None, "psp_matrix": None, "psp_times": None,
-              "cv_matrix": None, "cv_times": None}
+              "cv_matrix": None, "cv_times": None,
+              "sci_channels": None, "psp_channels": None, "cv_channels": None}
     # recorded even when every series below fails: it describes the request, not the result,
     # and without it a stored series cannot be told apart from one binned at another length
     sqm["qc_window_s"] = float(window_s)
@@ -237,6 +238,17 @@ def attach_windowed_series(
     series.update(sci_matrix=sci_matrix, sci_times=sci_times,
                   psp_matrix=psp_matrix, psp_times=psp_times,
                   cv_matrix=cv_matrix, cv_times=cv_times)
+    # mne-nirs returns one row per fNIRS channel in channel order, bads included
+    od_names = [raw_od.ch_names[i] for i in mne.pick_types(raw_od.info, fnirs=True, exclude=())]
+    row_names = {"sci": od_names, "psp": od_names,
+                 "cv": raw_intensity.ch_names if raw_intensity is not None else None}
+    for key, names in row_names.items():
+        matrix = series[f"{key}_matrix"]
+        if matrix is None:
+            continue
+        if names is None or len(names) != len(matrix):
+            raise ValueError(f"{key}_matrix has {len(matrix)} rows for {len(names or ())} channels")
+        series[f"{key}_channels"] = list(names)
     return series
 
 
