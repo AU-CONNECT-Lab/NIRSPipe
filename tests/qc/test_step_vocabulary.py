@@ -371,7 +371,7 @@ def test_the_coherence_sentence_names_the_band_it_averaged_and_nothing_unasked()
     assert slots["chroma"] == "HbO and HbR"
     assert slots["coi"] == ", excluding the cone of influence"
     # options this run did not use leave no sentence behind
-    assert slots["whiten"] == slots["window"] == slots["bads"] == ""
+    assert slots["whiten"] == slots["conditions"] == slots["window"] == slots["bads"] == ""
 
 
 def test_the_coherence_options_a_run_used_each_get_a_sentence():
@@ -394,6 +394,25 @@ def test_the_correlation_sentence_states_each_option_that_changed_it():
     # the defaults change nothing, so they add nothing
     assert template_slots("hyper_isc", {"isc_band_hz": None, "isc_whiten_max_order": 0,
                                         "isc_max_lag_s": 0.0}) == {"options": ""}
+
+
+@pytest.mark.parametrize("pad, said, unsaid", [
+    (None, "the same maps over each condition's span", "separate transform"),
+    (47.14, "47.1 s of recording on either side", "the same maps"),
+    (0.0, "cut at its own boundaries", "of recording on either side"),
+])
+def test_the_condition_sentence_names_the_route_the_tables_record(pad, said, unsaid):
+    windows = {"chat": [10.0, 110.0]}
+    for key in ("hyper_wtc", "hyper_wtc_crossed"):
+        slots = template_slots(key, {"condition_windows_s": windows, "wtc_cond_pad_s": pad})
+        assert said in slots["conditions"] and unsaid not in slots["conditions"]
+
+
+def test_a_run_without_conditions_says_nothing_about_them():
+    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+
+    assert template_slots("hyper_wtc", {"wtc_cond_pad_s": 30.0})["conditions"] == ""
+    assert "{conditions}" in _load_steps()["hyper_wtc"]["plain"]
 
 
 def test_a_run_that_named_no_band_averaged_the_whole_axis():

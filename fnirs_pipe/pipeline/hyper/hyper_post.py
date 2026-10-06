@@ -294,6 +294,8 @@ def run_hyper_post(
             **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
                if config.wtc_window_s else {}),
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
+            # None: conditions windowed out of the whole-run transform
+            wtc_cond_pad_s=None if cond_pad_s is None else round(cond_pad_s, 3),
             # what the re-paired null and the Methods read back rather than take again
             channel_cross=bool(wtc_channel_cross),
             roi_min_channels=int(wtc_roi_min_channels),

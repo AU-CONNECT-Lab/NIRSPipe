@@ -265,6 +265,21 @@ def _dpf_phrase(dpf: Any) -> str:
             "of wavelength")
 
 
+def _condition_route(params: dict[str, Any]) -> str:
+    """How the per-condition values were taken, or nothing for a run without conditions."""
+    if not params.get("condition_windows_s"):
+        return ""
+    pad = params.get("wtc_cond_pad_s")
+    if pad is None:
+        return " Per-condition values averaged the same maps over each condition's span only."
+    if pad == 0:
+        return (" Per-condition values came from a separate transform of each condition, cut "
+                "at its own boundaries.")
+    return (" Per-condition values came from a separate transform of each condition, cut "
+            f"with {_num(round(float(pad), 1))} s of recording on either side and averaged "
+            "over the condition's span only.")
+
+
 def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The coherence sentence's band and the clauses only some runs need."""
     wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
@@ -278,6 +293,7 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
         "whiten": (" Before the transform, each long channel was prewhitened with an "
                    f"autoregressive model of order {params.get('wtc_whiten_order')} "
                    f"({_num(whiten_s)} s)." if whiten_s else ""),
+        "conditions": _condition_route(params),
         "window": (f" Only {_num(window[0])}–{_num(window[1])} s of the aligned recordings "
                    "were analysed." if window else ""),
         "bads": (" A channel rejected in any of a member's runs was left out of all of them."

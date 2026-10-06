@@ -310,8 +310,7 @@ def test_tagging_before_the_aggregation_would_lose_the_tag():
 
 # ---- per condition ----
 
-@pytest.fixture(scope="module")
-def by_condition(dyad, tmp_path_factory):
+def _report_by_condition(dyad, out, **extra):
     """The same report with two task windows, so the per-condition branch runs.
 
     A window shorter than one cycle of `--wtc-fmin` is skipped, so at 0.02 Hz these have to
@@ -324,16 +323,27 @@ def by_condition(dyad, tmp_path_factory):
     for raw in marked.values():
         raw.set_annotations(mne.Annotations(onset=[10.0, 200.0], duration=[100.0, 100.0],
                                             description=["chat", "quiet"]))
-    out = tmp_path_factory.mktemp("bycond")
     build_hyper_post_report(
         group_id="G1", task="tap",
         group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
         aligned_raws=marked, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=out,
         roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]}, wtc_roi_min_channels=1,
         wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
-        wtc_by_condition=True, wtc_chroma=("hbo", "hbr"),
+        wtc_by_condition=True, wtc_chroma=("hbo", "hbr"), **extra,
     )
     return out / "group-G1" / "nirs"
+
+
+@pytest.fixture(scope="module")
+def by_condition(dyad, tmp_path_factory):
+    return _report_by_condition(dyad, tmp_path_factory.mktemp("bycond"))
+
+
+@pytest.fixture(scope="module")
+def by_condition_cut(dyad, tmp_path_factory):
+    """Each condition transformed on its own, over a cut padded by 30 s."""
+    return _report_by_condition(dyad, tmp_path_factory.mktemp("bycond_cut"),
+                                wtc_cond_pad_s=30.0)
 
 
 @pytest.mark.parametrize("kind", ["wtcbycond", "wtcbycond-roichan"])
@@ -361,6 +371,19 @@ def test_the_condition_windows_reach_the_sidecar(by_condition):
         "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
     assert sorted(params["condition_windows_s"]) == ["chat", "quiet"]
     assert params["chroma"] == ["hbo", "hbr"]
+    # read out of the whole-run transform unless asked otherwise
+    assert params["wtc_cond_pad_s"] is None
+
+
+def test_the_cut_route_reaches_the_sidecar_and_the_methods(by_condition_cut):
+    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+
+    params = json.loads((by_condition_cut / name(
+        "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
+    assert params["wtc_cond_pad_s"] == 30.0
+    slots = dict(steps_from_sidecars(by_condition_cut))["hyper_wtc"]
+    assert "separate transform of each condition" in slots["conditions"]
+    assert "30 s of recording on either side" in slots["conditions"]
 
 
 # ---- the null cannot drift from the run ----

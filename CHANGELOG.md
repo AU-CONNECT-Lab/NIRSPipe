@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - GLM sidecars record the boxcar length or the events table, and an FIR model's delays
 - The screening sidecar records whether the coupled share was counted over task blocks or the whole run
+- WTC sidecars record `wtc_cond_pad_s`, the per-condition route (null when windowed out of the whole run)
 - Quality records keep IMU gyroscope speed and accelerometer jerk (mean, median, p95) per run and condition, and their frame-level agreement with GVTD
 - Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
 
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The pass/fail grids, brain views and optode flat map colour with the run's own screening lines
 - The grand mean averages the good channels only
 - Methods state the wavelet design, the boxcar length or FIR delays, and the screening scope actually counted
+- Methods say whether per-condition WTC was read out of the whole-run transform or transformed on its own
 - Condition-page GVTD tooltips name the corrected file their windows come from
 - Mean SNR has no colour cutoffs
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
