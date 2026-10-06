@@ -319,6 +319,18 @@ def _condition_route(params: dict[str, Any]) -> str:
             "over the condition's span only.")
 
 
+def _monte_carlo(params: dict[str, Any]) -> str:
+    """pycwt's red-noise level, as --wtc-significance drew it, or nothing."""
+    if not params.get("wtc_mc_count"):
+        return ""
+    seed = params.get("wtc_seed")
+    return (" A per-frequency significance level was estimated by Monte Carlo simulation: "
+            f"coherence was computed for {int(params['wtc_mc_count'])} pairs of first-order "
+            "autoregressive (red-noise) surrogates matching each channel's lag-1 "
+            f"autocorrelation{f' (random seed {seed})' if seed is not None else ''}, and its "
+            "95th percentile taken at each frequency.")
+
+
 def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The coherence sentence's band and the clauses only some runs need."""
     wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
@@ -333,6 +345,7 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
                    f"autoregressive model of order {params.get('wtc_whiten_order')} "
                    f"({_num(whiten_s)} s)." if whiten_s else ""),
         "conditions": _condition_route(params),
+        "significance": _monte_carlo(params),
         "window": (f" Only {_num(window[0])}–{_num(window[1])} s of the aligned recordings "
                    "were analysed." if window else ""),
         "bads": (" A channel rejected in any of a member's runs was left out of all of them."

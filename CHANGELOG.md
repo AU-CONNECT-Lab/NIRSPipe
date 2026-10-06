@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Methods describe the re-paired null: who stood in, how many, how each condition was cut, and how stand-ins were summarised
 - Methods describe the phase-scrambled nulls of the coherence and of the correlation
 - Methods describe the relative phase per frequency
+- WTC sidecars record `wtc_mc_count` and `wtc_seed` when `--wtc-significance` ran, and Methods describe that level
 - `fnirs-hyper-groupnull` writes its cohort test's Methods paragraph to `logs/<cohort table>_methods.md`
 
 ### Changed

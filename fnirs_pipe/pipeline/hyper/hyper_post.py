@@ -296,6 +296,9 @@ def run_hyper_post(
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             # None: conditions windowed out of the whole-run transform
             wtc_cond_pad_s=None if cond_pad_s is None else round(cond_pad_s, 3),
+            # the Monte Carlo level, only when one was drawn
+            **({"wtc_mc_count": int(wtc_mc_count), "wtc_seed": wtc_seed}
+               if wtc_significance else {}),
             # what the re-paired null and the Methods read back rather than take again
             channel_cross=bool(wtc_channel_cross),
             roi_min_channels=int(wtc_roi_min_channels),

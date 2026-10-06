@@ -373,6 +373,19 @@ def test_the_condition_windows_reach_the_sidecar(by_condition):
     assert params["chroma"] == ["hbo", "hbr"]
     # read out of the whole-run transform unless asked otherwise
     assert params["wtc_cond_pad_s"] is None
+    # no Monte Carlo level was drawn, so nothing about one is recorded
+    assert "wtc_mc_count" not in params
+
+
+def test_a_monte_carlo_level_reaches_the_sidecar_and_the_methods(dyad, tmp_path):
+    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+
+    out = _report_by_condition(dyad, tmp_path, wtc_significance=True, wtc_mc_count=5,
+                               wtc_seed=1)
+    params = json.loads((out / name("G1", "tap", extension=".json")).read_text())["parameters"]
+    assert (params["wtc_mc_count"], params["wtc_seed"]) == (5, 1)
+    slots = dict(steps_from_sidecars(out))["hyper_wtc"]
+    assert "for 5 pairs of first-order autoregressive" in slots["significance"]
 
 
 def test_the_cut_route_reaches_the_sidecar_and_the_methods(by_condition_cut):

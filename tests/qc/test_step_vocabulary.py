@@ -694,3 +694,15 @@ def test_every_cohort_table_maps_to_one_test_sentence(null, said, table):
     assert boilerplate_key(step, {}) == "hyper_groupnull"
     slots = template_slots("hyper_groupnull", {"null_kind": null, "n_resample": 20000})
     assert slots == {"null": said, "n_resample": "20000"}
+
+
+
+# ---- the Monte Carlo level ----
+
+def test_the_monte_carlo_level_is_described_only_when_one_was_drawn():
+    slots = template_slots("hyper_wtc", {"wtc_mc_count": 300, "wtc_seed": 1})
+    assert "for 300 pairs of first-order autoregressive" in slots["significance"]
+    assert "(random seed 1)" in slots["significance"]
+    assert "seed" not in template_slots("hyper_wtc", {"wtc_mc_count": 300,
+                                                      "wtc_seed": None})["significance"]
+    assert template_slots("hyper_wtc", {})["significance"] == ""

@@ -95,11 +95,11 @@ plain = "The recordings of each group were not aligned on an event marker; they 
 citations = []
 
 [hyper_wtc]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{significance}{window}{bads}"
 citations = ["TODO_Wavelet"]
 
 [hyper_wtc_crossed]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{conditions}{significance}{window}{bads}"
 citations = ["TODO_Wavelet"]
 
 [hyper_phasescale]
