@@ -37,7 +37,10 @@ def test_the_corrected_side_is_read_from_the_derivatives_tree(
     assert stage_reads == [(deriv, "motcorrected")]
     assert list((out / "group-G01").glob("*_desc-raw_report.html"))
     desc = json.loads((out / "dataset_description.json").read_text())
-    assert desc["SourceDatasets"][0]["URL"] == deriv.resolve().as_uri()
+    # it reads both, so both are linked, under the names fnirs-hyper and fnirs-pipe use
+    links = desc["DatasetLinks"]
+    assert (out / links["preprocessed"]).resolve() == deriv.resolve()
+    assert (out / links["raw"]).resolve() == bids.resolve()
     assert not any(deriv.iterdir())
 
 
@@ -93,14 +96,16 @@ def test_a_fnirs_pipe_tree_is_refused_as_the_output(mini_hyper_bids, tmp_path, c
 
 def test_without_a_derivatives_tree_the_existing_stamp_is_kept(
         mini_hyper_bids, tmp_path, stage_reads):
-    from fnirs_pipe.io.derivatives import write_dataset_description
+    from fnirs_pipe.io.derivatives import LINK_PREPROCESSED, write_dataset_description
 
     bids, pairs = mini_hyper_bids
     deriv, out = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
     deriv.mkdir()
     write_dataset_description(out, name="fnirs-hyper output", generated_by="fnirs-hyper",
-                              source=deriv)
+                              source=deriv, link=LINK_PREPROCESSED)
     qc.main(_argv(bids, pairs, out))
 
+    # the link fnirs-hyper wrote stays, and the raw recordings this read are added beside it
     desc = json.loads((out / "dataset_description.json").read_text())
-    assert desc["SourceDatasets"][0]["URL"] == deriv.resolve().as_uri()
+    assert (out / desc["DatasetLinks"]["preprocessed"]).resolve() == deriv.resolve()
+    assert (out / desc["DatasetLinks"]["raw"]).resolve() == bids.resolve()

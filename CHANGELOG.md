@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 - Methods describe ALFF/fALFF and functional connectivity when a run computed them
 
 ### Changed
+- Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths
+- `dataset_description.json` links its source trees by relative path in `DatasetLinks`, keeping links other commands wrote
+- A tree whose `Sources` are not BIDS URIs is refused where they are read; rerun the command that wrote it
 - Coherence labels and help call the edge-affected region the cone of influence, so kept cells read "outside COI"
 - Stage comparisons band-limit with the pipeline's own filter design rather than MNE's default FIR
 - The pass/fail grids, brain views and optode flat map colour with the run's own screening lines

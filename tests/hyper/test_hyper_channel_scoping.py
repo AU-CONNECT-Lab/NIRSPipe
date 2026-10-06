@@ -356,12 +356,16 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
     Same contract as the band mean above: what the figure shows and what a stats script reads
     have to be one set of numbers.
     """
+    from fnirs_pipe.io.derivatives import LINK_PREPROCESSED, write_dataset_description
     from fnirs_pipe.pipeline.hyper.hyper_post import write_isc_matrix
 
+    hyper, member = tmp_path / "hyper", tmp_path / "pipe" / "sub-01" / "nirs" / "sub-01.snirf"
+    write_dataset_description(hyper, source=tmp_path / "pipe", link=LINK_PREPROCESSED)
     names = ["S1_D1 hbo", "S2_D2 hbo"]
     mat = np.array([[0.9, np.nan], [0.4, 0.8]])
-    path = tmp_path / "group-G1_task-hold_hyper-isc-hbo.tsv"
-    write_isc_matrix(path, mat, names, "hbo", ["/in/sub-01.snirf"], ["sub-01", "sub-02"])
+    path = hyper / "group-G1" / "nirs" / "group-G1_task-hold_hyper-isc-hbo.tsv"
+    path.parent.mkdir(parents=True)
+    write_isc_matrix(path, mat, names, "hbo", [member], ["sub-01", "sub-02"])
 
     written = pd.read_csv(path, sep="\t", index_col="channel")
     assert list(written.index) == list(written.columns) == names
@@ -371,6 +375,7 @@ def test_the_isc_matrix_is_written_beside_the_panel(tmp_path):
     sidecar = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     assert sidecar["step"] == "hyper_isc"
     assert sidecar["parameters"]["chromophore"] == "hbo"
+    assert sidecar["Sources"] == ["bids:preprocessed:sub-01/nirs/sub-01.snirf"]
 
 
 def test_a_failed_isc_write_costs_the_file_and_not_the_report(tmp_path):

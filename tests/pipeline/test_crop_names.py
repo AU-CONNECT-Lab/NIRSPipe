@@ -16,11 +16,12 @@ from fnirs_pipe.io.snirf import read_snirf, write_snirf
 from fnirs_pipe.pipeline import crop
 from fnirs_pipe.pipeline.crop import crop_snirf_from_path
 from fnirs_pipe.qc.common.windows import crop_provenance
-from tests._synth import synth_raw
+from tests._synth import _write_dataset_root, synth_raw
 
 
 @pytest.fixture
 def source(tmp_path) -> Path:
+    _write_dataset_root(tmp_path, ["01"])
     path = tmp_path / "sub-01_task-main_nirs.snirf"
     write_snirf(synth_raw("01", "main", duration=300.0, motion_onset=None, bad_pair=None), path)
     return path
@@ -123,7 +124,8 @@ def test_a_segment_records_its_own_length_and_where_it_came_from(source_with_sid
     side = _sidecar(out)
     assert side["RecordingDuration"] == pytest.approx(60.0, abs=0.2)
     assert side["SamplingFrequency"] == 10.0                     # the rest is kept
-    assert side["Sources"] == [source_with_sidecar.as_posix()]
+    # named through the cropped tree's link to the dataset the source sits in
+    assert side["Sources"] == [f"bids:raw:{source_with_sidecar.name}"]
     (lo, hi), = side["parameters"]["crop_windows_s"]
     assert (lo, hi) == (pytest.approx(10.0, abs=0.2), pytest.approx(70.0, abs=0.2))
 

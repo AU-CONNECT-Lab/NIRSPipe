@@ -11,6 +11,7 @@ import numpy as np
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
+from fnirs_pipe.io.derivatives import bids_uris
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -622,7 +623,7 @@ def _process_run(
         with guard("Per-condition metrics", errors, label):
             by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands,
                                              imu=imu)
-    record = sqm_record_dict(sections, [str(run["snirf_path"])])
+    record = sqm_record_dict(sections, bids_uris([run["snirf_path"]], sqm_path))
     if by_cond:
         record["by_condition"] = by_cond
     sqm_path.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")

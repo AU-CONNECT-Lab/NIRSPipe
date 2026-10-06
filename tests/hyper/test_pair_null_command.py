@@ -20,6 +20,14 @@ from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
 from tests.hyper._names import KINDS, name
 
 
+@pytest.fixture(autouse=True)
+def _hyper_tree(tmp_path):
+    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
+    from fnirs_pipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+
+
+
 def _merge(root, kind):
     """One kind's merge, discovered the way `merge` discovers it."""
     key = tuple(sorted((k, str(v)) for k, v in KINDS[kind].items()))

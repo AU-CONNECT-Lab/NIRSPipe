@@ -5,6 +5,7 @@ first rather than over it. Which entities carry over is what the tests below pin
 """
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -29,6 +30,18 @@ class _FakeGLM:
 
 class _FakeContrast(_FakeGLM):
     pass
+
+
+@pytest.fixture
+def nirs_dir(tmp_path):
+    """Where the GLM writes in a real tree, beside the stage it was fitted on."""
+    path = tmp_path / "sub-01" / "nirs"
+    path.mkdir(parents=True)
+    return path
+
+
+def _preproc(nirs_dir, task="tapping"):
+    return str(nirs_dir / Path(PREPROC).name.replace("tapping", task))
 
 
 @pytest.fixture
@@ -64,13 +77,12 @@ def test_a_source_with_no_subject_is_refused(source):
 
 # ---- output files ----
 
-def test_two_tasks_write_side_by_side(tmp_path, design_matrix):
+def test_two_tasks_write_side_by_side(nirs_dir, design_matrix):
     glm = _FakeGLM(["S1_D1 hbo", "S1_D1 hbr"])
     for task in ("tapping", "rest"):
-        _save_glm_outputs(glm, design_matrix, tmp_path,
-                          source_path=PREPROC.replace("tapping", task))
+        _save_glm_outputs(glm, design_matrix, nirs_dir, source_path=_preproc(nirs_dir, task))
 
-    names = {p.name for p in tmp_path.glob("*.tsv")}
+    names = {p.name for p in nirs_dir.glob("*.tsv")}
     assert names == {
         "sub-01_task-tapping_design.tsv", "sub-01_task-rest_design.tsv",
         "sub-01_task-tapping_desc-glm_nirsmap.tsv", "sub-01_task-rest_desc-glm_nirsmap.tsv",
@@ -82,12 +94,12 @@ def test_an_unknown_source_is_refused_rather_than_written_loose(tmp_path, design
         _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, tmp_path)
 
 
-def test_contrasts_are_written_with_the_same_prefix(tmp_path, design_matrix):
-    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, tmp_path,
+def test_contrasts_are_written_with_the_same_prefix(nirs_dir, design_matrix):
+    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, nirs_dir,
                       contrasts={"tapping-rest": _FakeContrast(["S1_D1 hbo"])},
-                      source_path=PREPROC)
+                      source_path=_preproc(nirs_dir))
 
-    frame = pd.read_csv(tmp_path / "sub-01_task-tapping_desc-contrast_nirsmap.tsv",
+    frame = pd.read_csv(nirs_dir / "sub-01_task-tapping_desc-contrast_nirsmap.tsv",
                         sep=TAB)
     assert frame["contrast"].unique().tolist() == ["tapping-rest"]
 
@@ -122,45 +134,47 @@ def test_a_condition_the_design_lacks_is_refused():
 
 # ---- sidecars ----
 
-def test_each_output_gets_a_sidecar_naming_its_step(tmp_path, design_matrix):
-    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, tmp_path,
-                      source_path=PREPROC, noise_model="ar1")
+def test_each_output_gets_a_sidecar_naming_its_step(nirs_dir, design_matrix):
+    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, nirs_dir,
+                      source_path=_preproc(nirs_dir), noise_model="ar1")
 
     steps = {}
-    for path in tmp_path.glob("*.json"):
+    for path in nirs_dir.glob("*.json"):
         meta = json.loads(path.read_text())
         steps[path.name] = meta["step"]
-        assert meta["Sources"] == [PREPROC]
+        # a BIDS URI from the tree's own root, not the absolute path the run saw
+        assert meta["Sources"] == ["bids::sub-01/nirs/" + Path(PREPROC).name]
     assert steps == {
         "sub-01_task-tapping_design.json": "design_matrix",
         "sub-01_task-tapping_desc-glm_nirsmap.json": "glm_fit",
     }
 
 
-def test_the_sidecar_carries_the_parameters_the_fit_used(tmp_path, design_matrix):
-    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, tmp_path,
-                      source_path=PREPROC, noise_model="ar1", drift_model="cosine")
+def test_the_sidecar_carries_the_parameters_the_fit_used(nirs_dir, design_matrix):
+    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, nirs_dir,
+                      source_path=_preproc(nirs_dir), noise_model="ar1", drift_model="cosine")
 
-    meta = json.loads((tmp_path / "sub-01_task-tapping_design.json").read_text())
+    meta = json.loads((nirs_dir / "sub-01_task-tapping_design.json").read_text())
     assert meta["parameters"] == {"noise_model": "ar1", "drift_model": "cosine"}
 
 
 # ---- bad channels ----
 
-def test_bad_channels_are_flagged_in_the_results_not_dropped(tmp_path, design_matrix):
+def test_bad_channels_are_flagged_in_the_results_not_dropped(nirs_dir, design_matrix):
     # the fit runs on every channel; group analysis reads the frame by position, so a
     # rejected channel has to keep its row
     glm = _FakeGLM(["S1_D1 hbo", "S2_D2 hbo"])
-    _save_glm_outputs(glm, design_matrix, tmp_path, source_path=PREPROC, bads=["S2_D2 hbo"])
+    _save_glm_outputs(glm, design_matrix, nirs_dir, source_path=_preproc(nirs_dir),
+                      bads=["S2_D2 hbo"])
 
-    frame = pd.read_csv(tmp_path / "sub-01_task-tapping_desc-glm_nirsmap.tsv", sep=TAB)
+    frame = pd.read_csv(nirs_dir / "sub-01_task-tapping_desc-glm_nirsmap.tsv", sep=TAB)
     assert len(frame) == 2
     assert frame.set_index("ch_name")["bad"].to_dict() == {"S1_D1 hbo": False, "S2_D2 hbo": True}
 
 
-def test_the_sidecar_lists_the_bad_channels(tmp_path, design_matrix):
-    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, tmp_path,
-                      source_path=PREPROC, bads=["S2_D2 hbo"])
+def test_the_sidecar_lists_the_bad_channels(nirs_dir, design_matrix):
+    _save_glm_outputs(_FakeGLM(["S1_D1 hbo"]), design_matrix, nirs_dir,
+                      source_path=_preproc(nirs_dir), bads=["S2_D2 hbo"])
 
-    meta = json.loads((tmp_path / "sub-01_task-tapping_desc-glm_nirsmap.json").read_text())
+    meta = json.loads((nirs_dir / "sub-01_task-tapping_desc-glm_nirsmap.json").read_text())
     assert meta["bad_channels"] == ["S2_D2 hbo"]

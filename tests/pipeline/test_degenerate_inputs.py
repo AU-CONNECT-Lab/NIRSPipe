@@ -84,7 +84,8 @@ def test_a_non_finite_stretch_rejects_its_pair_and_no_longer_reaches_the_glm(tmp
     preproc = next((tmp_path / "prep").rglob("*desc-preproc_nirs.snirf"))
     post = PostConfig(subject="01", high_pass=0.01, drift_model="polynomial", drift_order=1,
                       short_channel="mean", **_BANDS)
-    residual = run_post(result.raw_haemo.copy(), post, tmp_path / "post", mode="denoise",
+    # into the tree prep wrote, as the command does, so the stage it read is its own source
+    residual = run_post(result.raw_haemo.copy(), post, tmp_path / "prep", mode="denoise",
                         source_entities={"task": "rest"}, source_path=preproc)[0]
     good = [c for c in residual.ch_names if c not in residual.info["bads"]]
     assert np.isfinite(residual.get_data(picks=good)).all()

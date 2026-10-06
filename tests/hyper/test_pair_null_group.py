@@ -16,6 +16,14 @@ from fnirs_pipe.pipeline.hyper.pair_null_group import (
     write_group_null)
 from tests.hyper._names import cohort as _cohort, name
 
+
+@pytest.fixture(autouse=True)
+def _hyper_tree(tmp_path):
+    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
+    from fnirs_pipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+
+
 SEP = chr(9)
 
 CHANNELS = ["S1_D1", "S1_D2", "S2_D1", "S2_D2"]

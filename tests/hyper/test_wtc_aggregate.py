@@ -20,6 +20,14 @@ from fnirs_pipe.pipeline.hyper.wtc_aggregate import (
     aggregate_wtc, merge_kinds, write_aggregate_wtc, write_all_aggregates,
 )
 
+
+@pytest.fixture(autouse=True)
+def _hyper_tree(tmp_path):
+    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
+    from fnirs_pipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+
+
 WTC = {"statistic": "wtc"}
 ROI = {"segmentation": "custom", "aggregation": "roi", "statistic": "wtc"}
 

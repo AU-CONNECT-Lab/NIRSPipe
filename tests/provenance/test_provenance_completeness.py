@@ -14,6 +14,7 @@ import json
 
 import pytest
 
+from fnirs_pipe.io.derivatives import LINK_RAW, write_dataset_description
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -42,6 +43,8 @@ _EXTRA_STAGES = {
 def _run(bids_dir, out_dir, mode, subject="01", task="tapping"):
     source = bids_dir / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-{task}_nirs.snirf"
     entities = {"task": task}
+    # what the command writes first, so the raw input has a BIDS URI to be named by
+    write_dataset_description(out_dir, source=bids_dir, link=LINK_RAW)
 
     prep_config = PrepConfig(subject=subject, dpf=[6.0, 6.0], sci_threshold=0.8,
                              motion_correction="tddr", **_BANDS)

@@ -80,7 +80,10 @@ def test_the_output_names_the_dataset_it_was_computed_from(mini_bids, tmp_path, 
     monkeypatch.setattr(workflows, "validate_bids", lambda bids_dir: None)
     _dry_run(mini_bids, tmp_path / "out")
     desc = json.loads((tmp_path / "out" / "dataset_description.json").read_text())
-    assert desc["SourceDatasets"][0]["URL"] == mini_bids.resolve().as_uri()
+    # relative, so the trees can move together; the Sources URIs resolve through it
+    link = desc["DatasetLinks"]["raw"]
+    assert (tmp_path / "out" / link).resolve() == mini_bids.resolve()
+    assert desc["SourceDatasets"][0]["URL"] == link
 
 
 def _fake_validator(monkeypatch, report: dict, code: int):

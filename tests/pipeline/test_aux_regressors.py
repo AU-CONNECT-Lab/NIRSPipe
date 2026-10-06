@@ -49,7 +49,7 @@ from fnirs_pipe.pipeline.post_pipeline import (
     _has_confounds,
     _warn_unmatched_design_band,
 )
-from tests._synth import synth_raw
+from tests._synth import _write_dataset_root, synth_raw
 
 AUX_FS = 98.0        # deliberately not a whole multiple of the optical rate
 DATA_FS = 10.0
@@ -324,6 +324,7 @@ def _raw_snirf_with_aux(tmp_path: Path, duration: float, fs: float = AUX_FS) -> 
     Making the samples equal to the time they were taken at is what lets a test say where in
     the original recording a cropped window came from: the value is the answer.
     """
+    _write_dataset_root(tmp_path, ["01"])
     path = tmp_path / "sub-01_task-main_nirs.snirf"
     write_snirf(synth_raw("01", "rest", duration=duration, motion_onset=None, bad_pair=None),
                 path)
@@ -393,6 +394,7 @@ def test_a_combined_crop_lays_the_windows_end_to_end(tmp_path):
 
 
 def test_cropping_a_recording_with_no_aux_writes_no_aux(tmp_path):
+    _write_dataset_root(tmp_path, ["01"])
     source = tmp_path / "sub-01_task-main_nirs.snirf"
     write_snirf(synth_raw("01", "rest", duration=200.0, motion_onset=None, bad_pair=None),
                 source)
