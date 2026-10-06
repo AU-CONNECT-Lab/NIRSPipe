@@ -24,9 +24,8 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Intensity SNR", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
     ("GVTD amplitude",
-     ["gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+     ["gvtd_filt_mean", "gvtd_filt_p95",
       "gvtd_thresh", "gvtd_thresh_applied", "gvtd_censor_thresh"]),
-    ("GVTD in SD units", ["gvtd_vstd_mean", "gvtd_vstd_p95"]),
     ("Motion & spike fraction",
      ["gvtd_pct_above_thresh", "spike_pct", "spike_pct_frames",
       "gvtd_censor_pct", "motion_corrected_pct", "motion_corrected_frac_mean"]),
@@ -56,8 +55,10 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
 # Settings the record stores beside its metrics: kept in the table, out of the figures.
 _SETTING_METRICS = frozenset(
     {"qc_window_s", "gvtd_censor_n_std", "gvtd_censor_min_epoch_s"})
-# recorded for checking the optical motion index against the sensor, not charted
-_UNCHARTED_METRICS = frozenset({"gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho"})
+# recorded to be checked against, not charted: the IMU agreement, and the unfiltered GVTD
+# other implementations report, which does not follow head movement
+_UNCHARTED_METRICS = frozenset({"gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho",
+                                "gvtd_mean", "gvtd_p95", "gvtd_vstd_mean", "gvtd_vstd_p95"})
 
 # ---- Channel sets ----
 

@@ -25,6 +25,7 @@ from pathlib import Path
 
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.boilerplate import collect_software_versions
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
@@ -98,7 +99,7 @@ def _names(label: str) -> dict[str, str]:
 _COND_COLUMNS = (
     ("SCI (10 s)",      "sci_win_mean",            "{:.3f}"),
     ("SNR",             "snr_mean",                "{:.0f}"),
-    ("GVTD mean",       "gvtd_mean",               "{:.2e}"),
+    (f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", "gvtd_filt_mean", "{:.2e}"),
     ("GVTD above thr.", "gvtd_pct_above_thresh",   "{:.1%}"),
     ("Spike frames",    "spike_pct_frames",        "{:.1%}"),
     ("Motion corr.",    "motion_corrected_pct",    "{:.1%}"),
@@ -343,8 +344,8 @@ def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
     values = {key: long_section.get(key)
               for key in ("sci_win_mean", "snr_mean", "channel_retention_rate")}
 
-    per_window = windowed.get("gvtd_per_window")
-    values["gvtd_mean"] = statistics.fmean(per_window) if per_window else None
+    per_window = windowed.get("gvtd_filt_per_window")
+    values["gvtd_filt_mean"] = statistics.fmean(per_window) if per_window else None
     for key, stored in _WHOLE_RUN_SPANS:
         values[key] = (span_share(windowed.get(stored), 0.0, duration_s)
                        if windowed.get(stored) and duration_s else None)

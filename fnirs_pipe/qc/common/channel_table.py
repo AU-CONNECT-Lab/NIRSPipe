@@ -379,8 +379,6 @@ OD_SPLIT_COLUMNS = (
 # across rows. Here rather than in either template, so the raw viewer and the subject report
 # cannot end up listing different metrics for the same recording.
 MOTION_SPLIT_COLUMNS = (
-    ("gvtd_mean",             "GVTD mean"),
-    ("gvtd_p95",              "GVTD p95"),
     ("gvtd_filt_mean",        f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
     ("gvtd_filt_p95",         f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
     ("gvtd_pct_above_thresh", "GVTD % above threshold"),

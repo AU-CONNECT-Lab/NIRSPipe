@@ -498,11 +498,11 @@ METRIC_SUMMARY = {
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
-    "gvtd_mean": "Unfiltered GVTD of this channel set, averaged over the run. Not validated as a motion index and with no cutoff of its own (gvtd_thresh does not apply), so read gvtd_filt_mean for movement.",
+    "gvtd_mean": "Unfiltered GVTD of this channel set, averaged over the run: the value other implementations report, kept for comparison with them and shown in no report. Not validated as a motion index and with no cutoff of its own (gvtd_thresh does not apply), so read gvtd_filt_mean for movement.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
     "gvtd_filt_mean": f"Average movement after band-passing to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
     "gvtd_filt_p95": "The same at the worst moments, the 95th percentile.",
-    "gvtd_vstd_mean": "Unfiltered GVTD with each channel's derivative scaled to unit SD, so loud channels cannot dominate. Its mean square is 1 by construction, so the run mean shows how bursty the trace is rather than how much it moved, and it falls as motion concentrates.",
+    "gvtd_vstd_mean": "Unfiltered GVTD with each channel's derivative scaled to unit SD, so loud channels cannot dominate; recorded, shown in no report. Its mean square is 1 by construction, so the run mean shows how bursty the trace is rather than how much it moved, and it falls as motion concentrates.",
     "gvtd_vstd_p95": "The same at the 95th percentile, which also falls when motion fills under 5% of the run.",
     "gvtd_thresh": f"Motion cutoff from this recording's own band-passed GVTD histogram: its mode plus {GVTD_N_STD:g} times the spread below the mode; read it against gvtd_filt_p95. Each side of a pair sets its own, so a change here is not motion removed.",
     "gvtd_thresh_applied": "The cutoff the counts below were actually taken against: the uncorrected recording's on both sides of a pair, so the two share one yardstick.",

@@ -195,8 +195,8 @@ def compute_group_sqm_raw(
                                    entry.subject_id, exc_info=True)
                 # motion on the same window grid, which the screening pass does not measure
                 try:
-                    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_gvtd
-                    means, _p95, gvtd_t = compute_windowed_gvtd(raw_od)
+                    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
+                    means, _p95, gvtd_t = compute_windowed_filtered_gvtd(raw_od)
                     if len(gvtd_t) == len(counted["centers"]):
                         screen_windows["gvtd"] = means
                     else:
@@ -478,7 +478,7 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     # GVTD is an RMS across channels, so it has no matrix and rides along as one series.
     # Only a stored record carries it; the dyad's own pass does not measure motion, and a
     # panel that draws it has to cope with the row being absent rather than assume it.
-    gvtd = windowed.get("gvtd_per_window")
+    gvtd = windowed.get("gvtd_filt_per_window")
     if gvtd:
         out["gvtd"] = np.asarray(gvtd, dtype=float)
     return out

@@ -275,8 +275,7 @@ _TRIAL_METRICS = [
     ("psp_mean",               "PSP"),
     ("cv_mean",                "CV"),
     ("snr_mean",               "SNR"),
-    ("gvtd_mean",              "GVTD"),
-    ("gvtd_filt_mean",         "GVTD band"),
+    ("gvtd_filt_mean",         "GVTD"),
     ("channel_retention_rate", "Retention"),
 ]
 

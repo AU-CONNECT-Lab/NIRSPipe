@@ -50,12 +50,12 @@ TIME_INVARIANT = ("ch_dist_per_channel",)
 # the GVTD threshold is a mode of the whole run's histogram by definition, so a condition
 # is counted against the run's line rather than given one of its own.
 #
-# The four GVTD means come off the stored per-window series and are therefore the corrected
+# The two GVTD values come off the stored per-window series and are therefore the corrected
 # file, the stage that series is measured on; the spike and correction-footprint shares come
 # off spans found on the uncorrected file. Two stages in one list, which is why the report
 # names the stage on each row rather than printing nine bare numbers.
 COND_SCALAR_KEYS = ("sci_win_mean", "good_frac_mean", "psp_mean",
-                    "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95",
+                    "gvtd_filt_mean", "gvtd_filt_p95",
                     "cv_mean", "snr_mean",
                     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
                     "spike_pct_frames", "spike_num_frames",
