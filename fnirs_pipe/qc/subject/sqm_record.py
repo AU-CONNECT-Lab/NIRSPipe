@@ -63,6 +63,8 @@ from typing import Any
 import mne
 import numpy as np
 
+from fnirs_pipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
+                                     read_aux_table, table_channels)
 from fnirs_pipe.io.derivatives import entity_of, read_json
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
@@ -97,7 +99,8 @@ SECTIONS = ("raw", "raw_long", "raw_short",
             *_HAEMO_SECTIONS)
 
 # Sections only some runs have. Kept out of SECTIONS, which means "every run writes this" and
-# is asserted as such: censoring is opt-in, so a record without it is correct, not incomplete.
+# is asserted as such: censoring is opt-in and an IMU is on some devices only, so a record
+# without either is correct, not incomplete.
 # The group table still descends into these.
 # The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
 # `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
@@ -105,7 +108,7 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
-OPTIONAL_SECTIONS = ("censor",)
+OPTIONAL_SECTIONS = ("censor", "imu")
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one
 # number for every channel set. It stays on the whole-file section alone: repeating it
@@ -237,6 +240,26 @@ def _good_frac_scores(stages: dict[str, Path]) -> dict[str, float]:
         return {}
     scores = _sidecar(stages["sci"]).get("good_frac_scores") or {}
     return {k: float(v) for k, v in scores.items()}
+
+
+def _imu_of(stages: dict[str, Path]) -> "dict | None":
+    """The run's IMU traces, from the aux table preprocessing wrote beside its stages."""
+    table = find_aux_table(next(iter(stages.values()))) if stages else None
+    if table is None:
+        return None
+    try:
+        return imu_traces(*table_channels(read_aux_table(table)), aux_table_units(table)) or None
+    except Exception:
+        logger.warning("%s unreadable; no imu section", table, exc_info=True)
+        return None
+
+
+def _imu_slicer(imu: "dict | None"):
+    """``imu_of(t0, t1)`` for one condition, or None for a recording without an IMU."""
+    if not imu:
+        return None
+    from fnirs_pipe.qc.metrics import imu_scalars
+    return lambda t0, t1: imu_scalars(imu, t0, t1)
 
 
 def _split_scalars(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -616,6 +639,7 @@ def condition_sections(
     resp_l_freq: float,
     resp_h_freq: float,
     sep_bands=None,
+    imu: "dict | None" = None,
 ) -> dict[str, Any]:
     """One entry per annotated condition, sliced from ``windowed`` and recomputed on a crop.
 
@@ -659,7 +683,8 @@ def condition_sections(
                                 filtered=filtered)
 
     return _condition_entries(sections, raw_intensity, windows,
-                              _cutoffs_from_sidecar(stages), sep_bands, haemo_of)
+                              _cutoffs_from_sidecar(stages), sep_bands, haemo_of,
+                              imu_of=_imu_slicer(imu))
 
 
 def raw_condition_sections(
@@ -668,6 +693,7 @@ def raw_condition_sections(
     windows: "list[tuple[str, float, float]]",
     cutoffs: dict[str, float],
     sep_bands=None,
+    imu: "dict | None" = None,
 ) -> dict[str, Any]:
     """:func:`condition_sections` for a record written before the pipeline ran.
 
@@ -680,7 +706,8 @@ def raw_condition_sections(
     screened the recording itself and already holds both. Re-deriving a cutoff is how a
     condition ends up measured against a line no channel was judged by.
     """
-    return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands)
+    return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands,
+                              imu_of=_imu_slicer(imu))
 
 
 # Screening criteria a condition can be judged on: those with a windowed series to cut.
@@ -695,11 +722,13 @@ def _condition_entries(
     cutoffs: dict[str, float],
     sep_bands=None,
     haemo_of=None,
+    imu_of=None,
 ) -> dict[str, Any]:
     """The ``by_condition`` entries themselves, for whichever writer holds the record.
 
     ``haemo_of(t0, t1)`` returns that condition's ``(haemo_by_set, per_channel)``; None is a
-    pass with no haemoglobin stage, and leaves those keys out. Everything else is read out
+    pass with no haemoglobin stage, and leaves those keys out. ``imu_of(t0, t1)`` returns the
+    condition's IMU summary, None on a recording without one. Everything else is read out
     of ``sections`` rather than measured, so the two writers cannot end up with different
     numbers for one recording.
     """
@@ -800,6 +829,8 @@ def _condition_entries(
         haemo_by_set, haemo_per_channel = haemo_of(t0, t1) if haemo_of else ({}, {})
         # the long set, matching what the run's own haemoglobin rows report
         scalars.update(haemo_by_set.get("long") or haemo_by_set.get("all") or {})
+        if imu_of:
+            scalars.update(imu_of(t0, t1))
 
         # no `_post` half: the GVTD series is measured on the corrected file
         motion_by_set = {
@@ -983,6 +1014,16 @@ def compute_run_sections(
         sections.update(raw_secs)
         per_channel.update(raw_pc)
 
+    # the head-movement record, where the recording carried one. Measured on the input's own
+    # clock, the one the aux table was written on
+    imu = _imu_of(stages)
+    if imu and raw_intensity is not None:
+        try:
+            from fnirs_pipe.qc.metrics import imu_section
+            sections["imu"] = imu_section(imu, raw_intensity, sep_bands)
+        except Exception:
+            logger.warning("imu section failed", exc_info=True)
+
     # written by the prep step rather than measured here: censoring is a decision the run
     # made, and re-deriving it would silently disagree with the marks already on the files
     if "sci" in stages:
@@ -1121,7 +1162,8 @@ def compute_run_sections(
             by_condition = condition_sections(
                 sections, raw_intensity, stages,
                 cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-                resp_l_freq=resp_l_freq, resp_h_freq=resp_h_freq, sep_bands=sep_bands)
+                resp_l_freq=resp_l_freq, resp_h_freq=resp_h_freq, sep_bands=sep_bands,
+                imu=imu)
         except Exception:
             logger.warning("by_condition section failed", exc_info=True)
             by_condition = {}

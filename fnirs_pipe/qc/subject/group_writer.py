@@ -22,6 +22,7 @@ from fnirs_pipe.qc.figures.subject.group_figures import (
     build_deviation_strip,
     build_grouped_boxes,
     build_window_grid,
+    check_only,
     condition_names,
     detect_outliers,
     deviation_scores,
@@ -293,14 +294,21 @@ def _render_group(
         figure_paths[name] = {"src": f"figures/{fname}", "h": h,
                               "w": getattr(fig.layout, "width", None)}
 
+    # the columns the charts draw, settings and check-only metrics left out; the outlier
+    # score is taken over the same ones, so a run is never called out on a number not shown
+    ordered_cols: list[str] = []
+    if metric_cols:
+        with guard("Metric ordering", errors, out_desc):
+            _, ordered_cols = group_metrics(metric_cols)
+
     # one number per run, and the few worst names, which every panel below highlights
     ranked: list[str] = []
     worst: list[str] = []
     outliers: dict = {}
-    if metric_cols and not df.empty:
+    if ordered_cols and not df.empty:
         with guard("Outlier detection", errors, out_desc):
-            outliers = detect_outliers(df, metric_cols)
-            scores = deviation_scores(df, metric_cols)
+            outliers = detect_outliers(df, ordered_cols)
+            scores = deviation_scores(df, ordered_cols)
             finite = np.where(np.isfinite(scores), scores, -np.inf)
             ranked = [str(df.iloc[i, 0]) for i in np.argsort(-finite)]
             worst = [name for name in ranked if name in outliers][:3]
@@ -308,9 +316,6 @@ def _render_group(
     box_panels: list[dict] = []
     dropped: list[str] = []
     if not df.empty and metric_cols:
-        ordered_cols: list[str] = []
-        with guard("Metric ordering", errors, out_desc):
-            _, ordered_cols = group_metrics(metric_cols)
         with guard("Deviation strip", errors, out_desc):
             strip, dropped = build_deviation_strip(df, ordered_cols)
             _save("strip", "strip", strip)
@@ -356,6 +361,8 @@ def _render_group(
              "no run carries conditions, so the per-condition panels are absent; the "
              "windowed panel keeps the time axis")
 
+    # the TSV keeps every column; the page leaves out what is only there to be checked
+    shown_cols = [c for c in df.columns if not check_only(c)]
     html = render(
         template_name,
         **page_vars(
@@ -379,8 +386,8 @@ def _render_group(
         figure_paths=figure_paths,
         box_panels=box_panels,
         tsv_name=tsv_path.name,
-        table_columns=list(df.columns),
-        table_rows=df.values.tolist(),
+        table_columns=shown_cols,
+        table_rows=df[shown_cols].values.tolist(),
         outliers=outliers,
     )
     html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name

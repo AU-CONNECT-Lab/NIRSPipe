@@ -12,6 +12,7 @@ One module per metric family, layered so the imports run one way::
     motion      per-channel spikes and the motion-correction footprint
     haemo       HbO-HbR correlation, CNR, band powers, gcor, drift, retention
     windowed    the same questions per window, on one shared grid
+    imu         head movement from the IMU: its summaries and its agreement with GVTD
     aggregate   the dicts a run stores, assembled from the families above
     hyper       the dyad-level questions: the shared screening grid and its scalars
 
@@ -72,6 +73,9 @@ from fnirs_pipe.qc.metrics.haemo import (  # noqa: F401
 )
 from fnirs_pipe.qc.metrics.windowed import (  # noqa: F401
     compute_windowed_sci, compute_windowed_psp, attach_windowed_series,
+)
+from fnirs_pipe.qc.metrics.imu import (  # noqa: F401
+    IMU_QUANTITIES, IMU_STAT_KEYS, imu_scalars, imu_gvtd_agreement, imu_section,
 )
 from fnirs_pipe.qc.metrics.aggregate import (  # noqa: F401
     compute_raw_sqm, compute_haemo_sqm, compute_prep_haemo_sqm, comparable_stage_metrics,

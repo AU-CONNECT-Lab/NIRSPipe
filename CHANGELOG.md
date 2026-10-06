@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - GLM sidecars record the boxcar length or the events table, and an FIR model's delays
 - The screening sidecar records whether the coupled share was counted over task blocks or the whole run
+- Quality records keep IMU gyroscope speed and accelerometer jerk (mean, median, p95) per run and condition, and their frame-level agreement with GVTD
+- Subject, raw and cohort reports show the IMU summaries; cohort boxes mark the mean beside the median
 
 ### Changed
 - Coherence labels and help call the edge-affected region the cone of influence, so kept cells read "outside COI"
@@ -20,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Mean SNR has no colour cutoffs
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
 - The GVTD motion band is 0.02-0.5 Hz, the published task band, and `gvtd_threshold` defaults to the reported multiplier
+- The cohort outlier score and table cover the charted metrics only
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials
@@ -35,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - The orphan-separation caveat counted each wavelength and suggested bounds the CLI refuses
 - The chunked-trials caveat showed when no annotation was long enough to cut
 - The raw-signal caption claimed uncorrected data when it had fallen back to `desc-preproc`
+- The cohort report charted censoring columns under "Other", settings included
 
 ## [0.57.0] - 2026-10-05
 

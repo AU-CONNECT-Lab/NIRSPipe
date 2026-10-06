@@ -644,7 +644,9 @@
       over channels that would only track how many a set has. A montage that did not split
       has no table, so the whole list stays here. -#}
   {%- set flat_censor = sqm.get('gvtd_censor_pct') is not none %}
-  {% if flat_censor or not motion_split or not condition_label %}
+  {#- the IMU is not optical data, so it has no channel set and no column above -#}
+  {%- set has_imu = sqm.get('gyro_speed_mean') is not none or sqm.get('accel_jerk_mean') is not none %}
+  {% if flat_censor or has_imu or not motion_split or not condition_label %}
   <p class="qm-note">
      {%- if motion_split %}{{ section_note('metrics.motion_extra_split') }}
      {%- elif gvtd_channel_set == 'long' %}{{ section_note('metrics.motion_extra_long', pct=100 * spike_ch_frac) }}
@@ -657,6 +659,11 @@
     {{ qm_tr('gvtd_censor_pct', 'GVTD censored % (' ~ (sqm.get('gvtd_censor_channel_set') or 'long')
                                 ~ ' channels, n_std ' ~ sqm.get('gvtd_censor_n_std') ~ ')') }}
     {{ qm_tr('gvtd_censor_retained_s', 'GVTD retained (s in ' ~ sqm.get('gvtd_censor_n_epochs') ~ ' epoch(s))') }}
+    {% endif %}
+    {% if has_imu %}
+    {% for key in imu_stat_keys if sqm.get(key) is not none %}
+    {{ qm_tr(key, metric_label(key)) }}
+    {% endfor %}
     {% endif %}
     {% if not motion_split and sqm.get('motion_corrected_pct') is not none %}
     {{ qm_tr('motion_corrected_pct', 'Motion corrected % (exp.)') }}

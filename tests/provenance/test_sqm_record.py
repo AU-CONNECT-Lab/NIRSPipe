@@ -28,12 +28,16 @@ rot when a section is added or a metric moves:
 
 import json
 
+import mne
 import numpy as np
+import pandas as pd
 import pytest
 
+from fnirs_pipe.io.auxiliary import aux_table_path
 from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
 from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.qc.metrics import long_short_channels
+from fnirs_pipe.qc.subject.group_writer import _scalars
 from fnirs_pipe.qc.subject.sqm_record import (
     SECTIONS,
     build_sqm_records,
@@ -58,18 +62,22 @@ _RESAMPLE_SFREQ = SFREQ / 2
 _CENSOR = dict(gvtd_censor="long", gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0)
 
 
-def _run(out_dir, subject="01", task="tapping", post=True, censor=None):
+def _run(out_dir, subject="01", task="tapping", post=True, censor=None, blocks=None):
     """A full run on synthetic data, left on disk the way the pipeline leaves it.
 
     Post is asked for every optional step it has, so the record comes out with one section
     per haemo stage. A leaner post is what `test_a_skipped_step_leaves_no_section` covers.
+    ``blocks`` replaces the events with ``[(onset, duration, label), ...]`` conditions.
     """
     bids = out_dir / "bids"
     (bids / f"sub-{subject}" / "nirs").mkdir(parents=True, exist_ok=True)
     source = bids / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-{task}_nirs.snirf"
 
     from fnirs_pipe.io.snirf import read_snirf, write_snirf
-    write_snirf(synth_raw(subject, task), source)
+    raw = synth_raw(subject, task)
+    if blocks:
+        raw.set_annotations(mne.Annotations(*zip(*blocks)))
+    write_snirf(raw, source)
 
     # read_snirf, not the in-memory object: it is what stamps the input, and Recorder
     # only registers a source path for an object that carries a stamp
@@ -298,3 +306,62 @@ def test_censoring_off_leaves_no_marks_and_no_section(run):
         assert _n_bad_gvtd(stages[desc]) == 0, desc
     assert "censor" not in sections
     assert set(SECTIONS) <= set(sections), set(SECTIONS) - set(sections)
+
+
+# ---- The IMU, where the recording carried one ----
+# A gyroscope still except for one 10 s turn at 5 deg/s inside the "talk" block, so every
+# number the section holds has a closed form: the run's mean is 5 x 10 / 400, its median and
+# p95 are zero, and the turn belongs to one condition and not the other.
+
+_BLOCKS = [(20.0, 150.0, "rest"), (200.0, 150.0, "talk")]
+_TURN = (250.0, 260.0)
+
+
+def _write_aux_table(nirs_dir, stage_path):
+    t = np.round(np.arange(0.0, 400.0, 0.01), 2)
+    turn = np.where((t >= _TURN[0]) & (t < _TURN[1]), 5.0, 0.0)
+    table = pd.DataFrame({"time": t, "GYRO_X_1": turn, "GYRO_Y_1": 0.0, "GYRO_Z_1": 0.0,
+                          "ACCEL_X_1": 0.0, "ACCEL_Y_1": 0.0, "ACCEL_Z_1": 9.8})
+    path = aux_table_path(stage_path)
+    table.to_csv(path, sep="	", index=False, compression="gzip")
+    units = {**{f"GYRO_{a}_1": "o/s" for a in "XYZ"}, **{f"ACCEL_{a}_1": "m/s^2" for a in "XYZ"}}
+    path.with_name(path.name.removesuffix(".gz")).with_suffix(".json").write_text(
+        json.dumps({"Units": units}), encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def imu_run(tmp_path_factory):
+    _, nirs_dir = _run(tmp_path_factory.mktemp("sqm_imu"), blocks=_BLOCKS)
+    stages = scan_runs(nirs_dir)["sub-01_task-tapping"]
+    _write_aux_table(nirs_dir, stages["sci"])
+    return compute_run_sections(stages, **_BANDS)
+
+
+def test_no_aux_table_no_imu_section(run):
+    _, _, _, sections = run
+    assert "imu" not in sections
+
+
+def test_the_imu_section_is_the_trace_over_the_run(imu_run):
+    imu = imu_run["imu"]
+    duration = 400.0
+    assert np.isclose(imu["gyro_speed_mean"], 5.0 * (_TURN[1] - _TURN[0]) / duration, rtol=0.01)
+    assert imu["gyro_speed_median"] == 0.0 and imu["gyro_speed_p95"] == 0.0
+    assert imu["gyro_speed_unit"] == "°/s"
+    assert imu["accel_jerk_mean"] == 0.0
+    # a sensor that never moved has no rank order to agree with
+    assert imu["accel_jerk_gvtd_rho"] is None
+    assert -1.0 <= imu["gyro_speed_gvtd_rho"] <= 1.0
+
+
+def test_each_condition_holds_its_own_stretch_of_the_imu(imu_run):
+    by_condition = imu_run["by_condition"]
+    assert by_condition["rest"]["scalars"]["gyro_speed_mean"] == 0.0
+    talk = by_condition["talk"]["scalars"]["gyro_speed_mean"]
+    assert np.isclose(talk, 5.0 * (_TURN[1] - _TURN[0]) / 150.0, rtol=0.01)
+
+
+def test_the_group_table_flattens_the_numbers_and_drops_the_units(imu_run):
+    flat = _scalars(imu_run)
+    assert "imu_gyro_speed_mean" in flat and "imu_gyro_speed_gvtd_rho" in flat
+    assert "imu_gyro_speed_unit" not in flat

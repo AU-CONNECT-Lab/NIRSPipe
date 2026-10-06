@@ -17,6 +17,7 @@ import numpy as np
 
 from fnirs_pipe.io.naming import parse_path
 from fnirs_pipe.qc.boilerplate.notes import section_note
+from fnirs_pipe.qc.metrics.imu import IMU_STAT_KEYS
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.condition_views")
@@ -60,7 +61,7 @@ COND_SCALAR_KEYS = ("sci_win_mean", "good_frac_mean", "psp_mean",
                     "spike_pct_frames", "spike_num_frames",
                     "motion_corrected_pct", "motion_corrected_num",
                     "motion_corrected_n_segments",
-                    "channel_retention_rate")
+                    "channel_retention_rate", *IMU_STAT_KEYS)
 
 # mne's compute_psd caps n_fft here, so a shorter cut lands on a coarser grid than the run.
 # One floor for the record and the report, or a page shows a figure for a number it refused.

@@ -33,6 +33,8 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
      ["gvtd_num_above_thresh", "spike_count", "spike_num_frames",
       "gvtd_censor_n_spans", "motion_corrected_num", "motion_corrected_n_segments"]),
     ("Retained recording (s)", ["gvtd_censor_retained_s"]),
+    ("Gyroscope speed", ["gyro_speed_mean", "gyro_speed_median", "gyro_speed_p95"]),
+    ("Accelerometer jerk", ["accel_jerk_mean", "accel_jerk_median", "accel_jerk_p95"]),
     ("HbO-HbR correlation", ["hbo_hbr_corr_mean"]),
     ("Global correlation", ["gcor_hbo", "gcor_hbr"]),
     ("Low-freq drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
@@ -53,6 +55,8 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
 # Settings the record stores beside its metrics: kept in the table, out of the figures.
 _SETTING_METRICS = frozenset(
     {"qc_window_s", "gvtd_censor_n_std", "gvtd_censor_min_epoch_s"})
+# recorded for checking the optical motion index against the sensor, not charted
+_UNCHARTED_METRICS = frozenset({"gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho"})
 
 # ---- Channel sets ----
 
@@ -74,9 +78,9 @@ def _split_column(col: str) -> tuple[str, str, str]:
     Longest section first, or ``raw`` would match a ``raw_long_`` column and leave
     ``long_sci_mean`` behind.
     """
-    from fnirs_pipe.qc.subject.sqm_record import SECTIONS
+    from fnirs_pipe.qc.subject.sqm_record import OPTIONAL_SECTIONS, SECTIONS
 
-    for section in sorted(SECTIONS, key=len, reverse=True):
+    for section in sorted((*SECTIONS, *OPTIONAL_SECTIONS), key=len, reverse=True):
         if col.startswith(f"{section}_"):
             stage, _, suffix = section.rpartition("_")
             if suffix in ("long", "short"):
@@ -90,17 +94,23 @@ def _bare_metric(col: str) -> str:
     return _split_column(col)[2]
 
 
+def check_only(col: str) -> bool:
+    """Recorded to be checked against, not shown: ``imu_gyro_speed_gvtd_rho`` -> True."""
+    return _bare_metric(col) in _UNCHARTED_METRICS
+
+
 def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Split metric_cols into (groups, ordered_flat) following _METRIC_GROUPS; leftovers -> 'Other'.
 
     Matching ignores the section prefix, so ``raw_sci_mean`` and ``raw_long_sci_mean``
     both land in the coupling group while staying separate columns. Settings are dropped
-    rather than grouped, so neither the ordering nor the charts carry them.
+    rather than grouped, so neither the ordering nor the charts carry them, and so are the
+    metrics recorded only to be checked against.
     """
     by_metric: dict[str, list[str]] = {}
     for col in metric_cols:
         bare = _bare_metric(col)
-        if bare not in _SETTING_METRICS:
+        if bare not in _SETTING_METRICS and not check_only(col):
             by_metric.setdefault(bare, []).append(col)
 
     groups: list[tuple[str, list[str]]] = []
@@ -559,6 +569,7 @@ def build_condition_timeline(
 _CONDITION_METRICS = [
     ("sci_win_mean", "SCI"), ("psp_mean", "PSP"), ("cv_mean", "CV"), ("snr_mean", "SNR"),
     ("gvtd_mean", "GVTD"), ("gvtd_pct_above_thresh", "GVTD above threshold"),
+    ("gyro_speed_median", "Gyroscope speed"),
 ]
 
 def condition_names(rows: list[dict]) -> list[str]:
@@ -844,7 +855,7 @@ def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -
         drawn += 1
         colour = _SET_COLOURS[cset]
         fig.add_trace(go.Box(
-            x=box_x, y=box_y, width=slot * 0.68, boxpoints=False,
+            x=box_x, y=box_y, width=slot * 0.68, boxpoints=False, boxmean=True,
             line=dict(color=colour, width=1.2), fillcolor="rgba(0,0,0,0)",
             hoverinfo="skip", showlegend=False, legendgroup=cset,
         ))

@@ -90,8 +90,9 @@ from fnirs_pipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import (
-    CV_PASS, EDGE_S, SCI_PASS, edge_to_mid_rms, gvtd_channel_blocks, registration_offset,
-    separation_bands, separation_orphans, epochable_events, resolve_cutoffs,
+    CV_PASS, EDGE_S, IMU_STAT_KEYS, SCI_PASS, edge_to_mid_rms, gvtd_channel_blocks,
+    registration_offset, separation_bands, separation_orphans, epochable_events,
+    resolve_cutoffs,
 )
 from fnirs_pipe.qc.metrics._helpers import bands_from_record
 from fnirs_pipe.qc.figures.common._utils import chunk_annotations
@@ -136,7 +137,7 @@ from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
 from fnirs_pipe.qc.boilerplate.vocabulary import (
-    format_metric, is_key_metric, metric_class, metric_summary,
+    format_metric, is_key_metric, metric_class, metric_label, metric_summary,
 )
 from fnirs_pipe.qc.common.record_views import condition_verdict_view
 from fnirs_pipe.qc.common.windows import refuse_colliding_labels
@@ -1277,8 +1278,9 @@ def _section_sqm(
         # `preproc` before `preproc_long`, so the long values win where they exist and the
         # whole-file ones the split does not carry (pct_data_retained) survive underneath
         # `motion_long` the same way: only its frame counts differ from `motion`
-        # `censor` last and unsuffixed: its keys are all gvtd_censor_* so nothing collides
-        for key in (*keys, "motion_long", "preproc_long", "censor"):
+        # `censor` and `imu` last and unsuffixed: their keys (gvtd_censor_*, gyro_speed_*,
+        # accel_jerk_*) collide with nothing
+        for key in (*keys, "motion_long", "preproc_long", "censor", "imu"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
         # The corrected side of the *same* channel set, suffixed rather than merged: it
@@ -2011,6 +2013,8 @@ def build_subject_report(
         is_key_metric=is_key_metric,
         format_metric=format_metric,
         metric_class=metric_class,
+        metric_label=metric_label,
+        imu_stat_keys=IMU_STAT_KEYS,
         od_split_columns=measured_columns(
             OD_SPLIT_COLUMNS, sqm_vars["sqm_all"], sqm_vars["sqm_long"],
             sqm_vars["sqm_short"]),

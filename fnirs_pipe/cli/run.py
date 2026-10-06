@@ -177,8 +177,8 @@ def _build_parser() -> argparse.ArgumentParser:
                                "decide whether a run is usable stay on the long channels.")
     prep_opt.add_argument("--gvtd-censor-n-std", type=float, default=10.0,
                           help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
-                               "mode. 10 is the lenient value used for censoring; the reports "
-                               "score at 3, which censors far more.")
+                               "mode. 10 is the lenient value used for censoring, and the "
+                               "reports score at the same 10.")
     prep_opt.add_argument("--gvtd-min-epoch-s", type=float, default=30.0,
                           help="Shortest surviving stretch --gvtd-censor keeps (s). Anything "
                                "shorter is censored with the artifacts around it.")

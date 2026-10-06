@@ -29,8 +29,8 @@ from fnirs_pipe.qc.common.channel_table import (
     split_table,
 )
 from fnirs_pipe.qc.metrics import (
-    SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores, resolve_cutoffs,
-    screen_channels, screening_scores,
+    IMU_STAT_KEYS, SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
+    imu_section, resolve_cutoffs, screen_channels, screening_scores,
 )
 from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
                                            separation_orphans)
@@ -67,7 +67,7 @@ _EPOCH_TMAX   = 25.0
 # added to either one leaves the list on its own.
 _VIEW_MONTAGE_KEYS = tuple(
     k for k in ("cp_mean", "n_flat_channels", "mean_amp_mean",
-                "spike_count", "spike_pct_frames", "spike_num_frames")
+                "spike_count", "spike_pct_frames", "spike_num_frames", *IMU_STAT_KEYS)
     if k not in {key for key, _ in (*OD_SPLIT_COLUMNS, *MOTION_SPLIT_COLUMNS)}
 )
 _VIEW_SCALAR_KEYS = (
@@ -77,6 +77,7 @@ _VIEW_SCALAR_KEYS = (
     "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
     "spike_count", "spike_pct", "spike_pct_frames", "spike_num_frames",
+    *IMU_STAT_KEYS,
 )
 
 # ---- Channel decisions table ----
@@ -372,6 +373,10 @@ def _process_run(
     imu: dict = {}
     with guard("IMU", errors, label):
         imu = imu_traces(*read_aux_snirf(run["snirf_path"]))
+    imu_sec: dict = {}
+    if imu:
+        with guard("IMU summary", errors, label):
+            imu_sec = imu_section(imu, raw, sep_bands)
     with guard("GVTD carpet", errors, label):
         from fnirs_pipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
@@ -603,14 +608,16 @@ def _process_run(
     # same run, and one silently overwriting the other loses whichever ran first. Same
     # shape as that one, so the group table reads both through one path.
     sqm_path = sqm_dir / (label + RECORD_SUFFIXES["sqmraw"])
-    sections = {**raw_secs, "windowed": windowed, "per_channel": raw_pc}
+    sections = {**raw_secs, **({"imu": imu_sec} if imu_sec else {}),
+                "windowed": windowed, "per_channel": raw_pc}
     # written whenever the recording carries conditions, independently of `by_condition`:
     # the flag decides what a report shows, the record says what was measured. Deliberately
     # not in `SECTIONS`, so the group table does not descend into it.
     by_cond: dict = {}
     if cond_windows:
         with guard("Per-condition metrics", errors, label):
-            by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands)
+            by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands,
+                                             imu=imu)
     record = sqm_record_dict(sections, [str(run["snirf_path"])])
     if by_cond:
         record["by_condition"] = by_cond
@@ -652,7 +659,7 @@ def _process_run(
         # channel-set sections, and the record on disk is where the raw numbers live.
         "sqm": {
             "rows": metric_rows(
-                view_scalars,
+                {**view_scalars, **imu_sec},
                 _VIEW_MONTAGE_KEYS if sqm_split else _VIEW_SCALAR_KEYS,
                 skip_missing=True),
             "split":        split,
