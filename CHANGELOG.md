@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - The cohort over-time grid, by-condition panels and each run's condition timeline draw the motion-band GVTD, not the unfiltered one
 - Reports show only the motion-band GVTD; the unfiltered values stay in the record, TSV and database for comparison with other implementations
 - Quality records keep their arrays in TSV tables beside the JSON: channel-by-window matrices headed by channel name, per-window series, per-channel values; older records are refused
+- `fnirs-qc prep-raw` writes its channel table as `_desc-rawchannel_qc.tsv`, so a tree both commands wrote keeps both verdicts
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials

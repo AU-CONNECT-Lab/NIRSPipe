@@ -567,11 +567,16 @@ def format_rows(
 # optode pairing and channel properties of one recording, and this is scores and the
 # reason a channel was rejected.
 CHANNEL_METRICS_SUFFIX = "_desc-channel_qc.tsv"
+# prep-raw's, raw-prefixed like its record, so neither command's verdict replaces the other's
+RAW_CHANNEL_METRICS_SUFFIX = "_desc-rawchannel_qc.tsv"
+# best first, the order a reader wanting one verdict per run takes them in
+CHANNEL_METRICS_SUFFIXES = (CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX)
 
 
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
                      sci_threshold: float | None = None,
-                     psp_threshold: float | None = None) -> None:
+                     psp_threshold: float | None = None,
+                     suffix: str = CHANNEL_METRICS_SUFFIX) -> None:
     """Per-channel metrics for one run. The name carries the run's entities, or a subject
     with several tasks would keep only whichever ran last.
 
@@ -583,7 +588,7 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     reasons = {r["name"]: r["reason"]
                for r in format_rows(rows, sci_threshold, psp_threshold=psp_threshold)}
     rows = [{**r, "reason": reasons.get(r["name"], "")} for r in rows]
-    out_path = Path(out_dir) / (label + CHANNEL_METRICS_SUFFIX)
+    out_path = Path(out_dir) / (label + suffix)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(CSV_FIELDS), extrasaction="ignore",

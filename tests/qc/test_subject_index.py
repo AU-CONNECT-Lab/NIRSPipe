@@ -8,7 +8,9 @@ these build a subject folder rather than running anything.
 import json
 
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from fnirs_pipe.qc.common.channel_table import (
+    CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX,
+)
 from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
 from fnirs_pipe.qc.subject.record_io import write_record
 from fnirs_pipe.qc.subject.subject_index import (
@@ -40,13 +42,17 @@ def _run(sub_dir, task, *, sci=0.96, gvtd=9e-3, bad_pairs=(), channels=("S1_D1",
                  "sfreq": 10.0, "duration_s": 300.0},
     }))
 
+    _channel_table(nirs, label, channels, bad_pairs)
+    return label
+
+
+def _channel_table(nirs, label, channels, bad_pairs, suffix=CHANNEL_METRICS_SUFFIX):
     lines = [TAB.join(["name", "sci", "snr", "cv", "corr", "is_bad"])]
     for pair in channels:
         for wavelength in (760, 850):
             lines.append(TAB.join([f"{pair} {wavelength}", "0.9", "20", "0.1", "0.5",
                                    str(pair in bad_pairs)]))
-    (nirs / (label + CHANNEL_METRICS_SUFFIX)).write_text("\n".join(lines) + "\n")
-    return label
+    (nirs / (label + suffix)).write_text("\n".join(lines) + "\n")
 
 
 # ---- which run stands apart ----
@@ -110,6 +116,18 @@ def test_the_pair_rejected_most_often_comes_first(tmp_path):
     ]
     rows = collect_bad_channels(tmp_path, labels)["rejected"]
     assert [(r["pair"], r["n_bad"]) for r in rows] == [("S2_D2", 2), ("S1_D1", 1)]
+
+
+def test_the_pipeline_verdict_wins_and_prep_raws_stands_in_where_it_is_alone(tmp_path):
+    pairs = ("S1_D1", "S2_D2")
+    both = _run(tmp_path, "rest", bad_pairs=("S1_D1",), channels=pairs)
+    _channel_table(tmp_path / "nirs", both, pairs, ("S2_D2",), RAW_CHANNEL_METRICS_SUFFIX)
+    raw_only = "sub-01_task-hold"
+    _channel_table(tmp_path / "nirs", raw_only, pairs, ("S2_D2",), RAW_CHANNEL_METRICS_SUFFIX)
+
+    rows = collect_bad_channels(tmp_path, [both, raw_only])["rejected"]
+    assert {r["pair"]: r["bad_in"] for r in rows} == {"S1_D1": [True, False],
+                                                      "S2_D2": [False, True]}
 
 
 def test_a_tree_without_channel_metrics_says_nothing(tmp_path):
@@ -224,3 +242,26 @@ def test_a_run_in_a_session_folder_is_listed_and_linked_there(tmp_path):
     assert row["label"] == label
     assert {"text": "channels", "href": f"ses-a/nirs/{label}{CHANNEL_METRICS_SUFFIX}"} \
         in row["links"]
+
+
+def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
+    """prep-raw used to write the pipeline's name, so whichever ran last set the index's marks."""
+    from fnirs_pipe.cli import qc as qc_cli, run as run_cli
+    from tests._synth import _write_dataset_root, _write_subject, synth_raw
+
+    bids = tmp_path / "bids"
+    _write_dataset_root(bids, ["01"])
+    _write_subject(bids, "01", "tap", synth_raw("01", "tap", duration=300.0))
+    out = tmp_path / "out"
+    shared = ["--participant-label", "01", "--dpf", "6", "--cardiac-l-freq", "0.7",
+              "--cardiac-h-freq", "1.5", "--skip-bids-validation"]
+    run_cli.main([str(bids), str(out), "participant", *shared, "--sci-threshold", "0.5",
+                  "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--no-report",
+                  "--work-dir", str(tmp_path / "w")])
+    pipeline_table = out / "sub-01" / "nirs" / ("sub-01_task-tap" + CHANNEL_METRICS_SUFFIX)
+    before = pipeline_table.read_text(encoding="utf-8")
+
+    qc_cli.main(["prep-raw", str(bids), str(out), *shared])
+
+    assert pipeline_table.read_text(encoding="utf-8") == before
+    assert (pipeline_table.parent / ("sub-01_task-tap" + RAW_CHANNEL_METRICS_SUFFIX)).exists()

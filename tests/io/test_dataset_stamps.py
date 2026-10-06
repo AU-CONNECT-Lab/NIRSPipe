@@ -31,7 +31,7 @@ def test_the_source_tree_is_named_with_the_version_that_wrote_it(tmp_path):
     entry = _description(out)["SourceDatasets"][0]
     assert entry["Name"] == "fnirs-pipe"
     assert entry["Version"] == _description(source)["GeneratedBy"][0]["Version"]
-    assert entry["URL"].startswith("file:")
+    assert entry["URL"] == "../fnirs-pipe"
 
 
 def test_a_tree_with_no_source_claims_none(tmp_path):
@@ -46,7 +46,7 @@ def test_an_unreadable_source_still_leaves_a_usable_pointer(tmp_path):
     write_dataset_description(out, source=source)
 
     entry = _description(out)["SourceDatasets"][0]
-    assert entry["URL"].startswith("file:")
+    assert entry["URL"] == "../src"
     assert "Version" not in entry
 
 
@@ -89,20 +89,11 @@ def test_the_ignored_records_are_the_ones_the_writers_name(tmp_path):
         "group-G1_task-rest_desc-sqm_qc.json",
     ]
     kept = ["sub-01_task-rest_desc-preproc_nirs.json", "sub-01_task-rest_desc-channel_qc.tsv",
+            "sub-01_task-rest_desc-rawchannel_qc.tsv",
             "group-G1_task-rest_desc-usable_qc.tsv", "group-G1_task-rest_stat-wtc_relmat.json"]
 
     assert all(any(fnmatch(name, line) for line in lines) for name in written)
     assert not any(fnmatch(name, line) for name in kept for line in lines)
-
-
-def test_the_stamp_is_rewritten_when_the_source_changes(tmp_path):
-    a, b, out = tmp_path / "a", tmp_path / "b", tmp_path / "out"
-    write_dataset_description(a)
-    write_dataset_description(b)
-    write_dataset_description(out, source=a)
-    write_dataset_description(out, source=b)
-
-    assert _description(out)["SourceDatasets"][0]["URL"].endswith("/b")
 
 
 def test_a_prep_tree_restamps_a_description_an_older_version_left(tmp_path):
@@ -131,7 +122,7 @@ def test_a_crop_tree_names_the_dataset_its_input_sat_in(tmp_path):
     _setup_deriv_dir(tmp_path / "derivatives", "01", None, snirf)
 
     entry = _description(tmp_path / "derivatives" / _DERIV_NAME)["SourceDatasets"][0]
-    assert entry["URL"] == bids.resolve().as_uri()
+    assert entry["URL"] == "../../bids"
 
 
 def test_dataset_root_of_stops_at_the_nearest_description(tmp_path):

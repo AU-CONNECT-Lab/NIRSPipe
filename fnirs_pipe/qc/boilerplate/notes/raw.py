@@ -96,7 +96,7 @@ NOTES = {
     "raw.channel_decisions":
         "One row per source-detector pair: a decision applies to the pair, and SCI is a "
         "property of the pair rather than of either wavelength. SNR, CV and spike show the "
-        "first wavelength; both are in the channel TSV (<code>_desc-channel_qc.tsv</code>) "
+        "first wavelength; both are in the channel TSV (<code>_desc-rawchannel_qc.tsv</code>) "
         "beside the quality record. Rows in red were rejected by screening, and Status "
         "names the criterion. Click the decision chip to cycle: &#8212; &#8594; good "
         "&#8594; bad. Saves automatically.",

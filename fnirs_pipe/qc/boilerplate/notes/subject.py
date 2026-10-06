@@ -327,8 +327,9 @@ NOTES = {
     "subject_index.rejections":
         "{n_clean} of {n_pairs} source-detector pairs survived every run. Both wavelengths "
         "of a pair are collapsed into one row: rejecting either rejects the pair. Read "
-        "from each run&rsquo;s <code>_desc-channel_qc.tsv</code>; this is the set "
-        "<code>--bads-scope subject</code> takes the union of.",
+        "from each run&rsquo;s <code>_desc-channel_qc.tsv</code>, the set "
+        "<code>--bads-scope subject</code> takes the union of, or from "
+        "<code>_desc-rawchannel_qc.tsv</code> for a run only prep-raw saw.",
     "subject_index.rebuilt":
         "This page is assembled from the records under <code>nirs/</code> each time either "
         "command runs, so it lists whatever is on disk rather than what one command produced. "

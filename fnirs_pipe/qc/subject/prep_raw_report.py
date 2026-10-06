@@ -24,8 +24,9 @@ from fnirs_pipe.qc.common.figure_io import (
 from fnirs_pipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 from fnirs_pipe.qc.common.channel_table import (
-    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, channel_columns, channel_rows, format_rows,
-    heatmap_args, pair_rows, registration_note, save_channel_csv, separation_blocks,
+    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX, channel_columns,
+    channel_rows, format_rows, heatmap_args, pair_rows, registration_note, save_channel_csv,
+    separation_blocks,
     separation_notes,
     split_table,
 )
@@ -630,7 +631,8 @@ def _process_run(
         record["by_condition"] = by_cond
     write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
-    save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"])
+    save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"],
+                     suffix=RAW_CHANNEL_METRICS_SUFFIX)
 
     n_total = len(sci_scores)
     bad_rate = 100 * len(bad_channels) / n_total if n_total else 0.0

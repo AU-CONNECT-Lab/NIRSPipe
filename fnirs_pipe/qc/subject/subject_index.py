@@ -31,7 +31,9 @@ from fnirs_pipe.qc.common.report_shell import (
 from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
 from fnirs_pipe.io.derivatives import entity_of
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from fnirs_pipe.qc.common.channel_table import (
+    CHANNEL_METRICS_SUFFIX, CHANNEL_METRICS_SUFFIXES, RAW_CHANNEL_METRICS_SUFFIX,
+)
 from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, SQM_DESCS, entities_of,
@@ -74,6 +76,7 @@ _ARTEFACTS = (
     ("MNE",        "{mne_report}"),
     ("provenance", "figures/{provenance}"),
     ("channels",   "{nirs}/{label}" + CHANNEL_METRICS_SUFFIX),
+    ("raw channels", "{nirs}/{label}" + RAW_CHANNEL_METRICS_SUFFIX),
     ("aux",        "{nirs}/{label}_desc-aux_timeseries.tsv.gz"),
 )
 
@@ -228,7 +231,8 @@ def _condition_pages(sub_dir: Path, label: str,
 def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     """Which source-detector pair each run rejected, over all of the subject's runs.
 
-    Read from each run's ``_desc-channel_qc.tsv``, which carries one ``is_bad`` per channel.
+    Read from each run's channel table, which carries one ``is_bad`` per channel: the
+    pipeline's ``_desc-channel_qc.tsv``, else prep-raw's ``_desc-rawchannel_qc.tsv``.
     The two wavelengths of a pair are collapsed into the pair: rejecting one rejects the
     optode.
 
@@ -241,8 +245,9 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     bad_by_label: dict[str, set[str]] = {}
 
     for label in labels:
-        path = _nirs_dir(sub_dir, label) / (label + CHANNEL_METRICS_SUFFIX)
-        if not path.exists():
+        path = next((p for p in (_nirs_dir(sub_dir, label) / (label + suffix)
+                                 for suffix in CHANNEL_METRICS_SUFFIXES) if p.exists()), None)
+        if path is None:
             continue
         bad: set[str] = set()
         with path.open(encoding="utf-8", newline="") as fh:
