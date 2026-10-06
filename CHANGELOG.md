@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - The reported GVTD threshold is the mode plus 10 left-side SDs, as censoring uses, and its share is labelled "% above threshold"
 - The GVTD motion band is 0.02-0.5 Hz, the published task band, and `gvtd_threshold` defaults to the reported multiplier
 - The cohort outlier score and table cover the charted metrics only
+- The cohort over-time grid and each run's condition timeline draw the motion-band GVTD, not the unfiltered one
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials

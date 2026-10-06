@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
                                                   _hex_to_rgba)
 
@@ -307,10 +308,12 @@ _WINDOW_MATRICES = [
     ("cv",  "CV (windowed)",  "cv_matrix",  "cv_per_channel",  "cv_window_times_s"),
 ]
 
-# GVTD is stored as a series per channel set already. The bare key is the long channels,
-# following `spike_spans_s`; `_short` and `_all` name the others.
-_GVTD_SETS = {"long": "gvtd_per_window", "short": "gvtd_per_window_short",
-              "all": "gvtd_per_window_all"}
+# GVTD is stored as a series per channel set already. The motion-band one, being the trace
+# that follows head movement; the bare key is the long channels, following `spike_spans_s`,
+# and `_short` and `_all` name the others.
+_GVTD_SETS = {"long": "gvtd_filt_per_window", "short": "gvtd_filt_per_window_short",
+              "all": "gvtd_filt_per_window_all"}
+_GVTD_LABEL = f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"
 
 # Each windowed series is smoothed over this many seconds and then sampled at that same step.
 SMOOTH_S = 60.0
@@ -429,7 +432,7 @@ def build_window_grid(
     names = [str(r.get("bids_name", "")) for r in rows]
     picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
     if "gvtd" in metrics:
-        picked.append(("gvtd", "GVTD (windowed)"))
+        picked.append(("gvtd", f"{_GVTD_LABEL} (windowed)"))
     panels = [(key, label) for key, label in picked
               if any(_window_series(r, key) for r in rows)]
     if not panels:
@@ -520,7 +523,7 @@ def build_condition_timeline(
     """
     picked = [(key, label) for key, label, *_rest in _WINDOW_MATRICES if key in metrics]
     if "gvtd" in metrics:
-        picked.append(("gvtd", "GVTD"))
+        picked.append(("gvtd", _GVTD_LABEL))
     panels = [(key, label) for key, label in picked if _window_series(row, key)]
     if not panels:
         return None
