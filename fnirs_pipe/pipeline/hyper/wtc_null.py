@@ -22,15 +22,10 @@ from pathlib import Path
 import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.io.tables import write_tsv
 from fnirs_pipe.utils import ROI_MIN_CHANNELS
 
 logger = logging.getLogger(__name__)
-
-
-def write_tsv(frame: pd.DataFrame, path: Path) -> Path:
-    """One spelling for the tab-separated write every table here does."""
-    frame.to_csv(path, sep="\t", index=False)
-    return path
 
 
 def run_wtc_null(
@@ -243,14 +238,14 @@ def write_wtc_null(
         **alignment_params(aligned_raws),
     )
     out_path = _path({"nulldist": "phase", "statistic": "wtc"})
-    pd.concat(frames, ignore_index=True).to_csv(out_path, sep="\t", index=False)
+    write_tsv(pd.concat(frames, ignore_index=True), out_path)
     _hyper_sidecar(out_path, "hyper_wtc_phasenull", sources, **params)
     logger.info("Phase-scrambled WTC band means saved: %s", out_path)
 
     if cond_frames:
         cond_path = _path({"condition": "all", "nulldist": "phase",
                            "statistic": "wtc"})
-        pd.concat(cond_frames, ignore_index=True).to_csv(cond_path, sep="\t", index=False)
+        write_tsv(pd.concat(cond_frames, ignore_index=True), cond_path)
         _hyper_sidecar(cond_path, "hyper_wtc_bycondition_phasenull", sources,
                        conditions=[w[0] for w in (windows or [])], **params)
         logger.info("Phase-scrambled WTC per condition saved: %s", cond_path)

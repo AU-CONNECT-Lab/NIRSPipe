@@ -30,6 +30,7 @@ import pandas as pd
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.naming import derivative_path
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.pair_null_group")
 
@@ -517,7 +518,7 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
         if len(frame) == 0:
             continue
         path = derivative_path(output_dir, "relmat", ".tsv", **common, desc=desc)
-        frame.to_csv(path, sep="\t", index=False)
+        write_tsv(frame, path)
         _hyper_sidecar(path, step, sources, **params)
         logger.info("%s: %d rows", path.name, len(frame))
         written.append(path)

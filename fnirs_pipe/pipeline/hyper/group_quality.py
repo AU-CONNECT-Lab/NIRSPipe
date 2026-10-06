@@ -24,6 +24,7 @@ from fnirs_pipe.pipeline.hyper.group_io import (
 from fnirs_pipe.pipeline.prep_pipeline import _expand_bad_pairs
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.group_quality")
 
@@ -72,7 +73,7 @@ def write_group_bads(
     out_path = group_output_path(output_dir, gid, {"task": task, "desc": "bad"},
                                  "qc", ".tsv")
     columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
-    pd.DataFrame(rows, columns=columns).to_csv(out_path, sep="	", index=False)
+    write_tsv(pd.DataFrame(rows, columns=columns), out_path)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
     logger.info("excluded channels saved: %s (%d rows)", out_path, len(rows))
     return out_path
@@ -262,7 +263,7 @@ def compute_group_sqm_raw(
 
     scalar_path = group_output_path(output_dir, gid, {"task": task, "desc": "subject"},
                                     "qc", ".tsv")
-    pd.DataFrame(scalar_rows).to_csv(scalar_path, sep="\t", index=False)
+    write_tsv(pd.DataFrame(scalar_rows), scalar_path)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],
@@ -272,7 +273,7 @@ def compute_group_sqm_raw(
     # one row per subject and channel of cross-subject quality
     channel_path = group_output_path(output_dir, gid, {"task": task, "desc": "channel"},
                                      "qc", ".tsv")
-    pd.DataFrame(channel_rows).to_csv(channel_path, sep="\t", index=False)
+    write_tsv(pd.DataFrame(channel_rows), channel_path)
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],

@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("io.auxiliary")
 
@@ -395,7 +396,7 @@ def write_aux_table(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(out_path, "wt", newline="", encoding="utf-8") as handle:
-        table.to_csv(handle, sep="\t", index=False, float_format=_FLOAT_FORMAT)
+        write_tsv(table, handle, float_format=_FLOAT_FORMAT)
 
     facts = {
         "Columns": list(table.columns),

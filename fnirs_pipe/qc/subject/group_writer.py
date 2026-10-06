@@ -3,6 +3,7 @@ TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel.""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,9 @@ import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.notes import section_note
+from fnirs_pipe.qc.boilerplate.vocabulary import (
+    COHORT_ID_COLUMN, COHORT_SECTIONS, metric_label, record_key_summary,
+)
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.subject.group_figures import (
@@ -47,6 +51,7 @@ from fnirs_pipe.qc.subject.sqm_record import (
     fill_skipped_long_sections,
 )
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.tables import write_tsv
 
 # Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
 # the rest of that subject's files. The figure is an iframe one dir down from the group HTML,
@@ -125,6 +130,27 @@ def _scalars(sqm: dict) -> dict:
             flat.update({f"{section}_{k}": v for k, v in values.items()
                          if isinstance(v, (int, float))})
     return flat
+
+
+def _column_dictionary(columns) -> dict:
+    """The table's sidecar: each ``section_metric`` column described from the vocabulary."""
+    sections = sorted((*SECTIONS, *OPTIONAL_SECTIONS), key=len, reverse=True)
+    out: dict = {}
+    for column in columns:
+        if column == "bids_name":
+            out[column] = {"Description": COHORT_ID_COLUMN}
+            continue
+        section = next((s for s in sections if column.startswith(f"{s}_")), None)
+        key = column[len(section) + 1:] if section else column
+        text = record_key_summary(key)
+        if not text:
+            continue
+        entry = {}
+        if label := metric_label(key, fallback=""):
+            entry["LongName"] = f"{label}, {section}" if section else label
+        entry["Description"] = " ".join(filter(None, (text, COHORT_SECTIONS.get(section))))
+        out[column] = entry
+    return out
 
 
 def _bids_name_from_sqm_path(path: Path) -> str:
@@ -268,7 +294,9 @@ def _render_group(
                               "pipeline or `fnirs-qc prep-raw` first")
 
     tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc=out_desc).name
-    df.to_csv(tsv_path, sep="\t", index=False)
+    write_tsv(df, tsv_path)
+    tsv_path.with_suffix(".json").write_text(
+        json.dumps(_column_dictionary(df.columns), indent=2) + "\n", encoding="utf-8")
     logger.info("group TSV  -> %s (rows=%d, cols=%d)", tsv_path, len(df), len(df.columns))
 
     metric_cols = [c for c in df.columns if c != "bids_name"]

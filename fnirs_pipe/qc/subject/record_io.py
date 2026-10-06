@@ -11,6 +11,7 @@ import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.naming import record_table_name
+from fnirs_pipe.io.tables import NA, write_tsv
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     RECORD_CHANNEL_COLUMNS, RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
 )
@@ -19,7 +20,6 @@ from fnirs_pipe.qc.metrics.imu import IMU_QUANTITIES
 MATRIX_STATS = ("sci", "psp", "cv")
 SUMMARY_STAT = "summary"
 CHANNEL_COLUMNS = ("name", "section", "metric", "value")
-_NA = "n/a"
 
 
 def _label_and_desc(path: Path) -> tuple[str, str]:
@@ -137,7 +137,7 @@ def write_record(path: Path, record: dict[str, Any]) -> Path:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     for name, (frame, sidecar) in tables.items():
-        frame.to_csv(path.parent / name, sep="\t", index=False, na_rep=_NA)
+        write_tsv(frame, path.parent / name)
         (path.parent / name).with_suffix(".json").write_text(
             json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
     path.write_text(_dumps(record) + "\n", encoding="utf-8")
@@ -146,7 +146,7 @@ def write_record(path: Path, record: dict[str, Any]) -> Path:
 
 def _read_table(path: Path, text_columns=()) -> pd.DataFrame:
     # round_trip: the default parser drops the last digit pandas wrote
-    return pd.read_csv(path, sep="\t", na_values=[_NA], keep_default_na=False,
+    return pd.read_csv(path, sep="\t", na_values=[NA], keep_default_na=False,
                        float_precision="round_trip",
                        dtype={column: str for column in text_columns})
 

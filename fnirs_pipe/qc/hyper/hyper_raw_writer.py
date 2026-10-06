@@ -42,6 +42,7 @@ from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 from fnirs_pipe.utils.lineage import paths_from
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("qc.hyper_raw_writer")
 
@@ -65,7 +66,7 @@ def _write_coherence_tsv(
     if df is None or df.empty:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, sep="\t", index=False)
+    write_tsv(df, path)
     _hyper_sidecar(path, step,
                    paths_from(aligned_raws.values()),
                    **alignment_params(aligned_raws), **params)

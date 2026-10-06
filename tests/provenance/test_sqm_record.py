@@ -42,7 +42,7 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.qc.boilerplate.vocabulary import (
     RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
 )
-from fnirs_pipe.qc.subject.group_writer import _scalars
+from fnirs_pipe.qc.subject.group_writer import _scalars, build_group_raw_report
 from fnirs_pipe.qc.subject.record_io import read_record, write_record
 from fnirs_pipe.qc.subject.sqm_record import (
     SECTIONS,
@@ -241,6 +241,8 @@ def test_the_channel_table_is_written_without_a_report(run):
     rows = pd.read_csv(table, sep="\t")
     assert list(rows["name"]) == list(prep.sci_scores)
     assert set(rows.loc[rows["is_bad"], "name"]) == set(prep.bad_channels)
+    # a kept channel has no reason, which BIDS writes as n/a rather than an empty cell
+    assert not (pd.read_csv(table, sep="\t", keep_default_na=False) == "").any().any()
 
 
 def test_two_tasks_get_two_records_not_one(tmp_path_factory):
@@ -251,6 +253,19 @@ def test_two_tasks_get_two_records_not_one(tmp_path_factory):
     labels = set(scan_runs(out / "sub-01" / "nirs"))
     assert labels == {"sub-01_task-tapping", "sub-01_task-rest"}
     assert len(build_sqm_records(out / "sub-01" / "nirs")) == 2
+
+
+def test_every_cohort_column_is_described(tmp_path_factory):
+    """A metric added to the record without a description fails here, not in a reader's R."""
+    out = tmp_path_factory.mktemp("cohort")
+    _, nirs_dir = _run(out, censor=_CENSOR)
+    build_sqm_records(nirs_dir)
+    build_group_raw_report(out)
+
+    table = out / "desc-subjects_qc.tsv"
+    side = json.loads(table.with_suffix(".json").read_text(encoding="utf-8"))
+    columns = pd.read_csv(table, sep="\t").columns
+    assert [c for c in columns if "Description" not in side.get(c, {})] == []
 
 
 # ---- The record on disk: scalars in the JSON, arrays in tables beside it ----

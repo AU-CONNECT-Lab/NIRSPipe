@@ -12,7 +12,7 @@ import mne
 from fnirs_pipe.io.auxiliary import write_aux_window
 from fnirs_pipe.io.derivatives import dataset_root_of, write_dataset_description
 from fnirs_pipe.io.snirf import write_snirf
-from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.io.tables import read_table, write_tsv
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
@@ -67,7 +67,7 @@ def apply_markers_from_df(
     names = write_aux_window(snirf_path, out_snirf, [(0.0, float(raw.times[-1]))])
     if names:
         logger.info("Carried %d aux channels into %s", len(names), out_snirf.name)
-    annotations_to_df(raw).to_csv(out_nirs_dir / f"{stem}_events.tsv", sep="\t", index=False)
+    write_tsv(annotations_to_df(raw), out_nirs_dir / f"{stem}_events.tsv")
 
     logger.info("Written to %s", out_nirs_dir)
     return out_snirf
@@ -98,7 +98,7 @@ def export_markers(
         logger.info("Copied events TSV from BIDS: %s", events_src)
     else:
         raw = read_raw_snirf(snirf_path)
-        annotations_to_df(raw).to_csv(out_path, sep="\t", index=False)
+        write_tsv(annotations_to_df(raw), out_path)
         logger.info("Extracted events from SNIRF annotations: %s", snirf_path)
 
     return out_path

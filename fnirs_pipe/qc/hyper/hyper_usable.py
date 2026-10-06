@@ -21,6 +21,7 @@ import pandas as pd
 from fnirs_pipe.qc.metrics.hyper import dyad_status
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("qc.hyper_usable")
 
@@ -125,7 +126,7 @@ def write_usable_table(path: Path, grid: dict, subject_ids: list[str],
     table = usable_table(grid, subject_ids, conditions)
     if table.empty:
         return None
-    table.to_csv(path, sep="\t", index=False)
+    write_tsv(table, path)
     _hyper_sidecar(path, "hyper_usable", sources or [],
                    **{"window_s": round(_window_s(grid), 3),
                       "n_long_pairs": len(_long_rows(grid)), **params})

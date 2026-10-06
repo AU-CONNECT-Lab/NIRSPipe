@@ -18,7 +18,7 @@ from fnirs_pipe.io.derivatives import (bids_uris, data_state, dataset_root_of, e
                                        read_json, write_dataset_description,
                                        write_sidecar_json)
 from fnirs_pipe.io.snirf import read_snirf, write_snirf
-from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.io.tables import read_table, write_tsv
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.snirf_prep import (
     annotations_to_df,
@@ -74,7 +74,7 @@ def _write_segment(raw_seg, out_snirf: Path, snirf_path: Path,
     if names:
         logger.info("Carried %d aux channels into %s", len(names), out_snirf.name)
     events_path = out_snirf.parent / out_snirf.name.replace("_nirs.snirf", "_events.tsv")
-    annotations_to_df(raw_seg).to_csv(events_path, sep="\t", index=False)
+    write_tsv(annotations_to_df(raw_seg), events_path)
 
 
 def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,

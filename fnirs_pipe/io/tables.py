@@ -1,4 +1,4 @@
-"""One delimiter rule for every table a user hands the package."""
+"""One delimiter rule for every table a user hands the package, one format for every table it writes."""
 
 from __future__ import annotations
 
@@ -15,6 +15,15 @@ logger = get_logger("io.tables")
 _BY_EXTENSION = {".tsv": "\t", ".csv": ","}
 
 _CANDIDATES = ("\t", ",", ";", "|")
+
+# how BIDS codes a missing or non-applicable value in a table
+NA = "n/a"
+
+
+def write_tsv(frame: pd.DataFrame, path, **kwargs):
+    """Write a table as BIDS reads one: tab-separated, missing values ``n/a``, no index unless asked."""
+    frame.to_csv(path, sep="\t", na_rep=NA, **{"index": False, **kwargs})
+    return path
 
 
 def _sniff_delimiter(path: Path) -> str:

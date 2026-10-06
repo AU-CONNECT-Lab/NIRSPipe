@@ -11,11 +11,13 @@ does not carry is asking for a metric that was never stored.
 
 from __future__ import annotations
 
-import csv
 from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+import pandas as pd
+
+from fnirs_pipe.io.tables import write_tsv
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
@@ -590,9 +592,7 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     rows = [{**r, "reason": reasons.get(r["name"], "")} for r in rows]
     out_path = Path(out_dir) / (label + suffix)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(CSV_FIELDS), extrasaction="ignore",
-                                delimiter="	")
-        writer.writeheader()
-        writer.writerows(rows)
+    # an empty reason or separation is not applicable, which BIDS writes as n/a too
+    table = pd.DataFrame(rows).reindex(columns=list(CSV_FIELDS)).replace("", None)
+    write_tsv(table, out_path)
     logger.info("%s | channel metrics CSV saved: %s", label, out_path)

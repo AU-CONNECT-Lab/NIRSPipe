@@ -20,6 +20,7 @@ from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.derivatives import bids_uris, read_json
 from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
 from fnirs_pipe.utils.lineage import paths_from
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.wtc_store")
 
@@ -240,7 +241,7 @@ def reband_tree(
             **{k: v for k, v in entities.items()
                if k not in ("suffix", "extension", "datatype")},
             band=tag)
-        df.to_csv(out_path, sep="\t", index=False)
+        write_tsv(df, out_path)
         # everything the maps were computed with, which a new band changes none of
         _hyper_sidecar(out_path, "wtc_reband", [str(npz_path)],
                        **{**_maps_params(npz_path),

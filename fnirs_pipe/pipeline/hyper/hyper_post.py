@@ -25,6 +25,7 @@ from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
 from fnirs_pipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
 from fnirs_pipe.qc.common.windows import condition_windows, refuse_colliding_labels
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -179,8 +180,8 @@ def write_isc_matrix(
 
     try:
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(isc_mat, index=ch_names, columns=ch_names).to_csv(
-            tsv_path, sep="\t", index_label=index_label)
+        write_tsv(pd.DataFrame(isc_mat, index=ch_names, columns=ch_names), tsv_path,
+                  index=True, index_label=index_label)
         _hyper_sidecar(tsv_path, step, sources,
                        chromophore=ch_type, subjects=subject_ids,
                        **params, **(align or {}))
@@ -276,7 +277,7 @@ def run_hyper_post(
         """
         tsv_path = group_output_path(output_dir, group_id, {"task": task, **entities},
                                      "relmat", ".tsv")
-        df.to_csv(tsv_path, sep="\t", index=False)
+        write_tsv(df, tsv_path)
         _hyper_sidecar(tsv_path, step,
                        paths_from(aligned_raws.values()),
                        **_wtc_params(), **extra)
@@ -860,8 +861,7 @@ def run_hyper_post(
             tsv_path = group_output_path(output_dir, group_id,
                                          {"task": task, "statistic": "isc"},
                                          "relmat", ".tsv")
-            pd.concat(isc_pair_frames, ignore_index=True).to_csv(tsv_path, sep="\t",
-                                                                 index=False)
+            write_tsv(pd.concat(isc_pair_frames, ignore_index=True), tsv_path)
             _hyper_sidecar(
                 tsv_path, "hyper_isc_pairs",
                 paths_from(aligned_raws.values()),

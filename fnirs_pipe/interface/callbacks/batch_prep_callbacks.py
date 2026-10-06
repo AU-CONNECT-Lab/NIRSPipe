@@ -13,6 +13,7 @@ from fnirs_pipe.interface.callbacks._cli_run import poll_run, preview_text, star
 from fnirs_pipe.interface.cli_args import build_prep_args, missing_prep
 from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("interface.batch_prep_callbacks")
 
@@ -222,7 +223,7 @@ def _write_segments(deriv_dir: str, rows) -> str:
 
     path = Path(deriv_dir) / _SEGMENTS_TSV
     path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows, columns=["onset", "duration", "task"]).to_csv(path, sep="\t", index=False)
+    write_tsv(pd.DataFrame(rows, columns=["onset", "duration", "task"]), path)
     return str(path)
 
 

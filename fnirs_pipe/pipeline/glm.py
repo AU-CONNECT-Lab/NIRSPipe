@@ -8,7 +8,7 @@ import pandas as pd
 import mne
 import mne.io
 
-from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.io.tables import read_table, write_tsv
 from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -522,9 +522,6 @@ def run_glm_pipeline(
     return haemo, glm_est, dm, raw_resid
 
 
-_TAB = "\t"
-
-
 def _glm_name(source_path: "str | None", suffix: str, **extra) -> str:
     """One GLM output's filename, carrying the entities of the recording it was fitted on.
 
@@ -571,11 +568,11 @@ def _save_glm_outputs(
         return output_dir / _glm_name(source_path, suffix, **extra)
 
     dm_path = _named("design")
-    design_matrix.to_csv(dm_path, index=False, sep=_TAB)
+    write_tsv(design_matrix, dm_path)
     write_step_sidecar(dm_path, "design_matrix", source_path, bads, **params)
 
     res_path = _named("nirsmap", desc="glm")
-    _mark_bads(glm_est.to_dataframe()).to_csv(res_path, index=False, sep=_TAB)
+    write_tsv(_mark_bads(glm_est.to_dataframe()), res_path)
     write_step_sidecar(res_path, "glm_fit", source_path, bads, **params)
 
     if contrasts:
@@ -585,7 +582,7 @@ def _save_glm_outputs(
             df.insert(0, "contrast", name)
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")
-        pd.concat(frames, ignore_index=True).to_csv(con_path, index=False, sep=_TAB)
+        write_tsv(pd.concat(frames, ignore_index=True), con_path)
         write_step_sidecar(con_path, "contrasts", source_path, bads, **params)
 
     logger.info("GLM outputs written to %s", output_dir)

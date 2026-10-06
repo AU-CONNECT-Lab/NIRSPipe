@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.io.auxiliary import find_aux_table
-from fnirs_pipe.io.tables import read_table
+from fnirs_pipe.io.tables import read_table, write_tsv
 from fnirs_pipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -539,12 +539,12 @@ def _write_fc_derivatives(
         chromo_entities = {"chromophore": chromo}
 
         fc_path = _path(chromo_entities, "pearson")
-        fc_df.to_csv(fc_path, sep="	", index_label="channel")
+        write_tsv(fc_df, fc_path, index=True, index_label="channel")
         _sidecar(fc_path, "fc", chromophore=chromo)
         logger.info("sub-%s | fc (%s) -> %s", config.subject, chromo, fc_path)
 
         fcz_path = _path(chromo_entities, "fisherz")
-        fisher_z(fc_df).to_csv(fcz_path, sep="	", index_label="channel")
+        write_tsv(fisher_z(fc_df), fcz_path, index=True, index_label="channel")
         _sidecar(fcz_path, "fisher_z", chromophore=chromo)
         logger.info("sub-%s | fcz (%s) -> %s", config.subject, chromo, fcz_path)
 
@@ -552,7 +552,7 @@ def _write_fc_derivatives(
             fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
             if not fc_roi_df.empty:
                 fc_roi_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "pearson")
-                fc_roi_df.to_csv(fc_roi_path, sep="	", index_label="roi")
+                write_tsv(fc_roi_df, fc_roi_path, index=True, index_label="roi")
                 # the members, not the map: an ROI correlation averages them into a
                 # signal that exists nowhere else, and which ones survived is a property
                 # of this run, so without them the number cannot be reproduced
@@ -561,7 +561,7 @@ def _write_fc_derivatives(
                 logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "fisherz")
-                fisher_z(fc_roi_df).to_csv(fcroiz_path, sep="	", index_label="roi")
+                write_tsv(fisher_z(fc_roi_df), fcroiz_path, index=True, index_label="roi")
                 _sidecar(fcroiz_path, "fisher_z", chromophore=chromo,
                          roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
                 logger.info("sub-%s | fc_roiz (%s) -> %s", config.subject, chromo, fcroiz_path)
@@ -573,7 +573,7 @@ def _write_fc_derivatives(
             fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
             if not fc_seed_df.empty:
                 fcseed_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "pearson")
-                fc_seed_df.to_csv(fcseed_path, sep="	", index_label="roi")
+                write_tsv(fc_seed_df, fcseed_path, index=True, index_label="roi")
                 # the channels each seed was actually built from, which is the requested map
                 # minus whatever was rejected; without it a reader cannot tell why a cell
                 # inside a listed ROI holds a value instead of being blank
@@ -582,7 +582,7 @@ def _write_fc_derivatives(
                 logger.info("sub-%s | fc_seed (%s) -> %s", config.subject, chromo, fcseed_path)
 
                 fcseedz_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "fisherz")
-                fisher_z(fc_seed_df).to_csv(fcseedz_path, sep="	", index_label="roi")
+                write_tsv(fisher_z(fc_seed_df), fcseedz_path, index=True, index_label="roi")
                 _sidecar(fcseedz_path, "fisher_z", chromophore=chromo)
                 logger.info("sub-%s | fc_seedz (%s) -> %s", config.subject, chromo, fcseedz_path)
 
@@ -626,7 +626,7 @@ def _write_rest_derivatives(
             output_dir=output_dir, subject=config.subject, session=config.session,
             entities={**entities, "statistic": "alff"}, suffix="nirsmap", extension=".tsv",
         )
-        alff_df.to_csv(alff_path, sep="	", index=False)
+        write_tsv(alff_df, alff_path)
         write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
                        list(raw_resid.info["bads"]),
                        low_pass=config.low_pass, high_pass=config.high_pass)
@@ -641,7 +641,7 @@ def _write_rest_derivatives(
                               "aggregation": "roi", "statistic": "alff"},
                     suffix="nirsmap", extension=".tsv",
                 )
-                alff_roi_df.to_csv(alff_roi_path, sep="	", index=False)
+                write_tsv(alff_roi_df, alff_roi_path)
                 write_step_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
                                list(raw_resid.info["bads"]),
                                low_pass=config.low_pass, high_pass=config.high_pass,

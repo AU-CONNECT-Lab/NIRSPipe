@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.io.tables import read_tsv_or_none
+from fnirs_pipe.io.tables import read_tsv_or_none, write_tsv
 from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
@@ -238,8 +238,8 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
                            "panels that split the usable time are empty")
 
     tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc="groups").name
-    pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats]).to_csv(
-        tsv_path, sep="\t", index=False)
+    write_tsv(pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats]),
+              tsv_path)
 
     def cell(flat: dict, key: str, fmt: str) -> "str | None":
         text = _format(flat.get(key), fmt)

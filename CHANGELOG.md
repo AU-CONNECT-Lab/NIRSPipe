@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Methods describe the relative phase per frequency
 - WTC sidecars record `wtc_mc_count` and `wtc_seed` when `--wtc-significance` ran, and Methods describe that level
 - `fnirs-hyper-groupnull` writes its cohort test's Methods paragraph to `logs/<cohort table>_methods.md`
+- `desc-subjects_qc.json` describes every column of the cohort table
 
 ### Changed
 - Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths
@@ -41,6 +42,7 @@ All notable changes to this project will be documented in this file.
 - Reports show only the motion-band GVTD; the unfiltered values stay in the record, TSV and database for comparison with other implementations
 - Quality records keep their arrays in TSV tables beside the JSON: channel-by-window matrices headed by channel name, per-window series, per-channel values; older records are refused
 - `fnirs-qc prep-raw` writes its channel table as `_desc-rawchannel_qc.tsv`, so a tree both commands wrote keeps both verdicts
+- Every TSV writes a missing or non-applicable value as `n/a`, as BIDS requires, instead of an empty cell
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials

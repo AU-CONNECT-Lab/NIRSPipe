@@ -25,6 +25,7 @@ import pandas as pd
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
 from fnirs_pipe.io.naming import parse_path, derivative_path
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.wtc_aggregate")
 
@@ -269,7 +270,7 @@ def write_aggregate_wtc(output_dir: Path, sources: "list[Path]") -> Path | None:
 
     out_path = _merged_path(output_dir, sources[0])
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    merged.to_csv(out_path, sep="\t", index=False)
+    write_tsv(merged, out_path)
 
     # the band is uniform by the time we get here, so one file's parameters describe them all
     band = next((_band_params(p) for p in sources), {})

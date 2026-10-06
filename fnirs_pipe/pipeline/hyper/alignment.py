@@ -22,6 +22,7 @@ from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import path_from
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
+from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.alignment")
 
@@ -130,8 +131,7 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
 
     out_snirf = out_dir / f"{stem}_nirs.snirf"
     write_snirf(raw_aligned, out_snirf)
-    annotations_to_df(raw_aligned).to_csv(out_dir / f"{stem}_events.tsv", sep="\t",
-                                          index=False)
+    write_tsv(annotations_to_df(raw_aligned), out_dir / f"{stem}_events.tsv")
 
     lin = lineage_of(raw_aligned)
     if lin is None or lin.stage != ALIGN_STAGE:

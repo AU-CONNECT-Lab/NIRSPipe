@@ -22,7 +22,8 @@ from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations, _p95
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
-from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table, write_tsv
+from fnirs_pipe.io.tables import write_tsv
+from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
 from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
 from fnirs_pipe.qc.common.windows import condition_windows, split_windows

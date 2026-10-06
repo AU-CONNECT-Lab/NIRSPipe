@@ -779,6 +779,42 @@ RECORD_WINDOW_COLUMNS = {
     "accel_jerk_p95_per_window": "The 95th percentile of the accelerometer jerk within each window.",
 }
 
+# ---- the cohort table's sidecar ----
+# Record keys the cohort table carries that are counts or settings, not report metrics.
+RECORD_EXTRA_KEYS = {
+    "n_channels": "How many channels this channel set holds.",
+    "n_bad": "How many channels of this set were marked bad.",
+    "n_long_channels": "How many channels fall in the long separation band.",
+    "n_short_channels": "How many channels fall in the short separation band.",
+    "sep_short_max_mm": "The longest source-detector separation, in mm, counted as a short channel on this run.",
+    "sep_long_min_mm": "The shortest source-detector separation, in mm, counted as a long channel on this run.",
+    "sep_long_max_mm": "The longest source-detector separation, in mm, counted as a long channel on this run; n/a when no upper bound was set.",
+    "qc_window_s": "The window length the per-window series asked for, in seconds; each window used is a whole number of samples long.",
+    "gvtd_censor_n_std": "The multiplier the censoring cutoff was set with (--gvtd-censor-n-std).",
+    "gvtd_censor_min_epoch_s": "Stretches left between censored spans that are shorter than this, in seconds, are censored too (--gvtd-min-epoch-s).",
+    "gvtd_censor_thresh": "The cutoff on the band-passed GVTD that censoring used.",
+    "gvtd_censor_n_spans": "How many separate spans were censored.",
+    "gvtd_censor_n_epochs": "How many continuous stretches survived censoring.",
+}
+# per-wavelength CV keys carry the device's own wavelengths, so they take a template
+RECORD_CV_BY_WAVELENGTH = "cv_mean over the {nm} nm channels only."
+COHORT_SECTIONS = {
+    **RECORD_SECTIONS,
+    "censor": "From the GVTD censoring step.",
+    "imu": "From the head-motion sensor, not the optical data.",
+}
+COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
+
+
+def record_key_summary(key: str) -> str:
+    """What one record key holds, or '' when nothing describes it."""
+    if key in METRIC_SUMMARY:
+        return METRIC_SUMMARY[key]
+    if key in RECORD_EXTRA_KEYS:
+        return RECORD_EXTRA_KEYS[key]
+    wavelength = key.removeprefix("cv_mean_")
+    return RECORD_CV_BY_WAVELENGTH.format(nm=wavelength) if wavelength.isdigit() else ""
+
 
 # ---- how a metric is printed ----
 #
