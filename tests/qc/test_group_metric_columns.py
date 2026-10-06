@@ -6,8 +6,8 @@ does not know leaves the metric unrecognised and drops it into "Other", settings
 
 import numpy as np
 
-from fnirs_pipe.qc.figures.subject.group_figures import (_split_column, build_window_grid,
-                                                         group_metrics)
+from fnirs_pipe.qc.figures.subject.group_figures import (_split_column, build_condition_panels,
+                                                         build_window_grid, group_metrics)
 from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND
 
 
@@ -42,3 +42,14 @@ def test_the_over_time_grid_draws_the_motion_band_gvtd():
     assert drawn and 1.0 not in drawn
     # the row says which trace it is, the band read off the constant
     assert f"{GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz" in fig.layout.yaxis.title.text
+
+
+def test_the_condition_panels_draw_the_motion_band_gvtd():
+    rows = [{"bids_name": f"sub-0{k}_task-full",
+             "by_condition": {c: {"scalars": {"gvtd_mean": 1.0, "gvtd_filt_mean": 2.0 + k}}
+                              for c in ("rest", "talk")}}
+            for k in range(3)]
+    fig = build_condition_panels(rows)
+    drawn = {round(float(v), 6) for tr in fig.data if tr.y is not None for v in tr.y
+             if v is not None and np.isfinite(v)}
+    assert drawn and 1.0 not in drawn

@@ -571,7 +571,7 @@ def build_condition_timeline(
 # `scalars` block.
 _CONDITION_METRICS = [
     ("sci_win_mean", "SCI"), ("psp_mean", "PSP"), ("cv_mean", "CV"), ("snr_mean", "SNR"),
-    ("gvtd_mean", "GVTD"), ("gvtd_pct_above_thresh", "GVTD above threshold"),
+    ("gvtd_filt_mean", _GVTD_LABEL), ("gvtd_pct_above_thresh", "GVTD above threshold"),
     ("gyro_speed_mean", "Motion sensor: gyroscope speed"),
 ]
 
