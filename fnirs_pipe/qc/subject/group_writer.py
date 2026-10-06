@@ -63,7 +63,7 @@ _STRIP_CLICK_JS = (
 logger = get_logger("qc.group_writer")
 
 # Below this many runs a spread is not measured, it is drawn: the box, the robust z-score and
-# the Tukey fence each need a middle to sit in. The panels still render, carrying a line that
+# the outlier rule each need a middle to sit in. The panels still render, carrying a line that
 # says what they cannot tell the reader at this cohort size.
 SMALL_COHORT_N = 5
 
