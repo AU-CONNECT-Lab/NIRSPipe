@@ -249,13 +249,16 @@ def compute_group_sqm_raw(
                if isinstance(v, (int, float)) and not isinstance(v, bool)},
         })
 
+        sci_win = (sections.get("raw") or {}).get("sci_win_per_channel") or {}
         for ch, sci_val in sci_cw.items():
             channel_rows.append({
                 "group_id":   gid,
                 "subject_id": entry.subject_id,
                 "task":       task,
                 "channel":    ch,
-                "sci":        sci_val,
+                # the subject table's names, windowed first
+                "sci_win":    sci_win.get(ch),
+                "sci_whole":  sci_val,
                 "is_bad":     ch in bad_channels,
             })
 
@@ -354,6 +357,9 @@ def load_group_sqm(
             # `raw_short` and the dyad's channel table prints short rows too
             sqm["per_channel"] = per_ch
             sqm["per_channel_all"] = per_ch.get("raw") or {}
+            # the windowed SCI the dyad pages read, keyed the way their lookups ask
+            sqm["sci_win_per_channel"] = _pairwise(sqm["per_channel_all"]
+                                                   .get("sci_win_per_channel") or {})
             # an all-long montage writes no `raw_long`, so the whole-file section stands in
             sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel_all"]
             # the same screening grid `compute_group_sqm_raw` keeps when it measures one
@@ -534,7 +540,7 @@ def _pairwise(per_wavelength: dict) -> dict[str, float]:
 
       {"S1_D1 760": 0.86, "S1_D1 850": 0.86} -> {"S1_D1": 0.86, "S1_D1 hbo": 0.86}
 
-    The whole-run SCI is built with both spellings a few lines above, because the pages ask
+    The whole-run SCI is built with both spellings in ``compute_group_sqm_raw``, because the pages ask
     for ``"<pair> hbo"`` and fall back to the bare pair. The windowed estimate comes out of
     the metric registry keyed by the recording's own channel names instead, so handing it
     over unchanged makes every lookup miss and every channel read as unmeasured, with

@@ -15,12 +15,15 @@ All notable changes to this project will be documented in this file.
 - Condition pages and the subject index no longer show the windowed SCI under the whole-run SCI's name
 - Rejected pairs get channel detail and per-pair PSD pages, marked rejected, and rank in their own group on the HbO-HbR panel
 - The brain views and the raw viewer's optode layout grade channels by the windowed SCI
+- Dyad pages, the `fnirs-hyper` console summary and the GUI alignment table show the windowed SCI and name its window
+- The dyad channel table writes `sci_win` and `sci_whole` instead of `sci`
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
 - The SCI/PSP panel ignored `--psp-threshold`, and the run page's per-condition grid ignored it and `--min-good-frac`
 - The bad-segment zoom drew raw intensity as its After row instead of the motion-corrected optical density
 - The raw viewer's optode layout ignored `--sci-threshold`
+- `fnirs-hyper` graded dyad channels by the whole-run SCI, the record's windowed scores never reaching its pages
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

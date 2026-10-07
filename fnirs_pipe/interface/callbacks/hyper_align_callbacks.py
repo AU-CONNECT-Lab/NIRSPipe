@@ -10,6 +10,7 @@ import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
 from fnirs_pipe.utils import pair_of
+from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
 from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
@@ -328,6 +329,8 @@ def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict, paths: dict)
 
 def _compute_sci_from_cw(raws: dict, subject_ids: list, cardiac_l_freq, cardiac_h_freq) -> dict:
     import mne
+    import numpy as np
+    from fnirs_pipe.qc.metrics import compute_windowed_sci
 
     if cardiac_l_freq is None or cardiac_h_freq is None:
         return {sid: {} for sid in subject_ids}
@@ -340,12 +343,14 @@ def _compute_sci_from_cw(raws: dict, subject_ids: list, cardiac_l_freq, cardiac_
             continue
         try:
             raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
-                raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+            # the windowed SCI, the estimate every report reads
+            scores, _ = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, SCI_WINDOW_S)
+            with np.errstate(invalid="ignore"):
+                sci_arr = np.nanmean(np.asarray(scores, dtype=float), axis=1)
             pair_sci: dict = {}
-            for i, ch in enumerate(raw.ch_names):
-                pair = pair_of(ch)
-                pair_sci.setdefault(pair, []).append(float(sci_arr[i]))
+            for i, ch in enumerate(raw_od.ch_names):
+                if np.isfinite(sci_arr[i]):
+                    pair_sci.setdefault(pair_of(ch), []).append(float(sci_arr[i]))
             sci_by_sid[sid] = {p: round(sum(v) / len(v), 3) for p, v in pair_sci.items()}
         except Exception:
             sci_by_sid[sid] = {}
@@ -368,7 +373,7 @@ def _build_ha_decisions_table(
     sub_header = [html.Th("")]
     for _ in subject_ids:
         sub_header += [
-            html.Th("SCI",      style={"fontSize": "0.72rem", "color": "#888"}),
+            html.Th(f"SCI ({SCI_WINDOW_S:g} s)", style={"fontSize": "0.72rem", "color": "#888"}),
             html.Th("Decision", style={"fontSize": "0.72rem", "color": "#888"}),
         ]
 

@@ -133,14 +133,14 @@ def test_the_summary_names_the_channel_budget(capsys):
     from fnirs_pipe.cli.hyper import _quality_summary
 
     raws = {"sub-01": _raw(3, ["S3_D3 hbo", "S3_D3 hbr"])}
-    sqm = {"sub-01": {"sci_per_channel": {"a": 0.9, "b": 0.7},
+    sqm = {"sub-01": {"sci_win_per_channel": {"a": 0.9, "b": 0.7},
                       "bad_channel_sources": {"S3_D3 760": ["tap", "rest"]}}}
     _quality_summary(raws, sqm)
 
     out = capsys.readouterr().out
     assert "sub-01" in out
     assert "bad 1" in out              # one S-D pair, not two chromophore entries
-    assert "mean SCI 0.80" in out
+    assert "mean SCI (10 s) 0.80" in out
     assert "from: rest, tap" in out
 
 
@@ -158,7 +158,7 @@ def test_the_summary_says_nothing_it_does_not_know(capsys):
 
     _quality_summary({"sub-03": _raw(2)}, {})
     out = capsys.readouterr().out
-    assert "mean SCI n/a" in out
+    assert "mean SCI (10 s) n/a" in out
     assert "from:" not in out
 
 
@@ -204,3 +204,19 @@ def test_the_flat_tree_is_unchanged(nirs_dir):
     # nirs_dir, not tmp_path: `_sidecar` does not create the directory, `_ses_sidecar` does
     _sidecar(nirs_dir, "tap", BADS_TAP)
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP
+
+
+def test_the_dyad_pages_read_the_windowed_sci_from_the_record(nirs_dir):
+    from fnirs_pipe.qc.metrics.hyper import sci_of
+    from fnirs_pipe.qc.subject.record_io import write_record
+    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX
+
+    _sidecar(nirs_dir, "tap", BADS_TAP)
+    write_record(nirs_dir / "sub-01" / "nirs" / ("sub-01_task-tap" + RECORD_SUFFIX),
+                 {"Sources": [], "per_channel": {"raw": {
+                     "sci_per_channel": {"S1_D1 760": 0.9, "S1_D1 850": 0.9},
+                     "sci_win_per_channel": {"S1_D1 760": 0.6, "S1_D1 850": 0.6}}}})
+    sqm = load_group_sqm(nirs_dir, [GroupEntry("G1", "sub-01", "tap")])
+    assert sci_of(sqm, "sub-01")["S1_D1"] == 0.6
+    # the whole-run scores are still loaded, under their own name
+    assert sqm["sub-01"]["sci_per_channel"]["S1_D1 760"] == 0.9

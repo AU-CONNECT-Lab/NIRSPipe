@@ -10,6 +10,8 @@ from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
+from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
+from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
 )
@@ -150,8 +152,9 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 
 # (key, axis label, whether the row is divided by each member's own median). SCI and PSP are
 # what the carpet's mask is made of; CV catches baseline shifts and signal loss they miss.
-_SERIES_ROWS = (("sci", "SCI (10 s)", False), ("psp", "PSP (10 s)", False),
-                ("cv", "CV (10 s)", False))
+_SERIES_ROWS = (("sci", f"SCI ({SCREEN_WINDOW_S:g} s)", False),
+                ("psp", f"PSP ({SCREEN_WINDOW_S:g} s)", False),
+                ("cv", f"CV ({SCREEN_WINDOW_S:g} s)", False))
 _LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
 
 
@@ -857,7 +860,7 @@ def build_head_slider(
             if scope not in geo:
                 continue
             vals = _pair_values(geo, scope, sci, lambda v, k=frames_at[0]: v[k])
-            i = _head_glyph(fig, geo, scope, vals, 1, ci, "SCI<br>(10 s)", cmin, cmax,
+            i = _head_glyph(fig, geo, scope, vals, 1, ci, f"SCI<br>({SCREEN_WINDOW_S:g} s)", cmin, cmax,
                             bar=(ci == len(subject_ids) and scope == "long"),
                             colorscale=_HEAD_SCALE, sid=sid)
             drawn.append((sid, scope, i))
@@ -1250,7 +1253,8 @@ def build_channel_summary(
             c, status = _MIX_COLOR, "mixed"
 
         colors.append(c)
-        hover_texts.append(f"<b>{ch}</b> ({status})<br>" + "<br>".join(sci_vals))
+        hover_texts.append(f"<b>{ch}</b> ({status})<br>SCI ({SCI_WINDOW_S:g} s)<br>"
+                           + "<br>".join(sci_vals))
 
     traces: list[go.BaseTraceType] = [
         go.Scatter(

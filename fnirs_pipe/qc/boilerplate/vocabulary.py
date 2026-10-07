@@ -504,7 +504,7 @@ STEP_SUMMARY = {
     "hyper_screening": "Each window's coherence beside the surrogate null drawn for that window.",
     "hyper_usable": "How much of each channel pair both members could use at once, per condition.",
     "group_sqm_raw": "Each member's quality metrics, one row per member.",
-    "group_sqm_raw_channels": "Per member and channel: whole-run SCI and whether the channel was rejected.",
+    "group_sqm_raw_channels": "Per member and channel: the windowed and the whole-run SCI, and whether the channel was rejected.",
     "hyper_wtc": "Wavelet coherence between a pair, averaged over a band and one value per channel.",
     "hyper_wtc_phasenull": "The same average against a phase-scrambled partner: the null.",
     "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, or per pair of ROIs on a crossed run, every pairing between them: the ROI number to report.",

@@ -19,7 +19,7 @@ from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
-from fnirs_pipe.qc.metrics import SCI_PASS
+from fnirs_pipe.qc.metrics import SCI_PASS, SCI_WINDOW_S
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
 from fnirs_pipe.cli._shared import separation_bands_from_args
@@ -137,7 +137,7 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
 def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> None:
     """Print what the metrics are about to be computed on, one line per subject.
 
-    ``sub-01  long 18/20  bad 2  mean SCI 0.86  from: tapping``
+    ``sub-01  long 18/20  bad 2  mean SCI (10 s) 0.86  from: tapping``
 
     Counted off the aligned Raw after the rejections are applied, so it describes the channel
     set the coherence actually uses rather than what the montage holds.
@@ -149,9 +149,10 @@ def _quality_summary(aligned_raws: dict, group_sqm: dict, sep_bands=None) -> Non
         bad = {pair_of(ch) for ch in raw.info["bads"]}
         kept = len(long_channel_picks(raw, "hbo", sep_bands=sep_bands))  # bads already dropped
 
-        scores = [v for v in (sqm.get("sci_per_channel") or {}).values()
+        scores = [v for v in (sqm.get("sci_win_per_channel") or {}).values()
                   if v is not None and v == v]
-        sci = f"mean SCI {sum(scores) / len(scores):.2f}" if scores else "mean SCI n/a"
+        label = f"mean SCI ({SCI_WINDOW_S:g} s)"
+        sci = f"{label} {sum(scores) / len(scores):.2f}" if scores else f"{label} n/a"
 
         tasks = sorted({t for ts in (sqm.get("bad_channel_sources") or {}).values()
                         for t in ts})

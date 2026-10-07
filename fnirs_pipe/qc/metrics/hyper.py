@@ -23,14 +23,9 @@ NULL_ALPHA_PCT = 95.0
 
 
 def sci_of(sqm_data: dict, sid: str) -> dict:
-    """The per-channel SCI a dyad page prints, for one member.
-
-    The **windowed** estimate, since a drift shared by both wavelengths lifts the whole-run
-    number. The whole-run scores stand in only for a record written before the windowed pass
-    existed, so an old tree degrades to the number it has rather than to an empty grid.
-    """
+    """The per-channel windowed SCI a dyad page prints, for one member; never the whole-run one."""
     member = sqm_data.get(sid) or {}
-    return member.get("sci_win_per_channel") or member.get("sci_per_channel") or {}
+    return member.get("sci_win_per_channel") or {}
 
 
 def _rejected_pairs(sqm_data: dict, sid: str) -> "set[str] | None":
