@@ -19,7 +19,6 @@ import pytest
 
 from fnirs_pipe.qc.metrics.windowed import (
     SCREEN_WINDOW_S,
-    condition_window_fractions,
     good_window_fraction,
 )
 
@@ -141,39 +140,6 @@ def test_the_screening_window_is_the_one_the_lines_were_set_at():
     """PSP is a power and moves with window length, so 0.1 selects a different set of
     channels at every length. The report's window is free; this one is not."""
     assert SCREEN_WINDOW_S == 10.0
-
-
-# ---- per condition, reported and never screened on ----
-
-def test_conditions_are_counted_separately(stub_windows):
-    """One channel set still serves every condition, so this answers "when was it bad"
-    without changing what is dropped. Coupled in the first two windows only, so the first
-    condition reads 1.0 and the second 0.0."""
-    stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])
-    out = condition_window_fractions(
-        _Raw(["ch0"]), [("rest", 0.0, 20.0), ("talk", 20.0, 40.0)], 0.7, 1.5, 0.8, 0.1)
-    assert list(out) == ["rest", "talk"]
-    assert out["rest"]["ch0"] == pytest.approx(1.0)
-    assert out["talk"]["ch0"] == pytest.approx(0.0)
-
-
-def test_one_windowed_pass_serves_every_condition(stub_windows):
-    """Cutting each condition out first would filter each piece against its own edges and
-    put each on its own grid, so the conditions would be comparable neither with each other
-    nor with the run-wide share."""
-    from fnirs_pipe.qc.metrics import windowed
-
-    calls = []
-    stub_windows(sci=[[0.9] * 4], psp=[[0.5] * 4])
-    real = windowed.compute_windowed_sci
-    windowed.compute_windowed_sci = lambda *a, **k: (calls.append(1), real(*a, **k))[1]
-    try:
-        condition_window_fractions(
-            _Raw(["ch0"]), [("a", 0.0, 10.0), ("b", 10.0, 20.0), ("c", 20.0, 40.0)],
-            0.7, 1.5, 0.8, 0.1)
-    finally:
-        windowed.compute_windowed_sci = real
-    assert len(calls) == 1
 
 
 # ---- the scope: which windows go in the denominator ----

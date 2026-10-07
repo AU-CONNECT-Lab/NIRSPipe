@@ -469,9 +469,9 @@ def condition_window_means(
     ``matrix`` is reduced over its last axis, so a per-channel metric (channels x windows)
     gives one value per channel and a single series (windows,) gives one scalar.
 
-    A condition keeps the windows whose **centre** falls inside it, the same rule
-    :func:`condition_window_fractions` and the screening scope use, so every per-condition
-    number in a report comes off one grid and one filter.
+    A condition keeps the windows whose **centre** falls inside it, the same rule the
+    screening scope uses, so every per-condition number in a report comes off one grid and
+    one filter.
 
     Slicing rather than cutting the recording keeps the run's grid: a condition cut into its
     own file is filtered against its own two edges and lands on a grid of its own.
@@ -495,40 +495,3 @@ def condition_window_means(
         out[window[0]] = matrix[..., keep].mean(axis=-1)
     return out
 
-
-def condition_window_fractions(
-    raw_od: mne.io.Raw,
-    windows: "list[tuple[str, float, float]]",
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    sci_cutoff: float,
-    psp_cutoff: float,
-    window_s: float = SCREEN_WINDOW_S,
-) -> "dict[str, dict[str, float]]":
-    """:func:`good_window_fraction` restricted to each named stretch, one share per stretch.
-
-    ::
-
-      [("rest", 0, 300), ("task", 300, 600)]  ->  {"rest": {ch: 0.98}, "task": {ch: 0.41}}
-
-    Reported, never screened on. One channel set has to serve every condition or a contrast
-    between two conditions is also a contrast between two montages, so this answers "when
-    was this channel bad" without changing what is dropped.
-
-    One windowed pass masked per condition, for the reason
-    :func:`good_window_fraction` gives.
-    """
-    mask, centers = _coupled_mask(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                  sci_cutoff, psp_cutoff, window_s)
-    if mask is None:
-        return {}
-    names = list(raw_od.ch_names)
-    out: dict[str, dict[str, float]] = {}
-    for window in windows:
-        keep = _in_scope(centers, [window])
-        if not keep.any():
-            logger.warning("condition %s holds no whole screening window", window[0])
-            continue
-        frac = mask[:, keep].mean(axis=1)
-        out[window[0]] = {ch: float(frac[i]) for i, ch in enumerate(names) if i < len(frac)}
-    return out

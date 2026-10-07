@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
 
+### Removed
+- `condition_window_fractions`, whose shares `by_condition` already records
+
 ## [0.59.0] - 2026-10-06
 
 ### Added
