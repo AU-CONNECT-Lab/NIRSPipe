@@ -399,6 +399,12 @@ MOTION_SPLIT_COLUMNS = (
     ("motion_corrected_n_segments", "Corrected segments"),
 )
 
+# The raw viewer's haemoglobin table, on its run page and its condition pages. The subject
+# report prints this metric among its own haemoglobin rows instead.
+HAEMO_SPLIT_COLUMNS = (
+    ("hbo_hbr_corr_mean", "HbO–HbR corr"),
+)
+
 # What a per-condition page drops from the two lists above rather than leaving blank in all
 # three rows: none of these has a windowed series to slice, and the GVTD threshold is a mode
 # of the whole run's histogram by definition, so a condition is counted against the run's

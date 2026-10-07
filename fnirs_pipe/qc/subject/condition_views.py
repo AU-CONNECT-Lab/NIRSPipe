@@ -119,17 +119,19 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
             "per_channel": out_pc}
 
 
-def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]") -> dict:
-    """The record with ``preproc``'s HbO-HbR correlation replaced by the condition's own.
+def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]",
+                        section: str = "preproc") -> dict:
+    """The record with ``section``'s HbO-HbR correlation replaced by the condition's own.
 
-    ``channel_rows`` reads that column off the whole-file ``preproc`` section, so that is
-    where a value measured on the cut has to land. An empty dict leaves the column dashed.
+    ``channel_rows`` reads that column off the whole-file ``preproc`` section, or
+    ``rawhaemo`` on a raw-only record, so that is where a value measured on the cut has to
+    land. An empty dict leaves the column dashed.
     """
     if not corr_per_channel:
         return record
     per_channel = {**(record.get("per_channel") or {})}
-    per_channel["preproc"] = {**(per_channel.get("preproc") or {}),
-                              "hbo_hbr_corr_per_channel": dict(corr_per_channel)}
+    per_channel[section] = {**(per_channel.get(section) or {}),
+                            "hbo_hbr_corr_per_channel": dict(corr_per_channel)}
     return {**record, "per_channel": per_channel}
 
 
@@ -593,6 +595,7 @@ def condition_payloads(
     remake_epoch=None,
     trial_images=None,
     save_stack=None,
+    remake_hbo_hbr_corr=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -620,7 +623,9 @@ def condition_payloads(
       and ``remake_epoch``. There is nothing
       to slice, it being one spectrum rather than a time-by-frequency matrix, and nothing in
       a Welch estimate reads outside the samples it is handed. A condition too short for the
-      transform gets no spectrum rather than one on a coarser grid than the run's.
+      transform gets no spectrum rather than one on a coarser grid than the run's. The
+      HbO-HbR correlation panel too, through ``remake_hbo_hbr_corr``, for the reason the
+      record measures its numbers on the cut.
 
     The event timeline is the run's own figure, left whole: it is the schedule the whole
     recording ran to.
@@ -634,8 +639,8 @@ def condition_payloads(
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.common.channel_table import (
-        MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_rows,
-        format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
+        HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS,
+        channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
     )
     from fnirs_pipe.qc.common.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
@@ -656,7 +661,10 @@ def condition_payloads(
         window = (label, float(t0), float(t1))
         slug = _pair_fname(label)
 
-        rows = channel_rows(slice_record(record, sliced), sci_scores, cond_bad)
+        rows = channel_rows(
+            with_condition_corr(slice_record(record, sliced),
+                                sliced.get("hbo_hbr_corr_per_channel"), section="rawhaemo"),
+            sci_scores, cond_bad)
         pair_cells = format_rows(pair_rows(rows, channel_pairs or None), sci_threshold,
                                  name_key="pair", psp_threshold=cutoffs["psp"])
         # split on the montage, not on whether a Short entry exists: one is returned for
@@ -673,6 +681,17 @@ def condition_payloads(
             ("Long",  scalars.get("n_long_channels"),  motion_by_set.get("long") or {},  True),
             ("Short", scalars.get("n_short_channels"), motion_by_set.get("short") or {}, False),
         ], motion_cols) if has_short and motion_by_set.get("short") else {}
+
+        # the run page's rows: All alone on a montage with nothing to split, where Long would
+        # repeat it
+        haemo_by_set = entry.get("haemo_by_set") or {}
+        haemo_sets = (("All", len(rows), "all", False),
+                      ("Long", scalars.get("n_long_channels"), "long", True),
+                      ("Short", scalars.get("n_short_channels"), "short", False))
+        haemo_rows = [(name, n, haemo_by_set[key], colour)
+                      for name, n, key, colour in (haemo_sets if has_short else haemo_sets[:1])
+                      if haemo_by_set.get(key)]
+        haemo_split = split_table(haemo_rows, HAEMO_SPLIT_COLUMNS) if haemo_rows else {}
 
         d = dict(payload)
         # what the page is, for the panels that stay whole and have to say why
@@ -701,6 +720,7 @@ def condition_payloads(
             "rows": metric_rows(scalars, flat_keys, skip_missing=True, condition=True),
             "split": split,
             "motion_split": motion_split,
+            "haemo_split": haemo_split,
             # every channel, and the three sets are in the tables. Not "no short channels":
             # the Short rows below say whether the montage has them
             "channel_set": "every channel",
@@ -723,8 +743,7 @@ def condition_payloads(
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
         paths.pop("evoked_topo", None)
-        # measured over the whole run, with no condition version yet
-        paths.pop("hbo_hbr", None)
+        paths.pop("hbo_hbr_corr", None)
         for key in ("carpet", "ch_detail_template", "motion_detail_template"):
             entry_path = paths.get(key)
             if isinstance(entry_path, dict) and entry_path.get("src"):
@@ -755,6 +774,10 @@ def condition_payloads(
             paths.pop("psd", None)
             if psd_fig is not None:
                 paths["psd"] = save_figure("psd", slug, psd_fig)
+            hb_fig = (remake_hbo_hbr_corr(float(t0), float(t1))
+                      if remake_hbo_hbr_corr else None)
+            if hb_fig is not None:
+                paths["hbo_hbr_corr"] = save_figure("hbo_hbr_corr", slug, hb_fig)
             epoch_fig = remake_epoch(float(t0), float(t1)) if remake_epoch else None
             paths.pop("epoch_mean", None)
             if epoch_fig is not None:

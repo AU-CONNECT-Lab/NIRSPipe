@@ -20,8 +20,8 @@ NOTES = {
         "line. The recording was processed under the run's verdict, not this one; the run's "
         "page carries it.",
     "raw.condition_spectrum":
-        "The spectrum and the grand mean are redrawn on a cut of the recording; the "
-        "per-channel detail's spectrum and epoch average stay the whole run's.",
+        "The spectrum, the grand mean and the HbO–HbR correlation are redrawn on a cut of the "
+        "recording; the per-channel detail's spectrum and epoch average stay the whole run's.",
 
     # ---- Panels ----
     "raw.channel_detail":

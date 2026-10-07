@@ -7,7 +7,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`
+- `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`, condition pages included
+
+### Changed
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back

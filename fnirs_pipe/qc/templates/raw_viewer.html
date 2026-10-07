@@ -712,7 +712,7 @@ function _correctionMethod() {
 }
 
 function loadHbCorr() {
-  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).hbo_hbr;
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).hbo_hbr_corr;
   _showSection("HbCorr", !!(p && p.src));
   var note = document.getElementById("hb-corr-post-note");
   var method = _correctionMethod();

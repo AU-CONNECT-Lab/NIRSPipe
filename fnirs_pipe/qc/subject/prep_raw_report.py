@@ -24,7 +24,8 @@ from fnirs_pipe.qc.common.figure_io import (
 from fnirs_pipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 from fnirs_pipe.qc.common.channel_table import (
-    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX, channel_columns,
+    HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
+    channel_columns,
     channel_rows, format_rows, heatmap_args, pair_rows, registration_note, save_channel_csv,
     separation_blocks,
     separation_notes,
@@ -83,10 +84,6 @@ _VIEW_SCALAR_KEYS = (
     "spike_count", "spike_pct", "spike_pct_frames", "spike_num_frames",
     *IMU_STAT_KEYS,
 )
-
-# the haemoglobin table's one column; the subject report prints this metric among its own
-# haemoglobin rows, so there is no shared list to take it from
-_HAEMO_SPLIT_COLUMNS = (("hbo_hbr_corr_mean", "HbO–HbR corr"),)
 
 # ---- Channel decisions table ----
 # Its columns, like every other view's, come from channel_table. It draws the decision chip
@@ -346,7 +343,7 @@ def _process_run(
             ("Short", raw_all.get("n_short_channels"), "_short", False))
         if raw_secs.get(f"rawhaemo{suffix}")
     ]
-    haemo_split = split_table(haemo_rows, _HAEMO_SPLIT_COLUMNS) if haemo_rows else {}
+    haemo_split = split_table(haemo_rows, HAEMO_SPLIT_COLUMNS) if haemo_rows else {}
 
     # the data axis, which is what every panel on this page is drawn on and what
     # `score_trials` crops against; `extract_markers` leaves the onsets on the original
@@ -549,18 +546,14 @@ def _process_run(
                 }
 
     # ── file: HbO-HbR correlation ──────────────────────────────────────────────
-    # the subject report's panel, with motion correction as the step between its two stages
     if raw_haemo is not None:
         with guard("HbO-HbR correlation panel", errors, label):
-            from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure, hbo_hbr_fit_js
-            fig = hbo_hbr_correlation_figure(
-                raw_haemo, title="HbO–HbR correlation", sep_bands=sep_bands,
-                raw_after=raw_haemo_post,
-                stage_labels=("before motion correction", f"after {motion_correction}"))
+            from fnirs_pipe.qc.figures import hbo_hbr_fit_js
+            fig = _hbo_hbr_figure(raw_haemo, raw_haemo_post, sep_bands, motion_correction)
             if fig is not None:
                 fname = fig_name("hbohbrcorr")
                 h     = _save_figure_html(fig, fig_dir / fname, extra_js=hbo_hbr_fit_js(fig))
-                figure_paths["hbo_hbr"] = {"src": f"figures/{fname}", "h": h}
+                figure_paths["hbo_hbr_corr"] = {"src": f"figures/{fname}", "h": h}
 
     # ── file: per-channel trial images ─────────────────────────────────────────
     # Trials down the rows, so a channel that was fine for the first half and lost for the
@@ -661,7 +654,8 @@ def _process_run(
     if cond_windows:
         with guard("Per-condition metrics", errors, label):
             by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands,
-                                             imu=imu)
+                                             imu=imu, haemo=raw_haemo,
+                                             haemo_post=raw_haemo_post)
     record = sqm_record_dict(sections, bids_uris([run["snirf_path"]], sqm_path))
     if by_cond:
         record["by_condition"] = by_cond
@@ -743,6 +737,8 @@ def _process_run(
                                     build_psd_mean_figure),
         "remake_epoch":  _epoch_maker(raw_haemo, fig_tmin, fig_tmax, sep_bands,
                                       build_epoch_preview_figure),
+        "remake_hbo_hbr_corr": _hbo_hbr_maker(raw_haemo, raw_haemo_post, sep_bands,
+                                              motion_correction),
         "trial_images_by_condition": trial_img_by_cond,
         "sqm_path":      sqm_path,
         "fig_dir":       fig_dir,
@@ -753,6 +749,33 @@ def _process_run(
         "cutoffs":       cutoffs,
         "trial_rows":    trial_rows,
     }
+
+
+def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method):
+    """The subject report's correlation panel, with motion correction as the step between."""
+    from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure
+    return hbo_hbr_correlation_figure(
+        haemo, title="HbO–HbR correlation", sep_bands=sep_bands, raw_after=haemo_post,
+        stage_labels=("before motion correction", f"after {method}"))
+
+
+def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method):
+    """``(t0, t1) -> figure`` on both conversions cut to one condition, or None without one.
+
+    Cut rather than sliced, as the record's own numbers are: a correlation reads only the
+    samples it is handed.
+    """
+    if haemo is None:
+        return None
+
+    def remake(t0: float, t1: float):
+        lo, hi = max(0.0, float(t0)), min(float(haemo.times[-1]), float(t1))
+        if hi <= lo:
+            return None
+        after = None if haemo_post is None else haemo_post.copy().crop(tmin=lo, tmax=hi)
+        return _hbo_hbr_figure(haemo.copy().crop(tmin=lo, tmax=hi), after, sep_bands, method)
+
+    return remake
 
 
 def _epoch_maker(raw_haemo, tmin: float, tmax: float, sep_bands, build):
@@ -816,6 +839,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     to be learned twice. The file name comes from :func:`condition_page_name`, keyed by the
     run's own label and not the report's, since one report holds every run of a task.
     """
+    from fnirs_pipe.qc.figures import hbo_hbr_fit_js
     from fnirs_pipe.qc.subject.condition_views import condition_payloads
     from fnirs_pipe.qc.subject.report import condition_page_name
 
@@ -844,7 +868,9 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         # the two quality tables carry qc, as the run page names them
         fname = figure_namer(run_label, slug, prefix="raw")(
             desc, suffix="qc" if desc in ("chsummary", "trialqc") else "nirs")
-        h = _save_figure_html(fig, fig_dir / fname)
+        # the correlation panel fits its square matrix to the page, as the run's copy does
+        extra_js = hbo_hbr_fit_js(fig) if panel == "hbo_hbr_corr" else ""
+        h = _save_figure_html(fig, fig_dir / fname, extra_js=extra_js)
         return {"src": f"figures/{fname}", "h": h}
 
     def save_stack(panel: str, slug: str, name: str, figs) -> "dict | None":
@@ -861,6 +887,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         sci_threshold=sci_threshold, cutoffs=ctx["cutoffs"],
         trial_rows=ctx.get("trial_rows"), save_figure=save_figure,
         remake_psd=ctx.get("remake_psd"), remake_epoch=ctx.get("remake_epoch"),
+        remake_hbo_hbr_corr=ctx.get("remake_hbo_hbr_corr"),
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
     )

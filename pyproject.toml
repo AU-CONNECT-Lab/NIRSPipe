@@ -6,6 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "fnirs-pipe"
 dynamic = ["version"]
 description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning, QC, and run-tracking pipeline"
+authors = [
+    { name = "Qiuyu Yu", email = "qiuyuyu.psych@gmail.com" },
+]
+maintainers = [
+    { name = "Qiuyu Yu", email = "qiuyuyu.psych@gmail.com" },
+]
 requires-python = ">=3.10"
 dependencies = [
     "mne>=1.6",
