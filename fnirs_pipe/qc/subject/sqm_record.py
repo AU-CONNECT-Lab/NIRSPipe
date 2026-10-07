@@ -109,7 +109,11 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
-OPTIONAL_SECTIONS = ("censor", "imu")
+OPTIONAL_SECTIONS = ("censor", "imu",
+                     # `fnirs-qc prep-raw` only: its in-memory Beer-Lambert, before and after
+                     # the correction it may run
+                     "rawhaemo", "rawhaemo_long", "rawhaemo_short",
+                     "rawhaemo_post", "rawhaemo_post_long", "rawhaemo_post_short")
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one
 # number for every channel set. It stays on the whole-file section alone: repeating it

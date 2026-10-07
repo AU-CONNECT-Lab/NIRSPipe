@@ -725,6 +725,8 @@ def condition_payloads(
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
         paths.pop("evoked_topo", None)
+        # measured over the whole run, with no condition version yet
+        paths.pop("hbo_hbr", None)
         for key in ("carpet", "ch_detail_template", "motion_detail_template"):
             entry_path = paths.get(key)
             if isinstance(entry_path, dict) and entry_path.get("src"):

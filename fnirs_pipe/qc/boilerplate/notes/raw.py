@@ -46,6 +46,17 @@ NOTES = {
         "One channel's optical density either side of the correction, under its own "
         "separation class's GVTD. Measured over the whole recording like the carpet above, so "
         "a per-condition page narrows the view rather than remeasuring it.",
+    "raw.hbo_hbr_corr":
+        "The channel-by-channel correlation and each pair's HbO–HbR r, on the concentration "
+        "after Beer-Lambert with no filtering, rejected channels included. A cortical response "
+        "pushes r negative and shared systemic or motion signals push it positive; short "
+        "channels see no cortex and are grouped apart. No line is drawn, since the value "
+        "moves with the passband. Measured before motion correction, so it need not match "
+        "the pipeline report, which measures after it.",
+    "raw.hbo_hbr_corr_post":
+        "Left matrix and open rings: before {method}. Right matrix and filled dots: after "
+        "it. Pair by pair, the after side is what the pipeline report shows for "
+        "<code>preproc</code> when it ran the same correction.",
     "raw.events":
         "Every event on one axis, one row per condition. This is what shows a condition that "
         "stopped being delivered partway through or a block started twice, which no average "
@@ -84,6 +95,12 @@ NOTES = {
         "Each cell is <b>before &rarr; after {method}</b>. GVTD counts use the uncorrected "
         "side's cutoff on both sides; spike counts use each side's own per-channel cutoff, "
         "and the threshold's after value is not the one applied.",
+    "raw.haemo_sets":
+        "Mean HbO–HbR correlation over each channel set, on the unfiltered concentration with "
+        "rejected channels included. Uncoloured: no line on it has a source. A short channel "
+        "has no cortical anticorrelation, so its row is not read against the long one.",
+    "raw.haemo_post":
+        "Each cell is <b>before &rarr; after {method}</b>.",
     "raw.channel_summary":
         "Status / Coupled / SCI / CV / PSP / SNR per channel, green = pass and red = fail. "
         "Status is the screening verdict, read off the Coupled row; the others are "
@@ -97,7 +114,8 @@ NOTES = {
         "One row per source-detector pair: a decision applies to the pair, and SCI is a "
         "property of the pair rather than of either wavelength. SNR, CV and spike show the "
         "first wavelength; both are in the channel TSV (<code>_desc-rawchannel_qc.tsv</code>) "
-        "beside the quality record. Rows in red were rejected by screening, and Status "
+        "beside the quality record. HbO–HbR corr is measured before motion correction. "
+        "Rows in red were rejected by screening, and Status "
         "names the criterion. Click the decision chip to cycle: &#8212; &#8594; good "
         "&#8594; bad. Saves automatically.",
     "raw.skipped":

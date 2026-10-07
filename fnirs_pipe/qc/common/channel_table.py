@@ -70,7 +70,8 @@ def channel_rows(
     ``raw`` section, which measured it even though no split claimed it; its scores are the
     same per-channel numbers either way, and only the scalar means they feed differ.
     ``corr`` is the exception and comes from the whole-file ``preproc`` section, so it is
-    filled for short channels too.
+    filled for short channels too. A raw-only record has no ``preproc`` and reads
+    ``rawhaemo`` instead, the uncorrected side.
     """
     per_channel = record.get("per_channel") or {}
     short_pc = per_channel.get("raw_short") or {}
@@ -78,7 +79,8 @@ def channel_rows(
     whole_pc = per_channel.get("raw") or {}
     merged_pc = _long_per_channel(record)
     # the whole-file section, not the long split: this column is the one short channels have
-    corr_pc = (per_channel.get("preproc") or {}).get("hbo_hbr_corr_per_channel") or {}
+    corr_pc = (per_channel.get("preproc") or per_channel.get("rawhaemo")
+               or {}).get("hbo_hbr_corr_per_channel") or {}
     bad = set(bad_channels)
 
     def _named(pc: dict) -> set:

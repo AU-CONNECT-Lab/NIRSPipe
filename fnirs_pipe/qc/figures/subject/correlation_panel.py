@@ -158,7 +158,7 @@ def _add_dividers(fig, groups, order, n_hbo, col):
 
 
 def _add_dumbbell(fig, groups, r_before, r_after, row, col,
-                  after_label=_AFTER_LABEL, task_modelled=False):
+                  after_label=_AFTER_LABEL, task_modelled=False, before_label=_BEFORE_LABEL):
     """Per-pair r, one x position per pair, before as an open ring and after filled.
 
     Ordered best→worst inside each group on the *before* value, so one order serves both
@@ -199,7 +199,7 @@ def _add_dumbbell(fig, groups, r_before, r_after, row, col,
                                  line=dict(color=_MUTED, width=1.6), opacity=0.55,
                                  hoverinfo="skip"), row=row, col=col)
         fig.add_trace(go.Scatter(
-            x=xs, y=before, mode="markers", name=_BEFORE_LABEL, customdata=labels,
+            x=xs, y=before, mode="markers", name=before_label, customdata=labels,
             marker=dict(size=9, color="white", line=dict(color=_MUTED, width=1.4)),
             hovertemplate="%{customdata}<br>before r = %{y:.3f}<extra></extra>",
         ), row=row, col=col)
@@ -230,6 +230,7 @@ def hbo_hbr_correlation_figure(
     sep_bands=None,
     raw_after: "mne.io.Raw | None" = None,
     task_modelled: bool = False,
+    stage_labels: "tuple[str, str] | None" = None,
 ) -> "go.Figure | None":
     """Return the correlation panel as a Plotly figure, or None on an empty montage.
 
@@ -240,6 +241,9 @@ def hbo_hbr_correlation_figure(
 
     ``task_modelled`` says the after stage is a GLM residual, with the task model taken out
     as well as the confounds, so the after column is labelled to say so.
+
+    ``stage_labels`` names the two stages when the step between them is not denoising, as
+    in the raw viewer, where it is motion correction.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     order = _channel_order(raw_haemo, groups)
@@ -252,7 +256,8 @@ def hbo_hbr_correlation_figure(
     corr_a, r_a = (_stage(raw_after, order) if raw_after is not None else (None, None))
     two_stage = corr_a is not None
 
-    after_label = _AFTER_LABEL_GLM if task_modelled else _AFTER_LABEL
+    before_label, after_label = stage_labels or (
+        _BEFORE_LABEL, _AFTER_LABEL_GLM if task_modelled else _AFTER_LABEL)
 
     n_ch = len(order)
     n_hbo = sum(1 for n in order if n.endswith("hbo"))
@@ -269,7 +274,7 @@ def hbo_hbr_correlation_figure(
         rows=2, cols=cols, row_heights=row_heights, vertical_spacing=v_spacing,
         horizontal_spacing=0.06,
         specs=[[{}, {}], [{"colspan": 2}, None]] if two_stage else [[{}], [{}]],
-        subplot_titles=(_BEFORE_LABEL, after_label) if two_stage else (),
+        subplot_titles=(before_label, after_label) if two_stage else (),
     )
 
     for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
@@ -279,7 +284,8 @@ def hbo_hbr_correlation_figure(
 
     dumbbell_row = 2
     xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1,
-                               after_label=after_label, task_modelled=task_modelled)
+                               after_label=after_label, task_modelled=task_modelled,
+                               before_label=before_label)
 
     # every channel keeps its label, readable by zooming; the size keeps a few dozen legible
     tick_fs = int(np.clip(480 / max(n_ch, 1), 5, 10))

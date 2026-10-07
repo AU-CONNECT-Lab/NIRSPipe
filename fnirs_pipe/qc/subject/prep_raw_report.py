@@ -32,7 +32,8 @@ from fnirs_pipe.qc.common.channel_table import (
 )
 from fnirs_pipe.qc.metrics import (
     IMU_STAT_KEYS, SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    imu_section, imu_windowed, resolve_cutoffs, screen_channels, screening_scores,
+    haemo_quality_metrics, imu_section, imu_windowed, resolve_cutoffs, screen_channels,
+    screening_scores,
 )
 from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
                                            separation_orphans)
@@ -46,7 +47,8 @@ from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
 from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
 from fnirs_pipe.qc.subject.record_io import read_record, write_record
 from fnirs_pipe.qc.subject.sqm_record import (
-    RECORD_SUFFIXES, motion_sections, raw_condition_sections, raw_sections, sqm_record_dict,
+    RECORD_SUFFIXES, haemo_sections, motion_sections, raw_condition_sections, raw_sections,
+    sqm_record_dict,
 )
 
 logger = get_logger("qc.prep_raw_report")
@@ -83,12 +85,15 @@ _VIEW_SCALAR_KEYS = (
     *IMU_STAT_KEYS,
 )
 
+# the haemoglobin table's one column; the subject report prints this metric among its own
+# haemoglobin rows, so there is no shared list to take it from
+_HAEMO_SPLIT_COLUMNS = (("hbo_hbr_corr_mean", "HbO–HbR corr"),)
+
 # ---- Channel decisions table ----
 # Its columns, like every other view's, come from channel_table. It draws the decision chip
-# itself, that being the one column that is not a measurement, and the HbO-HbR correlation
-# is a haemoglobin measurement this intensity view has no stage for. The keys go over as
-# JSON because the table body is built in the browser.
-_CH_COLUMNS     = channel_columns(("corr", "separation"))
+# itself, that being the one column that is not a measurement. The keys go over as JSON
+# because the table body is built in the browser.
+_CH_COLUMNS     = channel_columns(("separation",))
 _CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
                    "ch_column_keys_json": json.dumps([key for key, _ in _CH_COLUMNS])}
 
@@ -216,6 +221,20 @@ def _process_run(
             from fnirs_pipe.pipeline.motion import correct_motion
             raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction)
 
+    ppf = dpf[0] if len(dpf) == 1 else dpf
+    raw_haemo = None
+    with guard("Beer-Lambert", errors, label):
+        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
+    if raw_haemo is None:
+        note(notes, label, "no haemoglobin conversion, so the per-channel detail panel "
+                           "is empty")
+    # the corrected copy converted too, only for the correlation's after side
+    raw_haemo_post = None
+    if raw_motcorr is not None:
+        with guard("Beer-Lambert after motion correction", errors, label):
+            raw_haemo_post = mne.preprocessing.nirs.beer_lambert_law(raw_motcorr.copy(),
+                                                                     ppf=ppf)
+
     sqm: dict = {}
     with guard("Quality metrics", errors, label):
         sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels),
@@ -228,6 +247,14 @@ def _process_run(
     raw_secs, raw_pc = raw_sections(
         raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
         screen_scores.get("good_frac"))
+    # HbO-HbR correlation on both conversions above, split by separation as the pipeline's
+    # haemoglobin stages are
+    for name, haemo in (("rawhaemo", raw_haemo), ("rawhaemo_post", raw_haemo_post)):
+        if haemo is not None:
+            with guard("HbO-HbR correlation", errors, label):
+                secs, pc = haemo_sections(name, haemo, haemo_quality_metrics, sep_bands)
+                raw_secs.update(secs)
+                raw_pc.update(pc)
     # Reported per condition, never screened on: one channel set serves every condition, so a
     # contrast between conditions is never one between montages. A window shorter than two
     # screening windows has too few to count, so it is not offered a share at all.
@@ -318,13 +345,21 @@ def _process_run(
     ]
     motion_split = split_table(motion_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
 
-    raw_haemo = None
-    with guard("Beer-Lambert", errors, label):
-        ppf = dpf[0] if len(dpf) == 1 else dpf
-        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
-    if raw_haemo is None:
-        note(notes, label, "no haemoglobin conversion, so the per-channel detail panel "
-                           "is empty")
+    # one row per set the record carries, so an unsplit montage still gets its All row
+    def _haemo_row(suffix: str) -> dict:
+        return {**(raw_secs.get(f"rawhaemo{suffix}") or {}),
+                **{f"{k}_post": v
+                   for k, v in (raw_secs.get(f"rawhaemo_post{suffix}") or {}).items()}}
+
+    haemo_rows = [
+        (name, n, _haemo_row(suffix), colour)
+        for name, n, suffix, colour in (
+            ("All",   len(sci_scores),                 "",       False),
+            ("Long",  raw_all.get("n_long_channels"),  "_long",  True),
+            ("Short", raw_all.get("n_short_channels"), "_short", False))
+        if raw_secs.get(f"rawhaemo{suffix}")
+    ]
+    haemo_split = split_table(haemo_rows, _HAEMO_SPLIT_COLUMNS) if haemo_rows else {}
 
     # the data axis, which is what every panel on this page is drawn on and what
     # `score_trials` crops against; `extract_markers` leaves the onsets on the original
@@ -526,6 +561,20 @@ def _process_run(
                     "h": saved[0]["h"] if saved else 700,
                 }
 
+    # ── file: HbO-HbR correlation ──────────────────────────────────────────────
+    # the subject report's panel, with motion correction as the step between its two stages
+    if raw_haemo is not None:
+        with guard("HbO-HbR correlation panel", errors, label):
+            from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure, hbo_hbr_fit_js
+            fig = hbo_hbr_correlation_figure(
+                raw_haemo, title="HbO–HbR correlation", sep_bands=sep_bands,
+                raw_after=raw_haemo_post,
+                stage_labels=("before motion correction", f"after {motion_correction}"))
+            if fig is not None:
+                fname = fig_name("hbohbrcorr")
+                h     = _save_figure_html(fig, fig_dir / fname, extra_js=hbo_hbr_fit_js(fig))
+                figure_paths["hbo_hbr"] = {"src": f"figures/{fname}", "h": h}
+
     # ── file: per-channel trial images ─────────────────────────────────────────
     # Trials down the rows, so a channel that was fine for the first half and lost for the
     # second reads as a band rather than being averaged away. HbO only, as the subject
@@ -673,6 +722,7 @@ def _process_run(
                 skip_missing=True),
             "split":        split,
             "motion_split": motion_split,
+            "haemo_split":  haemo_split,
             "channel_set":  "long channels" if sqm_split else "every channel",
         },
         # One table, at pair granularity: a decision is taken per source-detector pair. The

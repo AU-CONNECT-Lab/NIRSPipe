@@ -90,6 +90,7 @@ select#run-select {
   ("_PSD", "PSD", "#PSD"),
   ("_SCI_PSP", "SCI/PSP", "#SciPsp"),
   ("_Motion", "Motion", "#Motion"),
+  ("_HbCorr", "HbO–HbR r", "#HbCorr"),
   ("_Events", "Events", "#Events"),
   ("_Epoch", "Epoch", "#Epoch"),
   ("_TrialImage", "Trial image", "#TrialImage"),
@@ -255,18 +256,28 @@ select#run-select {
   </div>
 </details>
 
-<!-- step g: the design -->
+<!-- step g: whether the concentration looks haemodynamic, either side of the correction -->
+<details id="HbCorr" open>
+  <summary>g. HbO–HbR Correlation</summary>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('raw.hbo_hbr_corr') }}</p>
+    <p class="step-desc" id="hb-corr-post-note"></p>
+    <div id="hb-corr-plot"></div>
+  </div>
+</details>
+
+<!-- step h: the design -->
 <details id="Events" open>
-  <summary>g. Event Timeline</summary>
+  <summary>h. Event Timeline</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.events') }}</p>
     <div id="trigger-timeline-plot"></div>
   </div>
 </details>
 
-<!-- step h: what the events did, averaged and trial by trial -->
+<!-- step i: what the events did, averaged and trial by trial -->
 <details id="Epoch" open>
-  <summary>h. Epoch (grand mean)</summary>
+  <summary>i. Epoch (grand mean)</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.epoch') }}</p>
     <div id="epoch-mean-plot"></div>
@@ -274,7 +285,7 @@ select#run-select {
 </details>
 
 <details id="TrialImage" open>
-  <summary>i. Trial image: single-channel trials</summary>
+  <summary>j. Trial image: single-channel trials</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
     <select class="ch-select" id="trialimg-select"
@@ -298,6 +309,12 @@ select#run-select {
     <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
     <p class="qm-note" id="motion-post-note"></p>
     <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
+  </div>
+  <div id="haemo-split-wrap" style="display:none">
+    <h3 class="qm-sub">Haemoglobin</h3>
+    <p class="qm-note">{{ section_note('raw.haemo_sets') }}</p>
+    <p class="qm-note" id="haemo-post-note"></p>
+    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="haemo-split-table"></table></div>
   </div>
   <div id="bad-list"></div>
 </div>
@@ -439,6 +456,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadTriggerTimeline();
   loadCarpetGvtd();
   loadMotionDetail();
+  loadHbCorr();
   loadSciPsp();
   loadSqm();
   loadChannelSummary();
@@ -687,6 +705,23 @@ function loadMotionDetail() {
   show(chans[0]);
 }
 
+// ─── HbO-HbR correlation ──────────────────────────────────────────────────────
+function _correctionMethod() {
+  var m = ((_STATIC_DATA[_run_idx] || {}).summary || {}).motion_correction;
+  return (m && m !== "none") ? m : "";
+}
+
+function loadHbCorr() {
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).hbo_hbr;
+  _showSection("HbCorr", !!(p && p.src));
+  var note = document.getElementById("hb-corr-post-note");
+  var method = _correctionMethod();
+  if (note) note.innerHTML = method
+    ? {{ section_note('raw.hbo_hbr_corr_post', method='{method}') | tojson }}.replace("{method}", _esc(method))
+    : "";
+  if (p && p.src) _setIframeSrc("hb-corr-plot", p.src, p.h || 900);
+}
+
 // ─── SCI / PSP ────────────────────────────────────────────────────────────────
 function loadSciPsp() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
@@ -807,16 +842,23 @@ function renderSqm(d) {
   }
   renderSqmSplit(d.split || {},        "sqm-split-wrap",    "sqm-split-table");
   renderSqmSplit(d.motion_split || {}, "motion-split-wrap", "motion-split-table");
+  renderSqmSplit(d.haemo_split || {},  "haemo-split-wrap",  "haemo-split-table");
+  var corrected = _correctionMethod();
   var mp = document.getElementById("motion-post-note");
   if (mp) {
-    var corrected = ((_STATIC_DATA[_run_idx] || {}).summary || {}).motion_correction;
-    mp.innerHTML = (corrected && corrected !== "none")
+    mp.innerHTML = corrected
       ? {{ section_note('raw.motion_post', method='{method}') | tojson }}.replace("{method}", _esc(corrected))
+      : "";
+  }
+  var hp = document.getElementById("haemo-post-note");
+  if (hp) {
+    hp.innerHTML = corrected
+      ? {{ section_note('raw.haemo_post', method='{method}') | tojson }}.replace("{method}", _esc(corrected))
       : "";
   }
 }
 
-// one renderer for both tables: they are the same shape, built by channel_table.split_table
+// one renderer for every table: they are the same shape, built by channel_table.split_table
 function renderSqmSplit(split, wrapId, tableId) {
   var wrap  = document.getElementById(wrapId);
   var table = document.getElementById(tableId);
@@ -911,7 +953,7 @@ function switchRun(idx) {
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
-    loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail();
+    loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
     loadSciPsp(); loadSqm(); loadChannelSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();

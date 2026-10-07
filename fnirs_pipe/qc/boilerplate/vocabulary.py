@@ -646,6 +646,12 @@ _STAGE_BOTH = (
     "Measured on each haemoglobin stage the record covers (preproc, filtered, resampled, "
     "errts), so which stage you are reading is the section it sits in."
 )
+# the one haemoglobin metric the raw viewer also measures, on its own Beer-Lambert
+_STAGE_BOTH_AND_RAW = (
+    "Measured on each haemoglobin stage the record covers (preproc, filtered, resampled, "
+    "errts, and in the raw viewer unfiltered haemoglobin before and after motion "
+    "correction), so which stage you are reading is the section it sits in."
+)
 _STAGE_RAW_AND_CORRECTED = (
     "Measured on the recording as it arrived and again on the motion-corrected file, over the "
     "same channels both times."
@@ -695,6 +701,7 @@ METRIC_STAGE = {
     **{k: _STAGE_MOTION for k in _MOTION_METRICS},
     **{k: _STAGE_PREPROC for k in _PREPROC_METRICS},
     **{k: _STAGE_BOTH for k in _BOTH_METRICS},
+    "hbo_hbr_corr_mean": _STAGE_BOTH_AND_RAW,
 }
 
 
@@ -723,6 +730,8 @@ _RECORD_STAGES = {
     "raw": "The recording as it arrived, intensity and optical density, bad channels included.",
     "motion": "The motion-correction step, measured on the optical density either side of it, bad channels included.",
     "motion_post": "The motion-corrected optical density, bad channels included.",
+    "rawhaemo": "Haemoglobin converted from the recording as it arrived, before motion correction and filtering, bad channels included.",
+    "rawhaemo_post": "Haemoglobin converted from the motion-corrected optical density, before filtering, bad channels included.",
     "preproc": "Haemoglobin after Beer-Lambert and before filtering, bad channels excluded.",
     "filtered": "Haemoglobin after the bandpass, bad channels excluded.",
     "resampled": "Haemoglobin after the resample, bad channels excluded.",

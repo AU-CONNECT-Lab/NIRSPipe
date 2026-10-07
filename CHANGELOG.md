@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`
+
 ## [0.59.0] - 2026-10-06
 
 ### Added
