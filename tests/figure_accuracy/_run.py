@@ -25,9 +25,11 @@ class Run:
     def nirs(self) -> Path:
         return self.out / f"sub-{self.subject}" / "nirs"
 
-    def figure(self, desc: str, chan: str | None = None, suffix: str = "nirs") -> Path:
-        chan_part = f"_chan-{chan}" if chan else ""
-        return self.figures / f"sub-{self.subject}_task-{self.task}{chan_part}_desc-{desc}_{suffix}.html"
+    def figure(self, desc: str, chan: str | None = None, suffix: str = "nirs",
+               entities: str = "") -> Path:
+        """``entities`` are the ones between the run and ``desc``, e.g. ``stat-alff``."""
+        middle = "".join(f"_{part}" for part in (f"chan-{chan}" if chan else "", entities) if part)
+        return self.figures / f"sub-{self.subject}_task-{self.task}{middle}_desc-{desc}_{suffix}.html"
 
     @property
     def report(self) -> Path:

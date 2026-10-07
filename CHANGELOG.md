@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The brain views and the raw viewer's optode layout grade channels by the windowed SCI
 - Dyad pages, the `fnirs-hyper` console summary and the GUI alignment table show the windowed SCI and name its window
 - The dyad channel table writes `sci_win` and `sci_whole` instead of `sci`
+- The subject index and cohort condition panels name each metric's window
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back

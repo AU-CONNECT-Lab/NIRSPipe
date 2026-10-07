@@ -51,7 +51,8 @@ def test_the_heatmap_titles_name_their_window(scipsp):
 
 def test_the_rejected_pair_is_the_dark_row(denoise_run, scipsp):
     heat = _heatmap(scipsp, "SCI")
-    means = dict(zip(heat["y"], np.nanmean(np.asarray(heat["z"], float), axis=1)))
+    # the median, as the decoupled trial darkens one column of every row
+    means = dict(zip(heat["y"], np.nanmedian(np.asarray(heat["z"], float), axis=1)))
     for channel, mean in means.items():
         bad = denoise_run.truth.pair(channel.rsplit(" ", 1)[0]).bad
         assert (mean < 0.3) if bad else (mean > 0.9), channel

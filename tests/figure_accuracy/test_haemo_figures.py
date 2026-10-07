@@ -105,3 +105,38 @@ def test_the_denoised_carpet_is_after_regression_and_keeps_the_chromophores_apar
             continue
         assert share_at(x, rows[f"{pair.name} hbo"], SYSTEMIC_FREQ) < 0.02
         assert share_at(x, rows[f"{pair.name} hbr"], HBR_FREQ) > 10 * share_at(x, rows[f"{pair.name} hbo"], HBR_FREQ)
+
+
+# ---- denoising stages ----
+
+@pytest.fixture(scope="module")
+def stages(denoise_run):
+    fig = one_figure(denoise_run.figure("denoisestages"))
+    rows = {}
+    for trace in fig["data"]:
+        name = trace["hovertemplate"].split("<br>")[0]
+        rows[name] = dict(zip(trace["x"], np.asarray(trace["y"], float)))
+    return rows
+
+
+def test_the_stage_columns_are_the_stages_in_order(stages):
+    for row in stages.values():
+        assert list(row) == ["desc-preproc", "desc-filtered", "desc-errts"]
+
+
+def test_regression_removes_the_shared_hbo_and_leaves_hbr_alone(stages):
+    # the systemic oscillation is in every HbO, short included; the HbR mark is long-only
+    hbo, hbr = stages["GCOR HbO"], stages["GCOR HbR"]
+    assert hbo["desc-errts"] < 0.6 * hbo["desc-filtered"]
+    assert hbr["desc-errts"] == pytest.approx(hbr["desc-filtered"], abs=0.05)
+
+
+def test_the_low_pass_removes_the_pulse(stages):
+    cardiac = stages["cardiac power HbO"]
+    assert cardiac["desc-filtered"] < 1e-3 * cardiac["desc-preproc"]
+
+
+def test_variance_remaining_starts_whole_and_falls(stages):
+    remaining = list(stages["variance remaining"].values())
+    assert remaining[0] == pytest.approx(100.0)
+    assert remaining[0] > remaining[1] > remaining[2]

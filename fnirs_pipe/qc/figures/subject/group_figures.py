@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
                                                   _hex_to_rgba)
@@ -571,7 +572,8 @@ def build_condition_timeline(
 # What the per-condition panels report, in this order. Each is a key of a condition's
 # `scalars` block.
 _CONDITION_METRICS = [
-    ("sci_win_mean", "SCI"), ("psp_mean", "PSP"), ("cv_mean", "CV"), ("snr_mean", "SNR"),
+    ("sci_win_mean", f"SCI ({SCI_WINDOW_S:g} s)"), ("psp_mean", f"PSP ({PSP_WINDOW_S:g} s)"),
+    ("cv_mean", f"CV ({CV_WINDOW_S:g} s)"), ("snr_mean", f"SNR ({CV_WINDOW_S:g} s)"),
     ("gvtd_filt_mean", _GVTD_LABEL), ("gvtd_pct_above_thresh", "GVTD above threshold"),
     ("gyro_speed_mean", "Motion sensor: gyroscope speed"),
 ]

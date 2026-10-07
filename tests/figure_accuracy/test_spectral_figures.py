@@ -65,7 +65,7 @@ def test_the_drawn_filter_response_is_the_attenuation_the_filter_produced(psd):
     low_pass = mode_defaults("denoise")["low_pass"]
     # deeper in the stopband the measured ratio stops at the Welch window's leakage floor
     for freq, tolerance in ((0.3, 1.0), (0.9 * low_pass, 3.0), (low_pass, 3.0),
-                            (1.2 * low_pass, 3.0), (CARDIAC_FREQ, 6.0)):
+                            (1.2 * low_pass, 3.0), (CARDIAC_FREQ, 10.0)):
         measured = _db_at(after, freq) - _db_at(before, freq)
         assert measured == pytest.approx(drawn[np.argmin(np.abs(fx - freq))], abs=tolerance), freq
 

@@ -21,18 +21,27 @@ DPF = (5.8, 6.4)                     # two values, so a reversed list changes th
 
 EVENT_ONSETS = (40.0, 100.0, 160.0, 220.0, 280.0, 340.0)
 EVENT_DURATION = 10.0
-_CYCLE = 1 / (len(EVENT_ONSETS) * 60.0)
+# three trials 60 s apart in each block of the two-level design, six in all
+_CYCLE = 1 / (3 * 60.0)
 
 # ---- Fingerprint frequencies (Hz) ----
-# multiples of _CYCLE but not of 1/60 Hz, so each averages to zero over the six trials
-LONG_HBO_FREQS = tuple(m * _CYCLE for m in (13, 45, 67, 77, 110, 131))
+# multiples of _CYCLE but not of 1/60 Hz, so each averages to zero over three trials or six
+LONG_HBO_FREQS = tuple(m * _CYCLE for m in (7, 23, 34, 38, 55, 65))
 LONG_HBO_AMPS = (0.4e-6, 0.6e-6, 0.8e-6, 1.0e-6, 1.2e-6, 1.4e-6)
-HBO_HBR_CORR = (-0.9, -0.7, -0.5, -0.3, -0.1, 0.3)
-HBR_FREQ = 56 * _CYCLE               # every long HbR carries it, no HbO does
-SYSTEMIC_FREQ = 34 * _CYCLE          # short and long HbO alike
+# not -0.9 on a kept pair: its HbR would cancel its HbO in the 760 nm optical density
+HBO_HBR_CORR = (-0.5, -0.7, -0.9, -0.3, -0.1, 0.3)
+HBR_FREQ = 28 * _CYCLE               # every long HbR carries it, no HbO does
+SYSTEMIC_FREQ = 17 * _CYCLE          # short and long HbO alike
 SYSTEMIC_AMP = 0.8e-6
-CARDIAC_FREQ = 487 * _CYCLE
+CARDIAC_FREQ = 244 * _CYCLE
 CARDIAC_AMP = 0.3e-6
+
+# ---- Resting state: everything inside the 0.01-0.08 Hz band, and a known network ----
+REST_HBO_FREQS = (0.020, 0.026, 0.032, 0.038, 0.044, 0.050)
+REST_HBR_FREQ = 0.058
+REST_NET_FREQ = 0.066
+REST_NET_AMP = 0.8e-6
+NETWORK = (1.0, 1.0, 0.0, -1.0, 0.0, 0.0)   # per long pair: in phase, out of phase, or absent
 
 N_SHORT_PAIRS = 2
 BAD_PAIR = 2                         # 0-based long pair with uncoupled wavelengths
@@ -41,6 +50,15 @@ RESPONSE_AMP = 1.5e-6
 SPIKE = (4, 80.0)                    # (long pair, time in s), outside every -5..25 s epoch
 STEP = (5, 385.0)                    # past the last epoch: a high-passed step rings for tens of seconds
 MOTION_OD = 0.5
+DEAD_TRIAL = 3                       # index into EVENT_ONSETS: the wavelengths decouple for its duration
+DEAD_OD = 0.06
+
+# ---- Two-level design: condition blocks with the trials inside them ----
+# (name, onset, duration, response gain of its trials)
+BLOCKS = (("ca", 30.0, 160.0, 1.0), ("cb", 210.0, 160.0, 0.4))
+# a long pair whose wavelengths decouple over the second half of block cb only, so it stays
+# in the run (0.8 of windows coupled) and in ca, and fails in cb (0.5)
+BLOCK_BAD = (5, 290.0, 80.0)
 
 OD_NOISE = 0.002
 
@@ -75,11 +93,14 @@ class Truth:
     sfreq: float
     duration: float
     events: list[tuple[float, float, str]]
-    spike: tuple[str, float]
-    step: tuple[str, float]
+    spike: tuple[str, float] | None
+    step: tuple[str, float] | None
+    dead_trial: float | None         # onset of the trial whose wavelengths do not couple
     # haemoglobin per channel name ("S1_D1 hbo"), in M, before and after the systemic part
     haemo: dict[str, np.ndarray] = field(repr=False)
     haemo_no_systemic: dict[str, np.ndarray] = field(repr=False)
+    blocks: tuple = ()               # BLOCKS, on the two-level design only
+    block_bad: tuple | None = None   # (pair, onset, duration) decoupled inside one block
 
     @property
     def long_pairs(self) -> list[Pair]:
@@ -87,7 +108,7 @@ class Truth:
 
     @property
     def moved(self) -> set[str]:
-        return {self.spike[0], self.step[0]}
+        return {art[0] for art in (self.spike, self.step) if art}
 
     def pair(self, name: str) -> Pair:
         return next(p for p in self.pairs if p.name == name)
@@ -151,10 +172,10 @@ def _haemo_to_od(info: mne.Info, dpf) -> np.ndarray:
     return np.linalg.inv(forward)
 
 
-def _response(t: np.ndarray) -> np.ndarray:
+def _response(t: np.ndarray, gains=None) -> np.ndarray:
     boxcar = np.zeros_like(t)
-    for onset in EVENT_ONSETS:
-        boxcar[(t >= onset) & (t < onset + EVENT_DURATION)] = 1.0
+    for onset, gain in zip(EVENT_ONSETS, gains or [1.0] * len(EVENT_ONSETS)):
+        boxcar[(t >= onset) & (t < onset + EVENT_DURATION)] = gain
     kt = np.arange(0, 20, 1 / SFREQ)
     kernel = kt**5 * np.exp(-kt)                 # gamma, peak at 5 s
     kernel /= kernel.sum()
@@ -162,20 +183,25 @@ def _response(t: np.ndarray) -> np.ndarray:
     return smooth / smooth.max()
 
 
-def fingerprint_raw(subject: str, task: str, seed: int | None = None) -> tuple[mne.io.Raw, Truth]:
+def fingerprint_raw(subject: str, task: str, seed: int | None = None,
+                    rest: bool = False, blocks: bool = False) -> tuple[mne.io.Raw, Truth]:
     if seed is None:
         seed = zlib.crc32(f"fingerprint/{subject}/{task}".encode())
     rng = np.random.default_rng(seed)
     n = int(SFREQ * DURATION)
     t = np.arange(n) / SFREQ
-    n_long = len(LONG_HBO_FREQS)
+    freqs, hbr_freq = (REST_HBO_FREQS, REST_HBR_FREQ) if rest else (LONG_HBO_FREQS, HBR_FREQ)
+    n_long = len(freqs)
     layout = _layout(n_long, N_SHORT_PAIRS)
     info = _info(layout)
 
     systemic = SYSTEMIC_AMP * np.sin(2 * np.pi * SYSTEMIC_FREQ * t)
     cardiac = CARDIAC_AMP * np.sin(2 * np.pi * CARDIAC_FREQ * t)
-    hbr_mark = np.sin(2 * np.pi * HBR_FREQ * t)
-    response = _response(t)
+    hbr_mark = np.sin(2 * np.pi * hbr_freq * t)
+    gains = [next(g for _, on, dur, g in BLOCKS if on <= o < on + dur) for o in EVENT_ONSETS]         if blocks else None
+    response = np.zeros(n) if rest else _response(t, gains)
+    network = REST_NET_AMP * np.sin(2 * np.pi * REST_NET_FREQ * t) if rest else np.zeros(n)
+    responders = () if rest else RESPONDERS
 
     pairs: list[Pair] = []
     haemo: dict[str, np.ndarray] = {}
@@ -188,14 +214,15 @@ def fingerprint_raw(subject: str, task: str, seed: int | None = None) -> tuple[m
             # no HbR mark here, or short-channel regression would strip it from the long pairs
             hbr_own = np.zeros(n)
         else:
-            f, a, r = LONG_HBO_FREQS[k], LONG_HBO_AMPS[k], HBO_HBR_CORR[k]
+            f, a, r = freqs[k], LONG_HBO_AMPS[k], HBO_HBR_CORR[k]
             pairs.append(Pair(name, False, (src + det) / 2, f, a, r,
-                              responds=k in RESPONDERS, bad=k == BAD_PAIR))
+                              responds=k in responders, bad=k == BAD_PAIR))
             own = np.sin(2 * np.pi * f * t + k)
             hbo_own = a * own
             # own and hbr_mark are orthogonal, so corr(HbO, HbR) = r once systemic is regressed out
             hbr_own = 0.4 * a * (r * own + np.sqrt(1 - r**2) * hbr_mark)
-            if k in RESPONDERS:
+            hbo_own = hbo_own + NETWORK[k] * network
+            if k in responders:
                 hbo_own = hbo_own + RESPONSE_AMP * response
                 hbr_own = hbr_own - RESPONSE_AMP / 3 * response
         clean[f"{name} hbo"] = hbo_own
@@ -213,13 +240,29 @@ def fingerprint_raw(subject: str, task: str, seed: int | None = None) -> tuple[m
             od[2 * k: 2 * k + 2] = 0.01 * rng.normal(size=(2, n))
     od += OD_NOISE * rng.normal(size=od.shape)
 
-    # a 2 s bump rather than a few samples: the motion figures band-limit to 0.5 Hz first
-    spike_pair, spike_t = SPIKE
-    bump = MOTION_OD * np.hanning(int(2 * SFREQ))
-    i = int(spike_t * SFREQ)
-    od[2 * spike_pair: 2 * spike_pair + 2, i: i + len(bump)] += bump
-    step_pair, step_t = STEP
-    od[2 * step_pair: 2 * step_pair + 2, int(step_t * SFREQ):] += MOTION_OD
+    if not rest:
+        # a 2 s bump rather than a few samples: the motion figures band-limit to 0.5 Hz first
+        spike_pair, spike_t = SPIKE
+        bump = MOTION_OD * np.hanning(int(2 * SFREQ))
+        i = int(spike_t * SFREQ)
+        od[2 * spike_pair: 2 * spike_pair + 2, i: i + len(bump)] += bump
+        step_pair, step_t = STEP
+        od[2 * step_pair: 2 * step_pair + 2, int(step_t * SFREQ):] += MOTION_OD
+
+        # an anti-phase pulse at the two wavelengths, above every passband in use
+        dead = (t >= EVENT_ONSETS[DEAD_TRIAL]) & (t < EVENT_ONSETS[DEAD_TRIAL] + EVENT_DURATION)
+        anti = DEAD_OD * np.sin(2 * np.pi * CARDIAC_FREQ * t[dead])
+        for k in range(len(layout)):
+            if k != BAD_PAIR:
+                od[2 * k, dead] += anti
+                od[2 * k + 1, dead] -= anti
+
+    if blocks:
+        pair, onset, span = BLOCK_BAD
+        off = (t >= onset) & (t < onset + span)
+        anti = DEAD_OD * np.sin(2 * np.pi * CARDIAC_FREQ * t[off])
+        od[2 * pair, off] += anti
+        od[2 * pair + 1, off] -= anti
 
     intensity0 = 0.05 + 0.01 * np.arange(len(info["ch_names"]))[:, None]
     data = intensity0 * np.exp(-od)
@@ -227,14 +270,26 @@ def fingerprint_raw(subject: str, task: str, seed: int | None = None) -> tuple[m
     raw = mne.io.RawArray(data, info, verbose="error")
     raw.set_meas_date(datetime(2026, 1, 1, tzinfo=timezone.utc))
     raw.info["subject_info"] = {"first_name": "sub", "last_name": subject}
-    raw.set_annotations(mne.Annotations(
-        list(EVENT_ONSETS), [EVENT_DURATION] * len(EVENT_ONSETS), [task] * len(EVENT_ONSETS)))
+
+    if rest:
+        events = []
+    elif blocks:
+        # the blocks name the conditions; the trials inside them share one name
+        events = sorted([(on, dur, name) for name, on, dur, _ in BLOCKS]
+                        + [(o, EVENT_DURATION, "trial") for o in EVENT_ONSETS])
+    else:
+        events = [(o, EVENT_DURATION, task) for o in EVENT_ONSETS]
+    raw.set_annotations(mne.Annotations([e[0] for e in events], [e[1] for e in events],
+                                        [e[2] for e in events]))
 
     names = [p.name for p in pairs]
     truth = Truth(
-        pairs=pairs, sfreq=SFREQ, duration=DURATION,
-        events=[(o, EVENT_DURATION, task) for o in EVENT_ONSETS],
-        spike=(names[spike_pair], spike_t), step=(names[step_pair], step_t),
+        pairs=pairs, sfreq=SFREQ, duration=DURATION, events=events,
+        spike=None if rest else (names[SPIKE[0]], SPIKE[1]),
+        step=None if rest else (names[STEP[0]], STEP[1]),
+        dead_trial=None if rest else EVENT_ONSETS[DEAD_TRIAL],
+        blocks=BLOCKS if blocks else (),
+        block_bad=(names[BLOCK_BAD[0]], *BLOCK_BAD[1:]) if blocks else None,
         haemo=haemo, haemo_no_systemic=clean,
     )
     return raw, truth
@@ -242,9 +297,10 @@ def fingerprint_raw(subject: str, task: str, seed: int | None = None) -> tuple[m
 
 def make_fingerprint_dataset(
     root: Path, subject: str = "01", task: str = "tapping", name: str = "bids_fingerprint",
+    rest: bool = False, blocks: bool = False,
 ) -> tuple[Path, Truth]:
     bids_dir = Path(root) / name
     _write_dataset_root(bids_dir, [subject])
-    raw, truth = fingerprint_raw(subject, task)
+    raw, truth = fingerprint_raw(subject, task, rest=rest, blocks=blocks)
     _write_subject(bids_dir, subject, task, raw)
     return bids_dir, truth

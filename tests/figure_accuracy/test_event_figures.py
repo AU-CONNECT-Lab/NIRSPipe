@@ -9,6 +9,7 @@ import pytest
 from tests._fingerprint import EVENT_DURATION, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import _DECODER, _decode, one_figure, plotly_figures
 from tests.figure_accuracy._read import traces, xy
+from tests.figure_accuracy.conftest import ROI_MAP
 
 TMIN, TMAX = -5.0, 25.0
 
@@ -93,3 +94,54 @@ def test_each_trial_image_is_its_channel_s_trials(denoise_run, evoked):
         np.testing.assert_allclose(np.asarray(heat["z"], float), trials, rtol=1e-4, atol=1e-3)
         peak = trials.mean(axis=0).max()
         assert (peak > 0.6) if pair.responds else (peak < 0.2), pair.name
+
+
+# ---- per-trial quality ----
+
+@pytest.fixture(scope="module")
+def trial_cells(denoise_run):
+    fig = one_figure(denoise_run.figure("trialqc", suffix="qc"))
+    cells = {}
+    for text in fig["data"][0]["text"]:
+        trial, rest = text.split(" · ", 1)
+        metric, value = rest.split(": ", 1)
+        cells[(trial, metric)] = value
+    return fig, cells
+
+
+def test_the_trial_columns_are_the_events_in_order(trial_cells):
+    fig, _ = trial_cells
+    onsets = [float(re.search(r"_(\d+(?:\.\d+)?)s_", label).group(1))
+              for label in fig["layout"]["xaxis"]["ticktext"]]
+    assert onsets == list(EVENT_ONSETS)
+
+
+def test_the_decoupled_trial_is_the_one_with_low_sci(denoise_run, trial_cells):
+    _, cells = trial_cells
+    sci = {trial: float(v) for (trial, metric), v in cells.items() if metric.startswith("SCI")}
+    dead = next(t for t in sci if f"_{denoise_run.truth.dead_trial:g}s_" in t)
+    assert min(sci, key=sci.get) == dead
+    assert all(v > sci[dead] + 0.3 for t, v in sci.items() if t != dead)
+
+
+# ---- trial images averaged over an ROI ----
+
+@pytest.mark.parametrize("roi", list(ROI_MAP))
+def test_each_roi_trial_image_is_the_channel_average_of_its_members(denoise_run, evoked, roi):
+    fig = plotly_figures(denoise_run.figure("trialimage", entities=f"seg-roinet_label-{roi}"))[0]
+    heat = next(t for t in fig["data"] if t["type"] == "heatmap")
+    members = [f"{pair} hbo" for pair in ROI_MAP[roi]]
+    expected = evoked.get_data(picks=members).mean(axis=1) * 1e6
+    np.testing.assert_allclose(np.asarray(heat["z"], float), expected, rtol=1e-4, atol=1e-3)
+
+
+def test_an_roi_responds_by_the_share_of_its_members_that_do(denoise_run):
+    peaks = {}
+    for roi in ROI_MAP:
+        fig = plotly_figures(denoise_run.figure("trialimage", entities=f"seg-roinet_label-{roi}"))[0]
+        average = next(t for t in fig["data"] if t["type"] == "scatter")
+        peaks[roi] = float(np.nanmax(np.asarray(average["y"], float)))
+    for roi, members in ROI_MAP.items():
+        share = sum(denoise_run.truth.pair(p).responds for p in members) / len(members)
+        # 0.85: the high-pass leaves about that much of a planted 10 s response's peak
+        assert peaks[roi] == pytest.approx(share * RESPONSE_AMP * 1e6 * 0.85, abs=0.25), roi
