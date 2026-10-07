@@ -311,14 +311,29 @@ def _draw_condition_pairs(
             continue
         drawn += 1
         for label, start, span, real_t0, lead, trail in segments:
-            fixed_cut = (real_t0 - lead, real_t0 + span + trail)
-            partner_cut = (start - lead, start + span + trail)
-            pair = {fixed_id: fixed_raw.copy().crop(*fixed_cut),
-                    pid: partner_raw.copy().crop(*partner_cut)}
+            # a pad that reaches a recording's end sums to a hair past its last sample, which
+            # crop refuses
+            fixed_cut = (real_t0 - lead, min(real_t0 + span + trail, fixed_end))
+            partner_cut = (start - lead, min(start + span + trail, end))
+            pair = _same_length({fixed_id: fixed_raw.copy().crop(*fixed_cut),
+                                 pid: partner_raw.copy().crop(*partner_cut)})
             white = (pair if not whiten_s else
-                     {fixed_id: fixed_white.copy().crop(*fixed_cut),
-                      pid: partner_white.copy().crop(*partner_cut)})
+                     _same_length({fixed_id: fixed_white.copy().crop(*fixed_cut),
+                                   pid: partner_white.copy().crop(*partner_cut)}))
             yield pid, label, pair, (lead, lead + span), white
+
+
+def _same_length(cuts: dict) -> dict:
+    """Trim the longer of two cuts to the shorter one's sample count.
+
+    Two cuts of one duration starting at different fractions of a sample period can round to
+    sample counts one apart (seen at 5 Hz), and the transform needs one length:
+
+      {fixed: 2916 samples, partner: 2915}  ->  both 2915, the fixed cut losing its last sample
+    """
+    n = min(raw.n_times for raw in cuts.values())
+    return {k: raw if raw.n_times == n else raw.crop(tmax=raw.times[n - 1])
+            for k, raw in cuts.items()}
 
 
 def run_pair_null(

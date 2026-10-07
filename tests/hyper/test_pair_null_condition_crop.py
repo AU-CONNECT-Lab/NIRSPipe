@@ -22,7 +22,12 @@ class _Raw:
 
     def __init__(self, duration=1600.0, sfreq=10.0):
         self.info = {"sfreq": sfreq}
-        self.times = np.array([0.0, duration])
+        self._set(duration)
+
+    def _set(self, duration):
+        # a sample count for the equal-length trim, with the exact duration kept at the end
+        self.n_times = int(round(duration * self.info["sfreq"])) + 1
+        self.times = np.linspace(0.0, duration, self.n_times)
 
     def copy(self):
         return _Raw(float(self.times[-1]), self.info["sfreq"])
@@ -32,7 +37,7 @@ class _Raw:
             raise ValueError(f"tmin ({tmin}) must be >= 0")
         if tmax is not None and tmax > float(self.times[-1]):
             raise ValueError(f"tmax ({tmax}) must be less than or equal to the end")
-        self.times = np.array([0.0, float(tmax) - float(tmin)])
+        self._set(float(tmax) - float(tmin))
         return self
 
 

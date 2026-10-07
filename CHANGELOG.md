@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-10-06
+
+### Added
+- `desc-subjects_qc.json` describes every column of the cohort table
+
+### Changed
+- Quality records keep their arrays in TSV tables beside the JSON: channel-by-window matrices headed by channel name, per-window series, per-channel values; older records are refused
+- `fnirs-qc prep-raw` writes its channel table as `_desc-rawchannel_qc.tsv`, so a tree both commands wrote keeps both verdicts
+- Every TSV writes a missing or non-applicable value as `n/a`, as BIDS requires, instead of an empty cell
+
+### Fixed
+- A flat channel passed the coupled-window screening, mne-nirs scoring its rounding residue as coupled
+- `fnirs-hyper-pairnull` refused a stand-in whose padded cut reached its recording's last sample
+- `fnirs-hyper-pairnull` failed when the two cuts of a condition rounded one sample apart
+- Derivative SNIRF renumbered the optodes after a missing source or detector, renaming later channels
+- `--no-report` left no `_desc-channel_qc.tsv`, so the subject index and dyad pages lost `is_bad`; the record writer now writes it
+
+## [0.58.0] - 2026-10-05
+
 ### Added
 - GLM sidecars record the boxcar length or the events table, and an FIR model's delays
 - The screening sidecar records whether the coupled share was counted over task blocks or the whole run
@@ -18,7 +37,6 @@ All notable changes to this project will be documented in this file.
 - Methods describe the relative phase per frequency
 - WTC sidecars record `wtc_mc_count` and `wtc_seed` when `--wtc-significance` ran, and Methods describe that level
 - `fnirs-hyper-groupnull` writes its cohort test's Methods paragraph to `logs/<cohort table>_methods.md`
-- `desc-subjects_qc.json` describes every column of the cohort table
 
 ### Changed
 - Sidecar `Sources` are BIDS URIs (`bids::`, `bids:raw:`, `bids:preprocessed:`) rather than absolute paths
@@ -40,9 +58,6 @@ All notable changes to this project will be documented in this file.
 - The cohort outlier score and table cover the charted metrics only
 - The cohort over-time grid, by-condition panels and each run's condition timeline draw the motion-band GVTD, not the unfiltered one
 - Reports show only the motion-band GVTD; the unfiltered values stay in the record, TSV and database for comparison with other implementations
-- Quality records keep their arrays in TSV tables beside the JSON: channel-by-window matrices headed by channel name, per-window series, per-channel values; older records are refused
-- `fnirs-qc prep-raw` writes its channel table as `_desc-rawchannel_qc.tsv`, so a tree both commands wrote keeps both verdicts
-- Every TSV writes a missing or non-applicable value as `n/a`, as BIDS requires, instead of an empty cell
 
 ### Removed
 - The spline motion-correction Methods sentence, and the unreachable caveats for a missing short channel and for few trials
@@ -61,7 +76,6 @@ All notable changes to this project will be documented in this file.
 - The chunked-trials caveat showed when no annotation was long enough to cut
 - The raw-signal caption claimed uncorrected data when it had fallen back to `desc-preproc`
 - The cohort report charted censoring columns under "Other", settings included
-- `--no-report` left no `_desc-channel_qc.tsv`, so the subject index and dyad pages lost `is_bad`; the record writer now writes it
 
 ## [0.57.0] - 2026-10-05
 

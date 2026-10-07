@@ -6,6 +6,7 @@ a property of the recording as acquired, so they run before any rejection and th
 aggregates include the channels that rejection will remove.
 """
 
+import warnings
 from typing import Any
 
 import mne
@@ -144,6 +145,40 @@ def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, A
 def _window_samples(window_s: float, sfreq: float) -> int:
     """Samples per window, rounded up the way mne-nirs cuts its SCI and PSP windows."""
     return int(np.ceil(window_s * float(sfreq)))
+
+
+# below this a window's optical density is rounding residue rather than signal
+_FLAT_OD = 1e-10
+
+
+def blank_flat_windows(raw_od: mne.io.Raw, scores: np.ndarray, window_s: float) -> np.ndarray:
+    """NaN wherever either wavelength of a channel's optode pair is flat inside the window.
+
+    ::
+
+      a pair stuck at the detector's ceiling  ->  NaN in every window, never counted as coupled
+
+    mne-nirs filters a flat pair to the same rounding residue on both wavelengths and then
+    scales it up, which reads as a perfect correlation and a large cardiac peak. A flat
+    channel has no pulse to couple, so its windows must not count. ``scores`` is channel x
+    window on mne-nirs' own grid, rows in ``raw_od.ch_names`` order.
+    """
+    scores = np.array(scores, dtype=float)
+    data = raw_od.get_data()
+    if scores.ndim != 2 or scores.shape[0] != len(raw_od.ch_names):
+        return scores
+    n = _window_samples(window_s, raw_od.info["sfreq"])
+    flat = np.zeros(scores.shape, dtype=bool)
+    for w in range(scores.shape[1]):
+        # mne-nirs stops each window a sample short of the recording's end
+        seg = data[:, w * n:min((w + 1) * n, data.shape[1] - 1)]
+        flat[:, w] = np.ptp(seg, axis=1) <= _FLAT_OD
+    pair = [ch.split(" ")[0] for ch in raw_od.ch_names]
+    for name in set(pair):
+        rows = [i for i, p in enumerate(pair) if p == name]
+        flat[rows] = flat[rows].any(axis=0)
+    scores[flat] = np.nan
+    return scores
 
 
 def _windowed_cv(data: np.ndarray, n: int) -> np.ndarray:
@@ -295,7 +330,12 @@ def compute_psp_scores(
     _, psp_scores, _ = nirs_prep.peak_power(
         raw_od.copy(), time_window=PSP_WINDOW_S,
         l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-    return {ch: float(np.mean(psp_scores[i])) for i, ch in enumerate(raw_od.ch_names)}
+    psp_scores = blank_flat_windows(raw_od, psp_scores, PSP_WINDOW_S)
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        means = np.nanmean(psp_scores, axis=1)
+    # a channel flat throughout has no peak to report, as the windowed SCI leaves it out
+    return {ch: float(v) for ch, v in zip(raw_od.ch_names, means) if np.isfinite(v)}
 
 
 @_safe_metrics("PSP", ("psp_mean", "psp_per_channel"))

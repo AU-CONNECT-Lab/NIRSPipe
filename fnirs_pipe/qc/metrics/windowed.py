@@ -10,7 +10,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.metrics._helpers import long_short_channels
-from fnirs_pipe.qc.metrics.coupling import _window_samples, _windowed_cv
+from fnirs_pipe.qc.metrics.coupling import _window_samples, _windowed_cv, blank_flat_windows
 from fnirs_pipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
@@ -52,7 +52,7 @@ def compute_windowed_sci(
     _, scores, times = scalp_coupling_index_windowed(
         raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
     )
-    return scores, times
+    return blank_flat_windows(raw_od, scores, window_s), times
 
 
 def compute_windowed_psp(
@@ -87,7 +87,7 @@ def compute_windowed_psp(
     _, scores, times = peak_power(
         raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
     )
-    return scores, times
+    return blank_flat_windows(raw_od, scores, window_s), times
 
 
 def compute_windowed_cv(

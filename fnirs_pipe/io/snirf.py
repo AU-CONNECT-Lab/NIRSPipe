@@ -3,10 +3,12 @@ snirf file read/write (wraps MNE-NIRS + h5py).
 """
 
 
+import re
 from pathlib import Path
 from typing import Any
 
 import mne
+import numpy as np
 
 from fnirs_pipe.io.derivatives import entity_of, read_json
 from fnirs_pipe.utils.lineage import stamp
@@ -41,6 +43,49 @@ def write_snirf(raw: mne.io.Raw, out_path: Path) -> None:
     from mne_nirs.io.snirf import write_raw_snirf
 
     write_raw_snirf(_patch_haemo_wavelengths(raw), str(out_path))
+    _keep_optode_numbers(out_path, raw.ch_names)
+
+
+_OPTODES = re.compile(r"^S(\d+)_D(\d+)")
+
+
+def _keep_optode_numbers(path: Path, ch_names: list[str]) -> None:
+    """Index each optode by the number its channels' names carry, as the recording did.
+
+    ::
+
+      channels S1_D1, S3_D2, S10_D9 -> sourceIndex 1, 3, 10 (mne-nirs writes 1, 2, 3)
+
+    mne-nirs numbers the optodes it finds 1, 2, 3, ... and MNE names channels by those indices
+    on reading, so a recording missing a whole source or detector came back with every later
+    optode renamed. The probe keeps one row per number, NaN for a number no channel uses; a
+    file numbered from 1 without gaps is left exactly as mne-nirs wrote it.
+    """
+    numbers = [_OPTODES.match(ch) for ch in ch_names]
+    if not all(numbers):
+        return
+    src = [int(m.group(1)) for m in numbers]
+    det = [int(m.group(2)) for m in numbers]
+    used = {"source": sorted(set(src)), "detector": sorted(set(det))}
+    if all(u == list(range(1, len(u) + 1)) for u in used.values()):
+        return
+    # in the call, as mne_nirs above: only a file with a gap needs it
+    import h5py
+    with h5py.File(path, "r+") as f:
+        data, probe = f["nirs/data1"], f["nirs/probe"]
+        for k, (s, d) in enumerate(zip(src, det), start=1):
+            ml = data[f"measurementList{k}"]
+            for key, value in (("sourceIndex", s), ("detectorIndex", d)):
+                del ml[key]
+                ml.create_dataset(key, data=value, dtype="int32")
+        for kind, numbers_used in used.items():
+            # mne-nirs wrote one row per optode found, in ascending order of its number
+            pos = np.full((max(numbers_used), 3), np.nan)
+            pos[np.array(numbers_used) - 1] = probe[f"{kind}Pos3D"][()]
+            labels = [f"{kind[0].upper()}{i}".encode("UTF-8") for i in range(1, len(pos) + 1)]
+            for key, value in ((f"{kind}Pos3D", pos), (f"{kind}Labels", labels)):
+                del probe[key]
+                probe.create_dataset(key, data=value)
 
 
 def _sidecar(path: Path) -> dict:
