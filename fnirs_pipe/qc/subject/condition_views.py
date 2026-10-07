@@ -36,9 +36,7 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                # stored, so there is nothing on disk to count over one condition's window
                "spike_pct_per_channel",
                # both vary over the recording and neither has a windowed series stored
-               "mean_amp_per_channel", "motion_corrected_frac_per_channel",
-               # every condition's share side by side; a page slices its own from the series
-               "good_frac_by_condition_per_channel")
+               "mean_amp_per_channel", "motion_corrected_frac_per_channel")
 
 # Keys that describe the montage rather than the recording, so the run's value is also the
 # condition's. Named rather than left out of both lists above, which is the same silence a

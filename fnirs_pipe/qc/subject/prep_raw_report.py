@@ -35,8 +35,7 @@ from fnirs_pipe.qc.metrics import (
     haemo_quality_metrics, imu_section, imu_windowed, resolve_cutoffs, screen_channels,
     screening_scores,
 )
-from fnirs_pipe.qc.metrics._helpers import (_mean_or_none, registration_offset,
-                                           separation_orphans)
+from fnirs_pipe.qc.metrics._helpers import registration_offset, separation_orphans
 from fnirs_pipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
@@ -255,23 +254,15 @@ def _process_run(
                 secs, pc = haemo_sections(name, haemo, haemo_quality_metrics, sep_bands)
                 raw_secs.update(secs)
                 raw_pc.update(pc)
-    # Reported per condition, never screened on: one channel set serves every condition, so a
-    # contrast between conditions is never one between montages. A window shorter than two
-    # screening windows has too few to count, so it is not offered a share at all.
-    # both bound before the guard: it swallows the exception, and the per-condition views
-    # read these afterwards
-    cond_frac: dict = {}
+    # A window shorter than two screening windows has too few to count, so it is not offered
+    # a condition at all. Each condition's coupled-window share is in the record's
+    # `by_condition`, sliced from the windowed pass. Bound before the guard: it swallows
+    # the exception, and the per-condition views read it afterwards.
     cond_windows: list = []
-    with guard("Coupled windows per condition", errors, label):
+    with guard("Condition windows", errors, label):
         from fnirs_pipe.qc.common.windows import condition_windows
-        from fnirs_pipe.qc.metrics.windowed import (
-            SCREEN_WINDOW_S, condition_window_fractions,
-        )
+        from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
         cond_windows = condition_windows(raw, min_duration=2 * SCREEN_WINDOW_S)
-        if cond_windows:
-            cond_frac = condition_window_fractions(
-                raw_od, cond_windows, cardiac_l_freq, cardiac_h_freq,
-                sci_cutoff=cutoffs["sci"], psp_cutoff=cutoffs["psp"])
     # measured under every label, but the views and pages below are named by a slug of it;
     # two labels sharing one would overwrite each other, so neither is drawn
     view_windows = cond_windows
@@ -281,10 +272,6 @@ def _process_run(
         errors.append(f"Per-condition views: {exc}")
         logger.error("%s | %s", label, exc)
         view_windows = []
-    if cond_frac and "raw" in raw_secs:
-        raw_secs["raw"]["good_frac_by_condition"] = {
-            label_: _mean_or_none(shares.values()) for label_, shares in cond_frac.items()}
-        raw_pc.setdefault("raw", {})["good_frac_by_condition_per_channel"] = cond_frac
 
     record_view = {**raw_secs, "per_channel": raw_pc}
     ch_rows = channel_rows(record_view, sci_scores, bad_channels)

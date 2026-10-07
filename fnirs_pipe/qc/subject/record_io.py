@@ -100,6 +100,11 @@ def _channel_table(per_channel: dict, label: str, desc: str, header: dict) -> di
             for section, metrics in per_channel.items()
             for metric, values in metrics.items()
             for name, value in values.items()]
+    # refused here, or the record is written and only fails when read back
+    for name, section, metric, value in rows:
+        if value is not None and not isinstance(value, (int, float, np.number)):
+            raise ValueError(f"per_channel {section}.{metric} holds a {type(value).__name__} "
+                             f"for {name}; the channel table takes one number per channel")
     if not rows:
         return {}
     frame = pd.DataFrame(rows, columns=list(CHANNEL_COLUMNS))

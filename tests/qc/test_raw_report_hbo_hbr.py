@@ -1,7 +1,5 @@
 """The raw viewer measures HbO-HbR correlation on its own Beer-Lambert, and after the correction."""
 
-import json
-
 import mne
 import pytest
 
@@ -80,9 +78,8 @@ def test_a_correction_adds_the_after_side(corrected):
 
 
 def test_no_condition_entry_carries_the_run_correlation(tmp_path):
-    # the JSON itself: `read_record` cannot read a record with conditions back yet
     _, ctx = _process(tmp_path, "tddr", conditions=True)
-    by_condition = json.loads(ctx["sqm_path"].read_text(encoding="utf-8"))["by_condition"]
+    by_condition = read_record(ctx["sqm_path"])["by_condition"]
     assert set(by_condition) == {"rest", "talk"}
     assert "hbo_hbr_corr" not in repr(by_condition)
 
