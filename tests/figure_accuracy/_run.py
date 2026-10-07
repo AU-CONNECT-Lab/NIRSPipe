@@ -14,6 +14,7 @@ class Run:
     truth: Truth
     subject: str = "01"
     task: str = "tapping"
+    captured: dict = field(default_factory=dict, repr=False)
     _stages: dict = field(default_factory=dict, repr=False)
 
     @property
@@ -27,6 +28,17 @@ class Run:
     def figure(self, desc: str, chan: str | None = None, suffix: str = "nirs") -> Path:
         chan_part = f"_chan-{chan}" if chan else ""
         return self.figures / f"sub-{self.subject}_task-{self.task}{chan_part}_desc-{desc}_{suffix}.html"
+
+    @property
+    def report(self) -> Path:
+        return self.out / f"sub-{self.subject}" / f"sub-{self.subject}_task-{self.task}_report.html"
+
+    def table(self, suffix: str = "_desc-channel_qc.tsv") -> Path:
+        return self.nirs / f"sub-{self.subject}_task-{self.task}{suffix}"
+
+    def record(self) -> dict:
+        from fnirs_pipe.qc.subject.record_io import read_record
+        return read_record(self.nirs / f"sub-{self.subject}_task-{self.task}_desc-sqm_qc.json")
 
     def stage(self, desc: str) -> Path:
         return self.nirs / f"sub-{self.subject}_task-{self.task}_desc-{desc}_nirs.snirf"

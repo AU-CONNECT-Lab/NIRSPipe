@@ -288,9 +288,9 @@ def _pair_fname(pair: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "", pair)
 
 
-def get_channel_pairs(raw: mne.io.Raw) -> list[str]:
+def get_channel_pairs(raw: mne.io.Raw, exclude="bads") -> list[str]:
     """Return unique channel pair names (without chroma suffix) in MNE channel order."""
-    picks = mne.pick_types(raw.info, fnirs="hbo")
+    picks = mne.pick_types(raw.info, fnirs="hbo", exclude=exclude)
     seen: set[str] = set()
     pairs: list[str] = []
     for i in picks:

@@ -1,5 +1,7 @@
 """The per-channel pages draw the named channel, the named chromophore and the named stage."""
 
+import re
+
 import numpy as np
 import pytest
 from mne.time_frequency import psd_array_welch
@@ -18,16 +20,23 @@ def _fname(pair):
     return pair.replace("_", "")
 
 
-def _kept(run):
-    return [p for p in run.truth.pairs if not p.bad]
-
-
 # ---- channel detail: HbO and HbR over time, then their PSD ----
 
 @pytest.fixture(scope="module")
 def details(denoise_run):
     return {p.name: plotly_figures(denoise_run.figure("detail", chan=_fname(p.name)))
-            for p in _kept(denoise_run)}
+            for p in denoise_run.truth.pairs}
+
+
+@pytest.mark.parametrize("desc", ["detail", "psddetail"])
+def test_every_pair_has_a_page_and_a_rejected_one_says_so(denoise_run, desc):
+    html = denoise_run.report.read_text(encoding="utf-8")
+    for pair in denoise_run.truth.pairs:
+        path = denoise_run.figure(desc, chan=_fname(pair.name))
+        assert path.exists(), path.name
+        option = re.search(rf'<option value="figures/{re.escape(path.name)}">([^<]*)</option>', html)
+        assert option, path.name
+        assert ("rejected" in option.group(1)) == pair.bad, option.group(1)
 
 
 def test_the_detail_series_is_haemoglobin_from_the_od_before_motion_correction(denoise_run, details):

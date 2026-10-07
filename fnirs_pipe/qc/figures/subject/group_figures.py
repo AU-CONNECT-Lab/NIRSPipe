@@ -724,7 +724,7 @@ def build_condition_matrix(
 # an RMS across channels by definition, and so is its above-threshold share, which is why
 # those two panels belong to the profile alone and this picture is shorter by two.
 _CONDITION_PER_CHANNEL = {
-    "sci_win_mean": "sci_per_channel",
+    "sci_win_mean": "sci_win_per_channel",
     "psp_mean":     "psp_per_channel",
     "cv_mean":      "cv_per_channel",
     "snr_mean":     "snr_per_channel",

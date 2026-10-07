@@ -117,8 +117,8 @@ def channel_rows(
 
         return {
             "name":       ch,
-            "sci":        value_of("sci_per_channel"),
             "sci_win":    value_of("sci_win_per_channel"),
+            "sci_whole":  value_of("sci_per_channel"),
             "psp":        value_of("psp_per_channel"),
             "good_frac":  value_of("good_frac_per_channel"),
             "snr":        value_of("snr_per_channel"),
@@ -161,7 +161,8 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
         group = by_pair.get(pair, [])
         out.append({
             "pair":       pair,
-            "sci":        _first(group, "sci"),
+            "sci_win":    _first(group, "sci_win"),
+            "sci_whole":  _first(group, "sci_whole"),
             "psp":        _first(group, "psp"),
             "snr":        _first(group, "snr"),
             "cv":         _first(group, "cv"),
@@ -215,8 +216,7 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
         "good_frac_per_ch": {r["name"]: r["good_frac"] for r in ordered
                              if r.get("good_frac") is not None},
         # the windowed estimator, matching every other row here and the screening itself
-        "sci_per_ch": {r["name"]: v for r in ordered
-                       if (v := r.get("sci_win") or r.get("sci")) is not None},
+        "sci_per_ch": {r["name"]: r["sci_win"] for r in ordered if r.get("sci_win") is not None},
         "cv_per_ch":  {r["name"]: r["cv"] for r in ordered if r.get("cv") is not None},
         "snr_per_ch": {r["name"]: r["snr"] for r in ordered if r.get("snr") is not None},
         "psp_per_ch": {r["name"]: r["psp"] for r in ordered if r.get("psp") is not None},
@@ -309,7 +309,8 @@ def separation_notes(
 # number format comes from. A per-channel SCI printed to three decimals in one view and two
 # in the next is the drift this mapping exists to stop.
 _COLUMN_METRIC = {
-    "sci":   "sci_mean",
+    "sci_win":   "sci_win_mean",
+    "sci_whole": "sci_mean",
     "psp":   "psp_mean",
     "snr":   "snr_mean",
     "cv":    "cv_mean",
@@ -328,10 +329,12 @@ _COLUMN_METRIC = {
 CHANNEL_COLUMNS = (
     ("name",       "Channel"),
     ("status",     "Status"),
-    ("sci",        "SCI"),
-    ("psp",        "PSP"),
-    ("snr",        "SNR (intensity)"),
-    ("cv",         "CV"),
+    # the windowed SCI is the one read; the whole-run correlation beside it is context
+    ("sci_win",    f"SCI ({SCI_WINDOW_S:g} s)"),
+    ("sci_whole",  "SCI (whole run)"),
+    ("psp",        f"PSP ({PSP_WINDOW_S:g} s)"),
+    ("snr",        f"SNR ({CV_WINDOW_S:g} s)"),
+    ("cv",         f"CV ({CV_WINDOW_S:g} s)"),
     ("spike",      "Spike % (exp.)"),
     ("corr",       "HbO–HbR corr"),
     ("separation", "Separation"),
@@ -520,9 +523,9 @@ def format_rows(
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
-    format_rows([{"name": "S1_D1 760", "sci": 0.412, "corr": None, "is_bad": True, ...}], 0.8)
+    format_rows([{"name": "S1_D1 760", "sci_win": 0.412, "corr": None, "is_bad": True, ...}], 0.8)
     -> [{"name": "S1_D1 760", "status": "BAD", "status_cls": "bad",
-         "sci": "0.412", "sci_cls": "bad", "corr": "\u2014", "corr_cls": "", ...}]
+         "sci_win": "0.412", "sci_win_cls": "bad", "corr": "\u2014", "corr_cls": "", ...}]
 
     Formatting lives here rather than in each renderer because two of the three cannot use
     the Python registry directly: the raw viewer prints in JavaScript and the GUI builds
@@ -565,8 +568,8 @@ def format_rows(
             value = row.get(column)
             formatted[column] = format_metric(metric, value)
             formatted[f"{column}_cls"] = ""
-        if row.get("sci") is not None and row["sci"] < sci_threshold:
-            formatted["sci_cls"] = "bad"
+        if row.get("sci_win") is not None and row["sci_win"] < sci_threshold:
+            formatted["sci_win_cls"] = "bad"
         if row.get("corr") is not None:
             formatted["corr_cls"] = "neg" if row["corr"] < 0 else "pos"
         out.append(formatted)

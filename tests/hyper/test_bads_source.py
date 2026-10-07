@@ -40,7 +40,7 @@ def _sidecar(root, task, bads):
 
 def _csv(root, task, bads):
     names = ["S1_D1 760", "S6_D5 760", "S6_D5 850", "S7_D6 760"]
-    pd.DataFrame({"name": names, "sci": [0.9, 0.2, 0.2, 0.3],
+    pd.DataFrame({"name": names, "sci_whole": [0.9, 0.2, 0.2, 0.3],
                   "is_bad": [n in bads for n in names]}).to_csv(
         root / "sub-01" / "nirs" / (f"sub-01_task-{task}" + CHANNEL_METRICS_SUFFIX),
         index=False, sep=chr(9))

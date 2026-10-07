@@ -48,42 +48,48 @@ def _record() -> dict:
         "raw": {"sci_mean": 0.9},
         "per_channel": {
             "raw_long": {"sci_per_channel": {"A": 0.9, "B": 0.8},
+                         "sci_win_per_channel": {"A": 0.9, "B": 0.8},
                          "psp_per_channel": {"A": 0.5, "B": 0.4},
                          "snr_per_channel": {"A": 100.0, "B": 90.0},
                          "cv_per_channel": {"A": 0.1, "B": 0.2}},
-            "raw_short": {"sci_per_channel": {"S": 0.99}},
+            "raw_short": {"sci_win_per_channel": {"S": 0.99}},
         },
     }
 
 
 def test_the_sliced_values_replace_the_whole_run_ones():
-    out = slice_record(_record(), {"sci_per_channel": {"A": 0.2, "B": 0.3, "S": 0.5}})
-    assert out["per_channel"]["raw_long"]["sci_per_channel"] == {"A": 0.2, "B": 0.3}
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2, "B": 0.3, "S": 0.5}})
+    assert out["per_channel"]["raw_long"]["sci_win_per_channel"] == {"A": 0.2, "B": 0.3}
+
+
+def test_the_whole_run_sci_has_no_condition_value_and_is_dropped():
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2, "B": 0.3}})
+    assert "sci_per_channel" not in out["per_channel"]["raw_long"]
 
 
 def test_a_section_only_gets_the_channels_it_already_described():
     # channel_rows reads the sections to decide which block a channel is in, so leaking a
     # short channel into the long section would give it a long channel's verdict
-    out = slice_record(_record(), {"sci_per_channel": {"A": 0.2, "B": 0.3, "S": 0.5}})
-    assert set(out["per_channel"]["raw_long"]["sci_per_channel"]) == {"A", "B"}
-    assert set(out["per_channel"]["raw_short"]["sci_per_channel"]) == {"S"}
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2, "B": 0.3, "S": 0.5}})
+    assert set(out["per_channel"]["raw_long"]["sci_win_per_channel"]) == {"A", "B"}
+    assert set(out["per_channel"]["raw_short"]["sci_win_per_channel"]) == {"S"}
 
 
 def test_the_metrics_with_no_windowed_series_are_dropped_not_carried_over():
     # a whole-run SNR beside a per-condition SCI is two time scopes in one table
-    out = slice_record(_record(), {"sci_per_channel": {"A": 0.2, "B": 0.3}})
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2, "B": 0.3}})
     for key in UNSLICEABLE:
         assert key not in out["per_channel"]["raw_long"]
 
 
 def test_a_metric_the_condition_has_no_value_for_comes_back_empty_not_stale():
     # nothing was sliced for psp, so it must not keep the whole-run numbers
-    out = slice_record(_record(), {"sci_per_channel": {"A": 0.2, "B": 0.3}})
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2, "B": 0.3}})
     assert out["per_channel"]["raw_long"]["psp_per_channel"] == {}
 
 
 def test_scalars_and_other_sections_pass_through():
-    out = slice_record(_record(), {"sci_per_channel": {"A": 0.2}})
+    out = slice_record(_record(), {"sci_win_per_channel": {"A": 0.2}})
     assert out["raw"] == {"sci_mean": 0.9}
 
 

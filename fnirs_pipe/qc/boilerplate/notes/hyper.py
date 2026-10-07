@@ -105,8 +105,8 @@ NOTES = {
         "drift between devices at the same nominal rate is silent, and alignment cannot "
         "remove it.",
     "hyper_raw.member_metrics":
-        "Hover a column header for which end is better; SCI is coloured against this "
-        "run&rsquo;s threshold. One table: each member&rsquo;s long-channel values where "
+        "Hover a column header for which end is better; the windowed SCI is coloured "
+        "against this run&rsquo;s threshold. One table: each member&rsquo;s long-channel values where "
         "the montage has short channels, every channel where it has none.",
     "hyper_raw.group_sqm":
         "The dyad&rsquo;s own numbers rather than either member&rsquo;s: how many channel pairs "
@@ -219,8 +219,8 @@ NOTES = {
         "coherence is not. In the homologous table the WTC averages only the same-channel "
         "pairs, while the ISC beside it averages every pairing inside the region.",
     "hyper_post.member_metrics":
-        "One table per channel set. Hover a column header for which end is better; SCI is "
-        "coloured against <code>--sci-threshold</code>, which should be the line the "
+        "One table per channel set. Hover a column header for which end is better; the "
+        "windowed SCI is coloured against <code>--sci-threshold</code>, which should be the line the "
         "members were screened with.",
     "hyper_post.member_metrics_sets":
         "Each table is its own measurement, not a subset of the one above it: GVTD is an RMS "

@@ -1,6 +1,7 @@
 """The run page's per-condition channel grid: regrouped by metric, cell for cell the condition pages'."""
 
 from fnirs_pipe.qc.common.channel_table import heatmap_args
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.common.figure_io import figure_namer
 from fnirs_pipe.qc.figures import channel_quality_heatmap, condition_quality_heatmap
 from fnirs_pipe.qc.subject.report import _condition_channel_rows, _section_condition_summary
@@ -19,7 +20,7 @@ def _args(sci_b: float, bad: bool) -> dict:
 
 
 def _cells(fig) -> dict:
-    """{hover prefix up to the metric: colour}, e.g. {"rest · B · SCI": "#F8786E"}."""
+    """{hover prefix up to the metric: colour}, e.g. {"rest · B · SCI (10 s)": "#F8786E"}."""
     trace = fig.data[0]
     return {text.rsplit(":", 1)[0]: colour
             for text, colour in zip(trace.text, trace.marker.color)}
@@ -28,8 +29,9 @@ def _cells(fig) -> dict:
 def test_a_channel_failing_in_one_condition_is_red_only_in_that_row():
     fig = condition_quality_heatmap([("rest", _args(0.95, False)), ("task", _args(0.3, True))])
     cells = _cells(fig)
-    assert cells["rest · B · SCI"] != cells["task · B · SCI"]
-    assert cells["task · B · Status"] == cells["task · B · SCI"]
+    sci = f"SCI ({SCI_WINDOW_S:g} s)"
+    assert cells[f"rest · B · {sci}"] != cells[f"task · B · {sci}"]
+    assert cells["task · B · Status"] == cells[f"task · B · {sci}"]
     assert cells["rest · B · Status"] == cells["rest · A · Status"]
 
 
@@ -38,7 +40,9 @@ def test_rows_are_grouped_by_metric_then_condition():
     assert list(fig.layout.yaxis.ticktext) == ["rest", "task"] * 6
     headings = [a.text for a in fig.layout.annotations]
     assert headings == [f"<b>{m}</b>" for m in
-                        ("Status", "Coupled", "SCI", "CV", "PSP", "SNR")]
+                        ("Status", "Coupled", f"SCI ({SCI_WINDOW_S:g} s)",
+                         f"CV ({CV_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)",
+                         f"SNR ({CV_WINDOW_S:g} s)")]
 
 
 def test_every_cell_matches_the_condition_pages_own_grid():
@@ -59,10 +63,10 @@ def test_a_single_condition_draws_nothing():
 def _record(labels) -> dict:
     return {
         "raw_long": {},
-        "per_channel": {"raw_long": {"sci_per_channel": {"A": 0.9, "B": 0.9},
+        "per_channel": {"raw_long": {"sci_win_per_channel": {"A": 0.9, "B": 0.9},
                                      "psp_per_channel": {"A": 0.3, "B": 0.3}}},
         "by_condition": {
-            lab: {"per_channel": {"sci_per_channel": {"A": 0.9, "B": 0.2 if i else 0.9},
+            lab: {"per_channel": {"sci_win_per_channel": {"A": 0.9, "B": 0.2 if i else 0.9},
                                   "psp_per_channel": {"A": 0.3, "B": 0.3}},
                   "bad_channels": ["B"] if i else []}
             for i, lab in enumerate(labels)},

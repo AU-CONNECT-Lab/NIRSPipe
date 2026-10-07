@@ -23,7 +23,7 @@ from fnirs_pipe.utils.logging import get_logger
 logger = get_logger("qc.condition_views")
 
 # what a per-condition view can honestly fill, because each has a windowed series behind it
-SLICEABLE = ("sci_per_channel", "sci_win_per_channel", "psp_per_channel",
+SLICEABLE = ("sci_win_per_channel", "psp_per_channel",
              "good_frac_per_channel", "cv_per_channel", "snr_per_channel")
 
 # and what it therefore has to drop, so no column mixes two time scopes, and a column added
@@ -31,6 +31,8 @@ SLICEABLE = ("sci_per_channel", "sci_win_per_channel", "psp_per_channel",
 # `hbo_hbr_corr_per_channel` is dropped but recoverable: `with_condition_corr` puts back a
 # value measured on the cut, and a failed recompute leaves dashes rather than the run's.
 UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
+               # the whole-run SCI is one correlation over the recording, with no windows
+               "sci_per_channel",
                "hbo_hbr_corr_per_channel", "cnr_per_channel",
                # the spike mask is per sample, but only its whole-run share per channel is
                # stored, so there is nothing on disk to count over one condition's window
@@ -87,7 +89,7 @@ def span_share(spans, t0: float, t1: float) -> "float | None":
 def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> dict:
     """A copy of the record whose sliceable per-channel metrics come from one condition.
 
-    ``sliced`` is ``{"sci_per_channel": {ch: v}, ...}`` for this condition. Every section's
+    ``sliced`` is ``{"sci_win_per_channel": {ch: v}, ...}`` for this condition. Every section's
     per-channel dict is rebuilt from it, restricted to the channels that section already
     described, so a short channel's row stays in the short section and a long channel's in
     the long one; :func:`~fnirs_pipe.qc.common.channel_table.channel_rows` reads the sections and
@@ -752,9 +754,9 @@ def condition_payloads(
                 paths[key] = f"{entry_path}#{slug}"
         if save_figure is not None:
             sci_fig = _condition_sci_psp(
-                build_sci_psp_figure, sliced.get("sci_per_channel") or {},
+                build_sci_psp_figure, sliced.get("sci_win_per_channel") or {},
                 sliced.get("psp_per_channel") or {}, sliced.get("cv_per_channel") or {},
-                bad_channels, sci_threshold, series, window)
+                bad_channels, sci_threshold, cutoffs["psp"], series, window)
             for key, fig in (("sci_psp", sci_fig),
                              ("ch_summary", channel_quality_heatmap(
                                  sci_thresh=sci_threshold, psp_thresh=cutoffs["psp"],
@@ -905,7 +907,7 @@ def _narrowed_ts(inline: "dict | None", window) -> dict:
 
 
 def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold,
-                       series, window):
+                       psp_threshold, series, window):
     """The SCI/PSP panel over one condition's columns, a real slice of both matrices.
 
     Unlike the carpet, this figure derives nothing internally: it is handed the matrices and
@@ -933,7 +935,8 @@ def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold
     psp_matrix, psp_times = _cut("psp_matrix", "psp_times")
     cv_matrix, cv_times = _cut("cv_matrix", "cv_times")
     return build(
-        sci_pc, psp_pc, bad_channels, sci_threshold,
+        sci_pc, psp_pc, bad_channels, sci_threshold, psp_threshold=psp_threshold,
+        window_s=series.get("qc_window_s"),
         sci_matrix=sci_matrix, sci_win_times=sci_times,
         psp_matrix=psp_matrix, psp_win_times=psp_times,
         cv_per_channel=cv_pc, cv_matrix=cv_matrix, cv_win_times=cv_times,
@@ -951,7 +954,7 @@ def condition_slices_from_record(
 
     ::
 
-      {"game1": {"sci_per_channel": {...}, "psp_per_channel": {...},
+      {"game1": {"sci_win_per_channel": {...}, "psp_per_channel": {...},
                  "good_frac_per_channel": {...}}, ...}
 
     The record's ``windowed`` section already stores the channel-by-window SCI and PSP
@@ -1001,9 +1004,6 @@ def condition_slices_from_record(
         if label not in sci_by_cond:
             continue
         out[label] = {
-            # both keys off the same slice: the matrix is the windowed estimator, so a
-            # condition has no whole-run SCI of its own to put under the plain name
-            "sci_per_channel": _named(sci_by_cond[label]),
             "sci_win_per_channel": _named(sci_by_cond[label]),
             "psp_per_channel": _named(psp_by_cond[label]) if label in psp_by_cond else {},
             "good_frac_per_channel": (_named(frac_by_cond[label])
@@ -1040,7 +1040,7 @@ def condition_scalars(sliced: "dict[str, dict[str, float]]",
     out: "dict[str, float | None]" = {
         # windowed by construction: a condition is a column selection out of sci_matrix,
         # and the whole-run sci_mean has no slice of itself to give
-        "sci_win_mean":   _mean_or_none((sliced.get("sci_per_channel") or {}).values()),
+        "sci_win_mean":   _mean_or_none((sliced.get("sci_win_per_channel") or {}).values()),
         "psp_mean":       _mean_or_none((sliced.get("psp_per_channel") or {}).values()),
         "good_frac_mean": _mean_or_none((sliced.get("good_frac_per_channel") or {}).values()),
         "cv_mean":        _mean_or_none((sliced.get("cv_per_channel") or {}).values()),
@@ -1067,7 +1067,7 @@ def condition_set_scalars(
 
     ::
 
-        sliced["sci_per_channel"] over a montage of long and short channels
+        sliced["sci_win_per_channel"] over a montage of long and short channels
         -> {"all": {...}, "long": {...}, "short": {...}}
 
     Every metric here is a mean over the row's channels, which is the whole of what a set
@@ -1092,7 +1092,7 @@ def condition_set_scalars(
                      1.0 - sum(1 for ch in in_set if ch in bad_channels) / len(in_set))
         row = {
             "channel_retention_rate": retention,
-            "sci_win_mean":   _mean("sci_per_channel"),
+            "sci_win_mean":   _mean("sci_win_per_channel"),
             "good_frac_mean": _mean("good_frac_per_channel"),
             "psp_mean":       _mean("psp_per_channel"),
             "snr_mean":       _mean("snr_per_channel"),

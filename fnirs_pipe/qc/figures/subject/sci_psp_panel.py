@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from fnirs_pipe.qc.metrics.windowed import window_centers
 from fnirs_pipe.utils.logging import get_logger
@@ -67,10 +68,10 @@ def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_fra
     return [
         ("Status",  None,               None,  None),
         ("Coupled", "good_frac_per_ch", ".3f", lambda v: v >= good_frac_thresh),
-        ("SCI",     "sci_per_ch",       ".3f", lambda v: v >= sci_thresh),
-        ("CV",      "cv_per_ch",        ".3f", lambda v: v <= cv_thresh),
-        ("PSP",     "psp_per_ch",       ".3f", lambda v: v >= psp_thresh),
-        ("SNR",     "snr_per_ch",       ".1f", lambda v: v >= snr_thresh),
+        (f"SCI ({SCI_WINDOW_S:g} s)", "sci_per_ch", ".3f", lambda v: v >= sci_thresh),
+        (f"CV ({CV_WINDOW_S:g} s)",   "cv_per_ch",  ".3f", lambda v: v <= cv_thresh),
+        (f"PSP ({PSP_WINDOW_S:g} s)", "psp_per_ch", ".3f", lambda v: v >= psp_thresh),
+        (f"SNR ({CV_WINDOW_S:g} s)",  "snr_per_ch", ".1f", lambda v: v >= snr_thresh),
     ]
 
 
@@ -271,10 +272,10 @@ def condition_quality_heatmap(
 # the worse end of what this recording actually did -- so a descriptive metric with no better
 # end has no worse end either and cannot be drawn; _trial_metric_specs drops it and says so.
 _TRIAL_METRICS = [
-    ("sci_mean",               "SCI"),
-    ("psp_mean",               "PSP"),
-    ("cv_mean",                "CV"),
-    ("snr_mean",               "SNR"),
+    ("sci_mean",               "SCI (trial)"),
+    ("psp_mean",               f"PSP ({PSP_WINDOW_S:g} s)"),
+    ("cv_mean",                f"CV ({CV_WINDOW_S:g} s)"),
+    ("snr_mean",               f"SNR ({CV_WINDOW_S:g} s)"),
     ("gvtd_filt_mean",         "GVTD"),
     ("channel_retention_rate", "Retention"),
 ]
@@ -428,6 +429,7 @@ def build_sci_psp_figure(
     cv_matrix: np.ndarray | None = None,
     cv_win_times: np.ndarray | None = None,
     cv_threshold: float = CV_PASS,
+    window_s: float | None = None,
 ) -> go.Figure:
     """Channel quality over time: one heatmap row per metric, its channel mean beside it.
 
@@ -496,16 +498,18 @@ def build_sci_psp_figure(
         with np.errstate(invalid="ignore"):
             return np.nanmean(np.asarray(matrix, dtype=float), axis=1)
 
+    # this grid follows --window-length, not the 10 s the per-channel tables are pinned to
+    windows = f"{window_s:g} s windows" if window_s else "windowed"
     rows = [
-        ("SCI", "SCI (windowed)", "Row mean", sci_matrix, sci_win_times,
+        ("SCI", f"SCI ({windows})", "Row mean", sci_matrix, sci_win_times,
          _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}",
          (2 * sci_threshold - 1.0, 1.0)),
-        ("PSP", "PSP (windowed)", "Row mean", psp_matrix, psp_win_times,
+        ("PSP", f"PSP ({windows})", "Row mean", psp_matrix, psp_win_times,
          _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}",
          (0.0, 2 * psp_threshold)),
     ]
     if cv_matrix is not None and cv_win_times is not None:
-        rows.append(("CV", "CV (windowed)", "Row mean", cv_matrix, cv_win_times,
+        rows.append(("CV", f"CV ({windows})", "Row mean", cv_matrix, cv_win_times,
                      _row_mean(cv_matrix), cv_threshold, False,
                      "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
                      (0.0, 2 * cv_threshold)))

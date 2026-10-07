@@ -50,12 +50,13 @@ def test_after_denoising_the_dots_recover_the_designed_correlation(denoise_run, 
         assert drawn[pair.name] == pytest.approx(designed, abs=0.15), pair.name
 
 
-@pytest.mark.xfail(strict=True, reason="rejected pairs are ranked best-to-worst with the kept ones, unmarked")
-def test_a_rejected_pair_is_not_ranked_among_the_kept_ones(denoise_run, corr):
+def test_a_rejected_pair_is_ranked_after_the_kept_ones_in_a_group_of_its_own(denoise_run, corr):
     rejected = {p.name for p in denoise_run.truth.pairs if p.bad}
     for name in ("before denoising", "after denoising"):
         dots = next(t for t in corr["data"] if t.get("name") == name)
-        assert not rejected & set(dots["customdata"])
+        order = list(dots["customdata"])
+        assert set(order[-len(rejected):]) == rejected
+    assert any("rejected channels" in a.get("text", "") for a in corr["layout"]["annotations"])
 
 
 # ---- carpets ----

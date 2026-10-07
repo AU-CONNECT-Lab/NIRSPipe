@@ -89,9 +89,13 @@ _VIEW_SCALAR_KEYS = (
 # Its columns, like every other view's, come from channel_table. It draws the decision chip
 # itself, that being the one column that is not a measurement. The keys go over as JSON
 # because the table body is built in the browser.
-_CH_COLUMNS     = channel_columns(("separation",))
-_CH_COLUMN_VARS = {"ch_columns": _CH_COLUMNS,
-                   "ch_column_keys_json": json.dumps([key for key, _ in _CH_COLUMNS])}
+def _column_vars(columns: list) -> dict:
+    return {"ch_columns": columns, "ch_column_keys_json": json.dumps([key for key, _ in columns])}
+
+
+_CH_COLUMN_VARS = _column_vars(channel_columns(("separation",)))
+# a condition has no whole-run SCI: that estimate has no windows to select from
+_COND_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "sci_whole")))
 
 
 def _store_matrices(windowed: dict, series: dict) -> None:
@@ -379,7 +383,10 @@ def _process_run(
     # ── inline: layout figures (kept for click interactivity) ──────────────────
     layout_inline: dict = {}
     with guard("Optode layout", errors, label):
-        fig_2d, fig_3d = build_layout_figure(raw, bad_channels, sci_scores, sep_bands)
+        # graded by the windowed SCI against the run's own line, as the pipeline's flat map is
+        fig_2d, fig_3d = build_layout_figure(
+            raw, bad_channels, (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
+            sep_bands, sci_threshold=cutoffs["sci"])
         layout_inline = {
             "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
             "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,
@@ -439,6 +446,7 @@ def _process_run(
         # report's copy of this panel draws it
         fig   = build_sci_psp_figure(
             sci_scores, psp_per_ch, bad_channels, sci_threshold,
+            psp_threshold=cutoffs["psp"], window_s=window_s,
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
             psp_matrix=psp_matrix, psp_win_times=psp_win_times,
             cv_per_channel=(raw_pc.get("raw") or {}).get("cv_per_channel") or {},
@@ -549,7 +557,8 @@ def _process_run(
     if raw_haemo is not None:
         with guard("HbO-HbR correlation panel", errors, label):
             from fnirs_pipe.qc.figures import hbo_hbr_fit_js
-            fig = _hbo_hbr_figure(raw_haemo, raw_haemo_post, sep_bands, motion_correction)
+            fig = _hbo_hbr_figure(raw_haemo, raw_haemo_post, sep_bands, motion_correction,
+                                  {pair_of(c) for c in bad_channels})
             if fig is not None:
                 fname = fig_name("hbohbrcorr")
                 h     = _save_figure_html(fig, fig_dir / fname, extra_js=hbo_hbr_fit_js(fig))
@@ -738,7 +747,8 @@ def _process_run(
         "remake_epoch":  _epoch_maker(raw_haemo, fig_tmin, fig_tmax, sep_bands,
                                       build_epoch_preview_figure),
         "remake_hbo_hbr_corr": _hbo_hbr_maker(raw_haemo, raw_haemo_post, sep_bands,
-                                              motion_correction),
+                                              motion_correction,
+                                              {pair_of(c) for c in bad_channels}),
         "trial_images_by_condition": trial_img_by_cond,
         "sqm_path":      sqm_path,
         "fig_dir":       fig_dir,
@@ -751,15 +761,15 @@ def _process_run(
     }
 
 
-def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method):
+def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method, bad_pairs):
     """The subject report's correlation panel, with motion correction as the step between."""
     from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure
     return hbo_hbr_correlation_figure(
         haemo, title="HbO–HbR correlation", sep_bands=sep_bands, raw_after=haemo_post,
-        stage_labels=("before motion correction", f"after {method}"))
+        stage_labels=("before motion correction", f"after {method}"), bad_pairs=bad_pairs)
 
 
-def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method):
+def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method, bad_pairs):
     """``(t0, t1) -> figure`` on both conversions cut to one condition, or None without one.
 
     Cut rather than sliced, as the record's own numbers are: a correlation reads only the
@@ -773,7 +783,8 @@ def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method):
         if hi <= lo:
             return None
         after = None if haemo_post is None else haemo_post.copy().crop(tmin=lo, tmax=hi)
-        return _hbo_hbr_figure(haemo.copy().crop(tmin=lo, tmax=hi), after, sep_bands, method)
+        return _hbo_hbr_figure(haemo.copy().crop(tmin=lo, tmax=hi), after, sep_bands, method,
+                               bad_pairs)
 
     return remake
 
@@ -912,7 +923,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
             stem=out.stem,
             data_json=json.dumps([view]),
             **ctx["shell"],
-            **_CH_COLUMN_VARS,
+            **_COND_CH_COLUMN_VARS,
         )
         out.write_text(html, encoding="utf-8")
         logger.info("condition %s \u2192 %s", label, out.name)

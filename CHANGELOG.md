@@ -10,9 +10,17 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`, condition pages included
 
 ### Changed
+- Per-channel tables print `SCI (10 s)` and `SCI (whole run)`, and `_desc-channel_qc.tsv` writes them as `sci_win` and `sci_whole`
+- Per-channel grids, tables and the per-trial heatmap name each metric's window; the SCI/PSP panel names its `--window-length`
+- Condition pages and the subject index no longer show the windowed SCI under the whole-run SCI's name
+- Rejected pairs get channel detail and per-pair PSD pages, marked rejected, and rank in their own group on the HbO-HbR panel
+- The brain views and the raw viewer's optode layout grade channels by the windowed SCI
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
+- The SCI/PSP panel ignored `--psp-threshold`, and the run page's per-condition grid ignored it and `--min-good-frac`
+- The bad-segment zoom drew raw intensity as its After row instead of the motion-corrected optical density
+- The raw viewer's optode layout ignored `--sci-threshold`
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

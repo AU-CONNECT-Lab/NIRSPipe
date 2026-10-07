@@ -607,13 +607,13 @@ def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
     rows = {r["name"]: r for r in channel_rows(_split_record(), sci, ["O 760"])}
 
     assert rows["O 760"]["separation"] == "unclassified"
-    assert rows["O 760"]["sci"] == 0.30
+    assert rows["O 760"]["sci_whole"] == 0.30
     assert rows["O 760"]["good_frac"] == 0.10
     assert rows["O 760"]["snr"] == 40.0
     # the split sections still win for the channels they claim, or every long channel
     # would silently switch to the whole-montage numbers
-    assert rows["L 760"]["sci"] == 0.90 and rows["L 760"]["good_frac"] == 0.95
-    assert rows["S 760"]["sci"] == 0.99
+    assert rows["L 760"]["sci_whole"] == 0.90 and rows["L 760"]["good_frac"] == 0.95
+    assert rows["S 760"]["sci_whole"] == 0.99
 
 
 def test_a_rejected_channel_in_neither_range_prints_why_it_went():

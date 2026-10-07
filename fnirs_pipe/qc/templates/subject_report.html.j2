@@ -273,7 +273,7 @@
     <select class="ch-select"
             onchange="document.getElementById('psd-det-frame').src=this.value">
       {% for ch in psd_detail_pairs %}
-      <option value="{{ ch.path }}">{{ ch.pair }}</option>
+      <option value="{{ ch.path }}">{{ ch.label or ch.pair }}</option>
       {% endfor %}
     </select>
     <iframe id="psd-det-frame" class="plotly-frame"

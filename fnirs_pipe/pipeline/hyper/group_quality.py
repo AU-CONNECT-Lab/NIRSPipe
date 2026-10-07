@@ -402,10 +402,10 @@ def load_group_sqm(
             else:
                 try:
                     ch_df = pd.read_csv(path, sep="\t")
-                    if {"name", "sci"}.issubset(ch_df.columns):
+                    if {"name", "sci_whole"}.issubset(ch_df.columns):
                         sqm["sci_per_channel"] = dict(
                             zip(ch_df["name"].astype(str),
-                                pd.to_numeric(ch_df["sci"], errors="coerce"))
+                                pd.to_numeric(ch_df["sci_whole"], errors="coerce"))
                         )
                 except Exception:
                     pass

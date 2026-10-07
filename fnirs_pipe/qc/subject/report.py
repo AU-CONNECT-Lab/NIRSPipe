@@ -313,6 +313,10 @@ def _section_sci(
     psp_win_times     = _series("psp_times")
     cv_scores_matrix  = _series("cv_matrix")
     cv_win_times      = _series("cv_times")
+    # the matrix rows follow the record's own channel list, so the labels must too
+    stored = list((windowed or {}).get("sci_channels") or [])
+    if stored and set(stored) == set(sci_scores):
+        sci_scores = {ch: sci_scores[ch] for ch in stored}
     ch_names = list(sci_scores.keys())
     sci_psp_panel_path = None
     sci_psp_panel_h = 0
@@ -327,10 +331,12 @@ def _section_sci(
     if cv_scores_matrix is not None and not cv_per_ch:
         cv_scores_matrix = None       # a matrix on a different channel set is not this panel's
 
+    cutoffs = resolve_cutoffs(config)
     with _guard("SCI/PSP panel", errors, subject):
         fig = build_sci_psp_figure(
             sci_scores, psp_per_ch, set(bad_channels),
-            sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
+            sci_threshold=cutoffs["sci"],
+            psp_threshold=cutoffs["psp"],
             sci_matrix=sci_scores_matrix,
             sci_win_times=sci_win_times,
             psp_matrix=psp_scores_matrix,
@@ -338,6 +344,7 @@ def _section_sci(
             cv_per_channel=cv_per_ch,
             cv_matrix=cv_scores_matrix,
             cv_win_times=cv_win_times,
+            window_s=(windowed or {}).get("qc_window_s"),
         )
         sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
             fig, figures_dir / fig_name("scipsp")
@@ -370,6 +377,11 @@ def _uncorrected_haemo(
         return beer_lambert_law(raw_od_before.copy(), ppf=dpf[0] if len(dpf) == 1 else dpf)
 
 
+def _pair_label(pair: str, short: bool, rejected: bool) -> str:
+    tags = [tag for tag, on in (("short", short), ("rejected", rejected)) if on]
+    return f"{pair} ({', '.join(tags)})" if tags else pair
+
+
 def _section_channel_detail(
     raw_haemo: mne.io.Raw,
     subject: str,
@@ -384,7 +396,9 @@ def _section_channel_detail(
     from fnirs_pipe.qc.metrics import long_short_channels
 
     markers = extract_markers(raw_haemo)
-    pairs = get_channel_pairs(raw_haemo)
+    # rejected pairs too, named as such: this section is where a reader looks to see why
+    pairs = get_channel_pairs(raw_haemo, exclude=())
+    rejected = {pair_of(n) for n in raw_haemo.info["bads"]}
     # the selector mixed the two separations under names that do not say which is which, so
     # picking a short pair showed scalp haemodynamics with nothing on the page saying so
     _, short_names = long_short_channels(raw_haemo, sep_bands)
@@ -403,7 +417,7 @@ def _section_channel_detail(
             h = _save_multi_fig_html([detail_fig, psd_fig], figures_dir / fname)
             is_short = pair in short_pairs
             saved.append({"pair": pair, "path": _fig_href(fname), "h": h,
-                          "label": f"{pair} (short)" if is_short else pair,
+                          "label": _pair_label(pair, is_short, pair in rejected),
                           "short": is_short})
     return {"channel_pairs": saved}
 
@@ -513,21 +527,27 @@ def _section_psd_detail(
     cardiac: "tuple[float, float] | None" = None,
     resp: "tuple[float, float] | None" = None,
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
+    sep_bands=None,
 ) -> dict:
-    pairs = get_channel_pairs(raw_haemo)
+    from fnirs_pipe.qc.metrics import long_short_channels
+
+    pairs = get_channel_pairs(raw_haemo, exclude=())
+    rejected = {pair_of(n) for n in raw_haemo.info["bads"]}
+    short_pairs = {pair_of(n) for n in long_short_channels(raw_haemo, sep_bands)[1]}
     saved = []
     for pair in pairs:
         with _guard(f"PSD detail {pair}", errors, subject):
             picks = [c for c in (f"{pair} hbo", f"{pair} hbr") if c in raw_haemo.ch_names]
             if not picks:
                 continue
-            raw_sub = raw_haemo.copy().pick(picks)
+            # a pair's own page draws it whatever its verdict; the spectrum drops marked bads
+            raw_sub = _unmarked(raw_haemo.copy().pick(picks))
             # a later stage may have dropped the pair (bad channel), so each stage is
             # narrowed to whatever it still carries and skipped when that is nothing
             stages_sub = None
             if psd_stages is not None:
                 stages_sub = [
-                    (label, raw.copy().pick(present))
+                    (label, _unmarked(raw.copy().pick(present)))
                     for label, raw in psd_stages
                     if (present := [c for c in picks if c in raw.ch_names])
                 ]
@@ -536,8 +556,14 @@ def _section_psd_detail(
                              stages=stages_sub)
             fname = fig_name("psddetail", channel=_pair_fname(pair))
             path, h = _save_plotly_html(fig, figures_dir / fname)
-            saved.append({"pair": pair, "path": path, "h": h})
+            saved.append({"pair": pair, "path": path, "h": h,
+                          "label": _pair_label(pair, pair in short_pairs, pair in rejected)})
     return {"psd_detail_pairs": saved}
+
+
+def _unmarked(raw: mne.io.Raw) -> mne.io.Raw:
+    raw.info["bads"] = []
+    return raw
 
 
 def _segments_in_window(segments: dict | None,
@@ -654,11 +680,12 @@ def _section_motion(
 
     with _guard("Bad segment zoom", errors, subject):
         all_spans = _segments_in_window(segments, window)
-        if all_spans:
+        # both rows are optical density, either side of the motion correction
+        if all_spans and raw_after_motion is not None:
             sorted_chs = sorted(sci_scores.keys(), key=lambda c: sci_scores.get(c, 0), reverse=True)
             rep_chs = [c for c in sorted_chs if c in raw_long.ch_names][:3]
             b64 = bad_segment_zoom_figure(
-                raw_after=raw_long,
+                raw_after=raw_after_motion,
                 bad_segments=all_spans,
                 ch_names=rep_chs or raw_long.ch_names[:3],
                 raw_before=raw_before_motion,
@@ -1447,9 +1474,11 @@ def _section_condition_summary(
             conditions = [
                 (label, heatmap_args(_condition_channel_rows(record, entry, sci_scores)))
                 for label, entry in by_condition.items()]
-            # the condition pages' own cutoff, so a cell here matches the cell there
-            fig = condition_quality_heatmap(conditions,
-                                            sci_thresh=resolve_cutoffs(config)["sci"])
+            # the condition pages' own cutoffs, so a cell here matches the cell there
+            cutoffs = resolve_cutoffs(config)
+            fig = condition_quality_heatmap(conditions, sci_thresh=cutoffs["sci"],
+                                            psp_thresh=cutoffs["psp"],
+                                            good_frac_thresh=cutoffs["good_frac"])
             if fig is not None:
                 path, h = _save_plotly_html(fig, figures_dir / fig_name("condsummary",
                                                                         suffix="qc"))
@@ -1892,9 +1921,12 @@ def build_subject_report(
                                             fig_name, l_freq=l_freq, h_freq=h_freq,
                                             cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                                             resp=(config.resp_l_freq, config.resp_h_freq),
-                                            psd_stages=psd_stages)
+                                            psd_stages=psd_stages, sep_bands=sep_bands)
+    # graded by the windowed SCI, as each condition page's copy of this figure is
+    sci_win_scores    = (((record.get("per_channel") or {}).get("raw") or {})
+                         .get("sci_win_per_channel") or {})
     brain_vars        = _section_brain(
-                            sci_scores, bad_channels, coords_head, good_mask, raw_intensity,
+                            sci_win_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,
                             ch_names_brain=ch_names_brain,
                             sci_threshold=resolve_cutoffs(config)["sci"])
@@ -2273,7 +2305,7 @@ def _cropped_sections(
     if psd_ok:
         out.update(_section_psd_detail(haemo, subject, errors, figures_dir, fig_name,
                                        l_freq=l_freq, h_freq=h_freq, psd_stages=stages,
-                                       **bands))
+                                       sep_bands=sep_bands, **bands))
     # the bare span, unlike the epoch panels below: nothing in this section epochs,
     # so the pad would only show the neighbouring condition's last seconds
     out.update(_section_channel_detail(crop(raw_haemo_uncorr) or haemo, subject, errors,
@@ -2495,7 +2527,7 @@ def _write_condition_reports(
         panels: dict = {}
         if remake_sci is not None:
             panels.update(remake_sci(cond_name, _windowed_slice(record, windows, label),
-                                     sliced.get("sci_per_channel") or {}))
+                                     sliced.get("sci_win_per_channel") or {}))
         # the bad-segment zoom over this condition's own flagged segments, and the carpet
         # narrowed to it without being written again: measured over the run, viewed over it
         if remake_motion is not None:
@@ -2504,7 +2536,7 @@ def _write_condition_reports(
         # with no view to pick. The carpet and the per-channel motion figures are not: the
         # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
-            panels.update(remake_brain(cond_name, sliced.get("sci_per_channel") or {},
+            panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {},
                                        cond_bad))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))
@@ -2534,7 +2566,8 @@ def _write_condition_reports(
             "channel_rows": rows,
             "channel_cells": cells,
             "channel_blocks": separation_blocks(cells),
-            "channel_columns": channel_columns(("separation",)),
+            # a condition has no whole-run SCI: that estimate has no windows to select from
+            "channel_columns": channel_columns(("separation", "sci_whole")),
             "sqm_all": od_by_set.get("all") or {},
             "sqm_long": od_by_set.get("long") or {},
             "sqm_short": od_by_set.get("short") or {},

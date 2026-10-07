@@ -28,11 +28,12 @@ from fnirs_pipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
 # long_short_channels leaves unclaimed; it is usually empty.
-_GROUP_ORDER = ["long", "mid", "short"]
+_GROUP_ORDER = ["long", "mid", "short", "rejected"]
 _GROUP_LABEL = {
     "long":  "long channels",
     "mid":   "mid-range channels",
     "short": "short channels",
+    "rejected": "rejected channels",
 }
 
 # One correlation scale for the whole report, red at r = +1; see figures.common.matrix_map.
@@ -231,6 +232,7 @@ def hbo_hbr_correlation_figure(
     raw_after: "mne.io.Raw | None" = None,
     task_modelled: bool = False,
     stage_labels: "tuple[str, str] | None" = None,
+    bad_pairs: "set[str] | None" = None,
 ) -> "go.Figure | None":
     """Return the correlation panel as a Plotly figure, or None on an empty montage.
 
@@ -244,8 +246,13 @@ def hbo_hbr_correlation_figure(
 
     ``stage_labels`` names the two stages when the step between them is not denoising, as
     in the raw viewer, where it is motion correction.
+
+    ``bad_pairs`` are ranked in a group of their own after the kept ones; None reads them off
+    ``raw_haemo``'s marks.
     """
     groups = _pair_group(raw_haemo, sep_bands)
+    if bad_pairs is None:
+        bad_pairs = {pair_of(n) for n in raw_haemo.info["bads"]}
     order = _channel_order(raw_haemo, groups)
     if not order:
         return None
@@ -283,7 +290,8 @@ def hbo_hbr_correlation_figure(
         _add_dividers(fig, groups, order, n_hbo, col)
 
     dumbbell_row = 2
-    xs, labels = _add_dumbbell(fig, groups, r_b, r_a, dumbbell_row, 1,
+    ranked = {k: ("rejected" if k in bad_pairs else g) for k, g in groups.items()}
+    xs, labels = _add_dumbbell(fig, ranked, r_b, r_a, dumbbell_row, 1,
                                after_label=after_label, task_modelled=task_modelled,
                                before_label=before_label)
 
