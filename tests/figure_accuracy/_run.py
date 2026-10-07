@@ -1,0 +1,47 @@
+"""One finished fingerprint run: where its figures and stage files are, and the truth it was built from."""
+
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import mne
+
+from tests._fingerprint import DPF, Truth
+
+
+@dataclass
+class Run:
+    out: Path
+    truth: Truth
+    subject: str = "01"
+    task: str = "tapping"
+    _stages: dict = field(default_factory=dict, repr=False)
+
+    @property
+    def figures(self) -> Path:
+        return self.out / f"sub-{self.subject}" / "figures"
+
+    @property
+    def nirs(self) -> Path:
+        return self.out / f"sub-{self.subject}" / "nirs"
+
+    def figure(self, desc: str, chan: str | None = None, suffix: str = "nirs") -> Path:
+        chan_part = f"_chan-{chan}" if chan else ""
+        return self.figures / f"sub-{self.subject}_task-{self.task}{chan_part}_desc-{desc}_{suffix}.html"
+
+    def stage(self, desc: str) -> Path:
+        return self.nirs / f"sub-{self.subject}_task-{self.task}_desc-{desc}_nirs.snirf"
+
+    def read(self, desc: str) -> mne.io.Raw:
+        """A stage file, or ``uncorrected``: Beer-Lambert on desc-sci, which no file holds."""
+        if desc not in self._stages:
+            if desc == "uncorrected":
+                from mne.preprocessing.nirs import beer_lambert_law
+                raw = beer_lambert_law(self.read("sci").copy(), ppf=list(DPF))
+            else:
+                raw = mne.io.read_raw_snirf(self.stage(desc), verbose="error").load_data()
+            self._stages[desc] = raw
+        return self._stages[desc]
+
+    def channel(self, desc: str, name: str):
+        raw = self.read(desc)
+        return raw.times, raw.get_data(picks=[name])[0]
