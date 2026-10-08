@@ -127,14 +127,6 @@ def timeline_axes(row_labels: "list[str] | None"):
     return xaxis, yaxis
 
 
-def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
-    """Uniformly subsample columns of arr (and times) to at most max_pts for display."""
-    if len(times) <= max_pts:
-        return arr, times
-    step = max(1, len(times) // max_pts)
-    return arr[:, ::step], times[::step]
-
-
 def minmax_xy(times: np.ndarray, values: np.ndarray, max_pts: int):
     """Thin one trace to at most ``max_pts`` by keeping each bin's lowest and highest sample.
 
@@ -172,10 +164,9 @@ def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
     characters for a number that occupies eight bytes. A uniformly sampled x is then not sent
     at all, ``x0``/``dx`` saying the same thing in two numbers.
 
-    The uniformity test is what keeps this honest. ``decimate`` strides, so its timestamps
-    pass; ``minmax_xy`` and ``_maxpool_xy`` keep the timestamp each kept sample was recorded
-    at, so a peak sits where it happened rather than on a bin edge, and those fail the test
-    and keep their x.
+    The uniformity test is what keeps this honest. ``minmax_xy`` and ``_maxpool_xy`` keep the
+    timestamp each kept sample was recorded at, so a peak sits where it happened rather than on
+    a bin edge, and those fail the test and keep their x.
 
     Values go out as float32, which is a display cast and not a measurement one. Timestamps
     stay float64, since those are what the uniformity test and the peak positions are read off.

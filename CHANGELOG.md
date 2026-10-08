@@ -42,6 +42,7 @@ All notable changes to this project will be documented in this file.
 - Line figures of long recordings drew the cardiac pulse folded into a slow wave; they now keep each bin's lowest and highest sample
 - The motion carpet dropped bursts shorter than one column; each column now shows its bin's largest |z|, in at most 2000 columns
 - The aux table rounded timestamps past 1000 s to 0.01 s, distorting the subject report's accelerometer jerk
+- The raw viewer's channel map folded the pulse the same way on runs with no events, where it draws the continuous signal
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

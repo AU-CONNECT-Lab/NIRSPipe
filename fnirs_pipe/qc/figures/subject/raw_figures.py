@@ -16,7 +16,7 @@ from fnirs_pipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
     TIMELINE_ROW_PX, block_duration_labels,
-    decimate as _decimate, line_xy, minmax_xy,
+    line_xy, minmax_xy,
     _optode_positions, _topomap_project,
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
@@ -1183,8 +1183,9 @@ def _topo_layers(
     """One drawing layer per condition, each holding that condition's evoked trace per channel.
 
     e.g. two conditions -> [{"label": "rest", "times": [...], "by_ch": {"S1_D1 hbo": [...], ...}},
-    {"label": "task", ...}]. Falls back to a single layer of the continuous (decimated) signal
-    when the run has no usable events, which is what a resting-state run gets.
+    {"label": "task", ...}]. Falls back to a single layer of the continuous signal when the run
+    has no usable events, which is what a resting-state run gets; each channel is thinned on its
+    own there and carries its drawn times in ``times_by_ch``.
     """
     usable = [m for m in markers if not str(m["description"]).upper().startswith("BAD")]
     if usable:
@@ -1227,13 +1228,15 @@ def _topo_layers(
             logger.warning("evoked topo epoching failed, falling back to continuous: %s", exc)
 
     data, times = raw_haemo.get_data(picks=picks, return_times=True)
-    data, times = _decimate(data, times, max_ts_pts)
     names = [raw_haemo.ch_names[i] for i in picks]
+    # each channel thinned on its own, so each keeps the times of the samples it drew
+    thinned = {name: minmax_xy(times, row * 1e6, max_ts_pts) for name, row in zip(names, data)}
     return [{
         "label": "",
         "n": 0,
         "times": times.tolist(),
-        "by_ch": {name: (row * 1e6).tolist() for name, row in zip(names, data)},
+        "by_ch": {name: y.tolist() for name, (_, y) in thinned.items()},
+        "times_by_ch": {name: t.tolist() for name, (t, _) in thinned.items()},
         "hbo_color": HBO_COLOR,
         "hbr_color": HBR_COLOR,
     }]
@@ -1396,13 +1399,14 @@ def build_evoked_topo_figure(
                 y = layer["by_ch"].get(f"{pair} {chromo}")
                 if y is None:
                     continue
+                x = layer.get("times_by_ch", {}).get(f"{pair} {chromo}", times_list)
                 fig.add_trace(go.Scatter(
-                    x=times_list, y=y,
+                    x=x, y=y,
                     name=f"{chromo.upper()}{suffix}{n_txt}" if first else None,
                     mode="lines",
                     line=dict(color=color, width=1.0, dash=dash),
                     xaxis=xr, yaxis=yr,
-                    customdata=[pair] * len(times_list),
+                    customdata=[pair] * len(x),
                     legendgroup=f"{chromo}{suffix}", showlegend=first,
                     hovertemplate=(
                         f"<b>{pair}</b> %{{x:.1f}}s %{{y:.2f}} µM"
