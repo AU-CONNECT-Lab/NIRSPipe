@@ -19,7 +19,7 @@ from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
-from fnirs_pipe.qc.metrics import SCI_PASS, SCI_WINDOW_S
+from fnirs_pipe.qc.metrics import SCI_WINDOW_S
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
 from fnirs_pipe.cli._shared import separation_bands_from_args
@@ -231,7 +231,6 @@ def cmd_run(
     isc_max_lag: float, isc_phase_null: int,
     isc_fmin: "float | None", isc_fmax: "float | None",
     no_report: bool,
-    sci_threshold: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
@@ -433,7 +432,6 @@ def cmd_run(
             isc_phase_null=isc_phase_null,
             isc_band=isc_band,
             no_report=no_report,
-            sci_threshold=sci_threshold,
             sep_bands=sep_bands,
             analysis_window=analysis_window,
             desc=desc,
@@ -878,12 +876,6 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "computed on, and stop. Nothing is written. Use it to look over a "
                           "cohort's channel budget before committing to a long run, such as "
                           "one with --wtc-phase-null.")
-    # not the shared screening block: nothing is screened here, the rejections were decided
-    # upstream and are read off the sidecars, so a --psp-threshold would do nothing at all
-    run.add_argument("--sci-threshold", type=float, default=SCI_PASS,
-                     help=f"The SCI line the per-subject quality table is coloured against "
-                          f"(default {SCI_PASS}). Detects nothing here: screening happened "
-                          f"in fnirs-pipe. Pass what the run was prepped with.")
     _shared.add_separation_bands(run, note="An override, not the source: the bands are "
                                  "read back from what fnirs-pipe stamped in each member's "
                                  "record, and members prepped with different bands are "

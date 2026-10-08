@@ -111,8 +111,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Session label.")
     pw.add_argument("--task-label", "--task_label", default=None, type=_shared.BidsLabel,
                     help="Task label.")
-    pw.add_argument("--sci-threshold", type=float, default=0.8,
-                    help="SCI threshold for pre-highlighting bad channels.")
+    pw.add_argument("--sci-threshold", type=float, default=None,
+                    help="A second SCI line: outline each SCI (10 s) cell below it. The red "
+                         "cells stay the run's own line. Off when not given.")
     pw.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5052, or the next free port above it.")
     pw.set_defaults(func=cmd_raw)
@@ -129,7 +130,9 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Used to look up subject IDs in this group.")
     ph.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
-    ph.add_argument("--sci-threshold", type=float, default=0.8, help="SCI threshold.")
+    ph.add_argument("--sci-threshold", type=float, default=None,
+                    help="A second SCI line: outline each member's SCI (10 s) cell below it. "
+                         "The red cells stay each member's own line. Off when not given.")
     ph.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5053, or the next free port above it.")
     ph.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,

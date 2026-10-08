@@ -15,12 +15,14 @@ def _entry(share):
 def test_a_condition_table_calls_the_share_passing_in_condition():
     sqm = {"A": {"by_condition": {"talk": _entry(0.75)}},
            "B": {"by_condition": {"talk": _entry(1.0)}}}
-    tables = condition_subject_metrics(sqm, ["A", "B"], [("talk", 10.0, 50.0)], 0.8)
+    tables = condition_subject_metrics(sqm, ["A", "B"], [("talk", 10.0, 50.0)],
+                                       {"A": 0.8, "B": 0.8})
     labels = _labels(tables["talk"])
     assert labels["channel_retention_rate"] == "Passing in condition"
     assert "Channel retention" not in labels.values()
 
 
 def test_the_whole_run_table_keeps_channel_retention():
-    tables = subject_metric_tables({"all": {"A": {"channel_retention_rate": 0.75}}}, ["A"], 0.8)
+    tables = subject_metric_tables({"all": {"A": {"channel_retention_rate": 0.75}}}, ["A"],
+                                   {"A": 0.8})
     assert _labels(tables)["channel_retention_rate"] == "Channel retention"

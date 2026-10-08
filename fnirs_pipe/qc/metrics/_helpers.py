@@ -149,7 +149,7 @@ def record_has_bands(scalars: dict) -> bool:
 # Per-channel pass/fail lines. Apart from METRIC_DISPLAY, which holds the cutoffs for a
 # channel *average*: a mean SNR of 20 over a montage is a different claim from one channel
 # reading 20.
-SCI_PASS = 0.8        # also the --sci-threshold default
+SCI_PASS = 0.8        # the SCI criterion's published cutoff; --sci-threshold itself has no default
 PSP_PASS = 0.1
 # Share of windows in which a channel must pass both lines above to be kept.
 GOOD_FRAC_PASS = 0.75

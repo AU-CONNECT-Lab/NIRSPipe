@@ -18,6 +18,8 @@
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
+/* under the second line fnirs-rate was given, apart from each member's own red */
+.cd-table td.rate-low{outline:2px dashed #e67e22;outline-offset:-3px}
 .cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
 /* one member's columns run into the next without it; a rule rather than a fill, so the
    cell colours the metrics carry are still the only colour in the table */
@@ -72,7 +74,7 @@
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>
     <table>
-      <tr><th>SCI threshold</th><td>{{ "%.2f"|format(sci_threshold) }}</td></tr>
+      <tr><th>SCI threshold</th><td>{{ sci_lines_text }}</td></tr>
       <tr><th>Coherence band</th>
           <td>{{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz</td></tr>
       <tr><th>Aligned duration</th>
@@ -299,6 +301,7 @@
     <span class="hint" id="hyper-decisions-hint">per member</span></summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
+    <p class="step-desc" id="hyper-decisions-rate-line" style="display:none"></p>
     <div style="overflow-x:auto">
       <table class="qm-table cd-table" id="hyper-decisions-table">
         <thead>
@@ -594,6 +597,7 @@ function _set(id, text, cls) {
 (function(){
   var _hyperDecisions = {};
   var _isStatic       = true;
+  var _rateSciLine    = null;
   var _hdTimer        = null;
 
   var subjects = window._HYPER_SUBJECTS || [];
@@ -601,6 +605,22 @@ function _set(id, text, cls) {
   // a renderer that formatted its own numbers would drift from the report beside it
   var _DECISION_ROWS = window._DECISION_ROWS || {};
   var _CH_COLUMNS    = window._CH_COLUMNS || [];
+
+  // a second SCI line, only when fnirs-rate hyper was given --sci-threshold
+  fetch("/rate_config")
+    .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
+    .then(function(cfg) {
+      if (!cfg || cfg.sci_threshold == null) return;
+      _rateSciLine = cfg.sci_threshold;
+      var p = document.getElementById("hyper-decisions-rate-line");
+      if (p) {
+        p.innerHTML = {{ section_note('hyper_raw.rate_sci_line', line='{line}') | tojson }}
+          .replace("{line}", Number(_rateSciLine).toFixed(2));
+        p.style.display = "";
+      }
+      buildTable();
+    })
+    .catch(function() {});
 
   fetch("/load_decisions")
     .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
@@ -656,19 +676,23 @@ function _set(id, text, cls) {
 
         subjects.forEach(function(sid, si) {
           var cells = row.by_sub[sid] || {};
+          // each member's own verdict tints its own cells: the row holds two recordings
+          var tint = cells.is_bad ? "#fff8f8" : "";
           metrics.forEach(function(col) {
             var td = document.createElement("td");
             td.textContent = cells[col[0]] != null ? cells[col[0]] : "—";
             var cls = cells[col[0] + "_cls"];
             if (cls) td.className = cls;
             if (col === metrics[0]) td.classList.add("sub-edge");
+            if (col[0] === "sci_win" && _rateSciLine != null && cells.sci_win_value != null
+                && cells.sci_win_value < _rateSciLine) td.classList.add("rate-low");
+            td.style.background = tint;
             tr.appendChild(td);
           });
-          tr.appendChild(chipCell(sid, row.pair));
+          var chip = chipCell(sid, row.pair);
+          chip.style.background = tint;
+          tr.appendChild(chip);
         });
-        if (row.by_sub[subjects[0]] && row.by_sub[subjects[0]].is_bad) {
-          tr.style.background = "#fff8f8";
-        }
         tbody.appendChild(tr);
       });
     });

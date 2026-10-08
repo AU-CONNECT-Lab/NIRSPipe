@@ -523,7 +523,7 @@ def _failed_criteria(row: dict, cutoffs: dict[str, float]) -> list[str]:
 
 def format_rows(
     rows: list[dict],
-    sci_threshold: float | None = None,
+    sci_threshold: "float | None",
     *,
     name_key: str = "name",
     psp_threshold: float | None = None,
@@ -547,6 +547,7 @@ def format_rows(
     the run's other line, and is here for the same reason: the reason printed beside a
     rejected channel is re-derived from its scores, so a run that moved the PSP line has to
     hand that line over or the reason comes out naming the wrong criterion.
+    ``sci_threshold`` None means no line was recorded, and the SCI cell stays uncoloured.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
     Status names the criterion a rejected channel failed. Screening is a union, so a channel
@@ -554,10 +555,8 @@ def format_rows(
     contradiction rather than as a PSP failure.
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
-    from fnirs_pipe.qc.metrics import SCI_PASS, resolve_cutoffs
+    from fnirs_pipe.qc.metrics import resolve_cutoffs
 
-    if sci_threshold is None:
-        sci_threshold = SCI_PASS
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
     out = []
     for row in rows:
@@ -570,12 +569,14 @@ def format_rows(
             "reason":     "/".join(why),
             "separation": row.get("separation") or "",
             "is_bad":     row["is_bad"],
+            "sci_win_value": row.get("sci_win"),
         }
         for column, metric in _COLUMN_METRIC.items():
             value = row.get(column)
             formatted[column] = format_metric(metric, value)
             formatted[f"{column}_cls"] = ""
-        if row.get("sci_win") is not None and row["sci_win"] < sci_threshold:
+        if (sci_threshold is not None and row.get("sci_win") is not None
+                and row["sci_win"] < sci_threshold):
             formatted["sci_win_cls"] = "bad"
         if row.get("corr") is not None:
             formatted["corr_cls"] = "neg" if row["corr"] < 0 else "pos"
@@ -594,7 +595,7 @@ CHANNEL_METRICS_SUFFIXES = (CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX)
 
 
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
-                     sci_threshold: float | None = None,
+                     sci_threshold: "float | None",
                      psp_threshold: float | None = None,
                      suffix: str = CHANNEL_METRICS_SUFFIX) -> None:
     """Per-channel metrics for one run. The name carries the run's entities, or a subject

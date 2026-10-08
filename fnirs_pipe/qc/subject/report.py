@@ -89,7 +89,7 @@ from fnirs_pipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from fnirs_pipe.qc.metrics import (
-    CV_PASS, IMU_STAT_KEYS, SCI_PASS, gvtd_channel_blocks,
+    CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks,
     registration_offset, separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
@@ -976,7 +976,7 @@ def _section_trial_qc(
         markers = markers_on_data_axis(raw_intensity)
         labels, sqms = score_trials(
             raw_intensity, markers,
-            getattr(config, "sci_threshold", SCI_PASS),
+            config.sci_threshold,
             config.cardiac_l_freq, config.cardiac_h_freq,
             tmin, tmax,
             psp_threshold=getattr(config, "psp_threshold", None),
@@ -1261,7 +1261,7 @@ def _section_sqm(
     out_dir: Path | None = None,
     *,
     sqm_label: str | None = None,
-    sci_threshold: float = SCI_PASS,
+    sci_threshold: float,
     psp_threshold: float | None = None,
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
@@ -1441,7 +1441,7 @@ def _section_channel_summary(
     errors: list,
     figures_dir: Path,
     fig_name,
-    sci_thresh: float = SCI_PASS,
+    sci_thresh: float,
     psp_thresh: "float | None" = None,
     good_frac_thresh: "float | None" = None,
 ) -> dict:
@@ -1529,7 +1529,8 @@ def _section_brain(
     figures_dir: Path,
     fig_name,
     ch_names_brain: list[str] | None = None,
-    sci_threshold: float = SCI_PASS,
+    *,
+    sci_threshold: float,
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
 
@@ -1986,7 +1987,7 @@ def build_subject_report(
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=nirs_dir,
                                      sqm_label=sqm_label,
-                                     sci_threshold=getattr(config, "sci_threshold", SCI_PASS),
+                                     sci_threshold=config.sci_threshold,
                                      psp_threshold=getattr(config, "psp_threshold", None))
     # a property of the high-pass, so stated on every run it filtered rather than measured
     if l_freq and any(lab == "desc-filtered" for lab, _ in (psd_stages or [])):

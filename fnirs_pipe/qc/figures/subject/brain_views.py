@@ -17,7 +17,6 @@ import numpy as np
 from PIL import Image as _PILImage
 
 from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common._brain_utils import (
     CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, to_mni,
@@ -52,7 +51,7 @@ def _trim_white(arr: np.ndarray, pad: int = 6, threshold: int = 252) -> np.ndarr
     return arr[:, max(0, c0 - pad): c1 + pad + 1]
 
 
-def _link_color(sci: float | None, good: bool | None, threshold: float = SCI_PASS) -> str:
+def _link_color(sci: float | None, good: bool | None, threshold: float) -> str:
     """The screening verdict first, then the SCI ladder (which matches the flat map).
 
     ``good`` is the verdict and SCI only grades under it. Channels are screened on how many
@@ -125,7 +124,7 @@ def _spheres(points: np.ndarray, radius: float):
 
 
 def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
-                 sci_threshold: float = SCI_PASS) -> list[tuple]:
+                 sci_threshold: float) -> list[tuple]:
     """S-D segments as one tube mesh per quality colour, plus optode spheres.
 
     Returns ``(mesh, colour)`` pairs.
@@ -213,7 +212,8 @@ def quality_brain_views(
     good_mask: np.ndarray,
     raw: mne.io.Raw | None = None,
     sci_scores: dict[str, float] | None = None,
-    sci_threshold: float = SCI_PASS,
+    *,
+    sci_threshold: float,
 ) -> str:
     """Render 3-view brain figure and return as base64 PNG string.
 

@@ -95,7 +95,7 @@
       <tr><th>Outside the COI</th><td>{{ "masked out of every band mean" if mask_coi
                                         else "kept in the band means" }}</td></tr>
       <tr><th>ISC chords</th><td>{{ isc_arc_rule }}</td></tr>
-      <tr><th>SCI threshold</th><td>{{ "%.2f"|format(sci_threshold) }}</td></tr>
+      <tr><th>SCI threshold</th><td>{{ sci_lines_text }}</td></tr>
       <tr><th>Aligned duration</th>
           <td>{% if align_duration_s %}{{ "%.1f"|format(align_duration_s) }}&thinsp;s
               {%- else %}&mdash;{% endif %}</td></tr>

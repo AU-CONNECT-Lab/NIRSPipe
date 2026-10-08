@@ -11,7 +11,6 @@ from flask import Flask, jsonify, request, send_from_directory
 from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.io.naming import rating_path
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.utils.net import resolve_port
 from fnirs_pipe.utils import load_toml
@@ -211,7 +210,7 @@ class FNIRSRatingApp:
 class RawRatingApp:
     """Flask server for rating a single raw QC HTML report and annotating channel decisions."""
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: float = SCI_PASS):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
         self.html_path      = html_path
         self.stem           = html_path.stem        # "sub-01_task-rest_desc-raw_report"
         self.output_dir     = output_dir
@@ -279,6 +278,11 @@ class RawRatingApp:
         def load_channel_decisions():
             return jsonify(self._load_decisions())
 
+        # a second SCI line to outline cells against; None leaves the run's own colours alone
+        @app.route("/rate_config", methods=["GET"])
+        def rate_config():
+            return jsonify({"sci_threshold": self.sci_threshold})
+
         @app.route("/save_raw_ratings", methods=["POST"])
         def save_raw_ratings():
             return self._handle_save_ratings()
@@ -332,7 +336,7 @@ class HyperRatingApp:
         html_path: Path,
         output_dir: Path,
         subject_ids: list[str],
-        sci_threshold: float = SCI_PASS,
+        sci_threshold: "float | None" = None,
         decisions_dir: "Path | None" = None,
     ):
         self.html_path     = html_path
@@ -401,6 +405,10 @@ class HyperRatingApp:
         @app.route("/load_decisions", methods=["GET"])
         def load_decisions():
             return jsonify(self._load_decisions())
+
+        @app.route("/rate_config", methods=["GET"])
+        def rate_config():
+            return jsonify({"sci_threshold": self.sci_threshold})
 
         @app.route("/save_hyper_ratings", methods=["POST"])
         def save_hyper_ratings():

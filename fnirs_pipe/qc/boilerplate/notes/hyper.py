@@ -116,10 +116,14 @@ NOTES = {
     "hyper_raw.channel_decisions":
         "One row per source-detector pair, both members side by side, with the columns the "
         "subject report prints and each member&rsquo;s decision at the end of its own "
-        "block. Rows tinted red were rejected in the first member; each member&rsquo;s "
-        "Status cell says whether that member rejected it and on which criterion. Click a "
+        "block. A member&rsquo;s cells are tinted red where that member rejected the pair, "
+        "and its Status cell names the criterion. Click a "
         "chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s JSON, "
         "and is only active when the page is served by <code>fnirs-rate hyper</code>.",
+    "hyper_raw.rate_sci_line":
+        "SCI (10 s) cells outlined in orange are under {line}, the line given to "
+        "<code>fnirs-rate hyper</code>. A red cell is under the line that member was screened "
+        "at, and the outline changes no verdict.",
     "hyper_raw.per_channel":
         "The one view an individual report cannot give: two members on the same axes.",
 
@@ -220,8 +224,8 @@ NOTES = {
         "pairs, while the ISC beside it averages every pairing inside the region.",
     "hyper_post.member_metrics":
         "One table per channel set. Hover a column header for which end is better; the "
-        "windowed SCI is coloured against <code>--sci-threshold</code>, which should be the line the "
-        "members were screened with.",
+        "windowed SCI is coloured against each member&rsquo;s own <code>--sci-threshold</code>, "
+        "read from the sidecar its screening wrote, and left uncoloured where none was recorded.",
     "hyper_post.member_metrics_sets":
         "Each table is its own measurement, not a subset of the one above it: GVTD is an RMS "
         "across the channels of its set and a retention rate is a fraction of them. The "

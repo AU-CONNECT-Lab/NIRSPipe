@@ -164,17 +164,12 @@ def resolved_separation_bands(args):
     return separation_bands(type("Args", (), separation_bands_from_args(args)))
 
 
-def add_sci_threshold(container, default: "float | None" = None, note: str = "") -> None:
-    """``--sci-threshold``: the coupling line channel screening rejects on.
-
-    ``default`` is None for a command that requires the flag instead of defaulting it.
-    """
-    from fnirs_pipe.qc.metrics import SCI_PASS
-
+def add_sci_threshold(container, required: bool = False, note: str = "") -> None:
+    """``--sci-threshold``: the coupling line channel screening rejects on. It has no default
+    anywhere; ``required=False`` is for a parser that enforces it per analysis level."""
     container.add_argument(
-        "--sci-threshold", type=float, default=default,
-        help="Scalp coupling index a window must reach"
-             + (f" (default {SCI_PASS})." if default is not None else ", e.g. 0.8.")
+        "--sci-threshold", type=float, required=required,
+        help="Scalp coupling index a window must reach, e.g. 0.8. Required: no default."
              + (f" {note}" if note else ""))
 
 
@@ -214,14 +209,14 @@ def add_screen_scope(container, note: str = "") -> None:
              + (f" {note}" if note else ""))
 
 
-def screening(sci_default: "float | None" = None, note: str = "") -> argparse.ArgumentParser:
+def screening(note: str = "") -> argparse.ArgumentParser:
     """The screening lines as a parent parser.
 
     One block for all three, because they are one decision: SCI and PSP say what a coupled
     window is, and the third says how many of them a channel needs.
     """
     p = argparse.ArgumentParser(add_help=False)
-    add_sci_threshold(p, sci_default, note)
+    add_sci_threshold(p, required=True, note=note)
     add_psp_threshold(p, note)
     add_min_good_frac(p, note)
     add_screen_scope(p, note)

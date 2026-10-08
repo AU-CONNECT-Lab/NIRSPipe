@@ -2,7 +2,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SCI_PASS, SNR_PASS
+from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SNR_PASS
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from fnirs_pipe.qc.metrics.windowed import window_centers
@@ -122,7 +122,8 @@ def channel_quality_heatmap(
     snr_per_ch: dict[str, float],
     psp_per_ch: dict[str, float],
     good_frac_per_ch: "dict[str, float] | None" = None,
-    sci_thresh: float = SCI_PASS,
+    *,
+    sci_thresh: float,
     cv_thresh: float = CV_PASS,
     snr_thresh: float = SNR_PASS,
     psp_thresh: float = PSP_PASS,
@@ -192,7 +193,8 @@ _CONDITION_ROW_PX = 18
 
 def condition_quality_heatmap(
     conditions: "list[tuple[str, dict]]",
-    sci_thresh: float = SCI_PASS,
+    *,
+    sci_thresh: float,
     cv_thresh: float = CV_PASS,
     snr_thresh: float = SNR_PASS,
     psp_thresh: float = PSP_PASS,
@@ -424,7 +426,7 @@ def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
     bad_channels: set[str],
-    sci_threshold: float = SCI_PASS,
+    sci_threshold: float,
     psp_threshold: float = PSP_PASS,
     sci_matrix: np.ndarray | None = None,
     sci_win_times: np.ndarray | None = None,

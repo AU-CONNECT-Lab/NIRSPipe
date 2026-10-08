@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import mni_trans
@@ -77,7 +76,7 @@ def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
 SCI_WARN_RATIO = 0.625   # amber band as a share of the run's line; 0.5 at the 0.8 default
 
 
-def sci_color(sci: float | None, threshold: float = SCI_PASS,
+def sci_color(sci: float | None, threshold: float,
               rejected: bool | None = None) -> str:
     """Red if the channel was rejected; otherwise green above the run's SCI line, amber near it.
 
@@ -103,7 +102,7 @@ def sci_color(sci: float | None, threshold: float = SCI_PASS,
     return "#e74c3c"
 
 
-def sci_legend(threshold: float = SCI_PASS) -> str:
+def sci_legend(threshold: float) -> str:
     """Caption for :func:`sci_color`, from the same two numbers it colours by."""
     warn = SCI_WARN_RATIO * threshold
     return (f"red = rejected, else SCI (green ≥ {threshold:.2f} / yellow ≥ {warn:.2f} "
@@ -398,7 +397,8 @@ def build_layout_figure(
     bad_channels: set[str],
     sci_scores: dict[str, float],
     sep_bands: "Bands | None" = None,
-    sci_threshold: float = SCI_PASS,
+    *,
+    sci_threshold: float,
 ) -> tuple[go.Figure | None, go.Figure | None]:
     chs = raw.info["chs"]
     ch_names = raw.ch_names

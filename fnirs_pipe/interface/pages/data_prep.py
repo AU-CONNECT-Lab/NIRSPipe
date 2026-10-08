@@ -229,7 +229,7 @@ layout = dbc.Container([
         section("Parameters",
             params(
                 field("SCI threshold",
-                      dbc.Input(id="dp-sci-thresh", type="number", value=0.8,
+                      dbc.Input(id="dp-sci-thresh", type="number", placeholder="e.g. 0.8",
                                 min=0.0, max=1.0, step=0.01)),
                 field("SCI / PSP window (s)",
                       dbc.Input(id="dp-window-s", type="number", value=10.0,

@@ -362,7 +362,7 @@ def _build_ha_decisions_table(
     ch_pairs: list,
     sci_by_sid: dict,
     decisions: dict,
-    sci_thresh: float = 0.8,
+    sci_thresh: "float | None",
 ) -> html.Div:
     header_cells = [html.Th("Channel", style={"fontSize": "0.78rem"})]
     for sid in subject_ids:
@@ -383,7 +383,7 @@ def _build_ha_decisions_table(
         for sid in subject_ids:
             sci_val = sci_by_sid.get(sid, {}).get(pair)
             sci_style: dict = {"fontSize": "0.75rem", "textAlign": "center"}
-            if sci_val is not None and sci_val < sci_thresh:
+            if sci_val is not None and sci_thresh is not None and sci_val < sci_thresh:
                 sci_style["color"] = "#dc3545"
             sci_text = f"{sci_val:.2f}" if sci_val is not None else "—"
             state_key = f"{pair} hbo"
@@ -430,9 +430,11 @@ def _ha_ch_pairs_from_haemo(aligned_raws: dict, subject_ids: list) -> list:
     State("ha-deriv-dir",         "value"),
     State("ha-cardiac-l",         "value"),
     State("ha-cardiac-h",         "value"),
+    State("ha-sci-thresh",        "value"),
     prevent_initial_call=True,
 )
-def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h):
+def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h,
+                      sci_thresh):
     if not group_val or not bids_dir or not group_csv:
         return no_update, no_update
 
@@ -460,7 +462,7 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, card
         if deriv_dir else {s: {} for s in subject_ids}
     )
 
-    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
+    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions, sci_thresh)
     status = f"{len(ch_pairs)} channel pair(s) · {len(subject_ids)} subject(s)"
     return table, status
 
@@ -475,9 +477,11 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, card
     State("ha-deriv-dir",    "value"),
     State("ha-cardiac-l",    "value"),
     State("ha-cardiac-h",    "value"),
+    State("ha-sci-thresh",   "value"),
     prevent_initial_call=True,
 )
-def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h):
+def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardiac_l, cardiac_h,
+                sci_thresh):
     if not ctx.triggered_id or not isinstance(ctx.triggered_id, dict):
         return no_update, no_update
     if not any(n for n in n_clicks_list if n):
@@ -521,7 +525,7 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
 
     ch_pairs   = _ha_ch_pairs_from_haemo(aligned_raws, subject_ids)
     sci_by_sid = _compute_sci_from_cw(aligned_raws, subject_ids, cardiac_l, cardiac_h)
-    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions)
+    table  = _build_ha_decisions_table(subject_ids, ch_pairs, sci_by_sid, decisions, sci_thresh)
     status = f"Saved · {len(ch_pairs)} channel pair(s)"
     return table, status
 

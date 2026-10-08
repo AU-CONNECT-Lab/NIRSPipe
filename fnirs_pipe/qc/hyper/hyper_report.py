@@ -28,7 +28,6 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label, metric_summary,
     steps_from_lineage, steps_from_sidecars, template_slots,
 )
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.figure_io import (
     _fig_href,
@@ -100,24 +99,44 @@ def _empty_figures() -> dict:
 _CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
 
 
-def _metric_class(key: str, value: float, sci_threshold: float) -> str:
-    """The registry's verdict, except for SCI, which is judged against the run's own line.
+def member_sci_lines(sqm_data: dict, subject_ids: "list[str]") -> "dict[str, float | None]":
+    """Each member's own ``--sci-threshold``, as its screening recorded it; None where none was.
 
-    The exception is the same one the per-channel tables make: this run screened at
+    ``{"sub-01": {"screen_cutoffs": {"sci": 0.8}}, "sub-02": {}} -> {"sub-01": 0.8, "sub-02": None}``
+    """
+    return {sid: ((sqm_data.get(sid) or {}).get("screen_cutoffs") or {}).get("sci")
+            for sid in subject_ids}
+
+
+def sci_lines_text(lines: "dict[str, float | None]") -> str:
+    """One value when the members agree, else each member's: ``0.80`` or ``sub-01 0.80, sub-02 0.70``."""
+    shown = {sid: ("not recorded" if v is None else f"{v:.2f}") for sid, v in lines.items()}
+    if len(set(shown.values())) == 1:
+        return next(iter(shown.values()))
+    return ", ".join(f"{sid} {v}" for sid, v in shown.items())
+
+
+def _metric_class(key: str, value: float, sci_line: "float | None") -> str:
+    """The registry's verdict, except for SCI, which is judged against the member's own line.
+
+    The exception is the same one the per-channel tables make: the member screened at its
     ``--sci-threshold``, so colouring its SCI against the registry's cutoff would show a
-    verdict the run did not reach. Both estimates take it, the windowed one included.
+    verdict the run did not reach. Both estimates take it, the windowed one included. A
+    member with no recorded line prints its SCI uncoloured rather than against a guess.
     Everything else is the registry's, and a metric with no published cutoff there prints
     uncoloured.
     """
     if key in ("sci_mean", "sci_win_mean"):
-        return "qm-ok" if value >= sci_threshold else "qm-bad"
+        if sci_line is None:
+            return ""
+        return "qm-ok" if value >= sci_line else "qm-bad"
     return metric_class(key, value)
 
 
 def subject_metric_rows(
     sqm_data: dict[str, dict],
     subject_ids: list[str],
-    sci_threshold: float,
+    sci_lines: "dict[str, float | None]",
     condition: bool = False,
 ) -> list[dict]:
     """One entry per metric the members carry a value for, with a cell per member.
@@ -142,7 +161,7 @@ def subject_metric_rows(
             value = (sqm_data.get(sid) or {}).get(key)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 cells.append({"text": format_metric(key, value),
-                              "cls": _metric_class(key, value, sci_threshold)})
+                              "cls": _metric_class(key, value, sci_lines.get(sid))})
             else:
                 cells.append({"text": MISSING_VALUE, "cls": ""})
         if any(c["text"] != MISSING_VALUE for c in cells):
@@ -165,7 +184,7 @@ _CHANNEL_SETS = (("all", "All"), ("long", "Long"), ("short", "Short"))
 def subject_metric_tables(
     by_set: "dict[str, dict[str, dict]]",
     subject_ids: list[str],
-    sci_threshold: float,
+    sci_lines: "dict[str, float | None]",
     condition: bool = False,
 ) -> list[dict]:
     """One quality table per channel set.
@@ -189,7 +208,7 @@ def subject_metric_tables(
     a caller with no split at all passes, under ``all``.
     """
     def _table(heading: str, data: dict) -> "dict | None":
-        metrics = subject_metric_rows(data, subject_ids, sci_threshold, condition)
+        metrics = subject_metric_rows(data, subject_ids, sci_lines, condition)
         if not metrics:
             return None
         # a quarter turn: metric-major in, column-major out. One row per member is what the
@@ -250,7 +269,7 @@ def condition_subject_metrics(
     subject_sqm: dict,
     subject_ids: "list[str]",
     windows: "list[tuple[str, float, float]]",
-    sci_threshold: float,
+    sci_lines: "dict[str, float | None]",
     offsets: "dict[str, float] | None" = None,
     sfreq: "float | None" = None,
 ) -> dict:
@@ -299,7 +318,7 @@ def condition_subject_metrics(
                 if view:
                     per_subject.setdefault(label, {}).setdefault(set_name, {})[sid] = view
 
-    return {label: subject_metric_tables(by_set, subject_ids, sci_threshold, condition=True)
+    return {label: subject_metric_tables(by_set, subject_ids, sci_lines, condition=True)
             for label, by_set in per_subject.items()}
 
 
@@ -376,8 +395,7 @@ def group_methods(
 _CH_COLUMNS = channel_columns(("corr", "separation"))
 
 
-def decision_rows(sqm_data: dict, subject_ids: list[str],
-                  sci_threshold: float) -> list[dict]:
+def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:
     """The dyad's channel table: one entry per pair, carrying every member's cells.
 
     ::
@@ -406,7 +424,7 @@ def decision_rows(sqm_data: dict, subject_ids: list[str],
             rows = pair_rows(channel_rows(record, sci_scores,
                                           member.get("bad_channels") or []))
             cutoffs = member.get("screen_cutoffs") or {}
-            formatted = format_rows(rows, sci_threshold, name_key="pair",
+            formatted = format_rows(rows, cutoffs.get("sci"), name_key="pair",
                                     psp_threshold=cutoffs.get("psp"))
         except Exception:
             logger.warning("%s: channel table could not be built", sid, exc_info=True)
@@ -429,12 +447,12 @@ def build_hyper_report(
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     output_dir: Path,
+    sci_threshold: float,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
     imu: "dict[str, dict[str, tuple]] | None" = None,
     session: str | None = None,
-    sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
@@ -492,7 +510,7 @@ def build_hyper_report(
             heading=meta["label"],
             nav_meta=[("group", group_id), ("task", task),
                       ("subjects", ", ".join(meta["subject_ids"]))],
-            nav_note=(f"SCI thr: {sci_threshold:.2f} • "
+            nav_note=(f"SCI thr: {sci_lines_text(member_sci_lines(sqm_data, meta['subject_ids']))} • "
                       f"Coh: {coherence_fmin:.3f}–{coherence_fmax:.3f} Hz"),
         ),
         **footer_vars(
@@ -503,7 +521,7 @@ def build_hyper_report(
         group_id=group_id,
         task=task,
         subject_ids=meta["subject_ids"],
-        sci_threshold=sci_threshold,
+        sci_lines_text=sci_lines_text(member_sci_lines(sqm_data, meta["subject_ids"])),
         screen_null_iter=SCREEN_NULL_ITER,
         coherence_fmin=coherence_fmin,
         coherence_fmax=coherence_fmax,
@@ -520,13 +538,14 @@ def build_hyper_report(
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         ch_columns=_CH_COLUMNS,
         decision_rows_json=json.dumps(
-            decision_rows(sqm_data, meta["subject_ids"], sci_threshold), default=str),
+            decision_rows(sqm_data, meta["subject_ids"]), default=str),
         blocks_json=json.dumps(meta.get("conditions") or {}),
         member_info_json=json.dumps(meta.get("member_info") or []),
         # one unheaded table: this page's scalars come from the raw pass, which measures
         # every channel and does not split by separation
         subject_metrics_rows=subject_metric_tables(
-            {"all": sqm_data}, meta["subject_ids"], sci_threshold),
+            {"all": sqm_data}, meta["subject_ids"],
+            member_sci_lines(sqm_data, meta["subject_ids"])),
         # this page's own name, which is what the rating server files a verdict under
         page_stem=output_path.stem,
         post_href=post_href,
@@ -743,7 +762,6 @@ def build_hyper_post_report(
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
     isc_phase_null: int = 0,
-    sci_threshold: float = SCI_PASS,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
@@ -1262,16 +1280,17 @@ def build_hyper_post_report(
 
     # the quality table: the run's over the whole recording, and each window's read out of
     # that member's own record. The offsets are what puts the two clocks together
+    sci_lines = member_sci_lines(subject_sqm or {}, subject_ids)
     run_metric_rows = subject_metric_tables(
         {set_name: {sid: (subject_sqm or {}).get(sid, {}).get("by_set", {}).get(set_name)
                          or {}
                     for sid in subject_ids}
          for set_name, _ in _CHANNEL_SETS},
-        subject_ids, sci_threshold)
+        subject_ids, sci_lines)
     cond_metric_rows: dict = {}
     with guard("Per-condition quality table", errors, scope):
         cond_metric_rows = condition_subject_metrics(
-            subject_sqm or {}, subject_ids, cond_windows, sci_threshold,
+            subject_sqm or {}, subject_ids, cond_windows, sci_lines,
             offsets=offsets,
             sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None)
 
@@ -1406,7 +1425,7 @@ def build_hyper_post_report(
             arrow_min=arrow_min,
             arrow_rule=_arrow_rule(maps or [], pair, arrow_min),
             mask_coi=wtc_mask_coi,
-            sci_threshold=sci_threshold,
+            sci_lines_text=sci_lines_text(sci_lines),
             run_command=" ".join(sys.argv),
             # the summary states the pair in one line; the table below it is per member
             align_duration_s=next((r["duration_s"] for r in alignment_rows

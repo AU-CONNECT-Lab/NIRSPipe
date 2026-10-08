@@ -25,6 +25,11 @@ All notable changes to this project will be documented in this file.
 - The subject index Conditions table heads its channel column Channels passing
 - Condition pages and the dyad's per-condition quality table call a condition's channel share Passing in condition, not Channel retention
 - Per-trial quality leaves trial windows shorter than 10 s unscored, and a run note counts them
+- `fnirs-qc prep-raw` and `hyper-raw` require `--sci-threshold`, as `fnirs-pipe` does; the GUI's SCI threshold fields start empty
+- Report builders and figure functions take the SCI line from their caller, with no default
+- Dyad pages colour each member's SCI against the line that member was screened at, read from its sidecar
+- The dyad decision table tints each member's cells by that member's own rejection
+- `fnirs-rate raw` and `hyper` `--sci-threshold` now outline SCI (10 s) cells below it; off unless given
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
@@ -43,8 +48,10 @@ All notable changes to this project will be documented in this file.
 - The motion carpet dropped bursts shorter than one column; each column now shows its bin's largest |z|, in at most 2000 columns
 - The aux table rounded timestamps past 1000 s to 0.01 s, distorting the subject report's accelerometer jerk
 - The raw viewer's channel map folded the pulse the same way on runs with no events, where it draws the continuous signal
+- The GUI alignment table coloured SCI against 0.8 whatever the page's SCI threshold
 
 ### Removed
+- `fnirs-hyper --sci-threshold`; members' own screening lines are read instead
 - `condition_window_fractions`, whose shares `by_condition` already records
 - `design_matrix_heatmap`'s `conditions` and `title` parameters, which it never read
 

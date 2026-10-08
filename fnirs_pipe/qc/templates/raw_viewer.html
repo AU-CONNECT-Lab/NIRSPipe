@@ -74,6 +74,8 @@ select#run-select {
 .cd-chip.cd-unrated  { background:#e9ecef; color:#6c757d; }
 .cd-chip.cd-good     { background:#d4edda; color:#155724; }
 .cd-chip.cd-bad      { background:#f8d7da; color:#721c24; }
+/* under the second line fnirs-rate was given, apart from the run's own red */
+.qm-table td.rate-low { outline:2px dashed #e67e22; outline-offset:-3px; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
 </style>
 </head>
@@ -334,6 +336,7 @@ select#run-select {
   <div id="ch-notes"></div>
   <p class="qm-note">{{ section_note('raw.channel_decisions') }}</p>
   <p class="qm-note" id="ch-decisions-hint"></p>
+  <p class="qm-note" id="ch-decisions-rate-line" style="display:none"></p>
   <div style="overflow-x:auto">
   <table id="ch-decisions-table" class="qm-table">
     <thead><tr>
@@ -365,7 +368,7 @@ var _mkRO       = null;
 // channel decisions: fetched from /load_channel_decisions when served via fnirs-rate raw
 var _isStaticCD     = true;
 var _chDecisions    = {};
-var _sciThreshold   = 0.8;
+var _rateSciLine    = null;
 var _cdOpen         = true;
 var _cdSaveTimer    = null;
 
@@ -964,6 +967,22 @@ function switchRun(idx) {
   _reload();
 }
 
+// a second SCI line, only when fnirs-rate raw was given --sci-threshold
+fetch("/rate_config")
+  .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
+  .then(function(cfg) {
+    if (!cfg || cfg.sci_threshold == null) return;
+    _rateSciLine = cfg.sci_threshold;
+    var p = document.getElementById("ch-decisions-rate-line");
+    if (p) {
+      p.innerHTML = {{ section_note('raw.rate_sci_line', line='{line}') | tojson }}
+        .replace("{line}", Number(_rateSciLine).toFixed(2));
+      p.style.display = "";
+    }
+    buildChDecisionsTable();
+  })
+  .catch(function() {});
+
 // Try to fetch existing channel decisions; failure → static (read-only) mode.
 fetch("/load_channel_decisions")
   .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
@@ -1053,6 +1072,8 @@ function buildChDecisionsTable() {
         var td = document.createElement("td");
         td.className   = row[col + "_cls"] || "";
         td.textContent = row[col];
+        if (col === "sci_win" && _rateSciLine != null && row.sci_win_value != null
+            && row.sci_win_value < _rateSciLine) td.classList.add("rate-low");
         tr.appendChild(td);
       });
       tr.appendChild(decisionCell(row.name));

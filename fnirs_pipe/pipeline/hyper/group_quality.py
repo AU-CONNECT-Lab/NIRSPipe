@@ -458,17 +458,19 @@ def load_group_sqm(
 def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     """``{mask, centers, channel_order}`` off a stored record, empty when it has no matrices.
 
-    The cutoffs are the run's own where it recorded them, since a record screened at a
-    different SCI line has to be re-masked at that line and not at this package's default.
+    The cutoffs are the run's own, since a record screened at a different SCI line has to be
+    re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one.
     """
-    from fnirs_pipe.qc.metrics._helpers import PSP_PASS, SCI_PASS
+    from fnirs_pipe.qc.metrics._helpers import PSP_PASS
     from fnirs_pipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
 
     windowed = record.get("windowed") or {}
     lines = cutoffs or {}
+    if lines.get("sci") is None:
+        return {}
     sci = windowed.get("sci_matrix")
     psp = windowed.get("psp_matrix")
-    mask = coupled_mask_from_matrices(sci, psp, float(lines.get("sci", SCI_PASS)),
+    mask = coupled_mask_from_matrices(sci, psp, float(lines["sci"]),
                                       float(lines.get("psp", PSP_PASS)))
     times = windowed.get("sci_times")
     if mask is None or not times:

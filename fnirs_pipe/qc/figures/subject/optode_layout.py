@@ -6,7 +6,6 @@ import mne
 import numpy as np
 
 from fnirs_pipe.qc.common.figure_io import fig_png_b64
-from fnirs_pipe.qc.metrics import SCI_PASS
 
 from fnirs_pipe.qc.figures.common._utils import head_outline
 from fnirs_pipe.qc.figures.subject.brain_views import _lookup_sci
@@ -17,7 +16,7 @@ def optode_layout_static(
     raw: mne.io.Raw,
     sci_scores: dict[str, float],
     bad_channels: list[str],
-    sci_threshold: float = SCI_PASS,
+    sci_threshold: float,
 ) -> str | None:
     """Matplotlib static optode flat map. Returns base64 PNG or None.
 

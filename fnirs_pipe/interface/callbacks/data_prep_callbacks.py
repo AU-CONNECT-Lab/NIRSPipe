@@ -169,11 +169,12 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
         return no_update, no_update
     if not output_dir or not Path(output_dir).is_dir():
         return no_update, dbc.Alert("Set Output Directory first.", color="warning")
-    if cardiac_l is None or cardiac_h is None or dpf is None:
+    if sci_thresh is None or cardiac_l is None or cardiac_h is None or dpf is None:
         return no_update, dbc.Alert(
-            "Set Cardiac Band (lo/hi) and DPF before loading a run.", color="warning")
+            "Set SCI Threshold, Cardiac Band (lo/hi) and DPF before loading a run.",
+            color="warning")
 
-    sci_threshold = float(sci_thresh if sci_thresh is not None else 0.8)
+    sci_threshold = float(sci_thresh)
     cardiac_l, cardiac_h, dpf = float(cardiac_l), float(cardiac_h), float(dpf)
     from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
     window_s   = float(window_s if window_s is not None else 10.0)
@@ -1269,20 +1270,18 @@ def _cached_channels(cache_key) -> tuple[list, list, list]:
     Output("dp-decisions-store", "data"),
     Output("dp-decisions-table", "children"),
     Input("dp-run-store", "data"),
-    State("dp-sci-thresh",    "value"),
     State("app-output-dir",   "data"),
     prevent_initial_call=True,
 )
-def load_decisions(store, sci_thresh, output_dir):
+def load_decisions(store, output_dir):
     if not store:
         return no_update, no_update
     pair_cells, blocks, notes = _cached_channels(store.get("cache_key"))
-    sci_thresh = float(sci_thresh or 0.8)
     if not pair_cells:
         return {}, html.Small("No channels found.", className="text-muted")
 
     run_decisions = {}
-    state: dict = {"snirf_path": store["snirf_path"], "sci_threshold": sci_thresh}
+    state: dict = {"snirf_path": store["snirf_path"]}
     if output_dir:
         dec_path, run_label = _decisions_file_info(store["snirf_path"], output_dir)
         run_decisions       = _read_decisions(dec_path, run_label)

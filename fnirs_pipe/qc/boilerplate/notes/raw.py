@@ -118,6 +118,10 @@ NOTES = {
         "Rows in red were rejected by screening, and Status "
         "names the criterion. Click the decision chip to cycle: &#8212; &#8594; good "
         "&#8594; bad. Saves automatically.",
+    "raw.rate_sci_line":
+        "SCI (10 s) cells outlined in orange are under {line}, the line given to "
+        "<code>fnirs-rate raw</code>. A red cell is under the line this run was screened at, "
+        "and the outline changes no verdict.",
     "raw.skipped":
         "Notes on what this page shows and leaves out. Failures are listed below them.",
 }

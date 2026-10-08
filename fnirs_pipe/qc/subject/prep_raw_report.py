@@ -32,7 +32,7 @@ from fnirs_pipe.qc.common.channel_table import (
     split_table,
 )
 from fnirs_pipe.qc.metrics import (
-    IMU_STAT_KEYS, SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
+    IMU_STAT_KEYS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
     screen_channels, screening_scores,
 )
@@ -1027,7 +1027,7 @@ def build_prep_raw_report(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     dpf: list[float],
-    sci_threshold: float = SCI_PASS,
+    sci_threshold: float,
     psp_threshold: float | None = None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",

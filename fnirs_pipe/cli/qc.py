@@ -12,7 +12,6 @@ from fnirs_pipe import __version__
 
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe.cli._shared import separation_bands_from_args
 from fnirs_pipe.qc.metrics._helpers import separation_bands
@@ -371,7 +370,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"fnirs-qc {__version__}")
     sub = p.add_subparsers(required=True)
 
-    pr = sub.add_parser("prep-raw", parents=[_shared.screening(sci_default=SCI_PASS)],
+    pr = sub.add_parser("prep-raw", parents=[_shared.screening()],
                         help="Static raw QC report for a single participant.")
     pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     pr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
@@ -418,7 +417,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     hr = sub.add_parser("hyper-raw",
                         parents=[_shared.pairs_selection(),
-                                 _shared.screening(sci_default=SCI_PASS),
+                                 _shared.screening(),
                                  _shared.alignment_window()],
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")

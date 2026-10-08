@@ -273,7 +273,9 @@ def missing_raw_qc(command: str, opts: dict) -> str | None:
         if command == "hyper-raw":
             return "Set the BIDS and fnirs-hyper directories."
         return "Set the BIDS and output directories."
-    # these three have no defaults anywhere, by design
+    # these four have no defaults anywhere, by design
+    if opts.get("sci_threshold") is None:
+        return "SCI threshold is required."
     if opts.get("dpf") is None:
         return "DPF is required."
     if opts.get("cardiac_l") is None or opts.get("cardiac_h") is None:

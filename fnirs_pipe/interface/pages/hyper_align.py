@@ -90,7 +90,7 @@ layout = dbc.Container([
                 field("DPF", dbc.Input(id="ha-dpf", type="number", step=0.1,
                                        placeholder="e.g. 6.0")),
                 field("SCI threshold",
-                      dbc.Input(id="ha-sci-thresh", type="number", value=0.8,
+                      dbc.Input(id="ha-sci-thresh", type="number", placeholder="e.g. 0.8",
                                 min=0.0, max=1.0, step=0.01)),
                 className="mb-2",
             ),

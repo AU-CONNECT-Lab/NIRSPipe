@@ -187,7 +187,7 @@ def _preprocessing():
         section("Channel screening",
             params(
                 field("SCI threshold",
-                      dbc.Input(id="an-sci-thresh", type="number", value=0.8,
+                      dbc.Input(id="an-sci-thresh", type="number", placeholder="e.g. 0.8",
                                 min=0.0, max=1.0, step=0.01)),
                 field("PSP threshold",
                       dbc.Input(id="an-psp-thresh", type="number", value=0.1,

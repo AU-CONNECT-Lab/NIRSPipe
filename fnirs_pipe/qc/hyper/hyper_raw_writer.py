@@ -36,7 +36,6 @@ from fnirs_pipe.qc.metrics.hyper import (
 )
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
-from fnirs_pipe.qc.metrics import SCI_PASS
 from fnirs_pipe.qc.common.report_shell import guard, note
 from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
 from fnirs_pipe.utils.lineage import paths_from
@@ -122,12 +121,12 @@ def _process_hyper_raw_group(
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     output_dir: Path,
+    sci_threshold: float,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
     imu: "dict[str, dict[str, tuple]] | None" = None,
     session: str | None = None,
-    sci_threshold: float = SCI_PASS,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
     coherence_fmin: float = 0.01,
