@@ -297,10 +297,29 @@ def fingerprint_raw(subject: str, task: str, seed: int | None = None,
 
 def make_fingerprint_dataset(
     root: Path, subject: str = "01", task: str = "tapping", name: str = "bids_fingerprint",
-    rest: bool = False, blocks: bool = False,
+    rest: bool = False, blocks: bool = False, aux: bool = False,
 ) -> tuple[Path, Truth]:
     bids_dir = Path(root) / name
     _write_dataset_root(bids_dir, [subject])
     raw, truth = fingerprint_raw(subject, task, rest=rest, blocks=blocks)
-    _write_subject(bids_dir, subject, task, raw)
+    path = _write_subject(bids_dir, subject, task, raw)
+    if aux:
+        _add_aux(path)
     return bids_dir, truth
+
+
+AUX_NAME = "ACC_X"
+AUX_FS = 50.0
+
+
+def _add_aux(path: Path) -> None:
+    """One accelerometer axis in the file's aux group, noise unrelated to anything planted."""
+    import h5py
+
+    values = np.random.default_rng(7).standard_normal(int(DURATION * AUX_FS))
+    with h5py.File(path, "a") as handle:
+        group = handle["nirs"].create_group("aux1")
+        group.create_dataset("name", data=AUX_NAME.encode())
+        group.create_dataset("dataTimeSeries", data=values)
+        group.create_dataset("time", data=np.arange(len(values)) / AUX_FS)
+        group.create_dataset("dataUnit", data=b"m/s^2")

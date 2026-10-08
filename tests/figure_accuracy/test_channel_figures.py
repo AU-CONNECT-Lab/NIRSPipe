@@ -7,6 +7,8 @@ import pytest
 from mne.time_frequency import psd_array_welch
 
 from fnirs_pipe.qc.figures.common._utils import PSD_NFFT
+from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
+from fnirs_pipe.qc.subject.record_io import read_record
 from tests._fingerprint import CLI_ARGS, HBR_FREQ, SFREQ
 from tests.figure_accuracy._payload import plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy
@@ -113,3 +115,92 @@ def test_the_gvtd_row_rises_at_each_artefact(denoise_run):
     for _, when in (truth.spike, truth.step):
         near = np.abs(x - when) < 3.0
         assert y[near].max() > 3 * np.median(y), when
+
+
+# ---- the corrected spans shaded on each channel's motion figure ----
+
+# the pipeline's figures and the raw viewer's, each beside the record its run wrote
+MOTION_VIEWS = [("denoise_run", "motion", "sqm"), ("raw_viewer_run", "rawmotion", "sqmraw")]
+
+
+def _shaded(fig, name="corrected"):
+    """A shading trace's spans as (onset, duration); each span is one four-corner outline."""
+    found = traces(fig, name)
+    if not found:
+        return np.empty((0, 2))
+    x = np.asarray(found[0]["x"], float)
+    corners = x[np.isfinite(x)].reshape(-1, 4)
+    return np.column_stack([corners[:, 0], corners[:, 2] - corners[:, 0]])
+
+
+def _spans_for(request, run_name, desc, record, short):
+    run = request.getfixturevalue(run_name)
+    windowed = read_record(run.nirs / f"sub-01_task-tapping_desc-{record}_qc.json")["windowed"]
+    key = "motion_corrected_spans_short_s" if short else "motion_corrected_spans_s"
+    expected = np.asarray(windowed[key], float).reshape(-1, 2)
+    pairs = [p for p in run.truth.pairs if p.short == short]
+    return expected, {p.name: _shaded(plotly_figures(run.figure(desc, chan=f"{_fname(p.name)}760"))[0])
+                      for p in pairs}
+
+
+@pytest.mark.parametrize("run_name, desc, record", MOTION_VIEWS)
+def test_a_long_channel_shades_the_long_set_s_corrected_spans(request, run_name, desc, record):
+    expected, shaded = _spans_for(request, run_name, desc, record, short=False)
+    assert len(expected)
+    for pair, spans in shaded.items():
+        np.testing.assert_allclose(spans, expected, atol=0.05, err_msg=pair)
+
+
+@pytest.mark.xfail(strict=True, reason="every channel's motion figure shades the long set's "
+                                       "corrected spans, a short channel's included")
+@pytest.mark.parametrize("run_name, desc, record", MOTION_VIEWS)
+def test_a_short_channel_shades_the_short_set_s_corrected_spans(request, run_name, desc, record):
+    expected, shaded = _spans_for(request, run_name, desc, record, short=True)
+    for pair, spans in shaded.items():
+        assert spans.shape == expected.shape, pair
+        np.testing.assert_allclose(spans, expected, atol=0.05, err_msg=pair)
+
+
+# ---- the GVTD rows and their thresholds ----
+
+def _threshold_lines(fig):
+    return [s["y0"] for s in fig["layout"].get("shapes", [])
+            if s["type"] == "line" and not str(s.get("yref", "")).endswith("domain")]
+
+
+@pytest.mark.parametrize("run_name, desc, record", MOTION_VIEWS)
+def test_each_gvtd_line_is_the_threshold_the_record_holds(request, run_name, desc, record):
+    run = request.getfixturevalue(run_name)
+    rec = read_record(run.nirs / f"sub-01_task-tapping_desc-{record}_qc.json")
+    carpet = plotly_figures(run.figure(desc.replace("motion", "carpet")))[0]
+    assert _threshold_lines(carpet) == pytest.approx(
+        [rec["raw_long"]["gvtd_thresh"], rec["raw_short"]["gvtd_thresh"]], rel=1e-9)
+    for pair in run.truth.pairs:
+        fig = plotly_figures(run.figure(desc, chan=f"{_fname(pair.name)}760"))[0]
+        own = rec["raw_short" if pair.short else "raw_long"]["gvtd_thresh"]
+        assert _threshold_lines(fig) == pytest.approx([own], rel=1e-9), pair.name
+
+
+def test_the_gvtd_row_is_its_set_s_gvtd_in_the_motion_band(denoise_run):
+    od = denoise_run.read("sci")
+    for short in (False, True):
+        pair = next(p for p in denoise_run.truth.pairs if p.short == short)
+        names = [c for c in od.ch_names if denoise_run.truth.pair(c.rsplit(" ", 1)[0]).short == short]
+        expected = gvtd_timetrace(od.get_data(picks=names), od.info["sfreq"], *GVTD_MOTION_BAND)
+        gvtd = next(t for t in _motion(denoise_run, pair.name)["data"]
+                    if (t.get("name") or "").startswith("GVTD"))
+        x, y = xy(gvtd)
+        np.testing.assert_allclose(x, od.times[1:], atol=1e-6)
+        np.testing.assert_allclose(y, expected, rtol=1e-6, atol=1e-12)
+
+
+@pytest.mark.xfail(strict=True, reason="the GVTD trace and the derivative row are labelled "
+                                       "0.01-0.5 Hz, a literal the motion band moved away from")
+def test_the_motion_figure_names_the_band_it_filtered_in(denoise_run):
+    band = f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"
+    pair = denoise_run.truth.long_pairs[0].name
+    fig = _motion(denoise_run, pair)
+    names = [t.get("name") or "" for t in fig["data"]]
+    notes = [a.get("text") or "" for a in fig["layout"].get("annotations", [])]
+    assert f"GVTD {band}" in names, names
+    assert f"{pair} 760, {band}" in notes, notes

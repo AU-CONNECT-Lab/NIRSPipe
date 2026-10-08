@@ -9,6 +9,7 @@ import pytest
 from tests._fingerprint import EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from tests.figure_accuracy._read import _blocks, _grid, _trial_panel, traces, xy
+from tests.figure_accuracy.conftest import HAND_MARKED
 
 TMIN, TMAX = -5.0, 25.0
 
@@ -132,3 +133,20 @@ def test_the_correlation_dots_are_measured_on_the_condition_s_stretch(condition_
     for pair, r in zip(dots["customdata"], dots["y"]):
         hbo, hbr = raw.get_data(picks=[f"{pair} hbo", f"{pair} hbr"])
         assert r == pytest.approx(np.corrcoef(hbo, hbr)[0, 1], abs=0.02), (block, pair)
+
+
+def test_a_pair_marked_bad_by_hand_is_rejected_on_the_run_page(prep_condition_run):
+    cells = _grid(prep_condition_run.figure("chsummary", suffix="qc"))
+    hand = [value for (channel, metric), (value, _) in cells.items()
+            if metric == "Status" and channel.startswith(HAND_MARKED)]
+    assert hand and all(value != "OK" for value in hand)
+
+
+@pytest.mark.xfail(strict=True, reason="a condition screens on its coupled windows alone, so a pair "
+                                       "marked bad by hand reads OK on its pages")
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_pair_marked_bad_by_hand_is_rejected_on_every_condition_page(prep_condition_run, block):
+    cells = _grid(_figure(prep_condition_run, "chsummary", block, "qc"))
+    status = {channel: value for (channel, metric), (value, _) in cells.items() if metric == "Status"}
+    hand = [channel for channel in status if channel.startswith(HAND_MARKED)]
+    assert hand and all(status[channel] != "OK" for channel in hand), status

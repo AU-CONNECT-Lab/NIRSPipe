@@ -9,14 +9,13 @@ from fnirs_pipe.qc.common.channel_table import _neither_range_title
 from tests._fingerprint import LONG_DISTANCE, SHORT_DISTANCE
 from tests.figure_accuracy._payload import _decode, one_figure
 from tests.figure_accuracy._run import Run
-from tests.figure_accuracy.conftest import run_capturing
+from tests.figure_accuracy.conftest import PREP_SHORT_MAX_MM, run_capturing
 
 # the short pairs fall below the long range and above this, so they belong to neither
-SHORT_MAX_MM = 5.0
-BANDS = (SHORT_MAX_MM / 1e3, 0.015, None)
-SEP_ARGS = ["--by-condition", "--short-max-dist", f"{SHORT_MAX_MM:g}"]
+BANDS = (PREP_SHORT_MAX_MM / 1e3, 0.015, None)
+SEP_ARGS = ["--by-condition", "--short-max-dist", f"{PREP_SHORT_MAX_MM:g}"]
 
-assert SHORT_MAX_MM / 1e3 < SHORT_DISTANCE < BANDS[1] < LONG_DISTANCE
+assert BANDS[0] < SHORT_DISTANCE < BANDS[1] < LONG_DISTANCE
 
 
 @pytest.fixture(scope="module")
@@ -24,13 +23,6 @@ def raw_sep(tmp_path_factory) -> Run:
     root = tmp_path_factory.mktemp("fingerprint_raw_sep")
     done = run_capturing(root, ["--participant-label", "01", *SEP_ARGS], (), task="main",
                          blocks=True, raw_viewer=True)
-    return Run(root / "out", done["truth"], task="main")
-
-
-@pytest.fixture(scope="module")
-def prep_sep(tmp_path_factory) -> Run:
-    root = tmp_path_factory.mktemp("fingerprint_prep_sep")
-    done = run_capturing(root, SEP_ARGS, (), task="main", blocks=True)
     return Run(root / "out", done["truth"], task="main")
 
 
@@ -65,14 +57,14 @@ def test_the_mean_psd_groups_channels_by_the_run_s_bands(raw_sep):
 
 
 @pytest.mark.parametrize("which", ["raw viewer", "pipeline"])
-def test_every_channel_table_names_the_run_s_gap(raw_sep, prep_sep, which):
+def test_every_channel_table_names_the_run_s_gap(raw_sep, prep_condition_run, which):
     wanted = _neither_range_title(BANDS)
     if which == "raw viewer":
         pages = _raw_pages(raw_sep)
         titles = {page.name: [t for t, _ in _raw_blocks(page) if t.startswith("Neither")]
                   for page in pages}
     else:
-        pages = _pipeline_pages(prep_sep)
+        pages = _pipeline_pages(prep_condition_run)
         titles = {page.name: re.findall(r'class="ch-group">(Neither range \([^)]*\))',
                                         page.read_text(encoding="utf-8"))
                   for page in pages}

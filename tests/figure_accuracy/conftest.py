@@ -9,7 +9,7 @@ RAW_VIEWER_ARGS = [a for i, a in enumerate(CLI_ARGS)
 
 
 def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: bool = False,
-                  blocks: bool = False, raw_viewer: bool = False) -> dict:
+                  blocks: bool = False, raw_viewer: bool = False, aux: bool = False) -> dict:
     """Run fnirs-pipe, or fnirs-qc prep-raw, on a fresh fingerprint dataset, recording what each
     named figure builder was handed."""
     import fnirs_pipe.qc.figures as figures
@@ -28,7 +28,7 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
             return original(*a, **kw)
         return wrapper
 
-    bids, truth = make_fingerprint_dataset(root, task=task, rest=rest, blocks=blocks)
+    bids, truth = make_fingerprint_dataset(root, task=task, rest=rest, blocks=blocks, aux=aux)
     for module, name, original in patched:
         setattr(module, name, spy(name, original))
     try:
@@ -69,12 +69,14 @@ def denoise_run(tmp_path_factory) -> Run:
 
 @pytest.fixture(scope="session")
 def glm_run(tmp_path_factory) -> Run:
-    """The same recording through the GLM, its design and activation builders' inputs captured."""
+    """The same recording, with an accelerometer axis, through the GLM with aux regressors; its
+    design and activation builders' inputs captured."""
     root = tmp_path_factory.mktemp("fingerprint_glm")
     done = run_capturing(root, ["--mode", "glm", "--drift-high-pass", "0.008",
-                                "--stim-dur", f"{EVENT_DURATION:g}", "--short-channel", "mean"],
+                                "--stim-dur", f"{EVENT_DURATION:g}", "--short-channel", "mean",
+                                "--aux-regressors"],
                          ("design_matrix_static_figure", "design_matrix_heatmap",
-                          "activation_condition_figures"))
+                          "activation_condition_figures"), aux=True)
     return Run(root / "out", done["truth"], captured=done["captured"])
 
 
@@ -93,6 +95,21 @@ def condition_run(tmp_path_factory) -> Run:
     root = tmp_path_factory.mktemp("fingerprint_blocks")
     done = run_capturing(root, ["--mode", "denoise", "--short-channel", "mean", "--by-condition"],
                          (), task="main", blocks=True)
+    return Run(root / "out", done["truth"], task="main")
+
+
+# a prep run with two settings off the defaults that every condition page has to carry
+PREP_SHORT_MAX_MM = 5.0
+HAND_MARKED = "S2_D2"
+
+
+@pytest.fixture(scope="session")
+def prep_condition_run(tmp_path_factory) -> Run:
+    """The two-level design through prep only, with its own separation bands and a pair
+    marked bad by hand, with condition pages."""
+    root = tmp_path_factory.mktemp("fingerprint_prep_blocks")
+    done = run_capturing(root, ["--by-condition", "--short-max-dist", f"{PREP_SHORT_MAX_MM:g}",
+                                "--bad-channels", HAND_MARKED], (), task="main", blocks=True)
     return Run(root / "out", done["truth"], task="main")
 
 
