@@ -102,7 +102,7 @@ def conditioned(tmp_path_factory):
     run = {"label": "sub-01_task-tap", "snirf_path": path, "session": None,
            "subject_id": "01", "task": "tap"}
     page = out / "sub-01" / "sub-01_task-tap_desc-raw_report.html"
-    build_prep_raw_report([run], page, 0.7, 1.5, [6.0], by_condition=True,
+    build_prep_raw_report([run], page, 0.7, 1.5, [6.0], 0.8, by_condition=True,
                           motion_correction="tddr")
     record = read_record(next(out.rglob("*_desc-sqmraw_qc.json")))
     return path, record, page.parent

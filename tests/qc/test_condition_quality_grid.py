@@ -27,7 +27,8 @@ def _cells(fig) -> dict:
 
 
 def test_a_channel_failing_in_one_condition_is_red_only_in_that_row():
-    fig = condition_quality_heatmap([("rest", _args(0.95, False)), ("task", _args(0.3, True))])
+    fig = condition_quality_heatmap([("rest", _args(0.95, False)), ("task", _args(0.3, True))],
+                                    sci_thresh=0.8)
     cells = _cells(fig)
     sci = f"SCI ({SCI_WINDOW_S:g} s)"
     assert cells[f"rest · B · {sci}"] != cells[f"task · B · {sci}"]
@@ -36,7 +37,8 @@ def test_a_channel_failing_in_one_condition_is_red_only_in_that_row():
 
 
 def test_rows_are_grouped_by_metric_then_condition():
-    fig = condition_quality_heatmap([("rest", _args(0.95, False)), ("task", _args(0.3, True))])
+    fig = condition_quality_heatmap([("rest", _args(0.95, False)), ("task", _args(0.3, True))],
+                                    sci_thresh=0.8)
     assert list(fig.layout.yaxis.ticktext) == ["rest", "task"] * 6
     headings = [a.text for a in fig.layout.annotations]
     assert headings == [f"<b>{m}</b>" for m in
@@ -55,7 +57,7 @@ def test_every_cell_matches_the_condition_pages_own_grid():
 
 
 def test_a_single_condition_draws_nothing():
-    assert condition_quality_heatmap([("rest", _args(0.95, False))]) is None
+    assert condition_quality_heatmap([("rest", _args(0.95, False))], sci_thresh=0.8) is None
 
 
 # ---- the run-page section ----

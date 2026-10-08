@@ -35,7 +35,7 @@ def test_by_condition_writes_a_page_per_condition(tmp_path):
     out = tmp_path / "out"
     qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01",
                  "--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
-                 "--by-condition", "--skip-bids-validation"])
+                 "--sci-threshold", "0.8", "--by-condition", "--skip-bids-validation"])
     pages = sorted(p.name for p in out.rglob("*cond-*_report.html"))
     assert len(pages) == 2
     assert any("cond-rest" in p for p in pages) and any("cond-talk" in p for p in pages)

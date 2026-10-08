@@ -40,7 +40,7 @@ def _panel(tmp_path, record=None) -> dict:
     nirs.mkdir(parents=True, exist_ok=True)
     write_record(nirs / "sub-01_task-main_desc-sqm_qc.json", RECORD if record is None else record)
     errors: list = []
-    out = _section_sqm({}, [], "01", errors, nirs, sqm_label="sub-01_task-main")
+    out = _section_sqm({}, [], "01", errors, nirs, sqm_label="sub-01_task-main", sci_threshold=0.8)
     assert not errors, errors
     return out["sqm"]
 

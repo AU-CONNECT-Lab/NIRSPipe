@@ -136,7 +136,7 @@ def test_a_validator_that_prints_no_report_stops_the_run(tmp_path, monkeypatch):
 
 # ---- the other commands that read a BIDS dataset ----
 
-PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
+PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
 SAME_DIR_COMMANDS = {
     "crop":           ("prep", ["crop", "{b}", "{b}", "--participant-label", "01", "--tmin", "0"]),
     "align":          ("prep", ["align", "{b}", "{b}", "--group-csv", "{b}/pairs.csv"]),

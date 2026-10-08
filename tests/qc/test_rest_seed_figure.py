@@ -153,5 +153,5 @@ def test_the_head_carries_the_long_channels_and_only_those(haemo):
 
 def test_optode_layout_still_renders_after_the_outline_moved(haemo):
     from fnirs_pipe.qc.figures import optode_layout_static
-    b64 = optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [])
+    b64 = optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)
     assert base64.b64decode(b64)[:8] == b"\x89PNG\r\n\x1a\n"

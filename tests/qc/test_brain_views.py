@@ -65,7 +65,8 @@ def test_each_camera_faces_the_pole_its_label_names():
 
 def _green_pixels(sci_value: float, good: bool) -> int:
     raw, sci = _montage(sci_value)
-    b64 = bv.quality_brain_views(list(sci), None, np.full(4, good), raw=raw, sci_scores=sci)
+    b64 = bv.quality_brain_views(list(sci), None, np.full(4, good), raw=raw, sci_scores=sci,
+                                   sci_threshold=0.8)
     img = np.array(Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")).astype(int)
     return int(np.all(np.abs(img - (0x27, 0xae, 0x60)) < 40, axis=2).sum())
 
@@ -82,14 +83,16 @@ def test_a_failed_render_raises_instead_of_returning_a_blank(monkeypatch):
     monkeypatch.setattr(bv, "load_brain_meshes", broken)
     raw, sci = _montage()
     with pytest.raises(RuntimeError, match="no surface"):
-        bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci)
+        bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci,
+                                   sci_threshold=0.8)
 
 
 def test_subjects_rendering_in_parallel_threads_each_get_their_figure():
     raw, sci = _montage()
 
     def one(_):
-        return bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci)
+        return bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci,
+                                   sci_threshold=0.8)
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         figures = list(pool.map(one, range(3)))
@@ -153,7 +156,8 @@ def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_bra
     raw, sci = _montage()
     try:
         with pytest.raises(RuntimeError, match="fsaverage"):
-            bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci)
+            bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci,
+                                   sci_threshold=0.8)
     finally:
         _brain_utils._head_to_mri.cache_clear()
 

@@ -261,7 +261,7 @@ def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
     pipeline_table = out / "sub-01" / "nirs" / ("sub-01_task-tap" + CHANNEL_METRICS_SUFFIX)
     before = pipeline_table.read_text(encoding="utf-8")
 
-    qc_cli.main(["prep-raw", str(bids), str(out), *shared])
+    qc_cli.main(["prep-raw", str(bids), str(out), *shared, "--sci-threshold", "0.8"])
 
     assert pipeline_table.read_text(encoding="utf-8") == before
     assert (pipeline_table.parent / ("sub-01_task-tap" + RAW_CHANNEL_METRICS_SUFFIX)).exists()

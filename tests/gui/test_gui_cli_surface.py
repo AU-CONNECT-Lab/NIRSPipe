@@ -323,10 +323,6 @@ QC_NOT_EXPOSED = {
     "run": {"--no-normalize", "--wtc-limit-scales", "--no-wtc-limit-scales",
             # a log-level switch, not a parameter of the analysis
             "--verbose",
-            # only tints the per-subject quality table, against a threshold the run was
-            # already prepped with. A second control here could be set to a different number
-            # than prep used, with nothing saying which one the colours mean
-            "--sci-threshold",
             # same reason, one step worse: the bands are stamped in each member's record
             # by prep, so a second control could split the dyad metrics one way while the
             # member reports were split another. The CLI keeps the flags for a tree prepped

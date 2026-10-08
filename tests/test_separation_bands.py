@@ -623,7 +623,7 @@ def test_a_rejected_channel_in_neither_range_prints_why_it_went():
 
     sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
     rows = channel_rows(_split_record(), sci, ["O 760"])
-    out = {r["name"]: r for r in format_rows(rows)}
+    out = {r["name"]: r for r in format_rows(rows, 0.8)}
 
     assert out["O 760"]["reason"] == "coupled windows"
     assert out["O 760"]["status"] == "BAD (coupled windows)"

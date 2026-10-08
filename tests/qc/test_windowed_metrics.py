@@ -170,6 +170,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
         sci_scores={ch: 0.9 for ch in od_raw.ch_names},
         psp_per_channel={ch: 0.5 for ch in od_raw.ch_names},
         bad_channels=set(),
+        sci_threshold=0.8,
         sci_matrix=sci_matrix, sci_win_times=sci_times,
         psp_matrix=sci_matrix, psp_win_times=sci_times,
     )
@@ -187,6 +188,7 @@ def test_sci_heatmap_time_axis_spans_the_recording(od_raw):
         sci_scores={ch: 0.9 for ch in od_raw.ch_names},
         psp_per_channel={ch: 0.5 for ch in od_raw.ch_names},
         bad_channels=set(),
+        sci_threshold=0.8,
         sci_matrix=sci_matrix, sci_win_times=sci_times,
         psp_matrix=sci_matrix, psp_win_times=sci_times,
     )

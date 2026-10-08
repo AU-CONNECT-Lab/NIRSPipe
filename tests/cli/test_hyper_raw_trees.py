@@ -8,7 +8,7 @@ import pytest
 from fnirs_pipe.cli import qc
 from fnirs_pipe.pipeline import hyper as hyper_pkg
 
-PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
+PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
 
 
 def _argv(bids, pairs, out, *extra):

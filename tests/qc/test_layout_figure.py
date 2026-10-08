@@ -36,7 +36,7 @@ def no_brain_mesh(monkeypatch):
 
 
 def test_the_3d_lines_run_from_source_to_detector(raw, no_brain_mesh):
-    _, fig_3d = build_layout_figure(raw, set(), {})
+    _, fig_3d = build_layout_figure(raw, set(), {}, sci_threshold=0.8)
     lines = next(t for t in fig_3d.data if t.type == "scatter3d" and t.mode == "lines")
     first = np.array([[lines.x[0], lines.y[0], lines.z[0]],
                       [lines.x[1], lines.y[1], lines.z[1]]])
@@ -49,7 +49,7 @@ def test_the_3d_lines_run_from_source_to_detector(raw, no_brain_mesh):
 def test_a_bad_channel_stays_on_the_2d_map_and_is_drawn_grey(raw, no_brain_mesh):
     bad = raw.ch_names[0]
     raw.info["bads"] = [bad]
-    fig_2d, _ = build_layout_figure(raw, {bad}, {})
+    fig_2d, _ = build_layout_figure(raw, {bad}, {}, sci_threshold=0.8)
     channels = fig_2d.data[1]
 
     assert bad in list(channels.customdata)
