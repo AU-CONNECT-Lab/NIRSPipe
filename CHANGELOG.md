@@ -30,6 +30,9 @@ All notable changes to this project will be documented in this file.
 - The raw viewer's grand mean averaged rejected channels into its long-channel trace
 - The raw viewer's mean spectrum grouped channels by the default separation bands, not the run's
 - Channel tables titled their out-of-range block with the default separation gap, not the run's
+- GLM design figures and activation maps drew aux regressors as conditions
+- A short channel's motion figure shaded the long channels' corrected spans
+- The motion figure labelled its GVTD and derivative rows 0.01-0.5 Hz instead of the band it used
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

@@ -151,8 +151,6 @@ def test_a_long_channel_shades_the_long_set_s_corrected_spans(request, run_name,
         np.testing.assert_allclose(spans, expected, atol=0.05, err_msg=pair)
 
 
-@pytest.mark.xfail(strict=True, reason="every channel's motion figure shades the long set's "
-                                       "corrected spans, a short channel's included")
 @pytest.mark.parametrize("run_name, desc, record", MOTION_VIEWS)
 def test_a_short_channel_shades_the_short_set_s_corrected_spans(request, run_name, desc, record):
     expected, shaded = _spans_for(request, run_name, desc, record, short=True)
@@ -194,8 +192,6 @@ def test_the_gvtd_row_is_its_set_s_gvtd_in_the_motion_band(denoise_run):
         np.testing.assert_allclose(y, expected, rtol=1e-6, atol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason="the GVTD trace and the derivative row are labelled "
-                                       "0.01-0.5 Hz, a literal the motion band moved away from")
 def test_the_motion_figure_names_the_band_it_filtered_in(denoise_run):
     band = f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"
     pair = denoise_run.truth.long_pairs[0].name

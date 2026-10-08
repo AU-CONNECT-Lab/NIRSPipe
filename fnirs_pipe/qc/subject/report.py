@@ -429,7 +429,7 @@ def _motion_detail_figures(
     errors: list,
     gvtd_blocks: "list[tuple[str, list[str]]]",
     segments: dict | None = None,
-    corrected_segments: list | None = None,
+    corrected_by_set: dict | None = None,
     spike_by_set: dict | None = None,
     imu: "dict[str, ImuTrace] | None" = None,
 ) -> "list[tuple[str, Any]]":
@@ -464,7 +464,7 @@ def _motion_detail_figures(
             set_name, picks = set_of(ch)
             built.append((ch, build_motion_detail_figure(
                 raw_od_before, raw_od_after, ch, segments,
-                corrected_segments=corrected_segments,
+                corrected_segments=(corrected_by_set or {}).get(set_name),
                 spike_segments=(spike_by_set or {}).get(set_name),
                 gvtd_picks=picks, gvtd_set=set_name, imu=imu)))
     return built
@@ -628,7 +628,7 @@ def _section_motion(
     carries every condition's window in ``condition_spans`` and a condition page asks for
     one by URL fragment, ``skip_carpet`` saying it already has the file it needs.
 
-    Building it per condition instead would derive its GVTD (filtered 0.01-0.5 Hz), its
+    Building it per condition instead would derive its GVTD (filtered to the motion band), its
     per-channel z-scoring and its threshold from a cropped recording, so it would get filter
     edges on a short piece, a colour scale no other condition shares, and a threshold of its
     own. The same argument this docstring already makes for the corrected-versus-uncorrected
@@ -666,6 +666,8 @@ def _section_motion(
     spike_spans = _spans("spike_spans_s")
     # keyed by channel set, so each GVTD row shades the spans found on its own channels
     spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans_short_s")}
+    corrected_by_set = {gvtd_set: corrected_segments,
+                        "short": _spans("motion_corrected_spans_short_s")}
 
     if not skip_carpet:
         with _guard("Carpet + GVTD", errors, subject):
@@ -697,9 +699,9 @@ def _section_motion(
         "carpet_gvtd_path": carpet_gvtd_path,
         "carpet_gvtd_h": carpet_gvtd_h,
         "bad_segment_zoom_path": bad_segment_zoom_path,
-        "corrected_segments": corrected_segments,
         "spike_spans": spike_spans,
         "spike_by_set": spike_by_set,
+        "corrected_by_set": corrected_by_set,
     }
 
 
@@ -1589,7 +1591,7 @@ def _section_glm(
         design_matrix = design_matrix.rename(columns=str)
         conditions = [
             c for c in design_matrix.columns
-            if not c.startswith(("drift_", "cosine_", "constant", "intercept", "short"))
+            if not c.startswith(("drift_", "cosine_", "constant", "intercept", "short", "aux_"))
         ]
         with _guard("GLM design matrix (timeseries)", errors, subject):
             b64 = design_matrix_static_figure(design_matrix, conditions, segments=segments)
@@ -1869,7 +1871,7 @@ def build_subject_report(
     motion_det_figs   = _motion_detail_figures(
                             raw_before_motion, raw_after_motion, subject, errors,
                             segments=segments,
-                            corrected_segments=motion_vars.get("corrected_segments"),
+                            corrected_by_set=motion_vars.get("corrected_by_set"),
                             spike_by_set=motion_vars.get("spike_by_set"),
                             gvtd_blocks=gvtd_blocks, imu=imu)
     # every condition's window goes into the run's own files, which is what lets the

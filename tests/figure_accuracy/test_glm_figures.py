@@ -18,15 +18,11 @@ def test_the_model_carries_the_aux_regressor(glm_run):
     assert f"aux_{AUX_NAME}" in design.columns
 
 
-@pytest.mark.xfail(strict=True, reason="the report takes every column it does not know as a "
-                                       "condition, aux regressors included")
 @pytest.mark.parametrize("name", ["design_matrix_static_figure", "design_matrix_heatmap"])
 def test_both_design_figures_draw_the_conditions_and_nothing_else(glm_run, name):
     assert _conditions(glm_run, name) == [glm_run.task]
 
 
-@pytest.mark.xfail(strict=True, reason="the report takes every column it does not know as a "
-                                       "condition, aux regressors included")
 def test_the_activation_draws_the_conditions_and_nothing_else(glm_run):
     assert list(glm_run.captured["activation_condition_figures"][0][1]) == [glm_run.task]
 

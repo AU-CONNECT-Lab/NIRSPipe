@@ -28,6 +28,8 @@ logger = get_logger("qc.figures.motion_panel")
 
 _MAX_PTS = 4000
 
+_MOTION_BAND_LABEL = f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"
+
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
 _LW = 1.5          # data traces, thick enough to read at report width
@@ -197,7 +199,7 @@ def _gvtd_row_label(name: str, n_ch: int) -> str:
     threshold with them.
     """
     return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
-            f"{n_ch} ch · {GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz</span>")
+            f"{n_ch} ch · {_MOTION_BAND_LABEL}</span>")
 
 
 def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> float:
@@ -835,7 +837,7 @@ def build_motion_detail_figure(
 
     fig.add_trace(go.Scatter(
         **_line_xy(t_gvtd, gvtd_filt), mode="lines",
-        line=dict(color=_GVTD_LINE, width=_LW), name="GVTD 0.01–0.5 Hz",
+        line=dict(color=_GVTD_LINE, width=_LW), name=f"GVTD {_MOTION_BAND_LABEL}",
     ), row=gvtd_row, col=1)
     if motion_thresh is not None:
         fig.add_shape(
@@ -899,7 +901,7 @@ def build_motion_detail_figure(
         (gvtd_row,
          _gvtd_row_label(gvtd_set or "all", len(gvtd_names) or len(raw_od_before.ch_names)),
          12, _SET_COLORS.get(gvtd_set, _GVTD_LINE)),
-        (tvd_row, f"{ch_name}, 0.01–0.5 Hz", 8, "#8b95a1"),
+        (tvd_row, f"{ch_name}, {_MOTION_BAND_LABEL}", 8, "#8b95a1"),
         (od_row, "before / after", 8, "#8b95a1"),
     ):
         fig.add_annotation(

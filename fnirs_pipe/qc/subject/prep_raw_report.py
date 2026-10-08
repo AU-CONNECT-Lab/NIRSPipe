@@ -532,8 +532,12 @@ def _process_run(
             )
             built = _motion_detail_figures(
                 raw_od, raw_motcorr, label, errors,
-                corrected_segments=[tuple(sp) for sp in
-                                    windowed.get("motion_corrected_spans_s") or []] or None,
+                corrected_by_set={
+                    gvtd_blocks[0][0] if gvtd_blocks else "all":
+                        [tuple(sp) for sp in windowed.get("motion_corrected_spans_s") or []] or None,
+                    "short": [tuple(sp) for sp in
+                              windowed.get("motion_corrected_spans_short_s") or []] or None,
+                },
                 spike_by_set={
                     gvtd_blocks[0][0] if gvtd_blocks else "all":
                         [tuple(sp) for sp in windowed.get("spike_spans_s") or []] or None,
