@@ -38,9 +38,13 @@ All notable changes to this project will be documented in this file.
 - A short channel's motion figure shaded the long channels' corrected spans
 - The motion figure labelled its GVTD and derivative rows 0.01-0.5 Hz instead of the band it used
 - A channel rejected by hand or for non-finite samples passed on condition pages
+- Line figures of long recordings drew the cardiac pulse folded into a slow wave; they now keep each bin's lowest and highest sample
+- The motion carpet dropped bursts shorter than one column; each column now shows its bin's largest |z|, in at most 2000 columns
+- The aux table rounded timestamps past 1000 s to 0.01 s, distorting the subject report's accelerometer jerk
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records
+- `design_matrix_heatmap`'s `conditions` and `title` parameters, which it never read
 
 ## [0.59.0] - 2026-10-06
 

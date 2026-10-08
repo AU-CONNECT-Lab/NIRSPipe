@@ -16,7 +16,7 @@ from scipy.signal import detrend
 from fnirs_pipe.qc.common.figure_io import fig_png_b64
 from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
-from fnirs_pipe.qc.figures.common._utils import decimate as _decimate
+from fnirs_pipe.qc.figures.common._utils import minmax_xy
 from fnirs_pipe.qc.figures.common._utils import line_xy as _line_xy
 from fnirs_pipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
@@ -328,14 +328,17 @@ def carpet_z(
     z_threshold: float = CARPET_Z,
     stats: "tuple[np.ndarray, np.ndarray] | None" = None,
 ):
-    """Decimated, per-channel z-scored optical density, ready for a ``Heatmap``.
+    """Per-channel z-scored optical density in at most ``CARPET_MAX_PTS`` columns, for a ``Heatmap``.
 
     ::
 
-        carpet_z(od[:, :39611], times)  ->  (z (44, 1980), t (1980,), (mean, std))
+        carpet_z(od[:, :39611], times)  ->  (z (44, 1981), t (1981,), (mean, std))
 
     Each row is detrended before it is scaled, so the grey is a fluctuation about the row's
     own trend and not where on a slow drift the sample sits. The display copy only.
+
+    A column is one bin of samples, drawn at the bin's centre as its sample of largest |z|,
+    so a burst shorter than a column still shows, as the GVTD line above keeps its peaks.
 
     Returns the per-channel mean and SD alongside, so a second carpet of the same recording
     after a correction can be z-scored by the *uncorrected* numbers: rescaling it by its own
@@ -343,17 +346,25 @@ def carpet_z(
     ``stats`` to do that. That carpet is still detrended by its own fit. 2 dp because the
     colour scale cannot resolve more.
     """
-    step = max(1, data.shape[1] // CARPET_MAX_PTS)
+    n = data.shape[1]
+    step = -(-n // CARPET_MAX_PTS)
     # linear detrend then z-score per row, as fMRIPrep and MRIQC draw their carpets
-    carpet = detrend(data[:, ::step], axis=1, type="linear")
+    carpet = detrend(data, axis=1, type="linear")
     if stats is None:
         mean = carpet.mean(axis=1, keepdims=True)
         std = carpet.std(axis=1, keepdims=True)
         std[std == 0] = 1.0
     else:
         mean, std = stats
-    z = np.round(np.clip((carpet - mean) / std, -z_threshold, z_threshold), 2)
-    return z, times[:data.shape[1]:step], (mean, std)
+    pad = -n % step
+    bins = np.pad((carpet - mean) / std, ((0, 0), (0, pad)),
+                  constant_values=np.nan).reshape(len(carpet), -1, step)
+    # the padding that fills the last bin never wins it
+    pick = np.where(np.isnan(bins), -1.0, np.abs(bins)).argmax(axis=2)
+    z = np.take_along_axis(bins, pick[..., None], axis=2)[..., 0]
+    t = np.nanmean(np.pad(np.asarray(times[:n], float), (0, pad),
+                          constant_values=np.nan).reshape(-1, step), axis=1)
+    return np.round(np.clip(z, -z_threshold, z_threshold), 2), t, (mean, std)
 
 
 def add_carpet(fig, row: int, z: np.ndarray, t: np.ndarray, labels: list[str],
@@ -781,10 +792,8 @@ def build_motion_detail_figure(
     t_tvd, tvd = _maxpool_xy(t_full[1:], tvd_full, max_pts)
 
     def _get_ch(raw, ch):
-        idx = raw.ch_names.index(ch)
-        d, t = raw.get_data(picks=[idx], return_times=True)
-        d, t = _decimate(d, t, max_pts)
-        return t, d[0]
+        d, t = raw.get_data(picks=[raw.ch_names.index(ch)], return_times=True)
+        return minmax_xy(t, d[0], max_pts)
 
     t_b, y_b = _get_ch(raw_od_before, ch_name)
     t_a, y_a = _get_ch(raw_od_after,  ch_name)

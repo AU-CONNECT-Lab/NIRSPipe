@@ -695,11 +695,8 @@ def design_matrix_static_figure(
     return fig_png_b64(fig)
 
 
-def design_matrix_heatmap(
-    design_matrix: "pd.DataFrame",
-    conditions: "list[str] | None" = None,
-    title: str = "Design matrix",
-) -> str:
+def design_matrix_heatmap(design_matrix: "pd.DataFrame") -> str:
+    """Every column the model fitted, nuisance regressors included, as nilearn draws it."""
     from nilearn.plotting import plot_design_matrix as _plot_dm
 
     fig, ax = plt.subplots(figsize=(10, 4), constrained_layout=True)

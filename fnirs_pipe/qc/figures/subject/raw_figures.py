@@ -16,7 +16,7 @@ from fnirs_pipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
     TIMELINE_ROW_PX, block_duration_labels,
-    decimate as _decimate, line_xy,
+    decimate as _decimate, line_xy, minmax_xy,
     _optode_positions, _topomap_project,
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
@@ -127,8 +127,6 @@ def build_ts_figure(
         picks = list(range(len(raw.ch_names)))
 
     data, times = raw.get_data(picks=picks, return_times=True)
-    data, times = _decimate(data, times, max_ts_pts)
-    times_list = times.tolist()
 
     all_colors = _ch_colors(raw, sep_bands)
     cond_colors_ = condition_colors(markers)
@@ -137,15 +135,16 @@ def build_ts_figure(
     band_shapes = []
     for i, pick in enumerate(picks):
         ch = raw.ch_names[pick]
-        arr = data[i]
-        std = float(np.std(arr))
-        normed = ((arr - arr.mean()) / std).tolist() if std > 0 else (arr - arr.mean()).tolist()
+        row = data[i]
+        t_row, arr = minmax_xy(times, row, max_ts_pts)
+        std = float(np.std(row))
+        normed = ((arr - row.mean()) / std).tolist() if std > 0 else (arr - row.mean()).tolist()
         shifted = [v + i * 3 for v in normed]
         color = "#b2bec3" if ch in bad_channels else (all_colors[pick] if pick < len(all_colors) else "#aaa")
         traces.append(go.Scatter(
-            x=times_list, y=shifted, name=ch, mode="lines",
+            x=t_row.tolist(), y=shifted, name=ch, mode="lines",
             line=dict(width=0.9, color=color),
-            customdata=[ch] * len(times_list),
+            customdata=[ch] * len(t_row),
             hovertemplate="<b>%{customdata}</b><extra></extra>",
         ))
         band_shapes.append(dict(
@@ -224,10 +223,8 @@ def build_channel_figure(
     # and set_annotations below wants relative, so both need t0, in opposite directions
     t0 = float(raw_haemo.first_time)
     haemo_data, times = raw_haemo.get_data(picks=[hbo_pick, hbr_pick], return_times=True)
-    haemo_data, times_d = _decimate(haemo_data, times, max_ts_pts)
-    times_list = (times_d + t0).tolist()
-    hbo = (haemo_data[0] * 1e6).tolist()
-    hbr = (haemo_data[1] * 1e6).tolist()
+    t_hbo, hbo = minmax_xy(times + t0, haemo_data[0] * 1e6, max_ts_pts)
+    t_hbr, hbr = minmax_xy(times + t0, haemo_data[1] * 1e6, max_ts_pts)
 
     cond_colors_ = condition_colors(markers)
 
@@ -246,10 +243,10 @@ def build_channel_figure(
 
     detail_fig = go.Figure(
         data=[
-            go.Scatter(x=times_list, y=hbo, name="HbO", mode="lines",
+            go.Scatter(x=t_hbo.tolist(), y=hbo.tolist(), name="HbO", mode="lines",
                        line=dict(color=HBO_COLOR, width=1.5),
                        fill="tozeroy", fillcolor="rgba(231,76,60,0.06)"),
-            go.Scatter(x=times_list, y=hbr, name="HbR", mode="lines",
+            go.Scatter(x=t_hbr.tolist(), y=hbr.tolist(), name="HbR", mode="lines",
                        line=dict(color=HBR_COLOR, width=1.5),
                        fill="tozeroy", fillcolor="rgba(52,152,219,0.06)"),
         ],

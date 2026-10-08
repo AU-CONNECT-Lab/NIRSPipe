@@ -18,7 +18,7 @@ from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the pa
 from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
-                                          decimate as _decimate, physio_bands, timeline_axes,
+                                          minmax_xy, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from fnirs_pipe.qc.figures.common.head_map import (
@@ -1057,11 +1057,10 @@ def build_signal_overlay(
                     t_vals, y_vals = [], []
                 else:
                     pick = raw.ch_names.index(ch_name)
-                    arr, times = _decimate(
-                        raw.get_data(picks=[pick]), raw.times, _MAX_TS_PTS
-                    )
+                    times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * 1e6,
+                                           _MAX_TS_PTS)
                     t_vals = times.tolist()
-                    y_vals = (arr[0] * 1e6).tolist()
+                    y_vals = arr.tolist()
                 fig.add_trace(go.Scatter(
                     x=t_vals, y=y_vals,
                     name=sid, mode="lines",
@@ -1130,11 +1129,9 @@ def build_signal_overlay_pair(
             if raw is None or ch_name not in raw.ch_names:
                 continue
             pick = raw.ch_names.index(ch_name)
-            arr, times = _decimate(
-                raw.get_data(picks=[pick]), raw.times, _MAX_TS_PTS
-            )
+            times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * 1e6, _MAX_TS_PTS)
             fig.add_trace(go.Scatter(
-                x=times.tolist(), y=(arr[0] * 1e6).tolist(),
+                x=times.tolist(), y=arr.tolist(),
                 name=sid, mode="lines",
                 line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.3),
                 showlegend=(row_idx == 1),

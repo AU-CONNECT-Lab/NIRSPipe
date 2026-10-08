@@ -1598,7 +1598,7 @@ def _section_glm(
             glm_design_path = save_png(b64, figures_dir,
                                        fig_name("timeseries", suffix="design", extension=".png"))
         with _guard("GLM design matrix (heatmap)", errors, subject):
-            b64 = design_matrix_heatmap(design_matrix, conditions=conditions)
+            b64 = design_matrix_heatmap(design_matrix)
             glm_design_heatmap_path = save_png(b64, figures_dir,
                                                fig_name("heatmap", suffix="design", extension=".png"))
 

@@ -18,9 +18,8 @@ def test_the_model_carries_the_aux_regressor(glm_run):
     assert f"aux_{AUX_NAME}" in design.columns
 
 
-@pytest.mark.parametrize("name", ["design_matrix_static_figure", "design_matrix_heatmap"])
-def test_both_design_figures_draw_the_conditions_and_nothing_else(glm_run, name):
-    assert _conditions(glm_run, name) == [glm_run.task]
+def test_the_design_time_series_draws_the_conditions_and_nothing_else(glm_run):
+    assert _conditions(glm_run, "design_matrix_static_figure") == [glm_run.task]
 
 
 def test_the_heatmap_draws_the_whole_design_written_to_disk(glm_run):

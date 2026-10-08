@@ -44,7 +44,7 @@ AUX_SUFFIX = "timeseries"
 # also goes in the sidecar.
 TIME_COLUMN = "time"
 
-# six significant digits, below the resolution of the sensors an aux group carries
+# six significant digits for the values, below the resolution of the sensors an aux group carries
 _FLOAT_FORMAT = "%.6g"
 
 
@@ -395,8 +395,10 @@ def write_aux_table(
         if len(steps) else 0.0
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # timestamps in full: six digits round a 100 Hz stamp by a whole sample past 1000 s
+    stamps = table[TIME_COLUMN].map(lambda v: repr(float(v)))
     with gzip.open(out_path, "wt", newline="", encoding="utf-8") as handle:
-        write_tsv(table, handle, float_format=_FLOAT_FORMAT)
+        write_tsv(table.assign(**{TIME_COLUMN: stamps}), handle, float_format=_FLOAT_FORMAT)
 
     facts = {
         "Columns": list(table.columns),

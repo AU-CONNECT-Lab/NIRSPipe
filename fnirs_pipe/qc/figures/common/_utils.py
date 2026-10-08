@@ -135,6 +135,30 @@ def decimate(arr: np.ndarray, times: np.ndarray, max_pts: int):
     return arr[:, ::step], times[::step]
 
 
+def minmax_xy(times: np.ndarray, values: np.ndarray, max_pts: int):
+    """Thin one trace to at most ``max_pts`` by keeping each bin's lowest and highest sample.
+
+    A stride keeps one arbitrary sample per bin, so a rhythm faster than the drawn rate, the
+    cardiac pulse on a long recording, folds into a slow wave the data does not have. The two
+    extremes keep the envelope instead, each at the time it was recorded::
+
+        minmax_xy([0, 1, 2, 3, 4, 5], [0, 3, 1, 2, -1, 0], 4)  ->  ([0, 1, 3, 4], [0, 3, 2, -1])
+    """
+    t = np.asarray(times, dtype=float)
+    y = np.asarray(values, dtype=float)
+    n = len(y)
+    if n <= max_pts:
+        return t, y
+    step = -(-n // max(1, max_pts // 2))
+    bins = np.pad(y, (0, -n % step), constant_values=np.nan).reshape(-1, step)
+    starts = np.arange(bins.shape[0]) * step
+    # a NaN is never an extreme; a bin holding nothing else keeps its first sample
+    low = starts + np.argmin(np.where(np.isnan(bins), np.inf, bins), axis=1)
+    high = starts + np.argmax(np.where(np.isnan(bins), -np.inf, bins), axis=1)
+    keep = np.unique(np.concatenate([low, high]))
+    return t[keep], y[keep]
+
+
 def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
     """Scatter x/y kwargs for a long trace, sized for the file it is written to.
 
@@ -149,8 +173,9 @@ def line_xy(times: np.ndarray, values: np.ndarray) -> dict:
     at all, ``x0``/``dx`` saying the same thing in two numbers.
 
     The uniformity test is what keeps this honest. ``decimate`` strides, so its timestamps
-    pass; ``_maxpool_xy`` keeps the timestamp each bin's peak was found at, so a peak sits
-    where it happened rather than on a bin edge, and those fail the test and keep their x.
+    pass; ``minmax_xy`` and ``_maxpool_xy`` keep the timestamp each kept sample was recorded
+    at, so a peak sits where it happened rather than on a bin edge, and those fail the test
+    and keep their x.
 
     Values go out as float32, which is a display cast and not a measurement one. Timestamps
     stay float64, since those are what the uniformity test and the peak positions are read off.

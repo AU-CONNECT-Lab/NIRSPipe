@@ -199,8 +199,6 @@ def test_writing_then_reading_the_table_returns_the_samples(tmp_path):
     assert find_aux_table(tmp_path / "sub-01_task-hold_desc-preproc_nirs.snirf") == out
 
 
-@pytest.mark.xfail(strict=True, reason="the time column is written to six significant digits, "
-                                       "0.01 s past 1000 s, about one sample period here")
 def test_the_table_keeps_each_timestamp_past_a_thousand_seconds(tmp_path):
     n = int(1100 * AUX_FS)
     source = _snirf_with_aux(tmp_path, {"ACC_X": np.zeros(n)})
