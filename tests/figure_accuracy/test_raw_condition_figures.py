@@ -10,7 +10,10 @@ import pytest
 from fnirs_pipe.qc.subject.record_io import read_record
 from tests._fingerprint import EVENT_ONSETS
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
-from tests.figure_accuracy._read import _blocks, _grid, _trial_panel, xy
+from fnirs_pipe.qc.boilerplate.notes import section_note
+from tests.figure_accuracy._read import (
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, xy,
+)
 
 TMIN, TMAX = -5.0, 25.0
 BLOCKS = ["ca", "cb"]
@@ -52,17 +55,18 @@ def test_there_is_one_page_per_block(raw_condition_run):
 # ---- quality, sliced from the record ----
 
 @pytest.mark.parametrize("block", BLOCKS)
-def test_each_page_rejects_what_its_own_windows_rejected(raw_condition_run, block):
-    truth = raw_condition_run.truth
-    pair, onset, _ = truth.block_bad
-    t0, t1, _ = _blocks(raw_condition_run)[block]
+def test_each_page_rejects_what_the_run_rejected_and_colours_its_own_coupling(raw_condition_run, block):
     cells = _grid(_figure(raw_condition_run, "rawchsummary", block, "qc"))
-    for (channel, metric), (value, _) in cells.items():
-        if metric != "Status":
-            continue
-        name = channel.rsplit(" ", 1)[0]
-        bad = truth.pair(name).bad or (name == pair and t0 <= onset < t1)
-        assert (value != "OK") if bad else (value == "OK"), (block, channel)
+    _check_condition_grid(cells, raw_condition_run, block)
+
+
+@pytest.mark.parametrize("block", BLOCKS)
+def test_a_condition_page_header_counts_what_fails_on_its_own_stretch(raw_condition_run, block):
+    page = raw_condition_run.out / "sub-01" / f"sub-01_task-main_cond-{block}_desc-raw_report.html"
+    assert f"<th>{section_note('summary.condition_failing')}</th>" in page.read_text(encoding="utf-8")
+    summary = _page(raw_condition_run, block)["summary"]
+    assert (summary["n_bad"], summary["n_total"]) == (
+        2 * len(_failing_in(raw_condition_run, block)), 2 * len(raw_condition_run.truth.pairs))
 
 
 @pytest.mark.parametrize("block", BLOCKS)

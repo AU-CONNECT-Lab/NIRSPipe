@@ -686,9 +686,24 @@ def condition_sections(
                                 condition_haemo_scalars, long_short_channels,
                                 filtered=filtered)
 
-    return _condition_entries(sections, raw_intensity, windows,
-                              _cutoffs_from_sidecar(stages), sep_bands, haemo_of,
-                              imu_of=_imu_slicer(imu))
+    cutoffs = _cutoffs_from_sidecar(stages)
+    return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands, haemo_of,
+                              imu_of=_imu_slicer(imu), forced=_forced_bads(stages, cutoffs))
+
+
+def _forced_bads(stages: dict[str, Path], cutoffs: dict[str, float]) -> "frozenset[str]":
+    """The run's rejections its own screening does not explain: by hand or non-finite.
+
+    ::
+
+      sidecar bad_channels [S2_D2 760, S2_D2 850, S3_D3 760, S3_D3 850], S3 failing the
+      coupled-window line on good_frac_scores  ->  {S2_D2 760, S2_D2 850}
+    """
+    from fnirs_pipe.qc.metrics import screen_channels
+
+    sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
+    screened, _ = screen_channels({"good_frac": sidecar.get("good_frac_scores") or {}}, cutoffs)
+    return frozenset(set(sidecar.get("bad_channels") or ()) - set(screened))
 
 
 def raw_condition_sections(
@@ -780,6 +795,7 @@ def _condition_entries(
     sep_bands=None,
     haemo_of=None,
     imu_of=None,
+    forced: "frozenset[str]" = frozenset(),
 ) -> dict[str, Any]:
     """The ``by_condition`` entries themselves, for whichever writer holds the record.
 
@@ -787,7 +803,8 @@ def _condition_entries(
     pass with no haemoglobin stage, and leaves those keys out. ``imu_of(t0, t1)`` returns the
     condition's IMU summary, None on a recording without one. Everything else is read out
     of ``sections`` rather than measured, so the two writers cannot end up with different
-    numbers for one recording.
+    numbers for one recording. ``forced`` are the run's channels rejected by hand or for
+    non-finite samples, which fail every condition whatever their coupling there.
     """
     from fnirs_pipe.qc.metrics import long_short_channels, screen_channels
     from fnirs_pipe.qc.metrics.screening import CRITERIA
@@ -849,10 +866,11 @@ def _condition_entries(
     out: dict[str, Any] = {}
     for label, sliced in sliced_all.items():
         t0, t1 = window_of[label][1], window_of[label][2]
-        # this condition's own verdict on the run's line; the data was processed under the
-        # run's, which the run's own section carries
+        # which channels pass on this stretch alone, against the run's line: an assessment
+        # for choosing conditions, not a rejection; the data was processed under the run's
         cond_frac = sliced.get("good_frac_per_channel") or {}
-        cond_bad, _ = screen_channels({"good_frac": cond_frac}, cutoffs)
+        screened, _ = screen_channels({"good_frac": cond_frac}, cutoffs)
+        cond_bad = sorted(set(screened) | (forced & set(cond_frac)))
         retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
 
         # the frame count is that share of this stretch's samples, not a second pass. The

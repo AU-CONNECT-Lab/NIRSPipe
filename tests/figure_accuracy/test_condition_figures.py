@@ -8,7 +8,10 @@ import pytest
 
 from tests._fingerprint import EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
-from tests.figure_accuracy._read import _blocks, _grid, _trial_panel, traces, xy
+from fnirs_pipe.qc.boilerplate.notes import section_note
+from tests.figure_accuracy._read import (
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, traces, xy,
+)
 from tests.figure_accuracy.conftest import HAND_MARKED
 
 TMIN, TMAX = -5.0, 25.0
@@ -27,25 +30,38 @@ def test_there_is_one_page_per_block(condition_run):
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])
-def test_each_page_rejects_what_its_own_windows_rejected(condition_run, block):
-    truth = condition_run.truth
-    pair, onset, span = truth.block_bad
-    t0, t1, _ = _blocks(condition_run)[block]
-    inside = t0 <= onset < t1
-    for (channel, metric), (value, _) in _grid(_figure(condition_run, "chsummary", block, "qc")).items():
-        if metric != "Status":
-            continue
-        name = channel.rsplit(" ", 1)[0]
-        bad = truth.pair(name).bad or (name == pair and inside)
-        assert (value != "OK") if bad else (value == "OK"), (block, channel)
+def test_each_page_rejects_what_the_run_rejected_and_colours_its_own_coupling(condition_run, block):
+    _check_condition_grid(_grid(_figure(condition_run, "chsummary", block, "qc")), condition_run, block)
 
 
-def test_the_run_page_grid_carries_each_condition_s_own_verdict(condition_run):
-    pair = condition_run.truth.block_bad[0]
-    cells = _grid(condition_run.figure("condsummary", suffix="qc"))
-    status = {where[0]: value for where, (value, _) in cells.items()
-              if where[-1] == "Status" and where[1].startswith(pair)}
-    assert status["ca"] == "OK" and status["cb"] != "OK"
+RUNS_WITH_HAND = [("condition_run", ()), ("prep_condition_run", (HAND_MARKED,))]
+FAILING = section_note("summary.condition_failing")
+
+
+@pytest.mark.parametrize("run_name, hand", RUNS_WITH_HAND)
+def test_the_run_page_grid_says_which_channels_pass_in_each_condition(request, run_name, hand):
+    run = request.getfixturevalue(run_name)
+    cells = _grid(run.figure("condsummary", suffix="qc"))
+    assert not any(where[-1] == "Status" for where in cells)
+    checked = 0
+    for (block, channel, metric), (value, _) in cells.items():
+        if metric == "In condition":
+            failing = channel.rsplit(" ", 1)[0] in _failing_in(run, block, hand)
+            assert value == ("fail" if failing else "pass"), (block, channel)
+            checked += 1
+    assert checked == 2 * len(run.truth.pairs) * len(_blocks(run))
+
+
+@pytest.mark.parametrize("run_name, hand", RUNS_WITH_HAND)
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_condition_page_header_counts_what_fails_on_its_own_stretch(request, run_name, hand, block):
+    run = request.getfixturevalue(run_name)
+    html = (run.report.parent / f"sub-01_task-main_cond-{block}_report.html").read_text(encoding="utf-8")
+    found = re.search(rf"<th>{re.escape(FAILING)}</th>\s*<td><span[^>]*>(\d+)/(\d+)", html)
+    assert found, "no failing-channel count under its own heading"
+    assert (int(found.group(1)), int(found.group(2))) == (
+        2 * len(_failing_in(run, block, hand)), 2 * len(run.truth.pairs))
+    assert "<th>Bad channels</th>" not in html
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])
@@ -142,11 +158,7 @@ def test_a_pair_marked_bad_by_hand_is_rejected_on_the_run_page(prep_condition_ru
     assert hand and all(value != "OK" for value in hand)
 
 
-@pytest.mark.xfail(strict=True, reason="a condition screens on its coupled windows alone, so a pair "
-                                       "marked bad by hand reads OK on its pages")
 @pytest.mark.parametrize("block", ["ca", "cb"])
 def test_a_pair_marked_bad_by_hand_is_rejected_on_every_condition_page(prep_condition_run, block):
     cells = _grid(_figure(prep_condition_run, "chsummary", block, "qc"))
-    status = {channel: value for (channel, metric), (value, _) in cells.items() if metric == "Status"}
-    hand = [channel for channel in status if channel.startswith(HAND_MARKED)]
-    assert hand and all(status[channel] != "OK" for channel in hand), status
+    _check_condition_grid(cells, prep_condition_run, block, hand=(HAND_MARKED,))

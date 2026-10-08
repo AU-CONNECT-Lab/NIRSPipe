@@ -72,7 +72,7 @@
     </table>
     <table>
       <tr>
-        <th>Bad channels</th>
+        <th>{{ bad_heading | default('Bad channels') }}</th>
         <td><span class="{{ badge_class }}">{{ n_bad }}/{{ n_total }} ({{ "%.0f"|format(bad_rate) }}%)</span></td>
       </tr>
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
@@ -82,7 +82,7 @@
   </div>
   {% if bad_channels %}
   <p style="margin: 0.75rem 0 0; font-size:0.85rem;">
-    <strong>Bad channels:</strong> {{ bad_channels | join(', ') }}
+    <strong>{{ bad_heading | default('Bad channels') }}:</strong> {{ bad_channels | join(', ') }}
   </p>
   {% endif %}
   {% if condition_label %}

@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 - The subject index and cohort condition panels name each metric's window
 - The raw viewer's HbO-HbR set means and channel table leave rejected pairs out, as the pipeline's do
 - The raw viewer's channel picker marks short and rejected pairs
+- Condition pages mark channels rejected by the run's verdict; their header counts channels failing on that condition's stretch alone
+- The run page's per-condition grid shows In condition, pass or fail on each stretch, instead of Status
+- The subject index Conditions table heads its channel column Channels passing
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
@@ -33,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - GLM design figures and activation maps drew aux regressors as conditions
 - A short channel's motion figure shaded the long channels' corrected spans
 - The motion figure labelled its GVTD and derivative rows 0.01-0.5 Hz instead of the band it used
+- A channel rejected by hand or for non-finite samples passed on condition pages
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

@@ -79,10 +79,14 @@ class _Config:
 
 def test_the_section_reads_each_conditions_slice_and_verdict():
     record = _record(["rest", "task"])
-    rows = _condition_channel_rows(record, record["by_condition"]["task"], {"A": 0.9, "B": 0.9})
+    entry = record["by_condition"]["task"]
+    rows = _condition_channel_rows(record, entry, {"A": 0.9, "B": 0.9}, set(entry["bad_channels"]))
     args = heatmap_args(rows)
     assert args["sci_per_ch"]["B"] == 0.2
     assert dict(zip(args["ch_names"], args["is_bad"])) == {"A": False, "B": True}
+    # a condition page hands it the run's rejections instead, and Status follows those
+    run_rows = _condition_channel_rows(record, entry, {"A": 0.9, "B": 0.9}, set())
+    assert not any(heatmap_args(run_rows)["is_bad"])
 
 
 def test_the_section_writes_one_figure_for_two_conditions(tmp_path):

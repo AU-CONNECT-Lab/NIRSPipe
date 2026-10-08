@@ -1452,12 +1452,32 @@ def _section_channel_summary(
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
-def _condition_channel_rows(record: dict, entry: dict, sci_scores: dict) -> list:
-    """One condition's channel rows, read the way its own page reads them."""
+def _bad_count(bad: "list[str]", n_total: int) -> "tuple[int, int, float, str]":
+    """The summary box's count, total, share in percent and badge colour."""
+    rate = 100 * len(bad) / n_total if n_total > 0 else 0.0
+    badge = "badge-green" if rate < 10 else "badge-yellow" if rate < 30 else "badge-red"
+    return len(bad), n_total, rate, badge
+
+
+def _failing_summary(failing: "list[str]", n_total: int) -> dict:
+    """A condition page's summary box: the channels failing on its own stretch, so named."""
+    n_bad, n_total, bad_rate, badge_class = _bad_count(failing, n_total)
+    return {"n_bad": n_bad, "n_total": n_total, "bad_rate": bad_rate,
+            "badge_class": badge_class, "bad_channels": failing,
+            "bad_heading": section_note("summary.condition_failing")}
+
+
+def _condition_channel_rows(record: dict, entry: dict, sci_scores: dict,
+                            bad_channels: "set[str]") -> list:
+    """One condition's channel rows, ``bad_channels`` deciding Status.
+
+    A condition page passes the run's rejections; the run page's per-condition grid passes
+    the condition's own assessment, ``entry["bad_channels"]``.
+    """
     sliced = entry.get("per_channel") or {}
     cond_record = with_condition_corr(slice_record(record, sliced),
                                       sliced.get("hbo_hbr_corr_per_channel") or {})
-    return channel_rows(cond_record, sci_scores, set(entry.get("bad_channels") or ()))
+    return channel_rows(cond_record, sci_scores, set(bad_channels))
 
 
 def _section_condition_summary(
@@ -1475,41 +1495,21 @@ def _section_condition_summary(
     if len(by_condition) >= 2:
         with _guard("Per-condition channel quality", errors, subject):
             conditions = [
-                (label, heatmap_args(_condition_channel_rows(record, entry, sci_scores)))
+                (label, heatmap_args(_condition_channel_rows(
+                    record, entry, sci_scores, set(entry.get("bad_channels") or ()))))
                 for label, entry in by_condition.items()]
             # the condition pages' own cutoffs, so a cell here matches the cell there
             cutoffs = resolve_cutoffs(config)
+            # each condition's own assessment, for choosing conditions: not a rejection
             fig = condition_quality_heatmap(conditions, sci_thresh=cutoffs["sci"],
                                             psp_thresh=cutoffs["psp"],
-                                            good_frac_thresh=cutoffs["good_frac"])
+                                            good_frac_thresh=cutoffs["good_frac"],
+                                            status_label="In condition",
+                                            status_words=("pass", "fail"))
             if fig is not None:
                 path, h = _save_plotly_html(fig, figures_dir / fig_name("condsummary",
                                                                         suffix="qc"))
     return {"condition_summary_path": path, "condition_summary_h": h}
-
-
-def _good_mask_for(
-    bad_channels: "set[str] | list[str]",
-    ch_names_brain: "list[str] | None",
-    sci_scores: dict,
-    fallback: "np.ndarray | None",
-) -> "np.ndarray | None":
-    """The kept/rejected flag per brain-figure channel, for one condition's own verdict.
-
-    ::
-
-      {"S1_D1 760"}, ["S1_D1 hbo", "S1_D2 hbo"]  ->  array([False, True])
-
-    The brain figures are drawn over haemoglobin channel names and screening is decided on
-    intensity ones, so the two are matched on the source-detector pair they share, which is
-    how the run's own mask is built at the call site in the workflow. Returns the run's mask
-    unchanged when there is no channel list to match against.
-    """
-    names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
-    if not names:
-        return fallback
-    bad_bases = {pair_of(ch) for ch in bad_channels}
-    return np.array([pair_of(n) not in bad_bases for n in names])
 
 
 def _section_brain(
@@ -2009,14 +2009,7 @@ def build_subject_report(
                          if by_condition else
                          {"condition_summary_path": None, "condition_summary_h": 0})
 
-    n_bad    = len(bad_channels)
-    n_total  = len(sci_scores)
-    bad_rate = 100 * n_bad / n_total if n_total > 0 else 0.0
-    badge_class = (
-        "badge-green"  if bad_rate < 10
-        else "badge-yellow" if bad_rate < 30
-        else "badge-red"
-    )
+    n_bad, n_total, bad_rate, badge_class = _bad_count(bad_channels, len(sci_scores))
 
     run_label_text = sqm_label or f"sub-{subject}"
     report_vars = dict(
@@ -2120,11 +2113,10 @@ def build_subject_report(
                         skip_carpet=True, window=span),
                     **_condition_carpet(motion_vars, slug),
                 },
-                # the condition's own SCI and its own rejected set, so the maps show the
-                # verdict printed beside them rather than the run's
-                remake_brain=lambda cond_name, sci_pc, cond_bad: _section_brain(
-                    sci_pc, sorted(cond_bad), coords_head,
-                    _good_mask_for(cond_bad, ch_names_brain, sci_pc, good_mask),
+                # the condition's own SCI over the run's rejections: a condition page grades
+                # its stretch but rejects only what the run rejected
+                remake_brain=lambda cond_name, sci_pc: _section_brain(
+                    sci_pc, bad_channels, coords_head, good_mask,
                     raw_intensity, subject, errors, figures_dir, cond_name,
                     ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"]),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
@@ -2507,7 +2499,8 @@ def _write_condition_reports(
     trial_images = remake_trial_images(windows) if remake_trial_images is not None else {}
     for label, entry in by_condition.items():
         sliced = entry.get("per_channel") or {}
-        cond_bad = set(entry.get("bad_channels") or ())
+        # the header counts this condition's own assessment; Status stays the run's
+        cond_bad = sorted(entry.get("bad_channels") or ())
         # the long set, as the run's own scalar panel is, so the two pages compare
         scalars = condition_verdict_view(entry)
         haemo_by_set = entry.get("haemo_by_set") or {}
@@ -2520,7 +2513,8 @@ def _write_condition_reports(
         cropped: dict = {}
         if remake_cropped is not None:
             cropped = remake_cropped(cond_name, span)
-        rows = _condition_channel_rows(record, entry, sci_scores)
+        rows = _condition_channel_rows(record, entry, sci_scores,
+                                       set(report_vars.get("bad_channels") or ()))
         cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cond_name, cutoffs["sci"],
@@ -2539,8 +2533,7 @@ def _write_condition_reports(
         # with no view to pick. The carpet and the per-channel motion figures are not: the
         # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
-            panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {},
-                                       cond_bad))
+            panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {}))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))
         if remake_denoise_carpet is not None:
@@ -2565,6 +2558,7 @@ def _write_condition_reports(
             **report_vars, **blanked, **summary, **panels,
             "nav_links": [{"label": text, "href": _page_name(lab),
                            "current": lab == label} for lab, text in nav_pages],
+            **_failing_summary(cond_bad, report_vars.get("n_total") or 0),
             "sqm": scalars,
             "channel_rows": rows,
             "channel_cells": cells,

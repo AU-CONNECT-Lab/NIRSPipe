@@ -75,12 +75,13 @@ def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_fra
     ]
 
 
-def _channel_cell(metric, value, fmt, check, ch) -> tuple[str, str]:
-    """Colour and hover for one cell; ``value`` is the bad flag on the Status row."""
-    if metric == "Status":
+def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD")) -> tuple[str, str]:
+    """Colour and hover for one cell; ``value`` is the bad flag on the Status row, the one
+    row with no pass test. ``words`` name its two states."""
+    if check is None:
         if value is None:
-            return _MISSING_COLOR, f"{ch} · Status: —"
-        return (_BAD_COLOR if value else _GOOD_COLOR), f"{ch} · Status: {'BAD' if value else 'OK'}"
+            return _MISSING_COLOR, f"{ch} · {metric}: —"
+        return (_BAD_COLOR if value else _GOOD_COLOR), f"{ch} · {metric}: {words[bool(value)]}"
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return _MISSING_COLOR, f"{ch} · {metric}: —"
     return (_GOOD_COLOR if check(value) else _BAD_COLOR), f"{ch} · {metric}: {value:{fmt}}"
@@ -196,6 +197,8 @@ def condition_quality_heatmap(
     snr_thresh: float = SNR_PASS,
     psp_thresh: float = PSP_PASS,
     good_frac_thresh: float = GOOD_FRAC_PASS,
+    status_label: str = "Status",
+    status_words: "tuple[str, str]" = ("OK", "BAD"),
 ) -> "go.Figure | None":
     """Every condition's channel grid, regrouped: one block per metric, one row per condition.
 
@@ -217,6 +220,7 @@ def condition_quality_heatmap(
     n_ch = len(ch_names)
     specs = _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh,
                                  good_frac_thresh)
+    specs[0] = (status_label, *specs[0][1:])
     # one empty row above each block carries the metric's name
     depth = len(conditions) + 1
 
@@ -230,7 +234,8 @@ def condition_quality_heatmap(
             lookup = (dict(zip(args["ch_names"], args["is_bad"])) if key is None
                       else args.get(key) or {})
             for i, ch in enumerate(ch_names):
-                color, text = _channel_cell(metric, lookup.get(ch), fmt, chk, ch)
+                color, text = _channel_cell(metric, lookup.get(ch), fmt, chk, ch,
+                                            words=status_words)
                 xs.append(i * _SPACING)
                 ys.append(y)
                 colors.append(color)

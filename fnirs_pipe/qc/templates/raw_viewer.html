@@ -152,7 +152,7 @@ select#run-select {
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>
     <table>
-      <tr><th>Bad channels</th><td id="sum-bad"></td></tr>
+      <tr><th>{{ bad_heading | default('Bad channels') }}</th><td id="sum-bad"></td></tr>
       <tr><th>SCI threshold</th><td id="sum-sci"></td></tr>
       <tr><th>Coupled windows</th><td id="sum-frac"></td></tr>
       <tr><th>DPF</th><td id="sum-dpf"></td></tr>

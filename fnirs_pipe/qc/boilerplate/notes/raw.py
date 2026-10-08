@@ -16,9 +16,9 @@ NOTES = {
         "of it, so they sit on the same window grid and the same filter as every other "
         "condition and as the run.",
     "raw.condition_verdict":
-        "The verdict here is this condition's own, screened on its windows against the run's "
-        "line. The recording was processed under the run's verdict, not this one; the run's "
-        "page carries it.",
+        "Rejected channels here are the run's: the recording was processed under its verdict. "
+        "The count above is the channels failing on this condition's windows alone, against "
+        "the run's line, a guide to choosing conditions that rejects nothing.",
     "raw.condition_spectrum":
         "The spectrum, the grand mean and the HbO–HbR correlation are redrawn on a cut of the "
         "recording; the per-channel detail's spectrum and epoch average stay the whole run's.",

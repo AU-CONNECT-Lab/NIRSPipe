@@ -636,9 +636,9 @@ def condition_payloads(
     rescored, a trial's SQM reading nothing outside its own crop.
 
     Each payload carries three notes, because each is a way a reader could be misled: what
-    the view is, that the rejected channels are this condition's own verdict and not the
-    run's, and that the columns with no windowed series behind them are absent rather than
-    zero.
+    the view is, that its rejected channels are the run's while the header counts the ones
+    failing on this condition's windows alone, and that the columns with no windowed series
+    behind them are absent rather than zero.
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.common.channel_table import (
@@ -664,10 +664,11 @@ def condition_payloads(
         window = (label, float(t0), float(t1))
         slug = _pair_fname(label)
 
+        # Status is the run's rejection; the condition's own assessment is the header count
         rows = channel_rows(
             with_condition_corr(slice_record(record, sliced),
                                 sliced.get("hbo_hbr_corr_per_channel"), section="rawhaemo"),
-            sci_scores, cond_bad)
+            sci_scores, bad_channels)
         pair_cells = format_rows(pair_rows(rows, channel_pairs or None), sci_threshold,
                                  name_key="pair", psp_threshold=cutoffs["psp"])
         # split on the montage, not on whether a Short entry exists: one is returned for

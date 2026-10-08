@@ -947,6 +947,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
             data_json=json.dumps([view]),
             **ctx["shell"],
             **_COND_CH_COLUMN_VARS,
+            bad_heading=section_note("summary.condition_failing"),
         )
         out.write_text(html, encoding="utf-8")
         logger.info("condition %s \u2192 %s", label, out.name)

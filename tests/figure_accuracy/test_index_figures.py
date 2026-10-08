@@ -1,10 +1,14 @@
 """The subject index: each condition's numbers from the record, under that condition's name."""
 
+import re
+
 import numpy as np
 import pytest
 
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from tests.figure_accuracy._payload import one_figure
+from tests.figure_accuracy._read import _failing_in
+from tests.figure_accuracy.conftest import HAND_MARKED
 
 PANELS = {f"SCI ({SCI_WINDOW_S:g} s)": "sci_win_mean", f"PSP ({PSP_WINDOW_S:g} s)": "psp_mean",
           f"CV ({CV_WINDOW_S:g} s)": "cv_mean", f"SNR ({CV_WINDOW_S:g} s)": "snr_mean"}
@@ -52,3 +56,26 @@ def test_the_timeline_shades_each_condition_over_its_own_block(condition_run):
     for name, onset, duration, _ in condition_run.truth.blocks:
         assert (onset, onset + duration) in spans
         assert labels[name] == pytest.approx(onset + duration / 2)
+
+
+def _conditions_table(run):
+    html = (run.out / "sub-01" / "sub-01_desc-index_report.html").read_text(encoding="utf-8")
+    table = html[html.index('<h2 id="Conditions">'):]
+    table = table[:table.index("</table>")]
+    rows = [[re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", cell)).strip()
+             for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S)]
+            for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", table, re.S)]
+    return rows[0], {row[0]: row for row in rows[1:]}
+
+
+@pytest.mark.parametrize("run_name, hand", [("condition_run", ()), ("prep_condition_run", (HAND_MARKED,))])
+def test_the_conditions_table_counts_the_channels_passing_on_each_row(request, run_name, hand):
+    run = request.getfixturevalue(run_name)
+    header, rows = _conditions_table(run)
+    column = header.index("Channels passing")
+    n = 2 * len(run.truth.pairs)
+    rejected = {p.name for p in run.truth.pairs if p.bad} | set(hand)
+    assert rows["whole run"][column] == f"{n - 2 * len(rejected)}/{n}"
+    for block in ("ca", "cb"):
+        assert rows[block][column] == f"{n - 2 * len(_failing_in(run, block, hand))}/{n}", block
+

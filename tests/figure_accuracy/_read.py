@@ -7,6 +7,7 @@ import re
 import numpy as np
 
 from tests._fingerprint import EVENT_ONSETS, Truth
+from fnirs_pipe.qc.figures.subject.sci_psp_panel import _BAD_COLOR
 from tests.figure_accuracy._payload import one_figure
 
 
@@ -84,3 +85,30 @@ def _grid(path):
         *where, value = re.split(r" · |: ", text)
         cells[tuple(where)] = (value, colour)
     return cells
+
+
+def _failing_in(run, block, hand=()):
+    """The pairs failing on one block's stretch: the dead pair, the pair decoupled inside the
+    block, and any marked bad by hand."""
+    pair, onset, _ = run.truth.block_bad
+    t0, t1, _ = _blocks(run)[block]
+    out = {p.name for p in run.truth.pairs if p.bad} | set(hand)
+    if t0 <= onset < t1:
+        out.add(pair)
+    return out
+
+
+def _check_condition_grid(cells, run, block, hand=()):
+    """A condition page's grid: Status is the run's rejection, the coupled cell this stretch's."""
+    rejected = {p.name for p in run.truth.pairs if p.bad} | set(hand)
+    uncoupled = _failing_in(run, block)
+    seen = set()
+    for (channel, metric), (value, colour) in cells.items():
+        name = channel.rsplit(" ", 1)[0]
+        if metric == "Status":
+            assert (value != "OK") == (name in rejected), (block, channel, value)
+            seen.add(metric)
+        if metric == "Coupled":
+            assert (colour == _BAD_COLOR) == (name in uncoupled), (block, channel, value)
+            seen.add(metric)
+    assert seen == {"Status", "Coupled"}

@@ -8,8 +8,12 @@ NOTES = {
         "The coupling and motion numbers are sliced out of the windowed pass the whole "
         "recording was measured with, so they sit on the run&rsquo;s window grid and "
         "filter; the haemoglobin numbers and panels are recomputed on this "
-        "condition&rsquo;s stretch. The verdict is this condition&rsquo;s own; the "
-        "recording was processed under the run&rsquo;s.",
+        "condition&rsquo;s stretch. A channel marked rejected here is one the run rejected, "
+        "the recording having been processed under the run&rsquo;s verdict; the count above "
+        "is the channels failing on this stretch alone, a guide to choosing conditions that "
+        "rejects nothing.",
+    "summary.condition_failing":
+        "Failing in this condition",
     "summary.condition_rebuilt":
         "The motion carpet and per-channel motion figures are the run&rsquo;s, narrowed to "
         "this condition; the SCI/PSP panel, brain maps, haemoglobin panels, spectra, epoch "
@@ -53,9 +57,8 @@ NOTES = {
         "different questions: a channel is rejected on how many windows it was coupled in, "
         "so one can be dropped at a high SCI.",
     "quality.brain_views_condition":
-        "Both maps carry this condition's own SCI and its own rejected channels, which is the "
-        "verdict printed on this page. The recording was processed under the run's; its page "
-        "has that map.",
+        "Both maps carry this condition's own SCI over the run's rejected channels: the "
+        "stretch is graded on its own, and only what the run rejected is drawn rejected.",
     "steps.motion_correction":
         "Motion correction method: <strong>{method}</strong>. The reported GVTD numbers "
         "cover the <strong>{gvtd_set}</strong> channels, the set the analysis uses; the "
@@ -289,7 +292,10 @@ NOTES = {
         "Each condition page's channel grid, regrouped so one metric's conditions sit in "
         "adjacent rows: a channel that fails in one condition only shows as a lone red cell "
         "in its column. Same cells and cutoffs as the condition pages (<code>--sci-threshold"
-        "</code> {sci}), and Status is each condition's own screening verdict.",
+        "</code> {sci}), except the first block: <b>In condition</b> says whether each channel "
+        "passes on that condition's stretch alone, a channel rejected by hand failing "
+        "everywhere. It is a guide to choosing conditions and rejects nothing; Status on each "
+        "condition page is the run's.",
     "trial_qc":
         "Every trial window scored on its own, over {window}, on the intensity recording. "
         "Colour is relative within a row rather than a threshold: red marks the worse end of "
@@ -308,9 +314,11 @@ NOTES = {
         "expected to differ.",
     "subject_index.conditions":
         "Each condition is a window of the whole-run pass, so its rows compare with each "
-        "other and with the whole-run row; long channels throughout, except Channels kept, "
-        "which counts every channel. Runs cropped per condition before preprocessing are "
-        "listed under <b>Runs</b> instead.",
+        "other and with the whole-run row; long channels throughout, except Channels "
+        "passing, which counts every channel. On the whole-run row that is what the run "
+        "kept; on a condition's row it is what passes on that stretch alone, a guide to "
+        "choosing conditions that rejects nothing. Runs cropped per condition before "
+        "preprocessing are listed under <b>Runs</b> instead.",
     "subject_index.channel_condition":
         "Colour is the robust z inside one condition, so a cell says how far that channel "
         "sat from the others in that block rather than how the blocks rank; hover gives "
