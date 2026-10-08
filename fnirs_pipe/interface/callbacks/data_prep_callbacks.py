@@ -21,6 +21,9 @@ from fnirs_pipe.interface.grid import rows_minus_clicked
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.io.derivatives import channel_decisions_path, subject_labels
 from fnirs_pipe.qc.common.channel_table import channel_columns
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("interface.data_prep_callbacks")
 
 # Server-side cache: cache_key -> _process_run result dict (large figures stay here)
 _RESULT_CACHE: dict[str, dict] = {}
@@ -206,7 +209,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
             _RESULT_CACHE[cache_key] = result
             source = "disk"
         except Exception as exc:
-            print(f"[DEBUG load_run] disk cache load failed: {exc}, recomputing")
+            logger.warning("disk cache load failed, recomputing: %s", exc)
             result = None
             source = "compute"
     else:
@@ -245,11 +248,11 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
                     with open(disk_path, "wb") as f:
                         pickle.dump(result, f)
                 except Exception as exc:
-                    print(f"[DEBUG load_run] disk cache save failed: {exc}")
+                    logger.warning("disk cache save failed: %s", exc)
         except Exception as exc:
             return no_update, dbc.Alert(f"Failed to load: {exc}", color="danger")
 
-    print(f"[DEBUG load_run] source={source}, pairs={len(result.get('channel_pairs', []))}")
+    logger.debug("load_run: source=%s, pairs=%d", source, len(result.get("channel_pairs", [])))
 
     store = {
         "cache_key":  cache_key,
@@ -398,7 +401,7 @@ def on_ts_click(click_data, store):
         return no_update
     trace_name = trace_names[curve_num]
     pair = pair_of(trace_name)
-    print(f"[DEBUG on_ts_click] pair={pair!r}, valid={pair in valid_pairs}")
+    logger.debug("on_ts_click: pair=%r, valid=%s", pair, pair in valid_pairs)
     return pair if pair in valid_pairs else no_update
 
 
@@ -466,7 +469,7 @@ def highlight_optode_3d(channel_pair, store):
         patched["data"][hl_idx]["z"] = hz
         return patched
     except Exception as exc:
-        print(f"[DEBUG highlight_optode_3d] {exc}")
+        logger.warning("3D optode highlight failed", exc_info=exc)
         return no_update
 
 
@@ -522,7 +525,7 @@ def update_channel_detail(channel_pair, store):
                 raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
                 _HAEMO_CACHE[cache_key] = raw_haemo
             except Exception as exc:
-                print(f"[DEBUG update_channel_detail] recompute haemo failed: {exc}")
+                logger.warning("channel detail: haemoglobin recompute failed", exc_info=exc)
                 return (
                     _placeholder_fig("Failed to load channel data", 160),
                     no_update, no_update, _SHOW, no_update, no_update,
@@ -545,9 +548,9 @@ def update_channel_detail(channel_pair, store):
                 "psd_figure":    psd_fig.to_dict()    if psd_fig    else None,
                 "epoch_figure":  epoch_fig.to_dict()  if epoch_fig  else None,
             }
-            print(f"[DEBUG update_channel_detail] computed {channel_pair!r}")
+            logger.debug("channel detail: computed %r", channel_pair)
         except Exception as exc:
-            print(f"[DEBUG update_channel_detail] build failed: {exc}")
+            logger.warning("channel detail: %r build failed", channel_pair, exc_info=exc)
             channels[channel_pair] = {}
 
     ch_data = channels.get(channel_pair, {})
@@ -897,7 +900,7 @@ def highlight_optode_2d(channel_pair, store):
         patched["data"][1]["marker"]["line"]["width"] = lw
         return patched
     except Exception as exc:
-        print(f"[DEBUG highlight_optode_2d] {exc}")
+        logger.warning("2D optode highlight failed", exc_info=exc)
         return no_update
 
 
@@ -919,7 +922,8 @@ def on_layout_2d_click(click_data, store):
         return no_update
     ch_name = points[0].get("customdata", "")
     pair    = pair_of(ch_name)
-    print(f"[DEBUG on_layout_2d_click] ch_name={ch_name!r}, pair={pair!r}, valid={pair in valid_pairs}")
+    logger.debug("on_layout_2d_click: ch_name=%r, pair=%r, valid=%s", ch_name, pair,
+                 pair in valid_pairs)
     return pair if pair in valid_pairs else no_update
 
 
@@ -949,7 +953,7 @@ def on_topo_click(click_data, store):
         cd = traces[curve_num].get("customdata", [])
         pair = cd[0] if isinstance(cd, list) and cd else str(cd) if cd else ""
         if pair in valid_pairs:
-            print(f"[DEBUG on_topo_click] curve={curve_num}, pair={pair!r}")
+            logger.debug("on_topo_click: curve=%s, pair=%r", curve_num, pair)
             return pair
 
     # Fallback: customdata on the point itself

@@ -16,6 +16,9 @@ from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from fnirs_pipe.interface.theme import style_figure
 from fnirs_pipe.exceptions import AlignmentError
+from fnirs_pipe.utils.logging import get_logger
+
+logger = get_logger("interface.hyper_align_callbacks")
 
 # aligned_raws not JSON-serializable, so keep in process memory
 _ALIGNED_CACHE: dict[str, dict] = {}
@@ -207,7 +210,7 @@ def update_group_figures(group_val, bids_dir, group_csv):
             fig = fn(*args)
             return style_figure(fig.to_dict()) if fig is not None else no_update
         except Exception as exc:
-            print(f"[DEBUG hyper_align] {fn.__name__} failed: {exc}")
+            logger.warning("%s failed", fn.__name__, exc_info=exc)
             return no_update
 
     aligned_haemo = _to_haemo(aligned_raws)

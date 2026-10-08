@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - Dyad pages colour each member's SCI against the line that member was screened at, read from its sidecar
 - The dyad decision table tints each member's cells by that member's own rejection
 - `fnirs-rate raw` and `hyper` `--sci-threshold` now outline SCI (10 s) cells below it; off unless given
+- The GUI's Data Preparation and Hyper Align callbacks log through the package logger instead of printing `[DEBUG]` lines
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
