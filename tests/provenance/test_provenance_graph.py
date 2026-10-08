@@ -177,7 +177,11 @@ def test_mermaid_labels_each_edge_with_its_step(tmp_path):
     ("bandpass", {"high_pass": 0.01}, ">0.01 Hz"),
     ("resample", {"sfreq": 2.0}, "2 Hz"),
     ("beer_lambert", {"dpf": [6.0, 6.0]}, "dpf 6, 6"),
-    ("sci_pruning", {"sci_threshold": 0.75}, "thr 0.75"),
+    ("sci_pruning", {"sci_threshold": 0.75, "psp_threshold": 0.12, "min_good_frac": 0.7},
+     "SCI 0.75 + PSP 0.12, coupled ≥ 0.7"),
+    ("glm_residuals", {"noise_model": "ols", "drift_model": "none", "short_channel": "mean",
+                       "aux_regressors": ["aux_ACC_X"]}, "ols / none drift / short mean / 1 aux"),
+    ("glm_residuals", {"noise_model": "ols", "short_channel": "none"}, "ols"),
     ("motion_correction", {"motion_correction": "tddr"}, "tddr"),
     ("glm_residuals", {"hrf_model": "glover", "noise_model": "ar1"}, "glover / ar1"),
     ("bandpass", {}, ""),                        # the keys this step reads are absent

@@ -50,6 +50,7 @@ All notable changes to this project will be documented in this file.
 - The aux table rounded timestamps past 1000 s to 0.01 s, distorting the subject report's accelerometer jerk
 - The raw viewer's channel map folded the pulse the same way on runs with no events, where it draws the continuous signal
 - The GUI alignment table coloured SCI against 0.8 whatever the page's SCI threshold
+- The provenance diagram's screening arrow named only the SCI line, and its denoising arrow left out the short-channel regression
 
 ### Removed
 - `fnirs-hyper --sci-threshold`; members' own screening lines are read instead

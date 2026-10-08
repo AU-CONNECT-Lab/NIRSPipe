@@ -102,6 +102,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
 
     bandpass     + {high_pass: 0.01, low_pass: 0.5} -> "0.01-0.5 Hz"
     beer_lambert + {dpf: [6.0]}                     -> "dpf 6.0"
+    sci_pruning  + {sci_threshold: 0.75}            -> "SCI 0.75 + PSP 0.1, coupled ≥ 0.75"
     unknown step, or the keys are absent            -> ""
 
     Sidecars carry the whole config, so each step names only the keys that describe it.
@@ -131,8 +132,15 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         return f"dpf {dpf}" if dpf is not None else ""
 
     if step == "sci_pruning":
-        thr = pick("sci_threshold")
-        return f"thr {thr:g}" if thr is not None else ""
+        # the two lines a window clears together and the share of windows that keeps a
+        # channel: the share rejects, so the SCI line alone would name the wrong rule
+        if pick("sci_threshold") is None:
+            return ""
+        # local: qc.metrics pulls in mne, and the GUI imports this module at start-up
+        from fnirs_pipe.qc.metrics import resolve_cutoffs
+        lines = resolve_cutoffs(sci=pick("sci_threshold"), psp=pick("psp_threshold"),
+                                good_frac=pick("min_good_frac"))
+        return f"SCI {lines['sci']:g} + PSP {lines['psp']:g}, coupled ≥ {lines['good_frac']:g}"
 
     if step == "motion_correction":
         return str(pick("motion_correction") or "")
@@ -146,6 +154,11 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         bits = [pick("hrf_model"), pick("noise_model")]
         if (drift := pick("drift_model")) is not None:
             bits.append(f"{drift} drift")
+        # the confounds regressed out, which in denoise mode are the whole of the step
+        if (short := pick("short_channel")) not in (None, "none"):
+            bits.append(f"short {short}")
+        if aux := pick("aux_regressors"):
+            bits.append(f"{len(aux)} aux")
         return " / ".join(str(b) for b in bits if b)
 
     return ""

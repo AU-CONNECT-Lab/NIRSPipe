@@ -61,7 +61,8 @@ def test_the_chain_is_the_denoise_mode_s_order(diagram):
 
 
 @pytest.mark.parametrize("desc, detail", [
-    ("sci", f"thr {_arg('--sci-threshold'):g}"),
+    ("sci", f"SCI {_arg('--sci-threshold'):g} + PSP {_arg('--psp-threshold'):g}, "
+            f"coupled ≥ {_arg('--min-good-frac'):g}"),
     ("motcorrected", "tddr"),
     ("preproc", "dpf " + ", ".join(f"{d:g}" for d in DPF)),
 ])
@@ -75,16 +76,12 @@ def test_the_filter_arrow_names_the_band_the_filtered_stage_was_cut_to(denoise_r
         f"{params['high_pass']:g}-{params['low_pass']:g} Hz"
 
 
-@pytest.mark.xfail(strict=True, reason="finding 16: the screening arrow names the SCI line only, "
-                                       "while the run rejects on the coupled-window share")
 def test_the_screening_arrow_names_the_lines_that_reject(diagram):
     detail = diagram["sub-01_task-tapping_desc-sci_nirs"].detail
     for flag in ("--psp-threshold", "--min-good-frac"):
         assert f"{_arg(flag):g}" in detail, flag
 
 
-@pytest.mark.xfail(strict=True, reason="finding 17: the denoising arrow leaves out the short-channel "
-                                       "regression that made the stage")
 def test_the_denoising_arrow_names_the_short_channel_regression(diagram):
     assert "short" in diagram["sub-01_task-tapping_desc-errts_nirs"].detail
 
