@@ -735,7 +735,7 @@ def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
 
     Measured on the cut rather than sliced, which is safe because a correlation reads only
     the samples it is handed and nothing here filters. The per-channel dict is the before
-    side over every channel, the one the channel table prints.
+    side over every kept channel, the one the channel table prints.
     """
     from fnirs_pipe.qc.metrics import haemo_quality_metrics, long_short_channels
 

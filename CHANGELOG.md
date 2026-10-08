@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - Dyad pages, the `fnirs-hyper` console summary and the GUI alignment table show the windowed SCI and name its window
 - The dyad channel table writes `sci_win` and `sci_whole` instead of `sci`
 - The subject index and cohort condition panels name each metric's window
+- The raw viewer's HbO-HbR set means and channel table leave rejected pairs out, as the pipeline's do
+- The raw viewer's channel picker marks short and rejected pairs
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
@@ -25,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - The bad-segment zoom drew raw intensity as its After row instead of the motion-corrected optical density
 - The raw viewer's optode layout ignored `--sci-threshold`
 - `fnirs-hyper` graded dyad channels by the whole-run SCI, the record's windowed scores never reaching its pages
+- The raw viewer's grand mean averaged rejected channels into its long-channel trace
 
 ### Removed
 - `condition_window_fractions`, whose shares `by_condition` already records

@@ -561,10 +561,12 @@ function resetHighlight() {
 function loadChannelPicker() {
   var sel = document.getElementById("ch-detail-select");
   if (!sel) return;
-  var pairs = (_STATIC_DATA[_run_idx] || {}).channel_pairs || [];
+  var run    = _STATIC_DATA[_run_idx] || {};
+  var pairs  = run.channel_pairs || [];
+  var labels = run.channel_labels || {};
   sel.innerHTML = '<option value="">select a channel</option>'
     + pairs.map(function(p) {
-        return '<option value="' + _esc(p) + '">' + _esc(p) + "</option>";
+        return '<option value="' + _esc(p) + '">' + _esc(labels[p] || p) + "</option>";
       }).join("");
   sel.style.display = pairs.length ? "" : "none";
 }

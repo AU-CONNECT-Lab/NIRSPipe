@@ -1,5 +1,6 @@
 """The raw viewer measures HbO-HbR correlation on its own Beer-Lambert, and after the correction."""
 
+import csv
 import json
 import re
 
@@ -51,18 +52,24 @@ def test_the_record_carries_the_correlation_per_channel_set(uncorrected):
     assert "rawhaemo_post" not in record
 
 
-def test_rejected_channels_are_measured_too(uncorrected):
+def _table_rows(payload):
+    return [r for _, block in payload["channels"]["blocks"] for r in block]
+
+
+def test_rejected_channels_are_left_out(uncorrected):
     payload, record = uncorrected
     per_pair = record["per_channel"]["rawhaemo"]["hbo_hbr_corr_per_channel"]
-    assert set(per_pair) == set(payload["channel_pairs"])
+    rows = _table_rows(payload)
+    assert any(r["is_bad"] for r in rows)
+    assert set(per_pair) == {r["name"] for r in rows if not r["is_bad"]}
 
 
 def test_the_channel_table_prints_the_column(uncorrected):
     payload, record = uncorrected
     per_pair = record["per_channel"]["rawhaemo"]["hbo_hbr_corr_per_channel"]
-    rows = [r for _, block in payload["channels"]["blocks"] for r in block]
-    assert rows and all(r["corr"] not in (None, "", "—") for r in rows)
-    assert {r["name"] for r in rows} == set(per_pair)
+    rows = _table_rows(payload)
+    assert rows and all((r["corr"] in (None, "", "—")) == r["is_bad"] for r in rows)
+    assert {r["name"] for r in rows if not r["is_bad"]} == set(per_pair)
 
 
 def test_the_panel_and_the_table_are_drawn(uncorrected):
@@ -106,9 +113,17 @@ def _page_data(html_path):
     return json.loads(re.search(r"var _STATIC_DATA = (\[.*?\]);\n", html, re.S).group(1))[0]
 
 
+def _rejected(folder):
+    table = next((folder / "nirs").glob("*_desc-rawchannel_qc.tsv"))
+    with open(table, encoding="utf-8") as f:
+        return [r["name"] for r in csv.DictReader(f, delimiter="	") if r["is_bad"] == "True"]
+
+
 def test_each_condition_is_measured_on_its_own_cut(conditioned):
-    path, record, _ = conditioned
+    path, record, folder = conditioned
     od = mne.preprocessing.nirs.optical_density(mne.io.read_raw_snirf(path, preload=True))
+    od.info["bads"] = _rejected(folder)
+    assert od.info["bads"]
     haemo = mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0)
     for label, entry in record["by_condition"].items():
         t0, t1 = entry["window_s"]
@@ -134,7 +149,9 @@ def test_a_condition_page_prints_its_own_correlation(conditioned):
     assert (folder / data["figure_paths"]["hbo_hbr_corr"]["src"]).exists()
     own = record["by_condition"]["rest"]["per_channel"]["hbo_hbr_corr_per_channel"]
     cells = {r["name"]: r["corr"] for _, block in data["channels"]["blocks"] for r in block}
-    assert cells == {pair: f"{value:.3f}" for pair, value in own.items()}
+    rejected = {name.rsplit(" ", 1)[0] for name in _rejected(folder)}
+    assert cells == {**{pair: f"{value:.3f}" for pair, value in own.items()},
+                     **{pair: "—" for pair in rejected}}
 
 
 def test_the_new_sections_are_registered():

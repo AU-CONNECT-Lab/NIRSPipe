@@ -331,7 +331,8 @@ def restore_from_store(store, _tick):
     ] or no_update
 
     ch_pairs = cached.get("channel_pairs", [])
-    ch_options = [{"label": p, "value": p} for p in ch_pairs] or no_update
+    ch_labels = cached.get("channel_labels", {})
+    ch_options = [{"label": ch_labels.get(p, p), "value": p} for p in ch_pairs] or no_update
 
     # already labelled, formatted and coloured by the metric registry, which is also what
     # the subject report and the raw viewer print, so this panel carries no copy of any of it

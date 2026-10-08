@@ -33,8 +33,8 @@ from fnirs_pipe.qc.common.channel_table import (
 )
 from fnirs_pipe.qc.metrics import (
     IMU_STAT_KEYS, SCI_PASS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    haemo_quality_metrics, imu_section, imu_windowed, resolve_cutoffs, screen_channels,
-    screening_scores,
+    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
+    screen_channels, screening_scores,
 )
 from fnirs_pipe.qc.metrics._helpers import registration_offset, separation_orphans
 from fnirs_pipe.qc.common.report_shell import (
@@ -222,9 +222,11 @@ def _process_run(
             raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction)
 
     ppf = dpf[0] if len(dpf) == 1 else dpf
+    # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):
-        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(raw_od.copy(), ppf=ppf)
+        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(
+            _marked_copy(raw_od, bad_channels), ppf=ppf)
     if raw_haemo is None:
         note(notes, label, "no haemoglobin conversion, so the per-channel detail panel "
                            "is empty")
@@ -232,8 +234,8 @@ def _process_run(
     raw_haemo_post = None
     if raw_motcorr is not None:
         with guard("Beer-Lambert after motion correction", errors, label):
-            raw_haemo_post = mne.preprocessing.nirs.beer_lambert_law(raw_motcorr.copy(),
-                                                                     ppf=ppf)
+            raw_haemo_post = mne.preprocessing.nirs.beer_lambert_law(
+                _marked_copy(raw_motcorr, bad_channels), ppf=ppf)
 
     sqm: dict = {}
     with guard("Quality metrics", errors, label):
@@ -507,7 +509,7 @@ def _process_run(
                 evoked_topo_inline = {"figure": fig.to_dict()}
 
     # ── file: grand mean ───────────────────────────────────────────────────────
-    # One row per condition, every long channel averaged with the short ones dotted.
+    # One row per condition, every kept long channel averaged with the short ones dotted.
     if raw_haemo is not None:
         with guard("Grand mean", errors, label):
             fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=fig_tmin,
@@ -595,13 +597,20 @@ def _process_run(
     # and the file picks one off its URL fragment, so a condition page links to the run's
     # figure rather than to a copy of it
     channel_pairs: list[str] = []
+    channel_labels: dict[str, str] = {}
     if raw_haemo is not None:
         # this one figure is drawn on the original recording's axis, so the windows are
         # shifted onto it before its views are measured
         detail_origin = float(raw.first_time)
         detail_spans = [(lab, t0 + detail_origin, t1 + detail_origin)
                         for lab, t0, t1 in view_windows]
-        channel_pairs = get_channel_pairs(raw_haemo)
+        # rejected pairs too, named as such, as the subject report's picker has them
+        from fnirs_pipe.qc.subject.report import _pair_label
+        channel_pairs = get_channel_pairs(raw_haemo, exclude=())
+        short_pairs = {pair_of(n) for n in long_short_channels(raw_haemo, sep_bands)[1]}
+        rejected = {pair_of(c) for c in bad_channels}
+        channel_labels = {p: _pair_label(p, p in short_pairs, p in rejected)
+                          for p in channel_pairs}
         for pair in channel_pairs:
             with guard("Channel detail", errors, f"{label} | {pair}"):
                 detail_fig, psd_fig, epoch_fig = build_channel_figure(
@@ -727,6 +736,7 @@ def _process_run(
                        if n],
         },
         "channel_pairs": channel_pairs,
+        "channel_labels": channel_labels,
         # one entry per channel that got a motion figure, for that panel's own picker
         "motion_channels": motion_channels,
         # one entry per channel that had trials to draw, for this panel's own picker
@@ -759,6 +769,12 @@ def _process_run(
         "cutoffs":       cutoffs,
         "trial_rows":    trial_rows,
     }
+
+
+def _marked_copy(raw_od, bad_channels: "set[str]"):
+    marked = raw_od.copy()
+    marked.info["bads"] = [c for c in marked.ch_names if c in bad_channels]
+    return marked
 
 
 def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method, bad_pairs):

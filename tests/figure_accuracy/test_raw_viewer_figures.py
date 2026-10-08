@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
+from fnirs_pipe.qc.subject.record_io import read_record
 from tests._fingerprint import CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy
@@ -68,6 +69,17 @@ def test_the_channel_detail_is_the_pipeline_s_uncorrected_haemoglobin(raw_viewer
             assert share_at(*xy(hbr), HBR_FREQ) > 10 * share_at(*xy(hbo), HBR_FREQ), pair.name
 
 
+def test_the_picker_names_each_pair_as_the_pipeline_report_does(raw_viewer_run, denoise_run, page):
+    html = denoise_run.report.read_text(encoding="utf-8")
+    labels = page[1]["channel_labels"]
+    assert list(page[1]["channel_pairs"]) == [p.name for p in raw_viewer_run.truth.pairs]
+    for pair in raw_viewer_run.truth.pairs:
+        path = denoise_run.figure("detail", chan=_fname(pair.name))
+        option = re.search(rf'<option value="figures/{re.escape(path.name)}">([^<]*)</option>', html)
+        assert labels[pair.name] == option.group(1)
+        assert ("rejected" in labels[pair.name]) == pair.bad, labels[pair.name]
+
+
 def test_the_motion_rows_are_the_pipeline_s_od_either_side_of_the_correction(raw_viewer_run, denoise_run):
     for pair in raw_viewer_run.truth.pairs:
         fig = plotly_figures(raw_viewer_run.figure("rawmotion", chan=f"{_fname(pair.name)}760"))[0]
@@ -89,11 +101,33 @@ def test_the_correlation_panel_is_the_pipeline_s_two_stages(raw_viewer_run, deno
         assert set(list(dots["customdata"])[-len(rejected):]) == rejected
 
 
+def _corr(raw, pair):
+    return np.corrcoef(*raw.get_data(picks=[f"{pair} hbo", f"{pair} hbr"]))[0, 1]
+
+
+def test_the_correlation_record_leaves_the_rejected_pair_out(raw_viewer_run, denoise_run):
+    record = read_record(raw_viewer_run.nirs / "sub-01_task-tapping_desc-sqmraw_qc.json")
+    kept = [p.name for p in raw_viewer_run.truth.long_pairs if not p.bad]
+    for section, desc in (("rawhaemo_long", "uncorrected"), ("rawhaemo_post_long", "preproc")):
+        expected = np.mean([_corr(denoise_run.read(desc), p) for p in kept])
+        assert record[section]["hbo_hbr_corr_mean"] == pytest.approx(expected, abs=1e-6), section
+
+
+def test_the_table_prints_no_correlation_for_the_rejected_pair(raw_viewer_run, denoise_run):
+    with open(raw_viewer_run.table("_desc-rawchannel_qc.tsv"), encoding="utf-8") as f:
+        rows = list(csv.DictReader(f, delimiter="\t"))
+    raw = denoise_run.read("uncorrected")
+    for row in rows:
+        pair = raw_viewer_run.truth.pair(row["name"].rsplit(" ", 1)[0])
+        if pair.bad:
+            assert row["corr"] == "n/a", row["name"]
+        else:
+            assert float(row["corr"]) == pytest.approx(_corr(raw, pair.name), abs=1e-6), row["name"]
+
+
 # ---- quality panels ----
 
 def test_the_sci_panel_draws_the_record_and_the_run_s_lines(raw_viewer_run):
-    from fnirs_pipe.qc.subject.record_io import read_record
-
     record = read_record(raw_viewer_run.nirs / "sub-01_task-tapping_desc-sqmraw_qc.json")
     fig = one_figure(raw_viewer_run.figure("rawscipsp"))
     heat = next(t for t in fig["data"] if t["type"] == "heatmap" and t["name"] == "SCI")
@@ -129,8 +163,6 @@ def test_the_timeline_bars_are_the_events(raw_viewer_run):
         np.testing.assert_allclose(np.asarray(bar["x"], float), EVENT_DURATION, atol=1e-6)
 
 
-@pytest.mark.xfail(strict=True, reason="prep_raw_report's in-memory haemoglobin carries no bads, "
-                                       "so the grand mean averages rejected channels in")
 def test_the_grand_mean_averages_the_kept_long_channels_only(raw_viewer_run, denoise_run):
     _, y = xy(traces(one_figure(raw_viewer_run.figure("rawepochmean")), "HBO long")[0])
     raw = denoise_run.read("uncorrected")
