@@ -598,6 +598,7 @@ def condition_payloads(
     trial_images=None,
     save_stack=None,
     remake_hbo_hbr_corr=None,
+    sep_bands=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -729,7 +730,7 @@ def condition_payloads(
         }
         d["channels"] = {
             "pairs":  pair_cells,
-            "blocks": separation_blocks(pair_cells),
+            "blocks": separation_blocks(pair_cells, sep_bands),
             # carried over: a separation is a property of the montage, not of a condition
             "notes":  (payload.get("channels") or {}).get("notes") or [],
         }

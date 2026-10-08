@@ -600,7 +600,7 @@ def _psd_groups(
          dict(color=LONG_COLOR, width=2.5)),
         ("Short channels", np.array([c in short_set for c in ch_names]),
          dict(color=SHORT_COLOR, width=2.5)),
-        (_neither_range_title(),
+        (_neither_range_title(sep_bands),
          np.array([c not in long_set and c not in short_set for c in ch_names]),
          dict(color=UNCLASSIFIED_COLOR, width=2, dash="dash")),
     ]

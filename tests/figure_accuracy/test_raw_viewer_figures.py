@@ -7,10 +7,12 @@ import re
 import mne
 import numpy as np
 import pytest
+from mne.time_frequency import psd_array_welch
 
+from fnirs_pipe.qc.figures.common._utils import PSD_NFFT
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.subject.record_io import read_record
-from tests._fingerprint import CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
+from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy
 
@@ -151,6 +153,51 @@ def test_the_grid_prints_the_raw_channel_table(raw_viewer_run):
             assert float(value) == pytest.approx(float(table[channel]["sci_win"]), abs=1e-3), channel
         if metric == "Status":
             assert (value == "OK") == (table[channel]["is_bad"] == "False"), channel
+
+
+# ---- spectrum and carpet ----
+
+def test_the_mean_psd_is_the_welch_mean_of_each_separation_group(raw_viewer_run, denoise_run):
+    fig = one_figure(raw_viewer_run.figure("rawpsd"))
+    od = denoise_run.read("sci")
+    for label, short in (("Long channels", False), ("Short channels", True)):
+        names = [c for c in od.ch_names if raw_viewer_run.truth.pair(c.rsplit(" ", 1)[0]).short == short]
+        x, y = xy(traces(fig, f"{label} (n={len(names)})")[0])
+        data = od.get_data(picks=names)
+        psd, freqs = psd_array_welch(data, od.info["sfreq"], n_fft=min(PSD_NFFT, data.shape[1]),
+                                     verbose=False)
+        shown = freqs <= x.max() + 1e-9
+        np.testing.assert_allclose(x, freqs[shown], atol=1e-9)
+        np.testing.assert_allclose(y, psd[:, shown].mean(axis=0), rtol=1e-6)
+        above = x > 0.5
+        assert x[above][np.argmax(y[above])] == pytest.approx(CARDIAC_FREQ, abs=od.info["sfreq"] / PSD_NFFT)
+
+
+def test_the_mean_psd_shades_the_run_s_cardiac_band(raw_viewer_run):
+    fig = one_figure(raw_viewer_run.figure("rawpsd"))
+    spans = [(s["x0"], s["x1"]) for s in fig["layout"]["shapes"] if s["type"] == "rect"]
+    named = dict(zip([a["text"] for a in fig["layout"]["annotations"]], spans))
+    # prep-raw takes no respiration band, so it draws none
+    assert named == {"Mayer": (0.07, 0.13),
+                     "Cardiac": (_arg("--cardiac-l-freq"), _arg("--cardiac-h-freq"))}
+
+
+def test_the_carpet_is_the_pipeline_s_carpet(raw_viewer_run, denoise_run):
+    raw_fig = one_figure(raw_viewer_run.figure("rawcarpet"))
+    pipe_fig = one_figure(denoise_run.figure("carpet"))
+    assert [t.get("name") for t in raw_fig["data"]] == [t.get("name") for t in pipe_fig["data"]]
+    for ours, theirs in zip(raw_fig["data"], pipe_fig["data"]):
+        if ours["type"] == "heatmap":
+            assert list(ours["y"]) == list(theirs["y"])
+            pairs = ((ours["x"], theirs["x"]), (ours["z"], theirs["z"]))
+        else:
+            pairs = zip(xy(ours), xy(theirs))
+        for a, b in pairs:
+            np.testing.assert_allclose(np.asarray(a, float), np.asarray(b, float), atol=1e-9,
+                                       equal_nan=True)
+    lines = [[(s["yref"], s["y0"]) for s in fig["layout"]["shapes"] if s["type"] == "line"]
+             for fig in (raw_fig, pipe_fig)]
+    assert lines[0] == lines[1]
 
 
 # ---- events and trials ----

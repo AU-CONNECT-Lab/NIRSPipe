@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 
 from tests._fingerprint import EVENT_ONSETS, Truth
+from tests.figure_accuracy._payload import one_figure
 
 
 def xy(trace: dict) -> tuple[np.ndarray, np.ndarray]:
@@ -59,3 +62,25 @@ def evoked_peak(x, y, window: float = 15.0, baseline: float = 5.0) -> float:
         w = int(round(window * sfreq))
         trials.append(signal[i: i + w] - signal[i - b: i].mean())
     return float(np.mean(trials, axis=0).max())
+
+
+# ---- the two-level design ----
+
+def _blocks(run):
+    return {name: (onset, onset + duration, gain) for name, onset, duration, gain in run.truth.blocks}
+
+
+def _trial_panel(fig, label="HBO long"):
+    """The trace in the panel of the trials; the block's own single epoch has a panel of its own."""
+    titles = [a["text"] for a in fig["layout"]["annotations"] if "(n=" in a.get("text", "")]
+    panel = next(i for i, text in enumerate(titles) if text.startswith("trial ("))
+    return traces(fig, label)[panel]
+
+
+def _grid(path):
+    dots = one_figure(path)["data"][0]
+    cells = {}
+    for text, colour in zip(dots["text"], dots["marker"]["color"]):
+        *where, value = re.split(r" · |: ", text)
+        cells[tuple(where)] = (value, colour)
+    return cells

@@ -8,13 +8,9 @@ import pytest
 
 from tests._fingerprint import EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
-from tests.figure_accuracy._read import traces, xy
+from tests.figure_accuracy._read import _blocks, _grid, _trial_panel, traces, xy
 
 TMIN, TMAX = -5.0, 25.0
-
-
-def _blocks(run):
-    return {name: (onset, onset + duration, gain) for name, onset, duration, gain in run.truth.blocks}
 
 
 def _figure(run, desc, block, suffix="nirs", chan=None):
@@ -22,22 +18,6 @@ def _figure(run, desc, block, suffix="nirs", chan=None):
     if chan:
         return run.figures / f"sub-{run.subject}_task-{run.task}_chan-{chan}_{entities}_desc-{desc}_{suffix}.html"
     return run.figure(desc, suffix=suffix, entities=entities)
-
-
-def _trial_panel(fig, label="HBO long"):
-    """The trace in the panel of the trials; the block's own single epoch has a panel of its own."""
-    titles = [a["text"] for a in fig["layout"]["annotations"] if "(n=" in a.get("text", "")]
-    panel = next(i for i, text in enumerate(titles) if text.startswith("trial ("))
-    return traces(fig, label)[panel]
-
-
-def _grid(path):
-    dots = one_figure(path)["data"][0]
-    cells = {}
-    for text, colour in zip(dots["text"], dots["marker"]["color"]):
-        *where, value = re.split(r" · |: ", text)
-        cells[tuple(where)] = (value, colour)
-    return cells
 
 
 def test_there_is_one_page_per_block(condition_run):

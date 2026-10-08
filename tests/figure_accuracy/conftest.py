@@ -97,6 +97,15 @@ def condition_run(tmp_path_factory) -> Run:
 
 
 @pytest.fixture(scope="session")
+def raw_condition_run(tmp_path_factory) -> Run:
+    """The two-level design through fnirs-qc prep-raw, with condition pages."""
+    root = tmp_path_factory.mktemp("fingerprint_raw_blocks")
+    done = run_capturing(root, ["--participant-label", "01", "--epoch-qc", "--by-condition"], (),
+                         task="main", blocks=True, raw_viewer=True)
+    return Run(root / "out", done["truth"], task="main")
+
+
+@pytest.fixture(scope="session")
 def raw_viewer_run(tmp_path_factory) -> Run:
     """The task recording through fnirs-qc prep-raw, with motion correction and per-trial scoring."""
     root = tmp_path_factory.mktemp("fingerprint_raw")

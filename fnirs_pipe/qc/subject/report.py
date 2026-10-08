@@ -1371,7 +1371,8 @@ def _section_sqm(
         "sqm": sqm,
         "channel_rows": rows,
         "channel_cells": cells,
-        "channel_blocks": separation_blocks(cells, bands_from_record(sqm)),
+        # the bands are stamped in `raw` only, which `sqm` was not filled from on a split run
+        "channel_blocks": separation_blocks(cells, bands_from_record(sqm_all)),
         # the table groups by separation, so the block header says which side a row is on
         "channel_columns": channel_columns(("separation",)),
         "sqm_all": sqm_all,
@@ -2565,7 +2566,7 @@ def _write_condition_reports(
             "sqm": scalars,
             "channel_rows": rows,
             "channel_cells": cells,
-            "channel_blocks": separation_blocks(cells),
+            "channel_blocks": separation_blocks(cells, separation_bands(config)),
             # a condition has no whole-run SCI: that estimate has no windows to select from
             "channel_columns": channel_columns(("separation", "sci_whole")),
             "sqm_all": od_by_set.get("all") or {},
