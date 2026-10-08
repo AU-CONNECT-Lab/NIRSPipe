@@ -79,7 +79,7 @@ from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
 from fnirs_pipe.qc.common.channel_table import (
-    MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
+    CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
     registration_note, roi_overlap_note, separation_blocks, separation_notes,
 )
@@ -2579,9 +2579,7 @@ def _write_condition_reports(
             # WHOLE_RUN_ONLY_COLUMNS says which are dropped rather than left blank in all
             # three rows; low-frequency drift goes with them, measuring the span it is shown
             # rather than the recording
-            "od_split_columns": tuple(
-                (key, text) for key, text in OD_SPLIT_COLUMNS
-                if key not in WHOLE_RUN_ONLY_COLUMNS),
+            "od_split_columns": CONDITION_OD_SPLIT_COLUMNS,
             "motion_split_columns": tuple(
                 (key, text) for key, text in MOTION_SPLIT_COLUMNS
                 if key not in WHOLE_RUN_ONLY_COLUMNS),

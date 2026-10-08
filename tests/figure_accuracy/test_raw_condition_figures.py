@@ -194,3 +194,10 @@ def test_the_motion_and_carpet_views_open_on_the_condition(raw_condition_run, bl
     for path in (raw_condition_run.figure("rawmotion", chan=f"{pair.name.replace('_', '')}760"),
                  raw_condition_run.figure("rawcarpet")):
         assert _views(path)[block]["x"] == pytest.approx([t0, t1]), path.name
+
+
+@pytest.mark.parametrize("block", BLOCKS)
+def test_a_condition_page_names_its_channel_share_for_its_stretch(raw_condition_run, block):
+    split = _page(raw_condition_run, block)["sqm"]["split"]
+    labels = [column["label"] for column in split["columns"]]
+    assert "Passing in condition" in labels and "Channel retention" not in labels

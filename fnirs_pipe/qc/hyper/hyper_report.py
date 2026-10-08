@@ -118,6 +118,7 @@ def subject_metric_rows(
     sqm_data: dict[str, dict],
     subject_ids: list[str],
     sci_threshold: float,
+    condition: bool = False,
 ) -> list[dict]:
     """One entry per metric the members carry a value for, with a cell per member.
 
@@ -146,8 +147,8 @@ def subject_metric_rows(
                 cells.append({"text": MISSING_VALUE, "cls": ""})
         if any(c["text"] != MISSING_VALUE for c in cells):
             rows.append({"key": key,
-                         "label": metric_label(key),
-                         "summary": metric_summary(key),
+                         "label": metric_label(key, condition=condition),
+                         "summary": metric_summary(key, condition),
                          "key_metric": is_key_metric(key),
                          "cells": cells})
     return rows
@@ -165,6 +166,7 @@ def subject_metric_tables(
     by_set: "dict[str, dict[str, dict]]",
     subject_ids: list[str],
     sci_threshold: float,
+    condition: bool = False,
 ) -> list[dict]:
     """One quality table per channel set.
 
@@ -187,7 +189,7 @@ def subject_metric_tables(
     a caller with no split at all passes, under ``all``.
     """
     def _table(heading: str, data: dict) -> "dict | None":
-        metrics = subject_metric_rows(data, subject_ids, sci_threshold)
+        metrics = subject_metric_rows(data, subject_ids, sci_threshold, condition)
         if not metrics:
             return None
         # a quarter turn: metric-major in, column-major out. One row per member is what the
@@ -297,7 +299,7 @@ def condition_subject_metrics(
                 if view:
                     per_subject.setdefault(label, {}).setdefault(set_name, {})[sid] = view
 
-    return {label: subject_metric_tables(by_set, subject_ids, sci_threshold)
+    return {label: subject_metric_tables(by_set, subject_ids, sci_threshold, condition=True)
             for label, by_set in per_subject.items()}
 
 

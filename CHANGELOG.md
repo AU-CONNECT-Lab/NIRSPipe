@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - Condition pages mark channels rejected by the run's verdict; their header counts channels failing on that condition's stretch alone
 - The run page's per-condition grid shows In condition, pass or fail on each stretch, instead of Status
 - The subject index Conditions table heads its channel column Channels passing
+- Condition pages and the dyad's per-condition quality table call a condition's channel share Passing in condition, not Channel retention
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back

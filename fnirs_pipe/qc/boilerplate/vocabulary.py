@@ -711,7 +711,7 @@ def metric_summary(metric: str, condition: bool = False) -> str:
     Returns '' for an undescribed metric, so the report renders a bare number rather than
     an empty tooltip. ``condition`` is a condition page, whose GVTD numbers come from one file.
     """
-    text = METRIC_SUMMARY.get(metric, "")
+    text = (condition and _CONDITION_SUMMARIES.get(metric)) or METRIC_SUMMARY.get(metric, "")
     if not text:
         return ""
     stage = (_STAGE_CONDITION_MOTION if condition and metric.startswith("gvtd_")
@@ -925,7 +925,23 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
 MISSING_VALUE = "\u2014"
 
 
-def metric_label(metric: str, fallback: str | None = None) -> str:
+# A condition has no verdict of its own: its share is what passes on its stretch, so it is
+# named for that wherever a condition is shown, never as a retention.
+_CONDITION_LABELS = {
+    "channel_retention_rate": "Passing in condition",
+}
+_CONDITION_SUMMARIES = {
+    "channel_retention_rate": "Fraction of channels that pass on this condition's stretch alone, against the run's line; a channel rejected by hand or for non-finite samples fails every condition. A guide to choosing conditions that rejects nothing: the data were processed under the run's verdict. Higher is better.",
+}
+
+
+def condition_label(metric: str) -> "str | None":
+    return _CONDITION_LABELS.get(metric)
+
+
+def metric_label(metric: str, fallback: str | None = None, condition: bool = False) -> str:
+    if condition and metric in _CONDITION_LABELS:
+        return _CONDITION_LABELS[metric]
     spec = METRIC_DISPLAY.get(metric)
     if spec is not None:
         return spec[0]
@@ -1026,7 +1042,7 @@ def metric_rows(
             continue
         rows.append({
             "key":        key,
-            "label":      metric_label(key),
+            "label":      metric_label(key, condition=condition),
             "value":      format_metric(key, value),
             "cls":        metric_class(key, value),
             "tip":        metric_summary(key, condition),

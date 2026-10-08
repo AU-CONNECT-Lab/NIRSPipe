@@ -162,3 +162,11 @@ def test_a_pair_marked_bad_by_hand_is_rejected_on_the_run_page(prep_condition_ru
 def test_a_pair_marked_bad_by_hand_is_rejected_on_every_condition_page(prep_condition_run, block):
     cells = _grid(_figure(prep_condition_run, "chsummary", block, "qc"))
     _check_condition_grid(cells, prep_condition_run, block, hand=(HAND_MARKED,))
+
+
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_condition_page_names_its_channel_share_for_its_stretch(condition_run, block):
+    page = (condition_run.report.parent / f"sub-01_task-main_cond-{block}_report.html").read_text(
+        encoding="utf-8")
+    assert "Passing in condition" in page and "Channel retention" not in page
+    assert "Channel retention" in condition_run.report.read_text(encoding="utf-8")

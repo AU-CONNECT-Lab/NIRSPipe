@@ -19,6 +19,7 @@ import pandas as pd
 
 from fnirs_pipe.io.tables import write_tsv
 from fnirs_pipe.qc.boilerplate.notes import section_note
+from fnirs_pipe.qc.boilerplate.vocabulary import condition_label
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.utils import pair_of, roi_overlaps
@@ -419,6 +420,12 @@ WHOLE_RUN_ONLY_COLUMNS = frozenset({
     # columns out of. The 10 s estimate beside it is the one a condition can have
     "sci_mean",
 })
+
+# what a condition page's set table prints: the run's columns a condition can have, each
+# named for what it is on a stretch
+CONDITION_OD_SPLIT_COLUMNS = tuple((key, condition_label(key) or text)
+                                   for key, text in OD_SPLIT_COLUMNS
+                                   if key not in WHOLE_RUN_ONLY_COLUMNS)
 
 
 def _cell(key: str, scalars: dict, colour: bool) -> dict:

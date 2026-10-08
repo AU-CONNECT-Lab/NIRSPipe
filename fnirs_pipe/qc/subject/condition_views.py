@@ -642,14 +642,14 @@ def condition_payloads(
     """
     from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
     from fnirs_pipe.qc.common.channel_table import (
-        HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS,
+        CONDITION_OD_SPLIT_COLUMNS, HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS,
+        WHOLE_RUN_ONLY_COLUMNS,
         channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
     )
     from fnirs_pipe.qc.common.figure_io import _pair_fname
     from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
 
-    od_cols = tuple((k, t) for k, t in OD_SPLIT_COLUMNS
-                    if k not in WHOLE_RUN_ONLY_COLUMNS)
+    od_cols = CONDITION_OD_SPLIT_COLUMNS
     motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS
                         if k not in WHOLE_RUN_ONLY_COLUMNS)
 

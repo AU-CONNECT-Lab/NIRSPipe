@@ -550,7 +550,7 @@
   {% endif %}
   {% else %}
   <ul class="qm-list">
-    {{ qm_li('channel_retention_rate', 'Channel retention') }}
+    {{ qm_li('channel_retention_rate', metric_label('channel_retention_rate', condition=(condition_label|default('')) != '')) }}
     {{ qm_li('sci_win_mean', 'Mean SCI (%g s windows)'|format(sci_window_s)) }}
     {{ qm_li('sci_mean', 'Mean SCI (whole run)') }}
     {{ qm_li('good_frac_mean', 'Coupled windows') }}
