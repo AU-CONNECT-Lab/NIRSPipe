@@ -39,9 +39,6 @@ from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from fnirs_pipe.qc.metrics import long_short_channels
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.boilerplate.vocabulary import (
-    RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
-)
 from fnirs_pipe.qc.subject.group_writer import _scalars, build_group_raw_report
 from fnirs_pipe.qc.subject.record_io import read_record, write_record
 from fnirs_pipe.qc.subject.sqm_record import (

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import mne
 
+from fnirs_pipe.io.snirf import read_snirf
 from tests._fingerprint import DPF, Truth
 
 
@@ -46,13 +47,14 @@ class Run:
         return self.nirs / f"sub-{self.subject}_task-{self.task}_desc-{desc}_nirs.snirf"
 
     def read(self, desc: str) -> mne.io.Raw:
-        """A stage file, or ``uncorrected``: Beer-Lambert on desc-sci, which no file holds."""
+        """A stage file with its rejection marks, or ``uncorrected``: Beer-Lambert on desc-sci,
+        which no file holds. The marks live in the sidecar, so MNE's own reader drops them."""
         if desc not in self._stages:
             if desc == "uncorrected":
                 from mne.preprocessing.nirs import beer_lambert_law
                 raw = beer_lambert_law(self.read("sci").copy(), ppf=list(DPF))
             else:
-                raw = mne.io.read_raw_snirf(self.stage(desc), verbose="error").load_data()
+                raw = read_snirf(self.stage(desc), verbose="error")
             self._stages[desc] = raw
         return self._stages[desc]
 
