@@ -33,6 +33,22 @@ def test_the_zoom_rows_are_the_od_either_side_of_the_correction(censored, row, d
     np.testing.assert_allclose(raw.get_data(), expected, rtol=1e-6)
 
 
+def _jump(raw, pair, when):
+    """The level change across ``when`` on the pair's 760 row, in units of that row's own spread."""
+    y = raw.get_data(picks=[f"{pair} 760"])[0]
+    t = raw.times
+    before, after = y[(t > when - 6) & (t < when - 1)], y[(t > when + 1) & (t < when + 6)]
+    return abs(np.median(after) - np.median(before)) / np.std(y)
+
+
+def test_the_zoom_s_after_row_carries_less_of_the_planted_step_than_its_before_row(censored):
+    pair, when = censored.truth.step
+    zoom = _zoom(censored)
+    # an uncorrected row, whatever its units, keeps the whole step relative to its own spread
+    assert _jump(zoom["raw_before"], pair, when) > 1.0
+    assert _jump(zoom["raw_after"], pair, when) < 0.5 * _jump(zoom["raw_before"], pair, when)
+
+
 def test_the_brain_views_grade_by_the_windowed_sci(denoise_run):
     _, kwargs = denoise_run.captured["quality_brain_views"]
     raw = denoise_run.record()["per_channel"]["raw"]

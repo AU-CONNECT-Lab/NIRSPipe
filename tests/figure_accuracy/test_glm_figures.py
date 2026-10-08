@@ -33,6 +33,11 @@ def test_the_activation_draws_the_conditions_and_nothing_else(glm_run):
     assert list(glm_run.captured["activation_condition_figures"][0][1]) == [glm_run.task]
 
 
+def test_every_activation_file_written_is_a_condition_s(glm_run):
+    written = sorted(p.name for p in glm_run.figures.glob("*desc-glmactivation*"))
+    assert written and all(f"_cond-{glm_run.task}_" in name for name in written), written
+
+
 def test_the_task_regressor_rises_after_each_event_and_not_before(glm_run):
     design = glm_run.captured["design_matrix_static_figure"][0][0]
     t = design.index.to_numpy(float)

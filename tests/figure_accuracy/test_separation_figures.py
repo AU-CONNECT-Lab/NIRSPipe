@@ -56,6 +56,23 @@ def test_the_mean_psd_groups_channels_by_the_run_s_bands(raw_sep):
     assert legends == [f"Long channels (n={n_long})", f"{_neither_range_title(BANDS)} (n={n_short})"]
 
 
+def test_the_mean_psd_groups_channels_as_the_channel_table_does(raw_sep):
+    run_page = next(p for p in _raw_pages(raw_sep) if "_cond-" not in p.name)
+    # one table row per pair, one PSD channel per wavelength
+    table = {title: 2 * len(rows) for title, rows in _raw_blocks(run_page)}
+    psd = one_figure(raw_sep.figure("rawpsd"))
+    legends = [re.fullmatch(r"(.*) \(n=(\d+)\)", t["name"]).groups()
+               for t in psd["data"] if t.get("name")]
+    assert {title: int(n) for title, n in legends} == table
+
+
+def test_the_run_page_table_and_its_separation_note_name_the_same_gap(prep_condition_run):
+    run_page = prep_condition_run.report.read_text(encoding="utf-8")
+    in_table = re.findall(r'class="ch-group">Neither range \(([^)]*)\)', run_page)
+    in_note = re.findall(r"the long and short ranges leave out \(([^)]*)\)", run_page)
+    assert len(in_table) == 1 and in_note == in_table, (in_table, in_note)
+
+
 @pytest.mark.parametrize("which", ["raw viewer", "pipeline"])
 def test_every_channel_table_names_the_run_s_gap(raw_sep, prep_condition_run, which):
     wanted = _neither_range_title(BANDS)

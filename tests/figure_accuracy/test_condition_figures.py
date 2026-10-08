@@ -6,7 +6,7 @@ import mne
 import numpy as np
 import pytest
 
-from tests._fingerprint import EVENT_ONSETS, RESPONSE_AMP
+from tests._fingerprint import CLI_ARGS, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
@@ -87,6 +87,16 @@ def test_the_sci_panel_holds_the_condition_s_windows_and_only_those(condition_ru
                                rtol=1e-5, equal_nan=True)
 
 
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_the_condition_psp_row_is_lined_and_coloured_at_the_run_s_threshold(condition_run, block):
+    psp = float(CLI_ARGS[CLI_ARGS.index("--psp-threshold") + 1])
+    fig = one_figure(_figure(condition_run, "scipsp", block))
+    heat = next(t for t in fig["data"] if t["type"] == "heatmap" and t["name"] == "PSP")
+    assert (heat["zmin"], heat["zmax"]) == pytest.approx((0.0, 2 * psp))
+    line = next(s["x0"] for s in fig["layout"]["shapes"] if s["type"] == "line" and s["xref"] == "x4")
+    assert line == pytest.approx(psp)
+
+
 @pytest.fixture(scope="module")
 def evoked_by_block(condition_run):
     raw = condition_run.read("filtered")
@@ -149,6 +159,22 @@ def test_the_correlation_dots_are_measured_on_the_condition_s_stretch(condition_
     for pair, r in zip(dots["customdata"], dots["y"]):
         hbo, hbr = raw.get_data(picks=[f"{pair} hbo", f"{pair} hbr"])
         assert r == pytest.approx(np.corrcoef(hbo, hbr)[0, 1], abs=0.02), (block, pair)
+
+
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_each_group_header_stands_over_its_own_pairs(condition_run, block):
+    fig = one_figure(_figure(condition_run, "hbohbrcorr", block))
+    dots = next(t for t in fig["data"] if t.get("name") == "before denoising")
+    at = dict(zip(dots["customdata"], np.asarray(dots["x"], float)))
+    headers = {re.sub(r"</?b>", "", a["text"]): a["x"] for a in fig["layout"]["annotations"]
+               if a.get("text", "").startswith("<b>")}
+    truth = condition_run.truth
+    members = {"rejected channels": [p.name for p in truth.pairs if p.bad],
+               "long channels": [p.name for p in truth.long_pairs if not p.bad],
+               "short channels": [p.name for p in truth.pairs if p.short and not p.bad]}
+    assert set(headers) == set(members)
+    for header, pairs in members.items():
+        assert headers[header] == pytest.approx(np.mean([at[p] for p in pairs])), (block, header)
 
 
 def test_a_pair_marked_bad_by_hand_is_rejected_on_the_run_page(prep_condition_run):

@@ -159,6 +159,16 @@ def test_a_short_channel_shades_the_short_set_s_corrected_spans(request, run_nam
         np.testing.assert_allclose(spans, expected, atol=0.05, err_msg=pair)
 
 
+@pytest.mark.parametrize("run_name, desc, record", MOTION_VIEWS)
+def test_only_the_long_channels_shade_the_long_pairs_artefacts(request, run_name, desc, record):
+    run = request.getfixturevalue(run_name)
+    for pair in run.truth.pairs:
+        spans = _shaded(plotly_figures(run.figure(desc, chan=f"{_fname(pair.name)}760"))[0])
+        for _, when in (run.truth.spike, run.truth.step):
+            shaded = any(onset - 1 <= when <= onset + duration + 1 for onset, duration in spans)
+            assert shaded == (not pair.short), (pair.name, when)
+
+
 # ---- the GVTD rows and their thresholds ----
 
 def _threshold_lines(fig):
@@ -190,6 +200,24 @@ def test_the_gvtd_row_is_its_set_s_gvtd_in_the_motion_band(denoise_run):
         x, y = xy(gvtd)
         np.testing.assert_allclose(x, od.times[1:], atol=1e-6)
         np.testing.assert_allclose(y, expected, rtol=1e-6, atol=1e-12)
+
+
+def _strings(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, dict):
+        for value in node.values():
+            yield from _strings(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _strings(value)
+
+
+@pytest.mark.parametrize("run_name, desc", [("denoise_run", "carpet"), ("raw_viewer_run", "rawcarpet")])
+def test_every_band_the_carpet_names_is_the_one_its_gvtd_was_filtered_in(request, run_name, desc):
+    fig = plotly_figures(request.getfixturevalue(run_name).figure(desc))[0]
+    named = {band for text in _strings(fig) for band in re.findall(r"[\d.]+–[\d.]+ Hz", text)}
+    assert named == {f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"}
 
 
 def test_the_motion_figure_names_the_band_it_filtered_in(denoise_run):
