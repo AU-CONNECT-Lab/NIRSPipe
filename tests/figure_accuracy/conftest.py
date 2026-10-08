@@ -13,14 +13,16 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
     """Run fnirs-pipe, or fnirs-qc prep-raw, on a fresh fingerprint dataset, recording what each
     named figure builder was handed."""
     import fnirs_pipe.qc.figures as figures
+    import fnirs_pipe.qc.figures.common.provenance_figure as provenance
     from fnirs_pipe.cli import qc as qc_cli
     from fnirs_pipe.cli import run as run_cli
     from fnirs_pipe.qc.subject import report
 
     captured: dict = {}
-    # the report imports most builders by name and a few at call time from the package
+    # the report imports most builders by name and a few at call time from the package; the
+    # provenance diagram is drawn inside its own module
     patched = [(module, name, getattr(module, name)) for name in spied
-               for module in (report, figures) if hasattr(module, name)]
+               for module in (report, figures, provenance) if hasattr(module, name)]
 
     def spy(name, original):
         def wrapper(*a, **kw):
@@ -63,7 +65,7 @@ def denoise_run(tmp_path_factory) -> Run:
     root = tmp_path_factory.mktemp("fingerprint")
     done = run_capturing(root, ["--mode", "denoise", "--short-channel", "mean",
                                 "--roi-mapping", _roi_file(root)],
-                         ("quality_brain_views",))
+                         ("quality_brain_views", "provenance_figure", "_build_mne_report"))
     return Run(root / "out", done["truth"], captured=done["captured"])
 
 
