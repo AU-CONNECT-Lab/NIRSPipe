@@ -11,9 +11,27 @@ in the derivatives tree without colliding on filename.
 
 from __future__ import annotations
 
+import numpy as np
+
+from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, _window_samples
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.trial_qc")
+
+# the heatmap's CV, SNR and PSP rows name this window, so a trial is scored only if it holds one
+MIN_TRIAL_S = max(CV_WINDOW_S, PSP_WINDOW_S)
+
+
+def trial_fits(sfreq: float, t0: float, t1: float) -> bool:
+    """Whether the crop ``[t0, t1]`` holds one whole :data:`MIN_TRIAL_S` window.
+
+    Counted the way MNE crops, to the nearest sample at each end::
+
+        trial_fits(10.0, 30.0, 40.0)        ->  True   (101 samples, 100 needed)
+        trial_fits(7.8125, 33.408, 34.408)  ->  False  (9 samples, 79 needed)
+    """
+    n = int(np.round(t1 * sfreq)) - int(np.round(t0 * sfreq)) + 1
+    return n >= _window_samples(MIN_TRIAL_S, sfreq)
 
 
 def trial_windows(
@@ -71,17 +89,19 @@ def trial_sqm(raw, t0: float, t1: float,
     so that a trial's CV, SNR and spike count sit on the same scale as the recording-level
     numbers in the same report.
 
-    No sliding-window series is attached: a window of a few seconds has no room for the 10 s
-    grid the recording-level series uses. For the same reason a trial shorter than two
-    screening windows gets no coupled-window share, and since that share is the only
-    criterion that screens, such a trial's status row screens nothing rather than rejecting
-    everything. A block design is long enough; an event-related one is not.
+    A trial shorter than one :data:`MIN_TRIAL_S` window is not scored and returns ``{}``,
+    drawn blank: its CV and SNR would be the whole crop's under a windowed label, and its SCI
+    a correlation over a heartbeat or two. No sliding-window series is attached, and a trial
+    shorter than two screening windows gets no coupled-window share, so its status row
+    screens nothing rather than rejecting everything.
     """
     from fnirs_pipe.qc.metrics import (
         compute_raw_sqm, compute_sci_scores, resolve_cutoffs, screen_channels,
         screening_scores,
     )
 
+    if not trial_fits(float(raw.info["sfreq"]), t0, t1):
+        return {}
     seg = raw.copy().crop(tmin=t0, tmax=t1)
     sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
@@ -112,7 +132,8 @@ def score_trials(
 
     Returns two empty lists when no event describes a window that lies inside the recording,
     which is what a block design marking only condition boundaries looks like. The caller
-    draws nothing in that case rather than an empty figure.
+    draws nothing in that case rather than an empty figure. A window too short to score
+    (:func:`trial_fits`) keeps its label and comes back as ``{}``.
     """
     windows = trial_windows(markers, tmin, tmax, float(raw.times[-1]))
     labels = [w[0] for w in windows]

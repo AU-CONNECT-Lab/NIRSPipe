@@ -53,6 +53,10 @@ NOTES = {
         "Grand mean, evoked channel map, trial images and per-trial quality were skipped "
         "because {reason}. The per-channel, carpet and layout figures show the continuous "
         "signal instead.",
+    "caveat.short_trials":
+        "{n} of {total} trial windows are shorter than {window:g} s, the window the per-trial "
+        "panel's CV, SNR and PSP rows are measured in, so the panel leaves them unscored. Pass "
+        "--epoch-tmin / --epoch-tmax to score a fixed window from each onset.",
     "caveat.block_design_trials":
         "no scored trial falls inside this window: the annotation that defines it is not "
         "one, and events with no duration are scored only with --epoch-tmin/--epoch-tmax",

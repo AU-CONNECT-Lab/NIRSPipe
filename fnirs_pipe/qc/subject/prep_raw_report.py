@@ -40,7 +40,7 @@ from fnirs_pipe.qc.metrics._helpers import registration_offset, separation_orpha
 from fnirs_pipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
+from fnirs_pipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.boilerplate import collect_software_versions
 from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
@@ -650,9 +650,14 @@ def _process_run(
                                         min_good_frac=cutoffs["good_frac"])
             # the onset beside each scored trial, so a condition page takes its own rows out
             # of this table rather than scoring the same windows a second time
+            windows = trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1]))
             trial_rows = [(onset, lab, sqm) for (_, _, _, onset), lab, sqm in zip(
-                trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1])),
-                labels, sqms)]
+                windows, labels, sqms)]
+            sfreq = float(raw.info["sfreq"])
+            short = sum(not trial_fits(sfreq, t0, t1) for _, t0, t1, _ in windows)
+            if short:
+                note(notes, label, section_note("caveat.short_trials", n=short,
+                                                total=len(windows), window=MIN_TRIAL_S))
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = fig_name("trialqc", suffix="qc")

@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - The run page's per-condition grid shows In condition, pass or fail on each stretch, instead of Status
 - The subject index Conditions table heads its channel column Channels passing
 - Condition pages and the dyad's per-condition quality table call a condition's channel share Passing in condition, not Channel retention
+- Per-trial quality leaves trial windows shorter than 10 s unscored, and a run note counts them
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back

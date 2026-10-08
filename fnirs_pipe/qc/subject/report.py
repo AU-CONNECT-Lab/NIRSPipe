@@ -132,7 +132,7 @@ from fnirs_pipe.qc.common.report_shell import (
 )
 from fnirs_pipe.qc.subject.record_io import read_record
 from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
-from fnirs_pipe.qc.subject.trial_qc import score_trials, trial_windows
+from fnirs_pipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
@@ -950,6 +950,7 @@ def _section_trial_qc(
     errors: list,
     figures_dir: Path,
     fig_name,
+    notes: list,
 ) -> dict:
     """Each trial window scored on its own, so one bad trial is visible before averaging.
 
@@ -984,6 +985,11 @@ def _section_trial_qc(
         # the onset beside each scored trial, so a condition page can take its own rows out
         # of this table rather than scoring the same windows a second time
         windows = trial_windows(markers, tmin, tmax, float(raw_intensity.times[-1]))
+        sfreq = float(raw_intensity.info["sfreq"])
+        short = sum(not trial_fits(sfreq, t0, t1) for _, t0, t1, _ in windows)
+        if short:
+            _note(notes, subject, section_note("caveat.short_trials", n=short,
+                                               total=len(windows), window=MIN_TRIAL_S))
         rows = [(onset, label, sqm)
                 for (_, _, _, onset), label, sqm in zip(windows, labels, sqms)]
         fig = trial_quality_heatmap(labels, sqms)
@@ -1970,7 +1976,7 @@ def build_subject_report(
                                                     epoch_tmax=epoch_tmax,
                                                     sep_bands=sep_bands)
         trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
-                                              figures_dir, fig_name)
+                                              figures_dir, fig_name, notes)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
                                      figures_dir, fig_name, segments=segments)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fig_name,
