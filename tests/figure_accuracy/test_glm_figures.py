@@ -23,6 +23,13 @@ def test_both_design_figures_draw_the_conditions_and_nothing_else(glm_run, name)
     assert _conditions(glm_run, name) == [glm_run.task]
 
 
+def test_the_heatmap_draws_the_whole_design_written_to_disk(glm_run):
+    drawn = glm_run.captured["design_matrix_heatmap"][0][0]
+    on_disk = pd.read_csv(glm_run.table("_design.tsv"), sep="\t")
+    assert list(drawn.columns) == list(on_disk.columns)
+    np.testing.assert_allclose(drawn.to_numpy(float), on_disk.to_numpy(float), rtol=1e-5, atol=1e-9)
+
+
 def test_the_activation_draws_the_conditions_and_nothing_else(glm_run):
     assert list(glm_run.captured["activation_condition_figures"][0][1]) == [glm_run.task]
 

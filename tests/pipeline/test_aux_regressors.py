@@ -199,6 +199,18 @@ def test_writing_then_reading_the_table_returns_the_samples(tmp_path):
     assert find_aux_table(tmp_path / "sub-01_task-hold_desc-preproc_nirs.snirf") == out
 
 
+@pytest.mark.xfail(strict=True, reason="the time column is written to six significant digits, "
+                                       "0.01 s past 1000 s, about one sample period here")
+def test_the_table_keeps_each_timestamp_past_a_thousand_seconds(tmp_path):
+    n = int(1100 * AUX_FS)
+    source = _snirf_with_aux(tmp_path, {"ACC_X": np.zeros(n)})
+    out = aux_table_path(tmp_path / "sub-01_task-hold_desc-preproc_nirs.snirf")
+    write_aux_table(source, out)
+    stamps = read_aux_table(out)[TIME_COLUMN].to_numpy()
+    # a derivative such as the accelerometer's jerk divides by these steps
+    assert np.abs(stamps - np.arange(n) / AUX_FS).max() < 0.01 / AUX_FS
+
+
 def test_a_recording_with_no_aux_writes_no_table(tmp_path):
     source = tmp_path / "sub-01_task-hold_nirs.snirf"
     write_snirf(_haemo(20.0), source)
