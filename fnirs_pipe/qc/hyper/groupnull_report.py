@@ -126,6 +126,7 @@ def write_groupnull_report(output_dir: Path, task: str) -> "Path | None":
                     nav_meta=[("task", task), ("sections", len(sections))]),
         **footer_vars(versions=versions, errors=errors, notes=notes),
         sections=sections,
+        nav_sections=[(s["anchor"], s["title"]) for s in sections],
         table_columns=_TABLE_COLUMNS,
         alpha=ALPHA,
     )

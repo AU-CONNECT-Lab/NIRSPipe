@@ -2,6 +2,10 @@
 {# The cohort test page fnirs-hyper-groupnull writes: one section per statistic, null and
    chromophore found for the task. Inference lives here, not on the cohort QC page. #}
 
+{% set nav_modules = [nav_bar(nav_sections, rated=false, summary="#Summary",
+   closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
+{% set nav_chip = "cohort" %}
+
 {% block css %}
 .plot-frame { width: 100%; border: none; display: block; }
 table.groupnull-table { border-collapse: collapse; font-size: 0.8rem; margin-top: 0.6rem;
