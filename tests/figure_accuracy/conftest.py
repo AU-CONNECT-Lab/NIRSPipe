@@ -189,3 +189,66 @@ def raw_viewer_run(tmp_path_factory) -> Run:
     root = tmp_path_factory.mktemp("fingerprint_raw")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc"], (), raw_viewer=True)
     return Run(root / "out", done["truth"])
+
+
+@pytest.fixture(scope="session")
+def dyad_variants(groups):
+    """G01 again through the flags the main run leaves at their defaults, one tree each, off the
+    same derivatives; and the cohort-hyper page over a copy of the tree with one dyad's block
+    missing from its usable table."""
+    import shutil
+
+    import pandas as pd
+
+    from tests._dyad_fingerprint import write_roi_map
+    from tests.figure_accuracy._dyad import Groups
+    from fnirs_pipe.cli import hyper as hyper_cli
+    from fnirs_pipe.cli import qc as qc_cli
+    from fnirs_pipe.qc.hyper import hyper_report
+
+    roi = str(write_roi_map(groups.root))
+    pairs = str(groups.root / "bids_dyad_pairs.csv")
+    out: dict = {}
+
+    def _post(name, *flags):
+        calls: dict = {}
+        original = hyper_report.build_wtc_channel
+
+        def wrapper(*a, **kw):
+            got = original(*a, **kw)
+            calls.setdefault("build_wtc_channel", []).append((a, kw, got))
+            return got
+
+        hyper_report.build_wtc_channel = wrapper
+        tree = groups.root / f"hyper_{name}"
+        try:
+            hyper_cli.main([str(groups.deriv), str(tree), "group", "--pairs-csv", pairs,
+                            "--group-id", "G01", "--roi-mapping", roi, *DYAD_HYPER_ARGS, *flags])
+            hyper_cli.main_index([str(tree), "group"])
+        finally:
+            hyper_report.build_wtc_channel = original
+        out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth, calls=calls)
+
+    def _raw(name, *flags):
+        tree = groups.root / f"hyper_{name}"
+        qc_cli.main(["hyper-raw", str(groups.bids), str(tree), "group", "--pairs-csv", pairs,
+                     "--group-id", "G01", "--derivatives-dir", str(groups.deriv),
+                     "--skip-bids-validation", *DYAD_RAW_ARGS, *flags])
+        out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth)
+
+    _post("condtransform", "--wtc-cond-transform")
+    _post("phasenull", "--wtc-phase-null", "10", "--wtc-seed", "0")
+    _post("phasenull_homologous", "--wtc-phase-null", "10", "--wtc-seed", "0",
+          "--no-wtc-phase-null-cross")
+    _post("uncrossed", "--no-channel-cross")
+    _raw("tstart", "--tstart", "20", "--tend", "380")
+    _raw("normalize", "--normalize")
+
+    gap = groups.root / "hyper_cohortgap"
+    shutil.copytree(groups.hyper, gap, ignore=shutil.ignore_patterns("figures", "*.html"))
+    usable = gap / "group-G01" / "nirs" / "group-G01_task-main_desc-usable_qc.tsv"
+    table = pd.read_csv(usable, sep="\t")
+    table[table["condition"] != "cb"].to_csv(usable, sep="\t", index=False)
+    qc_cli.main(["cohort-hyper", str(gap)])
+    out["cohortgap"] = Groups(groups.root, groups.bids, groups.deriv, gap, groups.truth)
+    return out

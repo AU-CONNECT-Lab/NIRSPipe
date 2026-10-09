@@ -246,6 +246,23 @@ def test_the_roi_matrix_is_the_roi_table(groups, group, scope):
                     assert drawn == pytest.approx(want, abs=5e-4), (path.name, chroma, key)
 
 
+def test_a_pairing_page_s_roi_numbers_are_that_pairing_s_roi_table(groups):
+    """The numbers table is sliced to the page's pairing; read unsliced, a triad's ROI rows
+    would carry whichever pairing was written last."""
+    for a, b in _pairings(groups, "G02"):
+        rows = table_under(groups.page("G02", pair=(a, b)), "ROI pairs")
+        head = rows[1]
+        recorded = _roi_cells(groups, "G02", a, b, "hbo", "")
+        checked = 0
+        for r in (r for r in rows[2:] if len(r) > 2):
+            want = recorded.get((r[0], r[1]), np.nan)
+            text = r[2 + head.index("HbO WTC")]
+            if np.isfinite(want):
+                assert float(text) == pytest.approx(want, abs=5e-4), (a, b, r[:2])
+                checked += 1
+        assert checked, (a, b)
+
+
 def test_the_roi_matrix_puts_each_whole_run_coupling_in_its_regions(groups):
     from tests._dyad_fingerprint import ROI_MAP
     region = {ch: roi for roi, chans in ROI_MAP.items() for ch in chans}
