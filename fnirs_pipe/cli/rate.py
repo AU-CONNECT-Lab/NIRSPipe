@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fnirs_pipe import __version__
 
-from fnirs_pipe.io.derivatives import subject_labels
+from fnirs_pipe.io.derivatives import group_label, subject_labels
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.cli import _shared
 
@@ -58,11 +58,7 @@ def cmd_hyper(
     from fnirs_pipe.pipeline.hyper import parse_group_csv
     from fnirs_pipe.qc.rating.app import HyperRatingApp
 
-    name_parts = [f"group-{group_id}"]
-    if session_label:
-        name_parts.append(f"ses-{session_label}")
-    name_parts.append(f"task-{task_label}")
-    fname = report_name("_".join(name_parts), desc="raw")
+    fname = report_name(group_label(group_id, task_label, session_label), desc="raw")
     html_path = output_dir / f"group-{group_id}" / fname
     if not html_path.exists() and (output_dir / fname).exists():
         html_path = output_dir / fname      # a tree written before the group folder existed
@@ -71,7 +67,9 @@ def cmd_hyper(
         raise SystemExit(1)
 
     groups = parse_group_csv(pairs_csv)
-    members = groups.get((group_id, task_label))
+    # a pairs table without sessions keys every group under None, whatever the page's name
+    members = (groups.get((group_id, task_label, session_label))
+               or groups.get((group_id, task_label, None)))
     if not members:
         print(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", file=sys.stderr)
         raise SystemExit(1)

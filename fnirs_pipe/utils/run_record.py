@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from fnirs_pipe.io.derivatives import group_label
 from fnirs_pipe.utils import unwrap_enum as _unwrap
 from fnirs_pipe import __version__
 
@@ -187,10 +188,11 @@ def write_group_run_record(
     output_dir: Path,
     group_dir: Path,
     members: list[str] | None = None,
+    session: str | None = None,
 ) -> Path:
     """Write a TOML run record for one hyperscanning group.
 
-    Output: group_dir/logs/group-{group_id}_task-{task}.toml, the mirror of a subject's
+    Output: group_dir/logs/group-{group_id}[_ses-{session}]_task-{task}.toml, the mirror of a subject's
     logs/sub-{id}.toml.
 
     Sections:
@@ -209,6 +211,7 @@ def write_group_run_record(
         "output_dir": _fwd(output_dir),
         "log_dir": _fwd(group_dir / "logs"),
         "group_id": group_id,
+        **({"session_label": session} if session else {}),
         "task_label": task,
         "participant_label": list(members or []),
     }
@@ -218,7 +221,7 @@ def write_group_run_record(
              for k, v in args.items()
              if k not in skip and not isinstance(v, dict)}
 
-    out = group_dir / "logs" / f"group-{group_id}_task-{task}.toml"
+    out = group_dir / "logs" / f"{group_label(group_id, task, session)}.toml"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join([
         _section("environment", _environment()),

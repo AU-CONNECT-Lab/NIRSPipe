@@ -61,14 +61,14 @@ def _kind_of(path: Path) -> "tuple | None":
         return None
     if not entities.get("group") or not entities.get("task"):
         return None
-    dropped = {"group", "task", "suffix", "extension", "datatype", "subject"}
+    dropped = {"group", "session", "task", "suffix", "extension", "datatype", "subject"}
     return tuple(sorted((k, str(v)) for k, v in entities.items() if k not in dropped))
 
 
 def _merged_path(output_dir: Path, path: Path) -> Path:
     """Where one per-dyad table's merge lands: its own name with group and task taken out."""
     entities = {k: v for k, v in parse_path(path.name).items()
-                if k not in ("group", "task", "suffix", "extension", "datatype")}
+                if k not in ("group", "session", "task", "suffix", "extension", "datatype")}
     return derivative_path(output_dir, "relmat", ".tsv", **entities)
 
 
@@ -158,7 +158,7 @@ def _refuse_ragged_matrices(frames: dict[str, pd.DataFrame]) -> None:
     # `group_id` and `task` are already on the front by now, so the index column is the
     # first one that is neither
     wide = {name: df for name, df in frames.items()
-            if next((c for c in df.columns if c not in ("group_id", "task")), None)
+            if next((c for c in df.columns if c not in ("group_id", "session", "task")), None)
             in _MATRIX_INDEX}
     if len(wide) < 2:
         return
@@ -228,6 +228,9 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
     """
     frames: dict[str, pd.DataFrame] = {}
     params: dict[str, dict] = {}
+    # a column only where some group was recorded per session, so a tree without sessions
+    # merges exactly as before
+    sessions = any(parse_path(p.name).get("session") for p in sources)
     for tsv_path in sources:
         entities = parse_path(tsv_path.name)
         group_id, task = entities.get("group"), entities.get("task")
@@ -239,6 +242,8 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
         if df.empty:
             continue
         df.insert(0, "task", task)
+        if sessions:
+            df.insert(0, "session", entities.get("session"))
         df.insert(0, "group_id", group_id)
         frames[tsv_path.name] = df
         params[tsv_path.name] = _band_params(tsv_path)
@@ -253,7 +258,7 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
     _warn_mixed_chromophores(frames)
 
     merged = pd.concat(frames.values(), ignore_index=True)
-    sort_cols = [c for c in ("group_id", "task", "chromophore", "sub1", "sub2",
+    sort_cols = [c for c in ("group_id", "session", "task", "chromophore", "sub1", "sub2",
                              "label", "label2")
                  if c in merged.columns]
     return merged.sort_values(sort_cols, ignore_index=True)

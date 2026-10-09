@@ -41,6 +41,7 @@ tr.whole td.num { font-weight: 600; }
     <tr>
       <th>Window</th>
       {% if has_pairs %}<th>Pair</th>{% endif %}
+      {% if has_sessions %}<th>Session</th>{% endif %}
       <th>Task</th>
       <th>Span</th>
       {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th><th>WTC {{ chroma_labels[c] }} crossed</th>{% endfor %}
@@ -67,6 +68,7 @@ tr.whole td.num { font-weight: 600; }
         {% endif %}
       </td>
       {% if has_pairs %}<td>{{ row.pair or "" }}</td>{% endif %}
+      {% if has_sessions %}<td>{{ row.session or "" }}</td>{% endif %}
       <td>{{ row.task }}</td>
       <td class="num">{% if row.window %}{{ row.window }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
       {% for c in chroma %}

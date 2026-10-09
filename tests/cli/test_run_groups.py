@@ -9,11 +9,11 @@ from fnirs_pipe.exceptions import StageError
 
 
 def test_a_stage_error_is_reported_as_its_message(capsys, caplog):
-    def process(gid, task, members):
+    def process(gid, task, ses, members):
         raise StageError("desc-od holds optical density, not haemoglobin concentration")
 
     with caplog.at_level(logging.ERROR), pytest.raises(SystemExit) as exc:
-        _run_groups({("G01", "main"): []}, process)
+        _run_groups({("G01", "main", None): []}, process)
 
     assert exc.value.code == 1
     err = capsys.readouterr().err
@@ -25,12 +25,12 @@ def test_a_stage_error_is_reported_as_its_message(capsys, caplog):
 def test_the_other_groups_still_run(capsys):
     seen = []
 
-    def process(gid, task, members):
+    def process(gid, task, ses, members):
         seen.append(gid)
         if gid == "G01":
             raise StageError("no real WTC table to rank against")
 
     with pytest.raises(SystemExit):
-        _run_groups({("G01", "main"): [], ("G02", "main"): []}, process)
+        _run_groups({("G01", "main", None): [], ("G02", "main", None): []}, process)
     assert seen == ["G01", "G02"]
     assert "1 succeeded, 1 failed" in capsys.readouterr().out

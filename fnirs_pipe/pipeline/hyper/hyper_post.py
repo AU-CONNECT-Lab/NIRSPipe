@@ -204,6 +204,7 @@ def run_hyper_post(
     errors: list | None = None,
     notes: list | None = None,
     scope: str = "",
+    session: "str | None" = None,
 ) -> HyperPostResult:
     """Run the coherence and the correlation for one dyad, and write every table they make.
 
@@ -276,7 +277,7 @@ def run_hyper_post(
         one writer that needs it in a name, and only because its output sits beside this one.
         """
         tsv_path = group_output_path(output_dir, group_id, {"task": task, **entities},
-                                     "relmat", ".tsv")
+                                     "relmat", ".tsv", session=session)
         write_tsv(df, tsv_path)
         _hyper_sidecar(tsv_path, step,
                        paths_from(aligned_raws.values()),
@@ -358,7 +359,7 @@ def run_hyper_post(
         from fnirs_pipe.pipeline.hyper.wtc_store import save_wtc
         npz_path = group_output_path(output_dir, group_id,
                                      {"task": task, "chromophore": ch_type,
-                                      "statistic": "wtc"}, "relmat", ".npz")
+                                      "statistic": "wtc"}, "relmat", ".npz", session=session)
         with guard(f"Saving WTC maps ({ch_type})", errors, scope):
             save_wtc(result, npz_path)
             # what `fnirs-hyper band` carries onto the tables it re-averages from this
@@ -371,7 +372,7 @@ def run_hyper_post(
                                  {"task": task, "chromophore": ch_type,
                                   **({"condition": "all"} if nulldist == "pair" else {}),
                                   "nulldist": nulldist, "statistic": "wtc", "desc": "level"},
-                                 "relmat", ".npz")
+                                 "relmat", ".npz", session=session)
 
     def _usable_level(path: Path, what: str) -> bool:
         """Whether a level on disk was drawn on these recordings with these settings."""
@@ -774,7 +775,7 @@ def run_hyper_post(
         from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
         path = group_output_path(output_dir, group_id,
                                  {"task": task, "condition": "all", "nulldist": "pair",
-                                  "statistic": "isc"}, "relmat", ".tsv")
+                                  "statistic": "isc"}, "relmat", ".tsv", session=session)
         expected = {**wtc_grid_params(aligned_raws), **align_info,
                     "isc_whiten_max_order": isc_whiten, "isc_max_lag_s": isc_max_lag_s,
                     "isc_band_hz": list(isc_band) if isc_band else None}
@@ -841,7 +842,7 @@ def run_hyper_post(
                       "condition": _pair_fname(label) if label else None,
                       "statistic": "isc"}
             write_isc_matrix(
-                group_output_path(output_dir, group_id, common, "relmat", ".tsv"),
+                group_output_path(output_dir, group_id, common, "relmat", ".tsv", session=session),
                 isc_mat, isc_ch_names, ch_type, sources, pair_ids, align=align_info,
                 **_isc_params(),
             )
@@ -854,7 +855,7 @@ def run_hyper_post(
                         group_output_path(
                             output_dir, group_id,
                             {**common, **roi_entities, "aggregation": "roi"},
-                            "relmat", ".tsv"),
+                            "relmat", ".tsv", session=session),
                         roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
                         step="hyper_isc_roichan", index_label="roi",
                     )
@@ -882,7 +883,7 @@ def run_hyper_post(
         with guard("ISC pair table", errors, scope):
             tsv_path = group_output_path(output_dir, group_id,
                                          {"task": task, "statistic": "isc"},
-                                         "relmat", ".tsv")
+                                         "relmat", ".tsv", session=session)
             write_tsv(pd.concat(isc_pair_frames, ignore_index=True), tsv_path)
             _hyper_sidecar(
                 tsv_path, "hyper_isc_pairs",
@@ -904,7 +905,7 @@ def run_hyper_post(
             path = group_output_path(output_dir, group_id,
                                      {"task": task, "condition": "all", "nulldist": "phase",
                                       "statistic": "isc", "desc": "draws"},
-                                     "relmat", ".tsv")
+                                     "relmat", ".tsv", session=session)
             write_tsv(draws, path)
             _hyper_sidecar(
                 path, "hyper_isc_bycondition_phasenull_draws",

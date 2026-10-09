@@ -94,7 +94,8 @@ def _provenance_elements(output_dir: str | None) -> list | None:
         from fnirs_pipe.qc.common.provenance import scan
 
         root = Path(output_dir)
-        for nirs_dir in [*sorted(root.glob("sub-*/nirs")), *sorted(root.glob("group-*/nirs"))]:
+        for nirs_dir in [*sorted(root.glob("sub-*/nirs")), *sorted(root.glob("group-*/nirs")),
+                         *sorted(root.glob("group-*/ses-*/nirs"))]:
             nodes = scan(nirs_dir)
             if not nodes:
                 continue

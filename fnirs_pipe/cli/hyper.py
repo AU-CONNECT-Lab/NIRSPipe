@@ -77,13 +77,13 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
 
 
 def _run_groups(groups: dict, process) -> None:
-    """Run process(gid, task, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
+    """Run process(gid, task, session, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
     print(f"Processing {len(groups)} group session(s)...")
     n_ok = n_fail = 0
-    for (gid, task), members in groups.items():
-        print(f"  -> {gid}/{task} ({len(members)} subjects)")
+    for (gid, task, ses), members in groups.items():
+        print(f"  -> {gid}/{f'ses-{ses}/' if ses else ''}{task} ({len(members)} subjects)")
         try:
-            report_path = process(gid, task, members)
+            report_path = process(gid, task, ses, members)
             if report_path is not None:
                 print(f"     report -> {report_path}")
             n_ok += 1
@@ -348,7 +348,7 @@ def cmd_run(
     elif str(wtc_cond_pad_s).lower() != "auto":
         logger.warning("--wtc-cond-pad-s is ignored without --wtc-cond-transform")
 
-    def _process(gid, task, members):
+    def _process(gid, task, ses, members):
         aligned_raws, offsets, group_sqm = _load_aligned_group(
             derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
             passband_check=(wtc_fmin, wtc_fmax), scope_tasks=scope_tasks)
@@ -405,11 +405,13 @@ def cmd_run(
             windows=cond_windows,
             analysis_window=analysis_window,
             whiten_s=wtc_whiten,
+            session=ses,
         ) if wtc_phase_null else None
 
         report_path = build_hyper_post_report(
             group_id=gid,
             task=task,
+            session=ses,
             group=members,
             aligned_raws=aligned_raws,
             offsets=offsets,
@@ -459,7 +461,7 @@ def cmd_run(
                 {**run_args, **bands_to_record(sep_bands)},
                 gid, task, timestamp, output_dir,
                 group_report_dir(output_dir, gid),
-                members=[e.subject_id for e in members],
+                members=[e.subject_id for e in members], session=ses,
             )
             logger.info("group-%s | run record -> %s", gid, record)
         except Exception:
@@ -616,9 +618,9 @@ def cmd_pair_null(
     scope_tasks = sorted({key[1] for key in all_groups})
 
     failures = 0
-    for (gid, task), members in targets.items():
+    for (gid, task, ses), members in targets.items():
         # flushed, or it interleaves with the stderr line naming the failure it belongs to
-        print(f"  -> {gid}/{task}", flush=True)
+        print(f"  -> {gid}/{f'ses-{ses}/' if ses else ''}{task}", flush=True)
         try:
             path = run_pair_null(
                 gid, task, members, all_groups, derivatives_dir, output_dir,

@@ -8,7 +8,7 @@ from pathlib import Path
 import mne
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_report_dir
+from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, _hyper_sidecar, alignment_params,
 )
@@ -139,6 +139,7 @@ def _process_hyper_raw_group(
     sep_bands=None,
     errors: list | None = None,
     notes: list | None = None,
+    seed: int | None = None,
 ) -> dict:
     """Compute hyper raw figures, save each as a standalone HTML, write SQM JSON.
 
@@ -150,11 +151,7 @@ def _process_hyper_raw_group(
     errors = errors if errors is not None else []
     notes  = notes  if notes  is not None else []
 
-    label_parts = [f"group-{group_id}"]
-    if session:
-        label_parts.append(f"ses-{session}")
-    label_parts.append(f"task-{task}")
-    label    = "_".join(label_parts)
+    label    = group_label(group_id, task, session)
 
     group_dir = group_report_dir(output_dir, group_id)
     fig_dir   = group_dir / "figures"
@@ -201,7 +198,7 @@ def _process_hyper_raw_group(
         screening_df = screening_coherence(
             aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
             windows=[(name, a, b) for name, (a, b) in conditions.items()],
-            sep_bands=sep_bands,
+            sep_bands=sep_bands, seed=seed,
             # each member's own rejections: drawn and flagged, left out of every rank
             rejected={sid: {pair_of(c) for c in (sqm_data.get(sid) or {}).get("bad_channels")
                             or ()} for sid in subject_ids})
@@ -222,7 +219,7 @@ def _process_hyper_raw_group(
                                            "statistic": "coherence"}),
             "hyper_screening", aligned_raws,
             coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-            n_iter=SCREEN_NULL_ITER, null="phase_scramble")
+            n_iter=SCREEN_NULL_ITER, null="phase_scramble", seed=seed)
 
     figure_paths: dict = {}
 
@@ -324,6 +321,8 @@ def _process_hyper_raw_group(
     # the screening verdict beside the measured coherence, since the value alone is not
     # readable: see `screening_summary`
     sqm["screening"] = screening_summary(screening_df)
+    if sqm["screening"]:
+        sqm["screening"]["seed"] = seed
     sqm["motion"] = motion_scalars
     if grid is not None:
         sqm.update(usable_scalars(grid, subject_ids))

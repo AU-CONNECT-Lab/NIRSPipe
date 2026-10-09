@@ -48,8 +48,12 @@ class GroupEntry:
     run: str | None = None
 
 
-def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
-    """Parse group CSV into {(group_id, task): [GroupEntry, ...]}."""
+def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[GroupEntry]]":
+    """Parse group CSV into {(group_id, task, session): [GroupEntry, ...]}.
+
+    ``session`` is None for a row without one, so a CSV with no session column keys every
+    group as before; one group recorded in two sessions is two groups, never four members.
+    """
     try:
         df = read_table(csv_path, dtype=str)
     except Exception as exc:
@@ -72,20 +76,23 @@ def parse_group_csv(csv_path: Path) -> dict[tuple[str, str], list[GroupEntry]]:
 
     result: dict[tuple[str, str], list[GroupEntry]] = {}
     for _, row in df.iterrows():
-        key = (str(row["group_id"]).strip(), str(row["task"]).strip())
+        session = optional(row, "session")
+        key = (str(row["group_id"]).strip(), str(row["task"]).strip(), session)
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),
             subject_id=str(row["subject_id"]).strip(),
             task=str(row["task"]).strip(),
-            session=optional(row, "session"),
+            session=session,
             run=optional(row, "run"),
         )
         result.setdefault(key, []).append(entry)
 
-    for (gid, task), members in result.items():
+    for (gid, task, ses), members in result.items():
         if len(members) < 2:
+            where = f" session '{ses}'" if ses else ""
             raise GroupCSVError(
-                f"Group '{gid}' task '{task}' has only {len(members)} subject, need at least 2"
+                f"Group '{gid}' task '{task}'{where} has only {len(members)} subject, "
+                "need at least 2"
             )
 
     return result

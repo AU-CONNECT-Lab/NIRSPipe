@@ -21,7 +21,7 @@ def _cohort(task="main", n_groups=3, repeated_people=False):
         gid = f"G{i:02d}"
         subs = (["sub-01", "sub-02"] if repeated_people
                 else [f"sub-01{gid}", f"sub-02{gid}"])
-        groups[(gid, task)] = [GroupEntry(gid, s, task) for s in subs]
+        groups[(gid, task, None)] = [GroupEntry(gid, s, task) for s in subs]
     return groups
 
 
@@ -77,7 +77,7 @@ def test_the_refusal_names_the_subject_and_the_groups():
 
 def test_any_is_refused_when_a_group_lists_one_subject_twice():
     groups = _cohort()
-    groups[("G02", "main")] = [GroupEntry("G02", "sub-x", "main")] * 2
+    groups[("G02", "main", None)] = [GroupEntry("G02", "sub-x", "main")] * 2
     with pytest.raises(StageError, match="same subject twice"):
         partner_pool(groups, "G01", "main", pool="any")
 

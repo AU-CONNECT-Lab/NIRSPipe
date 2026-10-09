@@ -124,12 +124,14 @@ def collect_rows(output_dir: Path) -> list[dict]:
     is two rows and neither is silently the other.
     """
     rows: list[dict] = []
-    for record_path in sorted(output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}")):
+    for record_path in sorted([*output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}"),
+                               *output_dir.glob(f"group-*/ses-*/nirs/*{RECORD_SUFFIX}")]):
         record = _read_json(record_path)
         if not record or record.get("step") != "hyper_sqm":
             continue
         label = record_label(record_path)
-        group_dir = record_path.parent.parent
+        # group-G/nirs, or group-G/ses-S/nirs for a group recorded per session
+        group_dir = next(p for p in record_path.parents if p.name.startswith("group-"))
         table = read_tsv_or_none(record_path.parent / _usable_name(label), "its panel loses a row")
         screening = record.get("screening") or {}
         if screening and "pairings" not in screening:

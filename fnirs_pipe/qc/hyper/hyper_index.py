@@ -29,7 +29,7 @@ from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
 from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import entity_of
+from fnirs_pipe.io.derivatives import entity_of, group_label
 
 logger = get_logger("qc.hyper_index")
 
@@ -47,9 +47,9 @@ NULL_PERCENTILE = 95
 _ARTEFACTS = (
     ("raw QC",     "{raw_report}"),
     ("provenance", "figures/{provenance}"),
-    ("coherence",  "nirs/{coherence}"),
-    ("null",       "nirs/{null}"),
-    ("ISC pairs",  "nirs/{isc}"),
+    ("coherence",  "{nirs}/{coherence}"),
+    ("null",       "{nirs}/{null}"),
+    ("ISC pairs",  "{nirs}/{isc}"),
 )
 
 
@@ -213,10 +213,11 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
     return out
 
 
-def _links(group_dir: Path, stem: str) -> list[dict[str, str]]:
+def _links(group_dir: Path, stem: str, nirs: str = "nirs") -> list[dict[str, str]]:
     return [{"text": text, "href": rel}
             for text, template in _ARTEFACTS
             if (group_dir / (rel := template.format(
+                nirs=nirs,
                 raw_report=report_name(stem, desc="raw"),
                 provenance=figure_namer(stem)("provenance", extension=".png"),
                 coherence=_table(stem, statistic="wtc"),
@@ -241,19 +242,43 @@ def _tasks(nirs_dir: Path, group_id: str) -> "list[str]":
     return sorted(tasks)
 
 
+def _nirs_dirs(group_dir: Path) -> "list[tuple[str | None, Path]]":
+    """``[(session, nirs_dir)]``: ``group-G/nirs`` and each ``group-G/ses-S/nirs``."""
+    found = [(None, group_dir / "nirs")]
+    found += [(d.parent.name.removeprefix("ses-"), d)
+              for d in sorted(group_dir.glob("ses-*/nirs")) if d.is_dir()]
+    return found
+
+
 def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
     """One row per analysed window under ``group_dir``, for the index table.
 
     A task contributes its whole-run row and then one row per condition found in its
     ``cond-all`` table. The conditions come in the order that table lists them, which
     is the order the windows were found in the recording, so the rows read down the session
-    rather than alphabetically.
+    rather than alphabetically. A group recorded per session lists each session's tasks.
     """
-    nirs_dir = group_dir / "nirs"
     rows: list[dict] = []
 
+    for session, nirs_dir in _nirs_dirs(group_dir):
+        rows += _session_rows(group_dir, group_id, session, nirs_dir)
+
+    # a window is marked against the dyad's other windows, so this waits until every row is
+    # in hand. Flagged per chromophore, the two being separate measurements
+    for chroma in ("hbo", "hbr"):
+        for key, flag_key in (("coherence", "flagged"), ("coherence_crossed", "flagged_crossed")):
+            flags = outlier_flags([r[key].get(chroma) for r in rows])
+            for row, flagged in zip(rows, flags):
+                row.setdefault(flag_key, {})[chroma] = flagged
+    return rows
+
+
+def _session_rows(group_dir: Path, group_id: str, session: "str | None",
+                  nirs_dir: Path) -> "list[dict]":
+    rows: list[dict] = []
+    nirs = nirs_dir.relative_to(group_dir).as_posix()
     for task in _tasks(nirs_dir, group_id):
-        stem = f"group-{group_id}_task-{task}"
+        stem = group_label(group_id, task, session)
         whole = read_tsv_or_none(nirs_dir / _table(stem, statistic="wtc"), _LOST)
         bycond = read_tsv_or_none(nirs_dir / _table(stem, condition="all", statistic="wtc"),
                                   _LOST)
@@ -274,6 +299,7 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 stem, condition=_pair_fname(label) if label else None,
                 pairing=slug.lstrip("_") or None)
             return {
+                "session": session,
                 "task": task,
                 "condition": label,
                 "pair": " × ".join(pair) if pair and len(pairings) > 1 else None,
@@ -281,7 +307,7 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 "href": report.name if report.exists() else None,
                 # the task's other products hang off its whole-run row, being the task's and
                 # not one window's; the raw report among them, which nothing else links
-                "links": _links(group_dir, stem) if label is None else [],
+                "links": _links(group_dir, stem, nirs) if label is None else [],
                 "coherence": _mean_by_chroma(source, "coherence", where, pair),
                 "coherence_crossed": _mean_by_chroma(source, "coherence", where, pair,
                                                      crossed=True),
@@ -299,14 +325,6 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
             if bycond is not None and "condition" in bycond.columns:
                 for label in list(dict.fromkeys(bycond["condition"].astype(str))):
                     rows.append(_row(label, pair, ("condition", label)))
-
-    # a window is marked against the dyad's other windows, so this waits until every row is
-    # in hand. Flagged per chromophore, the two being separate measurements
-    for chroma in ("hbo", "hbr"):
-        for key, flag_key in (("coherence", "flagged"), ("coherence_crossed", "flagged_crossed")):
-            flags = outlier_flags([r[key].get(chroma) for r in rows])
-            for row, flagged in zip(rows, flags):
-                row.setdefault(flag_key, {})[chroma] = flagged
     return rows
 
 
@@ -343,8 +361,10 @@ def write_hyper_index(
 
     chroma = [c for c in ("hbo", "hbr")
               if any(c in row["coherence"] for row in rows)]
-    band = _band(group_dir / "nirs" / _table(
-        f"group-{group_id}_task-{rows[0]['task']}", statistic="wtc"))
+    first = rows[0]
+    band = _band(group_dir / (f"ses-{first['session']}/nirs" if first["session"] else "nirs")
+                 / _table(group_label(group_id, first["task"], first["session"]),
+                          statistic="wtc"))
 
     html = render(
         "hyper_index.html.j2",
@@ -357,6 +377,7 @@ def write_hyper_index(
         subject_ids=subject_ids or [],
         rows=rows,
         has_pairs=any(row.get("pair") for row in rows),
+        has_sessions=any(row["session"] for row in rows),
         chroma=chroma,
         chroma_labels={c: _CHROMA_LABEL[c] for c in chroma},
         band=band,

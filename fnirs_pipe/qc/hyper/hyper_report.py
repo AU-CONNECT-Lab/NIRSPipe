@@ -12,7 +12,7 @@ import mne
 import numpy as np
 
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
-from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
+from fnirs_pipe.io.derivatives import group_data_dir, group_label, group_report_dir
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
@@ -553,6 +553,7 @@ def build_hyper_report(
     coherence_fmin: float = 0.01,
     coherence_fmax: float = 0.10,
     sep_bands=None,
+    seed: int | None = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
@@ -567,18 +568,14 @@ def build_hyper_report(
         session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-        sep_bands=sep_bands, errors=errors, notes=notes,
+        sep_bands=sep_bands, errors=errors, notes=notes, seed=seed,
     )
 
     # no Methods on the raw pass: it screens the recordings, and the screening coherence is a
     # flag rather than a measure a paper reports
     versions = collect_software_versions()
 
-    name_parts = [f"group-{group_id}"]
-    if session:
-        name_parts.append(f"ses-{session}")
-    name_parts.append(f"task-{task}")
-    label = "_".join(name_parts)
+    label = group_label(group_id, task, session)
     output_path = group_report_dir(output_dir, group_id) / report_name(label, desc="raw")
 
     # the post report if `fnirs-hyper` has written one; a raw-only tree has none, and
@@ -591,7 +588,7 @@ def build_hyper_report(
     # `fnirs-qc provenance` gives it, so re-running that refreshes the image this page links
     provenance_path = None
     with guard("Provenance diagram", errors, meta["label"]):
-        scope = f"group-{group_id}_task-{task}"
+        scope = label
         for written in write_provenance(meta["sqm_dir"], output_path.parent / "figures",
                                         figure_namer(scope), title=scope):
             if written.suffix == ".png":
@@ -864,6 +861,7 @@ def build_hyper_post_report(
     result: "HyperPostResult | None" = None,
     desc: str | None = None,
     bads_scope: str | None = None,
+    session: str | None = None,
 ) -> "Path | None":
     """Build hyperscanning post-QC report.
 
@@ -952,7 +950,7 @@ def build_hyper_post_report(
     # above stays the run-wide list and reaches every page: an analysis that failed is missing
     # from all of them. A figure that failed is missing from one, and only that one says so.
     page_errors: dict = defaultdict(list)
-    scope = f"group-{group_id}_task-{task}"
+    scope = group_label(group_id, task, session)
 
     subject_ids  = [e.subject_id for e in group]
     ref_raw      = aligned_raws.get(subject_ids[0]) if subject_ids else None
@@ -1276,6 +1274,7 @@ def build_hyper_post_report(
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
+            session=session,
         )
     if wtc_nulls:
         write_wtc_null(
@@ -1285,7 +1284,7 @@ def build_hyper_post_report(
             seed=wtc_seed, cross=wtc_phase_null_cross, mask_coi=wtc_mask_coi,
             windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
             roi_map_name=roi_map_name, roi_min_channels=wtc_roi_min_channels,
-            whiten_s=wtc_whiten_s)
+            whiten_s=wtc_whiten_s, session=session)
     # Everything above is the analysis and has already written its tables; everything below
     # draws them.
     if no_report:
@@ -1433,7 +1432,7 @@ def build_hyper_post_report(
         # the condition and the pairing are entities of their own; the whole-run page for
         # the only pairing carries neither
         return group_report_dir(output_dir, group_id) / report_name(
-            f"group-{group_id}_task-{task}",
+            scope,
             condition=_pair_fname(label) if label else None,
             pairing=_pair_slug(pair).lstrip("_") or None)
 
@@ -1446,16 +1445,16 @@ def build_hyper_post_report(
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
         for written in write_provenance(
-            group_data_dir(output_dir, group_id),
+            group_data_dir(output_dir, group_id, session),
             group_report_dir(output_dir, group_id) / "figures",
-            figure_namer(scope), title=f"group-{group_id}_task-{task}",
+            figure_namer(scope), title=scope,
         ):
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"
 
     versions = collect_software_versions()
     methods = group_methods(paths_from(aligned_raws.values()),
-                            group_data_dir(output_dir, group_id), scope, align_info, desc,
+                            group_data_dir(output_dir, group_id, session), scope, align_info, desc,
                             versions, notes, scope)
 
     def _render_page(figs: dict, matrices: dict, number_scopes: list, label: "str | None",
@@ -1522,7 +1521,7 @@ def build_hyper_post_report(
                 number_tables.append(merged)
 
         out_path = _page_path(label, pair)
-        heading = f"group-{group_id}_task-{task}"
+        heading = scope
         nav_meta = [("group", group_id), ("task", task),
                     ("subjects", ", ".join(pair_ids))]
         if label is not None:
@@ -1541,7 +1540,7 @@ def build_hyper_post_report(
                 # the run-wide list plus this page's own, so a window that lost a panel says
                 # so and its neighbours do not
                 scope=scope, errors=errors + page_errors[(pair, label)], notes=notes,
-                nirs_dir=group_data_dir(output_dir, group_id),
+                nirs_dir=group_data_dir(output_dir, group_id, session),
                 provenance_path=provenance_path,
                 methods=methods, versions=versions,
             ),

@@ -20,7 +20,6 @@ map, every ordered region pair.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 import json
 
@@ -29,7 +28,8 @@ import pandas as pd
 
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.naming import derivative_path
+from fnirs_pipe.io.derivatives import occasion_label
+from fnirs_pipe.io.naming import derivative_path, parse_path
 from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.pair_null_group")
@@ -190,7 +190,7 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
     """
     frames = []
     for path in sorted(Path(output_dir).rglob(f"group-*_task-{task}{suffix}")):
-        found = re.search(r"group-([^_]+)_task-", path.name)
+        entities = parse_path(path.name)
         frame = _of_chroma(pd.read_csv(path, sep="\t"), chroma)
         missing = [c for c in needs if c not in frame.columns]
         if missing:
@@ -198,7 +198,9 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
                 f"{path.name} has no {', '.join(missing)} column, so its occasion would drop "
                 f"out of every mean silently. It predates the column: rerun that dyad's null, "
                 f"or rename the column if the values are current.")
-        frames.append(frame.assign(occasion=found.group(1), source=str(path)))
+        frames.append(frame.assign(
+            occasion=occasion_label(entities["group"], entities.get("session")),
+            source=str(path)))
     if not frames:
         raise FileNotFoundError(
             f"no group-*_task-{task}{suffix} under {output_dir}. The cohort levels are "

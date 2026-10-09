@@ -671,6 +671,8 @@ RAW_QC_NOT_EXPOSED = {
         "--skip-bids-validation", "--no-skip-bids-validation",
         # the page reads its dyads out of the group CSV, as for --task-label
         "--participant-label", "--participant_label",
+        # a reproduction route for the screening null, not a setting to fill in on a form
+        "--seed",
     },
 }
 

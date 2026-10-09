@@ -171,6 +171,7 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
     derivatives_dir: Path | None = None,
     participant_label: list[str] | None = None,
+    seed: int | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
@@ -222,12 +223,19 @@ def cmd_hyper_raw(
     from fnirs_pipe.utils.lineage import path_from
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
-    ses = session_label[0] if session_label else None
+    if session_label and any(key[2] for key in groups):
+        # a pairs table with sessions names them itself; the flag only picks among them
+        groups = {k: v for k, v in groups.items() if k[2] in session_label}
+        if not groups:
+            print(f"[error] session_label {session_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: the motion panel shows the recordings before "
               "correction only.", file=sys.stderr)
 
-    def _process(gid, task, members):
+    def _process(gid, task, ses, members):
+        # a pairs table without sessions keeps --session-label naming the output, as before
+        ses = ses or (session_label[0] if session_label else None)
         raws_cw = load_group_raw_bids(bids_dir, members)
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
@@ -288,6 +296,7 @@ def cmd_hyper_raw(
             cardiac_h_freq=cardiac_h_freq,
             coherence_fmin=coherence_fmin,
             coherence_fmax=coherence_fmax,
+            seed=seed,
         )
 
     _run_groups(groups, _process)
@@ -445,6 +454,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "
                          "there; without it, only the recordings before correction.")
+    hr.add_argument("--seed", type=int, default=None,
+                    help="Seed the phase randomisation behind the screening null, so its "
+                         "percentiles repeat from run to run. Default: unseeded.")
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

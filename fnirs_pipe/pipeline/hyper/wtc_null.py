@@ -47,6 +47,7 @@ def run_wtc_null(
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
     whiten_s: float = 0.0,
+    session: "str | None" = None,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -99,7 +100,7 @@ def run_wtc_null(
             path = save_null_levels(null.levels, group_output_path(
                 output_dir, group_id,
                 {"task": task, "chromophore": ch_type, "nulldist": "phase",
-                 "statistic": "wtc", "desc": "level"}, "relmat", ".npz"))
+                 "statistic": "wtc", "desc": "level"}, "relmat", ".npz", session=session))
             # what the report checks before it thresholds its arrows against this level
             _hyper_sidecar(path, "hyper_wtc_phasenull_level",
                            paths_from(aligned_raws.values()),
@@ -129,6 +130,7 @@ def write_wtc_null(
     roi_map_name: str = "custom",
     roi_min_channels: int = ROI_MIN_CHANNELS,
     whiten_s: float = 0.0,
+    session: "str | None" = None,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
@@ -168,7 +170,7 @@ def write_wtc_null(
 
     def _path(entities: dict, extension: str = ".tsv") -> Path:
         return group_output_path(output_dir, group_id, {"task": task, **entities},
-                                 "relmat", extension)
+                                 "relmat", extension, session=session)
 
     # the real tables this null is ranked against, each the same name minus `null-`
     real = _real_table(_path({"statistic": "wtc"}))

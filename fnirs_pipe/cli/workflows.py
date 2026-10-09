@@ -735,7 +735,8 @@ def run_group_level(args: dict[str, Any]) -> None:
     ind_path = build_group_raw_report(output_dir)
     logger.info("  -> %s", ind_path)
 
-    if any(output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}")):
+    if any([*output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}"),
+            *output_dir.glob(f"group-*/ses-*/nirs/*{RECORD_SUFFIX}")]):
         logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
         hyper_path = build_group_hyper_report(output_dir)
         logger.info("  -> %s", hyper_path)

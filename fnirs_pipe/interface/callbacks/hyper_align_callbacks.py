@@ -28,6 +28,17 @@ def _cache_key(bids_dir: str, group_csv: str) -> str:
     return hashlib.md5(f"{bids_dir}|{group_csv}".encode()).hexdigest()[:16]
 
 
+def _group_value(key: tuple) -> str:
+    """A dropdown value for ``(group, task, session)``, ``"G1|rest"`` without a session."""
+    return "|".join(part for part in key if part)
+
+
+def _group_key(value) -> "tuple | None":
+    """The ``(group, task, session)`` a dropdown value names, or None if it names none."""
+    parts = str(value).split("|")
+    return (parts[0], parts[1], parts[2] if len(parts) == 3 else None) if len(parts) in (2, 3) else None
+
+
 def _to_haemo(raws: dict) -> dict:
     import mne
     result = {}
@@ -103,12 +114,12 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
     all_aligned: dict[tuple, dict] = {}
     errors: list[str] = []
 
-    for (group_id, task), group in groups.items():
+    for (group_id, task, ses), group in groups.items():
         try:
             paths = member_snirfs(Path(bids_dir), group)
             raws = {sid: read_snirf(p, verbose=False) for sid, p in paths.items()}
             aligned_raws, offsets = align_recordings(raws, task)
-            all_aligned[(group_id, task)] = {
+            all_aligned[(group_id, task, ses)] = {
                 "aligned_raws": aligned_raws,
                 "offsets":      offsets,
                 "subject_ids":  [e.subject_id for e in group],
@@ -135,7 +146,7 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
     }
 
     offset_rows = []
-    for (group_id, task), info in all_aligned.items():
+    for (group_id, task, _), info in all_aligned.items():
         for sid in info["subject_ids"]:
             raw_a = info["aligned_raws"].get(sid)
             offset_rows.append({
@@ -147,11 +158,11 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
             })
 
     group_options = [
-        {"label": f"Group {gid} / task-{task}", "value": f"{gid}|{task}"}
-        for (gid, task) in all_aligned
+        {"label": f"Group {gid}{f' / ses-{ses}' if ses else ''} / task-{task}",
+         "value": _group_value((gid, task, ses))}
+        for (gid, task, ses) in all_aligned
     ]
-    first_key = next(iter(all_aligned))
-    first_val = f"{first_key[0]}|{first_key[1]}"
+    first_val = _group_value(next(iter(all_aligned)))
 
     parts = [f"Aligned {len(offset_rows)} subject(s) across {len(all_aligned)} group(s)."]
     if errors:
@@ -184,12 +195,12 @@ def update_group_figures(group_val, bids_dir, group_csv):
     if not cache:
         return no_update, no_update
 
-    parts = group_val.split("|", 1)
-    if len(parts) != 2:
+    group_key = _group_key(group_val)
+    if group_key is None:
         return no_update, no_update
-    group_id, task = parts[0], parts[1]
+    group_id, task, _ = group_key
 
-    info = cache["groups"].get((group_id, task))
+    info = cache["groups"].get(group_key)
     if not info:
         return no_update, no_update
 
@@ -251,7 +262,7 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
     written: list[str] = []
     errors:  list[str] = []
 
-    for (group_id, task), info in cache["groups"].items():
+    for (group_id, task, _), info in cache["groups"].items():
         write_dataset_description(deriv_path / _DERIV_NAME, name=_DERIV_NAME,
                                   generated_by="fnirs-gui hyper-align", source=Path(bids_dir),
                                   link=LINK_RAW)
@@ -446,12 +457,12 @@ def load_ha_decisions(group_val, bids_dir, group_csv, deriv_dir, cardiac_l, card
     if not cache:
         return no_update, no_update
 
-    parts = group_val.split("|", 1)
-    if len(parts) != 2:
+    group_key = _group_key(group_val)
+    if group_key is None:
         return no_update, no_update
-    group_id, task = parts[0], parts[1]
+    group_id, task, _ = group_key
 
-    info = cache["groups"].get((group_id, task))
+    info = cache["groups"].get(group_key)
     if not info:
         return no_update, no_update
 
@@ -504,12 +515,12 @@ def click_ha_cd(n_clicks_list, group_val, bids_dir, group_csv, deriv_dir, cardia
     if not cache:
         return no_update, no_update
 
-    gparts = group_val.split("|", 1)
-    if len(gparts) != 2:
+    group_key = _group_key(group_val)
+    if group_key is None:
         return no_update, no_update
-    group_id, task = gparts[0], gparts[1]
+    group_id, task, _ = group_key
 
-    info = cache["groups"].get((group_id, task))
+    info = cache["groups"].get(group_key)
     if not info:
         return no_update, no_update
 

@@ -141,8 +141,8 @@ def cmd_align(
         raise SystemExit(1)
 
     n_fail = 0
-    for (group_id, task), group in groups.items():
-        print(f"Group {group_id} task-{task} ({len(group)} subjects)")
+    for (group_id, task, ses), group in groups.items():
+        print(f"Group {group_id}{f' ses-{ses}' if ses else ''} task-{task} ({len(group)} subjects)")
 
         try:
             paths = member_snirfs(bids_dir, group, validate=True)

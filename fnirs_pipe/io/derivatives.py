@@ -74,6 +74,17 @@ def group_report_dir(output_dir: Path, group_id: str) -> Path:
     return folder
 
 
+def group_label(group_id: str, task: str, session: "str | None" = None) -> str:
+    """A dyad's label, ``group-G1_task-rest`` or ``group-G1_ses-2_task-rest``."""
+    return "_".join([f"group-{group_id}", *([f"ses-{session}"] if session else []),
+                     f"task-{task}"])
+
+
+def occasion_label(group_id: str, session: "str | None" = None) -> str:
+    """One recorded occasion of a group, ``"G1"`` or ``"G1 ses-2"``."""
+    return f"{group_id} ses-{session}" if session else group_id
+
+
 def group_data_dir(output_dir: Path, group_id: str, session: str | None = None) -> Path:
     """A group's tables, sidecars and quality record: ``group-<id>/[ses-<s>/]nirs``.
 

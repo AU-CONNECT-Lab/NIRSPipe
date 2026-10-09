@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import group_output_path
+from fnirs_pipe.io.derivatives import group_output_path, occasion_label
 from fnirs_pipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
@@ -44,6 +44,7 @@ def partner_pool(
     task: str,
     pool: str = "position",
     position: int = 1,
+    session: "str | None" = None,
 ) -> list:
     """The entries that can stand in for one member, taken from the other groups.
 
@@ -60,25 +61,31 @@ def partner_pool(
     It is also the only safe pool where one person appears in several groups, since ``any``
     would there pair somebody with themselves. ``any`` doubles the pool and is refused unless
     the table shows nobody is repeated.
+
+    A group recorded in several sessions is one occasion per session, and ``session`` names
+    the target's; the group's other sessions are other occasions, as other groups are.
     """
     if pool not in POOLS:
         raise ValueError(f"pool must be one of {POOLS}, got {pool!r}")
 
-    same_task = {gid: members for (gid, tsk), members in groups.items() if tsk == task}
-    if group_id not in same_task:
-        raise StageError(f"group {group_id!r} has no task {task!r} in the pairs table")
+    same_task = {occasion_label(gid, ses): members
+                 for (gid, tsk, ses), members in groups.items() if tsk == task}
+    target = occasion_label(group_id, session)
+    if target not in same_task:
+        raise StageError(f"group {target!r} has no task {task!r} in the pairs table")
     if pool == "any":
         _refuse_repeated_subjects(same_task, task)
         _warn_unverifiable_pool(same_task)
-        own = {entry.subject_id for entry in same_task[group_id]}
-        return [entry for gid, members in same_task.items() if gid != group_id
+        own = {entry.subject_id for entry in same_task[target]}
+        return [entry for occ, members in same_task.items() if occ != target
                 for entry in members if entry.subject_id not in own]
 
     # only the member held fixed is barred, not the whole group, so repeat visits keep a pool
-    held = {e.subject_id for i, e in enumerate(same_task[group_id]) if i != position}
-    return [members[position] for gid, members in same_task.items()
-            if gid != group_id and len(members) > position
+    held = {e.subject_id for i, e in enumerate(same_task[target]) if i != position}
+    return [members[position] for occ, members in same_task.items()
+            if occ != target and len(members) > position
             and members[position].subject_id not in held]
+
 
 
 def _refuse_repeated_subjects(same_task: dict, task: str) -> None:
@@ -390,9 +397,11 @@ def run_pair_null(
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
     cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
 
+    session = members[0].session if members else None
+
     def _path(entities: dict) -> Path:
         return group_output_path(output_dir, group_id, {"task": task, **entities},
-                                 "relmat", ".tsv")
+                                 "relmat", ".tsv", session=session)
 
     real_wtc = _path({"statistic": "wtc"})
     real_by_cond_path = _path({"condition": "all", "statistic": "wtc"})
@@ -440,7 +449,7 @@ def run_pair_null(
             f"the tree now aligns to {aligned_duration:.3f} s. Rerun `fnirs-hyper` for "
             f"group {group_id!r} before drawing its null.")
 
-    candidates = partner_pool(groups, group_id, task, pool=pool)
+    candidates = partner_pool(groups, group_id, task, pool=pool, session=session)
     if not candidates:
         raise StageError(
             f"no other group runs task {task!r}, so there is nobody to re-pair "

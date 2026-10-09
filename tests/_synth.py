@@ -186,11 +186,13 @@ def synth_raw(
     return raw
 
 
-def _write_subject(bids_dir: Path, subject: str, task: str, raw: mne.io.Raw) -> Path:
+def _write_subject(bids_dir: Path, subject: str, task: str, raw: mne.io.Raw,
+                   session: "str | None" = None) -> Path:
     from fnirs_pipe.io.snirf import write_snirf
 
-    nirs_dir = bids_dir / f"sub-{subject}" / "nirs"
-    stem = f"sub-{subject}_task-{task}_nirs"
+    nirs_dir = bids_dir / f"sub-{subject}" / (f"ses-{session}" if session else "") / "nirs"
+    prefix = f"sub-{subject}" + (f"_ses-{session}" if session else "")
+    stem = f"{prefix}_task-{task}_nirs"
     path = nirs_dir / f"{stem}.snirf"
     write_snirf(raw, path)
 
@@ -208,7 +210,7 @@ def _write_subject(bids_dir: Path, subject: str, task: str, raw: mne.io.Raw) -> 
         rows = ["onset\tduration\ttrial_type"]
         rows += [f"{o:.3f}\t{d:.3f}\t{desc}"
                  for o, d, desc in zip(ann.onset, ann.duration, ann.description)]
-        (nirs_dir / f"sub-{subject}_task-{task}_events.tsv").write_text("\n".join(rows) + "\n")
+        (nirs_dir / f"{prefix}_task-{task}_events.tsv").write_text("\n".join(rows) + "\n")
 
     return path
 
@@ -251,12 +253,15 @@ def make_hyper_dataset(
     groups: dict[str, tuple[str, str]] | None = None,
     tasks: tuple[str, ...] = ("hold", "rest"),
     name: str = "bids_hyper",
+    sessions: "tuple[str, ...] | None" = None,
     **raw_kwargs,
 ) -> tuple[Path, Path]:
     """Write a dyad dataset plus its pairs CSV. Returns (bids_dir, pairs_csv).
 
     ``hold`` carries triggers so alignment has something to align on; ``rest``
-    carries none, which is the case trigger alignment refuses outright.
+    carries none, which is the case trigger alignment refuses outright. ``sessions``
+    records every group once per session, each a recording of its own, and gives the
+    pairs CSV a session column.
     """
     groups = groups or {"G01": ("11", "12")}
     subjects = [s for members in groups.values() for s in members]
@@ -265,14 +270,22 @@ def make_hyper_dataset(
     _write_dataset_root(bids_dir, subjects)
     for subject in subjects:
         for task in tasks:
-            _write_subject(bids_dir, subject, task,
-                           synth_raw(subject, task, **raw_kwargs))
+            if sessions is None:
+                _write_subject(bids_dir, subject, task,
+                               synth_raw(subject, task, **raw_kwargs))
+            for ses in sessions or ():
+                seed = zlib.crc32(f"{subject}/{task}/{ses}".encode())
+                _write_subject(bids_dir, subject, task,
+                               synth_raw(subject, task, seed=seed, **raw_kwargs), session=ses)
 
     pairs_csv = Path(root) / f"{name}_pairs.csv"
-    rows = ["group_id,subject_id,task"]
+    rows = ["group_id,subject_id,task" + (",session" if sessions else "")]
     for group_id, members in groups.items():
         for subject in members:
-            rows += [f"{group_id},sub-{subject},{task}" for task in tasks]
+            if sessions is None:
+                rows += [f"{group_id},sub-{subject},{task}" for task in tasks]
+            rows += [f"{group_id},sub-{subject},{task},{ses}"
+                     for ses in sessions or () for task in tasks]
     pairs_csv.write_text("\n".join(rows) + "\n")
 
     return bids_dir, pairs_csv

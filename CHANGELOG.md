@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper --isc-phase-null` keeps every surrogate per condition in a `desc-draws` table, as the coherence's phase null does
 - `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
 - `fnirs-hyper`, `fnirs-hyper-pairnull` and `fnirs-qc hyper-raw` take `--participant-label`, keeping the groups a listed subject belongs to
+- `fnirs-qc hyper-raw --seed` seeds the screening null, so its percentiles repeat between runs; the seed is recorded
 
 ### Changed
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works
@@ -25,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw --tstart` left the record's alignment offsets and duration at their values before the cut
 - `fnirs-qc hyper-raw --normalize` labelled z-scored traces in µmol/L
 - The cohort dyad page drew a block a dyad lacks, and a missing share, as zero
+- A pairs CSV with a `session` column merged one group's sessions into one group; each session is now its own, every dyad output named `ses-`
 
 ## [0.61.0] - 2026-10-08
 
