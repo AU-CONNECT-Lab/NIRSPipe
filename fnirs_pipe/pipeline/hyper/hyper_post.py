@@ -759,7 +759,8 @@ def run_hyper_post(
                 "isc_whiten_max_order": isc_whiten,
                 "isc_max_lag_s": isc_max_lag_s,
                 "isc_phase_null_iter": isc_phase_null,
-                "channel_cross": bool(wtc_channel_cross)}
+                "channel_cross": bool(wtc_channel_cross),
+                "roi_min_channels": int(wtc_roi_min_channels)}
 
     def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:
         """Put each condition's re-paired |r| level in place of its chord level, where it fits.

@@ -19,7 +19,7 @@ from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
-from fnirs_pipe.pipeline.hyper.pair_null_group import P_CORRECTIONS
+from fnirs_pipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
 from fnirs_pipe.qc.metrics import SCI_WINDOW_S
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
@@ -507,6 +507,7 @@ def cmd_band(
 def cmd_group_null(
     output_dir: Path, task: str, chroma: str, null: str, roi_mapping: "Path | None",
     n_resample: int, seed: int | None, verbose: bool, p_correction: str = "none",
+    isc_test: str = "signed",
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
     from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
@@ -515,11 +516,11 @@ def cmd_group_null(
     roi_map = _shared.load_roi_mapping(roi_mapping)
     written = write_group_null(output_dir, task=task, chroma=chroma, null=null,
                                roi_map=roi_map, n_resample=n_resample, seed=seed,
-                               p_correction=p_correction)
+                               p_correction=p_correction, isc_test=isc_test)
     for path in written:
         print(f"group-null -> {path}")
-    cohort = next((p for p in written if entity_of(p.name, "desc") == "cohort"), None)
-    if cohort is not None:
+    # one per statistic read, coherence and correlation each having its own test
+    for cohort in (p for p in written if entity_of(p.name, "desc") == "cohort"):
         print(f"group-null methods -> {_write_group_null_methods(cohort)}")
 
 
@@ -936,6 +937,13 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "level (default none). The uncorrected p column is always "
                                  "written; a method adds a p_<method> column beside it, and "
                                  "the family column says how many tests it ran over.")
+    group_null.add_argument("--isc-test", default="signed", choices=ISC_TESTS,
+                            help="How the correlation is tested (default signed). 'signed' "
+                                 "averages Fisher z and tests either direction, so a "
+                                 "negative correlation counts; 'magnitude' averages |Fisher "
+                                 "z| and tests it above the null, so channels of opposite "
+                                 "sign do not cancel but the direction is not reported. "
+                                 "Coherence is unsigned and always tested above its null.")
 
     index = _command_parser(
         "fnirs-hyper-index", reads_subjects=False, parents=[common],

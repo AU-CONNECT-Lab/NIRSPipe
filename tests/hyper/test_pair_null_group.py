@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.hyper.pair_null_group import (
-    _exact_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
+    _exact_p, _tailed_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
     write_group_null)
 from tests.hyper._names import cohort as _cohort, name
 
@@ -697,3 +697,158 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     assert "Cohort-level coupling was tested against the re-paired null" in text
     assert "among 500 cohort means" in text
     assert "P values were not corrected for multiple comparisons." in text
+
+
+# ---- the correlation, read above the cell ----
+
+ISC_SETTINGS = {"isc_band_hz": None, "isc_whiten_max_order": 0, "isc_max_lag_s": 0.0,
+                "roi_min_channels": 2}
+
+
+def _isc_rows(rs, condition="game"):
+    """One occasion's homologous ISC rows, ``rs`` one r per channel."""
+    rs = np.asarray(rs, dtype=float)
+    return pd.DataFrame({"chromophore": "hbo", "condition": condition, "sub1": "sub-a",
+                         "sub2": "sub-b", "label": CHANNELS, "label2": CHANNELS,
+                         "r": rs, "r_z": np.arctanh(rs)})
+
+
+def _write_isc_tree(root, rs, null="pair", whole_run_r=0.99, settings=ISC_SETTINGS):
+    """Real ISC at ``rs`` per channel, and nine draws per cell scattered round zero."""
+    rng = np.random.default_rng(1)
+    for occ in OCCASIONS:
+        d = root / f"group-{occ}" / "nirs"
+        d.mkdir(parents=True, exist_ok=True)
+        # the whole-run row has no condition; a cohort test over conditions must not read it
+        real = pd.concat([_isc_rows(rs), _isc_rows([whole_run_r] * 4, condition=np.nan)])
+        real_tsv = d / name(occ, "main", "iscpairs")
+        real.to_csv(real_tsv, sep="\t", index=False)
+        draws = pd.concat([_isc_rows(rng.normal(0, 0.03, 4)).assign(draw=f"x{i}")
+                           for i in range(9)])
+        draws_tsv = d / name(occ, "main", f"iscbycond-{null}null-draws")
+        draws.to_csv(draws_tsv, sep="\t", index=False)
+        for tsv in (real_tsv, draws_tsv):
+            tsv.with_suffix(".json").write_text(json.dumps({"parameters": settings}))
+
+
+def _isc_cohort(tmp_path, test, null="pair"):
+    path = tmp_path / _cohort(null, "cohort", statistic="isc")
+    return pd.read_csv(path, sep="\t"), json.loads(path.with_suffix(".json").read_text())
+
+
+def test_the_two_sided_p_doubles_the_smaller_tail():
+    pool = np.arange(19, dtype=float)
+    assert _tailed_p(100.0, pool, two_sided=False) == pytest.approx(1 / 20)
+    assert _tailed_p(100.0, pool, two_sided=True) == pytest.approx(2 / 20)
+    assert _tailed_p(-100.0, pool, two_sided=True) == pytest.approx(2 / 20)
+    assert _tailed_p(-100.0, pool, two_sided=False) == pytest.approx(1.0)
+
+
+def test_a_negative_correlation_is_found_by_the_signed_test(tmp_path):
+    """The case a one-tailed read misses: every channel anticorrelated."""
+    _write_isc_tree(tmp_path, [-0.4] * 4)
+    write_group_null(tmp_path, "main", n_resample=2000, seed=1)
+    out, side = _isc_cohort(tmp_path, "signed")
+    whole = out[(out.granularity == "whole") & (out.test == "resample")].iloc[0]
+    assert whole.r_z == pytest.approx(np.arctanh(-0.4))
+    assert whole.p < 0.01
+    assert side["parameters"]["isc_test"] == "signed"
+    assert side["parameters"]["two_sided"] is True
+    assert side["parameters"]["measure"] == "isc"
+
+
+def test_opposite_signs_cancel_when_signed_and_count_by_magnitude(tmp_path):
+    """The trade between the two reads, at the whole-brain mean."""
+    _write_isc_tree(tmp_path, [0.4, -0.4, 0.4, -0.4])
+    write_group_null(tmp_path, "main", n_resample=2000, seed=1)
+    signed, _ = _isc_cohort(tmp_path, "signed")
+    write_group_null(tmp_path, "main", n_resample=2000, seed=1, isc_test="magnitude")
+    magnitude, side = _isc_cohort(tmp_path, "magnitude")
+
+    def whole(t):
+        return t[(t.granularity == "whole") & (t.test == "resample")].iloc[0]
+    assert whole(signed).p > 0.2
+    assert whole(magnitude).abs_r_z == pytest.approx(np.arctanh(0.4))
+    assert whole(magnitude).p < 0.01
+    assert side["parameters"]["two_sided"] is False
+
+
+def test_the_whole_run_rows_take_no_part(tmp_path):
+    _write_isc_tree(tmp_path, [0.2] * 4, whole_run_r=0.99)
+    write_group_null(tmp_path, "main", n_resample=500, seed=1)
+    out, _ = _isc_cohort(tmp_path, "signed")
+    assert out.r_z.iloc[0] == pytest.approx(np.arctanh(0.2))
+
+
+def test_each_statistic_gets_its_own_methods_paragraph(tmp_path):
+    from fnirs_pipe.cli.hyper import cmd_group_null
+
+    _write_tree(tmp_path)
+    _write_isc_tree(tmp_path, [0.3] * 4)
+    cmd_group_null(tmp_path, task="main", chroma="hbo", null="repaired", roi_mapping=None,
+                   n_resample=200, seed=3, verbose=False)
+    texts = {p.name: p.read_text(encoding="utf-8")
+             for p in (tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md")}
+    assert len(texts) == 2
+    isc = next(t for n, t in texts.items() if "stat-isc" in n)
+    wtc = next(t for n, t in texts.items() if "stat-wtc" in n)
+    assert "the inter-subject correlation, Fisher z-transformed, was averaged" in isc
+    assert "a two-tailed paired t test" in isc
+    assert "coherence was averaged" in wtc and "a one-tailed paired t test" in wtc
+
+
+def test_the_isc_cells_are_ranked_from_the_draws_with_the_same_tail(tmp_path):
+    _write_isc_tree(tmp_path, [-0.4] * 4)
+    write_group_null(tmp_path, "main", n_resample=500, seed=1, p_correction="fdr_bh")
+    cells = pd.read_csv(tmp_path / _cohort("pair", "bycell", statistic="isc"), sep="\t")
+    assert len(cells) == len(OCCASIONS) * len(CHANNELS)
+    # beating every one of nine draws, two-sided: 2/10
+    assert cells.p.to_numpy() == pytest.approx(0.2)
+    assert {"r_z", "p_fdr_bh", "family"} <= set(cells.columns)
+    assert set(cells.family) == {12}
+
+
+def test_both_statistics_are_read_in_one_call_when_both_drew(tmp_path):
+    _write_tree(tmp_path)
+    _write_isc_tree(tmp_path, [0.3] * 4)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3)
+    assert [p.name for p in written] == [
+        _cohort("pair", "byoccasion"), _cohort("pair", "cohort"),
+        _cohort("pair", "bycell", statistic="isc"),
+        _cohort("pair", "byoccasion", statistic="isc"),
+        _cohort("pair", "cohort", statistic="isc")]
+
+
+def test_the_phase_nulls_isc_draws_are_read_too(tmp_path):
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
+    written = write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+    assert _cohort("phase", "cohort", statistic="isc") in [p.name for p in written]
+
+
+def test_isc_tables_that_do_not_record_their_settings_are_refused(tmp_path):
+    _write_isc_tree(tmp_path, [0.3] * 4, settings={})
+    with pytest.raises(ValueError, match="does not record how its correlation"):
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
+
+
+def test_isc_draws_and_real_tables_computed_differently_are_refused(tmp_path):
+    _write_isc_tree(tmp_path, [0.3] * 4)
+    side = next(tmp_path.rglob("*_stat-isc_relmat.json"))
+    side.write_text(json.dumps({"parameters": {**ISC_SETTINGS, "isc_max_lag_s": 2.0}}))
+    with pytest.raises(ValueError, match="not computed alike"):
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
+
+
+def test_an_unknown_isc_test_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="unknown ISC test"):
+        write_group_null(tmp_path, "main", isc_test="two-sided")
+
+
+def test_the_paired_read_is_two_sided_when_asked():
+    draws = _draws(level=0.30)
+    real = _real(0.10)
+    one = by_cohort(draws, real, n_resample=200, seed=1).query("test == 'paired'").iloc[0]
+    two = by_cohort(draws, real, n_resample=200, seed=1,
+                    two_sided=True).query("test == 'paired'").iloc[0]
+    assert one.p > 0.99
+    assert two.p < 0.01

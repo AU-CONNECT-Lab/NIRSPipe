@@ -66,6 +66,12 @@ CELL_SUFFIX = {
 }
 DRAWS_SUFFIX = {kind: _tail(**_BY_COND, nulldist=null, desc="draws")
                 for kind, null in _NULL.items()}
+# the correlation's real table holds the whole run and every condition in one file
+ISC_REAL_SUFFIX = _tail(statistic="isc")
+ISC_DRAWS_SUFFIX = {kind: _tail(condition="all", nulldist=null, statistic="isc", desc="draws")
+                    for kind, null in _NULL.items()}
+# signed: Fisher z, either direction; magnitude: |Fisher z|, larger than the null only
+ISC_TESTS = ("signed", "magnitude")
 
 
 def _of_chroma(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
@@ -254,7 +260,25 @@ def _exact_p(beaten: int, n: int) -> float:
     return (n - beaten + 1) / (n + 1)
 
 
-def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
+def _tailed_p(value: float, pool: np.ndarray, two_sided: bool) -> float:
+    """The permutation p of ``value`` in ``pool``, upper tail or both.
+
+    ::
+
+      value above all 19 draws  ->  0.05 one-tailed, 0.1 two-sided
+
+    Two-sided doubles the smaller tail rather than comparing magnitudes, because a null need
+    not be centred on zero: two people on one task share a positive floor.
+    """
+    upper = _exact_p(int((value > pool).sum()), pool.size)
+    if not two_sided:
+        return upper
+    lower = _exact_p(int((value < pool).sum()), pool.size)
+    return min(1.0, 2 * min(upper, lower))
+
+
+def by_occasion(draws: pd.DataFrame, real: pd.DataFrame,
+                two_sided: bool = False) -> pd.DataFrame:
     """Each occasion's channel mean, ranked in that occasion's own draws."""
     rows = []
     real_mean = real.groupby(["condition", "occasion"]).coherence.mean()
@@ -274,7 +298,7 @@ def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
             "null_p95": float(np.percentile(pool, 95)),
             "lift": value - float(pool.mean()),
             "percentile": beaten / pool.size * 100,
-            "p": _exact_p(beaten, pool.size), "n_iter": int(pool.size),
+            "p": _tailed_p(value, pool, two_sided), "n_iter": int(pool.size),
         })
     # a channel no occasion has both a real value and draws for
     if not rows:
@@ -283,7 +307,8 @@ def by_occasion(draws: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
 
 
 def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
-              n_resample: int = 20000, seed: int | None = None) -> pd.DataFrame:
+              n_resample: int = 20000, seed: int | None = None,
+              two_sided: bool = False) -> pd.DataFrame:
     """The cohort mean against its null, by both reads, one row of each per condition.
 
     ``resample`` redraws one stand-in per occasion and ranks the real statistic inside that,
@@ -318,20 +343,21 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
             "null_mean": float(null.mean()), "null_sd": float(null.std(ddof=1)),
             "null_p95": float(np.percentile(null, 95)),
             "lift": value - float(null.mean()),
-            "p": (int((null >= value).sum()) + 1) / (n_resample + 1),
+            "p": _tailed_p(value, null, two_sided),
             "n_occasions": len(pools),
             "n_iter_min": int(min(p.size for p in pools.values())),
             "n_resample": n_resample,
         })
-        rows.append(_paired_row(cond, observed, pools))
+        rows.append(_paired_row(cond, observed, pools, two_sided))
     if not rows:
         return pd.DataFrame(columns=["condition", "test"])
     return (pd.DataFrame(rows)
             .sort_values(["condition", "test"], ignore_index=True))
 
 
-def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> dict:
-    """Real against each occasion's own averaged draws, paired over occasions, one-tailed.
+def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]",
+                two_sided: bool = False) -> dict:
+    """Real against each occasion's own averaged draws, paired over occasions.
 
     ::
 
@@ -359,8 +385,8 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
         t, p_two = stats.ttest_1samp(diff, 0.0)
         row["t"] = float(t)
         row["df"] = int(diff.size - 1)
-        # one-tailed: real above its baseline
-        row["p"] = float(p_two / 2 if t > 0 else 1.0 - p_two / 2)
+        # one-tailed unless asked: real above its baseline
+        row["p"] = float(p_two if two_sided else p_two / 2 if t > 0 else 1.0 - p_two / 2)
     return row
 
 
@@ -442,7 +468,44 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str,
         parts.append(_correct(frame, ["condition"], method).assign(level=level))
     if not parts:
         return None
-    out = pd.concat(parts, ignore_index=True)
+    return _cell_table(pd.concat(parts, ignore_index=True), method)
+
+
+def by_cell_from_draws(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool = False,
+                       method: str = "none") -> "pd.DataFrame | None":
+    """Each channel pairing ranked in its own draws, for tables that store no percentile.
+
+    ::
+
+      one occasion's S1_D1 > S2_D2 in game, real 0.31 against 9 draws  ->  one row with its p
+
+    The correlation's cells are ranked here rather than read back, so that one switch sets
+    their tail and the cohort's.
+    """
+    keys = [k for k in ("occasion", "condition", "sub1", "sub2", "label", "label2")
+            if k in draws.columns and k in real.columns]
+    truth = real.groupby(keys)["coherence"].first()
+    rows = []
+    for key, pool in draws.groupby(keys)["coherence"]:
+        if key not in truth.index:
+            continue
+        value = float(truth[key])
+        pool = pool.dropna().to_numpy(dtype=float)
+        if not pool.size:
+            continue
+        rows.append({**dict(zip(keys, key)), "coherence": value,
+                     "null_mean": float(pool.mean()),
+                     "null_sd": float(pool.std(ddof=1)) if pool.size > 1 else np.nan,
+                     "null_p95": float(np.percentile(pool, 95)),
+                     "percentile": float((value > pool).mean() * 100),
+                     "n_iter": int(pool.size), "p": _tailed_p(value, pool, two_sided)})
+    if not rows:
+        return None
+    out = _correct(pd.DataFrame(rows), ["condition"], method).assign(level="channel")
+    return _cell_table(out, method)
+
+
+def _cell_table(out: pd.DataFrame, method: str) -> pd.DataFrame:
     front = ["level", "condition", "occasion", "label"]
     keep = front + [c for c in ("label2", "coherence", "null_mean", "null_sd", "null_p95",
                                 "percentile", "n_iter", "p", f"p_{method}", "family")
@@ -453,19 +516,44 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str,
 def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
                      n_resample: int = 20000, seed: int | None = None,
-                     p_correction: str = "none") -> list[Path]:
-    """Every level the draws support, written beside the merged tables.
+                     p_correction: str = "none", isc_test: str = "signed") -> list[Path]:
+    """Every level the draws support, for each statistic whose draws are on disk.
 
-    Two files, not one per level: the levels differ in two columns and are read against each
-    other, so they belong in one table. `level` is ``whole`` or a region name, `pairings` is
-    which channel pairings entered the mean.
+    Two files per statistic, not one per level: the levels differ in two columns and are read
+    against each other, so they belong in one table. `level` is ``whole`` or a region name,
+    `pairings` is which channel pairings entered the mean.
+
+    Coherence is tested one-tailed, being unsigned. The correlation follows ``isc_test``.
     """
-    from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
-
+    if isc_test not in ISC_TESTS:
+        raise ValueError(f"unknown ISC test {isc_test!r}; one of {ISC_TESTS}")
     output_dir = Path(output_dir)
+    have = {stat: any(output_dir.rglob(f"group-*_task-{task}{suffix}"))
+            for stat, suffix in (("wtc", DRAWS_SUFFIX[null]), ("isc", ISC_DRAWS_SUFFIX[null]))}
+    if not any(have.values()):
+        raise FileNotFoundError(
+            f"no {null} draws for task {task} under {output_dir}, for the coherence or the "
+            f"correlation. The cohort levels are built from the draws a null writes, so "
+            f"`fnirs-hyper pair-null` or a `run --wtc-phase-null` / `--isc-phase-null` has "
+            f"to have produced them.")
+    shared = dict(output_dir=output_dir, task=task, chroma=chroma, null=null, roi_map=roi_map,
+                  n_resample=n_resample, seed=seed, p_correction=p_correction)
+    written = []
+    if have["wtc"]:
+        written += _write_wtc(**shared)
+    else:
+        logger.info("no coherence draws from the %s null; reading the correlation only", null)
+    if have["isc"]:
+        written += _write_isc(**shared, isc_test=isc_test)
+    else:
+        logger.info("no correlation draws from the %s null; reading the coherence only", null)
+    return written
+
+
+def _write_wtc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_resample: int,
+               seed, p_correction: str) -> list[Path]:
     draws = _read_tree(output_dir, DRAWS_SUFFIX[null], task, chroma, needs=("draw", "label"))
     real = _read_tree(output_dir, REAL_SUFFIX, task, chroma, needs=("label",))
-    sources = sorted(set(draws.source) | set(real.source))
     # a null averaged over one band and a real value over another measure different things
     bands = _band_of(set(draws.source)) | _band_of(set(real.source))
     if len(bands) > 1:
@@ -473,47 +561,127 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
             f"the draws and the real tables are not on one band: {sorted(bands)}. A null "
             f"averaged over one band cannot be subtracted from a value averaged over "
             f"another. Finish whichever rerun is in progress before reading this.")
+    cells = by_cell(output_dir, task, chroma, null, method=p_correction)
+    return _write_levels(output_dir, task, chroma, null, "wtc", draws, real, cells, roi_map,
+                         n_resample, seed, p_correction, two_sided=False,
+                         value_name="coherence",
+                         statistic="mean over channel pairings, then over occasions")
 
+
+def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_resample: int,
+               seed, p_correction: str, isc_test: str) -> list[Path]:
+    draws = _read_isc(output_dir, ISC_DRAWS_SUFFIX[null], task, chroma, isc_test,
+                      needs=("draw", "label", "label2"))
+    real = _read_isc(output_dir, ISC_REAL_SUFFIX, task, chroma, isc_test,
+                     needs=("label", "label2"))
+    settings = _isc_settings_of(set(draws.source) | set(real.source))
+    if len(settings) > 1:
+        raise ValueError(
+            f"the correlation's draws and real tables were not computed alike (band, "
+            f"whitening order, lag search): {sorted(settings, key=str)}. Finish whichever "
+            f"rerun is in progress before reading this.")
+    two_sided = isc_test == "signed"
+    cells = by_cell_from_draws(draws, real, two_sided=two_sided, method=p_correction)
+    magnitude = "|Fisher z|" if isc_test == "magnitude" else "Fisher z"
+    return _write_levels(output_dir, task, chroma, null, "isc", draws, real, cells, roi_map,
+                         n_resample, seed, p_correction, two_sided=two_sided,
+                         value_name="abs_r_z" if isc_test == "magnitude" else "r_z",
+                         statistic=f"mean {magnitude} over channel pairings, then over "
+                                   f"occasions",
+                         extra={"isc_test": isc_test})
+
+
+def _read_isc(output_dir: Path, suffix: str, task: str, chroma: str, isc_test: str,
+              needs: "tuple[str, ...]" = ()) -> pd.DataFrame:
+    """The correlation's rows with the value its test ranks in ``coherence``.
+
+    ::
+
+      r -0.4, signed  ->  coherence -0.42;  magnitude  ->  +0.42
+
+    Renamed into the column the coherence code reads rather than that code duplicated, as the
+    re-paired null does. The whole-run rows carry no condition and are dropped, the draws
+    being per condition only.
+    """
+    frame = _read_tree(output_dir, suffix, task, chroma, needs=("r_z", *needs))
+    if "condition" in frame.columns:
+        frame = frame[frame["condition"].notna()]
+    z = frame["r_z"]
+    frame = frame.assign(coherence=z.abs() if isc_test == "magnitude" else z)
+    return frame.dropna(subset=["coherence"])
+
+
+def _isc_settings_of(paths: "set[str]") -> set:
+    """What each correlation table was computed with, refusing a table that does not say.
+
+    ::
+
+      every sidecar band 0.01-0.1, AR 32, lag 2 s  ->  {((0.01, 0.1), 32, 2.0)}
+    """
+    found = set()
+    for tsv in paths:
+        params = _params_of(tsv)
+        if "isc_whiten_max_order" not in params:
+            raise ValueError(
+                f"{Path(tsv).name} does not record how its correlation was computed. Rerun "
+                f"`fnirs-hyper` (and its null) for that dyad on current code.")
+        band = params.get("isc_band_hz")
+        found.add((tuple(band) if band else None, params["isc_whiten_max_order"],
+                   params.get("isc_max_lag_s")))
+    return found
+
+
+def _write_levels(output_dir: Path, task: str, chroma: str, null: str, measure: str,
+                  draws: pd.DataFrame, real: pd.DataFrame, cells: "pd.DataFrame | None",
+                  roi_map, n_resample: int, seed, p_correction: str, two_sided: bool,
+                  value_name: str, statistic: str, extra: "dict | None" = None) -> list[Path]:
+    """One statistic's three tables and their sidecars, the cells already ranked."""
+    from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
+
+    sources = sorted(set(draws.source) | set(real.source))
     min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
 
     occ_parts, coh_parts = [], []
     for gran, level, pairings, d, r in _variants(draws, real, roi_map,
                                                  min_channels=min_channels):
         if gran != "channel":
-            logger.info("%s null, level %s over %s pairings: %d occasions, %d channels",
-                        null, level, pairings, d.occasion.nunique(), d.label.nunique())
+            logger.info("%s %s null, level %s over %s pairings: %d occasions, %d channels",
+                        measure, null, level, pairings, d.occasion.nunique(),
+                        d.label.nunique())
         tag = dict(granularity=gran, level=level, pairings=pairings)
-        occ = by_occasion(d, r)
-        coh = by_cohort(d, r, n_resample=n_resample, seed=seed)
+        occ = by_occasion(d, r, two_sided=two_sided)
+        coh = by_cohort(d, r, n_resample=n_resample, seed=seed, two_sided=two_sided)
         if len(occ):
             occ_parts.append(occ.assign(**tag))
         if len(coh):
             coh_parts.append(coh.assign(**tag))
     n_ch = sum(1 for p in coh_parts if (p["granularity"] == "channel").all())
-    logger.info("%s null, and one level per channel pairing: %d of them", null, n_ch)
+    logger.info("%s %s null, and one level per channel pairing: %d of them", measure, null,
+                n_ch)
 
     def tidy(parts):
+        if not parts:
+            return []
         out = pd.concat(parts, ignore_index=True)
         front = ["granularity", "level", "pairings", "condition"]
         return out[front + [c for c in out.columns if c not in front]]
 
-    params = dict(null_kind=null, chroma=chroma, task=task,
+    params = dict(measure=measure, null_kind=null, chroma=chroma, task=task,
                   n_resample=n_resample, seed=seed,
                   **({"roi_min_channels": min_channels} if roi_map else {}),
-                  granularities=sorted(pd.concat(coh_parts).granularity.unique()),
-                  statistic="mean over channel pairings, then over occasions",
+                  granularities=sorted({p.granularity.iloc[0] for p in coh_parts}),
+                  statistic=statistic, two_sided=two_sided, **(extra or {}),
                   p_correction=p_correction,
                   cell_correction_family="one condition and level, over occasions and "
                                          "pairings",
                   cohort_correction_family="one condition, one granularity, one pairing set "
                                            "and one test, over that level's cells; the "
                                            "`family` column carries its size")
-    cells = by_cell(output_dir, task, chroma, null, method=p_correction)
     if cells is not None:
-        logger.info("%s null, per cell: %d cells, %d at uncorrected p<0.05", null,
-                    len(cells), int((cells["p"] < 0.05).sum()))
+        logger.info("%s %s null, per cell: %d cells, %d at uncorrected p<0.05", measure,
+                    null, len(cells), int((cells["p"] < 0.05).sum()))
         if p_correction != "none":
-            logger.info("%s null, per cell: %d at %s-corrected p<0.05", null,
+            logger.info("%s %s null, per cell: %d at %s-corrected p<0.05", measure, null,
                         int((cells[f"p_{p_correction}"] < 0.05).sum()), p_correction)
 
     # at the root, so no group- and no sub-: what marks a table as cross-dyad is having no
@@ -521,17 +689,18 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
     # command was given rather than something it merged over, so a second run for another
     # task or chromophore does not overwrite the first.
     common = {"chromophore": chroma, "task": task, "condition": "all",
-              "nulldist": _NULL[null], "statistic": "wtc"}
+              "nulldist": _NULL[null], "statistic": measure}
+    cohort = tidy(coh_parts)
     written = []
     for frame, desc, step in (
             ([] if cells is None else cells, "bycell", f"hyper_{null}_null_by_cell"),
             (tidy(occ_parts), "byoccasion", f"hyper_{null}_null_by_occasion"),
-            (correct_cohort(tidy(coh_parts), p_correction), "cohort",
+            ([] if len(cohort) == 0 else correct_cohort(cohort, p_correction), "cohort",
              f"hyper_{null}_null_cohort")):
         if len(frame) == 0:
             continue
         path = derivative_path(output_dir, "relmat", ".tsv", **common, desc=desc)
-        write_tsv(frame, path)
+        write_tsv(frame.rename(columns={"coherence": value_name}), path)
         _hyper_sidecar(path, step, sources, **params)
         logger.info("%s: %d rows", path.name, len(frame))
         written.append(path)

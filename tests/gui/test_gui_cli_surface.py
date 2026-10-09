@@ -380,7 +380,7 @@ _QC_FULL_OPTS = dict(
     wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_homologous"],
     gn_task="main", gn_chroma="hbo", gn_null="repaired",
     gn_roi_mapping="/roi.json", gn_resample=20000, gn_seed=7,
-    gn_p_correction="fdr_bh",
+    gn_p_correction="fdr_bh", gn_isc_test="magnitude",
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
     band_flags=["band_no_mask_coi"],
     tstart=0.0, tend=60.0,

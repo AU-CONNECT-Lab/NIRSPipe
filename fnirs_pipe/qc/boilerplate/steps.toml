@@ -124,7 +124,7 @@ citations = ["TODO_RepairedNull"]
 
 # Written beside the cohort tables by fnirs-hyper-groupnull, not into any report
 [hyper_groupnull]
-plain = "Cohort-level coupling was tested against the {null} null {citations}: coherence was averaged over channel pairs within each occasion (one group on one task) and then over occasions, and compared with the null in two ways, a one-tailed paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion.{correction}"
+plain = "Cohort-level coupling was tested against the {null} null {citations}: {measure} was averaged over channel pairs within each occasion (one group on one task) and then over occasions, and compared with the null in two ways, a {tail} paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion{two_sided}.{correction}"
 citations = ["TODO_GroupNull"]
 
 [hyper_roi]

@@ -159,6 +159,18 @@ _P_CORRECTION_NAMES = {
 }
 
 
+def _groupnull_measure(params: dict[str, Any]) -> dict[str, str]:
+    """What the cohort test averaged and which tail it read, from the recorded test."""
+    if params.get("measure") != "isc":
+        return {"measure": "coherence", "tail": "one-tailed", "two_sided": ""}
+    if params.get("isc_test") == "magnitude":
+        return {"measure": "the absolute inter-subject correlation, Fisher z-transformed,",
+                "tail": "one-tailed", "two_sided": ""}
+    return {"measure": "the inter-subject correlation, Fisher z-transformed,",
+            "tail": "two-tailed",
+            "two_sided": ", its p doubling the smaller of the two tails"}
+
+
 def _correction_phrase(value: Any) -> str:
     # a sidecar from before the setting was recorded gets no sentence rather than a guessed one
     if value is None:
@@ -464,6 +476,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "hyper_groupnull":
         return {"null": "re-paired" if params.get("null_kind") == "repaired"
                 else "phase-randomised",
+                **_groupnull_measure(params),
                 "n_resample": str(int(params.get("n_resample") or 0)),
                 "correction": _correction_phrase(params.get("p_correction"))}
     if key == "hyper_pairnull":

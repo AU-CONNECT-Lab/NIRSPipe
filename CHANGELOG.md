@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `fnirs-hyper --isc-phase-null` keeps every surrogate per condition in a `desc-draws` table, as the coherence's phase null does
+- `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
 
 ### Changed
 - **Breaking**: `fnirs-hyper-pairnull` and `fnirs-hyper-groupnull` take `--chroma` for `--wtc-chroma`, since both cover the correlation too

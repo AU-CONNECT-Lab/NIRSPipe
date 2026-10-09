@@ -228,6 +228,12 @@ def _group_null_section():
                                       {"label": "Holm", "value": "holm"},
                                       {"label": "Bonferroni", "value": "bonferroni"}],
                              value="none")),
+            field("ISC test",
+                  dbc.Select(id="hy-gn-isc-test",
+                             options=[{"label": "Signed, two-sided", "value": "signed"},
+                                      {"label": "Magnitude |z|, above null",
+                                       "value": "magnitude"}],
+                             value="signed")),
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
                  "cohort, so it tests the pairing as a whole, not each channel. Reads what "

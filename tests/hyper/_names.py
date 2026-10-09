@@ -56,6 +56,8 @@ KINDS = {
                                    "statistic": "isc"},
     "iscbycond-pairnull-draws":   {"condition": "all", "nulldist": "pair",
                                    "statistic": "isc", "desc": "draws"},
+    "iscbycond-phasenull-draws":  {"condition": "all", "nulldist": "phase",
+                                   "statistic": "isc", "desc": "draws"},
 }
 
 
@@ -77,12 +79,13 @@ def archive(group: str, task: str, chromophore: str, **entities) -> str:
     return name(group, task, extension=".npz", chromophore=chromophore, **entities)
 
 
-def cohort(nulldist: str, desc: str, task: str = "main", chromophore: str = "hbo") -> str:
+def cohort(nulldist: str, desc: str, task: str = "main", chromophore: str = "hbo",
+           statistic: str = "wtc") -> str:
     """One cross-dyad verdict table at the tree root, from `fnirs-hyper-groupnull`.
 
     No group- and no sub-: having no analysis unit in the name is what marks a table as
     cross-dyad. The task and the chromophore stay, both being a filter the command was given.
     """
     return derivative_path("", "relmat", ".tsv", chromophore=chromophore, task=task,
-                           condition="all", nulldist=nulldist, statistic="wtc",
+                           condition="all", nulldist=nulldist, statistic=statistic,
                            desc=desc).name

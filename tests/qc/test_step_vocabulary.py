@@ -695,7 +695,19 @@ def test_every_cohort_table_maps_to_one_test_sentence(null, said, table):
     slots = template_slots("hyper_groupnull", {"null_kind": null, "n_resample": 20000,
                                                "p_correction": "none"})
     assert slots == {"null": said, "n_resample": "20000",
+                     "measure": "coherence", "tail": "one-tailed", "two_sided": "",
                      "correction": " P values were not corrected for multiple comparisons."}
+
+
+@pytest.mark.parametrize("test, measure, tail", [
+    ("signed", "the inter-subject correlation, Fisher z-transformed,", "two-tailed"),
+    ("magnitude", "the absolute inter-subject correlation, Fisher z-transformed,",
+     "one-tailed")])
+def test_the_cohort_sentence_follows_the_correlations_recorded_test(test, measure, tail):
+    slots = template_slots("hyper_groupnull", {"null_kind": "repaired", "measure": "isc",
+                                               "isc_test": test, "p_correction": "none"})
+    assert slots["measure"] == measure and slots["tail"] == tail
+    assert ("smaller of the two tails" in slots["two_sided"]) == (test == "signed")
 
 
 @pytest.mark.parametrize("method, named", [("fdr_bh", "Benjamini–Hochberg"),
