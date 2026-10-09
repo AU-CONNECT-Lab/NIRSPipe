@@ -63,7 +63,9 @@ def build_usable_bars(rows: list[dict], order: list[str]) -> "go.Figure | None":
     fig = go.Figure()
     for key, name, colour in parts:
         fig.add_trace(go.Bar(
-            x=[by_label[label]["usable"].get(key, 0.0) * 100 for label in order],
+            # a share the record lacks draws no bar rather than a zero one
+            x=[None if (v := by_label[label]["usable"].get(key)) is None else v * 100
+               for label in order],
             y=order, orientation="h", name=name,
             marker=dict(color=colour, line=dict(width=0.5, color="#fff")),
             hovertemplate=f"<b>%{{y}}</b><br>{name}: %{{x:.1f}}%<extra></extra>"))
@@ -147,13 +149,22 @@ def build_pair_field(rows: list[dict], order: list[str]) -> "go.Figure | None":
 
 def _add_dial(fig, row: int, col: int, label: str, rings: list[str], values: list[float],
               accent: str) -> None:
-    """One dyad's dial: a ring per entry of ``rings``, the arc its share of the circle."""
+    """One dyad's dial: a ring per entry of ``rings``, the arc its share of the circle.
+
+    A value of None is a block the dyad lacks: its ring is drawn empty and named so.
+    """
     for j, (name, value) in enumerate(zip(rings, values)):
         r_ring = len(rings) - j              # outermost ring is the first condition
         fig.add_trace(go.Barpolar(
             r=[0.55], base=[r_ring - 0.275], theta=[_DIAL_START + _DIAL_SWEEP / 2],
             width=[_DIAL_SWEEP], marker=dict(color="#eef1f4", line=dict(width=0)),
             showlegend=False, hoverinfo="skip"), row=row, col=col)
+        if value is None:
+            fig.add_trace(go.Scatterpolar(
+                r=[r_ring], theta=[0], mode="text", text=[f"{name} (no data)"],
+                textfont=dict(size=8, color="#5d6b78"), showlegend=False,
+                hoverinfo="skip"), row=row, col=col)
+            continue
         sweep = max(float(value) * _DIAL_SWEEP, 0.8)
         fig.add_trace(go.Barpolar(
             r=[0.55], base=[r_ring - 0.275], theta=[_DIAL_START + sweep / 2],
@@ -195,9 +206,10 @@ def build_condition_dials(rows: list[dict], order: list[str]) -> "go.Figure | No
 
     fig.add_trace(_dot_trace(frame, True, colorbar_x=0.30), row=1, col=1)
     for k, label in enumerate(worst):
-        values = [float(frame.loc[label, c]) if not pd.isna(frame.loc[label, c]) else 0.0
+        values = [None if pd.isna(frame.loc[label, c]) else float(frame.loc[label, c])
                   for c in frame.columns]
-        values.append(float(by_label[label]["usable"].get("usable_window_frac", 0.0)))
+        overall = by_label[label]["usable"].get("usable_window_frac")
+        values.append(None if overall is None else float(overall))
         _add_dial(fig, k // n_cols + 1, k % n_cols + 2, label, rings, values,
                   _DIAL_ACCENTS[k % len(_DIAL_ACCENTS)])
 

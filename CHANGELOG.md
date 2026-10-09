@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `fnirs-hyper --wtc-channel-cross` is `--channel-cross`, since it crosses the ISC as well as the coherence
 - `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
 
+### Fixed
+- `fnirs-hyper --wtc-cond-transform` drew each condition map on its cut's own clock instead of the aligned one
+- A crossed dyad run never used an uncrossed phase-scrambled null, not even on its same-channel maps
+- `fnirs-qc hyper-raw --tstart` left the record's alignment offsets and duration at their values before the cut
+- `fnirs-qc hyper-raw --normalize` labelled z-scored traces in µmol/L
+- The cohort dyad page drew a block a dyad lacks, and a missing share, as zero
+
 ## [0.61.0] - 2026-10-08
 
 ### Added

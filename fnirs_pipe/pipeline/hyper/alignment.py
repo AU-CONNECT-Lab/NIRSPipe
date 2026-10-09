@@ -20,6 +20,7 @@ from fnirs_pipe.pipeline.hyper._helpers import _zscore_rows
 from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import path_from
+from fnirs_pipe.utils.lineage import restamp
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.tables import write_tsv
@@ -353,7 +354,14 @@ def crop_aligned_window(
     if window is None:
         return raws
     t0, t1 = window
-    return {sid: raw.copy().crop(tmin=t0, tmax=t1) for sid, raw in raws.items()}
+    cut = {sid: raw.copy().crop(tmin=t0, tmax=t1) for sid, raw in raws.items()}
+    for raw in cut.values():
+        lin = lineage_of(raw)
+        if lin is not None and lin.stage == ALIGN_STAGE:
+            # the cut moves the shared zero, so each member's offset onto it moves with it
+            restamp(raw, offset_s=float(lin.params.get("offset_s") or 0.0) + t0,
+                    duration_s=float(raw.times[-1]))
+    return cut
 
 
 def resolve_analysis_window(
@@ -411,5 +419,6 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     for sid, raw in raws.items():
         r = raw.copy()
         r._data[:] = _zscore_rows(r.get_data())
-        result[sid] = r
+        # what a figure reads to label the traces z rather than a concentration
+        result[sid] = restamp(r, normalized=True)
     return result

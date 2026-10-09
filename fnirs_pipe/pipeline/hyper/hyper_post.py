@@ -335,7 +335,9 @@ def run_hyper_post(
                           limit_scales=wtc_limit_scales, ch_type=ch_type,
                           sep_bands=sep_bands)
         # the cut's own clock starts at zero, so the condition sits `tstart - lo` into it
-        return window_result(res, tstart - lo, tstart - lo + (tstop - tstart))
+        part = window_result(res, tstart - lo, tstart - lo + (tstop - tstart))
+        # back onto the aligned clock, the one its markers and the whole-run maps are on
+        return WTCResult(pairs=part.pairs, freqs=part.freqs, times=part.times + lo)
 
     def _tag(df, ch_type: str):
         """The column saying which chromophore a row is, added after every aggregation.
@@ -386,6 +388,19 @@ def run_hyper_post(
             logger.warning("%s | %s not used: %s", scope, path.name, why)
         return why is None
 
+    def _level_of(by_label: dict, label):
+        """A map's level, a same-channel pair matched across a crossed and an uncrossed key.
+
+        ::
+
+          map ("S1_D1", "S1_D1") against an uncrossed null's "S1_D1"  ->  that level
+        """
+        if label in by_label:
+            return by_label[label]
+        if isinstance(label, tuple) and len(label) == 2 and label[0] == label[1]:
+            return by_label.get(label[0])
+        return by_label.get((label, label)) if isinstance(label, str) else None
+
     def _set_level(data: dict, level, source: str, n_freqs: int) -> bool:
         # a level of the wrong length would be ignored by the arrows yet named in the caption
         if data is None or level is None or len(level) != n_freqs:
@@ -414,7 +429,7 @@ def run_hyper_post(
             levels = load_null_levels(npz_path)
             for pair_key, labels in result.pairs.items():
                 for label, data in labels.items():
-                    _set_level(data, levels.get(pair_key, {}).get(label), "null",
+                    _set_level(data, _level_of(levels.get(pair_key, {}), label), "null",
                                len(result.freqs))
             logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
@@ -444,8 +459,8 @@ def run_hyper_post(
         if spans.get(label) != [round(float(tstart), 3), round(float(tstop), 3)]:
             logger.info("%s | condition %s: no re-paired level for its span", scope, label)
             return
-        used = sum(_set_level(data, levels.get(label, {}).get(pair_key, {}).get(ch), "pair",
-                              len(cond_wtc.freqs))
+        used = sum(_set_level(data, _level_of(levels.get(label, {}).get(pair_key, {}), ch),
+                              "pair", len(cond_wtc.freqs))
                    for pair_key, labels in cond_wtc.pairs.items() for ch, data in labels.items())
         if used:
             logger.info("%s | condition %s: phase arrows drawn against the re-paired null "

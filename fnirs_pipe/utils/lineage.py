@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -60,6 +60,21 @@ def stamp(
         **(raw.info.get("temp") or {}),
         _KEY: Lineage(stage, step, src, params, path),
     }
+    return raw
+
+
+def restamp(raw: mne.io.Raw, **params: Any) -> mne.io.Raw:
+    """Raw's own stamp again with ``params`` replaced, for a step that moves what it recorded.
+
+    ::
+
+      aligned stamp {offset_s: 12.0, duration_s: 400.0} + restamp(offset_s=32.0, duration_s=360.0)
+    """
+    lin = lineage_of(raw)
+    if lin is None:
+        return raw
+    raw.info["temp"] = {**(raw.info.get("temp") or {}),
+                        _KEY: replace(lin, params={**lin.params, **params})}
     return raw
 
 

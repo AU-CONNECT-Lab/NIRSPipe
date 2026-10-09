@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
@@ -1071,6 +1072,19 @@ def build_trigger_timeline(
 # Figure: HbO + HbR signal overlay (2-row subplot, channel switching via select)
 # ---------------------------------------------------------------------------
 
+def _trace_scale(raws) -> "tuple[float, str]":
+    """The factor a haemoglobin trace is drawn at and the axis unit it reads in.
+
+    ::
+
+      haemoglobin in mol/L -> (1e6, "µmol/L"); z-scored by --normalize -> (1.0, "z")
+    """
+    if any((lineage_of(r).params if lineage_of(r) else {}).get("normalized")
+           for r in raws if r is not None):
+        return 1.0, "z"
+    return 1e6, "µmol/L"
+
+
 def build_signal_overlay(
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
@@ -1087,6 +1101,7 @@ def build_signal_overlay(
         return None
 
     ch_pairs = [pair_of(ref_raw.ch_names[p]) for p in hbo_picks]
+    scale, unit = _trace_scale(aligned_raws.values())
 
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
@@ -1104,7 +1119,7 @@ def build_signal_overlay(
                     t_vals, y_vals = [], []
                 else:
                     pick = raw.ch_names.index(ch_name)
-                    times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * 1e6,
+                    times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * scale,
                                            _MAX_TS_PTS)
                     t_vals = times.tolist()
                     y_vals = arr.tolist()
@@ -1147,7 +1162,7 @@ def build_signal_overlay(
     )
     fig.update_xaxes(gridcolor="#eeeeee")
     fig.update_xaxes(title_text="Time (s) [aligned]", row=2, col=1)
-    fig.update_yaxes(title_text="µmol/L", gridcolor="#eeeeee")
+    fig.update_yaxes(title_text=unit, gridcolor="#eeeeee")
 
     return fig
 
@@ -1162,6 +1177,7 @@ def build_signal_overlay_pair(
     """Single-channel-pair signal overlay (multi-subject), for iframe per-channel pages."""
     if not aligned_raws:
         return None
+    scale, unit = _trace_scale(aligned_raws.values())
 
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
@@ -1176,7 +1192,7 @@ def build_signal_overlay_pair(
             if raw is None or ch_name not in raw.ch_names:
                 continue
             pick = raw.ch_names.index(ch_name)
-            times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * 1e6, _MAX_TS_PTS)
+            times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * scale, _MAX_TS_PTS)
             fig.add_trace(go.Scatter(
                 x=times.tolist(), y=arr.tolist(),
                 name=sid, mode="lines",
@@ -1205,7 +1221,7 @@ def build_signal_overlay_pair(
     )
     fig.update_xaxes(gridcolor="#eeeeee")
     fig.update_xaxes(title_text="Time (s) [aligned]", row=2, col=1)
-    fig.update_yaxes(title_text="µmol/L", gridcolor="#eeeeee")
+    fig.update_yaxes(title_text=unit, gridcolor="#eeeeee")
     return fig
 
 
