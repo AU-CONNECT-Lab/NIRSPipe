@@ -337,6 +337,24 @@ def test_the_numbers_table_prints_each_pairing_s_own_band_means(groups, group):
                         (page.name, l1, l2, scope, chroma)
 
 
+@pytest.mark.xfail(strict=True, reason="the homologous table's ISC is the crossed ROI diagonal, "
+                                        "every pairing inside the region")
+@pytest.mark.parametrize("scope", SCOPES)
+def test_the_homologous_table_s_isc_averages_only_same_channel_pairs(groups, scope):
+    from tests._dyad_fingerprint import ROI_MAP
+    rows = table_under(groups.page("G01", cond=scope or None), "ROI homologous pairs")
+    head = rows[1]
+    for r in (r for r in rows[2:] if len(r) > 2):
+        assert r[0] == r[1], r
+        for c, chroma in enumerate(("hbo", "hbr")):
+            isc = pd.read_csv(groups.gdir("G01") / "nirs" / f"group-G01_task-main_chromo-{chroma}_"
+                              f"{_cond(scope)}stat-isc_relmat.tsv", sep="\t", index_col=0)
+            same = [isc.loc[ch, ch] for ch in ROI_MAP[r[0]] if np.isfinite(isc.loc[ch, ch])]
+            want = np.tanh(np.mean(np.arctanh(same)))
+            col = head.index(f"{'HbO' if chroma == 'hbo' else 'HbR'} ISC")
+            assert float(r[2 + col]) == pytest.approx(want, abs=5e-4), (scope, r[0], chroma)
+
+
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_post_page_carries_each_member_s_planted_offset(groups, group):
     for a, b in _pairings(groups, group):
