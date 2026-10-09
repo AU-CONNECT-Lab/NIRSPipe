@@ -316,3 +316,16 @@ def test_the_null_level_comes_back_as_a_matrix_shaped_like_the_correlations(dyad
 def test_no_null_means_no_level(dyad):
     _, _, _, level = compute_isc_pairs(dyad, ["11", "12"], "hbo")
     assert level is None
+
+
+def test_an_uncrossed_isc_keeps_the_same_channel_pairs_only(dyad):
+    """`--no-wtc-channel-cross` holds the coherence to the diagonal, and the ISC beside it
+    has to hold to the same pairs or one table would print two different pair sets."""
+    crossed, names, _, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=5, seed=3)
+    mat, _, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=5, seed=3,
+                                             cross=False)
+    off = ~np.eye(len(names), dtype=bool)
+    assert mat.shape == crossed.shape
+    assert np.isnan(mat[off]).all() and np.isnan(level[off]).all()
+    np.testing.assert_allclose(np.diag(mat), np.diag(crossed))
+    assert (frame["label"] == frame["label2"]).all() and len(frame) == len(names)
