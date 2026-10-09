@@ -9,8 +9,10 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `fnirs-hyper --isc-phase-null` keeps every surrogate per condition in a `desc-draws` table, as the coherence's phase null does
 - `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
+- `fnirs-hyper`, `fnirs-hyper-pairnull` and `fnirs-qc hyper-raw` take `--participant-label`, keeping the groups a listed subject belongs to
 
 ### Changed
+- `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works
 - **Breaking**: `fnirs-hyper-pairnull` and `fnirs-hyper-groupnull` take `--chroma` for `--wtc-chroma`, since both cover the correlation too
 - `fnirs-hyper-pairnull` ranks each ISC cell's `percentile` as |r| among |draws|, as the phase null always did
 - **Breaking**: `fnirs-hyper --wtc-channel-cross` is `--channel-cross`, since it crosses the ISC as well as the coherence

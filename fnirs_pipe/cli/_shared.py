@@ -224,13 +224,17 @@ def screening(note: str = "") -> argparse.ArgumentParser:
 
 
 def pairs_selection() -> argparse.ArgumentParser:
-    """``--pairs-csv`` / ``--group-id`` / ``--task-label``: which dyads to process."""
+    """``--pairs-csv`` / ``--group-id`` / ``--participant-label`` / ``--task-label``: which dyads to process."""
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--pairs-csv", type=Path, required=True,
                    help="CSV with columns: group_id, subject_id, task. Each unique "
                         "(group_id, task) pair is processed as one session.")
     p.add_argument("--group-id", default=None, type=BidsLabel,
                    help="Process only this group_id. Omit to process all groups.")
+    p.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
+                   type=BidsLabel,
+                   help="Process only the groups with at least one of these subjects as a "
+                        "member. The whole group still runs, partner included.")
     p.add_argument("--task-label", "--task_label", nargs="+", action="extend", type=BidsLabel,
                    help="Task label(s) to include, filtering the pairs table.")
     return p

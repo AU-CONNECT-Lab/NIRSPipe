@@ -217,7 +217,7 @@ Dyad analysis is six commands. The two that read member recordings take the `fni
 
 ```
 fnirs-hyper DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
-                [--group-id TEXT] [--task-label LABEL ...] [--desc TEXT]
+                [--group-id TEXT] [--participant-label LABEL ...] [--task-label LABEL ...] [--desc TEXT]
                 [--roi-mapping PATH]
                 [--wtc-fmin/--wtc-fmax FLOAT]        [default: 0.004 / 0.20]
                 [--wtc-band-fmin/--wtc-band-fmax FLOAT]
@@ -239,13 +239,13 @@ fnirs-hyper DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
                 [--normalize] [--no-align] [--tstart/--tend FLOAT]
 
 fnirs-hyper-pairnull  DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
-                      [--group-id TEXT] [--task-label LABEL ...] [--desc TEXT]
+                      [--group-id TEXT] [--participant-label LABEL ...] [--task-label LABEL ...] [--desc TEXT]
                       [--roi-mapping PATH] [--bads-scope {run,subject}]
                       [--wtc-chroma {hbo,hbr,both}] [--wtc-pair-pool {position,any}]
                       [--wtc-pair-max N] [--wtc-pair-cross]
                       [--wtc-roi-min-channels N] [--wtc-limit-scales | --no-wtc-limit-scales]
 
-fnirs-hyper-groupnull OUTPUT_DIR group --task TEXT [--wtc-chroma {hbo,hbr}]
+fnirs-hyper-groupnull OUTPUT_DIR group --task-label LABEL [--wtc-chroma {hbo,hbr}]
                       [--null {repaired,phase}] [--roi-mapping PATH]
                       [--n-resample N] [--seed INT]
 

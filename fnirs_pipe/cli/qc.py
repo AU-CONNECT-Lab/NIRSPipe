@@ -170,6 +170,7 @@ def cmd_hyper_raw(
     long_max_dist: float | None,
     skip_bids_validation: bool,
     derivatives_dir: Path | None = None,
+    participant_label: list[str] | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
@@ -220,7 +221,7 @@ def cmd_hyper_raw(
     from fnirs_pipe.qc.hyper.hyper_report import build_hyper_report
     from fnirs_pipe.utils.lineage import path_from
 
-    groups = _select_groups(pairs_csv, group_id, task_label)
+    groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
     ses = session_label[0] if session_label else None
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: the motion panel shows the recordings before "

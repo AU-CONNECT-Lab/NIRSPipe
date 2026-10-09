@@ -42,8 +42,9 @@ logger = get_logger("cli.hyper")
 _BADS_SCOPE_CHOICES = ["run", "subject"]
 
 
-def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None) -> dict:
-    """Parse the group CSV and filter by group_id / task_label. Exits non-zero on empty selection."""
+def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
+                   participant_label: list[str] | None = None) -> dict:
+    """Parse the group CSV and filter by group_id / task_label / participant_label. Exits non-zero on empty selection."""
     try:
         groups = parse_group_csv(pairs_csv)
     except GroupCSVError as exc:
@@ -60,6 +61,16 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
         groups = {k: v for k, v in groups.items() if k[1] in task_label}
         if not groups:
             print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
+            raise SystemExit(1)
+
+    if participant_label is not None:
+        # the CSV may spell a subject with or without sub-, the flag never carries it
+        wanted = set(participant_label)
+        groups = {k: v for k, v in groups.items()
+                  if any(_shared.BidsLabel(e.subject_id) in wanted for e in v)}
+        if not groups:
+            print(f"[error] no group in the CSV has participant(s) {participant_label}",
+                  file=sys.stderr)
             raise SystemExit(1)
 
     return groups
@@ -236,6 +247,7 @@ def cmd_run(
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     check_only: bool, verbose: bool,
+    participant_label: list[str] | None = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -296,7 +308,7 @@ def cmd_run(
               "--no-wtc-phase-null-cross draws it over the homologous pairings only.",
               file=sys.stderr)
 
-    groups = _select_groups(pairs_csv, group_id, task_label)
+    groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
 
     roi_map = _shared.load_roi_mapping(roi_mapping)
     # the seg- entity every ROI table takes, so one tree can hold two ROI definitions
@@ -582,6 +594,7 @@ def cmd_pair_null(
     wtc_roi_min_channels: int | None,
     wtc_limit_scales: bool,
     verbose: bool,
+    participant_label: list[str] | None = None,
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
     from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
@@ -594,7 +607,7 @@ def cmd_pair_null(
 
     # the pool comes from every group in the table, the targets from the selection: a null
     # drawn only from the dyads the caller happened to name would be a different null
-    targets = _select_groups(pairs_csv, group_id, task_label)
+    targets = _select_groups(pairs_csv, group_id, task_label, participant_label)
     all_groups = parse_group_csv(pairs_csv)
 
     roi_map = _shared.load_roi_mapping(roi_mapping)
@@ -905,7 +918,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "ranks each channel inside its own draws, where against n stand-ins no "
                     "cell can reach a p under 1/(n+1). It reads draws already on disk and "
                     "runs no transform.")
-    group_null.add_argument("--task", required=True,
+    # one value, unlike the other commands' --task-label: the cohort test reads one task
+    group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
+                            required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
     group_null.add_argument("--chroma", choices=("hbo", "hbr"), default="hbo",
                             help="Chromophore to read (default hbo), one at a time.")
