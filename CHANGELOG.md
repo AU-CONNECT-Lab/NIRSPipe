@@ -6,8 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking**: `fnirs-hyper --wtc-channel-cross` is `--channel-cross`, since it crosses the ISC as well as the coherence
+- `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
+
+## [0.61.0] - 2026-10-08
+
 ### Added
-- `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`, condition pages included
 - Dyad pages show each member's run verdict and per-condition pass or fail by channel pair: one condition on its page, every condition on the run page
 
 ### Changed
@@ -15,6 +20,36 @@ All notable changes to this project will be documented in this file.
 - The dyad page's ROI homologous table prints the ISC over same-channel pairs, as its coherence
 - The ISC follows `--wtc-channel-cross`: uncrossed, it keeps the same-channel pairs only, in its tables, ROI matrix and both nulls
 - The dyad index reports WTC, past-null counts and ISC over same-channel and crossed pairings apart; its ISC is a Fisher z mean
+- `fnirs-qc prep-raw` and `hyper-raw` require `--sci-threshold`, as `fnirs-pipe` does; the GUI's SCI threshold fields start empty
+- Report builders and figure functions take the SCI line from their caller, with no default
+- Dyad pages colour each member's SCI against the line that member was screened at, read from its sidecar
+- The dyad decision table tints each member's cells by that member's own rejection
+- `fnirs-rate raw` and `hyper` `--sci-threshold` now outline SCI (10 s) cells below it; off unless given
+- The GUI's Data Preparation and Hyper Align callbacks log through the package logger instead of printing `[DEBUG]` lines
+
+### Fixed
+- The GUI alignment table coloured SCI against 0.8 whatever the page's SCI threshold
+- The provenance diagram's screening arrow named only the SCI line, and its denoising arrow left out the short-channel regression
+- The dyad raw page dropped its usable-time and head panels whenever the members' clock offsets differed; they are screened on the shared clock now
+- The dyad raw page never drew its channel summary, and its channel table and record left the windowed SCI empty
+- A screening window too short for a coherence bin was ranked as the 0th percentile; it now draws no point
+- Groups of three ranked screening coherence by their first pairing only; every pairing now has its own percentile
+- The dyad motion panel flagged the shared clock's start as a joint spike; GVTD and spikes are now measured before the cut
+- Each dyad channel selector marked every member's rejections instead of its own member's
+- A triad's pairing page listed every member in its quality and alignment tables
+- Condition panels named a 10 s window for values measured on the run's `--window-length` grid
+- The cohort's windowed grid drew a highlighted run with the next run's values once an earlier run lacked that channel set
+- The dyad raw page's comparability table counted every pair, short ones included, as a long pair
+
+### Removed
+- `fnirs-hyper --sci-threshold`; members' own screening lines are read instead
+
+## [0.60.0] - 2026-10-07
+
+### Added
+- `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`, condition pages included
+
+### Changed
 - Per-channel tables print `SCI (10 s)` and `SCI (whole run)`, and `_desc-channel_qc.tsv` writes them as `sci_win` and `sci_whole`
 - Per-channel grids, tables and the per-trial heatmap name each metric's window; the SCI/PSP panel names its `--window-length`
 - Condition pages and the subject index no longer show the windowed SCI under the whole-run SCI's name
@@ -30,12 +65,6 @@ All notable changes to this project will be documented in this file.
 - The subject index Conditions table heads its channel column Channels passing
 - Condition pages and the dyad's per-condition quality table call a condition's channel share Passing in condition, not Channel retention
 - Per-trial quality leaves trial windows shorter than 10 s unscored, and a run note counts them
-- `fnirs-qc prep-raw` and `hyper-raw` require `--sci-threshold`, as `fnirs-pipe` does; the GUI's SCI threshold fields start empty
-- Report builders and figure functions take the SCI line from their caller, with no default
-- Dyad pages colour each member's SCI against the line that member was screened at, read from its sidecar
-- The dyad decision table tints each member's cells by that member's own rejection
-- `fnirs-rate raw` and `hyper` `--sci-threshold` now outline SCI (10 s) cells below it; off unless given
-- The GUI's Data Preparation and Hyper Align callbacks log through the package logger instead of printing `[DEBUG]` lines
 
 ### Fixed
 - `fnirs-qc prep-raw --by-condition` wrote no condition pages, its record holding a nested per-channel value that could not be read back
@@ -54,21 +83,8 @@ All notable changes to this project will be documented in this file.
 - The motion carpet dropped bursts shorter than one column; each column now shows its bin's largest |z|, in at most 2000 columns
 - The aux table rounded timestamps past 1000 s to 0.01 s, distorting the subject report's accelerometer jerk
 - The raw viewer's channel map folded the pulse the same way on runs with no events, where it draws the continuous signal
-- The GUI alignment table coloured SCI against 0.8 whatever the page's SCI threshold
-- The provenance diagram's screening arrow named only the SCI line, and its denoising arrow left out the short-channel regression
-- The dyad raw page dropped its usable-time and head panels whenever the members' clock offsets differed; they are screened on the shared clock now
-- The dyad raw page never drew its channel summary, and its channel table and record left the windowed SCI empty
-- A screening window too short for a coherence bin was ranked as the 0th percentile; it now draws no point
-- Groups of three ranked screening coherence by their first pairing only; every pairing now has its own percentile
-- The dyad motion panel flagged the shared clock's start as a joint spike; GVTD and spikes are now measured before the cut
-- Each dyad channel selector marked every member's rejections instead of its own member's
-- A triad's pairing page listed every member in its quality and alignment tables
-- Condition panels named a 10 s window for values measured on the run's `--window-length` grid
-- The cohort's windowed grid drew a highlighted run with the next run's values once an earlier run lacked that channel set
-- The dyad raw page's comparability table counted every pair, short ones included, as a long pair
 
 ### Removed
-- `fnirs-hyper --sci-threshold`; members' own screening lines are read instead
 - `condition_window_fractions`, whose shares `by_condition` already records
 - `design_matrix_heatmap`'s `conditions` and `title` parameters, which it never read
 

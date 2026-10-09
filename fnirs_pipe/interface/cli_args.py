@@ -115,8 +115,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         if "wtc_no_mask_coi" in flags:
             args.append("--no-wtc-mask-coi")
         # crossing is the default, so an unticked switch has to say so
-        args.append("--wtc-channel-cross" if "wtc_channel_cross" in flags
-                    else "--no-wtc-channel-cross")
+        args.append("--channel-cross" if "wtc_channel_cross" in flags
+                    else "--no-channel-cross")
         args.append("--wtc-phase-null-cross" if "wtc_phase_null_cross" in flags
                     else "--no-wtc-phase-null-cross")
         # the switch turns the per-condition pass off, that pass being the default

@@ -334,6 +334,9 @@ def screening_summary(coherence_df: "pd.DataFrame") -> dict:
         return {}
     pairings = []
     for (sub1, sub2), part in coherence_df.groupby(["sub1", "sub2"], sort=False):
+        # a rejected pair is on the strip, flagged, and counts toward none of these
+        if "rejected" in part.columns:
+            part = part[~part["rejected"].astype(bool)]
         windows = {}
         for name in dict.fromkeys(part["window"]):
             sub = part[part["window"] == name]
@@ -385,6 +388,8 @@ def compute_hyper_sqm(
     pct_good = round(n_all_good / n_total * 100, 1) if n_total > 0 else None
 
     mean_coherence = peak_coherence = peak_coherence_channel = None
+    if "rejected" in coherence_df.columns:
+        coherence_df = coherence_df[~coherence_df["rejected"].astype(bool)]
     if not coherence_df.empty:
         mean_coherence         = round(float(coherence_df["coherence"].mean()), 3)
         ch_mean                = coherence_df.groupby("ch_name")["coherence"].mean()

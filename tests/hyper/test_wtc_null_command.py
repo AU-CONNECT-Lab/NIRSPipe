@@ -1,6 +1,6 @@
 """The null shares the hyper run, and its crossing unless told otherwise.
 
-Unset, `--wtc-phase-null-cross` follows `--wtc-channel-cross`, which is on by default, and
+Unset, `--wtc-phase-null-cross` follows `--channel-cross`, which is on by default, and
 either can be set on its own: crossing multiplies the cost of every surrogate iteration. The null's
 sidecar records the iteration count and the shape as well as the band, so a short probe and
 a full null do not look alike.
@@ -77,7 +77,7 @@ def test_the_iteration_count_is_what_asks_for_it():
 
 def test_the_real_table_is_crossed_by_default():
     assert _hyper().wtc_channel_cross is True
-    assert _hyper("--no-wtc-channel-cross").wtc_channel_cross is False
+    assert _hyper("--no-channel-cross").wtc_channel_cross is False
 
 
 def test_the_nulls_crossing_is_left_to_follow_the_table_unless_set():
@@ -89,7 +89,7 @@ def test_the_null_can_be_set_either_way_on_its_own():
     args = _hyper("--wtc-phase-null", "100", "--no-wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is False
     assert args.wtc_channel_cross is True
-    args = _hyper("--wtc-phase-null", "100", "--no-wtc-channel-cross", "--wtc-phase-null-cross")
+    args = _hyper("--wtc-phase-null", "100", "--no-channel-cross", "--wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is True
     assert args.wtc_channel_cross is False
 

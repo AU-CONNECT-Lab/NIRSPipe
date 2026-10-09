@@ -225,7 +225,7 @@ fnirs-hyper DERIVATIVES_DIR OUTPUT_DIR group --pairs-csv PATH
                 [--wtc-chroma {hbo,hbr,both}]        [default: both]
                 [--wtc-mask-coi | --no-wtc-mask-coi] [--wtc-roi-min-channels N]
                 [--wtc-arrow-min R]                  [default: 0.5]
-                [--wtc-channel-cross] [--by-condition | --no-by-condition]
+                [--channel-cross] [--by-condition | --no-by-condition]
                 [--wtc-window-s SECONDS]
                 [--wtc-cond-transform] [--wtc-cond-pad-s SEC|auto]
                 [--wtc-limit-scales | --no-wtc-limit-scales] [--wtc-save-maps]
@@ -261,7 +261,7 @@ Keep `OUTPUT_DIR` apart from `DERIVATIVES_DIR`, so each tree carries its own `da
 
 `fnirs-hyper` computes wavelet coherence and inter-subject correlation for each dyad in the pairs file, one report per group. A group of more than two gets one report, one set of figures and one ISC table per pairing, tagged `pair-<sub1>x<sub2>`, the transform still running once over the whole group. `--check-only` aligns each dyad, prints what the metrics would be computed on, and stops, which is how to check a cohort's channel budget before a long run. `--no-report` writes the tables and skips the HTML and its figures.
 
-`--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--wtc-channel-cross` pairs every long channel with every other across the two brains, n² values instead of n, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
+`--wtc-significance` draws `--wtc-mc-count` surrogate series per channel pair, 300 by default, and the runtime scales with that count. `--channel-cross` pairs every long channel with every other across the two brains, n² values instead of n, and adds the channel x channel matrix of band means, the ROI x ROI matrix under `--roi-mapping`, and a per-brain selector on each map panel. Every map carries relative phase as arrows, so a pair moving together is distinguishable from one moving together a few seconds apart; they are drawn against the null's per-frequency level where one exists, and above the flat `--wtc-arrow-min` where none does.
 
 Per-condition results are on by default: the coherence is read out of each task annotation's own window, one result per block, and `--no-by-condition` turns that off. Each window is read off the whole-run transform rather than transformed on its own, so it costs almost nothing and a short condition is not inflated by its own edges. `--wtc-cond-transform` transforms each condition separately instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off; with the `auto` margin the numbers match the default route. `--wtc-limit-scales`, on by default, computes only the scales inside the band plus margin, bit for bit identical to the unrestricted transform. `--wtc-window-s` cuts every condition into non-overlapping windows of that length and makes the window the unit, so conditions of different length estimate the same thing.
 

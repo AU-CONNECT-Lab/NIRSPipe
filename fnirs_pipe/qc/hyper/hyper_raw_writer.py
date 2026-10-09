@@ -201,13 +201,16 @@ def _process_hyper_raw_group(
         screening_df = screening_coherence(
             aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
             windows=[(name, a, b) for name, (a, b) in conditions.items()],
-            sep_bands=sep_bands)
+            sep_bands=sep_bands,
+            # each member's own rejections: drawn and flagged, left out of every rank
+            rejected={sid: {pair_of(c) for c in (sqm_data.get(sid) or {}).get("bad_channels")
+                            or ()} for sid in subject_ids})
     # The whole-run rows are the plain pairwise coherence, read out of the pass that already
     # measured them, so a value on this page and its own null are the same estimate.
     coherence_df = (screening_df[screening_df["window"] == "whole run"]
-                    [["ch_name", "sub1", "sub2", "coherence"]].reset_index(drop=True)
+                    [["ch_name", "sub1", "sub2", "rejected", "coherence"]].reset_index(drop=True)
                     if not screening_df.empty else pd.DataFrame(
-                        columns=["ch_name", "sub1", "sub2", "coherence"]))
+                        columns=["ch_name", "sub1", "sub2", "rejected", "coherence"]))
 
     with guard("Coherence tables", errors, label):
         _write_coherence_tsv(

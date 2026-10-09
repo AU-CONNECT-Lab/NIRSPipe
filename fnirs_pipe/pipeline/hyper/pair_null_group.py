@@ -129,7 +129,7 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
     if crossed and not real_crossed:
         logger.warning("no all-pairings level: the draws are crossed and the real table is "
                        "not, so that level would rank a mean over the diagonal inside a null "
-                       "over every pairing. Rerun the real tables with --wtc-channel-cross")
+                       "over every pairing. Rerun the real tables with --channel-cross")
     all_pairings = False
     if crossed and real_crossed:
         # A whole-brain mean is over every pairing, not the diagonal.

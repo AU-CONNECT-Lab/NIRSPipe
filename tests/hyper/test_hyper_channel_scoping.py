@@ -226,6 +226,16 @@ def test_screening_coherence_drops_a_pair_one_member_lacks():
     assert df["window_percentile"].nunique() == 1
 
 
+def test_screening_coherence_flags_a_rejected_pair_and_keeps_its_row():
+    from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
+
+    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12")}
+    df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0, rejected={"sub-B": {"S2_D2"}})
+
+    assert set(df["ch_name"]) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
+    assert set(df[df["rejected"]]["ch_name"]) == {"S2_D2"}
+
+
 def test_a_sampling_rate_mismatch_is_refused():
     # alignment equalises duration, not rate, and every metric here takes the rate off one
     # participant, so a mismatch would mislabel the other's frequency axis

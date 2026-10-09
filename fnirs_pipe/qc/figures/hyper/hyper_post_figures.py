@@ -822,7 +822,7 @@ def build_wtc_cross_matrix(
 
     Rows are sub1's sites, columns sub2's, so cell (i, j) is sub1's site i against sub2's
     site j and the diagonal is the homologous pairing the rest of the report shows. It draws
-    the crossed pairs ``--wtc-channel-cross`` writes to the TSV.
+    the crossed pairs ``--channel-cross`` writes to the TSV.
 
     **The two chromophores share the figure and the scale.** HbO and HbR are two parallel
     passes, never mixed and never averaged. There is no connectogram. :func:`build_isc_panel`

@@ -68,7 +68,39 @@ def test_the_screening_strip_draws_each_channel_s_percentile_from_the_table(grou
         drawn = dict(zip(trace["customdata"], np.asarray(trace["x"], float)))
         rows = rows[rows.percentile.notna()]          # an unmeasured channel draws no point
         names = (rows.ch_name + " · " + rows.sub1 + " × " + rows.sub2) if many else rows.ch_name
+        names = names.where(~rows.rejected.astype(bool), names + " (rejected)")
         assert drawn == pytest.approx(dict(zip(names, rows.percentile)), abs=1e-6), window
+
+
+def _rejected_in_pairing(groups, a, b) -> set:
+    return {groups.truth.member(a).rejected, groups.truth.member(b).rejected}
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_a_rejected_pair_is_drawn_flagged_on_the_strip(groups, group):
+    """Shown, not hidden: each member's rejected pair keeps its point, an open ring named so."""
+    fig = one_figure(groups.figure(group, "desc-rawscreening_nirs.html"))
+    table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
+    for (a, b), part in table.groupby(["sub1", "sub2"]):
+        assert set(part[part.rejected].ch_name) == _rejected_in_pairing(groups, a, b), (a, b)
+    trace = traces(fig, "whole run")[0]
+    for label, symbol in zip(trace["customdata"], trace["marker"]["symbol"]):
+        assert label.endswith(" (rejected)") == (symbol == "circle-open"), label
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_a_rejected_pair_counts_toward_no_window_rank_or_dyad_number(groups, group):
+    table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
+    record = groups.record(group)
+    for p in record["screening"]["pairings"]:
+        n_kept = len(groups.truth.long_pairs) - len(_rejected_in_pairing(groups, p["sub1"], p["sub2"]))
+        for window, v in p["windows"].items():
+            assert v["n_channels"] == n_kept, (p["sub1"], p["sub2"], window)
+    kept = table[(table.window == "whole run") & ~table.rejected]
+    assert record["mean_coherence"] == pytest.approx(kept.coherence.mean(), abs=5e-4)
+    rejected = set().union(*(_rejected_in_pairing(groups, *pr)
+                             for pr in combinations([m.sid for m in groups.truth.group(group)], 2)))
+    assert record["peak_coherence_channel"] not in rejected
 
 
 def test_the_screening_strip_ranks_the_planted_block_coupling_first(groups):

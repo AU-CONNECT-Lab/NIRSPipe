@@ -104,6 +104,7 @@ def screening_coherence(
     n_iter: int = SCREEN_NULL_ITER,
     seed: "int | None" = None,
     sep_bands=None,
+    rejected: "dict[str, set[str]] | None" = None,
 ) -> pd.DataFrame:
     r"""Band coherence per window and channel, with the percentile of its own surrogate null.
 
@@ -121,10 +122,13 @@ def screening_coherence(
     surrogate :func:`~fnirs_pipe.pipeline.hyper.wtc_null.write_wtc_null` uses on the post report. One
     definition across a dyad's two pages, so "above the null" means one thing on both.
 
-    Returns a DataFrame with columns: window, ch_name, sub1, sub2, coherence, null_mean,
-    null_p95, percentile, window_percentile, n_seg, window_s. ``percentile`` is per channel
-    and ``window_percentile`` is the window's own, repeated down its rows; grade on the
-    second, since the first is a rank over a hundred draws and moves with the draw.
+    Returns a DataFrame with columns: window, ch_name, sub1, sub2, rejected, coherence,
+    null_mean, null_p95, percentile, window_percentile, n_seg, window_s. ``percentile`` is per
+    channel and ``window_percentile`` is the window's own, repeated down its rows; grade on
+    the second, since the first is a rank over a hundred draws and moves with the draw.
+
+    ``rejected`` is ``{subject: pair labels}``, each member's own rejections. A pair either
+    member rejected keeps its row, flagged, and is left out of the window's rank.
     """
     subject_ids = list(raws)
     if len(subject_ids) < 2:
@@ -145,6 +149,8 @@ def screening_coherence(
                            sub2, missing)
         if not labels:
             continue
+        dropped = set((rejected or {}).get(sub1) or ()) | set((rejected or {}).get(sub2) or ())
+        kept = np.array([n not in dropped for n in labels])
         d1 = raws[sub1].get_data(picks=[map1[n] for n in labels])[:, :n_times]
         d2 = raws[sub2].get_data(picks=[map2[n] for n in labels])[:, :n_times]
 
@@ -167,12 +173,15 @@ def screening_coherence(
                         sfreq, nperseg, fmin, fmax)
             # window percentile: the channel mean ranked among the null's channel means; a
             # window with no Welch bin in the band has no coherence, so it has no rank either
-            mean_null = null.mean(axis=1)
-            window_pct = (float((mean_null < real.mean()).mean() * 100)
-                          if np.isfinite(real.mean()) else float("nan"))
+            # over the kept pairs only: a rejected pair is shown, not ranked
+            mean_real = real[kept].mean() if kept.any() else float("nan")
+            mean_null = null[:, kept].mean(axis=1) if kept.any() else np.full(n_iter, np.nan)
+            window_pct = (float((mean_null < mean_real).mean() * 100)
+                          if np.isfinite(mean_real) else float("nan"))
             for i, label in enumerate(labels):
                 rows.append({
                     "window": name, "ch_name": label, "sub1": sub1, "sub2": sub2,
+                    "rejected": bool(not kept[i]),
                     "coherence": float(real[i]),
                     "null_mean": float(null[:, i].mean()),
                     "null_p95": float(np.percentile(null[:, i], 95)),
@@ -182,6 +191,7 @@ def screening_coherence(
                     "n_seg": int(n_seg), "window_s": round(seg / sfreq, 1),
                 })
 
-    return pd.DataFrame(rows, columns=["window", "ch_name", "sub1", "sub2", "coherence",
+    return pd.DataFrame(rows, columns=["window", "ch_name", "sub1", "sub2", "rejected",
+                                       "coherence",
                                        "null_mean", "null_p95", "percentile",
                                        "window_percentile", "n_seg", "window_s"])

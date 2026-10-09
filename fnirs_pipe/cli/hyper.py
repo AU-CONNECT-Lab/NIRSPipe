@@ -282,7 +282,7 @@ def cmd_run(
             raise SystemExit(1)
 
     if wtc_channel_cross and roi_mapping is None:
-        print("[warn] --wtc-channel-cross without --roi-mapping: the crossed channel table "
+        print("[warn] --channel-cross without --roi-mapping: the crossed channel table "
               "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
 
     chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
@@ -746,12 +746,13 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "Display only: no table or figure value changes with it. Both "
                           "--wtc-phase-null and --wtc-significance override it with a level per "
                           "frequency, the phase-scrambled one winning where both ran.")
-    run.add_argument("--wtc-channel-cross", action=argparse.BooleanOptionalAction, default=True,
+    run.add_argument("--channel-cross", dest="wtc_channel_cross",
+                     action=argparse.BooleanOptionalAction, default=True,
                      help="Cross every long channel with every other across the two brains "
                           "(default on), so n channels give n^2 coherence values rather than "
                           "n. The extra pairs reach the channel TSV with a label2 column, and "
                           "the time-frequency maps get a second selector for the partner's "
-                          "channel. --no-wtc-channel-cross pairs each channel with its "
+                          "channel. --no-channel-cross pairs each channel with its "
                           "counterpart only, for the ISC as for the coherence.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length "
@@ -805,7 +806,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     run.add_argument("--wtc-phase-null-cross", action=argparse.BooleanOptionalAction,
                      default=None,
                      help="Cross the channels for the phase-scrambled null too. Unset, it "
-                          "follows --wtc-channel-cross. Crossing squares the pair count on "
+                          "follows --channel-cross. Crossing squares the pair count on "
                           "every iteration. --no-wtc-phase-null-cross draws the null over the "
                           "homologous pairings only, which covers the homologous rows of a "
                           "crossed real table (label equal to label2).")

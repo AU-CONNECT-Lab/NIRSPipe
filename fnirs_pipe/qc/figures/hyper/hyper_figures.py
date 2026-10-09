@@ -930,7 +930,8 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     inside the null drawn for *that* window puts every window on one axis with one line to
     clear.
 
-    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded. A group
+    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded. A pair
+    either member rejected is an open ring named so, and is not in the diamond. A group
     of more than two draws every pairing, each dot and diamond naming its pairing, since each
     is ranked against that pairing's own null. A window with no measurable coherence keeps its
     row, labelled so, and draws no point.
@@ -960,12 +961,16 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
         colour = colours.get(name, "#7f8c8d")
         labels = (sub["ch_name"] + " · " + sub["sub1"] + " × " + sub["sub2"] if many
                   else sub["ch_name"])
+        flagged = (sub["rejected"].astype(bool).to_numpy() if "rejected" in sub.columns
+                   else np.zeros(len(sub), bool))
+        labels = labels.where(~flagged, labels + " (rejected)")
         fig.add_trace(go.Scatter(
             x=pct, y=i + jitter.uniform(-0.13, 0.13, len(pct)), mode="markers",
             name=str(name), legendgroup=str(name), showlegend=False,
             customdata=labels.tolist(),
             # saturated only above the line; the rest are drawn as grey spread
             marker=dict(size=8,
+                        symbol=["circle-open" if f else "circle" for f in flagged],
                         color=[colour if p >= NULL_ALPHA_PCT else "#d7dde2" for p in pct],
                         opacity=[0.95 if p >= NULL_ALPHA_PCT else 0.75 for p in pct],
                         line=dict(width=0.6, color="#fff")),

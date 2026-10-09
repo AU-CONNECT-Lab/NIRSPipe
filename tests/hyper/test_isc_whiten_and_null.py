@@ -319,7 +319,7 @@ def test_no_null_means_no_level(dyad):
 
 
 def test_an_uncrossed_isc_keeps_the_same_channel_pairs_only(dyad):
-    """`--no-wtc-channel-cross` holds the coherence to the diagonal, and the ISC beside it
+    """`--no-channel-cross` holds the coherence to the diagonal, and the ISC beside it
     has to hold to the same pairs or one table would print two different pair sets."""
     crossed, names, _, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=5, seed=3)
     mat, _, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=5, seed=3,

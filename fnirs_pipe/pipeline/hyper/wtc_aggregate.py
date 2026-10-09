@@ -124,7 +124,7 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
 
     A crossed table carries ``label2``; a homologous one does not. Concatenating the two
     leaves half a column empty, and an empty ``label2`` is indistinguishable from a genuinely
-    missing value. ``--wtc-channel-cross`` is what crosses them, at channel level and, since
+    missing value. ``--channel-cross`` is what crosses them, at channel level and, since
     the ROI numbers are grouped from the channel ones, at ROI level too; it can be on for
     some dyads only.
     """
