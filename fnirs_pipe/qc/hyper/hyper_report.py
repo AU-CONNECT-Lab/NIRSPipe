@@ -589,8 +589,9 @@ def build_hyper_report(
     provenance_path = None
     with guard("Provenance diagram", errors, meta["label"]):
         scope = label
+        # a group folder holds every task's sidecars, so the graph is cut to this run's
         for written in write_provenance(meta["sqm_dir"], output_path.parent / "figures",
-                                        figure_namer(scope), title=scope):
+                                        figure_namer(scope), title=scope, label=scope):
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"
 
@@ -1450,7 +1451,7 @@ def build_hyper_post_report(
         for written in write_provenance(
             group_data_dir(output_dir, group_id, session),
             group_report_dir(output_dir, group_id) / "figures",
-            figure_namer(scope), title=scope,
+            figure_namer(scope), title=scope, label=scope,
         ):
             if written.suffix == ".png":
                 provenance_path = f"figures/{written.name}"

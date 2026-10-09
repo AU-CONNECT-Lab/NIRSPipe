@@ -331,7 +331,7 @@ def cmd_provenance(output_dir: Path) -> None:
     from fnirs_pipe.qc.common.figure_io import figure_namer
     from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
 
-    from fnirs_pipe.io.derivatives import entity_of
+    from fnirs_pipe.io.derivatives import entity_of, group_label
     from fnirs_pipe.qc.subject.sqm_record import scan_runs
 
     # the root is always searched too: the merged cross-dyad and group-null tables sit there
@@ -339,6 +339,7 @@ def cmd_provenance(output_dir: Path) -> None:
         *sorted(output_dir.glob("sub-*/nirs")),
         *sorted(output_dir.glob("sub-*/ses-*/nirs")),
         *sorted(output_dir.glob("group-*/nirs")),
+        *sorted(output_dir.glob("group-*/ses-*/nirs")),
         output_dir,
     ]
 
@@ -349,12 +350,14 @@ def cmd_provenance(output_dir: Path) -> None:
             dest = dest.parent  # a subject's figures sit beside its reports, above sessions
         # Same destinations and names the writers use, so re-rendering refreshes the image
         # an already-written report points at: a subject gets one graph per run, a group one
-        # per task named as its dyad report names it, and the root a single graph
+        # per task and session named as its dyad report names it, and the root a single graph
         if dest.name.startswith("sub-"):
             jobs = [(label, label) for label in scan_runs(nirs_dir)]
         elif dest.name.startswith("group-"):
-            tasks = sorted({entity_of(p, "task") for p in nirs_dir.glob("*.json")} - {None})
-            jobs = [(f"{dest.name}_task-{task}", None) for task in tasks]
+            gid = dest.name.removeprefix("group-")
+            labels = sorted({group_label(gid, entity_of(p, "task"), entity_of(p, "ses"))
+                             for p in nirs_dir.glob("*.json") if entity_of(p, "task")})
+            jobs = [(label, label) for label in labels]
         else:
             jobs = []
         for name, label in jobs or [(dest.name, None)]:

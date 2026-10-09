@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - The cohort dyad page drew a block a dyad lacks, and a missing share, as zero
 - A pairs CSV with a `session` column merged one group's sessions into one group; each session is now its own, every dyad output named `ses-`
 - `fnirs-qc hyper-raw --session-label` only renamed some outputs; it now picks each listed session to read, every output under `ses-`
+- A dyad's provenance diagram drew every task of its group; it now holds its own run's files, and `fnirs-qc provenance` reaches session folders
 - `fnirs-hyper` ROI maps drew arrows at `--wtc-arrow-min` beside a null; `--wtc-phase-null` now gives them their own level, averaged surrogate maps
 
 ## [0.61.0] - 2026-10-08
