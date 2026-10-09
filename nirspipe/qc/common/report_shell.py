@@ -22,7 +22,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.report_shell")
 
@@ -122,7 +122,7 @@ def template_env(**options: Any):
     """
     from jinja2 import Environment, FileSystemLoader
 
-    from fnirs_pipe.qc.boilerplate.notes import section_note
+    from nirspipe.qc.boilerplate.notes import section_note
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False,
                       **options)
@@ -147,8 +147,8 @@ def page_vars(
 ) -> dict:
     """Variables the shell's head and nav bar read.
 
-    page_vars(title="fnirs-pipe Hyper Raw Report - G01 / main",
-              heading="fnirs-pipe Hyper Raw Report",
+    page_vars(title="nirspipe Hyper Raw Report - G01 / main",
+              heading="nirspipe Hyper Raw Report",
               nav_meta=[("group", "G01"), ("task", "main")],
               nav_note="SCI thr: 0.80")
 
@@ -254,8 +254,8 @@ def provenance_rows(
     """
     rows: list[dict] = []
     with guard("Provenance table", errors if errors is not None else [], scope):
-        from fnirs_pipe.qc.boilerplate.generate import step_sentence
-        from fnirs_pipe.qc.common.provenance import scan
+        from nirspipe.qc.boilerplate.generate import step_sentence
+        from nirspipe.qc.common.provenance import scan
 
         seen: set[tuple] = set()
         for node in sorted(scan(nirs_dir, label=label).values(),

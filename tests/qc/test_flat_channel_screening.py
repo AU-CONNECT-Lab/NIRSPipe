@@ -9,8 +9,8 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics.coupling import blank_flat_windows, compute_psp_scores
-from fnirs_pipe.qc.metrics.screening import resolve_cutoffs, screen_channels, screening_scores
+from nirspipe.qc.metrics.coupling import blank_flat_windows, compute_psp_scores
+from nirspipe.qc.metrics.screening import resolve_cutoffs, screen_channels, screening_scores
 
 SFREQ, SECONDS = 5.0, 600
 CARDIAC = (0.7, 2.0)

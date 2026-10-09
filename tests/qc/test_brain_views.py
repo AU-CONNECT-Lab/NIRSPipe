@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from fnirs_pipe.qc.figures.common._brain_utils import VIEW_LABELS, load_brain_meshes
-from fnirs_pipe.qc.figures.subject import brain_views as bv
+from nirspipe.qc.figures.common._brain_utils import VIEW_LABELS, load_brain_meshes
+from nirspipe.qc.figures.subject import brain_views as bv
 
 NASION, LPA, RPA = [0.0, 0.085, -0.035], [-0.081, -0.029, -0.041], [0.084, -0.029, -0.041]
 PURE = {"red": (255, 0, 0), "blue": (0, 0, 255), "green": (0, 255, 0),
@@ -101,8 +101,8 @@ def test_subjects_rendering_in_parallel_threads_each_get_their_figure():
 
 def test_a_rejected_channel_reaches_the_figure_flagged_as_rejected(mini_bids, tmp_path,
                                                                     monkeypatch):
-    from fnirs_pipe.cli.run import main
-    from fnirs_pipe.qc.subject import report
+    from nirspipe.cli.run import main
+    from nirspipe.qc.subject import report
 
     seen = {}
 
@@ -146,7 +146,7 @@ def test_the_superior_view_reads_like_the_flat_map_beside_it():
 
 
 def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_brain(monkeypatch):
-    from fnirs_pipe.qc.figures.common import _brain_utils
+    from nirspipe.qc.figures.common import _brain_utils
 
     def offline(*a, **k):
         raise OSError("no network")

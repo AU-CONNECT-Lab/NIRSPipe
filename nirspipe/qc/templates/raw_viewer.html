@@ -74,7 +74,7 @@ select#run-select {
 .cd-chip.cd-unrated  { background:#e9ecef; color:#6c757d; }
 .cd-chip.cd-good     { background:#d4edda; color:#155724; }
 .cd-chip.cd-bad      { background:#f8d7da; color:#721c24; }
-/* under the second line fnirs-rate was given, apart from the run's own red */
+/* under the second line nirspipe-rate was given, apart from the run's own red */
 .qm-table td.rate-low { outline:2px dashed #e67e22; outline-offset:-3px; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
 </style>
@@ -149,7 +149,7 @@ select#run-select {
     <table>
       <tr><th>Run</th><td id="sum-run"></td></tr>
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
-      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>
@@ -365,7 +365,7 @@ var _selChannel = null;
 var _bandShapes = [];
 var _mkRO       = null;
 
-// channel decisions: fetched from /load_channel_decisions when served via fnirs-rate raw
+// channel decisions: fetched from /load_channel_decisions when served via nirspipe-rate raw
 var _isStaticCD     = true;
 var _chDecisions    = {};
 var _rateSciLine    = null;
@@ -814,7 +814,7 @@ function loadSqm() {
 }
 
 // Rows arrive labelled, formatted and coloured: the labels, number formats, thresholds and
-// tooltips all live in the metric registry (fnirs_pipe.qc.boilerplate.vocabulary), which the
+// tooltips all live in the metric registry (nirspipe.qc.boilerplate.vocabulary), which the
 // subject report reads too, so the two views of one recording cannot disagree about whether
 // a channel set passed.
 function renderSqm(d) {
@@ -967,7 +967,7 @@ function switchRun(idx) {
   _reload();
 }
 
-// a second SCI line, only when fnirs-rate raw was given --sci-threshold
+// a second SCI line, only when nirspipe-rate raw was given --sci-threshold
 fetch("/rate_config")
   .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
   .then(function(cfg) {
@@ -994,7 +994,7 @@ fetch("/load_channel_decisions")
   .catch(function() {
     _isStaticCD = true;
     var h = document.getElementById("ch-decisions-hint");
-    if (h) h.textContent = "read-only · launch via fnirs-rate raw to save decisions";
+    if (h) h.textContent = "read-only · launch via nirspipe-rate raw to save decisions";
     buildChDecisionsTable();
   });
 
@@ -1004,7 +1004,7 @@ fetch("/load_channel_decisions")
 var _CH_COLUMNS = {{ ch_column_keys_json }};
 var _CD_LABELS   = {unrated: "—", good: "good", bad: "bad"};
 
-// Columns, values and cell classes all come from fnirs_pipe.qc.channel_table, so this table,
+// Columns, values and cell classes all come from nirspipe.qc.channel_table, so this table,
 // the subject report's and the GUI's cannot list one channel three ways. The only thing
 // added here is the decision chip, which is the one column that is not a measurement.
 function buildChDecisionsTable() {

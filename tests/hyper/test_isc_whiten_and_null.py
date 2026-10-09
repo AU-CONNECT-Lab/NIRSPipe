@@ -18,10 +18,10 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.isc import (
+from nirspipe.pipeline.hyper.isc import (
     _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
 )
-from fnirs_pipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
+from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
 from tests._synth import synth_raw
 
 N = 4000
@@ -229,7 +229,7 @@ def test_the_arc_rule_prefers_a_null_to_a_number_and_a_number_to_a_quantile():
     """Three tiers in the order they deserve to be believed in: a per-cell surrogate level is
     a test, a fixed cut is a number somebody chose on a scale that moves with the
     preprocessing, and a quantile of the matrix keeps the same share whatever the data did."""
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arc_rule
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _arc_rule
 
     z = np.array([[0.10, 0.50, np.nan],
                   [0.90, -0.70, 0.20],
@@ -249,7 +249,7 @@ def test_the_arc_rule_prefers_a_null_to_a_number_and_a_number_to_a_quantile():
 def test_a_cell_with_no_level_measured_gets_no_chord():
     """A NaN level is a cell the surrogates never reached; drawing it would read as a pairing
     that beat a null that was never taken."""
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arc_rule
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _arc_rule
 
     z = np.array([[0.9, 0.9]])
     level = np.array([[0.1, np.nan]])

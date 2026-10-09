@@ -26,11 +26,11 @@ import json
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import occasion_label
-from fnirs_pipe.io.naming import derivative_path, parse_path
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.derivatives import occasion_label
+from nirspipe.io.naming import derivative_path, parse_path
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.pair_null_group")
 
@@ -204,7 +204,7 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
     if not frames:
         raise FileNotFoundError(
             f"no group-*_task-{task}{suffix} under {output_dir}. The cohort levels are "
-            f"built from the draws a null writes, so `fnirs-hyper pair-null` or a `run "
+            f"built from the draws a null writes, so `nirspipe-hyper pair-null` or a `run "
             f"--wtc-phase-null` has to have produced them.")
     return pd.concat(frames, ignore_index=True)
 
@@ -239,7 +239,7 @@ def _roi_min_of(paths: "set[str]") -> int:
     if unrecorded:
         raise ValueError(
             f"{len(unrecorded)} real table(s) do not record the ROI minimum they were grouped "
-            f"under, e.g. {unrecorded[0]}. Rerun `fnirs-hyper` for those dyads on current code.")
+            f"under, e.g. {unrecorded[0]}. Rerun `nirspipe-hyper` for those dyads on current code.")
     found = {int(v) for v in recorded.values()}
     if len(found) > 1:
         raise ValueError(
@@ -571,7 +571,7 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
         raise FileNotFoundError(
             f"no {null} draws for task {task} under {output_dir}, for the coherence or the "
             f"correlation. The cohort levels are built from the draws a null writes, so "
-            f"`fnirs-hyper pair-null` or a `run --wtc-phase-null` / `--isc-phase-null` has "
+            f"`nirspipe-hyper pair-null` or a `run --wtc-phase-null` / `--isc-phase-null` has "
             f"to have produced them.")
     shared = dict(output_dir=output_dir, task=task, chroma=chroma, null=null, roi_map=roi_map,
                   n_resample=n_resample, seed=seed, p_correction=p_correction)
@@ -663,7 +663,7 @@ def _isc_settings_of(paths: "set[str]") -> set:
         if "isc_whiten_s" not in params:
             raise ValueError(
                 f"{Path(tsv).name} does not record how its correlation was computed. Rerun "
-                f"`fnirs-hyper` (and its null) for that dyad on current code.")
+                f"`nirspipe-hyper` (and its null) for that dyad on current code.")
         band = params.get("isc_band_hz")
         found.add((tuple(band) if band else None, params["isc_whiten_s"],
                    params.get("isc_max_lag_s")))
@@ -675,7 +675,7 @@ def _write_levels(output_dir: Path, task: str, chroma: str, null: str, measure: 
                   roi_map, n_resample: int, seed, p_correction: str, two_sided: bool,
                   value_name: str, statistic: str, extra: "dict | None" = None) -> list[Path]:
     """One statistic's three tables and their sidecars, the cells already ranked."""
-    from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 
     sources = sorted(set(draws.source) | set(real.source))
     min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS

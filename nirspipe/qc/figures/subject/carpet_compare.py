@@ -5,14 +5,14 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
-from fnirs_pipe.qc.figures.common.motion_panel import (
+from nirspipe.utils import pair_of
+from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
     carpet_coloraxis, carpet_z,
 )
-from fnirs_pipe.qc.metrics._helpers import as_optical_density
-from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
+from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
 _CARPET_ROW_PX = 190
 _CHROMO_COLOR = {"hbo": HBO_COLOR, "hbr": HBR_COLOR}
@@ -155,7 +155,7 @@ def carpet_compare_figure(
         raise ValueError(
             "gvtd_blocks is required alongside raw_gvtd: GVTD is an RMS across channels, so "
             "the long and short sets get a row each rather than one trace over their union. "
-            "Pass fnirs_pipe.qc.metrics.gvtd_channel_blocks(raw).")
+            "Pass nirspipe.qc.metrics.gvtd_channel_blocks(raw).")
     gvtd = _gvtd_rows(raw_gvtd, raw_gvtd_after, gvtd_blocks) if raw_gvtd is not None else []
     n_rows = len(rows) + len(gvtd)
     block_px = _CARPET_ROW_PX * max(len(r[2]) for r in rows)

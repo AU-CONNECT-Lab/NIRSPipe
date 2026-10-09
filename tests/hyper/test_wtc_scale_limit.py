@@ -13,7 +13,7 @@ compare against the unrestricted transform so that cannot happen silently.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.wtc import _FLAMBDA, _pairwise_wtc, _scale_range
+from nirspipe.pipeline.hyper.wtc import _FLAMBDA, _pairwise_wtc, _scale_range
 
 pycwt = pytest.importorskip("pycwt")
 

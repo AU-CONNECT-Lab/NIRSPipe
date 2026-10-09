@@ -1,4 +1,4 @@
-"""fnirs-prep CLI (argparse): data preparation utilities (marker editing, crop, etc.)."""
+"""nirspipe-prep CLI (argparse): data preparation utilities (marker editing, crop, etc.)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from fnirs_pipe import __version__
+from nirspipe import __version__
 
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.cli import _shared
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("cli.prep")
 
@@ -53,9 +53,9 @@ def cmd_crop(
     """Crop SNIRFs and write to derivatives/cropped/."""
     # cropping a pipeline output back into its own tree is the intended use of --input-desc
     if input_desc is None:
-        _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
+        _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-prep")
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
     if segments_path is not None and (tmin is not None or tmax is not None):
         print("[error] --segments-path and --tmin/--tmax are mutually exclusive.", file=sys.stderr)
@@ -70,12 +70,12 @@ def cmd_crop(
         print("[error] --align trigger requires --trigger-name.", file=sys.stderr)
         raise SystemExit(1)
 
-    from fnirs_pipe.pipeline.crop import _segment_stems, crop_snirf
+    from nirspipe.pipeline.crop import _segment_stems, crop_snirf
 
     # every subject reads the same table, so a table that cannot name its segments is one
     # error here rather than the same error once per subject
     if segments_path is not None and not combine:
-        from fnirs_pipe.io.tables import read_table
+        from nirspipe.io.tables import read_table
 
         try:
             _segment_stems(read_table(segments_path), stem="")
@@ -92,7 +92,7 @@ def cmd_crop(
                 print("[error] --margin auto requires --band-fmin (the lowest frequency the "
                       "analysis will average over).", file=sys.stderr)
                 raise SystemExit(1)
-            from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
+            from nirspipe.pipeline.hyper.wtc import cone_margin_s
             margin = cone_margin_s(band_fmin)
         else:
             margin = float(margin_s)
@@ -118,17 +118,17 @@ def cmd_align(
     bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
-    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
+    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-prep")
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from fnirs_pipe.exceptions import AlignmentError
-    from fnirs_pipe.io.derivatives import LINK_RAW, entity_of, write_dataset_description
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.pipeline.hyper import (
+    from nirspipe.exceptions import AlignmentError
+    from nirspipe.io.derivatives import LINK_RAW, entity_of, write_dataset_description
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.pipeline.hyper import (
         align_recordings, member_snirfs, parse_group_csv, write_aligned_member,
     )
-    from fnirs_pipe.utils.snirf_prep import (
+    from nirspipe.utils.snirf_prep import (
         deriv_nirs_dir, copy_dataset_root,
     )
 
@@ -160,7 +160,7 @@ def cmd_align(
             continue
 
         write_dataset_description(output_dir / _DERIV_NAME, name=_DERIV_NAME,
-                                  generated_by="fnirs-prep align", source=bids_dir,
+                                  generated_by="nirspipe-prep align", source=bids_dir,
                                   link=LINK_RAW)
         copy_dataset_root(bids_dir, output_dir / _DERIV_NAME)
 
@@ -188,11 +188,11 @@ def cmd_markers_export(
     n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Export events.tsv(s) to out_dir for manual editing."""
-    _shared.refuse_output_in_input(bids_dir, out_dir, "fnirs-prep")
+    _shared.refuse_output_in_input(bids_dir, out_dir, "nirspipe-prep")
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from fnirs_pipe.pipeline.edit_markers import export_markers
+    from nirspipe.pipeline.edit_markers import export_markers
 
     def _export_one(sub):
         return export_markers(
@@ -211,9 +211,9 @@ def cmd_markers_apply(
     rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
 ) -> None:
     """Apply marker edits to runs and write to derivatives/marker_edited/."""
-    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-prep")
+    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-prep")
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
     ops = [x for x in (tsv, shift, set_duration, rename) if x is not None]
     if not ops:
@@ -222,7 +222,7 @@ def cmd_markers_apply(
     if len(ops) > 1:
         print("[error] Only one of --tsv, --shift, --set-duration, --rename can be used at a time.", file=sys.stderr)
         raise SystemExit(1)
-    from fnirs_pipe.pipeline.edit_markers import apply_markers
+    from nirspipe.pipeline.edit_markers import apply_markers
 
     def _apply_one(sub):
         return apply_markers(
@@ -251,10 +251,10 @@ def _add_selection(sp) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-prep",
+        prog="nirspipe-prep",
         description="fNIRS data preparation: cropping, alignment and marker editing.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-prep {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-prep {__version__}")
     sub = p.add_subparsers(required=True)
 
     crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.")
@@ -284,7 +284,7 @@ def _build_parser() -> argparse.ArgumentParser:
     crop.add_argument("--band-fmin", type=float, default=None, metavar="HZ",
                       help="Lowest frequency the later analysis will average over, used only "
                            "to resolve --margin auto. Give the same value as "
-                           "fnirs-hyper --wtc-band-fmin.")
+                           "nirspipe-hyper --wtc-band-fmin.")
     crop.add_argument("--input-desc", default=None, metavar="DESC",
                       help="Cut a processed stage instead of a recording, e.g. 'errts' or "
                            "'filtered'. bids_dir is then a derivatives tree. The desc- "

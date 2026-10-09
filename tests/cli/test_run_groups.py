@@ -4,8 +4,8 @@ import logging
 
 import pytest
 
-from fnirs_pipe.cli.hyper import _run_groups
-from fnirs_pipe.exceptions import AlignmentError, StageError
+from nirspipe.cli.hyper import _run_groups
+from nirspipe.exceptions import AlignmentError, StageError
 
 
 def test_a_stage_error_is_reported_as_its_message(capsys, caplog):

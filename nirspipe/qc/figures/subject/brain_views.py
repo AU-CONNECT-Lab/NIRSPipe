@@ -16,12 +16,12 @@ import mne
 import numpy as np
 from PIL import Image as _PILImage
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.figures.common._brain_utils import (
+from nirspipe.utils import pair_of
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.figures.common._brain_utils import (
     CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, to_mni,
 )
-from fnirs_pipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
+from nirspipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
 
 logger = get_logger("qc.figures.brain_views")
 

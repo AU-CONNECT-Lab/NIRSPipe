@@ -14,9 +14,9 @@ that is too high by an amount that grows as the window shortens, and nothing rai
 import numpy as np
 import pytest
 
-from fnirs_pipe.exceptions import AlignmentError
-from fnirs_pipe.pipeline.hyper import resolve_analysis_window
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult, window_result
+from nirspipe.exceptions import AlignmentError
+from nirspipe.pipeline.hyper import resolve_analysis_window
+from nirspipe.pipeline.hyper.wtc import WTCResult, window_result
 
 
 class _Untouchable:

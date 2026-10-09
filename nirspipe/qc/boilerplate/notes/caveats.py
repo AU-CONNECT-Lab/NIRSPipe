@@ -83,7 +83,7 @@ NOTES = {
         "Input is a cut ({where}), made with no margin. A wavelet transform of a segment "
         "has two edges of its own, so this run's band means are inflated by an amount that "
         "grows as the segment shortens; n_valid_frac reports the share of band cells that "
-        "survived. Re-cut the stage this run reads with `fnirs-prep crop --input-desc "
+        "survived. Re-cut the stage this run reads with `nirspipe-prep crop --input-desc "
         "&lt;desc&gt; --margin auto --band-fmin &lt;f&gt;`; the per-condition rows then "
         "exclude the margin.",
     "caveat.isc_unfiltered":

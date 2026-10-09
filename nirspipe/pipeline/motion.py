@@ -9,7 +9,7 @@ import mne
 import mne.io
 import numpy as np
 
-from fnirs_pipe.utils.lineage import stamp
+from nirspipe.utils.lineage import stamp
 
 MotionMethod = Literal["tddr", "wavelet", "spline", "none"]
 

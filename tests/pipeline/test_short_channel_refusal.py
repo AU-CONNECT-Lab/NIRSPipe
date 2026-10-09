@@ -10,8 +10,8 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.glm import _short_channel_regressors
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.glm import _short_channel_regressors
 
 
 def _haemo(separations_mm):
@@ -78,7 +78,7 @@ def test_a_subject_whose_short_channels_are_all_bad_still_runs(caplog):
 
 def test_the_methods_text_names_short_channels_only_when_they_were_built():
     """The sentence is generated from the sidecar, so the sidecar must record the outcome."""
-    from fnirs_pipe.qc.boilerplate.vocabulary import template_slots
+    from nirspipe.qc.boilerplate.vocabulary import template_slots
 
     built = template_slots("confound_regression",
                            {"short_channel": "mean", "drift_model": "cosine",

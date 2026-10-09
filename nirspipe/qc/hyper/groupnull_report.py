@@ -1,4 +1,4 @@
-"""The page for `fnirs-hyper-groupnull`: one task's cohort tests, drawn off the tables on disk.
+"""The page for `nirspipe-hyper-groupnull`: one task's cohort tests, drawn off the tables on disk.
 
 Rebuilt from every ``desc-byoccasion`` / ``desc-cohort`` pair at the tree's root for the
 task, so a run for a second chromophore or null adds its section rather than replacing the
@@ -12,16 +12,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import entity_of
-from fnirs_pipe.io.naming import derivative_path
-from fnirs_pipe.io.tables import read_table
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.common.figure_io import _save_figure_html
-from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
-from fnirs_pipe.qc.figures.hyper.groupnull_figures import (
+from nirspipe.io.derivatives import entity_of
+from nirspipe.io.naming import derivative_path
+from nirspipe.io.tables import read_table
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.common.figure_io import _save_figure_html
+from nirspipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
+from nirspipe.qc.figures.hyper.groupnull_figures import (
     ALPHA, build_occasion_panels, build_region_lift, p_column, whole_level,
 )
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.groupnull_report")
 
@@ -121,8 +121,8 @@ def write_groupnull_report(output_dir: Path, task: str) -> "Path | None":
     versions = collect_software_versions()
     html = render(
         "groupnull_report.html.j2",
-        **page_vars(title=f"fnirs-pipe cohort test, task {task} ({output_dir.name})",
-                    heading="fnirs-pipe Cohort test (hyperscanning)",
+        **page_vars(title=f"nirspipe cohort test, task {task} ({output_dir.name})",
+                    heading="nirspipe Cohort test (hyperscanning)",
                     nav_meta=[("task", task), ("sections", len(sections))]),
         **footer_vars(versions=versions, errors=errors, notes=notes),
         sections=sections,

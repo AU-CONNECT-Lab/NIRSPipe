@@ -6,8 +6,8 @@ import shutil
 
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import (
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import (
     LINK_PREPROCESSED, LINK_RAW, read_json, resolve_bids_uri, to_bids_uri,
     write_dataset_description, write_sidecar_json,
 )
@@ -52,7 +52,7 @@ def test_a_linked_dataset_is_named_by_its_link(trees):
 
 def test_a_tree_inside_its_raw_dataset_still_names_its_own_files_with_bids_colon_colon(tmp_path):
     raw = _dataset(tmp_path / "bids")
-    out = raw / "derivatives" / "fnirs-pipe"
+    out = raw / "derivatives" / "nirspipe"
     write_dataset_description(out, source=raw, link=LINK_RAW)
     od = out / "sub-01" / "nirs" / "sub-01_desc-od_nirs.snirf"
     assert to_bids_uri(od, od).startswith("bids::sub-01/")
@@ -121,15 +121,15 @@ def test_the_link_is_relative_and_the_source_url_matches_it(trees):
 
 def test_two_commands_writing_one_tree_add_their_links_rather_than_take_turns(tmp_path):
     raw = _dataset(tmp_path / "bids")
-    pipe = _dataset(tmp_path / "fnirs-pipe", kind="derivative")
-    hyper = tmp_path / "fnirs-hyper"
+    pipe = _dataset(tmp_path / "nirspipe", kind="derivative")
+    hyper = tmp_path / "nirspipe-hyper"
     write_dataset_description(hyper, source=pipe, link=LINK_PREPROCESSED)
     write_dataset_description(hyper, source=raw, link=LINK_RAW)
     write_dataset_description(hyper, source=pipe, link=LINK_PREPROCESSED)
 
     desc = read_json(hyper / "dataset_description.json")
-    assert desc["DatasetLinks"] == {"preprocessed": "../fnirs-pipe", "raw": "../bids"}
-    assert sorted(s["URL"] for s in desc["SourceDatasets"]) == ["../bids", "../fnirs-pipe"]
+    assert desc["DatasetLinks"] == {"preprocessed": "../nirspipe", "raw": "../bids"}
+    assert sorted(s["URL"] for s in desc["SourceDatasets"]) == ["../bids", "../nirspipe"]
 
 
 def test_a_link_that_would_point_elsewhere_raises(trees, tmp_path):

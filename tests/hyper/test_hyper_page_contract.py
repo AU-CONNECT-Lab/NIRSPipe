@@ -25,9 +25,9 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.io.naming import parse_path
+from nirspipe.io.naming import parse_path
 
-from fnirs_pipe.pipeline.hyper import GroupEntry
+from nirspipe.pipeline.hyper import GroupEntry
 
 SFREQ, DURATION = 5.0, 400.0
 LABELS = ["S1_D1", "S2_D2", "S3_D3"]
@@ -72,7 +72,7 @@ def dyad():
 @pytest.fixture(scope="module")
 def pages(dyad, tmp_path_factory) -> "list[Path]":
     """The run's page and one per condition, crossed and over both chromophores."""
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("hyper_pages")
     path = build_hyper_post_report(
@@ -306,14 +306,14 @@ CAVEAT = "rests on very few independent looks"
     ((0.0, 60.0), 0.02, 1.2),
 ])
 def test_the_count_is_the_window_in_units_of_the_slowest_period(window, band_fmin, expected):
-    from fnirs_pipe.qc.hyper.hyper_report import _band_cycles
+    from nirspipe.qc.hyper.hyper_report import _band_cycles
 
     assert _band_cycles(window, band_fmin) == pytest.approx(expected, abs=0.05)
 
 
 def test_a_run_with_no_window_has_no_count():
     """The whole-run page describes the recording, which has no block to be short."""
-    from fnirs_pipe.qc.hyper.hyper_report import _band_cycles
+    from nirspipe.qc.hyper.hyper_report import _band_cycles
 
     assert _band_cycles(None, 0.06) is None
 
@@ -330,7 +330,7 @@ def test_a_long_enough_condition_prints_the_count_without_the_caveat(pages):
 
 def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
     """The same blocks against a 0.01 Hz floor: 1.8 cycles, and the page has to say it."""
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("hyper_short")
     path = build_hyper_post_report(
@@ -358,7 +358,7 @@ def test_a_condition_too_short_for_the_band_says_so(dyad, tmp_path_factory):
 def test_an_unstated_band_is_counted_from_the_axis_it_falls_back_to(dyad, tmp_path_factory):
     """No --wtc-band-fmin means the whole axis from --wtc-fmin is averaged, the case that most
     needs the warning, so the count reads the band the analysis resolved, not the flag."""
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("hyper_short_axis")
     path = build_hyper_post_report(
@@ -386,7 +386,7 @@ def test_a_failed_panel_reaches_its_own_page_and_no_other(dyad, tmp_path, monkey
     The failure is injected at the point that knows which window it is drawing: the figure
     filename carries the window slug and nothing above it does.
     """
-    from fnirs_pipe.qc.hyper import hyper_report
+    from nirspipe.qc.hyper import hyper_report
 
     real_save = hyper_report.save_png
 

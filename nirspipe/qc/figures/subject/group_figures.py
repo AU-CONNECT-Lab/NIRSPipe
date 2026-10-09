@@ -7,10 +7,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.boilerplate.vocabulary import grid_window_label, shared_window
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
+from nirspipe.qc.boilerplate.vocabulary import grid_window_label, shared_window
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
                                                   _hex_to_rgba)
 
 
@@ -82,7 +82,7 @@ def _split_column(col: str) -> tuple[str, str, str]:
     Longest section first, or ``raw`` would match a ``raw_long_`` column and leave
     ``long_sci_mean`` behind.
     """
-    from fnirs_pipe.qc.subject.sqm_record import OPTIONAL_SECTIONS, SECTIONS
+    from nirspipe.qc.subject.sqm_record import OPTIONAL_SECTIONS, SECTIONS
 
     for section in sorted((*SECTIONS, *OPTIONAL_SECTIONS), key=len, reverse=True):
         if col.startswith(f"{section}_"):

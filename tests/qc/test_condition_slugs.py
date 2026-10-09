@@ -17,8 +17,8 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.common.windows import condition_windows, refuse_colliding_labels
+from nirspipe.exceptions import StageError
+from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 
@@ -60,8 +60,8 @@ def test_the_windows_themselves_keep_every_label():
 
 
 def _dyad(tmp_path, descriptions):
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     raws = {sid: _raw(descriptions) for sid in ("sub-01", "sub-02")}
     build_hyper_post_report(
@@ -82,7 +82,7 @@ def test_colliding_conditions_are_refused_by_the_dyad_report(tmp_path):
 
 
 def test_a_subject_report_keeps_the_record_and_draws_no_condition_pages(tmp_path):
-    from fnirs_pipe.cli import qc as qc_cli
+    from nirspipe.cli import qc as qc_cli
 
     bids = tmp_path / "bids"
     _write_dataset_root(bids, ["01"])
@@ -107,7 +107,7 @@ def test_a_subject_report_keeps_the_record_and_draws_no_condition_pages(tmp_path
 
 
 def test_a_pipeline_report_keeps_the_record_and_draws_no_condition_pages(tmp_path):
-    from fnirs_pipe.cli import run as run_cli
+    from nirspipe.cli import run as run_cli
 
     bids = tmp_path / "bids"
     _write_dataset_root(bids, ["01"])

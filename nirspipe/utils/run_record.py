@@ -7,9 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fnirs_pipe.io.derivatives import group_label
-from fnirs_pipe.utils import unwrap_enum as _unwrap
-from fnirs_pipe import __version__
+from nirspipe.io.derivatives import group_label
+from nirspipe.utils import unwrap_enum as _unwrap
+from nirspipe import __version__
 
 
 # a run's id, made when it starts and read back wherever its time is printed
@@ -82,10 +82,10 @@ def _config_section(config: Any) -> dict[str, Any]:
 def _environment() -> dict[str, Any]:
     """Versions and machine, the same for every record a run writes bar free_mem_gb,
     which is read at the moment of writing."""
-    from fnirs_pipe.qc.boilerplate import collect_software_versions
+    from nirspipe.qc.boilerplate import collect_software_versions
 
     env: dict[str, Any] = {
-        "fnirs_pipe_version": __version__,
+        "nirspipe_version": __version__,
         "python_version": (
             f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         ),
@@ -99,7 +99,7 @@ def _environment() -> dict[str, Any]:
         pass
 
     for pkg_name, pkg_ver in collect_software_versions().items():
-        if pkg_name in ("python", "fnirs-pipe"):
+        if pkg_name in ("python", "nirspipe"):
             continue
         env[pkg_name.replace("-", "_") + "_version"] = pkg_ver
     return env

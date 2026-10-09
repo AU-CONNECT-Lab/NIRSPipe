@@ -7,8 +7,8 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import PATH, actions, band, card, field, params
-from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
+from nirspipe.interface.components import PATH, actions, band, card, field, params
+from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/hyper-align", name="Hyper Preparation")
 
@@ -107,13 +107,13 @@ layout = dbc.Container([
                            color="secondary", outline=True),
             ),
             params(
-                field("fnirs-hyper directory",
+                field("nirspipe-hyper directory",
                       dbc.Input(id="ha-hyper-dir", type="text",
                                 placeholder="tree the dyad reports go to, not the derivatives"),
                       span=PATH),
             ),
-            html.Small("The report runs fnirs-qc hyper-raw over the group CSV with the"
-                       " parameters above, into the fnirs-hyper directory, reading each"
+            html.Small("The report runs nirspipe-qc hyper-raw over the group CSV with the"
+                       " parameters above, into the nirspipe-hyper directory, reading each"
                        " member's corrected recording from the derivatives directory."
                        " Export writes the aligned recordings themselves.",
                        className="fp-hint d-block mt-1"),

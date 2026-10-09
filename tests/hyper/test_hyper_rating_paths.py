@@ -5,9 +5,9 @@ page to task `unknown` and each member's channel decisions to a file the raw QC 
 reads.
 """
 
-from fnirs_pipe.io.derivatives import channel_decisions_path
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.rating.app import HyperRatingApp
+from nirspipe.io.derivatives import channel_decisions_path
+from nirspipe.io.naming import report_name
+from nirspipe.qc.rating.app import HyperRatingApp
 
 
 def test_the_decisions_file_is_the_one_the_raw_page_keeps(tmp_path):
@@ -26,8 +26,8 @@ def test_a_tree_without_sessions_reads_none(tmp_path):
     assert (app.group_id, app.session, app.task) == ("G1", None, "rest")
 
 
-def test_decisions_go_to_the_fnirs_pipe_tree_and_ratings_stay_with_the_report(tmp_path):
-    pipe, hyper = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
+def test_decisions_go_to_the_nirspipe_tree_and_ratings_stay_with_the_report(tmp_path):
+    pipe, hyper = tmp_path / "nirspipe", tmp_path / "nirspipe-hyper"
     html = hyper / "group-G1" / report_name("group-G1_task-rest", desc="raw")
     app = HyperRatingApp(html, hyper, ["01", "02"], decisions_dir=pipe)
 

@@ -9,7 +9,7 @@ leakage does not blur the expected values.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.restingstate import compute_alff
+from nirspipe.pipeline.restingstate import compute_alff
 
 SFREQ = 10.0
 DUR = 100.0                       # 1000 samples -> 0.01 Hz per bin

@@ -10,9 +10,9 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
-from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
-from fnirs_pipe.pipeline.hyper.pair_null import _draw_condition_pairs
+from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
+from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.pipeline.hyper.pair_null import _draw_condition_pairs
 
 FIXED, PARTNER = "sub-01G01", "sub-02G02"
 

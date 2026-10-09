@@ -46,7 +46,7 @@
 {% block header %}
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
-  <span class="subtitle">v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+  <span class="subtitle">v{{ versions.get('nirspipe', 'unknown') }} &bull; {{ run_date }}
     {%- if run_entities %} &bull; {% for k, v in run_entities.items() %}{{ k }}-{{ v }}{{ ", " if not loop.last }}{% endfor %}{% endif %}</span>
 </div>
 {% endblock %}
@@ -66,7 +66,7 @@
       <tr><th>Scope</th><td>condition &ldquo;{{ condition_label }}&rdquo;</td></tr>
       {% endif %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
-      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>
@@ -442,7 +442,7 @@
 
 <!-- ================================================= quantitative metrics -->
 {#- Number formats, colour cutoffs and tooltips all come from the metric registry in
-    fnirs_pipe.qc.boilerplate.vocabulary, which the raw viewer and the GUI read as well, so
+    nirspipe.qc.boilerplate.vocabulary, which the raw viewer and the GUI read as well, so
     a threshold moves in one place instead of once per renderer. Only the labels are
     written here, where a header has room to say more than a registry default can. -#}
 {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
@@ -500,7 +500,7 @@
   {#- one column per metric, one row per channel set. Both halves are measured before
       denoising, so they share one table; the domain changes at the divider, and the two
       halves come from different records, hence the two dicts per row. -#}
-  {#- the OD columns come from fnirs_pipe.qc.channel_table, so this table and the raw
+  {#- the OD columns come from nirspipe.qc.channel_table, so this table and the raw
       viewer's cannot end up listing different metrics for the same recording -#}
   {%- set od_cols = od_split_columns %}
   {%- set hb_cols = [('hbo_hbr_corr_mean', 'HbO&ndash;HbR corr'),
@@ -595,7 +595,7 @@
   {% if motion_split %}
   <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
   {%- set gvtd_set_help = section_note('metrics.gvtd_set_help', pct=100 * spike_ch_frac) %}
-  {#- from fnirs_pipe.qc.channel_table, so this table and the raw viewer's cannot end up
+  {#- from nirspipe.qc.channel_table, so this table and the raw viewer's cannot end up
       listing different metrics for the same recording -#}
   {%- set motion_rows = motion_split_columns %}
   {%- macro motion_cell(d, key, is_long) %}
@@ -730,7 +730,7 @@
 <h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
 <div class="qm-box">
   {#- columns, values and cell classes all come pre-formatted from
-      fnirs_pipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
+      nirspipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
       same things left to right and print one number one way, and the SCI column is marked
       against the run's own --sci-threshold rather than a copy of it -#}
   {% macro ch_row(row) %}
@@ -740,7 +740,7 @@
         {%- endfor %}
       </tr>
   {% endmacro %}
-  {#- the montage split, long first, grouped by fnirs_pipe.qc.channel_table so this table
+  {#- the montage split, long first, grouped by nirspipe.qc.channel_table so this table
       and the raw views block their channels the same way. An unsplit record comes back as
       one block, which is what a montage of one kind looks like. -#}
   {% set n_blocks = channel_blocks | length %}

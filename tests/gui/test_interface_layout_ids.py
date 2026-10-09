@@ -32,18 +32,18 @@ def _walk(component, found):
 
 @pytest.fixture(scope="module")
 def registered():
-    import fnirs_pipe.interface as interface_pkg
+    import nirspipe.interface as interface_pkg
     pages = os.path.join(os.path.dirname(interface_pkg.__file__), "pages")
     dash.Dash(__name__, use_pages=True, pages_folder=pages, suppress_callback_exceptions=True)
 
-    import fnirs_pipe.interface.callbacks._sections               # noqa: F401
-    import fnirs_pipe.interface.callbacks.analysis_callbacks      # noqa: F401
-    import fnirs_pipe.interface.callbacks.batch_prep_callbacks    # noqa: F401
-    import fnirs_pipe.interface.callbacks.data_prep_callbacks     # noqa: F401
-    import fnirs_pipe.interface.callbacks.hyper_align_callbacks    # noqa: F401
-    import fnirs_pipe.interface.callbacks.hyper_analysis_callbacks  # noqa: F401
-    import fnirs_pipe.interface.callbacks.qc_callbacks            # noqa: F401
-    import fnirs_pipe.interface.callbacks.recon_callbacks         # noqa: F401
+    import nirspipe.interface.callbacks._sections               # noqa: F401
+    import nirspipe.interface.callbacks.analysis_callbacks      # noqa: F401
+    import nirspipe.interface.callbacks.batch_prep_callbacks    # noqa: F401
+    import nirspipe.interface.callbacks.data_prep_callbacks     # noqa: F401
+    import nirspipe.interface.callbacks.hyper_align_callbacks    # noqa: F401
+    import nirspipe.interface.callbacks.hyper_analysis_callbacks  # noqa: F401
+    import nirspipe.interface.callbacks.qc_callbacks            # noqa: F401
+    import nirspipe.interface.callbacks.recon_callbacks         # noqa: F401
 
     layout_ids = set()
     for page in dash.page_registry.values():

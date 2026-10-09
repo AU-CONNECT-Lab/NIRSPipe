@@ -1,4 +1,4 @@
-"""What `fnirs-prep align` leaves on disk: one aligned tree, every offset beside its file.
+"""What `nirspipe-prep align` leaves on disk: one aligned tree, every offset beside its file.
 
 A shift a step applied to one file is recorded in that file's sidecar, and no offsets table
 is written at the tree's root: this tree is read as an input next, where a group table has
@@ -10,7 +10,7 @@ import shutil
 
 import pytest
 
-from fnirs_pipe.cli.prep import cmd_align
+from nirspipe.cli.prep import cmd_align
 from tests._synth import make_hyper_dataset
 
 

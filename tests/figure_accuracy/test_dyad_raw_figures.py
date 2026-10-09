@@ -1,4 +1,4 @@
-"""The dyad raw page (fnirs-qc hyper-raw): each figure against its table and against the planted truth."""
+"""The dyad raw page (nirspipe-qc hyper-raw): each figure against its table and against the planted truth."""
 
 import re
 

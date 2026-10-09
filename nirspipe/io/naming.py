@@ -1,6 +1,6 @@
 """Every derivative name this package writes, built from and parsed against one table.
 
-The table is ``fnirs_pipe/data/fnirs_pipe_bids_config.json``: the entities this package adds
+The table is ``nirspipe/data/nirspipe_bids_config.json``: the entities this package adds
 to the ones pybids already knows, and the path patterns each kind of output follows.
 
 Two functions, and they are inverses:
@@ -20,7 +20,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-_CONFIG_FILE = Path(__file__).parent.parent / "data" / "fnirs_pipe_bids_config.json"
+_CONFIG_FILE = Path(__file__).parent.parent / "data" / "nirspipe_bids_config.json"
 
 
 @lru_cache(maxsize=1)
@@ -122,7 +122,7 @@ def figure_name(stem: str, desc: str, *, suffix: str = "nirs",
 
 def _label_entities(label: str) -> dict:
     """The entities a run or dyad label carries, for a caller that has only the label."""
-    from fnirs_pipe.io.derivatives import entity_of
+    from nirspipe.io.derivatives import entity_of
 
     return {key: entity_of(label, short)
             for key, short in (("subject", "sub"), ("group", "group"),

@@ -1,4 +1,4 @@
-"""A dyad's provenance diagram draws that task's chain only, on its pages and from `fnirs-qc provenance`."""
+"""A dyad's provenance diagram draws that task's chain only, on its pages and from `nirspipe-qc provenance`."""
 
 import pytest
 
@@ -18,10 +18,10 @@ def _only_its_own(text, own, others):
 
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
-    """One dyad, two tasks, through hyper-raw and fnirs-hyper; the raw pages' graphs kept."""
-    from fnirs_pipe.cli import hyper as hyper_cli
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.cli import run as run_cli
+    """One dyad, two tasks, through hyper-raw and nirspipe-hyper; the raw pages' graphs kept."""
+    from nirspipe.cli import hyper as hyper_cli
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.cli import run as run_cli
     from tests._fingerprint import CLI_ARGS
     from tests._synth import make_hyper_dataset
 
@@ -48,7 +48,7 @@ def test_a_dyad_page_s_provenance_holds_its_own_task_only(tree, page, task):
 
 
 def test_the_provenance_command_draws_each_dyad_task_apart(tree):
-    from fnirs_pipe.cli import qc as qc_cli
+    from nirspipe.cli import qc as qc_cli
 
     for path in tree["figures"].glob("*_desc-provenance_*"):
         path.unlink()
@@ -59,7 +59,7 @@ def test_the_provenance_command_draws_each_dyad_task_apart(tree):
 
 
 def test_the_provenance_command_reaches_a_dyad_recorded_per_session(tmp_path):
-    from fnirs_pipe.cli import qc as qc_cli
+    from nirspipe.cli import qc as qc_cli
     from tests._synth import make_hyper_dataset
 
     bids, pairs = make_hyper_dataset(tmp_path, tasks=("hold",), sessions=("a", "b"))

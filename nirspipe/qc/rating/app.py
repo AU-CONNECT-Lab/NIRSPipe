@@ -8,12 +8,12 @@ import logging as _logging
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
-from fnirs_pipe.io.naming import rating_path
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.utils.net import resolve_port
-from fnirs_pipe.utils import load_toml
+from nirspipe.io.derivatives import channel_decisions_path, entity_of
+from nirspipe.io.naming import rating_path
+from nirspipe.io.naming import report_name
+from nirspipe.utils.logging import get_logger
+from nirspipe.utils.net import resolve_port
+from nirspipe.utils import load_toml
 
 logger = get_logger("qc.rating")
 
@@ -204,7 +204,7 @@ class FNIRSRatingApp:
                 logger.info("opening %s", url)
                 webbrowser.open(url)
 
-        _serve_forever(self.app, served, "fnirs-rate", ready_delay=1.5, on_ready=_on_ready)
+        _serve_forever(self.app, served, "nirspipe-rate", ready_delay=1.5, on_ready=_on_ready)
 
 
 class RawRatingApp:
@@ -325,7 +325,7 @@ class RawRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int | None = None) -> None:
-        _serve_viewer(self.app, port, RAW_PORT, "raw viewer", "fnirs-rate raw")
+        _serve_viewer(self.app, port, RAW_PORT, "raw viewer", "nirspipe-rate raw")
 
 
 class HyperRatingApp:
@@ -341,7 +341,7 @@ class HyperRatingApp:
     ):
         self.html_path     = html_path
         self.output_dir    = output_dir
-        # the members' decisions live beside their raw pages in the fnirs-pipe tree
+        # the members' decisions live beside their raw pages in the nirspipe tree
         self.decisions_dir = decisions_dir or output_dir
         self.subject_ids   = list(subject_ids)
         self.sci_threshold = sci_threshold
@@ -468,4 +468,4 @@ class HyperRatingApp:
             return jsonify({"status": "fail", "message": str(exc)}), 500
 
     def run(self, port: int | None = None) -> None:
-        _serve_viewer(self.app, port, HYPER_PORT, "hyper viewer", "fnirs-rate hyper")
+        _serve_viewer(self.app, port, HYPER_PORT, "hyper viewer", "nirspipe-rate hyper")

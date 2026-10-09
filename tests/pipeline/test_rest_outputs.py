@@ -15,10 +15,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.naming import derivative_path
+from nirspipe.io.naming import derivative_path
 
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
 from tests._synth import synth_raw
 

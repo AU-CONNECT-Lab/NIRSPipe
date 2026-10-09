@@ -16,7 +16,7 @@ import inspect
 import pytest
 
 # the CLIs that dispatch through set_defaults(func=...)
-MODULES = ["fnirs_pipe.cli.qc", "fnirs_pipe.cli.prep", "fnirs_pipe.cli.hyper"]
+MODULES = ["nirspipe.cli.qc", "nirspipe.cli.prep", "nirspipe.cli.hyper"]
 
 
 # dests that never reach the function: --help and --version print and exit without landing

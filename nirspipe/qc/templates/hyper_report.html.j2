@@ -17,7 +17,7 @@
 .cd-chip.cd-good{background:#d4edda;color:#155724}
 .cd-chip.cd-bad{background:#f8d7da;color:#721c24}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
-/* under the second line fnirs-rate was given, apart from each member's own red */
+/* under the second line nirspipe-rate was given, apart from each member's own red */
 .cd-table td.rate-low{outline:2px dashed #e67e22;outline-offset:-3px}
 .cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
 /* one member's columns run into the next without it; a rule rather than a fill, so the
@@ -51,7 +51,7 @@
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
   <span class="subtitle">dyad raw QC &bull;
-    v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
+    v{{ versions.get('nirspipe', 'unknown') }} &bull; {{ run_date }}</span>
 </div>
 {% endblock %}
 
@@ -67,7 +67,7 @@
       <tr><th>Members</th><td>{{ subject_ids | join(' &times; ') | safe }}</td></tr>
       <tr><th>Scope</th><td>the recording as acquired, before preprocessing</td></tr>
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
-      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>
@@ -521,7 +521,7 @@ function _set(id, text, cls) {
 
 </script>
 
-<!-- Channel Decisions: populated by fnirs-rate hyper when served via Flask -->
+<!-- Channel Decisions: populated by nirspipe-rate hyper when served via Flask -->
 <script>
 (function(){
   var _hyperDecisions = {};
@@ -535,7 +535,7 @@ function _set(id, text, cls) {
   var _DECISION_ROWS = window._DECISION_ROWS || {};
   var _CH_COLUMNS    = window._CH_COLUMNS || [];
 
-  // a second SCI line, only when fnirs-rate hyper was given --sci-threshold
+  // a second SCI line, only when nirspipe-rate hyper was given --sci-threshold
   fetch("/rate_config")
     .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
     .then(function(cfg) {
@@ -563,7 +563,7 @@ function _set(id, text, cls) {
     .catch(function() {
       _isStatic = true;
       var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "read-only · launch via fnirs-rate hyper to save decisions";
+      if (hint) hint.textContent = "read-only · launch via nirspipe-rate hyper to save decisions";
       buildTable();
     });
 

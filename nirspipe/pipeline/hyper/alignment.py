@@ -13,18 +13,18 @@ from pathlib import Path
 import mne
 import numpy as np
 
-from fnirs_pipe.exceptions import AlignmentError
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.io.snirf import write_snirf
-from fnirs_pipe.pipeline.hyper._helpers import _zscore_rows
-from fnirs_pipe.utils import is_marker
-from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
-from fnirs_pipe.utils.lineage import lineage_of
-from fnirs_pipe.utils.lineage import path_from
-from fnirs_pipe.utils.lineage import restamp
-from fnirs_pipe.utils.lineage import stamp
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.exceptions import AlignmentError
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.io.snirf import write_snirf
+from nirspipe.pipeline.hyper._helpers import _zscore_rows
+from nirspipe.utils import is_marker
+from nirspipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
+from nirspipe.utils.lineage import lineage_of
+from nirspipe.utils.lineage import path_from
+from nirspipe.utils.lineage import restamp
+from nirspipe.utils.lineage import stamp
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.alignment")
 
@@ -383,7 +383,7 @@ def crop_aligned_window(
 
     For a metric with no frequency axis of its own, where a window carries no edge the whole
     record would not have had: the Welch coherence and the signal overlays of the raw dyad
-    report. ``fnirs-hyper`` does **not** use this. Its window goes through
+    report. ``nirspipe-hyper`` does **not** use this. Its window goes through
     :func:`resolve_analysis_window` instead and is taken out of the wavelet transform, a cut
     stretch transformed alone having two edges and a cone of influence of its own.
 
@@ -421,7 +421,7 @@ def resolve_analysis_window(
 
     **It returns a window; it does not cut.** The recordings stay whole and the window is
     taken out of the wavelet transform afterwards, which is the same route
-    ``--wtc-by-condition`` takes (see :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`).
+    ``--wtc-by-condition`` takes (see :func:`~nirspipe.pipeline.hyper.wtc.window_result`).
 
     ``tend`` past the end of the data is clipped rather than refused: recordings differ in
     length and an over-long window is a request for "to the end", not a mistake. A ``tstart``

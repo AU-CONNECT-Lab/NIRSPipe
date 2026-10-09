@@ -13,9 +13,9 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import long_short_channels, _mask_to_segments, _safe_metrics
-from fnirs_pipe.qc.metrics._helpers import as_optical_density
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics._helpers import long_short_channels, _mask_to_segments, _safe_metrics
+from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.gvtd")
 

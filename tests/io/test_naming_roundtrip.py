@@ -1,7 +1,7 @@
 """The names in the scheme, spelled out, and the guarantee that they parse back.
 
 Two things are held here. The table below is the scheme itself: change a pattern in
-`fnirs_pipe/data/fnirs_pipe_bids_config.json` and the rows that name a different file turn
+`nirspipe/data/nirspipe_bids_config.json` and the rows that name a different file turn
 red, so the config cannot drift from what the package meant to write. And every row has to
 survive a build-then-parse round trip, which is the property that lets a reader recover what
 a file is from its name alone. Without it the entities are decoration and the tables have to
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from fnirs_pipe.io.naming import derivative_path, parse_path
+from nirspipe.io.naming import derivative_path, parse_path
 
 OUT = Path("/out")
 
@@ -183,11 +183,11 @@ def test_pybids_can_index_and_query_a_tree_written_this_way(tmp_path):
 
     from bids import BIDSLayout
 
-    from fnirs_pipe.io.naming import layout_config
+    from nirspipe.io.naming import layout_config
 
     (tmp_path / "dataset_description.json").write_text(json.dumps({
-        "Name": "fnirs-hyper output", "BIDSVersion": "1.9.0",
-        "DatasetType": "derivative", "GeneratedBy": [{"Name": "fnirs-hyper"}],
+        "Name": "nirspipe-hyper output", "BIDSVersion": "1.9.0",
+        "DatasetType": "derivative", "GeneratedBy": [{"Name": "nirspipe-hyper"}],
     }), encoding="utf-8")
 
     written = [
@@ -214,6 +214,6 @@ def test_pybids_can_index_and_query_a_tree_written_this_way(tmp_path):
 
 
 def test_the_config_ships_with_the_package():
-    from fnirs_pipe.io.naming import _CONFIG_FILE
+    from nirspipe.io.naming import _CONFIG_FILE
 
     assert _CONFIG_FILE.is_file(), f"{_CONFIG_FILE} is missing from the installed package"

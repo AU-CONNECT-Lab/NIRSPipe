@@ -42,7 +42,7 @@ tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
   <span class="subtitle">
     {{ rows | length }} run{{ "s" if rows | length != 1 }}
     {%- if mode %} &bull; mode: {{ mode }}{% endif %}
-    &bull; v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+    &bull; v{{ versions.get('nirspipe', 'unknown') }} &bull; {{ run_date }}
   </span>
 </div>
 {% endblock %}

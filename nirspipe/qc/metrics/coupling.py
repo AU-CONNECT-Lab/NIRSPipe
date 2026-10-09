@@ -12,12 +12,12 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import SNR_PASS
-from fnirs_pipe.qc.metrics._helpers import (
+from nirspipe.qc.metrics._helpers import SNR_PASS
+from nirspipe.qc.metrics._helpers import (
     _mean_or_none, _safe_metrics, require_cardiac_below_nyquist,
 )
-from fnirs_pipe.qc.metrics._helpers import as_optical_density
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.coupling")
 
@@ -98,7 +98,7 @@ def _sci_win_metrics(
     same 10 s as ``psp_mean`` and ``cv_mean`` rather than following the QC window, so the
     four scalars describe the same stretch of recording whatever ``--qc-window`` is set to.
     """
-    from fnirs_pipe.qc.metrics.windowed import compute_windowed_sci
+    from nirspipe.qc.metrics.windowed import compute_windowed_sci
 
     raw_od = as_optical_density(raw)
     scores, _times = compute_windowed_sci(

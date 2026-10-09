@@ -1,6 +1,6 @@
 """A pair rejected by screening says which criterion rejected it, as a wavelength row does."""
 
-from fnirs_pipe.qc.common.channel_table import format_rows, pair_rows
+from nirspipe.qc.common.channel_table import format_rows, pair_rows
 
 
 def _row(name, good_frac, is_bad):
@@ -25,8 +25,8 @@ def test_the_lower_share_of_the_two_wavelengths_decides():
 def test_a_rejected_channel_does_not_move_the_grand_mean():
     import numpy as np
 
-    from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
-    from fnirs_pipe.qc.figures.subject.raw_figures import build_epoch_preview_figure
+    from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
+    from nirspipe.qc.figures.subject.raw_figures import build_epoch_preview_figure
     from tests._synth import synth_raw
 
     haemo = od_to_haemo(intensity_to_od(synth_raw("01", "tapping")), [6.0])

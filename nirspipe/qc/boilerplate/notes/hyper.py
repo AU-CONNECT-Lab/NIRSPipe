@@ -103,10 +103,10 @@ NOTES = {
         "block. A member&rsquo;s cells are tinted red where that member rejected the pair, "
         "and its Status cell names the criterion. Click a "
         "chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s JSON, "
-        "and is only active when the page is served by <code>fnirs-rate hyper</code>.",
+        "and is only active when the page is served by <code>nirspipe-rate hyper</code>.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
-        "<code>fnirs-rate hyper</code>. A red cell is under the line that member was screened "
+        "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was screened "
         "at, and the outline changes no verdict.",
     "hyper_raw.per_channel":
         "The one view an individual report cannot give: two members on the same axes.",
@@ -275,10 +275,10 @@ NOTES = {
         "table has none), so a column of this panel would not be the same pair down the "
         "page.",
 
-    # ---- The cohort test page (fnirs-hyper-groupnull) ----
+    # ---- The cohort test page (nirspipe-hyper-groupnull) ----
     "groupnull.page":
         "Each section is one statistic, one null and one chromophore, read off the tables "
-        "<code>fnirs-hyper-groupnull</code> wrote beside this page. Marks read the "
+        "<code>nirspipe-hyper-groupnull</code> wrote beside this page. Marks read the "
         "<b>paired</b> test: each occasion against the mean of its own null draws, so its "
         "spread is between occasions, which is the unit the left panels draw. The "
         "<b>resample</b> test ranks the cohort mean inside a null redrawn from each "

@@ -17,13 +17,13 @@ from typing import Any
 
 import pandas as pd
 
-from fnirs_pipe.io.tables import write_tsv
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.boilerplate.vocabulary import condition_label
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from fnirs_pipe.utils import pair_of, roi_overlaps
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.boilerplate.vocabulary import condition_label
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.utils import pair_of, roi_overlaps
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
 
@@ -180,7 +180,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
 
 
 def _neither_range_title(sep_bands=None) -> str:
-    from fnirs_pipe.qc.metrics import unclaimed_separations
+    from nirspipe.qc.metrics import unclaimed_separations
     return f"Neither range ({unclaimed_separations(sep_bands)})"
 
 
@@ -228,7 +228,7 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
 def registration_note(offset: "tuple[float, float] | None") -> "str | None":
     """What to say when the optode positions were never registered to the head.
 
-    ``offset`` is :func:`fnirs_pipe.qc.metrics.registration_offset`' output, and None means
+    ``offset`` is :func:`nirspipe.qc.metrics.registration_offset`' output, and None means
     there is nothing to say. One wording for both views, as the separation notes are.
     """
     if offset is None:
@@ -282,7 +282,7 @@ def separation_notes(
     n_odd = len({r.get("pair") or (pair_of(r["name"]) if r.get("name") else i)
                  for i, r in enumerate(odd)})
     if n_odd:
-        from fnirs_pipe.qc.metrics import separation_bands, unclaimed_separations
+        from nirspipe.qc.metrics import separation_bands, unclaimed_separations
         where = ""
         short_max, long_min = (sep_bands or separation_bands())[:2]
         # the two flags can only take in channels between the ranges; one past --long-max-dist
@@ -430,7 +430,7 @@ CONDITION_OD_SPLIT_COLUMNS = tuple((key, condition_label(key) or text)
 
 def _cell(key: str, scalars: dict, colour: bool) -> dict:
     """One table cell, with the after value beside it where the row carries one."""
-    from fnirs_pipe.qc.boilerplate.vocabulary import format_metric, metric_class
+    from nirspipe.qc.boilerplate.vocabulary import format_metric, metric_class
 
     before, after = scalars.get(key), scalars.get(f"{key}_post")
     cell = {"value": format_metric(key, before),
@@ -473,7 +473,7 @@ def split_table(
         -> columns: [{"key": "sci_mean", "label": "Mean SCI", ...}]
            rows:    [{"name": "Long", "n": 40, "cells": [{"value": "0.810", "cls": "qm-ok"}]}]
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
+    from nirspipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
 
     columns = measured_columns(columns, *(s for _, _, s, _ in channel_sets))
     return {
@@ -501,7 +501,7 @@ def _failed_criteria(row: dict, cutoffs: dict[str, float]) -> list[str]:
     is only claimed when every criterion actually has a score to judge it by -- an
     unmeasured criterion is not evidence of a manual rejection.
     """
-    from fnirs_pipe.qc.metrics import CRITERIA
+    from nirspipe.qc.metrics import CRITERIA
 
     failed, scored = [], True
     for c in CRITERIA:
@@ -554,8 +554,8 @@ def format_rows(
     can be BAD with a passing SCI cell; without the reason printed beside it that reads as a
     contradiction rather than as a PSP failure.
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import format_metric
-    from fnirs_pipe.qc.metrics import resolve_cutoffs
+    from nirspipe.qc.boilerplate.vocabulary import format_metric
+    from nirspipe.qc.metrics import resolve_cutoffs
 
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
     out = []

@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fnirs-pipe"
+name = "nirspipe"
 dynamic = ["version"]
 description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning, QC, and run-tracking pipeline"
 authors = [
@@ -30,12 +30,12 @@ dependencies = [
     "matplotlib>=3.8",    # every static QC panel; imported at module level
     "pillow>=10.0",       # stitches the rendered brain views side by side
     "joblib>=1.3",        # parallel dispatch (--n-jobs)
-    "flask>=3.0",         # fnirs-rate viewer
+    "flask>=3.0",         # nirspipe-rate viewer
     "dash[ag-grid]>=2.16",
     "dash-ag-grid>=33",     # Theming API; assets/interface.css styles it through --ag-*
     "dash-bootstrap-components>=1.6",
     "dash-cytoscape>=1.0",   # GUI Analysis-page DAG
-    "pycwt>=0.4",         # hyperscanning WTC (fnirs-qc hyper-post)
+    "pycwt>=0.4",         # hyperscanning WTC (nirspipe-qc hyper-post)
     "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
     "tomli>=2.0; python_version < '3.11'",
     "bibtexparser>=2.0.0b1",
@@ -50,29 +50,29 @@ dev = [
 ]
 
 [project.scripts]
-fnirs-pipe  = "fnirs_pipe.cli.run:main"
-fnirs-prep  = "fnirs_pipe.cli.prep:main"
-fnirs-recon = "fnirs_pipe.cli.recon:main"
-fnirs-rate  = "fnirs_pipe.cli.rate:main"
-fnirs-qc    = "fnirs_pipe.cli.qc:main"
-fnirs-hyper           = "fnirs_pipe.cli.hyper:main"
-fnirs-hyper-pairnull  = "fnirs_pipe.cli.hyper:main_pair_null"
-fnirs-hyper-groupnull = "fnirs_pipe.cli.hyper:main_group_null"
-fnirs-hyper-band      = "fnirs_pipe.cli.hyper:main_band"
-fnirs-hyper-index     = "fnirs_pipe.cli.hyper:main_index"
-fnirs-hyper-merge     = "fnirs_pipe.cli.hyper:main_merge"
-fnirs-gui   = "fnirs_pipe.cli.gui:main"
-fnirs-log   = "fnirs_pipe.cli.db:main"
+nirspipe                 = "nirspipe.cli.run:main"
+nirspipe-prep            = "nirspipe.cli.prep:main"
+nirspipe-recon           = "nirspipe.cli.recon:main"
+nirspipe-rate            = "nirspipe.cli.rate:main"
+nirspipe-qc              = "nirspipe.cli.qc:main"
+nirspipe-hyper           = "nirspipe.cli.hyper:main"
+nirspipe-hyper-pairnull  = "nirspipe.cli.hyper:main_pair_null"
+nirspipe-hyper-groupnull = "nirspipe.cli.hyper:main_group_null"
+nirspipe-hyper-band      = "nirspipe.cli.hyper:main_band"
+nirspipe-hyper-index     = "nirspipe.cli.hyper:main_index"
+nirspipe-hyper-merge     = "nirspipe.cli.hyper:main_merge"
+nirspipe-gui             = "nirspipe.cli.gui:main"
+nirspipe-log             = "nirspipe.cli.db:main"
 
 [tool.setuptools.dynamic]
-version = {attr = "fnirs_pipe.__version__"}
+version = {attr = "nirspipe.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["fnirs_pipe*"]
+include = ["nirspipe*"]
 
 [tool.setuptools.package-data]
-fnirs_pipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/assets/*.css"]
+nirspipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/assets/*.css"]
 
 [tool.ruff]
 line-length = 100

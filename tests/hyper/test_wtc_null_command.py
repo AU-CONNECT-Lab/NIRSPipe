@@ -5,7 +5,7 @@ either can be set on its own: crossing multiplies the cost of every surrogate it
 sidecar records the iteration count and the shape as well as the band, so a short probe and
 a full null do not look alike.
 
-The null runs inside `fnirs-hyper`, which is what keeps its band and its stage identical
+The null runs inside `nirspipe-hyper`, which is what keeps its band and its stage identical
 to the table it sits beside. These tests hold that in place: the null is off unless asked
 for, its crossing follows the table unless set, the sidecar says what was run, and a merge keeps
 mixed iteration counts visible while refusing mixed bands.
@@ -18,16 +18,16 @@ import logging
 
 import pytest
 
-from fnirs_pipe.cli.hyper import _parsers
-from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
+from nirspipe.cli.hyper import _parsers
+from nirspipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
 from tests.hyper._names import name
 
 
 @pytest.fixture(autouse=True)
 def _hyper_tree(tmp_path):
-    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
-    from fnirs_pipe.io.derivatives import write_dataset_description
-    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+    """tmp_path is the nirspipe-hyper tree, which every command stamps before it writes."""
+    from nirspipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="nirspipe-hyper output", generated_by="nirspipe-hyper")
 
 
 
@@ -51,7 +51,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -59,7 +59,7 @@ def _null(frame, cond_frames=(), levels=None):
 
 
 def _hyper(*argv):
-    return _parsers()["fnirs-hyper"].parse_args(
+    return _parsers()["nirspipe-hyper"].parse_args(
         ["/deriv", "/out", "group", "--pairs-csv", "/p.csv", *argv])
 
 
@@ -97,8 +97,8 @@ def test_the_null_can_be_set_either_way_on_its_own():
 # ---- what lands on disk ----
 
 def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
@@ -126,8 +126,8 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     """One pass per chromophore, and the frame each returns is not the null's to
     change. Inserting the column in place would raise on the second pass as soon as
     two passes are handed the same object, which a cache or a stub does."""
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -146,8 +146,8 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
 
 
 def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
@@ -188,7 +188,7 @@ def test_nulls_of_different_lengths_merge_but_say_so(tmp_path, caplog):
     """
     _write_null(tmp_path, "G01", "baseline", 100)
     _write_null(tmp_path, "G02", "baseline", 5)
-    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.pipeline.hyper.wtc_aggregate"):
+    with caplog.at_level(logging.WARNING, logger="nirspipe.pipeline.hyper.wtc_aggregate"):
         merged = _merge(tmp_path)
     assert sorted(merged["group_id"].unique()) == ["G01", "G02"]
     assert sorted(merged["n_iter"].unique()) == [5, 100]
@@ -212,7 +212,7 @@ def test_nulls_of_one_length_merge(tmp_path):
 
 def test_merge_covers_whatever_is_on_disk(tmp_path):
     """Every kind on disk is merged, not only the kinds on a fixed list."""
-    from fnirs_pipe.cli.hyper import cmd_merge
+    from nirspipe.cli.hyper import cmd_merge
 
     _write_null(tmp_path, "G01", "baseline", 100)
     cmd_merge(tmp_path, verbose=False)
@@ -235,7 +235,7 @@ def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
     """A stale merged table reads like a finished result, so the run says which it is.
     It does not merge: a run often covers one dyad, and merging the whole tree after it
     would fail on a band a later run legitimately changed."""
-    from fnirs_pipe.cli.hyper import _merge_reminder
+    from nirspipe.cli.hyper import _merge_reminder
 
     _write_table(tmp_path, "G01", "baseline")
     _write_table(tmp_path, "G02", "baseline")
@@ -243,13 +243,13 @@ def test_a_run_says_when_nothing_has_been_merged(tmp_path, capsys):
 
     out = capsys.readouterr().out
     assert "2 table(s) for stat-wtc_relmat.tsv, never merged" in out
-    assert "fnirs-hyper-merge" in out
+    assert "nirspipe-hyper-merge" in out
 
 
 def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
     import os
 
-    from fnirs_pipe.cli.hyper import _merge_reminder
+    from nirspipe.cli.hyper import _merge_reminder
 
     tsv = _write_table(tmp_path, "G01", "baseline")
     merged = tmp_path / "stat-wtc_relmat.tsv"
@@ -265,7 +265,7 @@ def test_a_run_says_when_the_merged_table_is_behind(tmp_path, capsys):
 
 def test_the_reminder_counts_what_the_merge_would_take(tmp_path, capsys):
     """Same discovery as the aggregator, so the count cannot disagree with what merge does."""
-    from fnirs_pipe.cli.hyper import _merge_reminder
+    from nirspipe.cli.hyper import _merge_reminder
 
     _write_table(tmp_path, "G01", "baseline", kind="wtc")
     _write_table(tmp_path, "G01", "baseline", kind="wtc-phasenull")
@@ -291,8 +291,8 @@ def _null_frames():
 def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypatch, make_raw):
     """Two files rather than one, mirroring the real side, where the whole-run and
     per-condition tables are also merged separately."""
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null",
@@ -314,8 +314,8 @@ def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypat
 
 def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_raw):
     """Without them a table of five conditions and a table of two read the same on disk."""
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null",
@@ -334,8 +334,8 @@ def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_r
 
 
 def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_raw):
-    import fnirs_pipe.pipeline.hyper as hyper
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import wtc_null
 
     whole, _ = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(whole))
@@ -355,7 +355,7 @@ def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
     They differ by the `cond-` entity, which is what puts them in two merges: the kind a
     file belongs to is the entity set it carries besides its group and its task.
     """
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import merge_kinds
+    from nirspipe.pipeline.hyper.wtc_aggregate import merge_kinds
 
     _write_table(tmp_path, "G01", "main", kind="wtc-phasenull")
     _write_table(tmp_path, "G01", "main", kind="wtcbycond-phasenull")
@@ -368,7 +368,7 @@ TWO_REGIONS = {"r1": ["S1_D1", "S1_D2"], "r2": ["S2_D1"]}
 
 
 def _write_roi_null(tmp_path, make_raw, frame, **kwargs):
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    from nirspipe.pipeline.hyper import wtc_null
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     return wtc_null.write_wtc_null(
@@ -435,8 +435,8 @@ def test_a_crossed_null_ranks_the_crossed_roi_matrix_only_against_a_crossed_one(
 
 def test_one_surviving_channel_keeps_a_region_by_default():
     """The region's mean of channel coherences rests on fewer channels, not on a biased one."""
-    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels
-    from fnirs_pipe.utils import ROI_MIN_CHANNELS
+    from nirspipe.pipeline.hyper.roi import roi_mean_of_channels
+    from nirspipe.utils import ROI_MIN_CHANNELS
 
     assert _hyper().wtc_roi_min_channels == ROI_MIN_CHANNELS == 1
     frame = pd.DataFrame({"sub1": ["a"] * 2, "sub2": ["b"] * 2, "label": ["S1_D1", "S2_D1"],

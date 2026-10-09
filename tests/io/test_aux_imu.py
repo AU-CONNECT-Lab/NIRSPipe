@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.auxiliary import (
+from nirspipe.io.auxiliary import (
     TIME_COLUMN, accel_jerk, gyro_speed, imu_traces, table_channels,
 )
 
@@ -64,7 +64,7 @@ def test_the_subject_report_finds_the_table_beside_the_stages(tmp_path):
     """The report has only the run's stage files; the aux table sits beside them under the
     same entities, and a run without one draws no row rather than failing."""
     import gzip
-    from fnirs_pipe.qc.subject.report import _load_imu
+    from nirspipe.qc.subject.report import _load_imu
 
     (tmp_path / "sub-01_task-rest_desc-sci_nirs.snirf").touch()
     t = np.arange(0.0, 2.0, 0.01)
@@ -104,7 +104,7 @@ def test_each_sensor_carries_the_unit_its_axis_prints():
 
 def test_the_table_units_come_from_its_sidecar(tmp_path):
     import json
-    from fnirs_pipe.io.auxiliary import aux_table_units
+    from nirspipe.io.auxiliary import aux_table_units
 
     table = tmp_path / "sub-01_task-rest_desc-aux_timeseries.tsv.gz"
     table.touch()

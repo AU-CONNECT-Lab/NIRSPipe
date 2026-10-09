@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import mne
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.screen_scope")
 
@@ -40,7 +40,7 @@ def resolve_screen_scope(
     if scope == "run":
         return None
 
-    from fnirs_pipe.qc.metrics.windowed import task_scope_windows
+    from nirspipe.qc.metrics.windowed import task_scope_windows
 
     windows = task_scope_windows(raw)
     if not windows:

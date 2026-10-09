@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 
-from fnirs_pipe.cli.workflows import run_participant_level
+from nirspipe.cli.workflows import run_participant_level
 
 
 def _marked(out_dir, task):
@@ -27,7 +27,7 @@ def test_a_task_row_reaches_only_that_task_in_the_run_and_its_script(mini_bids, 
         bad_channels=str(table),
         bids_dir=mini_bids, output_dir=cli_out, participant_label=["01"])
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(mini_bids), str(cli_out), "participant"]
+    sys.argv = ["nirspipe", str(mini_bids), str(cli_out), "participant"]
     try:
         run_participant_level(args)
     finally:

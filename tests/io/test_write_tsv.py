@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.io.tables import write_tsv
 
 
 def test_a_missing_value_is_written_n_a_and_no_index_by_default(tmp_path):

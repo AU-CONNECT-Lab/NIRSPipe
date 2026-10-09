@@ -15,17 +15,17 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper.wtc_aggregate import (
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.pipeline.hyper.wtc_aggregate import (
     aggregate_wtc, merge_kinds, write_aggregate_wtc, write_all_aggregates,
 )
 
 
 @pytest.fixture(autouse=True)
 def _hyper_tree(tmp_path):
-    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
-    from fnirs_pipe.io.derivatives import write_dataset_description
-    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+    """tmp_path is the nirspipe-hyper tree, which every command stamps before it writes."""
+    from nirspipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="nirspipe-hyper output", generated_by="nirspipe-hyper")
 
 
 WTC = {"statistic": "wtc"}

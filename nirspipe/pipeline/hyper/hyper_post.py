@@ -1,7 +1,7 @@
-"""The analysis behind ``fnirs-hyper post``: the WTC and ISC runs, and the tables they write.
+"""The analysis behind ``nirspipe-hyper post``: the WTC and ISC runs, and the tables they write.
 
 Nothing here draws. The transform covers every pairing at once and a figure is of one
-pairing, so the two are separated; :mod:`fnirs_pipe.qc.hyper.hyper_report` draws the
+pairing, so the two are separated; :mod:`nirspipe.qc.hyper.hyper_report` draws the
 :class:`HyperPostResult` this returns, and skips the transform when handed one.
 """
 
@@ -15,24 +15,24 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper._helpers import _chroma_tuple
-from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
-from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
-from fnirs_pipe.pipeline.hyper.whiten import whiten_order, whiten_raws
-from fnirs_pipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
-from fnirs_pipe.qc.common.windows import condition_windows, refuse_colliding_labels
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
+from nirspipe.utils.logging import get_logger
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.pipeline.hyper._helpers import _chroma_tuple
+from nirspipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
+from nirspipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
+from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
+from nirspipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
+from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.hyper_post")
 
 
 @dataclass
 class HyperPostConfig:
-    """Every ``--wtc-*`` option of ``fnirs-hyper post``, with the derived values resolved once.
+    """Every ``--wtc-*`` option of ``nirspipe-hyper post``, with the derived values resolved once.
 
     Field names are the CLI's. ``band_fmin``, ``band_fmax``, ``chroma`` and ``cond_pad_s``
     are the resolved forms, in one place so the tables and the figures cannot fall back
@@ -167,7 +167,7 @@ def write_isc_matrix(
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
     Both axes carry the montage's channel labels, which is how
-    :func:`~fnirs_pipe.pipeline.hyper.isc.compute_isc` pairs the
+    :func:`~nirspipe.pipeline.hyper.isc.compute_isc` pairs the
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
@@ -175,12 +175,12 @@ def write_isc_matrix(
     ``step`` and ``index_label`` are what let this serve the ROI means of those matrices
     too, which are the same square shape over regions instead of channels.
 
-    ``align`` is what :func:`~fnirs_pipe.pipeline.hyper.alignment_params` returned, so the
+    ``align`` is what :func:`~nirspipe.pipeline.hyper.alignment_params` returned, so the
     file says which alignment it got.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
-    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper import _hyper_sidecar
 
     try:
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -219,10 +219,10 @@ def run_hyper_post(
     ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
     the footer of the page this result is drawn on and not only the run log.
     """
-    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper import _hyper_sidecar
     # straight from the modules that define them, not the package re-exports
-    from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
-    from fnirs_pipe.pipeline.hyper.wtc import (
+    from nirspipe.pipeline.hyper._helpers import long_axis_over
+    from nirspipe.pipeline.hyper.wtc import (
         WTCResult,
         compute_wtc,
         window_result,
@@ -230,8 +230,8 @@ def run_hyper_post(
         wtc_grid_params,
         wtc_phase_by_scale,
     )
-    from fnirs_pipe.qc.common.report_shell import guard, note
-    from fnirs_pipe.utils.lineage import paths_from
+    from nirspipe.qc.common.report_shell import guard, note
+    from nirspipe.utils.lineage import paths_from
 
     errors = errors if errors is not None else []
     notes  = notes  if notes  is not None else []
@@ -280,7 +280,7 @@ def run_hyper_post(
 
         No chromophore entity: these are long tables with a ``chromophore`` column, and no
         band entity: the band is a parameter of the measurement rather than something that
-        tells two files apart, so it goes in the sidecar below. ``fnirs-hyper band`` is the
+        tells two files apart, so it goes in the sidecar below. ``nirspipe-hyper band`` is the
         one writer that needs it in a name, and only because its output sits beside this one.
         """
         tsv_path = group_output_path(output_dir, group_id, {"task": task, **entities},
@@ -326,7 +326,7 @@ def run_hyper_post(
 
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. What the padding buys is the cone:
-        with a margin past :func:`~fnirs_pipe.pipeline.hyper.wtc.cone_margin_s` it lands
+        with a margin past :func:`~nirspipe.pipeline.hyper.wtc.cone_margin_s` it lands
         outside the condition instead of eating its edges.
 
         ``cond_pad_s`` of 0 does cut to the boundaries.
@@ -363,13 +363,13 @@ def run_hyper_post(
         It carries ``chromo-`` where the TSV beside it does not: the TSV is long format and
         holds both chromophores in a column, and an archive cannot.
         """
-        from fnirs_pipe.pipeline.hyper.wtc_store import save_wtc
+        from nirspipe.pipeline.hyper.wtc_store import save_wtc
         npz_path = group_output_path(output_dir, group_id,
                                      {"task": task, "chromophore": ch_type,
                                       "statistic": "wtc"}, "relmat", ".npz", session=session)
         with guard(f"Saving WTC maps ({ch_type})", errors, scope):
             save_wtc(result, npz_path)
-            # what `fnirs-hyper band` carries onto the tables it re-averages from this
+            # what `nirspipe-hyper band` carries onto the tables it re-averages from this
             _hyper_sidecar(npz_path, "hyper_wtc_maps",
                            paths_from(aligned_raws.values()),
                            **_wtc_params())
@@ -383,7 +383,7 @@ def run_hyper_post(
 
     def _usable_level(path: Path, what: str, **expected) -> bool:
         """Whether a level on disk was drawn on these recordings with these settings."""
-        from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch, level_params
+        from nirspipe.pipeline.hyper.wtc_store import level_mismatch, level_params
         if not path.exists():
             return False
         why = level_mismatch(path, {**level_params(aligned_raws, wtc_fmin=wtc_fmin,
@@ -429,7 +429,7 @@ def run_hyper_post(
         keep whatever they had, and the arrows fall back to the flat --wtc-arrow-min. A level
         drawn on other recordings or settings is refused rather than used.
         """
-        from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
+        from nirspipe.pipeline.hyper.wtc_store import load_null_levels
         npz_path = _level_path(ch_type, "phase")
         if result is None or not _usable_level(npz_path, f"{ch_type} phase arrows"):
             return
@@ -446,8 +446,8 @@ def run_hyper_post(
 
     def _load_roi_level(ch_type: str) -> None:
         """The ROI maps' own phase-scrambled level, kept for the report that draws the maps."""
-        from fnirs_pipe.pipeline.hyper.wtc_null import roi_level_params, roi_level_path
-        from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
+        from nirspipe.pipeline.hyper.wtc_null import roi_level_params, roi_level_path
+        from nirspipe.pipeline.hyper.wtc_store import load_null_levels
         if not roi_map:
             return
         path = roi_level_path(output_dir, group_id, task, ch_type, config.roi_map_name, session)
@@ -469,7 +469,7 @@ def run_hyper_post(
         gave it. A condition whose span on this run's clock differs from the one the null was
         drawn on keeps that too.
         """
-        from fnirs_pipe.pipeline.hyper.wtc_store import load_cond_null_levels
+        from nirspipe.pipeline.hyper.wtc_store import load_cond_null_levels
         if ch_type not in pair_levels:
             path = _level_path(ch_type, "pair")
             pair_levels[ch_type] = None
@@ -792,13 +792,13 @@ def run_hyper_post(
     def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:
         """Put each condition's re-paired |r| level in place of its chord level, where it fits.
 
-        Written by `fnirs-hyper-pairnull` for the members it re-paired, one condition at a
+        Written by `nirspipe-hyper-pairnull` for the members it re-paired, one condition at a
         time, so only that pairing's condition pages can take it. A table drawn with other ISC
         settings, on other recordings, or over a condition span this run does not share is
         left unused and the chords keep the phase-scrambled level or the fallback.
         """
-        from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-        from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+        from nirspipe.pipeline.hyper.wtc import wtc_grid_params
+        from nirspipe.pipeline.hyper.wtc_store import level_mismatch
         path = group_output_path(output_dir, group_id,
                                  {"task": task, "condition": "all", "nulldist": "pair",
                                   "statistic": "isc"}, "relmat", ".tsv", session=session)
@@ -810,7 +810,7 @@ def run_hyper_post(
         why = level_mismatch(path, expected, aligned_raws)
         if why:
             note(notes, scope, f"{path.name} is on disk but was not used for the chords: "
-                               f"{why}. Rerun fnirs-hyper-pairnull on this tree.")
+                               f"{why}. Rerun nirspipe-hyper-pairnull on this tree.")
             return {}
         side = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["parameters"]
         spans = side.get("condition_windows_s") or {}

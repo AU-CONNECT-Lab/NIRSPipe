@@ -7,12 +7,12 @@ reader and the subject folders. These pin the folder, not the filenames.
 
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import (
+from nirspipe.io.derivatives import (
     group_data_dir,
     group_report_dir,
     subject_report_dir,
 )
-from fnirs_pipe.pipeline.hyper import GroupEntry, write_group_bads
+from nirspipe.pipeline.hyper import GroupEntry, write_group_bads
 
 
 def _group(task="hold"):
@@ -65,9 +65,9 @@ def test_a_subject_folder_is_named_the_same_way_from_either_form(tmp_path):
 
 def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
     """Not loose in the root, one file per run beside the study's own."""
-    from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
+    from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
 
-    from fnirs_pipe.io.naming import report_name
+    from nirspipe.io.naming import report_name
 
     out = subject_report_dir(tmp_path, "01") / report_name("sub-01_task-hold", desc="raw")
     build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, dpf=[6.0],

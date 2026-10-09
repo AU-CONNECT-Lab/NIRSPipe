@@ -1,6 +1,6 @@
 """A dyad's per-condition quality table names a condition's channel share for what it is."""
 
-from fnirs_pipe.qc.hyper.hyper_report import condition_subject_metrics, subject_metric_tables
+from nirspipe.qc.hyper.hyper_report import condition_subject_metrics, subject_metric_tables
 
 
 def _labels(tables):

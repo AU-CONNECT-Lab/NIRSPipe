@@ -1,7 +1,7 @@
 """The contract between the GUI's command builder and the CLI it drives.
 
 The analysis page does not run the pipeline; it assembles an argv and hands it to
-`fnirs-pipe`. That makes `_build_cli_args` a hand-written copy of the CLI's flag surface,
+`nirspipe`. That makes `_build_cli_args` a hand-written copy of the CLI's flag surface,
 and a copy falls behind with nothing to announce it.
 
 These tests do the comparing. `NOT_EXPOSED` is the deliberate half of the
@@ -16,10 +16,10 @@ import dash_bootstrap_components as dbc
 import pytest
 from dash import dcc, html
 
-from fnirs_pipe.cli.run import _build_parser
-from fnirs_pipe.cli.workflows import _build_post_config
-from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
-from fnirs_pipe.interface.cli_args import (
+from nirspipe.cli.run import _build_parser
+from nirspipe.cli.workflows import _build_post_config
+from nirspipe.interface.callbacks.analysis_callbacks import _build_cli_args
+from nirspipe.interface.cli_args import (
     _AGGREGATE,
     _HYPER,
     _RAW_QC,
@@ -179,7 +179,7 @@ def test_nothing_is_both_written_off_and_emitted():
 @pytest.mark.parametrize("mode", _MODES)
 def test_the_generated_command_parses(mode):
     argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
-    assert argv[0] == "fnirs-pipe"
+    assert argv[0] == "nirspipe"
     _build_parser().parse_args(argv[1:])          # raises SystemExit on an unknown flag
 
 
@@ -230,19 +230,19 @@ def analysis_page():
     Dash refuses `register_page` before an app exists, so the page modules cannot simply be
     imported; the app has to be constructed the way `interface.app.launch` constructs it.
     """
-    import fnirs_pipe.interface.app as app_module
+    import nirspipe.interface.app as app_module
 
     app = dash.Dash(
         __name__, use_pages=True,
         pages_folder=os.path.join(os.path.dirname(app_module.__file__), "pages"),
         external_stylesheets=[dbc.themes.FLATLY], suppress_callback_exceptions=True,
     )
-    import fnirs_pipe.interface.callbacks.analysis_callbacks
-    import fnirs_pipe.interface.callbacks.batch_prep_callbacks
-    import fnirs_pipe.interface.callbacks.data_prep_callbacks
-    import fnirs_pipe.interface.callbacks.hyper_align_callbacks
-    import fnirs_pipe.interface.callbacks.qc_callbacks
-    import fnirs_pipe.interface.callbacks.recon_callbacks  # noqa: F401
+    import nirspipe.interface.callbacks.analysis_callbacks
+    import nirspipe.interface.callbacks.batch_prep_callbacks
+    import nirspipe.interface.callbacks.data_prep_callbacks
+    import nirspipe.interface.callbacks.hyper_align_callbacks
+    import nirspipe.interface.callbacks.qc_callbacks
+    import nirspipe.interface.callbacks.recon_callbacks  # noqa: F401
 
     app.layout = html.Div([dcc.Store(id="app-bids-dir"), dash.page_container])
     app._setup_server()
@@ -308,10 +308,10 @@ def test_the_unbound_controls_still_exist(analysis_page):
 
 # ---- the same contract for the QC page, which drives two tools ----
 
-# The page builds `fnirs-qc` for the aggregate commands and `fnirs-hyper` for the dyad
+# The page builds `nirspipe-qc` for the aggregate commands and `nirspipe-hyper` for the dyad
 # analysis. Both are subparser CLIs, so each command's flag list is read off its own parser.
 
-# fnirs-qc subcommands the QC page does not offer, and why.
+# nirspipe-qc subcommands the QC page does not offer, and why.
 QC_COMMANDS_NOT_OFFERED: dict[str, str] = {}
 
 # per-command flags the page leaves out. Most are the negative half of a paired
@@ -403,14 +403,14 @@ def _subcommands(build):
 
 
 def _build_qc_parser():
-    from fnirs_pipe.cli.qc import _build_parser as build
+    from nirspipe.cli.qc import _build_parser as build
     return build()
 
 
 def _hyper_parsers_by_command():
     """Each dyad command's own parser, keyed the way the page names it."""
-    from fnirs_pipe.cli.hyper import _parsers
-    from fnirs_pipe.interface.cli_args import _HYPER_PROG
+    from nirspipe.cli.hyper import _parsers
+    from nirspipe.interface.cli_args import _HYPER_PROG
 
     built = _parsers()
     return {command: built[prog] for command, prog in _HYPER_PROG.items()}
@@ -435,29 +435,29 @@ def _qc_emitted(command: str) -> set[str]:
     return {a for a in build_qc_args(command, _QC_FULL_OPTS) if a.startswith("--")}
 
 
-def test_some_page_offers_every_fnirs_qc_subcommand_or_writes_it_off():
+def test_some_page_offers_every_nirspipe_qc_subcommand_or_writes_it_off():
     """The aggregates are on Cohort Reports; the two raw reports are on the QC pages."""
     reachable = set(_QC_OFFERED) | set(_RAW_QC) | set(QC_COMMANDS_NOT_OFFERED)
     missing = set(_qc_subparsers()) - reachable
     assert not missing, (
-        f"fnirs-qc grew {sorted(missing)} and no page either offers or declines them"
+        f"nirspipe-qc grew {sorted(missing)} and no page either offers or declines them"
     )
 
 
 def test_the_page_offers_every_hyper_subcommand():
     missing = set(_hyper_subparsers()) - set(_QC_OFFERED)
-    assert not missing, f"fnirs-hyper grew {sorted(missing)} and the page cannot reach them"
+    assert not missing, f"nirspipe-hyper grew {sorted(missing)} and the page cannot reach them"
 
 
 def test_the_declined_subcommands_still_exist():
     stale = set(QC_COMMANDS_NOT_OFFERED) - set(_qc_subparsers())
-    assert not stale, f"QC_COMMANDS_NOT_OFFERED names commands fnirs-qc no longer has: {sorted(stale)}"
+    assert not stale, f"QC_COMMANDS_NOT_OFFERED names commands nirspipe-qc no longer has: {sorted(stale)}"
 
 
-def test_the_dyad_analysis_left_fnirs_qc():
-    """fnirs-qc carries none of the dyad analysis; that is fnirs-hyper's."""
+def test_the_dyad_analysis_left_nirspipe_qc():
+    """nirspipe-qc carries none of the dyad analysis; that is nirspipe-hyper's."""
     gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(_qc_subparsers())
-    assert not gone, f"fnirs-qc still carries {sorted(gone)}"
+    assert not gone, f"nirspipe-qc still carries {sorted(gone)}"
 
 
 @pytest.mark.parametrize("command", _QC_OFFERED)
@@ -480,12 +480,12 @@ def test_the_written_off_qc_flags_still_exist(command):
 def test_the_generated_qc_command_parses(command):
     argv = build_qc_args(command, _QC_FULL_OPTS)
     if command in _HYPER:
-        from fnirs_pipe.interface.cli_args import _HYPER_PROG
+        from nirspipe.interface.cli_args import _HYPER_PROG
         assert argv[0] == _HYPER_PROG[command]
         # raises SystemExit on an unknown flag or a missing positional
         _hyper_parsers_by_command()[command].parse_args(argv[1:])
     else:
-        assert argv[:2] == ["fnirs-qc", command]
+        assert argv[:2] == ["nirspipe-qc", command]
         _build_qc_parser().parse_args(argv[1:])
 
 
@@ -505,10 +505,10 @@ def test_a_space_separated_box_repeats_its_flag_rather_than_joining():
 
 def test_the_aggregate_commands_take_only_an_output_directory():
     for command in _AGGREGATE:
-        assert build_qc_args(command, _QC_FULL_OPTS) == ["fnirs-qc", command, "/out"]
+        assert build_qc_args(command, _QC_FULL_OPTS) == ["nirspipe-qc", command, "/out"]
 
 
-# ── Batch Prep → fnirs-prep ──────────────────────────────────────────────────
+# ── Batch Prep → nirspipe-prep ──────────────────────────────────────────────────
 
 # per-subcommand flags the Batch Prep page leaves out, and why
 PREP_NOT_EXPOSED = {
@@ -555,12 +555,12 @@ _PREP_CASES = [
     ("hyper_align", {}),
 ]
 
-# the page's operation names, and the fnirs-prep subcommand each one drives
+# the page's operation names, and the nirspipe-prep subcommand each one drives
 _PREP_SUBCOMMAND = {"markers": "edit-markers", "crop": "crop", "hyper_align": "align"}
 
 
 def _build_prep_parser():
-    from fnirs_pipe.cli.prep import _build_parser as build
+    from nirspipe.cli.prep import _build_parser as build
     return build()
 
 
@@ -588,7 +588,7 @@ def _prep_emitted(subcommand: str) -> set[str]:
 
 def test_the_batch_page_reaches_every_prep_subcommand():
     missing = set(_prep_subparsers()) - set(_PREP_SUBCOMMAND.values())
-    assert not missing, f"fnirs-prep grew {sorted(missing)} and Batch Prep cannot reach them"
+    assert not missing, f"nirspipe-prep grew {sorted(missing)} and Batch Prep cannot reach them"
 
 
 @pytest.mark.parametrize("subcommand", sorted(set(_PREP_SUBCOMMAND.values())))
@@ -612,7 +612,7 @@ def test_the_written_off_prep_flags_still_exist(subcommand):
                               for op, e in _PREP_CASES])
 def test_the_generated_prep_command_parses(operation, extra):
     argv = build_prep_args(operation, dict(_PREP_FULL_OPTS, **extra))
-    assert argv[0] == "fnirs-prep"
+    assert argv[0] == "nirspipe-prep"
     _build_prep_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
 
 
@@ -639,7 +639,7 @@ def test_one_marker_edit_is_sent_at_a_time():
         assert not (others & set(argv)), f"{marker_op} also sent {sorted(others & set(argv))}"
 
 
-# ── The two QC pages → fnirs-qc prep-raw / hyper-raw ─────────────────────────
+# ── The two QC pages → nirspipe-qc prep-raw / hyper-raw ─────────────────────────
 
 # These are the static counterparts of what Data Preparation and Hyper Preparation show
 # interactively. Both take a BIDS root, which is what separates them from the aggregate
@@ -715,7 +715,7 @@ def test_the_written_off_raw_qc_flags_still_exist(command):
 @pytest.mark.parametrize("command", _RAW_QC)
 def test_the_generated_raw_qc_command_parses(command):
     argv = build_raw_qc_args(command, _RAW_QC_FULL_OPTS)
-    assert argv[:2] == ["fnirs-qc", command]
+    assert argv[:2] == ["nirspipe-qc", command]
     _build_qc_parser().parse_args(argv[1:])   # raises SystemExit on an unknown flag
 
 
@@ -749,7 +749,7 @@ def test_the_raw_reports_take_a_bids_directory():
 # ---- an empty field takes the mode's default ----
 
 def test_the_band_note_reads_the_mode_default_for_an_empty_cutoff():
-    from fnirs_pipe.interface.callbacks.analysis_callbacks import band_note
+    from nirspipe.interface.callbacks.analysis_callbacks import band_note
 
     # rest ships its own cosine cutoff; glm leaves it to the design
     assert band_note("rest", None, "cosine", None) is None
@@ -757,8 +757,8 @@ def test_the_band_note_reads_the_mode_default_for_an_empty_cutoff():
 
 
 def test_the_placeholders_name_the_mode_defaults():
-    from fnirs_pipe.cli.run import mode_defaults
-    from fnirs_pipe.interface.callbacks.analysis_callbacks import mode_placeholders
+    from nirspipe.cli.run import mode_defaults
+    from nirspipe.interface.callbacks.analysis_callbacks import mode_placeholders
 
     _, low, _, drift, _, noise = mode_placeholders("rest")
     assert str(mode_defaults("rest")["low_pass"]) in low
@@ -794,7 +794,7 @@ def test_the_cutoff_fields_refuse_exactly_what_the_cli_refuses():
     import argparse
     import re
 
-    from fnirs_pipe.cli.run import CUTOFF_PATTERN, _cutoff
+    from nirspipe.cli.run import CUTOFF_PATTERN, _cutoff
 
     for value in ("0.01", "0.5", "1", "1.", ".5", "none", "None", "NONE",
                   "", "off", "-0.1", "nan", "inf", "1e-2", "0.1.2", "0,5"):
@@ -808,7 +808,7 @@ def test_the_cutoff_fields_refuse_exactly_what_the_cli_refuses():
 
 
 def test_a_switched_off_high_pass_raises_no_glm_band_warning():
-    from fnirs_pipe.interface.callbacks.analysis_callbacks import band_note
+    from nirspipe.interface.callbacks.analysis_callbacks import band_note
 
     assert band_note("glm", "none", "polynomial", None) is None
     assert band_note("glm", "0.01", "polynomial", None) is not None

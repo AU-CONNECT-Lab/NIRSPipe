@@ -2,14 +2,14 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.metrics import CV_PASS, PSP_PASS, SNR_PASS
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS
-from fnirs_pipe.qc.metrics.windowed import window_centers
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics import CV_PASS, PSP_PASS, SNR_PASS
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS
+from nirspipe.qc.metrics.windowed import window_centers
+from nirspipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._utils import AXIS_TEXT_COLOR
-from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, format_metric
+from nirspipe.qc.figures.common._utils import AXIS_TEXT_COLOR
+from nirspipe.qc.boilerplate.vocabulary import higher_is_better, format_metric
 
 logger = get_logger("qc.figures.sci_psp")
 
@@ -139,7 +139,7 @@ def channel_quality_heatmap(
     Status is the screening verdict and Coupled is the row that produces it, which is why it
     sits directly under: a channel can fail on its coupled-window share with every average
     below it comfortable. The rows under
-    it are drawn against the cutoffs in :mod:`fnirs_pipe.qc.metrics._helpers` and none of
+    it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
     them prunes.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
@@ -281,7 +281,7 @@ def member_condition_heatmap(
 ) -> "go.Figure | None":
     """A group's channel status, one block per member: the run's verdict, then each condition's.
 
-    ``status`` is :func:`~fnirs_pipe.qc.hyper.hyper_report.condition_channel_status`. Each
+    ``status`` is :func:`~nirspipe.qc.hyper.hyper_report.condition_channel_status`. Each
     block is a Run row (kept / rejected) and one row per label (pass / fail); ``row_label``
     names a lone condition row instead of the label, as a condition page does.
 

@@ -6,8 +6,8 @@ read from.
 
 from pathlib import Path
 
-from fnirs_pipe.interface.callbacks.hyper_align_callbacks import _ha_decisions_path
-from fnirs_pipe.io.derivatives import channel_decisions_path
+from nirspipe.interface.callbacks.hyper_align_callbacks import _ha_decisions_path
+from nirspipe.io.derivatives import channel_decisions_path
 
 
 def test_the_session_comes_from_the_file_the_member_was_read_from(tmp_path):

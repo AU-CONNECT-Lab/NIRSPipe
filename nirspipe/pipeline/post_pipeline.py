@@ -15,26 +15,26 @@ import mne.io
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.auxiliary import find_aux_table
-from fnirs_pipe.io.tables import read_table, write_tsv
-from fnirs_pipe.pipeline.denoise import (
+from nirspipe.io.auxiliary import find_aux_table
+from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
     bandpass_filter,
     filter_description,
     resample,
 )
-from fnirs_pipe.pipeline.glm import run_glm_pipeline, sole_regressor_channels
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.utils import is_marker
-from fnirs_pipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
-from fnirs_pipe.qc.metrics._helpers import separation_bands
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
-from fnirs_pipe.io.derivatives import (
+from nirspipe.pipeline.glm import run_glm_pipeline, sole_regressor_channels
+from nirspipe.exceptions import StageError
+from nirspipe.utils import is_marker
+from nirspipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
+from nirspipe.qc.metrics._helpers import separation_bands
+from nirspipe.utils.logging import get_logger
+from nirspipe import __version__
+from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
 )
-from fnirs_pipe.io.snirf import write_snirf
+from nirspipe.io.snirf import write_snirf
 
 logger = get_logger("post.pipeline")
 
@@ -495,7 +495,7 @@ def _write_fc_derivatives(
     own confound residual or, when no regression ran, the bandpassed data itself. The
     distinction lives in the caller, not here.
     """
-    from fnirs_pipe.pipeline.restingstate import (
+    from nirspipe.pipeline.restingstate import (
         _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
     )
 
@@ -611,7 +611,7 @@ def _write_rest_derivatives(
     ALFF/fALFF use the broadband residual (raw_resid_bb); every FC product uses the
     bandpassed one.
     """
-    from fnirs_pipe.pipeline.restingstate import _roi_members, compute_alff, compute_alff_roi
+    from nirspipe.pipeline.restingstate import _roi_members, compute_alff, compute_alff_roi
 
     entities = carry_entities(source_entities)
 
@@ -708,7 +708,7 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     )
     # on every stage, not just desc-filtered: a later stage is what downstream tools read,
     # and it is the one that has to name its own passband
-    from fnirs_pipe.qc.metrics._helpers import bands_to_record
+    from nirspipe.qc.metrics._helpers import bands_to_record
 
     parameters = {
         "high_pass": config.high_pass,

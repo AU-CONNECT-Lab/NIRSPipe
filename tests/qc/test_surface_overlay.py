@@ -8,7 +8,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figures.common._surface_overlay import (
+from nirspipe.qc.figures.common._surface_overlay import (
     activation_rgba, diverging_lut, smoothing_matrix, vertex_normals,
 )
 

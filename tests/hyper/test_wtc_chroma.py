@@ -22,8 +22,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper._helpers import _long_by_label
-from fnirs_pipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
+from nirspipe.pipeline.hyper._helpers import _long_by_label
+from nirspipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
 from tests.hyper._names import archive, name
 
 SFREQ = 5.0
@@ -112,8 +112,8 @@ def test_the_error_names_the_chromophore_that_has_no_channel(dyad):
 @pytest.fixture(scope="module")
 def report(dyad, tmp_path_factory):
     """One report over both chromophores, with the maps archived and the channels crossed."""
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("chroma")
     build_hyper_post_report(
@@ -161,7 +161,7 @@ def test_the_maps_are_archived_one_file_per_chromophore(report):
 def test_a_reband_puts_the_chromophore_column_back(report):
     """The archive carries a chromo- entity, so a re-banded table has the same shape as the
     one the run wrote."""
-    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
+    from nirspipe.pipeline.hyper.wtc_store import reband_tree
 
     written = reband_tree(report.parent.parent, 0.04, 0.09)
     seen = {}
@@ -181,8 +181,8 @@ def test_the_isc_tables_stay_one_file_each(report):
 # ---- one chromophore only ----
 
 def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     build_hyper_post_report(
         group_id="G1", task="tap",
@@ -197,8 +197,8 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
 
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     with pytest.raises(ValueError, match="wtc_chroma"):
         build_hyper_post_report(
@@ -221,7 +221,7 @@ def _draw_and_write(wtc_null, **kwargs):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -233,7 +233,7 @@ def _null(frame, cond_frames=(), levels=None):
 def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
     """A null on one chromophore says nothing about a coupling in the other, so the real
     table's other half would have nothing to be tested against."""
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    from nirspipe.pipeline.hyper import wtc_null
 
     path = _draw_and_write(
         wtc_null, group_id="G1", task="tap", aligned_raws=dyad, output_dir=tmp_path,
@@ -248,7 +248,7 @@ def test_the_null_covers_both_chromophores_in_one_table(dyad, tmp_path):
 
 
 def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
 
     with pytest.raises(ValueError, match="chroma"):
         run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
@@ -258,27 +258,27 @@ def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
 
 def test_the_flag_defaults_to_both():
     """Both chromophores by default, at twice the runtime of HbO alone."""
-    from fnirs_pipe.cli.hyper import _parsers
+    from nirspipe.cli.hyper import _parsers
 
-    args = _parsers()["fnirs-hyper"].parse_args(
+    args = _parsers()["nirspipe-hyper"].parse_args(
         ["deriv", "out", "group", "--pairs-csv", "pairs.csv"])
     assert args.wtc_chroma == "both"
 
 
 @pytest.mark.parametrize("value", ["hbo", "hbr", "both"])
 def test_the_flag_takes_the_three_settings(value):
-    from fnirs_pipe.cli.hyper import _parsers
+    from nirspipe.cli.hyper import _parsers
 
-    args = _parsers()["fnirs-hyper"].parse_args(
+    args = _parsers()["nirspipe-hyper"].parse_args(
         ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", value])
     assert args.wtc_chroma == value
 
 
 def test_the_flag_refuses_anything_else():
-    from fnirs_pipe.cli.hyper import _parsers
+    from nirspipe.cli.hyper import _parsers
 
     with pytest.raises(SystemExit):
-        _parsers()["fnirs-hyper"].parse_args(
+        _parsers()["nirspipe-hyper"].parse_args(
             ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", "hbt"])
 
 
@@ -288,7 +288,7 @@ def test_tagging_before_the_aggregation_would_lose_the_tag():
     """Why `_tag` runs after every aggregation and not before. `roi_mean_of_channels`
     groups on the columns it knows and drops the rest, so a chromophore column added
     upstream of it vanishes without an error."""
-    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels
+    from nirspipe.pipeline.hyper.roi import roi_mean_of_channels
 
     tagged = pd.DataFrame({
         "chromophore": ["hbo"] * 2,
@@ -308,8 +308,8 @@ def _report_by_condition(dyad, out, **extra):
     A window shorter than one cycle of `--wtc-fmin` is skipped, so at 0.02 Hz these have to
     be at least 50 s.
     """
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     marked = {sid: raw.copy() for sid, raw in dyad.items()}
     for raw in marked.values():
@@ -370,7 +370,7 @@ def test_the_condition_windows_reach_the_sidecar(by_condition):
 
 
 def test_a_monte_carlo_level_reaches_the_sidecar_and_the_methods(dyad, tmp_path):
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
 
     out = _report_by_condition(dyad, tmp_path, wtc_significance=True, wtc_mc_count=5,
                                wtc_seed=1)
@@ -381,7 +381,7 @@ def test_a_monte_carlo_level_reaches_the_sidecar_and_the_methods(dyad, tmp_path)
 
 
 def test_the_cut_route_reaches_the_sidecar_and_the_methods(by_condition_cut):
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_sidecars
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
 
     params = json.loads((by_condition_cut / name(
         "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
@@ -399,8 +399,8 @@ def test_the_null_and_the_report_default_to_the_same_chromophores():
     the real table with nothing to be tested against."""
     import inspect
 
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
 
     report = inspect.signature(build_hyper_post_report).parameters["wtc_chroma"].default
     null = inspect.signature(run_wtc_null).parameters["chroma"].default
@@ -417,8 +417,8 @@ def _js_var(html: str, name: str):
 
 
 def _page(dyad, where, chroma, **kwargs):
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     path = build_hyper_post_report(
         group_id="G1", task="tap",
@@ -529,7 +529,7 @@ def test_a_condition_boundary_is_drawn_on_the_axis_the_window_was_cut_on(dyad, t
     """An aligned recording keeps its crop offset in `first_time` while everything computed
     from it starts at zero, so the two have to be read through one function, or every
     boundary line on every coherence map comes out late by that offset."""
-    from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
+    from nirspipe.qc.common.windows import condition_windows, markers_on_data_axis
 
     raw = dyad["sub-01"].copy()
     raw.set_annotations(mne.Annotations([20.0, 210.0], [180.0, 180.0], ["rest", "talk"]))

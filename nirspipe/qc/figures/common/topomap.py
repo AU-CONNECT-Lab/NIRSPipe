@@ -15,10 +15,10 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.metrics._helpers import epochable_events
-from fnirs_pipe.utils import is_marker
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.figures.common._utils import _optode_positions, _topomap_project
+from nirspipe.qc.metrics._helpers import epochable_events
+from nirspipe.utils import is_marker
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.figures.common._utils import _optode_positions, _topomap_project
 
 logger = get_logger("qc.figures")
 
@@ -154,7 +154,7 @@ def evoked_channel_map_figure(
     None when the run has no events, no usable optode positions, or no channel in either
     separation band.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     try:
         evokeds = _condition_evokeds(raw_haemo, epoch_tmin, epoch_tmax)

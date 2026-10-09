@@ -25,9 +25,9 @@ import pandas as pd
 from scipy.fft import next_fast_len
 from scipy.signal import convolve2d
 
-from fnirs_pipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
-from fnirs_pipe.utils import fisher_r_to_z
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
+from nirspipe.utils import fisher_r_to_z
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.wtc")
 
@@ -455,7 +455,7 @@ def _wtc_over_pairs(
     ``axis`` is the montage's labels, rejections included, and is what the keys are drawn
     from: a label one member has no usable channel at gets its key with ``None`` behind it
     rather than no key at all, so every dyad's table has one shape (the ``exclude=[]`` rule
-    :func:`~fnirs_pipe.io.snirf.long_channel_picks` documents). Left at None the keys come
+    :func:`~nirspipe.io.snirf.long_channel_picks` documents). Left at None the keys come
     from the surviving channels, which is the shape a caller with no montage to hand can
     produce.
 

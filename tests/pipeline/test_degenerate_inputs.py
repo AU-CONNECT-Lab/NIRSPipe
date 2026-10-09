@@ -13,18 +13,18 @@ import pandas as pd
 import pytest
 from numpy.testing import assert_array_equal
 
-from fnirs_pipe.exceptions import AlignmentError, FilterDesignError, StageError
-from fnirs_pipe.pipeline.denoise import filter_kwargs
-from fnirs_pipe.pipeline.glm import build_design_matrix
-from fnirs_pipe.pipeline.hyper.alignment import align_recordings
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import (
+from nirspipe.exceptions import AlignmentError, FilterDesignError, StageError
+from nirspipe.pipeline.denoise import filter_kwargs
+from nirspipe.pipeline.glm import build_design_matrix
+from nirspipe.pipeline.hyper.alignment import align_recordings
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import (
     PrepConfig,
     intensity_to_od,
     mark_bad_channels,
     run_prep,
 )
-from fnirs_pipe.qc.metrics import compute_sci_scores, screening_scores
+from nirspipe.qc.metrics import compute_sci_scores, screening_scores
 
 from tests._synth import synth_raw
 

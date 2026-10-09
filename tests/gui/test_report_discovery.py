@@ -13,8 +13,8 @@ import dash_bootstrap_components as dbc
 import pytest
 from dash import html
 
-from fnirs_pipe.io.naming import derivative_path, report_name
-from fnirs_pipe.interface.callbacks._cli_run import (
+from nirspipe.io.naming import derivative_path, report_name
+from nirspipe.interface.callbacks._cli_run import (
     REPORT_PATTERNS, find_report, run_and_report,
 )
 
@@ -64,14 +64,14 @@ def _second_panel(stored):
 
 
 def test_a_command_that_writes_no_report_says_only_that(tmp_path, _ran_fine):
-    panel = _second_panel({"argv": ["fnirs-hyper-merge"], "command": "merge",
+    panel = _second_panel({"argv": ["nirspipe-hyper-merge"], "command": "merge",
                            "output_dir": str(tmp_path)})
     assert isinstance(panel, html.Small)
     assert "tables" in panel.children
 
 
 def test_a_missing_report_is_a_warning_not_a_shrug(tmp_path, _ran_fine):
-    panel = _second_panel({"argv": ["fnirs-qc", "prep-raw"], "command": "prep-raw",
+    panel = _second_panel({"argv": ["nirspipe-qc", "prep-raw"], "command": "prep-raw",
                            "output_dir": str(tmp_path)})
     assert isinstance(panel, dbc.Alert), "a command that should have written a page did not"
     assert panel.color == "warning"
@@ -82,6 +82,6 @@ def test_the_report_is_linked_when_it_is_there(tmp_path, _ran_fine):
     written.parent.mkdir(parents=True, exist_ok=True)
     written.write_text("<html></html>", encoding="utf-8")
 
-    panel = _second_panel({"argv": ["fnirs-qc", "prep-raw"], "command": "prep-raw",
+    panel = _second_panel({"argv": ["nirspipe-qc", "prep-raw"], "command": "prep-raw",
                            "output_dir": str(tmp_path)})
     assert not isinstance(panel, dbc.Alert)

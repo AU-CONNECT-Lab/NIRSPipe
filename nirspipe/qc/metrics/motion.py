@@ -12,9 +12,9 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import _mask_to_segments, _mean_or_none, _safe_metrics
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, _band_derivative
-from fnirs_pipe.qc.metrics._helpers import as_optical_density
+from nirspipe.qc.metrics._helpers import _mask_to_segments, _mean_or_none, _safe_metrics
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, _band_derivative
+from nirspipe.qc.metrics._helpers import as_optical_density
 
 # share of channels that must spike, or be corrected, at once for a timepoint to count
 SPIKE_CH_FRAC = 0.1

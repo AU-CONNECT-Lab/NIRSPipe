@@ -1,7 +1,7 @@
 """The scalp-share notes on the channel maps sit over the column they describe."""
 import numpy as np
 
-from fnirs_pipe.qc.figures.common.topomap import _assemble, _glyph_points
+from nirspipe.qc.figures.common.topomap import _assemble, _glyph_points
 
 CONDS = ["one", "two", "three", "four", "five"]
 OPT = {"S1": (0.0, 0.0), "D1": (1.0, 0.0), "S2": (0.0, 1.0), "D2": (1.0, 1.0)}

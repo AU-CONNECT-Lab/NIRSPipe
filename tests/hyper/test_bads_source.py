@@ -18,8 +18,8 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper import GroupEntry, load_group_sqm
-from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.pipeline.hyper import GroupEntry, load_group_sqm
+from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 
 BADS_TAP = ["S6_D5 760", "S6_D5 850"]
 BADS_REST = ["S7_D6 760"]
@@ -130,7 +130,7 @@ def _raw(n_pairs=3, bads=()):
 
 
 def test_the_summary_names_the_channel_budget(capsys):
-    from fnirs_pipe.cli.hyper import _quality_summary
+    from nirspipe.cli.hyper import _quality_summary
 
     raws = {"sub-01": _raw(3, ["S3_D3 hbo", "S3_D3 hbr"])}
     sqm = {"sub-01": {"sci_win_per_channel": {"a": 0.9, "b": 0.7},
@@ -145,7 +145,7 @@ def test_the_summary_names_the_channel_budget(capsys):
 
 
 def test_the_summary_warns_when_most_of_the_montage_is_gone(capsys):
-    from fnirs_pipe.cli.hyper import _quality_summary
+    from nirspipe.cli.hyper import _quality_summary
 
     bads = [f"S{i}_D{i} {c}" for i in (1, 2, 3) for c in ("hbo", "hbr")]
     _quality_summary({"sub-02": _raw(4, bads)}, {})
@@ -154,7 +154,7 @@ def test_the_summary_warns_when_most_of_the_montage_is_gone(capsys):
 
 def test_the_summary_says_nothing_it_does_not_know(capsys):
     """No quality record at all still prints a line, rather than crashing on a missing key."""
-    from fnirs_pipe.cli.hyper import _quality_summary
+    from nirspipe.cli.hyper import _quality_summary
 
     _quality_summary({"sub-03": _raw(2)}, {})
     out = capsys.readouterr().out
@@ -207,9 +207,9 @@ def test_the_flat_tree_is_unchanged(nirs_dir):
 
 
 def test_the_dyad_pages_read_the_windowed_sci_from_the_record(nirs_dir):
-    from fnirs_pipe.qc.metrics.hyper import sci_of
-    from fnirs_pipe.qc.subject.record_io import write_record
-    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX
+    from nirspipe.qc.metrics.hyper import sci_of
+    from nirspipe.qc.subject.record_io import write_record
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIX
 
     _sidecar(nirs_dir, "tap", BADS_TAP)
     write_record(nirs_dir / "sub-01" / "nirs" / ("sub-01_task-tap" + RECORD_SUFFIX),

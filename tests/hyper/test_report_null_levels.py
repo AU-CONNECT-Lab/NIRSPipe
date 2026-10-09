@@ -12,13 +12,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper import GroupEntry, _hyper_sidecar, alignment_params
-from fnirs_pipe.pipeline.hyper.wtc import compute_wtc, wtc_grid_params
-from fnirs_pipe.pipeline.hyper.wtc_store import (level_params, save_cond_null_levels,
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.pipeline.hyper import GroupEntry, _hyper_sidecar, alignment_params
+from nirspipe.pipeline.hyper.wtc import compute_wtc, wtc_grid_params
+from nirspipe.pipeline.hyper.wtc_store import (level_params, save_cond_null_levels,
                                                  save_null_levels)
-from fnirs_pipe.qc.common.windows import condition_windows
-from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+from nirspipe.qc.common.windows import condition_windows
+from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 from tests.hyper.test_hyper_page_contract import LABELS, SFREQ, DURATION, _raw
 
 FMIN, FMAX = 0.02, 0.2
@@ -174,7 +174,7 @@ def test_the_chords_name_the_re_paired_null_where_it_drew_them(dyad, tmp_path):
 
 
 def _drawn_null(dyad, out):
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
     return run_wtc_null(group_id="G1", task="tap", aligned_raws=dyad, output_dir=out,
                         n_iter=2, wtc_fmin=FMIN, wtc_fmax=FMAX, band_fmin=0.03,
                         band_fmax=0.10, seed=0, chroma=("hbo",))

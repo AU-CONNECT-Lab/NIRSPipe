@@ -1,12 +1,12 @@
 # Pipeline step prose templates.
 #
 # [header] is the opening sentence of the Methods section.
-# {ver} is replaced with the installed fnirs-pipe version.
+# {ver} is replaced with the installed nirspipe version.
 
 [header]
-plain    = "fNIRS data were processed using fnirs-pipe v{ver}."
-markdown = "fNIRS data were processed using **fnirs-pipe** v{ver}."
-latex    = "fNIRS data were processed using \\texttt{{fnirs-pipe}} v{ver}."
+plain    = "fNIRS data were processed using NIRSPipe v{ver}."
+markdown = "fNIRS data were processed using **NIRSPipe** v{ver}."
+latex    = "fNIRS data were processed using NIRSPipe v{ver}."
 
 #
 #
@@ -73,7 +73,7 @@ citations = []
 
 # A tree written before the regression recorded its conditions; it cannot say which model ran.
 [regression_unrecorded]
-plain = "A regression was applied whose design this derivatives tree does not record; re-run fnirs-pipe to describe it here."
+plain = "A regression was applied whose design this derivatives tree does not record; re-run nirspipe to describe it here."
 citations = []
 
 # ---- Hyperscanning ----
@@ -118,7 +118,7 @@ citations = ["TODO_PhaseNull"]
 plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins."
 citations = ["TODO_RepairedNull"]
 
-# Written beside the cohort tables by fnirs-hyper-groupnull, not into any report
+# Written beside the cohort tables by nirspipe-hyper-groupnull, not into any report
 [hyper_groupnull]
 plain = "Cohort-level coupling was tested against the {null} null {citations}: {measure} was averaged over channel pairs within each occasion (one group on one task) and then over occasions, and compared with the null in two ways, a {tail} paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion{two_sided}.{correction}"
 citations = ["TODO_GroupNull"]

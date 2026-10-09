@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-import fnirs_pipe.qc as qc_pkg
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+import nirspipe.qc as qc_pkg
+from nirspipe.qc.boilerplate.vocabulary import (
     KEY_METRICS,
     METRIC_DISPLAY,
     METRIC_SUMMARY,
@@ -26,12 +26,12 @@ from fnirs_pipe.qc.boilerplate.vocabulary import (
     metric_class,
     metric_summary,
 )
-from fnirs_pipe.qc.boilerplate.vocabulary import higher_is_better, metric_direction
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.qc.boilerplate.vocabulary import higher_is_better, metric_direction
+from nirspipe.qc.common.channel_table import (
     MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, _COLUMN_METRIC,
 )
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import _TRIAL_METRICS
-from fnirs_pipe.qc.subject.prep_raw_report import _VIEW_SCALAR_KEYS
+from nirspipe.qc.figures.subject.sci_psp_panel import _TRIAL_METRICS
+from nirspipe.qc.subject.prep_raw_report import _VIEW_SCALAR_KEYS
 
 _QC = Path(qc_pkg.__file__).parent
 _SUBJECT_TEMPLATE = _QC / "templates" / "subject_report.html.j2"

@@ -7,8 +7,8 @@ back. That handoff is the one place the whole provenance chain touches disk.
 
 import pytest
 
-from fnirs_pipe.io.snirf import read_snirf, write_snirf
-from fnirs_pipe.utils.lineage import lineage_of, path_from, stage_of
+from nirspipe.io.snirf import read_snirf, write_snirf
+from nirspipe.utils.lineage import lineage_of, path_from, stage_of
 
 from tests._synth import synth_raw
 
@@ -86,7 +86,7 @@ def test_channel_names_and_types_survive_the_round_trip(raw, tmp_path):
 
 def _write(raw, path, bads=None):
     """Write a SNIRF and the sidecar the pipeline writes beside it."""
-    from fnirs_pipe.io.derivatives import write_sidecar_json
+    from nirspipe.io.derivatives import write_sidecar_json
 
     write_snirf(raw, path)
     if bads is not None:

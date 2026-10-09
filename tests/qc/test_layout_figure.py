@@ -10,12 +10,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figures.common._brain_utils import to_mni
-from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, LONG_COLOR, SHORT_COLOR,
+from nirspipe.qc.figures.common._brain_utils import to_mni
+from nirspipe.qc.figures.common._utils import (BAND_COLORS, LONG_COLOR, SHORT_COLOR,
                                                   UNCLASSIFIED_COLOR)
-from fnirs_pipe.qc.figures.hyper.hyper_figures import _psd_band_shapes
-from fnirs_pipe.qc.figures.subject.brain_views import _lookup_sci
-from fnirs_pipe.qc.figures.subject.raw_figures import (_ch_colors, _hex_to_rgba,
+from nirspipe.qc.figures.hyper.hyper_figures import _psd_band_shapes
+from nirspipe.qc.figures.subject.brain_views import _lookup_sci
+from nirspipe.qc.figures.subject.raw_figures import (_ch_colors, _hex_to_rgba,
                                                         build_layout_figure)
 from tests._synth import synth_raw
 

@@ -12,7 +12,7 @@ Layering, which nothing should undo::
 
 from __future__ import annotations
 
-from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     _stamp_alignment,
     align_imu_like,
     align_like,
@@ -26,7 +26,7 @@ from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     trim_to_shortest,
     write_aligned_member,
 )
-from fnirs_pipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
     GroupEntry,
     _for_task,
     _hyper_sidecar,
@@ -40,7 +40,7 @@ from fnirs_pipe.pipeline.hyper.group_io import (  # noqa: F401  re-exported
     unfiltered_stage_note,
     warn_outside_passband,
 )
-from fnirs_pipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
     _bad_from_csv,
     _bad_from_sidecar,
     _pairwise,
@@ -53,15 +53,15 @@ from fnirs_pipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
     resolve_group_bands,
     write_group_bads,
 )
-from fnirs_pipe.pipeline.hyper.roi import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.roi import (  # noqa: F401  re-exported
     roi_maps_from_channels,
     roi_mean_of_channels,
 )
-from fnirs_pipe.pipeline.hyper.surrogate import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.surrogate import (  # noqa: F401  re-exported
     compute_wtc_pair_null,
     compute_wtc_phase_null,
 )
-from fnirs_pipe.pipeline.hyper.wtc import (  # noqa: F401  re-exported
+from nirspipe.pipeline.hyper.wtc import (  # noqa: F401  re-exported
     WTCResult,
     compute_wtc,
     window_result,

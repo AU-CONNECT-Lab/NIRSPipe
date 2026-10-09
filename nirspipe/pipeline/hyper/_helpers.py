@@ -7,8 +7,8 @@ from collections.abc import Iterable
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.io.snirf import long_channel_picks
+from nirspipe.utils import pair_of
+from nirspipe.io.snirf import long_channel_picks
 
 
 def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:

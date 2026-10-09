@@ -10,9 +10,9 @@ along with the axis rule that lets a stand-in with a different montage be drawn 
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper import surrogate
-from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult
+from nirspipe.pipeline.hyper import surrogate
+from nirspipe.pipeline.hyper.surrogate import compute_wtc_pair_null
+from nirspipe.pipeline.hyper.wtc import WTCResult
 from tests.hyper._names import name
 
 FREQS = np.linspace(0.02, 0.30, 12)
@@ -193,7 +193,7 @@ def test_the_hook_gets_the_condition_and_the_pair(stub):
 
 def test_the_roi_summary_survives_a_null_that_has_no_whole_run_draw(stub):
     """The re-paired null is per condition only, so its whole-run list is empty by design."""
-    from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_homologous  # noqa: F401  re-exported
+    from nirspipe.pipeline.hyper.roi import roi_mean_of_homologous  # noqa: F401  re-exported
 
     null = _run(["sub-02G02", "sub-02G03"], labels=("early", "late"))
     whole, by_cond = null.summarise_roi({"front": ["S1_D1", "S1_D2"]}, min_channels=2)
@@ -206,7 +206,7 @@ def test_the_roi_summary_survives_a_null_that_has_no_whole_run_draw(stub):
 def test_the_correlation_keeps_its_draws_too(tmp_path):
     """Both metrics ride the same re-paired draws, so both have to be readable above the cell."""
     import pandas as pd
-    from fnirs_pipe.pipeline.hyper.pair_null import _write_isc_null
+    from nirspipe.pipeline.hyper.pair_null import _write_isc_null
 
     rows = [{"chromophore": "hbo", "condition": "early", "sub1": TRUE[0], "sub2": TRUE[1],
              "label": "S1_D1", "label2": "S1_D1", "coherence": 0.2 + 0.01 * i,

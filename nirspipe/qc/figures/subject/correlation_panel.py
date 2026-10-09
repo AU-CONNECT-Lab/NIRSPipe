@@ -23,8 +23,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.figures.common.matrix_map import CORRELATION_SCALE
+from nirspipe.utils import pair_of
+from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
 # long_short_channels leaves unclaimed; it is usually empty.
@@ -70,7 +70,7 @@ def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
 
         ["S1_D1 hbo", "S1_D8 hbo"] -> {"S1_D1": "long", "S1_D8": "short"}
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     long_names, short_names = long_short_channels(raw_haemo, sep_bands)
     groups = {pair_of(n): "mid" for n in raw_haemo.ch_names}

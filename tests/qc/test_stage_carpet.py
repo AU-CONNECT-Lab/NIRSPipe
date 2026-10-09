@@ -3,7 +3,7 @@
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.figures.subject.carpet_compare import carpet_compare_figure
+from nirspipe.qc.figures.subject.carpet_compare import carpet_compare_figure
 
 
 def _raw(scale: float = 1e-6, n_pairs: int = 4, sfreq: float = 5.0, n: int = 600,
@@ -151,7 +151,7 @@ def test_the_motion_rows_fall_back_to_one_trace_without_a_corrected_recording():
 
 def test_the_panel_picks_the_residual_whatever_order_the_stage_list_is_in():
     """The preference is by name: psd_stages is built elsewhere and may be reordered there."""
-    from fnirs_pipe.qc.subject.report import _carpet_stages
+    from nirspipe.qc.subject.report import _carpet_stages
 
     filtered, resampled, errts = _raw(), _raw(), _raw()
     listed = [("desc-filtered", filtered), ("desc-resampled", resampled),
@@ -164,7 +164,7 @@ def test_the_panel_picks_the_residual_whatever_order_the_stage_list_is_in():
 
 
 def test_the_panel_falls_back_to_the_bandpassed_stage_then_to_preproc():
-    from fnirs_pipe.qc.subject.report import _carpet_stages
+    from nirspipe.qc.subject.report import _carpet_stages
 
     filtered, haemo = _raw(), _raw()
     stages, _ = _carpet_stages(haemo, [("desc-resampled", _raw()),

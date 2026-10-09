@@ -10,20 +10,20 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.exceptions import GroupCSVError
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import find_preproc_snirf
-from fnirs_pipe.io.derivatives import subject_nirs_dirs
-from fnirs_pipe.io.derivatives import write_sidecar_json
-from fnirs_pipe.io.derivatives import select_one_run
-from fnirs_pipe.io.snirf import read_snirf
-from fnirs_pipe.io.tables import read_table
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import lineage_of
-from fnirs_pipe.utils.lineage import stage_of
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
+from nirspipe.exceptions import GroupCSVError
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import find_preproc_snirf
+from nirspipe.io.derivatives import subject_nirs_dirs
+from nirspipe.io.derivatives import write_sidecar_json
+from nirspipe.io.derivatives import select_one_run
+from nirspipe.io.snirf import read_snirf
+from nirspipe.io.tables import read_table
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.utils import is_optical_density
+from nirspipe.utils.lineage import lineage_of
+from nirspipe.utils.lineage import stage_of
+from nirspipe.utils.logging import get_logger
+from nirspipe import __version__
 
 logger = get_logger("pipeline.group_io")
 
@@ -133,7 +133,7 @@ def member_snirfs(bids_dir: Path, group: list[GroupEntry],
     Separate lookups that dropped the session could, on a two-session tree, give the aligned
     copy its name and sidecars from the other session.
     """
-    from fnirs_pipe.io.bids import get_layout, get_nirs_files
+    from nirspipe.io.bids import get_layout, get_nirs_files
 
     layout = get_layout(bids_dir, validate=validate)
     out: dict[str, Path] = {}
@@ -188,7 +188,7 @@ def load_group_stage(
         load_group_stage(out, group, "motcorrected")  ->  {"sub-01": Raw, ...}
 
     Optional by design: the dyad raw report runs off BIDS and a member who has never been
-    through ``fnirs-pipe`` simply contributes nothing here, which the caller draws as a
+    through ``nirspipe`` simply contributes nothing here, which the caller draws as a
     panel with no corrected side rather than as a failure. The task entity is matched, so a
     subject with five tasks does not hand back another task's recording.
     """
@@ -240,7 +240,7 @@ def _member_sqm_files(output_dir: Path, entry: GroupEntry, pattern: str) -> list
       sub-01/ses-a/nirs/sub-01_ses-a_task-hold_desc-sci_nirs.json, entry with no session
         -> that file, rather than nothing
 
-    Reads the same folders :func:`~fnirs_pipe.io.derivatives.find_preproc_snirf` reads the
+    Reads the same folders :func:`~nirspipe.io.derivatives.find_preproc_snirf` reads the
     recording itself from.
     """
     return sorted((f for d in subject_nirs_dirs(output_dir, entry.subject_id, entry.session)

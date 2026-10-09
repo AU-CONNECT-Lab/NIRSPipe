@@ -8,11 +8,11 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.pipeline.hyper.alignment import (
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.pipeline.hyper.alignment import (
     align_imu_like, align_like, align_recordings, crop_aligned_window,
 )
-from fnirs_pipe.qc.figures.hyper.hyper_figures import build_motion_panel, motion_series
+from nirspipe.qc.figures.hyper.hyper_figures import build_motion_panel, motion_series
 from tests._synth import synth_raw
 
 SHIFTS = {"sub-01": 5.0, "sub-02": 12.0}

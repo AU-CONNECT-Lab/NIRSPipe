@@ -11,11 +11,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli import prep as prep_cli
-from fnirs_pipe.io.snirf import read_snirf, write_snirf
-from fnirs_pipe.pipeline import crop
-from fnirs_pipe.pipeline.crop import crop_snirf_from_path
-from fnirs_pipe.qc.common.windows import crop_provenance
+from nirspipe.cli import prep as prep_cli
+from nirspipe.io.snirf import read_snirf, write_snirf
+from nirspipe.pipeline import crop
+from nirspipe.pipeline.crop import crop_snirf_from_path
+from nirspipe.qc.common.windows import crop_provenance
 from tests._synth import _write_dataset_root, synth_raw
 
 

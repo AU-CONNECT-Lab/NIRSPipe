@@ -305,7 +305,7 @@ NOTES = {
     # ---- Subject index ----
     "subject_index.runs":
         "Metrics are read from each run&rsquo;s quality record (<code>desc-sqm</code>, or "
-        "<code>desc-sqmraw</code> for a run only <code>fnirs-qc prep-raw</code> measured). "
+        "<code>desc-sqmraw</code> for a run only <code>nirspipe-qc prep-raw</code> measured). "
         "Open a run for its figures, provenance and full metric table.",
     "subject_index.outlier":
         "A marked cell sits at least {z} robust SDs (1.4826 &times; MAD) from the median "

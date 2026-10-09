@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from fnirs_pipe.cli import run as run_cli
+from nirspipe.cli import run as run_cli
 
 
 def _parse(argv):
@@ -37,7 +37,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as e:
         _parse(["--version"])
     assert e.value.code == 0
-    assert "fnirs-pipe" in capsys.readouterr().out
+    assert "nirspipe" in capsys.readouterr().out
 
 
 def test_missing_positionals_errors():
@@ -143,20 +143,20 @@ def test_missing_dpf_exits_one(capsys):
 
 def test_dispatch_participant(monkeypatch):
     called = {}
-    fake = types.ModuleType("fnirs_pipe.cli.workflows")
+    fake = types.ModuleType("nirspipe.cli.workflows")
     fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
     fake.run_group_level = lambda opts: called.setdefault("group", opts)
-    monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
+    monkeypatch.setitem(sys.modules, "nirspipe.cli.workflows", fake)
 
     run_cli.main(_MIN + ["--participant-label", "01"])
     assert called["participant"]["participant_label"] == ["01"]
 
 
 def _fake_workflows(monkeypatch, called):
-    fake = types.ModuleType("fnirs_pipe.cli.workflows")
+    fake = types.ModuleType("nirspipe.cli.workflows")
     fake.run_participant_level = lambda opts: called.setdefault("participant", opts)
     fake.run_group_level       = lambda opts: called.setdefault("group", opts)
-    monkeypatch.setitem(sys.modules, "fnirs_pipe.cli.workflows", fake)
+    monkeypatch.setitem(sys.modules, "nirspipe.cli.workflows", fake)
     return called
 
 
@@ -168,7 +168,7 @@ def test_dispatch_group(monkeypatch):
 
 
 def test_the_dyad_analysis_is_not_a_pipeline_level():
-    """It is fnirs-hyper. fnirs-pipe stays on the BIDS App levels, and its three
+    """It is nirspipe-hyper. nirspipe stays on the BIDS App levels, and its three
     positionals stay the app signature every container entry point has to accept."""
     with pytest.raises(SystemExit):
         run_cli.main(["bids", "out", "hyper", "--pairs-csv", "p.csv"])
@@ -180,22 +180,22 @@ def test_participant_still_requires_the_bands(capsys):
     assert "--cardiac-l-freq" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(shutil.which("fnirs-pipe") is None, reason="console script not installed")
+@pytest.mark.skipif(shutil.which("nirspipe") is None, reason="console script not installed")
 def test_console_script_entry_point():
-    r = subprocess.run(["fnirs-pipe", "--help"], capture_output=True, text=True)
+    r = subprocess.run(["nirspipe", "--help"], capture_output=True, text=True)
     assert r.returncode == 0
     assert "participant" in r.stdout
 
 
 # ── other commands: parser smoke + dispatch ──────────────────────────────────
 
-from fnirs_pipe.cli import db as db_cli
-from fnirs_pipe.cli import gui as gui_cli
-from fnirs_pipe.cli import prep as prep_cli
-from fnirs_pipe.cli import hyper as hyper_cli
-from fnirs_pipe.cli import qc as qc_cli
-from fnirs_pipe.cli import rate as rate_cli
-from fnirs_pipe.cli import recon as recon_cli
+from nirspipe.cli import db as db_cli
+from nirspipe.cli import gui as gui_cli
+from nirspipe.cli import prep as prep_cli
+from nirspipe.cli import hyper as hyper_cli
+from nirspipe.cli import qc as qc_cli
+from nirspipe.cli import rate as rate_cli
+from nirspipe.cli import recon as recon_cli
 
 
 @pytest.mark.parametrize("mod", [db_cli, gui_cli, prep_cli, qc_cli, rate_cli, recon_cli])
@@ -206,7 +206,7 @@ def test_help_exits_zero_all(mod):
 
 
 def test_gui_default_port():
-    from fnirs_pipe.interface.app import DEFAULT_PORT
+    from nirspipe.interface.app import DEFAULT_PORT
 
     # None rather than 8050: the launcher has to tell "unset" from "the user asked for 8050",
     # and only the first may be moved when the port is busy
@@ -252,17 +252,17 @@ def test_qc_hyper_raw_dispatches():
 
 
 def test_hyper_stage_and_band_flags():
-    args = hyper_cli._parsers()["fnirs-hyper"].parse_args(
+    args = hyper_cli._parsers()["nirspipe-hyper"].parse_args(
         ["/deriv", "/o", "group", "--pairs-csv", "p.csv", "--desc", "errts",
          "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
     )
-    assert hyper_cli.COMMANDS["fnirs-hyper"] is hyper_cli.cmd_run
+    assert hyper_cli.COMMANDS["nirspipe-hyper"] is hyper_cli.cmd_run
     assert (args.desc, args.wtc_band_fmin, args.wtc_band_fmax) == ("errts", 0.03, 0.10)
 
 
 def test_hyper_reads_preproc_unless_told_otherwise():
     # the band bounds stay None so the report can say it averaged the whole axis
-    args = hyper_cli._parsers()["fnirs-hyper"].parse_args(
+    args = hyper_cli._parsers()["nirspipe-hyper"].parse_args(
         ["/deriv", "/o", "group", "--pairs-csv", "p.csv"])
     assert args.desc == "preproc"
     assert (args.wtc_band_fmin, args.wtc_band_fmax) == (None, None)
@@ -275,13 +275,13 @@ def test_hyper_reads_derivatives_and_never_raw_bids():
     rest one would be a positional they never read.
     """
     cases = {
-        "fnirs-hyper":          ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
-        "fnirs-hyper-pairnull": ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
-        "fnirs-hyper-band":     ["/o", "group", "--wtc-band-fmin", "0.1",
+        "nirspipe-hyper":          ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
+        "nirspipe-hyper-pairnull": ["/deriv", "/o", "group", "--pairs-csv", "p.csv"],
+        "nirspipe-hyper-band":     ["/o", "group", "--wtc-band-fmin", "0.1",
                                  "--wtc-band-fmax", "0.2"],
-        "fnirs-hyper-merge":    ["/o", "group"],
+        "nirspipe-hyper-merge":    ["/o", "group"],
     }
-    reads_subjects = {"fnirs-hyper", "fnirs-hyper-pairnull"}
+    reads_subjects = {"nirspipe-hyper", "nirspipe-hyper-pairnull"}
     for prog, argv in cases.items():
         args = hyper_cli._parsers()[prog].parse_args(argv)
         assert args.output_dir == Path("/o")
@@ -290,13 +290,13 @@ def test_hyper_reads_derivatives_and_never_raw_bids():
 
 
 def test_the_band_flags_are_shared_between_run_and_band():
-    """One name per parameter: `fnirs-hyper-band` reuses the `fnirs-hyper` flags rather
+    """One name per parameter: `nirspipe-hyper-band` reuses the `nirspipe-hyper` flags rather
     than carrying them under a second name that has to be kept in step."""
     flags = {f for parser in hyper_cli._parsers().values()
              for a in parser._actions for f in a.option_strings}
     assert not ({"--band-fmin", "--band-fmax", "--mask-coi", "--suffix"} & flags)
-    for prog, argv in (("fnirs-hyper", ["/deriv", "/o", "group", "--pairs-csv", "p.csv"]),
-                       ("fnirs-hyper-band",
+    for prog, argv in (("nirspipe-hyper", ["/deriv", "/o", "group", "--pairs-csv", "p.csv"]),
+                       ("nirspipe-hyper-band",
                         ["/o", "group", "--wtc-band-fmin", "0.1", "--wtc-band-fmax", "0.2"])):
         args = hyper_cli._parsers()[prog].parse_args(argv)
         assert hasattr(args, "wtc_band_fmin") and hasattr(args, "wtc_mask_coi")

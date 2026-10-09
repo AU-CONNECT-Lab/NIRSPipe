@@ -1,6 +1,6 @@
 """Section prose for the QC reports, so a paragraph is written once and read anywhere.
 
-The per-metric hover text is next door in :mod:`~fnirs_pipe.qc.boilerplate.vocabulary`;
+The per-metric hover text is next door in :mod:`~nirspipe.qc.boilerplate.vocabulary`;
 this is the layer above it, the paragraphs that introduce a section or say how to read the
 panel under it, and the caveats a run attaches to them from Python (``caveats``). One
 module per report family, merged into one table here.
@@ -18,10 +18,10 @@ autoescaping on would have to wrap these.
 
 from __future__ import annotations
 
-from fnirs_pipe.qc.boilerplate.notes.caveats import NOTES as _CAVEATS
-from fnirs_pipe.qc.boilerplate.notes.hyper import NOTES as _HYPER
-from fnirs_pipe.qc.boilerplate.notes.raw import NOTES as _RAW
-from fnirs_pipe.qc.boilerplate.notes.subject import NOTES as _SUBJECT
+from nirspipe.qc.boilerplate.notes.caveats import NOTES as _CAVEATS
+from nirspipe.qc.boilerplate.notes.hyper import NOTES as _HYPER
+from nirspipe.qc.boilerplate.notes.raw import NOTES as _RAW
+from nirspipe.qc.boilerplate.notes.subject import NOTES as _SUBJECT
 
 
 def _merge(*tables: dict[str, str]) -> dict[str, str]:
@@ -45,7 +45,7 @@ def section_note(key: str, **values: object) -> str:
       section_note("trial_qc", window="-5 to 25 s")
 
     Returns '' for a key nothing is written for, the way
-    :func:`~fnirs_pipe.qc.boilerplate.vocabulary.metric_summary` does: a renamed key leaves
+    :func:`~nirspipe.qc.boilerplate.vocabulary.metric_summary` does: a renamed key leaves
     a missing paragraph rather than stopping the render half way down a report.
     """
     text = SECTION_NOTES.get(key, "")

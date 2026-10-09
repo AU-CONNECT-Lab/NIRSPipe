@@ -3,7 +3,7 @@
 The process is launched detached, one reader thread drains its output into a bounded buffer,
 and the page reads that buffer on a timer, so a long command never freezes the page.
 
-    run_id = start(["fnirs-pipe", "..."])
+    run_id = start(["nirspipe", "..."])
     lines, returncode = poll(run_id)     # returncode is None while it is still running
 """
 

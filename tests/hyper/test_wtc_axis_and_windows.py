@@ -14,8 +14,8 @@ come out half empty rather than as an error.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.roi import _mean_phase
-from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _log_freq_ticks
+from nirspipe.pipeline.hyper.roi import _mean_phase
+from nirspipe.qc.figures.hyper.hyper_post_figures import _log_freq_ticks
 
 # pycwt's default grid: 12 sub-octaves per octave, so neighbours differ by 2 ** (1 / 12)
 WAVELET_GRID = np.sort(0.2 / 2 ** (np.arange(0, 70) / 12))
@@ -125,7 +125,7 @@ def _raw_with(descs, onsets, durations, end=900.0):
 
 @pytest.fixture
 def windows():
-    from fnirs_pipe.qc.common.windows import condition_windows
+    from nirspipe.qc.common.windows import condition_windows
 
     return condition_windows
 
@@ -198,7 +198,7 @@ def test_no_two_kinds_of_table_share_a_name(tmp_path):
     """A per-condition table matching the whole-run kind would concatenate its rows into that
     table, leaving the `condition` column half empty instead of erroring.
     """
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import merge_kinds
+    from nirspipe.pipeline.hyper.wtc_aggregate import merge_kinds
     from tests.hyper._names import KINDS, name
 
     nirs = tmp_path / "group-07" / "nirs"

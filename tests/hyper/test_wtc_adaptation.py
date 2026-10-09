@@ -18,7 +18,7 @@ the smoothing window at the largest scales spans the record and drives coherence
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.wtc import _pairwise_wtc
+from nirspipe.pipeline.hyper.wtc import _pairwise_wtc
 
 SFREQ = 5.0
 DT = 1.0 / SFREQ
@@ -49,7 +49,7 @@ def short_pair():
 def raw_pycwt(short_pair):
     import pycwt
 
-    from fnirs_pipe.pipeline.hyper.wtc import _morlet
+    from nirspipe.pipeline.hyper.wtc import _morlet
 
     sig1, sig2 = short_pair
     WCT, aWCT, coi, freqs, _ = pycwt.wct(sig1, sig2, dt=DT, dj=1.0 / 12, sig=False,
@@ -175,7 +175,7 @@ def test_a_burst_does_not_light_up_an_unrelated_frequency():
 def test_the_scale_window_spans_dj0_whatever_the_grid_is(dj):
     """The width is fixed in log2(scale), so the point count follows dj rather than the
     other way round."""
-    from fnirs_pipe.pipeline.hyper.wtc import _SCALE_SMOOTH_DJ0, _scale_window
+    from nirspipe.pipeline.hyper.wtc import _SCALE_SMOOTH_DJ0, _scale_window
 
     win = _scale_window(dj)
     # normalised back to unit end-weights, the span is what the definition fixes
@@ -189,7 +189,7 @@ def test_the_stock_mother_would_give_a_different_coherence(short_pair):
     the difference is asserted rather than assumed. Wider smoothing reads lower."""
     import pycwt
 
-    from fnirs_pipe.pipeline.hyper.wtc import _morlet
+    from nirspipe.pipeline.hyper.wtc import _morlet
 
     sig1, sig2 = short_pair
     kw = dict(dt=DT, dj=1.0 / 12, sig=False, normalize=True, cache=False)

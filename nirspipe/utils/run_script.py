@@ -8,12 +8,12 @@ noted in comments rather than re-run here.
 
 from datetime import datetime
 
-from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
+from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from pathlib import Path
 from typing import Any
 
-from fnirs_pipe.utils import unwrap_enum as _unwrap
-from fnirs_pipe.utils.run_record import RUN_TIMESTAMP_FORMAT, _command_line, _fwd
+from nirspipe.utils import unwrap_enum as _unwrap
+from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, _command_line, _fwd
 
 
 def _lit(v: Any) -> str:
@@ -104,7 +104,7 @@ def _build_script_text(
     # ---- header / imports ----
     w(
         '#!/usr/bin/env python3',
-        f'"""fnirs-pipe processing script for sub-{subject}, generated {dt_str}.',
+        f'"""nirspipe processing script for sub-{subject}, generated {dt_str}.',
         '',
         'Step-by-step transcript of the pipeline: each block is one processing stage,',
         'calling the same functions the CLI uses. QC/SQM metrics the CLI computes are',
@@ -117,25 +117,25 @@ def _build_script_text(
         '',
         'import mne',
         '',
-        'from fnirs_pipe import __version__',
-        'from fnirs_pipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
-        'from fnirs_pipe.io.bids import get_layout, get_nirs_files',
-        'from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
-        'from fnirs_pipe.io.snirf import write_snirf',
-        'from fnirs_pipe.utils import is_optical_density',
-        'from fnirs_pipe.pipeline.prep_pipeline import (',
+        'from nirspipe import __version__',
+        'from nirspipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
+        'from nirspipe.io.bids import get_layout, get_nirs_files',
+        'from nirspipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
+        'from nirspipe.io.snirf import write_snirf',
+        'from nirspipe.utils import is_optical_density',
+        'from nirspipe.pipeline.prep_pipeline import (',
         '    intensity_to_od, mark_bad_channels, correct_motion, od_to_haemo,',
         '    _expand_bad_pairs,',
         ')',
     )
     if gvtd_censor:
-        w('from fnirs_pipe.qc.metrics import gvtd_censor_spans')
+        w('from nirspipe.qc.metrics import gvtd_censor_spans')
     if bad_channels_table:
-        w('from fnirs_pipe.cli.workflows import _bad_channels_for')
+        w('from nirspipe.cli.workflows import _bad_channels_for')
     if mode:
-        w('from fnirs_pipe.pipeline.denoise import bandpass_filter, resample')
+        w('from nirspipe.pipeline.denoise import bandpass_filter, resample')
     if mode in ("glm", "rest") or denoise_regress:
-        w('from fnirs_pipe.pipeline.glm import run_glm_pipeline')
+        w('from nirspipe.pipeline.glm import run_glm_pipeline')
     if mode == "rest" or denoise_regress:
         w('import pandas as pd')
     if mode and contrast_file:
@@ -438,8 +438,8 @@ def write_run_script(
         tuple(int(x) for x in raw_fir.split(",")) if raw_fir else (0,)
     )
 
-    from fnirs_pipe.cli._shared import resolved_separation_bands
-    from fnirs_pipe.cli.workflows import _bad_channels_for, _make_prep_config
+    from nirspipe.cli._shared import resolved_separation_bands
+    from nirspipe.cli.workflows import _bad_channels_for, _make_prep_config
     # resolved as the run resolves them, so a flag left off gets the same default
     screening = _make_prep_config(subject, None, args)
     bad_spec = args.get("bad_channels")

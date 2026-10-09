@@ -10,13 +10,13 @@ from __future__ import annotations
 import mne
 import pytest
 
-from fnirs_pipe.qc.figures.subject.raw_figures import (
+from nirspipe.qc.figures.subject.raw_figures import (
     _trial_image_by_span, build_trial_image_by_condition,
 )
-from fnirs_pipe.qc.common.windows import condition_windows
-from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
-from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.subject.report import _condition_trial_qc
+from nirspipe.qc.common.windows import condition_windows
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from nirspipe.qc.common.figure_io import figure_namer
+from nirspipe.qc.subject.report import _condition_trial_qc
 from tests._synth import synth_raw
 
 TALK = figure_namer("sub-01_task-main", "talk")

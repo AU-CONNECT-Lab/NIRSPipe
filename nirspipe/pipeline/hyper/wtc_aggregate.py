@@ -1,6 +1,6 @@
 """Merge the per-dyad WTC band-mean tables into one long table per study.
 
-``fnirs-hyper`` writes one ``group-<id>_task-<task>_stat-wtc_relmat.tsv`` per dyad and
+``nirspipe-hyper`` writes one ``group-<id>_task-<task>_stat-wtc_relmat.tsv`` per dyad and
 task, and a dozen more beside it for the ROI means, the conditions and the nulls. This
 produces the stitched tables, with ``group_id`` and ``task`` carried as columns so nothing
 about a row depends on the filename it came from.
@@ -22,10 +22,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
-from fnirs_pipe.io.naming import parse_path, derivative_path
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.utils.logging import get_logger
+from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+from nirspipe.io.naming import parse_path, derivative_path
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.wtc_aggregate")
 
@@ -114,7 +114,7 @@ def _refuse_mixed_bands(seen: dict[str, dict]) -> None:
             raise ValueError(
                 f"the WTC tables disagree on {key}, so their coherence columns are not "
                 f"comparable and merging them would hide it:\n{spread}\n"
-                f"Re-run `fnirs-hyper` for the odd ones out with matching settings, or "
+                f"Re-run `nirspipe-hyper` for the odd ones out with matching settings, or "
                 f"aggregate them separately."
             )
 

@@ -1,6 +1,6 @@
 """Which trial windows the per-trial panel scores, and which it leaves blank."""
 
-from fnirs_pipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits
+from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits
 from tests._synth import synth_raw
 
 

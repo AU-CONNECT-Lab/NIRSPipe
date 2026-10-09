@@ -1,6 +1,6 @@
 """The three screening flags have to arrive in PrepConfig, not merely parse.
 
-`fnirs-pipe` builds its config out of the parsed args with a run of conditional
+`nirspipe` builds its config out of the parsed args with a run of conditional
 ``**({...} if args.get(k) is not None else {})`` splats, and the same pattern appears in the
 call that logs the run to the job database. A splat written into the wrong one of those two
 calls parses fine, records fine, and never reaches the config: the flag becomes a silent
@@ -12,13 +12,13 @@ against its own signature, and both calls here are internal.
 
 import pytest
 
-from fnirs_pipe.qc.metrics import GOOD_FRAC_PASS, PSP_PASS
+from nirspipe.qc.metrics import GOOD_FRAC_PASS, PSP_PASS
 
 
 def _config(argv_extra):
-    """The PrepConfig `fnirs-pipe participant` would build for these flags."""
-    from fnirs_pipe.cli import run as run_cli
-    from fnirs_pipe.cli.workflows import _make_prep_config
+    """The PrepConfig `nirspipe participant` would build for these flags."""
+    from nirspipe.cli import run as run_cli
+    from nirspipe.cli.workflows import _make_prep_config
 
     argv = ["bids", "out", "participant",
             "--participant-label", "01",

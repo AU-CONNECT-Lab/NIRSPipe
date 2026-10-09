@@ -11,7 +11,7 @@ import socket
 
 import pytest
 
-from fnirs_pipe.utils.net import SCAN_SPAN, resolve_port
+from nirspipe.utils.net import SCAN_SPAN, resolve_port
 
 HOST = "127.0.0.1"
 
@@ -67,6 +67,6 @@ def test_named_port_fails_instead_of_moving(taken):
 
 def test_exhausted_scan_fails(taken, monkeypatch):
     port = taken()
-    monkeypatch.setattr("fnirs_pipe.utils.net._is_free", lambda host, p: False)
+    monkeypatch.setattr("nirspipe.utils.net._is_free", lambda host, p: False)
     with pytest.raises(SystemExit, match=f"No free port between {port} and {port + SCAN_SPAN}"):
         resolve_port(port, explicit=False)

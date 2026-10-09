@@ -7,10 +7,10 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import EVENT_ONSETS
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
-from fnirs_pipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
     _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, xy,
 )

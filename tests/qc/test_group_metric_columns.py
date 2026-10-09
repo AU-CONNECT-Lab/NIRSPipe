@@ -6,9 +6,9 @@ does not know leaves the metric unrecognised and drops it into "Other", settings
 
 import numpy as np
 
-from fnirs_pipe.qc.figures.subject.group_figures import (_split_column, build_condition_panels,
+from nirspipe.qc.figures.subject.group_figures import (_split_column, build_condition_panels,
                                                          build_window_grid, group_metrics)
-from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND
+from nirspipe.qc.metrics import GVTD_MOTION_BAND
 
 
 def test_an_optional_section_is_split_off_like_any_other():

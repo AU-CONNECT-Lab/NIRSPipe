@@ -1,4 +1,4 @@
-"""Panels for the cohort test `fnirs-hyper-groupnull` writes: real dyads against their null.
+"""Panels for the cohort test `nirspipe-hyper-groupnull` writes: real dyads against their null.
 
 Both read the tables the command already wrote and compute nothing that is not on them
 except a mean and its interval. ``byoccasion`` gives each occasion's real value and the mean

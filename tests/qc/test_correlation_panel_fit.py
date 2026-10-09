@@ -8,9 +8,9 @@ import re
 
 import mne
 
-from fnirs_pipe.qc.common.figure_io import _RESIZE_JS
-from fnirs_pipe.qc.common.report_shell import TEMPLATE_DIR
-from fnirs_pipe.qc.figures.subject.correlation_panel import fit_js, hbo_hbr_correlation_figure
+from nirspipe.qc.common.figure_io import _RESIZE_JS
+from nirspipe.qc.common.report_shell import TEMPLATE_DIR
+from nirspipe.qc.figures.subject.correlation_panel import fit_js, hbo_hbr_correlation_figure
 from tests._synth import synth_raw
 
 

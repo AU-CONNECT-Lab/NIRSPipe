@@ -9,7 +9,7 @@ looked up in a region map.
 import numpy as np
 import pytest
 
-from fnirs_pipe.io.snirf import read_snirf, write_snirf
+from nirspipe.io.snirf import read_snirf, write_snirf
 
 from tests._synth import synth_raw
 

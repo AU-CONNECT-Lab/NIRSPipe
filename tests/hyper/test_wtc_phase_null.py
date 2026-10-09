@@ -15,9 +15,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.roi import roi_maps_from_channels, roi_mean_of_channels
-from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean
+from nirspipe.pipeline.hyper.roi import roi_maps_from_channels, roi_mean_of_channels
+from nirspipe.pipeline.hyper.surrogate import phase_scramble
+from nirspipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean
 
 FREQS = np.linspace(0.02, 0.30, 24)
 TIMES = np.arange(30.0)
@@ -227,7 +227,7 @@ def test_a_channel_two_rois_list_counts_in_both():
 
 def test_a_group_of_three_is_refused_rather_than_half_scrambled():
     """Only one subject is scrambled, so a third member would leave real pairs in the null."""
-    from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_phase_null
+    from nirspipe.pipeline.hyper.surrogate import compute_wtc_phase_null
 
     with pytest.raises(ValueError, match="exactly 2 subjects"):
         compute_wtc_phase_null({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
@@ -256,7 +256,7 @@ def _ramp_map(first_half, second_half):
 
 def _null(frame, cond_frames=(), levels=None):
     """A NullDraws around an already-made frame, for the tests that stub the draw away."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frame.columns else [])
     return NullDraws(draws=[frame], cond_draws=list(cond_frames), keys=keys,
@@ -270,7 +270,7 @@ def stub_null(monkeypatch):
     Neither is what these tests are about, and stubbing both keeps them exact: the map is
     fixed, so every number below is arithmetic rather than a coherence estimate.
     """
-    from fnirs_pipe.pipeline.hyper import surrogate
+    from nirspipe.pipeline.hyper import surrogate
 
     result = _result({"S1_D1": _ramp_map(0.2, 0.8)})
     monkeypatch.setattr(surrogate, "_long_signals",
@@ -366,7 +366,7 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_null):
 def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     """The wiring: both functions take the window for the run as well as the ones for the
     conditions."""
-    from fnirs_pipe.pipeline.hyper import wtc_null
+    from nirspipe.pipeline.hyper import wtc_null
     seen = {}
 
     def _spy(*args, **kwargs):
@@ -375,12 +375,12 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
                                    "label2": ["S1_D1"], "coherence": [0.5],
                                    "n_valid_frac": [1.0]}))
 
-    monkeypatch.setattr("fnirs_pipe.pipeline.hyper.compute_wtc_phase_null", _spy)
-    monkeypatch.setattr("fnirs_pipe.pipeline.hyper._hyper_sidecar",
+    monkeypatch.setattr("nirspipe.pipeline.hyper.compute_wtc_phase_null", _spy)
+    monkeypatch.setattr("nirspipe.pipeline.hyper._hyper_sidecar",
                         lambda *a, **k: None)
-    monkeypatch.setattr("fnirs_pipe.utils.lineage.path_from", lambda r: None)
+    monkeypatch.setattr("nirspipe.utils.lineage.path_from", lambda r: None)
     # both read the montage off the recordings, which these stubs do not have
-    monkeypatch.setattr("fnirs_pipe.pipeline.hyper.wtc.wtc_grid_params", lambda raws: {})
+    monkeypatch.setattr("nirspipe.pipeline.hyper.wtc.wtc_grid_params", lambda raws: {})
     wtc_null.run_wtc_null(
         group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
         output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
@@ -391,7 +391,7 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
 
 def _roi_draws(values_per_iter):
     """NullDraws with hand-made draws: [{label: value}] per iteration, two channels an ROI."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     frames = []
     for values in values_per_iter:
@@ -446,7 +446,7 @@ def test_the_roi_null_ranks_the_real_roi_value():
 
 def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
     """A crossed draw carries within-ROI cross pairings the reported ROI value does not."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     rows = [("S1_D1", "S1_D1", 0.4), ("S1_D2", "S1_D2", 0.4),
             ("S1_D1", "S1_D2", 0.9), ("S1_D2", "S1_D1", 0.9)]
@@ -464,7 +464,7 @@ def test_a_crossed_null_still_ranks_only_the_homologous_roi_value():
 
 def test_a_crossed_roi_null_groups_every_pairing_like_the_crossed_matrix():
     """The (roi, roi) cell of the crossed matrix holds the cross pairings too, so its null must."""
-    from fnirs_pipe.pipeline.hyper.surrogate import NullDraws
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
 
     rows = [("S1_D1", "S1_D1", 0.4), ("S1_D2", "S1_D2", 0.4),
             ("S1_D1", "S1_D2", 0.9), ("S1_D2", "S1_D1", 0.9)]
@@ -485,7 +485,7 @@ def test_a_crossed_roi_null_groups_every_pairing_like_the_crossed_matrix():
 def test_a_suffixed_map_passed_straight_to_the_api_matches_the_bare_one():
     """The CLI strips suffixes on load; a caller going straight to these functions does not
     pass through it, and a "A1 hbo" entry used to match no channel at all."""
-    from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_isc
+    from nirspipe.pipeline.hyper.isc import roi_mean_of_isc
 
     df = wtc_band_mean(_result({"A1": _map(0.2), "A2": _map(0.8)}), 0.06, 0.15)
     bare = roi_mean_of_channels(df, {"roiA": ["A1", "A2"]}, min_channels=2)

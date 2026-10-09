@@ -16,7 +16,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.wtc import (
+from nirspipe.pipeline.hyper.wtc import (
     _pair_from_prepared,
     _pairwise_wtc,
     _prepare_channel,
@@ -94,7 +94,7 @@ def test_a_signal_of_another_length_is_refused_rather_than_broadcast():
 def test_a_grid_the_scales_fell_off_is_refused(monkeypatch):
     """A scale whose row comes back all-NaN is dropped, which would pair two channels on
     different grids. Simulated at the transform, since that is the only thing that drops one."""
-    import fnirs_pipe.pipeline.hyper.wtc as syn
+    import nirspipe.pipeline.hyper.wtc as syn
     sig, = _signals(1)
     grid = _wavelet_grid(1 / SFREQ, len(sig), FMIN, FMAX, limit_scales=True)
     real = syn._cwt

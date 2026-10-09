@@ -13,8 +13,8 @@ from enum import Enum
 
 import pytest
 
-from fnirs_pipe.cli.run import _MODE_CHOICES, mode_defaults
-from fnirs_pipe.cli.workflows import (
+from nirspipe.cli.run import _MODE_CHOICES, mode_defaults
+from nirspipe.cli.workflows import (
     _build_post_config,
     _make_prep_config,
     _refuse_cosine_without_cutoff,
@@ -159,7 +159,7 @@ def test_motion_correction_enum_is_unwrapped():
 def test_cosine_drift_without_a_cutoff_is_rejected():
     # nilearn multiplies the cutoff by the frame times, so without this the run dies
     # several minutes in with "unsupported operand type(s) for *: 'NoneType' and 'float'"
-    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+    from nirspipe.pipeline.post_pipeline import PostConfig
 
     with pytest.raises(ValueError, match="drift-high-pass"):
         PostConfig(subject="01", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
@@ -167,7 +167,7 @@ def test_cosine_drift_without_a_cutoff_is_rejected():
 
 
 def test_the_other_drift_models_need_no_cutoff():
-    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+    from nirspipe.pipeline.post_pipeline import PostConfig
 
     bands = dict(subject="01", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
                  resp_l_freq=0.1, resp_h_freq=0.5)

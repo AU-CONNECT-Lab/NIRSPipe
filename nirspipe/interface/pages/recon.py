@@ -9,10 +9,10 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import html
 
-from fnirs_pipe.interface.components import (
+from nirspipe.interface.components import (
     PATH, action_field, actions, card, field, params, split,
 )
-from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF
+from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF
 
 dash.register_page(__name__, path="/recon", name="Recon")
 

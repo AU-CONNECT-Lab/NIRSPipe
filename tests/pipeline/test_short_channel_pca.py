@@ -13,8 +13,8 @@ channel at all, and a chromophore whose short channels were all rejected.
 import numpy as np
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.glm import _short_channel_basis, _short_channel_regressors
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.glm import _short_channel_basis, _short_channel_regressors
 
 
 def _block(n_ch=6, n_times=600, rank=None, seed=0):
@@ -101,7 +101,7 @@ def test_a_config_file_saying_true_still_means_mean(monkeypatch, fake_raw):
         captured["called"] = True
         return ([], [])
 
-    monkeypatch.setattr("fnirs_pipe.qc.metrics._helpers.long_short_channels", fake_short)
+    monkeypatch.setattr("nirspipe.qc.metrics._helpers.long_short_channels", fake_short)
     with pytest.raises(StageError):          # no short channels, which is the next check
         _short_channel_regressors(fake_raw, True)
     assert captured["called"]

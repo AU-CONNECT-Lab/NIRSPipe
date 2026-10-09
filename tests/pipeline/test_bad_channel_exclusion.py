@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.pipeline.glm import _short_channel_regressors
-from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc_roi
+from nirspipe.pipeline.glm import _short_channel_regressors
+from nirspipe.pipeline.restingstate import compute_alff, compute_fc_roi
 
 SFREQ = 10.0
 DURATION = 60.0

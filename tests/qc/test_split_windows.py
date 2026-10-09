@@ -7,7 +7,7 @@ window of some other length out of the result.
 
 import pytest
 
-from fnirs_pipe.qc.common.windows import split_windows
+from nirspipe.qc.common.windows import split_windows
 
 
 def test_a_long_condition_yields_whole_windows_and_a_short_one_yields_one():

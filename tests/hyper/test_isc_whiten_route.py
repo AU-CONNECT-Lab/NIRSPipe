@@ -11,13 +11,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper import GroupEntry
-from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs
-from fnirs_pipe.pipeline.hyper.whiten import whiten_order, whiten_raws
-from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.io.snirf import long_channel_picks
+from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.pipeline.hyper.isc import compute_isc_pairs
+from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
+from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 from tests.hyper.test_hyper_page_contract import DURATION, SFREQ, _raw
 
 SUBS = ("sub-01", "sub-02")
@@ -103,7 +103,7 @@ def test_no_table_carries_a_per_channel_order_any_more(plain_and_white):
 # ---- the re-paired null ----
 
 def _draws(dyad, monkeypatch, windows, **kwargs):
-    from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
+    from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
 
     monkeypatch.setattr(group_io, "load_group_haemo",
                         lambda out, entries, desc="preproc": {entries[0].subject_id:
@@ -146,7 +146,7 @@ def test_without_correlation_whitening_the_window_is_the_condition_s(dyad, monke
 
 
 def test_a_real_table_from_before_the_seconds_setting_is_refused(tmp_path):
-    from fnirs_pipe.pipeline.hyper.pair_null import _isc_settings_of
+    from nirspipe.pipeline.hyper.pair_null import _isc_settings_of
 
     sidecar = tmp_path / "isc.json"
     sidecar.write_text(json.dumps({"parameters": {"isc_whiten_max_order": 0}}))

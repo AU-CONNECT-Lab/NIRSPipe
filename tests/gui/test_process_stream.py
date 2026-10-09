@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from fnirs_pipe.interface import process_stream
+from nirspipe.interface import process_stream
 
 
 def _run(body: str) -> str:

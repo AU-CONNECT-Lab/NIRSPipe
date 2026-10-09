@@ -17,7 +17,7 @@ import re
 import pytest
 from jinja2 import ChainableUndefined
 
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.common.report_shell import (
     FOOTER_CSS,
     TEMPLATE_DIR,
     TOKENS_CSS,
@@ -76,7 +76,7 @@ def test_no_report_template_writes_the_footer_itself():
 def test_an_absent_key_drops_its_section(env):
     html = env.get_template("group_report.html.j2").render(
         **page_vars(title="T", heading="T"),
-        **footer_vars(versions={"fnirs-pipe": "0.1"}),
+        **footer_vars(versions={"nirspipe": "0.1"}),
     )
     assert 'id="Versions"' in html
     for absent in ('id="Errors"', 'id="Provenance"', 'id="Methods"'):
@@ -201,7 +201,7 @@ def test_no_report_writer_names_a_stylesheet():
     # nothing outside the shell calls it, so the one look reaches every page through
     # page_vars and there is no keyword to forget. Not `extra_css`, which is per-figure CSS
     # injected into an iframe and is a different thing.
-    import fnirs_pipe.qc as qc_pkg
+    import nirspipe.qc as qc_pkg
     qc = pathlib.Path(qc_pkg.__file__).resolve().parent
     for path in sorted(qc.rglob("*.py")):
         if path.name == "report_shell.py":
@@ -260,7 +260,7 @@ def test_an_unrated_bar_has_nothing_to_rate_with():
 
 def test_a_summary_page_renders_no_rating_layer(env):
     html = env.get_template("group_report.html.j2").render(
-        **page_vars(title="T", heading="T"), **footer_vars(versions={"fnirs-pipe": "0.1"}),
+        **page_vars(title="T", heading="T"), **footer_vars(versions={"nirspipe": "0.1"}),
     )
     assert 'id="qc-container"' in html, "the cohort report lost its bar"
     for rating_only in ('class="qc-module"', "saveEndpoint", 'id="rating-static-banner"'):

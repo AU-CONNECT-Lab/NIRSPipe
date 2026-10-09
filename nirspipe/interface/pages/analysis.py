@@ -9,7 +9,7 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import (
+from nirspipe.interface.components import (
     PATH,
     action_field,
     actions,
@@ -22,7 +22,7 @@ from fnirs_pipe.interface.components import (
     switches,
 )
 
-from fnirs_pipe.cli.run import (
+from nirspipe.cli.run import (
     _DRIFT_CHOICES,
     _HRF_CHOICES,
     _NOISE_CHOICES,
@@ -31,7 +31,7 @@ from fnirs_pipe.cli.run import (
     NOISE_MODEL_PATTERN,
 )
 
-from fnirs_pipe.pipeline.denoise import (
+from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,

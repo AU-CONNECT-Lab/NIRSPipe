@@ -9,14 +9,14 @@ import hashlib
 import dash_bootstrap_components as dbc
 from dash import ALL, Input, Output, State, callback, ctx, html, no_update
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
-from fnirs_pipe.interface.callbacks._cli_run import run_and_report
-from fnirs_pipe.io.derivatives import channel_decisions_path, entity_of
-from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
-from fnirs_pipe.interface.theme import style_figure
-from fnirs_pipe.exceptions import AlignmentError
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import pair_of
+from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
+from nirspipe.interface.callbacks._cli_run import run_and_report
+from nirspipe.io.derivatives import channel_decisions_path, entity_of
+from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
+from nirspipe.interface.theme import style_figure
+from nirspipe.exceptions import AlignmentError
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.hyper_align_callbacks")
 
@@ -99,8 +99,8 @@ def load_and_align(n_clicks, bids_dir, deriv_dir, group_csv):
             _HIDE, no_update, no_update, no_update,
         )
 
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.pipeline.hyper import align_recordings, member_snirfs, parse_group_csv
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.pipeline.hyper import align_recordings, member_snirfs, parse_group_csv
 
     try:
         groups = parse_group_csv(Path(group_csv))
@@ -204,7 +204,7 @@ def update_group_figures(group_val, bids_dir, group_csv):
     if not info:
         return no_update, no_update
 
-    from fnirs_pipe.qc.figures.hyper.hyper_figures import (
+    from nirspipe.qc.figures.hyper.hyper_figures import (
         _cond_colors, _extract_markers,
         build_signal_overlay, build_trigger_timeline,
     )
@@ -253,9 +253,9 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
         return dbc.Alert("Load and align first.", color="warning",
                          className="mb-0 py-2")
 
-    from fnirs_pipe.pipeline.hyper import write_aligned_member
-    from fnirs_pipe.io.derivatives import LINK_RAW, write_dataset_description
-    from fnirs_pipe.utils.snirf_prep import deriv_nirs_dir
+    from nirspipe.pipeline.hyper import write_aligned_member
+    from nirspipe.io.derivatives import LINK_RAW, write_dataset_description
+    from nirspipe.utils.snirf_prep import deriv_nirs_dir
 
     _DERIV_NAME = "aligned"
     deriv_path  = Path(deriv_dir)
@@ -264,7 +264,7 @@ def export_snirfs(n_clicks, bids_dir, deriv_dir, group_csv):
 
     for (group_id, task, _), info in cache["groups"].items():
         write_dataset_description(deriv_path / _DERIV_NAME, name=_DERIV_NAME,
-                                  generated_by="fnirs-gui hyper-align", source=Path(bids_dir),
+                                  generated_by="nirspipe-gui hyper-align", source=Path(bids_dir),
                                   link=LINK_RAW)
         for sid in info["subject_ids"]:
             path = info["paths"][sid]
@@ -344,7 +344,7 @@ def _write_ha_decisions(deriv_dir: str, task: str, decisions: dict, paths: dict)
 def _compute_sci_from_cw(raws: dict, subject_ids: list, cardiac_l_freq, cardiac_h_freq) -> dict:
     import mne
     import numpy as np
-    from fnirs_pipe.qc.metrics import compute_windowed_sci
+    from nirspipe.qc.metrics import compute_windowed_sci
 
     if cardiac_l_freq is None or cardiac_h_freq is None:
         return {sid: {} for sid in subject_ids}

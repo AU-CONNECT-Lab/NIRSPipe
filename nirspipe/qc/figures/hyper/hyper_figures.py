@@ -7,30 +7,30 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import is_marker, pair_of
-from fnirs_pipe.utils.lineage import lineage_of
-from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
-from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
-from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
+from nirspipe.utils import is_marker, pair_of
+from nirspipe.utils.lineage import lineage_of
+from nirspipe.qc.common.figure_io import extract_markers as _extract_markers
+from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     _ch_kept_by_member, dyad_status, sci_of,
 )
-from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
+from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
                                           minmax_xy, physio_bands, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
-from fnirs_pipe.qc.figures.common.head_map import (
+from nirspipe.qc.figures.common.head_map import (
     head_axes as _head_axes, head_ground as _head_ground,
     head_glyph as _head_glyph,
 )
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.figures.common.motion_panel import (
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.figures.common.motion_panel import (
     _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
 )
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.metrics import (
     GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
 )
 
@@ -84,7 +84,7 @@ def build_alignment_timeline(
     """Every member's annotated blocks, on its own clock above and the shared one below.
 
     The second row is the shared clock every later panel reads. ``residuals`` are
-    :func:`~fnirs_pipe.pipeline.hyper.alignment.onset_residuals`, drawn as a third row: what
+    :func:`~nirspipe.pipeline.hyper.alignment.onset_residuals`, drawn as a third row: what
     is left between the members after alignment, which the bars are too coarse to show.
     Points beyond ``tol_s`` are red.
 
@@ -389,7 +389,7 @@ def motion_series(
           "imu": {"gyro": {...}}}
 
     ``imu`` is ``{sid: {sensor: ImuTrace}}`` already on the shared clock, from
-    :func:`~fnirs_pipe.pipeline.hyper.alignment.align_imu_like`; see :func:`_imu_rows`.
+    :func:`~nirspipe.pipeline.hyper.alignment.align_imu_like`; see :func:`_imu_rows`.
 
     **Each member is divided by its own before-median, and the corrected traces are divided
     by that same number.** GVTD is an RMS of optical-density derivatives in the recording's
@@ -623,7 +623,7 @@ def build_motion_panel(
 
     Under the rows sits the spike strip, marking only the spans where every member was
     spiking at once, and under that each member's z-scored optical-density carpet, drawn by
-    the subject report's own :func:`~fnirs_pipe.qc.figures.common.motion_panel.add_carpet` so the
+    the subject report's own :func:`~nirspipe.qc.figures.common.motion_panel.add_carpet` so the
     dyad's image and the member's own cannot drift apart.
 
     Row titles and the run's numbers sit in the left margin rather than inside the panels,

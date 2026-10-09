@@ -10,8 +10,8 @@ import functools
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import is_marker, is_optical_density
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import is_marker, is_optical_density
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.helpers")
 

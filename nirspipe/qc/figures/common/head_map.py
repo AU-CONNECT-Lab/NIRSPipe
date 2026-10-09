@@ -11,7 +11,7 @@ One projection, one outline, two marks. Which mark is right depends on what the 
 
 Two views built on it cannot drift into describing different heads.
 
-Built on :mod:`fnirs_pipe.qc.figures.common.topomap`'s projection, which is MNE's own, so
+Built on :mod:`nirspipe.qc.figures.common.topomap`'s projection, which is MNE's own, so
 these heads and a real topomap put a channel in the same place. What varies between callers
 is the colour scale and which channels have a value; the geometry never does.
 """
@@ -22,13 +22,13 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 
-from fnirs_pipe.qc.figures.common.topomap import (
+from nirspipe.qc.figures.common.topomap import (
     _LONG_SIZE, _SHORT_SIZE, _glyph_points, _projected_optodes,
 )
 
 # one disc per channel, drawn larger than the discs a bar is strung from
 _DISC_SIZE = 15
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.head_map")
 

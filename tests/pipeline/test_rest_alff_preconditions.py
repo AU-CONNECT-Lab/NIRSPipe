@@ -13,8 +13,8 @@ these tests pin is that it costs the ALFF outputs instead of silently corrupting
 
 import pytest
 
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
 from tests._synth import synth_raw
 

@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.naming import derivative_path
-from fnirs_pipe.qc.figures.hyper.groupnull_figures import (
+from nirspipe.io.naming import derivative_path
+from nirspipe.qc.figures.hyper.groupnull_figures import (
     build_occasion_panels, build_region_lift,
 )
-from fnirs_pipe.qc.hyper.groupnull_report import write_groupnull_report
+from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
 
 OCCASIONS = ("G01", "G02", "G03", "G04")
 CONDITIONS = ("ca", "cb")

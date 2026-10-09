@@ -10,8 +10,8 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.io.derivatives import entity_of, read_json
-from fnirs_pipe.utils.lineage import stamp
+from nirspipe.io.derivatives import entity_of, read_json
+from nirspipe.utils.lineage import stamp
 
 
 def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
@@ -149,7 +149,7 @@ def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
 
 def has_short_channels(raw: mne.io.Raw, sep_bands=None) -> bool:
     """Return True if the recording contains short-distance reference channels."""
-    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+    from nirspipe.qc.metrics._helpers import long_short_channels
 
     return bool(long_short_channels(raw, sep_bands)[1])
 
@@ -166,7 +166,7 @@ def long_channel_picks(
     Montages with no short channels lose nothing.
 
     "Long" is the package's one separation rule,
-    :func:`~fnirs_pipe.qc.metrics._helpers.separation_bands`, and a channel outside both
+    :func:`~nirspipe.qc.metrics._helpers.separation_bands`, and a channel outside both
     bands is in neither list; ``long_short_channels`` names such a channel in a warning.
 
     ``exclude`` is pick_types', so rejected channels are dropped by default, which is what a
@@ -174,7 +174,7 @@ def long_channel_picks(
     matrix wants: an axis over the montage rather than over the survivors gives every subject
     and every dyad a matrix of one shape.
     """
-    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+    from nirspipe.qc.metrics._helpers import long_short_channels
 
     long_names = set(long_short_channels(raw, sep_bands)[0])
     return [p for p in mne.pick_types(raw.info, fnirs=ch_type, exclude=exclude)

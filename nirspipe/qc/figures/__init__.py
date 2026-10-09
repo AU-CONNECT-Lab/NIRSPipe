@@ -1,4 +1,4 @@
-from fnirs_pipe.qc.figures.subject.raw_figures import (
+from nirspipe.qc.figures.subject.raw_figures import (
     build_ts_figure,
     build_channel_figure,
     build_layout_figure,
@@ -14,7 +14,7 @@ from fnirs_pipe.qc.figures.subject.raw_figures import (
     sci_color,
     psd_layout,
 )
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import (
+from nirspipe.qc.figures.subject.sci_psp_panel import (
     build_sci_psp_figure,
     binary_heatmap_figure,
     lollipop_scores_figure,
@@ -22,25 +22,25 @@ from fnirs_pipe.qc.figures.subject.sci_psp_panel import (
     condition_quality_heatmap,
     trial_quality_heatmap,
 )
-from fnirs_pipe.qc.figures.subject.brain_views import quality_brain_views
-from fnirs_pipe.qc.figures.common.motion_panel import (
+from nirspipe.qc.figures.subject.brain_views import quality_brain_views
+from nirspipe.qc.figures.common.motion_panel import (
     carpet_gvtd_figure, bad_segment_zoom_figure, build_motion_detail_figure,
 )
-from fnirs_pipe.qc.figures.subject.carpet_compare import carpet_compare_figure
-from fnirs_pipe.qc.figures.subject.psd_plot import psd_figure
-from fnirs_pipe.qc.figures.subject.denoise_compare import (
+from nirspipe.qc.figures.subject.carpet_compare import carpet_compare_figure
+from nirspipe.qc.figures.subject.psd_plot import psd_figure
+from nirspipe.qc.figures.subject.denoise_compare import (
     denoise_stage_panels, stage_metrics_figure, stage_slope_figure,
 )
-from fnirs_pipe.qc.figures.subject.glm_figures import (
+from nirspipe.qc.figures.subject.glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
     activation_brain_figure, activation_condition_figures, activation_panel,
     per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
 )
-from fnirs_pipe.qc.figures.subject.correlation_panel import fit_js as hbo_hbr_fit_js
-from fnirs_pipe.qc.figures.subject.correlation_panel import hbo_hbr_correlation_figure
-from fnirs_pipe.qc.figures.subject.optode_layout import optode_layout_static
-from fnirs_pipe.qc.figures.common.topomap import evoked_channel_map_figure
-from fnirs_pipe.qc.figures.subject.rest_figures import (
+from nirspipe.qc.figures.subject.correlation_panel import fit_js as hbo_hbr_fit_js
+from nirspipe.qc.figures.subject.correlation_panel import hbo_hbr_correlation_figure
+from nirspipe.qc.figures.subject.optode_layout import optode_layout_static
+from nirspipe.qc.figures.common.topomap import evoked_channel_map_figure
+from nirspipe.qc.figures.subject.rest_figures import (
     alff_topo_figure,
     rest_channel_panel,
     fc_roi_matrix_figure,

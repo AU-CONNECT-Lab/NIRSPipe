@@ -17,10 +17,10 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.hyper._helpers import _long_signals, long_axis_over
-from fnirs_pipe.pipeline.hyper.roi import (roi_maps_from_channels, roi_mean_of_channels,
+from nirspipe.pipeline.hyper._helpers import _long_signals, long_axis_over
+from nirspipe.pipeline.hyper.roi import (roi_maps_from_channels, roi_mean_of_channels,
                                            roi_mean_of_homologous)
-from fnirs_pipe.pipeline.hyper.wtc import (
+from nirspipe.pipeline.hyper.wtc import (
     WTCResult,
     _ChannelWavelet,
     _outside_coi,
@@ -28,8 +28,8 @@ from fnirs_pipe.pipeline.hyper.wtc import (
     wtc_band_mean,
     window_result,
 )
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, fisher_r_to_z
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import ROI_MIN_CHANNELS, fisher_r_to_z
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.surrogate")
 

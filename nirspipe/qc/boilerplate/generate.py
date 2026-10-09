@@ -7,8 +7,8 @@ import sys
 from importlib.resources import files
 from typing import Any
 
-from fnirs_pipe import __version__
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe import __version__
+from nirspipe.qc.boilerplate.vocabulary import (
     boilerplate_key, step_summary, steps_from_sidecars, template_slots,
 )
 
@@ -99,7 +99,7 @@ def _load_steps() -> dict:
         import tomllib
     except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
-    data = files("fnirs_pipe.qc.boilerplate").joinpath("steps.toml").read_bytes()
+    data = files("nirspipe.qc.boilerplate").joinpath("steps.toml").read_bytes()
     return tomllib.loads(data.decode())
 
 
@@ -135,7 +135,7 @@ def _delatex(value: str) -> str:
 
 def _load_refs() -> dict[str, dict]:
     import bibtexparser
-    text = files("fnirs_pipe.qc.boilerplate").joinpath("references.bib").read_text(encoding="utf-8")
+    text = files("nirspipe.qc.boilerplate").joinpath("references.bib").read_text(encoding="utf-8")
     lib = bibtexparser.parse_string(text)
     return {
         entry.key: {name: _delatex(field.value) for name, field in entry.fields_dict.items()}
@@ -244,14 +244,14 @@ def generate_methods_text(
     """Methods prose for one run, from what its sidecars record.
 
     ``steps`` is the step list itself, already slot-filled (see
-    :func:`~fnirs_pipe.qc.boilerplate.vocabulary.template_slots`), for a caller that
+    :func:`~nirspipe.qc.boilerplate.vocabulary.template_slots`), for a caller that
     assembles it from more than one place: a dyad's paragraph continues from the files its
     members were read from into steps that left no file. Otherwise ``nirs_dir`` is scanned,
     scoped to the run ``label`` names.
     """
     templates = _load_steps()
     refs = _load_refs()
-    ver = (versions or {}).get("fnirs-pipe", "unknown")
+    ver = (versions or {}).get("nirspipe", "unknown")
 
     active = list(steps) if steps is not None else []
     if steps is None and nirs_dir is not None:
@@ -263,7 +263,7 @@ def generate_methods_text(
     reflist     = _build_reflist(active, templates, refs)
 
     header = templates.get("header", {})
-    header_plain = header.get("plain", "fNIRS data were processed using fnirs-pipe v{ver}.").format(ver=ver)
+    header_plain = header.get("plain", "fNIRS data were processed using NIRSPipe v{ver}.").format(ver=ver)
     header_md    = header.get("markdown", header_plain).format(ver=ver)
     header_latex = header.get("latex", header_plain).format(ver=ver)
 
@@ -282,7 +282,7 @@ def generate_methods_text(
     latex = (
         "\\subsection{fNIRS Processing}\n"
         f"{para_latex}\n"
-        "% BibTeX keys: see fnirs_pipe/qc/boilerplate/references.bib"
+        "% BibTeX keys: see nirspipe/qc/boilerplate/references.bib"
     )
 
     html = _build_html(header_plain, refs, active, templates)
@@ -306,9 +306,9 @@ def step_sentence(step: str | None, params: dict) -> str:
 def collect_software_versions() -> dict[str, str]:
     out = {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        "fnirs-pipe": __version__,
+        "nirspipe": __version__,
     }
-    for req in importlib.metadata.requires("fnirs-pipe") or []:
+    for req in importlib.metadata.requires("nirspipe") or []:
         if "extra ==" in req:
             continue
         name = re.split(r"[>=<!;\s\[]", req)[0].strip()

@@ -5,11 +5,11 @@ import re
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.common.figure_io import fig_png_b64
+from nirspipe.qc.common.figure_io import fig_png_b64
 
-from fnirs_pipe.qc.figures.common._utils import head_outline
-from fnirs_pipe.qc.figures.subject.brain_views import _lookup_sci
-from fnirs_pipe.qc.figures.subject.raw_figures import sci_color, sci_legend
+from nirspipe.qc.figures.common._utils import head_outline
+from nirspipe.qc.figures.subject.brain_views import _lookup_sci
+from nirspipe.qc.figures.subject.raw_figures import sci_color, sci_legend
 
 
 def optode_layout_static(

@@ -28,9 +28,9 @@ import pandas as pd
 import pytest
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.pipeline.restingstate import fisher_z
-from fnirs_pipe.utils import fisher_r_to_z
-from fnirs_pipe.qc.metrics import (
+from nirspipe.pipeline.restingstate import fisher_z
+from nirspipe.utils import fisher_r_to_z
+from nirspipe.qc.metrics import (
     _cardiac_power_metrics,
     _drift_metrics,
     _gcor,
@@ -318,7 +318,7 @@ def test_the_carpet_draws_every_set_whatever_the_censor_was_told_to_use():
     whether the movement was scalp-only. The panel shows all of it; only the censoring
     choice is a choice.
     """
-    from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+    from nirspipe.qc.metrics import gvtd_channel_blocks
     normal = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
     assert [name for name, _ in gvtd_channel_blocks(normal)] == ["long", "short"]
 
@@ -685,7 +685,7 @@ def test_an_h_freq_at_nyquist_degrades_the_bandpass_to_a_high_pass():
 # ---- optical density, from either end ----
 
 def test_as_optical_density_converts_intensity_and_passes_od_through():
-    from fnirs_pipe.qc.metrics._helpers import as_optical_density
+    from nirspipe.qc.metrics._helpers import as_optical_density
 
     raw = synth_raw("01", "hold", duration=20.0, motion_onset=None)
     before = raw.get_data().copy()
@@ -697,7 +697,7 @@ def test_as_optical_density_converts_intensity_and_passes_od_through():
 
 
 def test_pair_of_drops_the_wavelength_or_chromophore_and_keeps_a_bare_pair():
-    from fnirs_pipe.utils import pair_of
+    from nirspipe.utils import pair_of
 
     assert [pair_of(n) for n in ("S1_D1 760", "S12_D3 hbo", "S1_D1 hbr", "S1_D1")] == \
         ["S1_D1", "S12_D3", "S1_D1", "S1_D1"]

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.glm import fit_glm
+from nirspipe.pipeline.glm import fit_glm
 
 RHOS = (0.55, 0.72, 0.90)
 

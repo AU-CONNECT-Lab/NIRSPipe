@@ -1,12 +1,12 @@
-"""Callbacks for the Hyper Analysis page: build an `fnirs-hyper` argv, run it, show the report."""
+"""Callbacks for the Hyper Analysis page: build an `nirspipe-hyper` argv, run it, show the report."""
 
 from __future__ import annotations
 
 from dash import Input, Output, State, callback
 
-from fnirs_pipe.interface.callbacks._cli_run import preview_text, run_and_report
-from fnirs_pipe.interface.cli_args import build_qc_args, missing
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.interface.callbacks._cli_run import preview_text, run_and_report
+from nirspipe.interface.cli_args import build_qc_args, missing
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.hyper_analysis_callbacks")
 

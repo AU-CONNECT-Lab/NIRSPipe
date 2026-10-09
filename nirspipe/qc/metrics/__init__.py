@@ -16,7 +16,7 @@ One module per metric family, layered so the imports run one way::
     aggregate   the dicts a run stores, assembled from the families above
     hyper       the dyad-level questions: the shared screening grid and its scalars
 
-Every name is re-exported here, so ``from fnirs_pipe.qc.metrics import X`` reaches any of
+Every name is re-exported here, so ``from nirspipe.qc.metrics import X`` reaches any of
 them and a caller need not know which module X is in.
 
 Each compute_* function returns a flat dict and does no I/O. Assembling them into a
@@ -39,48 +39,48 @@ cannot fall below the threshold no matter how bad the recording is.
 Per-channel dicts always list every channel, in both domains.
 """
 
-from fnirs_pipe.qc.metrics._helpers import (  # noqa: F401
+from nirspipe.qc.metrics._helpers import (  # noqa: F401
     SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels,
     separation_bands, unclaimed_separations, separation_orphans, registration_offset,
     REGISTRATION_MAX_RATIO, _mean_or_none,
     _safe_metrics, _mask_to_segments, epochable_events,
     SCI_PASS, PSP_PASS, GOOD_FRAC_PASS, CV_PASS, SNR_PASS,
 )
-from fnirs_pipe.qc.metrics.gvtd import (  # noqa: F401
+from nirspipe.qc.metrics.gvtd import (  # noqa: F401
     GVTD_MOTION_BAND, GVTD_N_STD, gvtd_timetrace, gvtd_threshold,
     gvtd_channel_picks, gvtd_channel_blocks, _motion_metrics, gvtd_above_segments,
     gvtd_censor_spans, _windowed_gvtd, window_grid,
     compute_windowed_gvtd, compute_windowed_filtered_gvtd,
 )
-from fnirs_pipe.qc.metrics.screening import (  # noqa: F401
+from nirspipe.qc.metrics.screening import (  # noqa: F401
     CRITERIA, Criterion, criterion_cutoffs, resolve_cutoffs, screen_channels,
     screening_scores,
 )
-from fnirs_pipe.qc.metrics.coupling import (  # noqa: F401
+from nirspipe.qc.metrics.coupling import (  # noqa: F401
     PSP_WINDOW_S, SCI_WINDOW_S, compute_sci_scores, compute_psp_scores, _sci_metrics,
     _sci_win_metrics,
     channel_cv, channel_snr, _intensity_metrics,
     _channel_distance_metrics, _psp_metrics, _cardiac_power_metrics,
 )
-from fnirs_pipe.qc.metrics.motion import (  # noqa: F401
+from nirspipe.qc.metrics.motion import (  # noqa: F401
     _spike_mask, _motion_band_diff, _spike_metrics, _correction_footprint,
     motion_correction_metrics, motion_corrected_segments, spike_segments,
 )
-from fnirs_pipe.qc.metrics.haemo import (  # noqa: F401
+from nirspipe.qc.metrics.haemo import (  # noqa: F401
     CNR_BASELINE_S, CNR_RESPONSE_S, haemo_quality_metrics, _cnr_metrics, _spectral_metrics,
     _gcor, gcor_metrics, _drift_metrics, _retention_metrics,
 )
-from fnirs_pipe.qc.metrics.windowed import (  # noqa: F401
+from nirspipe.qc.metrics.windowed import (  # noqa: F401
     compute_windowed_sci, compute_windowed_psp, attach_windowed_series,
 )
-from fnirs_pipe.qc.metrics.imu import (  # noqa: F401
+from nirspipe.qc.metrics.imu import (  # noqa: F401
     IMU_QUANTITIES, IMU_STAT_KEYS, imu_scalars, imu_windowed, imu_gvtd_agreement, imu_section,
 )
-from fnirs_pipe.qc.metrics.aggregate import (  # noqa: F401
+from nirspipe.qc.metrics.aggregate import (  # noqa: F401
     compute_raw_sqm, compute_haemo_sqm, compute_prep_haemo_sqm, comparable_stage_metrics,
     _band_power, _variance_remaining,
 )
-from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401
+from nirspipe.qc.metrics.hyper import (  # noqa: F401
     sci_of, _rejected_pairs, _ch_kept_by_member,
     coupled_grid, dyad_status, member_series,
     motion_summary, compute_hyper_sqm,

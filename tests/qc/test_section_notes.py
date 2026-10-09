@@ -13,8 +13,8 @@ there would notice. So the two sides are compared directly.
 import re
 from pathlib import Path
 
-import fnirs_pipe.qc as qc_pkg
-from fnirs_pipe.qc.boilerplate.notes import SECTION_NOTES, section_note
+import nirspipe.qc as qc_pkg
+from nirspipe.qc.boilerplate.notes import SECTION_NOTES, section_note
 
 TEMPLATES = Path(qc_pkg.__file__).resolve().parent / "templates"
 PACKAGE = Path(qc_pkg.__file__).resolve().parents[1]

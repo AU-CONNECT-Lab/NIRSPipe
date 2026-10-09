@@ -15,13 +15,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.surrogate import (
+from nirspipe.pipeline.hyper.surrogate import (
     NULL_ARROW_QUANTILE,
     NullDraws,
     _accumulate_null_hist,
     _null_level,
 )
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult
+from nirspipe.pipeline.hyper.wtc import WTCResult
 
 FREQS = np.array([0.02, 0.06, 0.15])
 KEYS = ["sub1", "sub2", "label"]
@@ -187,7 +187,7 @@ def test_a_pair_with_nothing_inside_the_cone_gets_no_level_at_all():
 def test_a_frequency_with_no_level_draws_no_arrow():
     """NaN, not 0: a 0 would pass every cell at that frequency as beating the null. A
     comparison against NaN is False, so the row simply goes unmarked."""
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arrow_mask
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _arrow_mask
 
     wtc = np.array([[0.99, 0.99], [0.30, 0.60]])
     coi = np.full(2, 1e6)
@@ -201,7 +201,7 @@ def test_a_frequency_with_no_level_draws_no_arrow():
 def test_the_arrow_mask_prefers_the_level_over_the_flat_threshold():
     """The level lands in `sig`, the slot pycwt's Monte Carlo level already used, so the
     figures do not have to choose between two thresholds."""
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _arrow_mask
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _arrow_mask
 
     wtc = np.array([[0.30, 0.60], [0.30, 0.60]])
     coi = np.full(2, 1e6)
@@ -217,7 +217,7 @@ def test_the_caption_names_the_level_it_actually_used():
     """Three sources and three wordings. A caption reading "the Monte Carlo level" over
     arrows drawn against the phase-scrambled null, or against a display threshold, claims a test
     nobody ran."""
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _clears
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _clears
 
     level = np.array([0.4, 0.5, 0.6])
     assert _clears({"sig": None}, arrow_min=0.5) == "0.5"
@@ -228,8 +228,8 @@ def test_the_caption_names_the_level_it_actually_used():
 def test_a_condition_window_keeps_the_source_of_its_level():
     """Every condition page is drawn from a window of the whole-record map; losing the source
     there would caption arrows drawn against the phase-scrambled null as the Monte Carlo level."""
-    from fnirs_pipe.pipeline.hyper.wtc import window_result
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import _clears
+    from nirspipe.pipeline.hyper.wtc import window_result
+    from nirspipe.qc.figures.hyper.hyper_post_figures import _clears
 
     whole = _map([0.5, 0.5, 0.5])
     whole.pairs[("a", "b")]["S1_D1"].update(sig=np.full(len(FREQS), 0.4), sig_source="null")
@@ -242,7 +242,7 @@ def test_a_condition_window_keeps_the_source_of_its_level():
 def test_the_level_survives_a_round_trip_to_disk(tmp_path):
     """It is what the arrows are drawn against, and redrawing a report must not cost the
     hours the null took to produce it."""
-    from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels, save_null_levels
+    from nirspipe.pipeline.hyper.wtc_store import load_null_levels, save_null_levels
 
     levels = {("a", "b", "S1_D1"): np.array([0.31, 0.42, 0.53]),
               ("a", "b", ("S1_D1", "S2_D2")): np.array([0.11, 0.22, 0.33])}
@@ -254,9 +254,9 @@ def test_the_level_survives_a_round_trip_to_disk(tmp_path):
 
 
 def test_reband_leaves_the_level_archive_alone(tmp_path):
-    """It sits under the same `*_hyper-wtc*.npz` prefix `fnirs-hyper-band` globs, but holds
+    """It sits under the same `*_hyper-wtc*.npz` prefix `nirspipe-hyper-band` globs, but holds
     one row per pair rather than a map, so opening it only produces a warning."""
-    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree, save_null_levels
+    from nirspipe.pipeline.hyper.wtc_store import reband_tree, save_null_levels
 
     save_null_levels({("a", "b", "S1_D1"): np.array([0.3, 0.4, 0.5])},
                      tmp_path / "group-G01_task-main_hyper-wtc-nulllevel-hbo.npz")
@@ -267,7 +267,7 @@ def test_reband_leaves_the_level_archive_alone(tmp_path):
 # ---- the per-condition levels and what decides whether a report may use one ----
 
 def test_per_condition_levels_survive_a_round_trip_to_disk(tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_store import load_cond_null_levels, save_cond_null_levels
+    from nirspipe.pipeline.hyper.wtc_store import load_cond_null_levels, save_cond_null_levels
 
     levels = {"game1#2": {("a", "b", "S1_D1"): np.array([0.3, 0.4, 0.5])},
               "talk": {("a", "b", ("S1_D1", "S2_D2")): np.array([0.6, 0.7, 0.8])}}
@@ -284,21 +284,21 @@ def _stamped(tmp_path, **params):
 
 
 def test_a_level_matching_this_run_is_usable(tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+    from nirspipe.pipeline.hyper.wtc_store import level_mismatch
 
     path = _stamped(tmp_path, wtc_fmin=0.02, align_offset_s={"a": 0.0}, n_iter=5)
     assert level_mismatch(path, {"wtc_fmin": 0.02, "align_offset_s": {"a": 0.0}}, {}) is None
 
 
 def test_a_level_without_its_sidecar_is_not_usable(tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+    from nirspipe.pipeline.hyper.wtc_store import level_mismatch
 
     assert "missing" in level_mismatch(tmp_path / "level.npz", {}, {})
 
 
 def test_a_setting_the_writer_recorded_and_this_run_lacks_counts_as_a_difference(tmp_path):
     """A level drawn on trigger-aligned recordings does not fit a run aligned on none."""
-    from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch
+    from nirspipe.pipeline.hyper.wtc_store import level_mismatch
 
     path = _stamped(tmp_path, wtc_fmin=0.02, align_trigger={"a": "start"})
     assert "align_trigger" in level_mismatch(path, {"wtc_fmin": 0.02}, {})
@@ -307,7 +307,7 @@ def test_a_setting_the_writer_recorded_and_this_run_lacks_counts_as_a_difference
 def test_the_re_paired_isc_null_carries_a_level_for_the_size_of_r(tmp_path):
     """The chords compare |r| with a level, so a p95 over signed r is the wrong number:
     a null whose draws swing both ways has a low signed p95 and a high |r| one."""
-    from fnirs_pipe.pipeline.hyper.pair_null import _write_isc_null
+    from nirspipe.pipeline.hyper.pair_null import _write_isc_null
 
     draws = [pd.DataFrame({"chromophore": ["hbo"], "condition": ["talk"], "sub1": ["a"],
                            "sub2": ["b"], "label": ["S1_D1"], "label2": ["S1_D1"],
@@ -327,7 +327,7 @@ def test_the_re_paired_isc_null_carries_a_level_for_the_size_of_r(tmp_path):
 def test_the_re_paired_isc_percentile_ranks_the_size_of_r(tmp_path):
     """The phase null ranks |r| among |draws|; the re-paired one has to say the same thing,
     or a strongly negative pair reads as beating none of its stand-ins."""
-    from fnirs_pipe.pipeline.hyper.pair_null import _write_isc_null
+    from nirspipe.pipeline.hyper.pair_null import _write_isc_null
 
     keys = {"chromophore": ["hbo"], "condition": ["talk"], "sub1": ["a"], "sub2": ["b"],
             "label": ["S1_D1"], "label2": ["S1_D1"]}
@@ -358,7 +358,7 @@ def _two_channel_map(rows1, rows2, n_times=40):
 def test_an_roi_level_is_counted_off_the_averaged_surrogate_maps():
     """Two channels at 0.2 and 0.8 average to a 0.5 map, so the ROI's level is 0.5: neither
     channel's, and not the mean of the channels' levels taken over their own draws."""
-    from fnirs_pipe.pipeline.hyper.surrogate import _collect_draw
+    from nirspipe.pipeline.hyper.surrogate import _collect_draw
 
     hists, roi_hists = {}, {}
     for low, high in ((0.2, 0.8), (0.8, 0.2)):
@@ -372,7 +372,7 @@ def test_an_roi_level_is_counted_off_the_averaged_surrogate_maps():
 
 
 def test_roi_maps_take_back_only_a_level_keyed_to_them():
-    from fnirs_pipe.pipeline.hyper.roi import roi_maps_from_channels
+    from nirspipe.pipeline.hyper.roi import roi_maps_from_channels
 
     level = np.array([0.4, 0.5, 0.6])
     got = roi_maps_from_channels(_two_channel_map([0.2] * 3, [0.8] * 3),

@@ -7,12 +7,12 @@ import re
 import mne
 import pytest
 
-from fnirs_pipe.io.derivatives import write_dataset_description
-from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure
-from fnirs_pipe.qc.metrics import haemo_quality_metrics
-from fnirs_pipe.qc.subject.prep_raw_report import _process_run, build_prep_raw_report
-from fnirs_pipe.qc.subject.record_io import read_record
-from fnirs_pipe.qc.subject.sqm_record import OPTIONAL_SECTIONS
+from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.qc.figures import hbo_hbr_correlation_figure
+from nirspipe.qc.metrics import haemo_quality_metrics
+from nirspipe.qc.subject.prep_raw_report import _process_run, build_prep_raw_report
+from nirspipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.sqm_record import OPTIONAL_SECTIONS
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 

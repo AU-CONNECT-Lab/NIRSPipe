@@ -7,10 +7,10 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import (
+from nirspipe.interface.components import (
     PATH, action_field, actions, band, card, field, params, section, switches,
 )
-from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
+from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 
 dash.register_page(__name__, path="/", name="Data Preparation")
@@ -270,7 +270,7 @@ layout = dbc.Container([
                 dbc.Button("Write QC report", id="dp-report-btn",
                            color="secondary", outline=True),
             ),
-            html.Small("Runs fnirs-qc prep-raw on the loaded run with the parameters above,"
+            html.Small("Runs nirspipe-qc prep-raw on the loaded run with the parameters above,"
                        " and writes the report and its quality record into the output"
                        " directory.", className="fp-hint d-block mt-1"),
             html.Div(id="dp-report-status", className="mt-2"),

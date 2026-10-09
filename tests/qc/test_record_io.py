@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.subject.record_io import read_record, write_record
+from nirspipe.qc.subject.record_io import read_record, write_record
 
 _PATH = "sub-01_task-tap_desc-sqmraw_qc.json"
 

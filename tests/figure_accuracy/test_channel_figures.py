@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 from mne.time_frequency import psd_array_welch
 
-from fnirs_pipe.qc.figures.common._utils import PSD_NFFT
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
-from fnirs_pipe.qc.subject.record_io import read_record
+from nirspipe.qc.figures.common._utils import PSD_NFFT
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
+from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CLI_ARGS, HBR_FREQ, SFREQ
 from tests.figure_accuracy._payload import plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy

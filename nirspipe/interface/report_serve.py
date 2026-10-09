@@ -13,7 +13,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.report_serve")
 

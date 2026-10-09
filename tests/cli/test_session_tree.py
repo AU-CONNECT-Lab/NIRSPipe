@@ -1,4 +1,4 @@
-"""`fnirs-pipe participant` on a subject recorded in two sessions, without `--session-label`.
+"""`nirspipe participant` on a subject recorded in two sessions, without `--session-label`.
 
 Each config takes its session from the file being processed, not from the `--session-label`
 loop (None when the flag is not given), so every output keeps its `ses-` entity and neither
@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from fnirs_pipe.cli.workflows import run_participant_level
+from nirspipe.cli.workflows import run_participant_level
 from tests._synth import make_bids_dataset
 
 _ARGS = dict(
@@ -36,7 +36,7 @@ def out_dir(tmp_path_factory):
 
     out = root / "out"
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(bids), str(out), "participant"]
+    sys.argv = ["nirspipe", str(bids), str(out), "participant"]
     try:
         run_participant_level({**_ARGS, "bids_dir": bids, "output_dir": out})
     finally:

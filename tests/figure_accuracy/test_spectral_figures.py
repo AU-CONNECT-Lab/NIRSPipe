@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from fnirs_pipe.cli.run import mode_defaults
+from nirspipe.cli.run import mode_defaults
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, SYSTEMIC_FREQ
 from tests.figure_accuracy._payload import one_figure
 from tests.figure_accuracy._read import traces, xy

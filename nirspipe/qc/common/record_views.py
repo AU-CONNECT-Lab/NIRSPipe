@@ -15,7 +15,7 @@ def condition_verdict_view(entry: dict) -> "dict[str, float | None]":
          "od_by_set": {"long": {"sci_win_mean": 0.86}}}
         -> {"sci_win_mean": 0.86, "gvtd_filt_p95": 1.2e-4}
 
-    The arrangement :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` makes for a run, and
+    The arrangement :func:`~nirspipe.qc.subject.sqm_record.raw_verdict_view` makes for a run, and
     for the same reason: a page printing a run's row above a condition's needs both on one
     channel set, or what looks like a comparison between two stretches is a comparison
     between two montages as well.

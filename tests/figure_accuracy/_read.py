@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from tests._fingerprint import EVENT_ONSETS, Truth
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import _BAD_COLOR
+from nirspipe.qc.figures.subject.sci_psp_panel import _BAD_COLOR
 from tests.figure_accuracy._payload import one_figure
 
 

@@ -13,10 +13,10 @@ import numpy as np
 from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.exceptions import StageError
+from nirspipe.io.snirf import long_channel_picks
+from nirspipe.pipeline.hyper._helpers import _shared_sfreq
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.whiten")
 

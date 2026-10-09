@@ -8,8 +8,8 @@ Nothing downstream fails, which is why it has to be measured rather than raised.
 import numpy as np
 import mne
 
-from fnirs_pipe.qc.common.channel_table import registration_note
-from fnirs_pipe.qc.metrics import REGISTRATION_MAX_RATIO, registration_offset
+from nirspipe.qc.common.channel_table import registration_note
+from nirspipe.qc.metrics import REGISTRATION_MAX_RATIO, registration_offset
 
 # a head's worth of cardinal points, the shape a template fills in when a file carries none
 NASION, LPA, RPA = [0.0, 0.085, -0.035], [-0.081, -0.029, -0.041], [0.084, -0.029, -0.041]

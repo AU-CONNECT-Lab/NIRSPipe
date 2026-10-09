@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from fnirs_pipe.pipeline.hyper.group_quality import _screen_windows
-from fnirs_pipe.qc.hyper.hyper_report import member_sci_lines, sci_lines_text, subject_metric_tables
+from nirspipe.pipeline.hyper.group_quality import _screen_windows
+from nirspipe.qc.hyper.hyper_report import member_sci_lines, sci_lines_text, subject_metric_tables
 
 
 def _sci_class(tables, member):

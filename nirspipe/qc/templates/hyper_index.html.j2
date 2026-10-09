@@ -27,7 +27,7 @@ tr.whole td.num { font-weight: 600; }
     {{ n_tasks }} task{{ "s" if n_tasks != 1 }}
     {%- if subject_ids %} &bull; {{ subject_ids | join(" &times; ") }}{% endif %}
     {%- if band %} &bull; band {{ band }}{% endif %}
-    &bull; v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}
+    &bull; v{{ versions.get('nirspipe', 'unknown') }} &bull; {{ run_date }}
   </span>
 </div>
 {% endblock %}

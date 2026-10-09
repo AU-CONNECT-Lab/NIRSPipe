@@ -1,9 +1,9 @@
-"""fnirs-hyper CLI (argparse): dyad analysis over a derivatives tree.
+"""nirspipe-hyper CLI (argparse): dyad analysis over a derivatives tree.
 
 Hyperscanning is its own domain: its input is a pairs table, its unit is a dyad, and it
 reads derivatives rather than BIDS raw.
 
-Each command is its own console script. `fnirs-hyper` and `fnirs-hyper-pairnull` read the
+Each command is its own console script. `nirspipe-hyper` and `nirspipe-hyper-pairnull` read the
 subject tree and write a separate dyad tree (`<source> <output> group`); the rest re-read
 only the dyad tree (`<output> group`).
 """
@@ -15,24 +15,24 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.io.naming import roi_map_name
-from fnirs_pipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
-from fnirs_pipe.qc.metrics import SCI_WINDOW_S
-from fnirs_pipe.utils.logging import get_logger, setup_logging
-from fnirs_pipe import __version__
-from fnirs_pipe.cli._shared import separation_bands_from_args
-from fnirs_pipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
-from fnirs_pipe.io.derivatives import (
+from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
+from nirspipe.cli import _shared
+from nirspipe.io.naming import roi_map_name
+from nirspipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
+from nirspipe.qc.metrics import SCI_WINDOW_S
+from nirspipe.utils.logging import get_logger, setup_logging
+from nirspipe import __version__
+from nirspipe.cli._shared import separation_bands_from_args
+from nirspipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
+from nirspipe.io.derivatives import (
     LINK_PREPROCESSED, entity_of, group_report_dir, read_json, write_bidsignore,
     write_dataset_description,
 )
-from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper import (
+from nirspipe.io.snirf import long_channel_picks
+from nirspipe.pipeline.hyper import (
     parse_group_csv, resolve_analysis_window, resolve_group_bands, write_group_bads,
 )
-from fnirs_pipe.qc.metrics._helpers import bands_to_record
+from nirspipe.qc.metrics._helpers import bands_to_record
 
 setup_logging()
 
@@ -124,7 +124,7 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
     `passband_check` is the (fmin, fmax) a metric is about to ask for, checked against the
     bandpass the files record while the sidecars are still in hand.
     """
-    from fnirs_pipe.pipeline.hyper import (
+    from nirspipe.pipeline.hyper import (
         align_recordings,
         apply_group_bads,
         load_group_haemo,
@@ -188,7 +188,7 @@ def _merge_reminder(output_dir: Path) -> None:
     Driven off the aggregator's own discovery, so the counts are the ones `merge` would
     use and a kind added later cannot be left out.
     """
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import _merged_path, merge_kinds
+    from nirspipe.pipeline.hyper.wtc_aggregate import _merged_path, merge_kinds
 
     lines = []
     for parts in merge_kinds(output_dir).values():
@@ -201,7 +201,7 @@ def _merge_reminder(output_dir: Path) -> None:
             lines.append(f"  {len(parts)} table(s) for {merged.name}, {stale} newer than it")
 
     if lines:
-        print("\n".join(["", *lines, f"Run `fnirs-hyper-merge {output_dir} group` for one table per kind."]))
+        print("\n".join(["", *lines, f"Run `nirspipe-hyper-merge {output_dir} group` for one table per kind."]))
 
 
 def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
@@ -275,14 +275,14 @@ def cmd_run(
         "long_max_dist": long_max_dist,
     })
 
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
-    from fnirs_pipe.qc.common.windows import condition_windows, split_windows
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
-    from fnirs_pipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
+    from nirspipe.qc.common.windows import condition_windows, split_windows
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
 
     setup_logging(verbose=verbose)
-    write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=derivatives_dir,
+    write_dataset_description(output_dir, name="nirspipe-hyper output",
+                              generated_by="nirspipe-hyper", source=derivatives_dir,
                               link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
     timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
@@ -338,7 +338,7 @@ def cmd_run(
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
         if str(wtc_cond_pad_s).lower() == "auto":
-            from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
+            from nirspipe.pipeline.hyper.wtc import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
             # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
             cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)
@@ -488,7 +488,7 @@ def cmd_run(
     # anything held in memory, so a dyad whose other tasks were analysed in an earlier run
     # still lists them. Not built inside `_process`, which would rewrite it once per task
     # from a tree missing the tasks still to come.
-    from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
+    from nirspipe.qc.hyper.hyper_index import write_hyper_index
 
     for gid in dict.fromkeys(key[0] for key in groups):
         folder = output_dir / f"group-{gid}"
@@ -513,7 +513,7 @@ def cmd_band(
     wtc_mask_coi: bool, wtc_suffix: str | None, verbose: bool,
 ) -> None:
     """Re-average every saved WTC map over a new band, without recomputing the transform."""
-    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
+    from nirspipe.pipeline.hyper.wtc_store import reband_tree
 
     setup_logging(verbose=verbose)
 
@@ -522,7 +522,7 @@ def cmd_band(
     for path in written:
         print(f"reband -> {path}")
     if not written:
-        print(f"no *_stat-wtc_relmat.npz under {output_dir}; rerun `fnirs-hyper "
+        print(f"no *_stat-wtc_relmat.npz under {output_dir}; rerun `nirspipe-hyper "
               "--wtc-save-maps` to write them", file=sys.stderr)
 
 
@@ -532,8 +532,8 @@ def cmd_group_null(
     isc_test: str = "signed",
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
-    from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
-    from fnirs_pipe.qc.hyper.groupnull_report import write_groupnull_report
+    from nirspipe.pipeline.hyper.pair_null_group import write_group_null
+    from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
 
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
@@ -554,8 +554,8 @@ def cmd_group_null(
 def _write_group_null_methods(cohort: Path) -> Path:
     """The Methods paragraph for a cohort test, in logs/ beside its tables, as the BIDS apps
     leave theirs: no report carries it, the tables being cross-dyad."""
-    from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
-    from fnirs_pipe.qc.boilerplate.vocabulary import boilerplate_key, template_slots
+    from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
+    from nirspipe.qc.boilerplate.vocabulary import boilerplate_key, template_slots
 
     side = read_json(cohort.with_suffix(".json"))
     params = side.get("parameters") or {}
@@ -570,7 +570,7 @@ def _write_group_null_methods(cohort: Path) -> Path:
 
 def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
     """Write one dyad index per group-* directory, from the tables already on disk."""
-    from fnirs_pipe.qc.hyper.hyper_index import write_hyper_index
+    from nirspipe.qc.hyper.hyper_index import write_hyper_index
 
     setup_logging(verbose=verbose)
 
@@ -590,7 +590,7 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
             print(f"{folder.name} -> {path}")
             wrote += 1
     if not wrote:
-        print(f"no coherence tables under {output_dir}; run `fnirs-hyper` first")
+        print(f"no coherence tables under {output_dir}; run `nirspipe-hyper` first")
 
 
 def cmd_pair_null(
@@ -612,11 +612,11 @@ def cmd_pair_null(
     participant_label: list[str] | None = None,
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
-    from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
+    from nirspipe.pipeline.hyper.pair_null import run_pair_null
 
     setup_logging(verbose=verbose)
-    write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=derivatives_dir,
+    write_dataset_description(output_dir, name="nirspipe-hyper output",
+                              generated_by="nirspipe-hyper", source=derivatives_dir,
                               link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
 
@@ -658,7 +658,7 @@ def cmd_pair_null(
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad coherence table into one long table per kind."""
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import write_all_aggregates
+    from nirspipe.pipeline.hyper.wtc_aggregate import write_all_aggregates
 
     setup_logging(verbose=verbose)
 
@@ -666,7 +666,7 @@ def cmd_merge(output_dir: Path, verbose: bool) -> None:
     for path in written:
         print(f"{path.name}")
     if not written:
-        print(f"no dyad coherence tables under {output_dir}; run `fnirs-hyper` first")
+        print(f"no dyad coherence tables under {output_dir}; run `nirspipe-hyper` first")
 
 
 # `group` is the only level these commands have: a dyad is two subjects, so nothing here
@@ -688,7 +688,7 @@ def _command_parser(prog: str, description: str, *, reads_subjects: bool,
     p.add_argument("--version", action="version", version=f"{prog} {__version__}")
     if reads_subjects:
         p.add_argument("derivatives_dir", type=Path,
-                       help="BIDS derivatives directory fnirs-pipe wrote, holding each "
+                       help="BIDS derivatives directory nirspipe wrote, holding each "
                             "member's sub-<id>/nirs/ recordings.")
     p.add_argument("output_dir", type=Path,
                    help="Where the dyad results go. Keep it apart from the source tree so "
@@ -704,12 +704,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     band_opts = argparse.ArgumentParser(add_help=False)
     band_opts.add_argument("--wtc-band-fmin", type=float, default=None,
                            help="Lower bound (Hz) of the band the per-channel WTC TSV "
-                                "averages over. For fnirs-hyper it defaults to --wtc-fmin, i.e. "
-                                "the whole computed axis; for fnirs-hyper-band it is the new band and "
+                                "averages over. For nirspipe-hyper it defaults to --wtc-fmin, i.e. "
+                                "the whole computed axis; for nirspipe-hyper-band it is the new band and "
                                 "is required.")
     band_opts.add_argument("--wtc-band-fmax", type=float, default=None,
                            help="Upper bound (Hz) of that band. Defaults to --wtc-fmax for "
-                                "fnirs-hyper; required for fnirs-hyper-band.")
+                                "nirspipe-hyper; required for nirspipe-hyper-band.")
     band_opts.add_argument("--wtc-mask-coi", action=argparse.BooleanOptionalAction,
                            default=True,
                            help="Average each band mean only over cells outside the cone "
@@ -721,15 +721,15 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--verbose", action="store_true")
 
-    # the dyad selection and the alignment window are the same parameters `fnirs-qc
+    # the dyad selection and the alignment window are the same parameters `nirspipe-qc
     # hyper-raw` takes, so they are declared once for both scripts
     pairs = _shared.pairs_selection()
     window = _shared.alignment_window()
 
     run = _command_parser(
-        "fnirs-hyper",
+        "nirspipe-hyper",
         "Hyperscanning analysis: wavelet coherence, inter-subject correlation and the "
-        "phase-scrambled null, over a derivatives tree fnirs-pipe has already written.",
+        "phase-scrambled null, over a derivatives tree nirspipe has already written.",
         reads_subjects=True, parents=[common, pairs, window, band_opts])
     run.add_argument("--desc", default="preproc",
                      help="desc entity of the per-subject stage the inter-brain metrics read, "
@@ -790,7 +790,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "and make the window the unit instead of the condition. Needs "
                           "--by-condition. The remainder past the last whole window is "
                           "dropped, and a condition too short for one window is left out. "
-                          "fnirs-hyper-pairnull reads this off the sidecar, so both sides resolve the "
+                          "nirspipe-hyper-pairnull reads this off the sidecar, so both sides resolve the "
                           "same grid.")
     run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
                      action=argparse.BooleanOptionalAction, default=True,
@@ -823,7 +823,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     run.add_argument("--wtc-save-maps", action="store_true",
                      help="Save the full time-frequency coherence maps beside each TSV as "
                           "npz, so a different band can be averaged later with "
-                          "`fnirs-hyper-band` instead of a second wavelet transform. Large: one array "
+                          "`nirspipe-hyper-band` instead of a second wavelet transform. Large: one array "
                           "per pair per dyad per task.")
     run.add_argument("--wtc-phase-null", type=int, default=None, metavar="N",
                      help="Also write the phase-scrambled null: the same band means against a "
@@ -911,14 +911,14 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "cohort's channel budget before committing to a long run, such as "
                           "one with --wtc-phase-null.")
     _shared.add_separation_bands(run, note="An override, not the source: the bands are "
-                                 "read back from what fnirs-pipe stamped in each member's "
+                                 "read back from what nirspipe stamped in each member's "
                                  "record, and members prepped with different bands are "
                                  "refused. Pass this only for a tree whose records carry "
                                  "no bands. A band left off keeps the records' value.")
 
     band = _command_parser(
-        "fnirs-hyper-band", reads_subjects=False, parents=[common, band_opts],
-        description="Re-averages the maps a `fnirs-hyper --wtc-save-maps` saved, so no wavelet "
+        "nirspipe-hyper-band", reads_subjects=False, parents=[common, band_opts],
+        description="Re-averages the maps a `nirspipe-hyper --wtc-save-maps` saved, so no wavelet "
                     "transform runs a second time. Writes tables, not a report. "
                     "--wtc-band-fmin and --wtc-band-fmax are both required here.")
     band.add_argument("--wtc-suffix", default=None,
@@ -928,10 +928,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "rather than replacing them.")
 
     group_null = _command_parser(
-        "fnirs-hyper-groupnull", reads_subjects=False, parents=[common],
+        "nirspipe-hyper-groupnull", reads_subjects=False, parents=[common],
         description="Averages each dyad's channels first and ranks that mean inside a null's "
                     "draws, once per occasion and once over the cohort. It says whether the "
-                    "pairing beats its null, not which channel does; fnirs-hyper-pairnull "
+                    "pairing beats its null, not which channel does; nirspipe-hyper-pairnull "
                     "ranks each channel inside its own draws, where against n stand-ins no "
                     "cell can reach a p under 1/(n+1). It reads draws already on disk and "
                     "runs no transform.")
@@ -978,9 +978,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "Coherence is unsigned and always tested above its null.")
 
     index = _command_parser(
-        "fnirs-hyper-index", reads_subjects=False, parents=[common],
+        "nirspipe-hyper-index", reads_subjects=False, parents=[common],
         description="Writes group-<id>_desc-index_report.html, one row per analysed window, linking to "
-                    "that window's report. fnirs-hyper writes it too; this rebuilds it for a tree "
+                    "that window's report. nirspipe-hyper writes it too; this rebuilds it for a tree "
                     "produced earlier, or after the pages were regenerated by hand. It "
                     "reads the tables and nothing else, so it serves both orders the "
                     "pipeline can be driven in: a recording preprocessed whole lists its "
@@ -990,14 +990,14 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                        help="Only this dyad. Every group-* directory by default.")
 
     pair = _command_parser(
-        "fnirs-hyper-pairnull", reads_subjects=True, parents=[common, pairs],
+        "nirspipe-hyper-pairnull", reads_subjects=True, parents=[common, pairs],
         description="Recomputes the coherence of one member against people they never "
                     "interacted with, drawn from the other groups of the same task, and "
                     "writes the null-pair tables beside the real ones. "
                     "Unlike --wtc-phase-null, a re-paired partner did the same task, so the "
                     "null keeps the shared task response. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
-                    "the percentile can rank. Run it after `fnirs-hyper`, whose tables "
+                    "the percentile can rank. Run it after `nirspipe-hyper`, whose tables "
                     "it reads its band, its mask, its frequency range and its window off, "
                     "and by default its stage, its rejection scope, its crossing and its "
                     "ROI minimum.")
@@ -1009,7 +1009,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "null of the homologous ROI means and, when the null and the real "
                            "tables are both crossed, of the ROI x ROI matrix. Optional.")
     pair.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default=None,
-                      help="Which rejected channels are excluded, as in fnirs-hyper. Unset, "
+                      help="Which rejected channels are excluded, as in nirspipe-hyper. Unset, "
                            "it is the scope the real tables recorded; a different one is "
                            "refused. A stand-in with no quality record is refused rather than "
                            "kept whole.")
@@ -1039,10 +1039,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "different one is refused.")
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
-                           "(default on), as in fnirs-hyper.")
+                           "(default on), as in nirspipe-hyper.")
 
     merge = _command_parser(
-        "fnirs-hyper-merge", reads_subjects=False, parents=[common],
+        "nirspipe-hyper-merge", reads_subjects=False, parents=[common],
         description="Concatenates every group-*_task-*_*_relmat.tsv under the tree into "
                     "one table per kind at its root, adding group_id and task columns, so a "
                     "cohort analysis reads one file. Refuses to merge tables that disagree "
@@ -1057,12 +1057,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
 # each console script and the function it hands off to. One table, so a command cannot be
 # registered in pyproject.toml without something here saying what it runs
 COMMANDS = {
-    "fnirs-hyper":           cmd_run,
-    "fnirs-hyper-pairnull":  cmd_pair_null,
-    "fnirs-hyper-groupnull": cmd_group_null,
-    "fnirs-hyper-band":      cmd_band,
-    "fnirs-hyper-index":     cmd_index,
-    "fnirs-hyper-merge":     cmd_merge,
+    "nirspipe-hyper":           cmd_run,
+    "nirspipe-hyper-pairnull":  cmd_pair_null,
+    "nirspipe-hyper-groupnull": cmd_group_null,
+    "nirspipe-hyper-band":      cmd_band,
+    "nirspipe-hyper-index":     cmd_index,
+    "nirspipe-hyper-merge":     cmd_merge,
 }
 
 
@@ -1086,26 +1086,26 @@ def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None
 
 
 def main(argv: list[str] | None = None) -> None:
-    _dispatch("fnirs-hyper", COMMANDS["fnirs-hyper"], argv)
+    _dispatch("nirspipe-hyper", COMMANDS["nirspipe-hyper"], argv)
 
 
 def main_pair_null(argv: list[str] | None = None) -> None:
-    _dispatch("fnirs-hyper-pairnull", COMMANDS["fnirs-hyper-pairnull"], argv)
+    _dispatch("nirspipe-hyper-pairnull", COMMANDS["nirspipe-hyper-pairnull"], argv)
 
 
 def main_group_null(argv: list[str] | None = None) -> None:
-    _dispatch("fnirs-hyper-groupnull", COMMANDS["fnirs-hyper-groupnull"], argv)
+    _dispatch("nirspipe-hyper-groupnull", COMMANDS["nirspipe-hyper-groupnull"], argv)
 
 
 def main_index(argv: list[str] | None = None) -> None:
-    _dispatch("fnirs-hyper-index", COMMANDS["fnirs-hyper-index"], argv)
+    _dispatch("nirspipe-hyper-index", COMMANDS["nirspipe-hyper-index"], argv)
 
 
 def main_merge(argv: list[str] | None = None) -> None:
-    _dispatch("fnirs-hyper-merge", COMMANDS["fnirs-hyper-merge"], argv)
+    _dispatch("nirspipe-hyper-merge", COMMANDS["nirspipe-hyper-merge"], argv)
 
 
 def main_band(argv: list[str] | None = None) -> None:
     # the band is the whole point of this one, so it is required here and optional on `run`
-    _dispatch("fnirs-hyper-band", COMMANDS["fnirs-hyper-band"], argv,
+    _dispatch("nirspipe-hyper-band", COMMANDS["nirspipe-hyper-band"], argv,
               require=("wtc_band_fmin", "wtc_band_fmax"))

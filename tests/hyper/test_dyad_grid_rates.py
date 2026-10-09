@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from fnirs_pipe.qc.metrics.hyper import coupled_grid, member_series
+from nirspipe.qc.metrics.hyper import coupled_grid, member_series
 
 PAIRS = ["S1_D1 760", "S1_D1 850", "S2_D1 760", "S2_D1 850"]
 

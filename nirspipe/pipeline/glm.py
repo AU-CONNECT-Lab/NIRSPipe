@@ -8,19 +8,19 @@ import pandas as pd
 import mne
 import mne.io
 
-from fnirs_pipe.io.tables import read_table, write_tsv
-from fnirs_pipe.pipeline.denoise import (
+from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
     filter_array,
 )
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.utils import is_marker
-from fnirs_pipe.utils.lineage import stamp
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
-from fnirs_pipe.io.derivatives import entity_of, write_step_sidecar
-from fnirs_pipe.io.naming import derivative_path
+from nirspipe.exceptions import StageError
+from nirspipe.utils import is_marker
+from nirspipe.utils.lineage import stamp
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
+from nirspipe.io.derivatives import entity_of, write_step_sidecar
+from nirspipe.io.naming import derivative_path
 
 logger = get_logger("post.glm")
 
@@ -47,7 +47,7 @@ AR_BINS_MIN = 1000
 def _short_channel_regressors(
     haemo: mne.io.Raw, strategy: SCRStrategy, sep_bands=None,
 ) -> dict[str, np.ndarray]:
-    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+    from nirspipe.qc.metrics._helpers import long_short_channels
 
     # a --config TOML can write `short_channel = true`, which reaches this past the CLI's choices
     if strategy is True:
@@ -61,7 +61,7 @@ def _short_channel_regressors(
     if not short_names:
         # refusing rather than skipping: the methods text names the regressors that were
         # asked for, so a silent skip publishes a claim the residual does not support
-        from fnirs_pipe.qc.metrics._helpers import separation_bands
+        from nirspipe.qc.metrics._helpers import separation_bands
         picks = mne.pick_types(haemo.info, meg=False, fnirs=True, exclude=[])
         dists = mne.preprocessing.nirs.source_detector_distances(haemo.info, picks=picks)
         positive = [d for d in dists if d > 0]
@@ -125,7 +125,7 @@ def sole_regressor_channels(
     """
     if not strategy:
         return []
-    from fnirs_pipe.qc.metrics._helpers import long_short_channels
+    from nirspipe.qc.metrics._helpers import long_short_channels
 
     short_names = long_short_channels(haemo, sep_bands)[1]
     if not short_names:
@@ -363,7 +363,7 @@ def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) 
     """
     from mne_nirs.statistics._glm_level_first import RegressionResults
 
-    from fnirs_pipe.pipeline.ar_irls import fit_channel, resolve_pmax
+    from nirspipe.pipeline.ar_irls import fit_channel, resolve_pmax
 
     pmax = resolve_pmax(spec, haemo.info["sfreq"])
     logger.debug("ar_irls: pmax %d over %d channels", pmax, len(haemo.ch_names))

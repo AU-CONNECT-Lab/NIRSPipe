@@ -3,8 +3,8 @@
 import mne
 import pytest
 
-from fnirs_pipe.pipeline.hyper.alignment import onset_residuals
-from fnirs_pipe.qc.figures.hyper.hyper_figures import build_alignment_timeline
+from nirspipe.pipeline.hyper.alignment import onset_residuals
+from nirspipe.qc.figures.hyper.hyper_figures import build_alignment_timeline
 from tests._synth import synth_raw
 
 

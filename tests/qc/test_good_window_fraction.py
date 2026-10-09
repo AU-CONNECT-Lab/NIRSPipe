@@ -17,7 +17,7 @@ long run and dead for the other half passes on the average and fails on the coun
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics.windowed import (
+from nirspipe.qc.metrics.windowed import (
     SCREEN_WINDOW_S,
     good_window_fraction,
 )
@@ -30,7 +30,7 @@ def stub_windows(monkeypatch):
     The grid comes back too, laid out as consecutive 10 s windows, because the scope is
     decided on window centres and a stub without times cannot be scoped.
     """
-    from fnirs_pipe.qc.metrics import windowed
+    from nirspipe.qc.metrics import windowed
 
     def _install(sci, psp, window_s=SCREEN_WINDOW_S):
         sci, psp = np.asarray(sci, float), np.asarray(psp, float)
@@ -117,7 +117,7 @@ def test_each_channel_is_counted_on_its_own(stub_windows):
 def test_an_unmeasurable_metric_screens_nothing(monkeypatch):
     """Returning nothing keeps every channel. The alternative failure, an empty score
     treated as zero, would reject the whole montage for a reason unrelated to coupling."""
-    from fnirs_pipe.qc.metrics import windowed
+    from nirspipe.qc.metrics import windowed
 
     def _boom(*a, **k):
         raise RuntimeError("cardiac band rejected by the filter")
@@ -166,7 +166,7 @@ def test_a_scope_drops_the_windows_outside_it(stub_windows):
 def test_a_window_is_placed_by_its_centre(stub_windows):
     """Decided on one time rather than on overlap, so a window straddling a block edge
     counts for the side it mostly sits in and never for both."""
-    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+    from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 
     centers = window_centers([[0, 10], [10, 20], [20, 30]])
     keep = _in_scope(centers, [("a", 0.0, 12.0), ("b", 12.0, 30.0)])
@@ -193,14 +193,14 @@ def _annotated(onsets, durations, descs, dur=600.0):
 
 
 def test_task_scope_takes_the_blocks_and_leaves_the_triggers():
-    from fnirs_pipe.qc.metrics.windowed import task_scope_windows
+    from nirspipe.qc.metrics.windowed import task_scope_windows
 
     raw = _annotated([20.0, 400.0], [300.0, 0.0], ["rest", "trigger"])
     assert task_scope_windows(raw) == [("rest", 20.0, 320.0)]
 
 
 def test_run_scope_is_the_whole_recording():
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from nirspipe.qc.common.screen_scope import resolve_screen_scope
 
     assert resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "run") is None
 
@@ -208,7 +208,7 @@ def test_run_scope_is_the_whole_recording():
 def test_task_scope_falls_back_when_only_triggers_are_annotated(caplog):
     """The case the fallback exists for: scoping to a handful of short triggers would count
     a minute of an hour and still read as a verdict on the run."""
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from nirspipe.qc.common.screen_scope import resolve_screen_scope
 
     raw = _annotated([20.0, 100.0, 200.0], [10.0, 10.0, 10.0], ["t", "t", "t"])
     with caplog.at_level("WARNING"):
@@ -217,7 +217,7 @@ def test_task_scope_falls_back_when_only_triggers_are_annotated(caplog):
 
 
 def test_task_scope_returns_the_blocks_when_there_are_blocks():
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from nirspipe.qc.common.screen_scope import resolve_screen_scope
 
     raw = _annotated([20.0, 400.0], [300.0, 100.0], ["rest", "talk"])
     assert resolve_screen_scope(raw, "task") == [("rest", 20.0, 320.0),
@@ -225,7 +225,7 @@ def test_task_scope_returns_the_blocks_when_there_are_blocks():
 
 
 def test_an_unknown_scope_is_refused():
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+    from nirspipe.qc.common.screen_scope import resolve_screen_scope
 
     with pytest.raises(ValueError, match="screen scope"):
         resolve_screen_scope(_annotated([20.0], [300.0], ["rest"]), "poi")

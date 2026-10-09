@@ -7,7 +7,7 @@ second copy of it.
 
 import numpy as np
 
-from fnirs_pipe.qc.figures.common.circle_map import DYAD_GAP, bezier, ring_angles
+from nirspipe.qc.figures.common.circle_map import DYAD_GAP, bezier, ring_angles
 
 
 def test_the_dyad_circle_puts_one_member_a_side():
@@ -23,7 +23,7 @@ def test_the_hyper_circle_is_drawn_on_the_shared_one():
     """A second copy of the geometry is how the circle would quietly fork off this module."""
     import inspect
 
-    from fnirs_pipe.qc.figures.hyper import hyper_post_figures as hp
+    from nirspipe.qc.figures.hyper import hyper_post_figures as hp
 
     assert hp.ring_angles is ring_angles
     assert "ring_angles" in inspect.getsource(hp._circle_traces)

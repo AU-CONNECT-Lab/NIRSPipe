@@ -13,11 +13,11 @@ the guard were deleted.
 import mne
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, _write_step_snirf
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.qc.metrics import compute_prep_haemo_sqm
-from fnirs_pipe.utils.lineage import Recorder, stamp
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.post_pipeline import PostConfig, _write_step_snirf
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.qc.metrics import compute_prep_haemo_sqm
+from nirspipe.utils.lineage import Recorder, stamp
 
 from tests._synth import synth_raw
 
@@ -65,7 +65,7 @@ def test_prep_save_rejects_a_step_that_stamped_the_wrong_stage(tmp_path, monkeyp
     # The guard cannot be reached through normal input, since the pipeline stamps
     # correctly. Break one transformation instead: that is the mistake it exists for.
     monkeypatch.setattr(
-        "fnirs_pipe.pipeline.prep_pipeline.intensity_to_od",
+        "nirspipe.pipeline.prep_pipeline.intensity_to_od",
         lambda raw: stamp(raw.copy(), stage="bogus", step="od_conversion", source=raw),
     )
     config = PrepConfig(subject="01", dpf=[6.0, 6.0], sci_threshold=0.8,

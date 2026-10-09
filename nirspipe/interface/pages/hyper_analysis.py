@@ -1,4 +1,4 @@
-"""Page: the hyperscanning pipeline (`fnirs-hyper`), which runs on what `fnirs-pipe` wrote."""
+"""Page: the hyperscanning pipeline (`nirspipe-hyper`), which runs on what `nirspipe` wrote."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import (
+from nirspipe.interface.components import (
     PATH, actions, band, card, field, params, section, split, switches,
 )
-from fnirs_pipe.qc.common.provenance import _DOMAIN
-from fnirs_pipe.utils import ROI_MIN_CHANNELS
+from nirspipe.qc.common.provenance import _DOMAIN
+from nirspipe.utils import ROI_MIN_CHANNELS
 
 dash.register_page(__name__, path="/hyper-analysis", name="Hyper Analysis")
 
@@ -23,12 +23,12 @@ _DEFAULT_SHELL = "cmd" if platform.system() == "Windows" else "bash"
 _DESC_CHOICES = [desc for desc, domain in _DOMAIN.items() if domain == "haemo"]
 
 _COMMANDS = [
-    {"label": "Analyse dyads (fnirs-hyper)", "value": "run"},
-    {"label": "Re-paired null (fnirs-hyper-pairnull)", "value": "pair-null"},
-    {"label": "Read the draws above the cell (fnirs-hyper-groupnull)", "value": "group-null"},
-    {"label": "Re-average saved WTC maps (fnirs-hyper-band)", "value": "band"},
-    {"label": "Merge WTC tables across dyads (fnirs-hyper-merge)", "value": "merge"},
-    {"label": "Rebuild the dyad landing pages (fnirs-hyper-index)", "value": "index"},
+    {"label": "Analyse dyads (nirspipe-hyper)", "value": "run"},
+    {"label": "Re-paired null (nirspipe-hyper-pairnull)", "value": "pair-null"},
+    {"label": "Read the draws above the cell (nirspipe-hyper-groupnull)", "value": "group-null"},
+    {"label": "Re-average saved WTC maps (nirspipe-hyper-band)", "value": "band"},
+    {"label": "Merge WTC tables across dyads (nirspipe-hyper-merge)", "value": "merge"},
+    {"label": "Rebuild the dyad landing pages (nirspipe-hyper-index)", "value": "index"},
 ]
 
 
@@ -56,7 +56,7 @@ def _run_section():
                 # shown for exactly those two
                 field("Source derivatives",
                       dbc.Input(id="hy-derivatives-dir", type="text",
-                                placeholder="tree fnirs-pipe wrote, holding sub-*/nirs/"),
+                                placeholder="tree nirspipe wrote, holding sub-*/nirs/"),
                       span=PATH),
                 field("Pairs CSV",
                       dbc.Input(id="hy-pairs-csv", type="text",
@@ -188,9 +188,9 @@ def _pair_null_section():
             )),
         ),
         subtitle="Pairs one member with people from the other groups who did the same task. "
-                 "Run it after fnirs-hyper: the band, the mask, the window, the stage, the "
+                 "Run it after nirspipe-hyper: the band, the mask, the window, the stage, the "
                  "rejected channels, the ROI minimum and the crossing come off the tables "
-                 "fnirs-hyper wrote, not off this form. The number of draws is the number of "
+                 "nirspipe-hyper wrote, not off this form. The number of draws is the number of "
                  "other groups, which is what limits how finely it can rank.",
     ))
 
@@ -237,7 +237,7 @@ def _group_null_section():
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
                  "cohort, so it tests the pairing as a whole, not each channel. Reads what "
-                 "fnirs-hyper-pairnull wrote and runs no transform, so one chromophore at a time.",
+                 "nirspipe-hyper-pairnull wrote and runs no transform, so one chromophore at a time.",
     ))
 
 
@@ -299,7 +299,7 @@ layout = dbc.Container([
     dcc.Store(id="hy-command-store"),
 
     html.H3("Hyper Analysis"),
-    html.P("Wavelet coherence and inter-subject correlation over dyads, run by fnirs-hyper "
+    html.P("Wavelet coherence and inter-subject correlation over dyads, run by nirspipe-hyper "
            "on what the individual pipeline already wrote. Reads a derivatives tree, never "
            "BIDS.", className="text-muted"),
     html.Hr(),

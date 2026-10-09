@@ -16,7 +16,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.glm import _short_channel_regressors, sole_regressor_channels
+from nirspipe.pipeline.glm import _short_channel_regressors, sole_regressor_channels
 
 
 def _haemo(separations_mm, bads=()):

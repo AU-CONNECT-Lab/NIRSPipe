@@ -8,9 +8,9 @@ import sys
 
 import pytest
 
-from fnirs_pipe.cli import workflows
-from fnirs_pipe.cli.run import main
-from fnirs_pipe.io import bids as bids_io
+from nirspipe.cli import workflows
+from nirspipe.cli.run import main
+from nirspipe.io import bids as bids_io
 
 REQUIRED = ["--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
             "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.1", "--resp-h-freq", "0.4"]
@@ -28,7 +28,7 @@ def _dry_run(bids_dir, out_dir, **overrides):
     args = {**_ARGS, "bids_dir": bids_dir, "output_dir": out_dir,
             "participant_label": ["01"], "skip_bids_validation": False, **overrides}
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(bids_dir), str(out_dir), "participant", "--dry-run"]
+    sys.argv = ["nirspipe", str(bids_dir), str(out_dir), "participant", "--dry-run"]
     try:
         workflows.run_participant_level(args)
     finally:
@@ -151,7 +151,7 @@ SAME_DIR_COMMANDS = {
 
 
 def _entry(module: str):
-    from fnirs_pipe.cli import prep, qc
+    from nirspipe.cli import prep, qc
     return {"prep": prep.main, "qc": qc.main}[module]
 
 
@@ -167,7 +167,7 @@ def test_every_command_refuses_to_write_into_its_input(name, mini_bids, capsys):
 
 
 def test_cropping_a_pipeline_output_back_into_its_own_tree_is_allowed(tmp_path, capsys):
-    from fnirs_pipe.cli import prep
+    from nirspipe.cli import prep
     tree = tmp_path / "out"
     tree.mkdir()
     try:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.io.snirf import read_snirf
+from nirspipe.io.snirf import read_snirf
 from tests._fingerprint import DPF, Truth
 
 
@@ -40,7 +40,7 @@ class Run:
         return self.nirs / f"sub-{self.subject}_task-{self.task}{suffix}"
 
     def record(self) -> dict:
-        from fnirs_pipe.qc.subject.record_io import read_record
+        from nirspipe.qc.subject.record_io import read_record
         return read_record(self.nirs / f"sub-{self.subject}_task-{self.task}_desc-sqm_qc.json")
 
     def stage(self, desc: str) -> Path:

@@ -19,8 +19,8 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.prep_pipeline import _expand_bad_pairs
-from fnirs_pipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_seed
+from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
+from nirspipe.pipeline.restingstate import compute_alff, compute_fc, compute_fc_seed
 
 SFREQ = 10.0
 DURATION = 60.0
@@ -176,7 +176,7 @@ def test_bad_channels_can_differ_per_subject(tmp_path):
     A cohort where only some caps slipped cannot be described by a single list, and passing
     the union would throw out channels that were fine on most subjects.
     """
-    from fnirs_pipe.cli.workflows import _bad_channels_for
+    from nirspipe.cli.workflows import _bad_channels_for
 
     table = tmp_path / "bads.tsv"
     table.write_text("participant_id\tbad_channels\nsub-01\tS1_D1,S2_D3\n02\tS4_D4\n",
@@ -191,7 +191,7 @@ def test_bad_channels_can_differ_per_subject(tmp_path):
 
 def test_a_table_missing_its_columns_is_refused(tmp_path):
     """Silently reading no rejections out of a malformed table is the dangerous failure."""
-    from fnirs_pipe.cli.workflows import _bad_channels_for
+    from nirspipe.cli.workflows import _bad_channels_for
 
     table = tmp_path / "bads.tsv"
     table.write_text("subject\tchannels\nsub-01\tS1_D1\n", encoding="utf-8")
@@ -201,7 +201,7 @@ def test_a_table_missing_its_columns_is_refused(tmp_path):
 
 
 def test_a_table_row_can_name_one_run(tmp_path):
-    from fnirs_pipe.cli.workflows import _bad_channels_for
+    from nirspipe.cli.workflows import _bad_channels_for
 
     table = tmp_path / "bads.tsv"
     table.write_text("participant_id\tsession\ttask\trun\tbad_channels\n"
@@ -220,7 +220,7 @@ def test_a_table_row_can_name_one_run(tmp_path):
 
 @pytest.mark.parametrize("cell", ["0 1", "run-x", "ses_02"])
 def test_a_table_label_that_is_not_bids_is_refused(tmp_path, cell):
-    from fnirs_pipe.cli.workflows import _bad_channels_for
+    from nirspipe.cli.workflows import _bad_channels_for
 
     column = "run" if cell.startswith("run") else "session"
     table = tmp_path / "bads.tsv"
@@ -231,8 +231,8 @@ def test_a_table_label_that_is_not_bids_is_refused(tmp_path, cell):
 
 
 def test_a_table_row_matching_no_recording_stops_the_run(mini_bids, tmp_path):
-    from fnirs_pipe.cli.workflows import _refuse_unmatched_bad_channel_rows
-    from fnirs_pipe.io.bids import get_layout
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
 
     table = tmp_path / "bads.tsv"
     table.write_text("participant_id\ttask\trun\tbad_channels\n"

@@ -7,7 +7,7 @@ without anything failing, so both ends are pinned.
 
 import json
 
-from fnirs_pipe.io.derivatives import data_state, write_sidecar_json
+from nirspipe.io.derivatives import data_state, write_sidecar_json
 
 
 def test_data_state_records_what_the_step_left_behind(make_raw):
@@ -42,7 +42,7 @@ def test_the_sidecar_timestamps_itself(tmp_path):
 # ---- reading what is beside an output ----
 
 def test_read_json_gives_an_empty_object_for_anything_it_cannot_use(tmp_path):
-    from fnirs_pipe.io.derivatives import read_json
+    from nirspipe.io.derivatives import read_json
 
     (tmp_path / "ok.json").write_text('{"parameters": {"a": 1}}', encoding="utf-8")
     (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
@@ -53,7 +53,7 @@ def test_read_json_gives_an_empty_object_for_anything_it_cannot_use(tmp_path):
 
 
 def test_subject_labels_are_the_bare_sorted_sub_folders(tmp_path):
-    from fnirs_pipe.io.derivatives import subject_labels
+    from nirspipe.io.derivatives import subject_labels
 
     for name in ("sub-02", "sub-01", "logs"):
         (tmp_path / name).mkdir()

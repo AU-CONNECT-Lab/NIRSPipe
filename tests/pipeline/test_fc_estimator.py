@@ -8,7 +8,7 @@ shape of the recording.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.restingstate import (
+from nirspipe.pipeline.restingstate import (
     compute_alff_roi,
     compute_fc,
     compute_fc_roi,

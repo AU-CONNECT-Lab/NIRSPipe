@@ -5,8 +5,8 @@ from itertools import combinations
 
 import pytest
 
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import _BAD_COLOR, _GOOD_COLOR
-from fnirs_pipe.utils import pair_of
+from nirspipe.qc.figures.subject.sci_psp_panel import _BAD_COLOR, _GOOD_COLOR
+from nirspipe.utils import pair_of
 from tests._dyad_fingerprint import CONDITION_FAILING
 from tests.figure_accuracy._payload import one_figure
 

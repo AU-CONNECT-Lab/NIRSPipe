@@ -9,10 +9,10 @@ agreement ranks GVTD against the sensor rather than against anything else.
 import numpy as np
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.qc.metrics import (IMU_STAT_KEYS, compute_windowed_gvtd, imu_gvtd_agreement,
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.qc.metrics import (IMU_STAT_KEYS, compute_windowed_gvtd, imu_gvtd_agreement,
                                    imu_scalars, imu_section, imu_windowed, window_grid)
-from fnirs_pipe.qc.metrics.imu import _window_mean
+from nirspipe.qc.metrics.imu import _window_mean
 from tests._synth import synth_raw
 
 

@@ -12,9 +12,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult, _circular_stats
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.pipeline.hyper.wtc import WTCResult, _circular_stats
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.roi")
 

@@ -13,16 +13,16 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.signal import detrend
 
-from fnirs_pipe.qc.common.figure_io import fig_png_b64
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
-from fnirs_pipe.qc.figures.common._utils import minmax_xy
-from fnirs_pipe.qc.figures.common._utils import line_xy as _line_xy
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
+from nirspipe.qc.figures.common._utils import minmax_xy
+from nirspipe.qc.figures.common._utils import line_xy as _line_xy
+from nirspipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
-from fnirs_pipe.qc.metrics._helpers import as_optical_density
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.motion_panel")
 
@@ -429,7 +429,7 @@ def carpet_gvtd_figure(
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
 
     ``imu`` is ``{"gyro": ImuTrace, "accel": ImuTrace}`` at the aux rate, from
-    :func:`~fnirs_pipe.io.auxiliary.imu_traces`. Each sensor present is a row above the GVTD
+    :func:`~nirspipe.io.auxiliary.imu_traces`. Each sensor present is a row above the GVTD
     rows, the one record of movement that does not come from the optical data; a sensor the
     recording lacks gets no row rather than an empty one.
 

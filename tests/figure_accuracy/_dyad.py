@@ -14,7 +14,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.snirf import read_snirf
+from nirspipe.io.snirf import read_snirf
 from tests._dyad_fingerprint import COUPLING_BAND, TASK, GroupTruth
 
 BAND = COUPLING_BAND
@@ -69,7 +69,7 @@ class Groups:
         return json.loads(self.stage_path(sid, desc).with_suffix(".json").read_text())
 
     def member_record(self, sid: str) -> dict:
-        from fnirs_pipe.qc.subject.record_io import read_record
+        from nirspipe.qc.subject.record_io import read_record
         return read_record(self.deriv / sid / "nirs" / f"{sid}_task-{TASK}_desc-sqm_qc.json")
 
     # ---- the channel coherence maps, which are PNGs: their builder's inputs ----

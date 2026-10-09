@@ -60,7 +60,7 @@ def _roi_maps(g):
 
 
 def _levels(g, chroma, roi=False):
-    from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
+    from nirspipe.pipeline.hyper.wtc_store import load_null_levels
     seg = "_seg-roidyad_agg-roi" if roi else ""
     path = (g.gdir("G01") / "nirs"
             / f"group-G01_task-main_chromo-{chroma}{seg}_null-phase_stat-wtc_desc-level_relmat.npz")
@@ -163,7 +163,7 @@ def test_an_uncrossed_run_prints_dashes_in_the_index_s_crossed_columns(dyad_vari
         float(cells[head.index("WTC HbO")])
 
 
-# ---- fnirs-qc hyper-raw --tstart / --normalize ----
+# ---- nirspipe-qc hyper-raw --tstart / --normalize ----
 
 def test_the_record_s_offsets_are_the_page_s_under_tstart(dyad_variants):
     g = dyad_variants["tstart"]
@@ -185,7 +185,7 @@ def test_a_normalized_detail_trace_is_not_labelled_in_concentration(dyad_variant
     assert not any("mol" in t for t in titles), titles
 
 
-# ---- fnirs-qc cohort-hyper with a block one dyad lacks ----
+# ---- nirspipe-qc cohort-hyper with a block one dyad lacks ----
 
 def test_a_block_a_dyad_lacks_draws_no_arc(dyad_variants):
     g = dyad_variants["cohortgap"]

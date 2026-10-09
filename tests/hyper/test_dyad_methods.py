@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from fnirs_pipe.qc.hyper.hyper_report import group_methods
+from nirspipe.qc.hyper.hyper_report import group_methods
 
 LABEL = "group-G1_task-hold"
 
@@ -44,7 +44,7 @@ def tree(tmp_path):
 
 def _plain(paths, group, desc, align, notes=None):
     read = [paths[sid](desc) for sid in ("11", "12")]
-    return group_methods(read, group, LABEL, align, desc, {"fnirs-pipe": "9.9"},
+    return group_methods(read, group, LABEL, align, desc, {"nirspipe": "9.9"},
                          notes if notes is not None else [], LABEL)["plain"]
 
 
@@ -79,6 +79,6 @@ def test_an_unreadable_chain_is_named_rather_than_guessed(tree, tmp_path):
     notes = []
     read = [str(tmp_path / "moved" / "sub-11_task-hold_desc-errts_nirs.snirf")]
     plain = group_methods(read, group, LABEL, {"aligned": True}, "errts",
-                          {"fnirs-pipe": "9.9"}, notes, LABEL)["plain"]
+                          {"nirspipe": "9.9"}, notes, LABEL)["plain"]
     assert "desc-errts files" in plain and "Beer-Lambert" not in plain
     assert notes and "could not be read" in notes[0]

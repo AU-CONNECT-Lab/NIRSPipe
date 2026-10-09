@@ -62,14 +62,14 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
+from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
-from fnirs_pipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
-from fnirs_pipe.qc.common.channel_table import channel_rows, save_channel_csv
-from fnirs_pipe.qc.subject.record_io import write_record
-from fnirs_pipe.qc.subject.condition_views import (
+from nirspipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
+from nirspipe.utils.logging import get_logger
+from nirspipe import __version__
+from nirspipe.qc.common.channel_table import channel_rows, save_channel_csv
+from nirspipe.qc.subject.record_io import write_record
+from nirspipe.qc.subject.condition_views import (
     PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
     condition_slices_from_record, span_counts,
 )
@@ -104,13 +104,13 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # without either is correct, not incomplete.
 # The group table still descends into these.
 # The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
-# `sqmraw` what `fnirs-qc prep-raw` writes, measuring the original recording only. A run
+# `sqmraw` what `nirspipe-qc prep-raw` writes, measuring the original recording only. A run
 # that saw both commands has both files. Both are sectioned; the shape is what is read,
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
 OPTIONAL_SECTIONS = ("censor", "imu",
-                     # `fnirs-qc prep-raw` only: its in-memory Beer-Lambert, before and after
+                     # `nirspipe-qc prep-raw` only: its in-memory Beer-Lambert, before and after
                      # the correction it may run
                      "rawhaemo", "rawhaemo_long", "rawhaemo_short",
                      "rawhaemo_post", "rawhaemo_post_long", "rawhaemo_post_short")
@@ -222,8 +222,8 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
     source = stages.get("sci") or stages.get("od")
     if source is None:
         return {}
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.metrics import compute_sci_scores
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.qc.metrics import compute_sci_scores
     bands = _bands(stages) or {}
     if not bands:
         return {}
@@ -262,7 +262,7 @@ def _imu_slicer(imu: "dict | None"):
     """``imu_of(t0, t1)`` for one condition, or None for a recording without an IMU."""
     if not imu:
         return None
-    from fnirs_pipe.qc.metrics import imu_scalars
+    from nirspipe.qc.metrics import imu_scalars
     return lambda t0, t1: imu_scalars(imu, t0, t1)
 
 
@@ -303,11 +303,11 @@ def _short_section(
     because a short channel's coupling is high by construction; the long section is where
     the number is read against a line.
     """
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.qc.metrics import (
         _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
         _sci_win_metrics, _spike_metrics,
     )
-    from fnirs_pipe.qc.metrics.coupling import _good_frac_metrics
+    from nirspipe.qc.metrics.coupling import _good_frac_metrics
 
     raw_short = raw_intensity.copy().pick(short_names)
     short_set = set(short_names)
@@ -432,8 +432,8 @@ def raw_sections(
     in rather than recounted: it is two windowed passes over the recording, and a caller
     that screened has it. None leaves the entry empty rather than paying for it again.
     """
-    from fnirs_pipe.qc.metrics import compute_raw_sqm, long_short_channels
-    from fnirs_pipe.qc.metrics._helpers import bands_to_record, separation_bands
+    from nirspipe.qc.metrics import compute_raw_sqm, long_short_channels
+    from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -486,7 +486,7 @@ def haemo_sections(
 
     A subset that turns out to be the whole file is skipped rather than written twice.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -525,7 +525,7 @@ def _motion_post_section(
     Hand-picked rather than ``compute_raw_sqm``: this file is optical density, which would
     leave that function's intensity family empty.
     """
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.qc.metrics import (
         _mean_or_none, _motion_metrics, _psp_metrics, _sci_win_metrics, _spike_metrics,
         compute_sci_scores,
     )
@@ -572,10 +572,10 @@ def motion_sections(
 
     Written in place through ``section``, the same writer the rest of the record uses, so a
     family that fails costs that family alone. One function because two callers assemble it:
-    the pipeline's record reads the two files off disk, and ``fnirs-qc prep-raw`` corrects a
+    the pipeline's record reads the two files off disk, and ``nirspipe-qc prep-raw`` corrects a
     copy in memory and never writes it.
     """
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.qc.metrics import (
         long_short_channels, motion_corrected_segments, motion_correction_metrics,
     )
 
@@ -626,7 +626,7 @@ def motion_sections(
 
 def _cutoffs_from_sidecar(stages: dict[str, Path]) -> dict[str, float]:
     """The lines the run screened by, so a condition's verdict is on the same ones."""
-    from fnirs_pipe.qc.metrics import resolve_cutoffs
+    from nirspipe.qc.metrics import resolve_cutoffs
     params = (_sidecar(stages["sci"]).get("parameters") or {}) if "sci" in stages else {}
     return resolve_cutoffs(sci=params.get("sci_threshold"),
                            psp=params.get("psp_threshold"),
@@ -653,10 +653,10 @@ def condition_sections(
     distribution) stays whole-run and is absent here. ``{}`` when no annotation holds two
     screening windows.
     """
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.common.windows import condition_windows
-    from fnirs_pipe.qc.metrics import long_short_channels
-    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.qc.common.windows import condition_windows
+    from nirspipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 
     windows = condition_windows(raw_intensity, min_duration=2 * SCREEN_WINDOW_S)
     if not windows:
@@ -699,7 +699,7 @@ def _forced_bads(stages: dict[str, Path], cutoffs: dict[str, float]) -> "frozens
       sidecar bad_channels [S2_D2 760, S2_D2 850, S3_D3 760, S3_D3 850], S3 failing the
       coupled-window line on good_frac_scores  ->  {S2_D2 760, S2_D2 850}
     """
-    from fnirs_pipe.qc.metrics import screen_channels
+    from nirspipe.qc.metrics import screen_channels
 
     sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
     screened, _ = screen_channels({"good_frac": sidecar.get("good_frac_scores") or {}}, cutoffs)
@@ -752,7 +752,7 @@ def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
     the samples it is handed and nothing here filters. The per-channel dict is the before
     side over every kept channel, the one the channel table prints.
     """
-    from fnirs_pipe.qc.metrics import haemo_quality_metrics, long_short_channels
+    from nirspipe.qc.metrics import haemo_quality_metrics, long_short_channels
 
     def _cut(raw):
         if raw is None:
@@ -806,9 +806,9 @@ def _condition_entries(
     numbers for one recording. ``forced`` are the run's channels rejected by hand or for
     non-finite samples, which fail every condition whatever their coupling there.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels, screen_channels
-    from fnirs_pipe.qc.metrics.screening import CRITERIA
-    from fnirs_pipe.qc.metrics.windowed import condition_window_means
+    from nirspipe.qc.metrics import long_short_channels, screen_channels
+    from nirspipe.qc.metrics.screening import CRITERIA
+    from nirspipe.qc.metrics.windowed import condition_window_means
 
     unscreened = sorted(c.name for c in CRITERIA
                         if c.screens and c.name not in _CONDITION_SCREENABLE)
@@ -940,7 +940,7 @@ def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
     epoch for want of one. Widening can reach the next condition's onset, hence the filter:
     the events kept are this condition's, the extra samples only give them room.
     """
-    from fnirs_pipe.qc.metrics.haemo import (
+    from nirspipe.qc.metrics.haemo import (
         CNR_BASELINE_S, CNR_RESPONSE_S, _cnr_metrics,
     )
     lo = max(0.0, float(t0) + min(0.0, CNR_BASELINE_S[0]))
@@ -1043,12 +1043,12 @@ def compute_run_sections(
     ``bids_root`` is where to look for the original recording when the path its sidecar
     recorded no longer resolves; without it a moved tree loses the ``raw*`` sections.
     """
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.qc.metrics import (
         attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm,
         long_short_channels,
     )
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
+    from nirspipe.qc.metrics._helpers import separation_bands
 
     sep_bands = sep_bands if sep_bands is not None else separation_bands()
 
@@ -1094,7 +1094,7 @@ def compute_run_sections(
     imu = _imu_of(stages)
     if imu and raw_intensity is not None:
         try:
-            from fnirs_pipe.qc.metrics import imu_section
+            from nirspipe.qc.metrics import imu_section
             sections["imu"] = imu_section(imu, raw_intensity, sep_bands)
         except Exception:
             logger.warning("imu section failed", exc_info=True)
@@ -1113,7 +1113,7 @@ def compute_run_sections(
     spike_stage = stages.get("sci") or stages.get("od")
     if raw_intensity is not None or spike_stage is not None:
         try:
-            from fnirs_pipe.qc.metrics import spike_segments
+            from nirspipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
             spike_long, spike_short = long_short_channels(spike_source, sep_bands)
             # one list per channel set, because the test is ">= 10% of *these* channels
@@ -1138,7 +1138,7 @@ def compute_run_sections(
     gvtd_span_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
     if gvtd_span_source is not None:
         try:
-            from fnirs_pipe.qc.metrics import gvtd_above_segments
+            from nirspipe.qc.metrics import gvtd_above_segments
             span_raw = read_snirf(gvtd_span_source)
             windowed["gvtd_above_spans_s"] = [
                 list(span) for span in gvtd_above_segments(span_raw, sep_bands)]
@@ -1172,7 +1172,7 @@ def compute_run_sections(
                 gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity, sep_bands=sep_bands)
             # on the GVTD file's clock and grid, so window i is the same stretch in both
             if imu:
-                from fnirs_pipe.qc.metrics import imu_windowed
+                from nirspipe.qc.metrics import imu_windowed
                 windowed.update(imu_windowed(imu, raw_gvtd_od.times,
                                              float(raw_gvtd_od.info["sfreq"]), qc_window_s))
             # the channel by window matrices as well as the channel-averaged series: the

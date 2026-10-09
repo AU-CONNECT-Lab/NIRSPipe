@@ -2,7 +2,7 @@
 
 A cell is one channel pair in one window, and it is usable only while the pair is coupled in
 **both** members at that moment. That intersection is what
-:func:`~fnirs_pipe.qc.metrics.hyper.dyad_status` computes; this reduces it to what a
+:func:`~nirspipe.qc.metrics.hyper.dyad_status` computes; this reduces it to what a
 cohort report can carry: a handful of scalars for the record, and one row per
 (pair, condition) for the panels.
 
@@ -18,10 +18,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.qc.metrics.hyper import dyad_status
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.qc.metrics.hyper import dyad_status
+from nirspipe.utils.logging import get_logger
+from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("qc.hyper_usable")
 

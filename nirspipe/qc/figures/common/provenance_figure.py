@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fnirs_pipe.qc.common.provenance import Node, scan, simplify, to_mermaid
+from nirspipe.qc.common.provenance import Node, scan, simplify, to_mermaid
 
-# ---- Palette (shared with the interface DAG, fnirs_pipe/interface/pages/analysis.py) ----
+# ---- Palette (shared with the interface DAG, nirspipe/interface/pages/analysis.py) ----
 # Signal domain -> outline colour. Reading left to right the colour tracks the domain
 # change: intensity -> optical density -> haemoglobin -> analysis output. Boxes are drawn
 # unfilled, so the outline carries the whole signal, as it does in the interface.
@@ -150,7 +150,7 @@ def write_provenance(
 ) -> list[Path]:
     """Render the graph for nirs_dir into out_dir as a PNG and its mermaid source.
 
-    ``fig_name`` is a :func:`~fnirs_pipe.qc.common.figure_io.figure_namer`, so both files
+    ``fig_name`` is a :func:`~nirspipe.qc.common.figure_io.figure_namer`, so both files
     are named the way every other figure in the tree is and carry the run they are of.
 
     ``label`` restricts the graph to one BIDS run; see :func:`scan`.

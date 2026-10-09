@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("io.tables")
 

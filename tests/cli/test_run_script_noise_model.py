@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from fnirs_pipe.cli.workflows import run_participant_level
+from nirspipe.cli.workflows import run_participant_level
 
 _ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
@@ -27,7 +27,7 @@ def _script_for(bids, out_dir, **extra) -> str:
     args = {**_ARGS, "bids_dir": bids, "output_dir": out_dir,
             "participant_label": ["01"], "dry_run": True, **extra}
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(bids), str(out_dir), "participant", "--dry-run"]
+    sys.argv = ["nirspipe", str(bids), str(out_dir), "participant", "--dry-run"]
     try:
         run_participant_level(args)
     finally:

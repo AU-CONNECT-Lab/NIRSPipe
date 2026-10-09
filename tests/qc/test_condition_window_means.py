@@ -8,7 +8,7 @@ its windows are the run's windows. These pin the selection rule.
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics.windowed import condition_window_means
+from nirspipe.qc.metrics.windowed import condition_window_means
 
 # 40 windows on a 10 s grid, centres 5, 15, ... 395
 CENTERS = np.arange(5.0, 400.0, 10.0)

@@ -5,7 +5,7 @@ import csv
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from tests._fingerprint import CLI_ARGS
 from tests.figure_accuracy._payload import one_figure
 

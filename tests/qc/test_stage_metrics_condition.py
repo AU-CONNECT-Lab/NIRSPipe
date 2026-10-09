@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from fnirs_pipe.pipeline.denoise import band_limited
-from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
-from fnirs_pipe.qc.metrics import comparable_stage_metrics
+from nirspipe.pipeline.denoise import band_limited
+from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
+from nirspipe.qc.metrics import comparable_stage_metrics
 from tests._synth import synth_raw
 
 BANDS = (0.7, 1.5, 0.2, 0.5)

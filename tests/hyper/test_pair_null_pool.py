@@ -9,9 +9,9 @@ measured rather than declared by the caller.
 
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
-from fnirs_pipe.pipeline.hyper.pair_null import partner_pool
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.pipeline.hyper.pair_null import partner_pool
 
 
 def _cohort(task="main", n_groups=3, repeated_people=False):

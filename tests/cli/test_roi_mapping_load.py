@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from fnirs_pipe.cli._shared import load_roi_mapping
+from nirspipe.cli._shared import load_roi_mapping
 
 
 def test_no_mapping_means_no_roi_map():
@@ -37,7 +37,7 @@ def test_a_chromophore_suffix_on_an_entry_is_dropped(tmp_path):
 
 
 def test_a_channel_in_two_rois_is_logged_and_noted_in_the_report(tmp_path, caplog):
-    from fnirs_pipe.qc.common.channel_table import roi_overlap_note
+    from nirspipe.qc.common.channel_table import roi_overlap_note
 
     path = tmp_path / "roi.json"
     path.write_text(json.dumps({"L": ["S1_D1", "S1_D2 hbo"], "R": ["S1_D2"]}))

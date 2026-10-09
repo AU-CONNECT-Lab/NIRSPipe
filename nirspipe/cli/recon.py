@@ -1,4 +1,4 @@
-"""fnirs-recon CLI (argparse): convert raw snirf files to BIDS format."""
+"""nirspipe-recon CLI (argparse): convert raw snirf files to BIDS format."""
 
 from __future__ import annotations
 
@@ -6,18 +6,18 @@ import argparse
 import sys
 from pathlib import Path
 
-from fnirs_pipe import __version__
+from nirspipe import __version__
 
-from fnirs_pipe.cli import _shared
+from nirspipe.cli import _shared
 
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-recon",
+        prog="nirspipe-recon",
         description="Convert a raw snirf file to BIDS format (one subject at a time). "
                     "For multiple subjects, loop over this command or use the GUI Recon page.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-recon {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-recon {__version__}")
     p.add_argument("input_file", type=Path, help="Input snirf file.")
     p.add_argument("bids_dir",   type=Path, help="Output BIDS dataset directory.")
     p.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
@@ -41,7 +41,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
 
-    from fnirs_pipe.io.bids import write_bids_from_snirf
+    from nirspipe.io.bids import write_bids_from_snirf
 
     if not args.input_file.exists():
         print(f"ERROR: input file not found: {args.input_file}", file=sys.stderr)

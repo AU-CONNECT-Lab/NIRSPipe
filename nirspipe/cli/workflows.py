@@ -16,22 +16,22 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.cli.run import mode_defaults
-from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
-from fnirs_pipe.io.naming import report_name, roi_map_name
-from fnirs_pipe.io.derivatives import (
+from nirspipe.cli import _shared
+from nirspipe.cli.run import mode_defaults
+from nirspipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
+from nirspipe.io.naming import report_name, roi_map_name
+from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
 )
-from fnirs_pipe.io.snirf import read_snirf
-from fnirs_pipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.utils import pair_of, unwrap_enum as _v
-from fnirs_pipe.utils import job_db as _jdb
-from fnirs_pipe.utils.logging import get_logger, setup_logging, thread_log_file
-from fnirs_pipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
-from fnirs_pipe.utils.run_script import write_run_script
-from fnirs_pipe import __version__
+from nirspipe.io.snirf import read_snirf
+from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.utils import pair_of, unwrap_enum as _v
+from nirspipe.utils import job_db as _jdb
+from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
+from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
+from nirspipe.utils.run_script import write_run_script
+from nirspipe import __version__
 
 logger = get_logger("cli.workflows")
 
@@ -41,7 +41,7 @@ def _roi_map_name(args: dict[str, Any]) -> str:
 
 
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
-    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+    from nirspipe.pipeline.post_pipeline import PostConfig
 
     # CLI takes priority over TOML; Typer Enum values are unwrapped to plain strings.
     def pick(cli_key: str, toml_key: str | None = None, default: Any = None) -> Any:
@@ -61,7 +61,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
     contrast_def = None
     contrast_file = args.get("contrast_file") or (Path(toml["contrast_file"]) if "contrast_file" in toml else None)
     if contrast_file:
-        from fnirs_pipe.utils import load_toml
+        from nirspipe.utils import load_toml
         contrast_def = load_toml(contrast_file)
 
     return PostConfig(
@@ -106,7 +106,7 @@ _ARG_OF_FIELD = {"aux": "aux_regressors"}
 def _post_setting_args() -> dict[str, str]:
     """PostConfig field -> the argument, and TOML key, that sets it."""
     from dataclasses import fields
-    from fnirs_pipe.pipeline.post_pipeline import PostConfig
+    from nirspipe.pipeline.post_pipeline import PostConfig
     return {f.name: _ARG_OF_FIELD.get(f.name, f.name)
             for f in fields(PostConfig) if f.name not in _NOT_SETTINGS}
 
@@ -177,7 +177,7 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     Motion correction fits its weighting over whatever series it is handed and the bandpass
     pads whatever it is given, so each condition preprocessed alone gets a different answer.
 
-    Detected from the input tree's own `dataset_description.json`, which `fnirs-prep crop`
+    Detected from the input tree's own `dataset_description.json`, which `nirspipe-prep crop`
     stamps with its name, so nothing new has to be recorded for this to work.
     """
     if allow:
@@ -188,16 +188,16 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     except (OSError, json.JSONDecodeError):
         return
     names = {str(entry.get("Name", "")) for entry in generated_by if isinstance(entry, dict)}
-    if "fnirs-prep crop" not in names:
+    if "nirspipe-prep crop" not in names:
         return
     raise SystemExit(
-        f"[error] {bids_dir} was written by `fnirs-prep crop`, so every condition would be "
+        f"[error] {bids_dir} was written by `nirspipe-prep crop`, so every condition would be "
         "preprocessed on its own. Motion correction and the bandpass both read whatever "
         "series they are handed, so a short condition moves both.\n"
         "        Run this on the uncut recording instead, then cut what you need out of the "
         "result:\n"
-        "          fnirs-pipe <bids> <out> participant ...\n"
-        "          fnirs-prep crop <out> <out> --input-desc errts --segments-path <tsv> ...\n"
+        "          nirspipe <bids> <out> participant ...\n"
+        "          nirspipe-prep crop <out> <out> --input-desc errts --segments-path <tsv> ...\n"
         "        Pass --allow-cropped-input to run on the cropped tree anyway."
     )
 
@@ -213,7 +213,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     verbose: bool                    = args.get("verbose", False)
 
     setup_logging(verbose=verbose)
-    logger.info("fnirs-pipe starting - output: %s", output_dir)
+    logger.info("nirspipe starting - output: %s", output_dir)
 
     _refuse_cropped_input(bids_dir, allow=bool(args.get("allow_cropped_input")))
 
@@ -238,7 +238,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     config_toml: dict[str, Any] = {}
     if args.get("config"):
-        from fnirs_pipe.utils import load_toml
+        from nirspipe.utils import load_toml
         config_toml = load_toml(args["config"])
         logger.debug("loaded post config: %s", args["config"])
 
@@ -260,11 +260,11 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     tasks: list[str | None] = task_label if task_label else [None]
 
-    db_path = output_dir / "logs" / "fnirs_pipe.db"
+    db_path = output_dir / "logs" / "nirspipe.db"
     execution_id = _jdb.log_execution(
         db_path=db_path,
         command_line=" ".join(sys.argv),
-        fnirs_pipe_version=__version__,
+        nirspipe_version=__version__,
         input_dir=str(bids_dir),
         output_dir=str(output_dir),
         subjects=participant_label,
@@ -360,8 +360,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     # one SQM record per run, written once both passes have finished so the
                     # post-Beer-Lambert sections can measure the files post actually produced.
                     # The database takes one row per section.
-                    from fnirs_pipe.qc.subject.record_io import read_record
-                    from fnirs_pipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
+                    from nirspipe.qc.subject.record_io import read_record
+                    from nirspipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
                     try:
                         # one nirs/ per session the runs came from
                         sqm_paths = []
@@ -399,8 +399,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         # on disk by now, and --no-report still leaves the diagram behind
                         provenance_path = None
                         try:
-                            from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
-                            from fnirs_pipe.qc.common.figure_io import figure_namer
+                            from nirspipe.qc.figures.common.provenance_figure import write_provenance
+                            from nirspipe.qc.common.figure_io import figure_namer
                             # the run's own nirs/, session level included; the figure stays
                             # beside the subject's reports
                             ses = entity_of(label, "ses")
@@ -436,7 +436,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         ) or []])
 
                     if not args.get("no_report") and prep_runs:
-                        from fnirs_pipe.qc.subject.subject_index import write_subject_index
+                        from nirspipe.qc.subject.subject_index import write_subject_index
                         try:
                             write_subject_index(subject, sub_dir, " ".join(sys.argv),
                                                 mode=_v(args["mode"]) if args.get("mode") else None)
@@ -527,7 +527,7 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
     ``{"participant_id": "01", "session": "02", "task": "", "run": "1",
     "bad_channels": "S1_D1", "line": 2}``; a blank or absent session, task or run means all.
     """
-    from fnirs_pipe.io.tables import read_table
+    from nirspipe.io.tables import read_table
 
     table = read_table(path, dtype=str).fillna("")
     missing = {"participant_id", "bad_channels"} - set(table.columns)
@@ -652,7 +652,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
 
 
 def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None):
-    from fnirs_pipe.qc.subject.report import build_subject_report
+    from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
     hbo_picks = mne.pick_types(last_result.raw_haemo.info, fnirs="hbo", exclude=[])
@@ -729,7 +729,7 @@ def _run_post_for_subject(
     One entry per run, keyed the same way as the prep results, so the report loop can pair
     them up. A run whose post failed simply has no entry.
     """
-    from fnirs_pipe.pipeline.post_pipeline import run_post
+    from nirspipe.pipeline.post_pipeline import run_post
 
     mode = _v(args["mode"])
     task_label = args.get("task_label")
@@ -780,34 +780,34 @@ def _warn_on_split_tree(output_dir: Path) -> None:
     Two output directories means two records for one run, and the rule preferring the
     pipeline record over the `prep-raw` one can only choose between records one glob found.
     """
-    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIXES
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
 
     for sub in (output_dir / "qc", output_dir / "derivatives"):
         if sub.is_dir() and any(any(sub.glob(f"*/**/nirs/*{suffix}"))
                                 for suffix in RECORD_SUFFIXES.values()):
             logger.warning(
                 "quality records under %s are not part of this cohort page; point both "
-                "`fnirs-pipe` and `fnirs-qc prep-raw` at one output directory, or aggregate "
-                "that one separately with `fnirs-qc cohort %s`", sub, sub)
+                "`nirspipe` and `nirspipe-qc prep-raw` at one output directory, or aggregate "
+                "that one separately with `nirspipe-qc cohort %s`", sub, sub)
 
 
 def run_group_level(args: dict[str, Any]) -> None:
     """BIDS Apps `group` entry point: aggregates per-subject (and per-group hyper,
     if present) SQM JSONs into cohort HTML reports under <output_dir>."""
-    from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
-    from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
-    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX
+    from nirspipe.qc.hyper.group_hyper_writer import build_group_hyper_report
+    from nirspipe.qc.subject.group_writer import build_group_raw_report
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIX
 
     output_dir = Path(args["output_dir"])
     _warn_on_split_tree(output_dir)
 
-    logger.info("fnirs-pipe group: aggregating individual SQMs from %s", output_dir)
+    logger.info("nirspipe group: aggregating individual SQMs from %s", output_dir)
     ind_path = build_group_raw_report(output_dir)
     logger.info("  -> %s", ind_path)
 
     if any([*output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}"),
             *output_dir.glob(f"group-*/ses-*/nirs/*{RECORD_SUFFIX}")]):
-        logger.info("fnirs-pipe group: also aggregating hyperscanning SQMs")
+        logger.info("nirspipe group: also aggregating hyperscanning SQMs")
         hyper_path = build_group_hyper_report(output_dir)
         logger.info("  -> %s", hyper_path)
 

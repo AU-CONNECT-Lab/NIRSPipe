@@ -1,6 +1,6 @@
 """The phase-scrambled null, computed and written on its own.
 
-Called from ``fnirs-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
+Called from ``nirspipe-hyper`` when ``--wtc-phase-null`` is given, so it inherits that run's
 stage, band, window and ROI minimum by construction. Crossing follows the real table unless
 ``--wtc-phase-null-cross`` says otherwise, and n channels crossed give n^2 pairings and so n
 times the surrogate cost of the n homologous ones.
@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.io.tables import write_tsv
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.io.tables import write_tsv
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +74,12 @@ def run_wtc_null(
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
-    from fnirs_pipe.io.derivatives import group_output_path
-    from fnirs_pipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
-    from fnirs_pipe.pipeline.hyper._helpers import _chroma_tuple
-    from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
-    from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_null_levels
-    from fnirs_pipe.utils.lineage import paths_from
+    from nirspipe.io.derivatives import group_output_path
+    from nirspipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
+    from nirspipe.pipeline.hyper._helpers import _chroma_tuple
+    from nirspipe.pipeline.hyper.whiten import whiten_raws
+    from nirspipe.pipeline.hyper.wtc_store import level_params, save_null_levels
+    from nirspipe.utils.lineage import paths_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
@@ -192,9 +192,9 @@ def write_wtc_null(
     written them, and are what gives both tables their ``percentile`` column. A tree without
     them still gets a null, just one nothing has been ranked against yet.
     """
-    from fnirs_pipe.pipeline.hyper import _hyper_sidecar, alignment_params
-    from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-    from fnirs_pipe.utils.lineage import paths_from
+    from nirspipe.pipeline.hyper import _hyper_sidecar, alignment_params
+    from nirspipe.pipeline.hyper.wtc import wtc_grid_params
+    from nirspipe.utils.lineage import paths_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax

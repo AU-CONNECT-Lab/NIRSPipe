@@ -28,7 +28,7 @@ def find_snirf(
     already finds its inputs: the layout is built without a derivatives config, so a
     ``desc=`` query returns nothing.
     """
-    from fnirs_pipe.io.bids import get_layout
+    from nirspipe.io.bids import get_layout
     layout = get_layout(bids_dir, validate=validate)
     kwargs: dict = {"subject": sub, "extension": ".snirf"}
     if ses:  kwargs["session"] = ses

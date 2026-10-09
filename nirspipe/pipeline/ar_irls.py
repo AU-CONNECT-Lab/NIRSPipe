@@ -21,7 +21,7 @@ from __future__ import annotations
 import numpy as np
 from nilearn.glm.regression import ARModel
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.ar_irls")
 

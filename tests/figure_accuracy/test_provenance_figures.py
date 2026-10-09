@@ -7,7 +7,7 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.io.snirf import read_snirf
+from nirspipe.io.snirf import read_snirf
 from tests._fingerprint import CLI_ARGS, DPF
 
 

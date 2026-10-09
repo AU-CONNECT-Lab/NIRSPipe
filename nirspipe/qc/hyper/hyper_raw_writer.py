@@ -7,17 +7,17 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
-from fnirs_pipe.pipeline.hyper import (
+from nirspipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
+from nirspipe.pipeline.hyper import (
     GroupEntry, alignment_params, onset_residuals,
 )
-from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
-from fnirs_pipe.qc.subject.sqm_record import record_path
-from fnirs_pipe.qc.common.figure_io import (
+from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
+from nirspipe.qc.subject.sqm_record import record_path
+from nirspipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, figure_namer,
     get_channel_pairs,
 )
-from fnirs_pipe.qc.figures.hyper.hyper_figures import (
+from nirspipe.qc.figures.hyper.hyper_figures import (
     _cond_colors,
     build_alignment_timeline,
     build_channel_summary,
@@ -29,18 +29,18 @@ from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     build_usable_time,
     motion_series,
 )
-from fnirs_pipe.qc.figures.common.head_map import head_geometry
-from fnirs_pipe.qc.metrics.hyper import (
+from nirspipe.qc.figures.common.head_map import head_geometry
+from nirspipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, shared_screen_windows,
 )
-from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
-from fnirs_pipe.qc.common.report_shell import guard, note
-from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
-from fnirs_pipe.qc.metrics._helpers import long_short_channels
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.utils.lineage import paths_from
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
+from nirspipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
+from nirspipe.qc.common.report_shell import guard, note
+from nirspipe.qc.common.windows import condition_windows, markers_on_data_axis
+from nirspipe.qc.metrics._helpers import long_short_channels
+from nirspipe.utils import pair_of
+from nirspipe.utils.lineage import paths_from
+from nirspipe.utils.logging import get_logger
+from nirspipe import __version__
 
 logger = get_logger("qc.hyper_raw_writer")
 
@@ -49,7 +49,7 @@ def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
     """The dyad's quality record, with the provenance keys the graph reads.
 
     The keys sit in the file rather than in a sidecar beside it, the way
-    :func:`~fnirs_pipe.qc.subject.sqm_record.sqm_record_dict` puts them there: a sidecar for
+    :func:`~nirspipe.qc.subject.sqm_record.sqm_record_dict` puts them there: a sidecar for
     ``x.json`` would resolve to ``x.json`` itself. ``n_metrics`` is what marks the node as
     a QC record measured off the chain rather than a signal file on it, so the graph draws
     it without edges. The step name is its own: two objects sharing one is how a stage gets
@@ -74,7 +74,7 @@ def _condition_spans(raw: "mne.io.Raw | None") -> dict:
 
     The dict is what every panel that splits by condition reads, so none of them can be
     drawn against a different set of blocks. The rule behind it is
-    :func:`~fnirs_pipe.qc.common.windows.condition_windows` rather than a second copy of it here.
+    :func:`~nirspipe.qc.common.windows.condition_windows` rather than a second copy of it here.
     Taking each annotation's own duration would give zero-duration triggers zero-length
     spans, and keying on the bare description would keep only the last of a repeated one.
 
@@ -126,7 +126,7 @@ def _process_hyper_raw_group(
 
     def _table(folder: Path, entities: dict, suffix: str = "relmat") -> Path:
         """One of this dyad's tables, named off the same label its figures are."""
-        from fnirs_pipe.io.naming import derivative_path
+        from nirspipe.io.naming import derivative_path
 
         return folder / derivative_path("", suffix, ".tsv", group=group_id, session=session,
                                         task=task, **entities).name

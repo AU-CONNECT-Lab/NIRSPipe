@@ -56,7 +56,7 @@
 <div class="page-header">
   <h1>{{ page_heading }}</h1>
   <span class="subtitle">dyad post QC &bull;
-    v{{ versions.get('fnirs-pipe', 'unknown') }} &bull; {{ run_date }}</span>
+    v{{ versions.get('nirspipe', 'unknown') }} &bull; {{ run_date }}</span>
 </div>
 {% endblock %}
 
@@ -80,7 +80,7 @@
         </td>
       </tr>
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
-      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
     </table>

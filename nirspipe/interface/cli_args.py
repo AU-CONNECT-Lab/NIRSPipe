@@ -1,26 +1,26 @@
 """Translate a page's form into an argv for the CLI that owns it.
 
-The batch editing is `fnirs-prep`, the dyad analysis is `fnirs-hyper`, the aggregate reports
-are `fnirs-qc`. Kept beside the pages rather than derived from the parsers, because argparse
+The batch editing is `nirspipe-prep`, the dyad analysis is `nirspipe-hyper`, the aggregate reports
+are `nirspipe-qc`. Kept beside the pages rather than derived from the parsers, because argparse
 can say a flag exists but not which widget should fill it. `tests/gui/test_gui_cli_surface.py` is
 what stops the two surfaces drifting apart.
 """
 
 from __future__ import annotations
 
-# fnirs-qc commands whose whole argument list is one output_dir
+# nirspipe-qc commands whose whole argument list is one output_dir
 _AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
 # Each dyad command is its own console script, because they do not take the same
 # positionals: `run` and `pair-null` read each member's recording out of a source tree, the
 # rest only re-read tables this package already wrote. The page keeps the short names.
 _HYPER_PROG = {
-    "run":        "fnirs-hyper",
-    "pair-null":  "fnirs-hyper-pairnull",
-    "group-null": "fnirs-hyper-groupnull",
-    "band":       "fnirs-hyper-band",
-    "merge":      "fnirs-hyper-merge",
-    "index":      "fnirs-hyper-index",
+    "run":        "nirspipe-hyper",
+    "pair-null":  "nirspipe-hyper-pairnull",
+    "group-null": "nirspipe-hyper-groupnull",
+    "band":       "nirspipe-hyper-band",
+    "merge":      "nirspipe-hyper-merge",
+    "index":      "nirspipe-hyper-index",
 }
 _HYPER = tuple(_HYPER_PROG)
 
@@ -43,7 +43,7 @@ def _split(flag: str, value) -> list[str]:
 
 def build_qc_args(command: str, opts: dict) -> list[str]:
     if command in _AGGREGATE:
-        return ["fnirs-qc", command, opts["output_dir"]]
+        return ["nirspipe-qc", command, opts["output_dir"]]
 
     args = [_HYPER_PROG[command]]
     if command in _HYPER_READS_SUBJECTS:
@@ -155,7 +155,7 @@ def missing(command: str, opts: dict) -> str | None:
     return None
 
 
-# ---- fnirs-prep ----
+# ---- nirspipe-prep ----
 
 # the three batch operations, named as the page's radio names them
 _PREP_OPERATIONS = ("markers", "crop", "hyper_align")
@@ -175,11 +175,11 @@ def build_prep_args(operation: str, opts: dict) -> list[str]:
 
     # align selects its subjects through the group CSV, so it takes no selection flags
     if operation == "hyper_align":
-        return ["fnirs-prep", "align", bids, deriv,
+        return ["nirspipe-prep", "align", bids, deriv,
                 *_text("--group-csv", opts.get("group_csv"))]
 
     if operation == "markers":
-        args = ["fnirs-prep", "edit-markers", "apply", bids, deriv, *_selection(opts)]
+        args = ["nirspipe-prep", "edit-markers", "apply", bids, deriv, *_selection(opts)]
         marker_op = opts.get("marker_op")
         if marker_op == "shift":
             args += _num("--shift", opts.get("shift"))
@@ -191,7 +191,7 @@ def build_prep_args(operation: str, opts: dict) -> list[str]:
                 args += ["--rename", *pairs]
         return args
 
-    args = ["fnirs-prep", "crop", bids, deriv, *_selection(opts)]
+    args = ["nirspipe-prep", "crop", bids, deriv, *_selection(opts)]
     if opts.get("crop_mode") == "multi":
         args += _text("--segments-path", opts.get("segments_path"))
         # the negative half is the default, so only the positive is ever sent
@@ -230,7 +230,7 @@ def missing_prep(operation: str, opts: dict) -> str | None:
     return None
 
 
-# ---- fnirs-qc raw reports ----
+# ---- nirspipe-qc raw reports ----
 
 # the static counterparts of what the two QC pages show interactively
 _RAW_QC = ("prep-raw", "hyper-raw")
@@ -250,7 +250,7 @@ def _screening(opts: dict) -> list[str]:
 
 
 def build_raw_qc_args(command: str, opts: dict) -> list[str]:
-    args = ["fnirs-qc", command, opts.get("bids_dir"), opts.get("output_dir")]
+    args = ["nirspipe-qc", command, opts.get("bids_dir"), opts.get("output_dir")]
 
     if command == "prep-raw":
         args += _text("--participant-label", opts.get("subject"))
@@ -273,7 +273,7 @@ def build_raw_qc_args(command: str, opts: dict) -> list[str]:
 def missing_raw_qc(command: str, opts: dict) -> str | None:
     if not opts.get("bids_dir") or not opts.get("output_dir"):
         if command == "hyper-raw":
-            return "Set the BIDS and fnirs-hyper directories."
+            return "Set the BIDS and nirspipe-hyper directories."
         return "Set the BIDS and output directories."
     # these four have no defaults anywhere, by design
     if opts.get("sci_threshold") is None:

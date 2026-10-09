@@ -1,17 +1,17 @@
-"""fnirs-log CLI (argparse): database management for fnirs-pipe."""
+"""nirspipe-log CLI (argparse): database management for nirspipe."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from fnirs_pipe import __version__
+from nirspipe import __version__
 
-from fnirs_pipe.utils import job_db as _db
+from nirspipe.utils import job_db as _db
 
 
 def _default_db(output_dir: Path) -> Path:
-    return output_dir / "logs" / "fnirs_pipe.db"
+    return output_dir / "logs" / "nirspipe.db"
 
 
 def cmd_merge(output_dir: Path, db_path: Path | None) -> None:
@@ -29,10 +29,10 @@ def cmd_rebuild(output_dir: Path, db_path: Path | None) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-log",
-        description="Merge JSONL run logs into the fnirs-pipe SQLite database.",
+        prog="nirspipe-log",
+        description="Merge JSONL run logs into the nirspipe SQLite database.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-log {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-log {__version__}")
     sub = p.add_subparsers(required=True)
 
     m = sub.add_parser("merge", help="Merge every finished execution's JSONL logs under logs/json/ "

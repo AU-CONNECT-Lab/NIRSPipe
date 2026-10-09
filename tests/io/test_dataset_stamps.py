@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from fnmatch import fnmatch
 
-from fnirs_pipe.io.derivatives import (
+from nirspipe.io.derivatives import (
     JSON_ONLY_DESCS, write_bidsignore, write_dataset_description,
 )
 
@@ -23,15 +23,15 @@ def _description(path):
 
 
 def test_the_source_tree_is_named_with_the_version_that_wrote_it(tmp_path):
-    source, out = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
+    source, out = tmp_path / "nirspipe", tmp_path / "nirspipe-hyper"
     write_dataset_description(source)
-    write_dataset_description(out, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=source)
+    write_dataset_description(out, name="nirspipe-hyper output",
+                              generated_by="nirspipe-hyper", source=source)
 
     entry = _description(out)["SourceDatasets"][0]
-    assert entry["Name"] == "fnirs-pipe"
+    assert entry["Name"] == "nirspipe"
     assert entry["Version"] == _description(source)["GeneratedBy"][0]["Version"]
-    assert entry["URL"] == "../fnirs-pipe"
+    assert entry["URL"] == "../nirspipe"
 
 
 def test_a_tree_with_no_source_claims_none(tmp_path):
@@ -77,9 +77,9 @@ def test_the_ignored_records_are_the_ones_the_writers_name(tmp_path):
     The desc names live in three modules, so the list is bound to the writers here rather
     than trusted to stay in step with them.
     """
-    from fnirs_pipe.io.derivatives import channel_decisions_path
-    from fnirs_pipe.io.naming import rating_path
-    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIXES
+    from nirspipe.io.derivatives import channel_decisions_path
+    from nirspipe.io.naming import rating_path
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
 
     lines = _ignore_lines(tmp_path)
     written = [f"sub-01_task-rest{suffix}" for suffix in RECORD_SUFFIXES.values()] + [
@@ -98,13 +98,13 @@ def test_the_ignored_records_are_the_ones_the_writers_name(tmp_path):
 
 def test_a_prep_tree_restamps_a_description_an_older_version_left(tmp_path):
     """The crop, edit-markers and aligned trees used to keep whatever stamp first wrote them."""
-    from fnirs_pipe import __version__
-    from fnirs_pipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
+    from nirspipe import __version__
+    from nirspipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
 
     root = tmp_path / _DERIV_NAME
     root.mkdir()
     (root / "dataset_description.json").write_text(json.dumps(
-        {"Name": _DERIV_NAME, "GeneratedBy": [{"Name": "fnirs-prep crop", "Version": "0.0.1"}]}))
+        {"Name": _DERIV_NAME, "GeneratedBy": [{"Name": "nirspipe-prep crop", "Version": "0.0.1"}]}))
     _setup_deriv_dir(tmp_path, "01", None)
 
     assert _description(root)["GeneratedBy"][0]["Version"] == __version__
@@ -113,7 +113,7 @@ def test_a_prep_tree_restamps_a_description_an_older_version_left(tmp_path):
 def test_a_crop_tree_names_the_dataset_its_input_sat_in(tmp_path):
     """Found from the file, so the CLI, which knows the BIDS root, and the GUI, which only has
     the file, stamp the same source and do not overwrite each other's."""
-    from fnirs_pipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
+    from nirspipe.pipeline.crop import _DERIV_NAME, _setup_deriv_dir
 
     bids = tmp_path / "bids"
     (bids / "sub-01" / "nirs").mkdir(parents=True)
@@ -126,9 +126,9 @@ def test_a_crop_tree_names_the_dataset_its_input_sat_in(tmp_path):
 
 
 def test_dataset_root_of_stops_at_the_nearest_description(tmp_path):
-    from fnirs_pipe.io.derivatives import dataset_root_of
+    from nirspipe.io.derivatives import dataset_root_of
 
-    inner = tmp_path / "outer" / "derivatives" / "fnirs-pipe"
+    inner = tmp_path / "outer" / "derivatives" / "nirspipe"
     (inner / "sub-01").mkdir(parents=True)
     for root in (tmp_path / "outer", inner):
         (root / "dataset_description.json").write_text("{}")

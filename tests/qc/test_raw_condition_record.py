@@ -2,10 +2,10 @@
 
 import mne
 
-from fnirs_pipe.cli import qc as qc_cli
-from fnirs_pipe.io.derivatives import write_dataset_description
-from fnirs_pipe.qc.subject.prep_raw_report import _process_run
-from fnirs_pipe.qc.subject.record_io import read_record
+from nirspipe.cli import qc as qc_cli
+from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.qc.subject.prep_raw_report import _process_run
+from nirspipe.qc.subject.record_io import read_record
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 

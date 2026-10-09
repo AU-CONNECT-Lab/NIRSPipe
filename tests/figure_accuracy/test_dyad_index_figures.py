@@ -1,4 +1,4 @@
-"""The dyad index (fnirs-hyper-index): one row per pairing and window, each from its own tables."""
+"""The dyad index (nirspipe-hyper-index): one row per pairing and window, each from its own tables."""
 
 import re
 from itertools import combinations

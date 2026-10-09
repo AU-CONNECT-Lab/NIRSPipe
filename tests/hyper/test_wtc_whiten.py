@@ -13,11 +13,11 @@ import pandas as pd
 import pytest
 from scipy.signal import lfilter
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper import GroupEntry
-from fnirs_pipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_order, whiten_raws
-from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import group_output_path
+from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_order, whiten_raws
+from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 from tests.hyper.test_hyper_page_contract import DURATION, SFREQ, _raw
 
 SUBS = ("sub-01", "sub-02")
@@ -142,7 +142,7 @@ def test_every_wtc_table_records_the_whitening(plain_and_white):
 
 
 def test_a_phase_level_drawn_unwhitened_is_refused_by_a_whitened_report(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
 
     run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=2, wtc_fmin=0.02, wtc_fmax=0.2,
                  band_fmin=0.03, band_fmax=0.10, seed=1, chroma=("hbo",))
@@ -155,7 +155,7 @@ def test_a_phase_level_drawn_unwhitened_is_refused_by_a_whitened_report(dyad, tm
 
 
 def test_the_phase_null_is_drawn_on_the_whitened_signals(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
 
     run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=2, wtc_fmin=0.02, wtc_fmax=0.2,
                  band_fmin=0.03, band_fmax=0.10, seed=1, chroma=("hbo",), whiten_s=10.0)
@@ -167,7 +167,7 @@ def test_the_phase_null_is_drawn_on_the_whitened_signals(dyad, tmp_path):
 
 def test_a_re_paired_draw_hands_the_coherence_whitened_cuts_and_the_correlation_plain(
         dyad, monkeypatch):
-    from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
+    from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
 
     monkeypatch.setattr(group_io, "load_group_haemo",
                         lambda out, entries, desc="preproc": {entries[0].subject_id:
@@ -194,7 +194,7 @@ def test_a_re_paired_draw_hands_the_coherence_whitened_cuts_and_the_correlation_
 # ---- nothing merges across it ----
 
 def test_tables_whitened_differently_refuse_to_merge(tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
+    from nirspipe.pipeline.hyper.wtc_aggregate import aggregate_wtc
 
     paths = []
     for gid, extra in (("G01", {}), ("G02", {"wtc_whiten_s": 10.0})):
@@ -211,7 +211,7 @@ def test_tables_whitened_differently_refuse_to_merge(tmp_path):
 
 
 def test_a_re_banded_table_keeps_what_its_maps_were_computed_with(dyad, tmp_path):
-    from fnirs_pipe.pipeline.hyper.wtc_store import reband_tree
+    from nirspipe.pipeline.hyper.wtc_store import reband_tree
 
     _build(dyad, tmp_path, whiten_s=10.0, wtc_save_maps=True)
     written = reband_tree(tmp_path, 0.05, 0.15)
@@ -223,7 +223,7 @@ def test_a_re_banded_table_keeps_what_its_maps_were_computed_with(dyad, tmp_path
 
 
 def test_a_stand_in_too_short_to_whiten_is_counted_rather_than_raised(dyad, monkeypatch):
-    from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
+    from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
 
     short = dyad["sub-02"].copy().crop(tmax=35.0)      # 175 samples against AR(50)
     monkeypatch.setattr(group_io, "load_group_haemo",

@@ -14,8 +14,8 @@ import pandas as pd
 import plotly.colors as pc
 import pytest
 
-from fnirs_pipe.qc.figures.common.matrix_map import BLANK_CELL, CORRELATION_SCALE
-from fnirs_pipe.qc.figures.subject.rest_figures import (
+from nirspipe.qc.figures.common.matrix_map import BLANK_CELL, CORRELATION_SCALE
+from nirspipe.qc.figures.subject.rest_figures import (
     alff_topo_figure, fc_roi_matrix_figure, rest_channel_panel,
 )
 
@@ -172,7 +172,7 @@ def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
     """An amplitude is a property of a place. Drawn as a source-to-detector bar it would
     chain into the neighbouring channels wherever they share an optode, and a montage of
     independent measurements would read as one connected polyline."""
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     long_names, _ = long_short_channels(haemo, None)
     # short channels are off every map in this module, so the count is the long ones

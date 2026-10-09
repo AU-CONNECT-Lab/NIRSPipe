@@ -1,4 +1,4 @@
-"""fnirs-qc CLI (argparse): quality control for fNIRS data."""
+"""nirspipe-qc CLI (argparse): quality control for fNIRS data."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 from collections import defaultdict
 from dataclasses import replace
 
-from fnirs_pipe import __version__
+from nirspipe import __version__
 
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.utils.logging import get_logger, setup_logging
-from fnirs_pipe.cli._shared import separation_bands_from_args
-from fnirs_pipe.qc.metrics._helpers import separation_bands
+from nirspipe.io.naming import report_name
+from nirspipe.cli import _shared
+from nirspipe.utils.logging import get_logger, setup_logging
+from nirspipe.cli._shared import separation_bands_from_args
+from nirspipe.qc.metrics._helpers import separation_bands
 
 setup_logging()
 
@@ -37,11 +37,11 @@ def cmd_prep_raw(
     skip_bids_validation: bool,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
-    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-qc")
+    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from fnirs_pipe.io.derivatives import LINK_RAW, write_dataset_description
+    from nirspipe.io.derivatives import LINK_RAW, write_dataset_description
     # the records it writes name the raw recordings, which resolve through this link
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
@@ -49,9 +49,9 @@ def cmd_prep_raw(
         "long_max_dist": long_max_dist,
     })))
 
-    from fnirs_pipe.io.bids import bids_label, get_layout, get_nirs_files
-    from fnirs_pipe.io.derivatives import subject_report_dir
-    from fnirs_pipe.qc.subject.prep_raw_report import build_prep_raw_report
+    from nirspipe.io.bids import bids_label, get_layout, get_nirs_files
+    from nirspipe.io.derivatives import subject_report_dir
+    from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     if (epoch_tmin is None) != (epoch_tmax is None):
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
@@ -120,7 +120,7 @@ def cmd_prep_raw(
         # rebuilt rather than added to: it is assembled from the records on disk, so it
         # comes back carrying the pipeline's reports too where a run has been through both
         # commands
-        from fnirs_pipe.qc.subject.subject_index import write_subject_index
+        from nirspipe.qc.subject.subject_index import write_subject_index
         try:
             index = write_subject_index(subject, subject_report_dir(output_dir, subject),
                                         " ".join(sys.argv))
@@ -173,28 +173,28 @@ def cmd_hyper_raw(
     participant_label: list[str] | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
-    _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
+    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-hyper")
     if derivatives_dir is not None:
         _shared.refuse_output_is_source(derivatives_dir, output_dir)
     made_by = _generated_by(output_dir)
-    if "fnirs-pipe" in made_by:
-        print(f"Error: {output_dir} is a fnirs-pipe tree; the dyad reports go to the "
-              f"fnirs-hyper tree. Pass that as OUTPUT_DIR and this one as --derivatives-dir.",
+    if "nirspipe" in made_by:
+        print(f"Error: {output_dir} is a nirspipe tree; the dyad reports go to the "
+              f"nirspipe-hyper tree. Pass that as OUTPUT_DIR and this one as --derivatives-dir.",
               file=sys.stderr)
         raise SystemExit(1)
     if not skip_bids_validation:
-        from fnirs_pipe.io.bids import validate_bids
+        from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from fnirs_pipe.io.derivatives import (
+    from nirspipe.io.derivatives import (
         LINK_PREPROCESSED, LINK_RAW, write_bidsignore, write_dataset_description,
     )
 
-    # the same stamp fnirs-hyper gives the tree, plus the raw recordings this also reads
-    write_dataset_description(output_dir, name="fnirs-hyper output",
-                              generated_by="fnirs-hyper", source=bids_dir, link=LINK_RAW)
+    # the same stamp nirspipe-hyper gives the tree, plus the raw recordings this also reads
+    write_dataset_description(output_dir, name="nirspipe-hyper output",
+                              generated_by="nirspipe-hyper", source=bids_dir, link=LINK_RAW)
     if derivatives_dir is not None:
-        write_dataset_description(output_dir, name="fnirs-hyper output",
-                                  generated_by="fnirs-hyper", source=derivatives_dir,
+        write_dataset_description(output_dir, name="nirspipe-hyper output",
+                                  generated_by="nirspipe-hyper", source=derivatives_dir,
                                   link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
 
@@ -203,8 +203,8 @@ def cmd_hyper_raw(
         "long_max_dist": long_max_dist,
     })))
 
-    from fnirs_pipe.cli.hyper import _run_groups, _select_groups
-    from fnirs_pipe.pipeline.hyper import (
+    from nirspipe.cli.hyper import _run_groups, _select_groups
+    from nirspipe.pipeline.hyper import (
         _raw_to_haemo,
         align_imu_like,
         align_like,
@@ -217,9 +217,9 @@ def cmd_hyper_raw(
         normalize_raws,
         trim_to_shortest,
     )
-    from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_report
-    from fnirs_pipe.utils.lineage import path_from
+    from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
+    from nirspipe.qc.hyper.hyper_report import build_hyper_report
+    from nirspipe.utils.lineage import path_from
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
     if session_label:
@@ -256,7 +256,7 @@ def cmd_hyper_raw(
         # the motion panel needs optical density, which the haemoglobin conversion above
         # has already left behind, so the intensity copy is cut to the same window rather
         # than aligned a second time. The corrected file is whatever the member's own
-        # `fnirs-pipe` run left in the tree --derivatives-dir names, and is simply absent for
+        # `nirspipe` run left in the tree --derivatives-dir names, and is simply absent for
         # a member who has not been through one.
         intensity_raws = align_like(raws_cw, aligned_raws)
         full_after = (load_group_stage(derivatives_dir, members, "motcorrected")
@@ -301,7 +301,7 @@ def cmd_hyper_raw(
 
 def cmd_group_raw(output_dir: Path) -> None:
     """Aggregate per-subject SQMs into desc-subjects_qc.tsv + desc-subjects_report.html."""
-    from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
+    from nirspipe.qc.subject.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
     print(f"report -> {path}")
@@ -309,11 +309,11 @@ def cmd_group_raw(output_dir: Path) -> None:
 
 def cmd_group_hyper_raw(output_dir: Path) -> None:
     """Aggregate per-group hyper SQMs into desc-groups_qc.tsv + desc-groups_report.html."""
-    from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
+    from nirspipe.qc.hyper.group_hyper_writer import build_group_hyper_report
 
     path = build_group_hyper_report(output_dir)
     if path is None:
-        print(f"no dyad records under {output_dir}; run `fnirs-qc hyper-raw` first")
+        print(f"no dyad records under {output_dir}; run `nirspipe-qc hyper-raw` first")
         return
     print(f"report -> {path}")
 
@@ -323,11 +323,11 @@ def cmd_provenance(output_dir: Path) -> None:
 
     Reads the JSON sidecars already on disk, so it works on any past run.
     """
-    from fnirs_pipe.qc.common.figure_io import figure_namer
-    from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
+    from nirspipe.qc.common.figure_io import figure_namer
+    from nirspipe.qc.figures.common.provenance_figure import write_provenance
 
-    from fnirs_pipe.io.derivatives import entity_of, group_label
-    from fnirs_pipe.qc.subject.sqm_record import scan_runs
+    from nirspipe.io.derivatives import entity_of, group_label
+    from nirspipe.qc.subject.sqm_record import scan_runs
 
     # the root is always searched too: the merged cross-dyad and group-null tables sit there
     targets = [
@@ -378,16 +378,16 @@ def _add_dpf_and_cardiac(parser) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-qc",
+        prog="nirspipe-qc",
         description="fNIRS quality control: individual, hyperscanning and cohort-level reports.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-qc {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-qc {__version__}")
     sub = p.add_subparsers(required=True)
 
     pr = sub.add_parser("prep-raw", parents=[_shared.screening()],
                         help="Static raw QC report for a single participant.")
     pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    pr.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    pr.add_argument("output_dir", type=Path, help="nirspipe derivatives directory")
     pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend", required=True,
                     type=_shared.BidsLabel,
                     help="Subject ID(s) to inspect, e.g. '01'. One report set per subject, "
@@ -436,7 +436,7 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     hr.add_argument("output_dir", type=Path,
-                    help="The fnirs-hyper tree the dyad reports go to, the one fnirs-hyper "
+                    help="The nirspipe-hyper tree the dyad reports go to, the one nirspipe-hyper "
                          "writes.")
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
@@ -448,7 +448,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "read once per listed session.")
     _shared.add_skip_bids_validation(hr)
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
-                    help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
+                    help="The nirspipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "
                          "there; without it, only the recordings before correction.")
     hr.set_defaults(func=cmd_hyper_raw)
@@ -456,9 +456,9 @@ def _build_parser() -> argparse.ArgumentParser:
     gr = sub.add_parser(
         "cohort",
         help="Every subject in a tree on one page.",
-        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `fnirs-pipe` and `prep-raw` has two records and the pipeline one is used, so the page carries every stage the run was measured at.")
+        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `nirspipe` and `prep-raw` has two records and the pipeline one is used, so the page carries every stage the run was measured at.")
     gr.add_argument("output_dir", type=Path,
-                    help="fnirs-pipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
+                    help="nirspipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
     gr.set_defaults(func=cmd_group_raw)
 
     ghr = sub.add_parser(
@@ -469,11 +469,11 @@ def _build_parser() -> argparse.ArgumentParser:
                     "the dyad runs already wrote. It reports what a dyad has and a subject "
                     "cannot; the per-subject quality distributions stay in `cohort`.")
     ghr.add_argument("output_dir", type=Path,
-                     help="fnirs-pipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
+                     help="nirspipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
     ghr.set_defaults(func=cmd_group_hyper_raw)
 
     pv = sub.add_parser("provenance", help="Render the file provenance graph from existing sidecars.")
-    pv.add_argument("output_dir", type=Path, help="fnirs-pipe derivatives directory")
+    pv.add_argument("output_dir", type=Path, help="nirspipe derivatives directory")
     pv.set_defaults(func=cmd_provenance)
 
 

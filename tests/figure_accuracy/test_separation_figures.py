@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from fnirs_pipe.qc.common.channel_table import _neither_range_title
+from nirspipe.qc.common.channel_table import _neither_range_title
 from tests._fingerprint import LONG_DISTANCE, SHORT_DISTANCE
 from tests.figure_accuracy._payload import _decode, one_figure
 from tests.figure_accuracy._run import Run

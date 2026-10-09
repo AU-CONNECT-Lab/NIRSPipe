@@ -1,4 +1,4 @@
-"""The cohort page (fnirs-qc cohort): each figure against the cohort table and each run's record."""
+"""The cohort page (nirspipe-qc cohort): each figure against the cohort table and each run's record."""
 
 import numpy as np
 import pandas as pd
@@ -172,7 +172,7 @@ _GRID_ROWS = {"SCI (windowed)": "sci", "CV (windowed)": "cv"}
 def _own_series(groups, sid, key, channel_set):
     """One run's windowed series for one channel set, off its own record and the channel
     names the record stores beside each matrix, smoothed and sampled as the grid does."""
-    from fnirs_pipe.qc.figures.subject.group_figures import SMOOTH_S, _smooth
+    from nirspipe.qc.figures.subject.group_figures import SMOOTH_S, _smooth
 
     rec = groups.member_record(sid)
     windowed = rec["windowed"]

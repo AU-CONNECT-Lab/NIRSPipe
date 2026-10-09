@@ -7,11 +7,11 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, no_update
 
-from fnirs_pipe.cli.run import mode_defaults
-from fnirs_pipe.interface import process_stream
-from fnirs_pipe.interface.callbacks._cli_run import poll_run, start_run
-from fnirs_pipe.interface.callbacks._sections import rng, summary, value
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.cli.run import mode_defaults
+from nirspipe.interface import process_stream
+from nirspipe.interface.callbacks._cli_run import poll_run, start_run
+from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.analysis_callbacks")
 
@@ -40,7 +40,7 @@ def detect_subjects(n_clicks, bids_dir):
     if not bids_dir:
         return dbc.Alert("BIDS directory is empty.", color="warning", className="mb-0"), "", []
     try:
-        from fnirs_pipe.io.bids import get_layout
+        from nirspipe.io.bids import get_layout
         layout = get_layout(bids_dir, validate=False)
         subjects = sorted(layout.get_subjects())
     except Exception as exc:
@@ -91,7 +91,7 @@ def _provenance_elements(output_dir: str | None) -> list | None:
     if not output_dir:
         return None
     try:
-        from fnirs_pipe.qc.common.provenance import scan
+        from nirspipe.qc.common.provenance import scan
 
         root = Path(output_dir)
         for nirs_dir in [*sorted(root.glob("sub-*/nirs")), *sorted(root.glob("group-*/nirs")),
@@ -174,9 +174,9 @@ def update_dag(post_mode, _run_status, output_dir):
 
 
 def _build_cli_args(opts: dict) -> list[str]:
-    """Translate widget values into a fnirs-pipe argv list."""
+    """Translate widget values into a nirspipe argv list."""
     args: list[str] = [
-        "fnirs-pipe",
+        "nirspipe",
         opts["bids_dir"],
         opts["output_dir"],
         "participant",
@@ -394,7 +394,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
 )
 def run_pipeline(n_clicks, cmd_data):
     return start_run(cmd_data, "Generate Command",
-                     "`{exe}` not found on PATH - make sure fnirs-pipe is installed.")
+                     "`{exe}` not found on PATH - make sure nirspipe is installed.")
 
 
 @callback(

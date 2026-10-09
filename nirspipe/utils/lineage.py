@@ -20,12 +20,12 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fnirs_pipe.exceptions import StageError
+from nirspipe.exceptions import StageError
 
 if TYPE_CHECKING:
     import mne
 
-_KEY = "fnirs_pipe_lineage"
+_KEY = "nirspipe_lineage"
 _RESERVED = ("raw", "stage", "step", "source", "path")
 
 

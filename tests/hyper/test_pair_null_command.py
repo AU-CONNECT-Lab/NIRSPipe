@@ -13,18 +13,18 @@ import json
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli.hyper import _parsers
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.hyper.pair_null import real_table_params
-from fnirs_pipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
+from nirspipe.cli.hyper import _parsers
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.hyper.pair_null import real_table_params
+from nirspipe.pipeline.hyper.wtc_aggregate import aggregate_wtc, merge_kinds
 from tests.hyper._names import KINDS, name
 
 
 @pytest.fixture(autouse=True)
 def _hyper_tree(tmp_path):
-    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
-    from fnirs_pipe.io.derivatives import write_dataset_description
-    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+    """tmp_path is the nirspipe-hyper tree, which every command stamps before it writes."""
+    from nirspipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="nirspipe-hyper output", generated_by="nirspipe-hyper")
 
 
 
@@ -78,7 +78,7 @@ def test_an_unreadable_sidecar_is_refused(tmp_path):
 # ---- the command surface ----
 
 def _parse(*argv):
-    return _parsers()["fnirs-hyper-pairnull"].parse_args(
+    return _parsers()["nirspipe-hyper-pairnull"].parse_args(
         ["/deriv", "/out", "group", "--pairs-csv", "/p.csv", *argv])
 
 
@@ -164,7 +164,7 @@ def test_one_pool_merges(tmp_path):
 
 
 def test_merge_covers_the_new_kinds(tmp_path):
-    from fnirs_pipe.cli.hyper import cmd_merge
+    from nirspipe.cli.hyper import cmd_merge
 
     _write_null(tmp_path, "G01", "main", "wtc-pairnull", n_iter=9,
                 null_kind="repaired", pair_pool="position")
@@ -180,8 +180,8 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
     The call is stubbed because what is under test is the command's own argument handling,
     not the draw; the draw has its own tests and needs a derivatives tree.
     """
-    import fnirs_pipe.pipeline.hyper.pair_null as pair_null
-    from fnirs_pipe.cli.hyper import cmd_pair_null
+    import nirspipe.pipeline.hyper.pair_null as pair_null
+    from nirspipe.cli.hyper import cmd_pair_null
 
     (tmp_path / "roi.json").write_text('{"pfc": ["S1_D1", "S1_D2"]}')
     (tmp_path / "pairs.csv").write_text(
@@ -203,7 +203,7 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
 
 
 def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
-    from fnirs_pipe.cli.hyper import cmd_pair_null
+    from nirspipe.cli.hyper import cmd_pair_null
 
     (tmp_path / "roi.json").write_text("{not json")
     (tmp_path / "pairs.csv").write_text(
@@ -228,7 +228,7 @@ def test_the_real_table_records_the_window_it_describes():
     """
     import inspect
 
-    from fnirs_pipe.pipeline.hyper import hyper_post
+    from nirspipe.pipeline.hyper import hyper_post
 
     src = inspect.getsource(hyper_post.run_hyper_post)
     assert "analysis_window_s" in src, (
@@ -238,14 +238,14 @@ def test_the_real_table_records_the_window_it_describes():
 # ---- what the null takes from the real table rather than the command line ----
 
 def test_an_unset_value_follows_the_real_table():
-    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
+    from nirspipe.pipeline.hyper.pair_null import _follow_real
 
     assert _follow_real("--desc", None, "errts") == "errts"
     assert _follow_real("--desc", "errts", "errts") == "errts"
 
 
 def test_a_value_that_disagrees_with_the_real_table_is_refused():
-    from fnirs_pipe.pipeline.hyper.pair_null import _follow_real
+    from nirspipe.pipeline.hyper.pair_null import _follow_real
 
     with pytest.raises(StageError, match="--wtc-roi-min-channels 2 disagrees"):
         _follow_real("--wtc-roi-min-channels", 2, 3)
@@ -278,9 +278,9 @@ def _haemo(seed: int):
 
 @pytest.fixture(scope="module")
 def real_tree(tmp_path_factory):
-    """One dyad's real tables, crossed, as `fnirs-hyper` writes them for the null to read."""
-    from fnirs_pipe.pipeline.hyper import GroupEntry
-    from fnirs_pipe.qc.hyper.hyper_report import build_hyper_post_report
+    """One dyad's real tables, crossed, as `nirspipe-hyper` writes them for the null to read."""
+    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("real")
     group = [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]
@@ -306,7 +306,7 @@ class _Loaded(Exception):
 
 
 def _stop_at_load(monkeypatch):
-    from fnirs_pipe.pipeline.hyper import group_io
+    from nirspipe.pipeline.hyper import group_io
 
     def _load(derivatives_dir, members, desc):
         raise _Loaded(desc)
@@ -315,7 +315,7 @@ def _stop_at_load(monkeypatch):
 
 
 def _draw(real_tree, **kwargs):
-    from fnirs_pipe.pipeline.hyper.pair_null import run_pair_null
+    from nirspipe.pipeline.hyper.pair_null import run_pair_null
 
     out, group = real_tree
     run_pair_null("G01", "tap", group, {("G01", "tap"): group}, out, out,
@@ -341,7 +341,7 @@ def test_a_retyped_roi_minimum_that_differs_is_refused(real_tree, monkeypatch):
 
 
 def test_a_crossed_null_over_an_uncrossed_table_says_so(tmp_path, monkeypatch, caplog):
-    from fnirs_pipe.pipeline.hyper import GroupEntry
+    from nirspipe.pipeline.hyper import GroupEntry
 
     _real_table(tmp_path, gid="G01", task="tap")
     group = [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]

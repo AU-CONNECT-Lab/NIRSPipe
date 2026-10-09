@@ -10,8 +10,8 @@ that reads as a result.
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.hyper.hyper_index import (NULL_PERCENTILE, _links, _mean_by_chroma, _past_null,
+from nirspipe.io.naming import report_name
+from nirspipe.qc.hyper.hyper_index import (NULL_PERCENTILE, _links, _mean_by_chroma, _past_null,
                                              collect_rows)
 from tests.hyper._names import name
 
@@ -97,7 +97,7 @@ def _whole_run_only(tmp_path):
 def test_a_table_the_run_did_not_write_is_not_reported_unreadable(tmp_path, caplog):
     # the per-condition and null tables are optional; their absence is the normal case
     _whole_run_only(tmp_path)
-    with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
+    with caplog.at_level("WARNING", logger="nirspipe.qc.hyper_index"):
         rows = collect_rows(tmp_path, "G01")
     assert [row["kind"] for row in rows] == ["whole run"]
     assert rows[0]["past_null"] == {}
@@ -107,6 +107,6 @@ def test_a_table_the_run_did_not_write_is_not_reported_unreadable(tmp_path, capl
 def test_a_table_on_disk_that_cannot_be_read_is_still_reported(tmp_path, caplog):
     _whole_run_only(tmp_path)
     (tmp_path / "nirs" / name("G01", "main", "wtc-phasenull")).write_text("", encoding="utf-8")
-    with caplog.at_level("WARNING", logger="fnirs_pipe.qc.hyper_index"):
+    with caplog.at_level("WARNING", logger="nirspipe.qc.hyper_index"):
         collect_rows(tmp_path, "G01")
     assert "unreadable" in caplog.text

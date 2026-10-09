@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
+from nirspipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
 
 
 def _figure(sci_threshold=0.8, psp_threshold=0.1, cv_threshold=0.05):

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from fnirs_pipe.interface import process_stream
-from fnirs_pipe.interface.callbacks._cli_run import poll_run, start_run
+from nirspipe.interface import process_stream
+from nirspipe.interface.callbacks._cli_run import poll_run, start_run
 
 
 def _header(panel) -> str:
@@ -44,7 +44,7 @@ def test_a_missing_executable_is_named(monkeypatch):
     def _missing(argv):
         raise FileNotFoundError
     monkeypatch.setattr(process_stream, "start", _missing)
-    status, run_id, *_ = start_run({"argv": ["fnirs-pipe", "x"]}, "Generate Command",
-                                   "`{exe}` not found on PATH - make sure fnirs-pipe is installed.")
-    assert status.children == "`fnirs-pipe` not found on PATH - make sure fnirs-pipe is installed."
+    status, run_id, *_ = start_run({"argv": ["nirspipe", "x"]}, "Generate Command",
+                                   "`{exe}` not found on PATH - make sure nirspipe is installed.")
+    assert status.children == "`nirspipe` not found on PATH - make sure nirspipe is installed."
     assert run_id is None

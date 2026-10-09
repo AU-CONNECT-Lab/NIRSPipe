@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 from mne.time_frequency import psd_array_welch
 
-from fnirs_pipe.qc.figures.common._utils import PSD_NFFT
-from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
-from fnirs_pipe.qc.subject.record_io import read_record
+from nirspipe.qc.figures.common._utils import PSD_NFFT
+from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
+from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy

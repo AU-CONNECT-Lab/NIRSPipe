@@ -30,8 +30,8 @@ from typing import NamedTuple
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("io.auxiliary")
 

@@ -18,12 +18,12 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.figures.common.motion_panel import (
+from nirspipe.qc.figures.common.motion_panel import (
     IMU_SLOT, _GVTD_ROW_PX, _SPIKE_LABEL, _maxpool_xy, build_motion_detail_figure,
     carpet_gvtd_figure, carpet_z,
 )
-from fnirs_pipe.io.auxiliary import ImuTrace
-from fnirs_pipe.qc.metrics import GVTD_MOTION_BAND, _mask_to_segments
+from nirspipe.io.auxiliary import ImuTrace
+from nirspipe.qc.metrics import GVTD_MOTION_BAND, _mask_to_segments
 from tests._synth import synth_raw
 
 CARDIAC_HZ = 1.0

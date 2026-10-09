@@ -1,13 +1,13 @@
-"""fnirs-pipe CLI entry point (argparse, BIDS App convention)."""
+"""nirspipe CLI entry point (argparse, BIDS App convention)."""
 
 import argparse
 import re
 import sys
 from pathlib import Path
 
-from fnirs_pipe import __version__
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.pipeline.denoise import (
+from nirspipe import __version__
+from nirspipe.cli import _shared
+from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,
@@ -22,7 +22,7 @@ def mode_defaults(mode: str | None) -> dict:
     """The post settings ``--mode`` fills in below ``--config`` and the command line."""
     if mode in (None, "none"):
         return {}
-    from fnirs_pipe.utils import load_toml
+    from nirspipe.utils import load_toml
     return load_toml(_PRESETS_DIR / f"{mode}.toml")
 
 
@@ -71,12 +71,12 @@ _LEVEL_CHOICES         = list(_LEVEL_REQUIRES)
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-pipe",
+        prog="nirspipe",
         description="BIDS-compatible fNIRS preprocessing and postprocessing pipeline. "
                     "Prep always runs; add --mode to run postprocessing. Dyad analysis "
-                    "lives in fnirs-hyper, which reads what this writes.",
+                    "lives in nirspipe-hyper, which reads what this writes.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-pipe {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe {__version__}")
 
     p.add_argument("bids_dir",   type=Path, help="BIDS dataset directory.")
     p.add_argument("output_dir", type=Path, help="Output directory (BIDS Derivatives).")
@@ -279,11 +279,11 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Do not check the input with bids-validator. Files BIDS does not "
                           "recognise are left out either way.")
     esc.add_argument("--allow-cropped-input", action="store_true",
-                     help="Run on a `fnirs-prep crop` tree, which is otherwise refused. "
+                     help="Run on a `nirspipe-prep crop` tree, which is otherwise refused. "
                           "Every condition is then preprocessed on its own, and motion "
                           "correction and the bandpass each see one segment, which moves "
                           "both. Preprocess the uncut recording and crop the result instead "
-                          "(`fnirs-prep crop --input-desc`).")
+                          "(`nirspipe-prep crop --input-desc`).")
     esc.add_argument("--dry-run", action="store_true", help="Write pipeline script without executing.")
     esc.add_argument("--verbose", action="store_true")
     return p
@@ -298,7 +298,7 @@ def _check_epoch_window(args: argparse.Namespace) -> None:
 
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
-    _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "fnirs-pipe")
+    _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "nirspipe")
     bids_dir = args.bids_dir.resolve()
     work_dir = args.work_dir.resolve() if args.work_dir else None
     if work_dir is not None and (work_dir == bids_dir or bids_dir in work_dir.parents):
@@ -324,7 +324,7 @@ def main(argv: list[str] | None = None) -> None:
     _check_epoch_window(args)
     _check_dirs(args)
 
-    from fnirs_pipe.cli.workflows import run_group_level, run_participant_level
+    from nirspipe.cli.workflows import run_group_level, run_participant_level
 
     runner = {
         "participant": run_participant_level,

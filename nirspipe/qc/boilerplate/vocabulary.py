@@ -21,13 +21,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from fnirs_pipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
-from fnirs_pipe.qc.metrics.imu import AGREEMENT_HALF_WINDOW_S
-from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
-from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
-from fnirs_pipe.utils import pair_of
+from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
+from nirspipe.qc.metrics.imu import AGREEMENT_HALF_WINDOW_S
+from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from nirspipe.utils import pair_of
 
 # ---- pipeline step -> steps.toml section ----
 
@@ -43,7 +43,7 @@ _ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_ro
               "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
 
-# The cohort tables fnirs-hyper-groupnull writes from either null's draws: one test.
+# The cohort tables nirspipe-hyper-groupnull writes from either null's draws: one test.
 _GROUPNULL_STEPS = tuple(f"hyper_{null}_null_{table}" for null in ("repaired", "phase")
                          for table in ("by_cell", "by_occasion", "cohort"))
 
@@ -295,7 +295,7 @@ def _screening_scope(params: dict[str, Any]) -> str:
 def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     """The screening sentence's numbers, its counting scope and any channels marked by hand."""
     # Each line falls back to the criteria table for a record that does not carry it.
-    from fnirs_pipe.qc.metrics import criterion_cutoffs
+    from nirspipe.qc.metrics import criterion_cutoffs
     cutoffs = criterion_cutoffs()
     psp = params.get("psp_threshold")
     good_frac = params.get("min_good_frac")
@@ -1132,9 +1132,9 @@ def steps_from_sidecars(
     """Every method step the sidecars under ``nirs_dir`` record, ordered by graph depth.
 
     ``label`` is a run stem (``sub-01_task-rest``) and keeps another run's files out of the
-    paragraph, the way :func:`~fnirs_pipe.qc.common.provenance.scan` scopes its graph.
+    paragraph, the way :func:`~nirspipe.qc.common.provenance.scan` scopes its graph.
     """
-    from fnirs_pipe.qc.common.provenance import scan
+    from nirspipe.qc.common.provenance import scan
 
     return _describe(scan(nirs_dir, label=label).values())
 
@@ -1151,7 +1151,7 @@ def steps_from_lineage(path: "str | Path") -> "list[tuple[str, dict[str, str]]] 
     earlier stage is never described as having read the later one. None when the file's own
     record cannot be found, which is a moved tree or an input this package did not write.
     """
-    from fnirs_pipe.qc.common.provenance import _key, scan
+    from nirspipe.qc.common.provenance import _key, scan
 
     nodes = scan(Path(path).parent)
     start = _key(path)

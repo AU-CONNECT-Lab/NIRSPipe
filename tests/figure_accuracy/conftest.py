@@ -10,13 +10,13 @@ RAW_VIEWER_ARGS = [a for i, a in enumerate(CLI_ARGS)
 
 def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: bool = False,
                   blocks: bool = False, raw_viewer: bool = False, aux: bool = False) -> dict:
-    """Run fnirs-pipe, or fnirs-qc prep-raw, on a fresh fingerprint dataset, recording what each
+    """Run nirspipe, or nirspipe-qc prep-raw, on a fresh fingerprint dataset, recording what each
     named figure builder was handed."""
-    import fnirs_pipe.qc.figures as figures
-    import fnirs_pipe.qc.figures.common.provenance_figure as provenance
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.cli import run as run_cli
-    from fnirs_pipe.qc.subject import report
+    import nirspipe.qc.figures as figures
+    import nirspipe.qc.figures.common.provenance_figure as provenance
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.cli import run as run_cli
+    from nirspipe.qc.subject import report
 
     captured: dict = {}
     # the report imports most builders by name and a few at call time from the package; the
@@ -117,7 +117,7 @@ def prep_condition_run(tmp_path_factory) -> Run:
 
 @pytest.fixture(scope="session")
 def raw_condition_run(tmp_path_factory) -> Run:
-    """The two-level design through fnirs-qc prep-raw, with condition pages."""
+    """The two-level design through nirspipe-qc prep-raw, with condition pages."""
     root = tmp_path_factory.mktemp("fingerprint_raw_blocks")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc", "--by-condition"], (),
                          task="main", blocks=True, raw_viewer=True)
@@ -142,14 +142,14 @@ DYAD_HYPER_ARGS = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-
 @pytest.fixture(scope="session")
 def groups(tmp_path_factory):
     """The dyad and the triad through every command that draws a group or cohort page:
-    fnirs-pipe, fnirs-qc cohort, fnirs-qc hyper-raw, fnirs-hyper, its index, and
-    fnirs-qc cohort-hyper, with the channel coherence maps' builder inputs captured."""
+    nirspipe, nirspipe-qc cohort, nirspipe-qc hyper-raw, nirspipe-hyper, its index, and
+    nirspipe-qc cohort-hyper, with the channel coherence maps' builder inputs captured."""
     from tests._dyad_fingerprint import make_group_dataset, write_roi_map
     from tests.figure_accuracy._dyad import Groups
-    from fnirs_pipe.cli import hyper as hyper_cli
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.cli import run as run_cli
-    from fnirs_pipe.qc.hyper import hyper_report
+    from nirspipe.cli import hyper as hyper_cli
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.cli import run as run_cli
+    from nirspipe.qc.hyper import hyper_report
 
     root = tmp_path_factory.mktemp("dyad")
     bids, pairs, truth = make_group_dataset(root)
@@ -185,7 +185,7 @@ def groups(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def raw_viewer_run(tmp_path_factory) -> Run:
-    """The task recording through fnirs-qc prep-raw, with motion correction and per-trial scoring."""
+    """The task recording through nirspipe-qc prep-raw, with motion correction and per-trial scoring."""
     root = tmp_path_factory.mktemp("fingerprint_raw")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc"], (), raw_viewer=True)
     return Run(root / "out", done["truth"])
@@ -202,9 +202,9 @@ def dyad_variants(groups):
 
     from tests._dyad_fingerprint import write_roi_map
     from tests.figure_accuracy._dyad import Groups
-    from fnirs_pipe.cli import hyper as hyper_cli
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.qc.hyper import hyper_report
+    from nirspipe.cli import hyper as hyper_cli
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.qc.hyper import hyper_report
 
     roi = str(write_roi_map(groups.root))
     pairs = str(groups.root / "bids_dyad_pairs.csv")

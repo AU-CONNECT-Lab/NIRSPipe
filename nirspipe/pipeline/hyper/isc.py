@@ -17,11 +17,11 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.io.snirf import long_channel_picks
-from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
-from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.io.snirf import long_channel_picks
+from nirspipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
+from nirspipe.pipeline.hyper.surrogate import phase_scramble
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
 
@@ -168,12 +168,12 @@ def compute_isc(
     and ``band`` is applied over the whole record before the cut (see :func:`_band_limit`),
     so a window carries no edge that the whole record would not have had. Both sides are z-scored inside the window, because the correlation over a
     stretch is against that stretch's mean, not the recording's. The wavelet coherence is
-    windowed instead; see :func:`~fnirs_pipe.pipeline.hyper.wtc.window_result`.
+    windowed instead; see :func:`~nirspipe.pipeline.hyper.wtc.window_result`.
 
     Both axes are the *montage's* long channels, rejected ones included, so every dyad's
     matrix has one shape and a group analysis can stack them however their rejections
     differ. That is the convention
-    :func:`fnirs_pipe.pipeline.restingstate.compute_fc` follows for the same reason. A
+    :func:`nirspipe.pipeline.restingstate.compute_fc` follows for the same reason. A
     rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
     both, since sub1's copy of a channel is not needed to correlate sub2's against
     everything else.
@@ -183,14 +183,14 @@ def compute_isc(
     claims. Everything here is looked up by S-D label.
 
     Rejections arrive on ``raw.info["bads"]``, which is where
-    :func:`fnirs_pipe.pipeline.hyper.load_group_haemo` puts them and the only place
+    :func:`nirspipe.pipeline.hyper.load_group_haemo` puts them and the only place
     the WTC path reads them from.
 
     Raises ValueError if the members were recorded at different sampling rates, which is
     the refusal WTC makes: alignment equalises duration, not rate.
 
     Whitening is the caller's: hand in the copies
-    :func:`~fnirs_pipe.pipeline.hyper.whiten.whiten_raws` made of the whole record, with
+    :func:`~nirspipe.pipeline.hyper.whiten.whiten_raws` made of the whole record, with
     ``skip_s`` past their zeroed transient, so every channel of both members carries one
     order. Whitening shrinks r, so a whitened matrix and an unwhitened one are not
     comparable and the sidecar records which was written.
@@ -221,7 +221,7 @@ def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
     lo, hi = band
     if lo is None and hi is None:
         return data
-    from fnirs_pipe.pipeline.denoise import filter_array
+    from nirspipe.pipeline.denoise import filter_array
 
     out = data.copy()
     usable = ~np.isnan(data).any(axis=1)
@@ -478,7 +478,7 @@ def roi_mean_of_homologous_isc(
         -> L x L is the Fisher z mean of (S1_D1, S1_D1) and (S2_D2, S2_D2); off the
            diagonal NaN
 
-    The counterpart of :func:`~fnirs_pipe.pipeline.hyper.roi.roi_mean_of_homologous`: the
+    The counterpart of :func:`~nirspipe.pipeline.hyper.roi.roi_mean_of_homologous`: the
     crossed ROI diagonal averages every pairing inside a region, this averages only a channel
     against the other member's copy of it.
     """

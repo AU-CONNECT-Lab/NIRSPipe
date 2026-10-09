@@ -7,13 +7,13 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, ctx, no_update
 
-from fnirs_pipe.interface import process_stream
-from fnirs_pipe.io.derivatives import subject_labels
-from fnirs_pipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
-from fnirs_pipe.interface.cli_args import build_prep_args, missing_prep
-from fnirs_pipe.interface.grid import rows_minus_clicked
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.interface import process_stream
+from nirspipe.io.derivatives import subject_labels
+from nirspipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
+from nirspipe.interface.cli_args import build_prep_args, missing_prep
+from nirspipe.interface.grid import rows_minus_clicked
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("interface.batch_prep_callbacks")
 
@@ -205,7 +205,7 @@ def delete_crop_segment(cell, rows):
 
 
 
-# ── Generate the equivalent fnirs-prep command ───────────────────────────────
+# ── Generate the equivalent nirspipe-prep command ───────────────────────────────
 
 # the segments table has to reach the CLI as a file, and the derivatives tree is where the
 # record of what was cut belongs

@@ -11,11 +11,11 @@ import pandas as pd
 import pytest
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.denoise import bandpass_filter
-from fnirs_pipe.pipeline.glm import run_glm_pipeline
-from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
-from fnirs_pipe.utils.lineage import lineage_of
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.denoise import bandpass_filter
+from nirspipe.pipeline.glm import run_glm_pipeline
+from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
+from nirspipe.utils.lineage import lineage_of
 
 from tests._synth import synth_raw
 

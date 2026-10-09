@@ -13,14 +13,14 @@ import pandas as pd
 
 import json
 
-from fnirs_pipe.pipeline.hyper.alignment import alignment_params
-from fnirs_pipe.pipeline.hyper.group_io import _hyper_sidecar
-from fnirs_pipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import bids_uris, read_json
-from fnirs_pipe.io.naming import bids_label, derivative_path, parse_path
-from fnirs_pipe.utils.lineage import paths_from
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.pipeline.hyper.alignment import alignment_params
+from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+from nirspipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.derivatives import bids_uris, read_json
+from nirspipe.io.naming import bids_label, derivative_path, parse_path
+from nirspipe.utils.lineage import paths_from
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.wtc_store")
 
@@ -214,7 +214,7 @@ def reband_tree(
     overwriting it.
 
     An archive carrying a ``chromo-`` entity gets its ``chromophore`` column back, so the
-    re-banded table has the shape ``fnirs-hyper`` writes.
+    re-banded table has the shape ``nirspipe-hyper`` writes.
     """
     # the band- value, so letters and digits only whatever the caller typed
     tag = bids_label(suffix) if suffix else f"{fmin:g}to{fmax:g}".replace(".", "p")
@@ -230,7 +230,7 @@ def reband_tree(
             logger.warning("skipping %s: %s", npz_path.name, exc)
             continue
         # the archive is per chromophore and says so in its name; the column puts it back,
-        # so a re-banded table has the same shape as the one `fnirs-hyper` wrote
+        # so a re-banded table has the same shape as the one `nirspipe-hyper` wrote
         ch_type = entities.get("chromophore")
         if ch_type:
             df.insert(0, "chromophore", ch_type)

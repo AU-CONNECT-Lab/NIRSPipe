@@ -7,11 +7,11 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import is_marker, pair_of
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import is_marker, pair_of
+from nirspipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._brain_utils import mni_trans
-from fnirs_pipe.qc.figures.common._utils import (
+from nirspipe.qc.figures.common._brain_utils import mni_trans
+from nirspipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
     TIMELINE_ROW_PX, block_duration_labels,
@@ -20,9 +20,9 @@ from fnirs_pipe.qc.figures.common._utils import (
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
 )
-from fnirs_pipe.qc.metrics._helpers import Bands, epochable_events, long_short_channels
-from fnirs_pipe.qc.common.channel_table import _neither_range_title
-from fnirs_pipe.qc.common.figure_io import extract_markers
+from nirspipe.qc.metrics._helpers import Bands, epochable_events, long_short_channels
+from nirspipe.qc.common.channel_table import _neither_range_title
+from nirspipe.qc.common.figure_io import extract_markers
 
 logger = get_logger("qc.figures")
 
@@ -582,7 +582,7 @@ def _psd_groups(
     A montage whose separations fall in neither range gets a third curve rather than being
     folded into "long". Returns one unnamed mean when there is no usable split at all.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     try:
         long_names, short_names = long_short_channels(raw_od, sep_bands)
@@ -994,7 +994,7 @@ def build_epoch_preview_figure(
             baseline=(epoch_tmin, 0),
             preload=True, verbose=False,
         )
-        from fnirs_pipe.qc.metrics import long_short_channels
+        from nirspipe.qc.metrics import long_short_channels
         long_names, short_names = long_short_channels(raw_haemo, sep_bands)
 
         bads = set(raw_haemo.info["bads"])

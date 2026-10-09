@@ -1,6 +1,6 @@
 """The re-paired null: one member against people they never interacted with.
 
-Split from :mod:`fnirs_pipe.pipeline.hyper.wtc_null` rather than folded into it because the two
+Split from :mod:`nirspipe.pipeline.hyper.wtc_null` rather than folded into it because the two
 nulls sit at different levels. Phase randomisation needs one dyad and can run inside the
 per-dyad pass; re-pairing needs the rest of the cohort, so it reads the pairs table and the
 finished derivatives tree and runs after them.
@@ -19,16 +19,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import group_output_path, occasion_label
-from fnirs_pipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import group_output_path, occasion_label
+from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
-from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
-from fnirs_pipe.io.tables import write_tsv
-from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
-from fnirs_pipe.pipeline.hyper.whiten import whiten_raws
-from fnirs_pipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
-from fnirs_pipe.qc.common.windows import condition_windows, split_windows
+from nirspipe.pipeline.hyper.wtc import cone_margin_s
+from nirspipe.io.tables import write_tsv
+from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
+from nirspipe.pipeline.hyper.whiten import whiten_raws
+from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
+from nirspipe.qc.common.windows import condition_windows, split_windows
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ def real_table_params(real_tsv: Path) -> dict:
     if not sidecar.exists():
         raise StageError(
             f"no real WTC table to rank against: {sidecar} is missing. Run "
-            "`fnirs-hyper` for this group first; the null reads its band, its mask and "
+            "`nirspipe-hyper` for this group first; the null reads its band, its mask and "
             "its clock off that table rather than taking them again from the command line.")
     try:
         params = json.loads(sidecar.read_text()).get("parameters", {})
@@ -160,7 +160,7 @@ def real_table_params(real_tsv: Path) -> dict:
     if missing:
         raise StageError(
             f"{sidecar} does not record {', '.join(missing)}, so the null cannot be built to "
-            "match it. Rerun `fnirs-hyper` for this group on current code.")
+            "match it. Rerun `nirspipe-hyper` for this group on current code.")
     return params
 
 
@@ -192,7 +192,7 @@ def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
 
         stand-in marks game1 at 100 s and 900 s, labels ["game1#2"] -> {"game1#2": 900.0}
     """
-    from fnirs_pipe.qc.common.windows import markers_on_data_axis
+    from nirspipe.qc.common.windows import markers_on_data_axis
 
     markers = sorted(markers_on_data_axis(partner_raw), key=lambda m: float(m["onset"]))
     descriptions = {str(m["description"]) for m in markers}
@@ -243,8 +243,8 @@ def _draw_condition_pairs(
     stands in for, so the whole-record duration does not matter and a stand-in shorter than
     the real dyad's recording is still usable.
     """
-    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
+    from nirspipe.pipeline.hyper.group_io import load_group_haemo
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
 
     margin = cone_margin_s(band_fmin)
     window_sources = window_sources or {}
@@ -397,14 +397,14 @@ def run_pair_null(
     step for the same reason: there is nothing to write between them, the table being ranked
     against is already on disk.
     """
-    from fnirs_pipe.pipeline.hyper.group_io import load_group_haemo
-    from fnirs_pipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
+    from nirspipe.pipeline.hyper.group_io import load_group_haemo
+    from nirspipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
-    from fnirs_pipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
+    from nirspipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
                                                    alignment_params)
-    from fnirs_pipe.pipeline.hyper._helpers import long_axis_over
-    from fnirs_pipe.pipeline.hyper.wtc import wtc_grid_params
-    from fnirs_pipe.utils.lineage import paths_from
+    from nirspipe.pipeline.hyper._helpers import long_axis_over
+    from nirspipe.pipeline.hyper.wtc import wtc_grid_params
+    from nirspipe.utils.lineage import paths_from
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
     cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
@@ -456,7 +456,7 @@ def run_pair_null(
         # the tree moved under the table: the null would describe a different stretch
         raise StageError(
             f"the real table was written on {float(recorded):.3f} s of aligned recording but "
-            f"the tree now aligns to {aligned_duration:.3f} s. Rerun `fnirs-hyper` for "
+            f"the tree now aligns to {aligned_duration:.3f} s. Rerun `nirspipe-hyper` for "
             f"group {group_id!r} before drawing its null.")
 
     candidates = partner_pool(groups, group_id, task, pool=pool, session=session)
@@ -503,7 +503,7 @@ def run_pair_null(
 
     def _isc_collector(ch_type: str):
         """A callback that correlates each drawn pair, whole run and per condition."""
-        from fnirs_pipe.pipeline.hyper.isc import compute_isc_pairs
+        from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
         def _collect(partner_id: str, label: str, pair: dict, inner: tuple) -> None:
             ids = [fixed_id, partner_id]
@@ -643,7 +643,7 @@ def run_pair_null(
             "no usable stand-in was drawn for any condition, so there is no null. The log "
             "says which test each candidate failed.")
 
-    # what `fnirs-hyper` thresholds each condition's phase arrows against on its next run
+    # what `nirspipe-hyper` thresholds each condition's phase arrows against on its next run
     for ch_type, levels in cond_levels.items():
         if not levels:
             continue
@@ -676,7 +676,7 @@ def _isc_settings_of(sidecar: Path, whiten_s: float, max_lag_s: float, band):
                        "the real one", sidecar.name)
         return whiten_s, max_lag_s, band
     if "isc_whiten_s" not in params:
-        raise StageError(f"{sidecar.name} does not record isc_whiten_s. Rerun `fnirs-hyper` "
+        raise StageError(f"{sidecar.name} does not record isc_whiten_s. Rerun `nirspipe-hyper` "
                          "for this dyad on current code.")
     stored_band = params.get("isc_band_hz")
     settings = (float(params["isc_whiten_s"]),
@@ -711,7 +711,7 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     ``path_of`` is the caller's namer, so these land under the same group and task its
     coherence tables do without this function knowing either.
     """
-    from fnirs_pipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper import _hyper_sidecar
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()

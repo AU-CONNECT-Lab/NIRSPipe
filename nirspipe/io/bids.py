@@ -9,7 +9,7 @@ from pathlib import Path
 
 from bids import BIDSLayout
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("io.bids")
 
@@ -129,7 +129,7 @@ def get_participant_age(
 
     Raises ValueError if age is not found and no fallback is provided.
     """
-    from fnirs_pipe.io.tables import read_table
+    from nirspipe.io.tables import read_table
 
     tsv_path = Path(layout.root) / "participants.tsv"
     if tsv_path.exists():

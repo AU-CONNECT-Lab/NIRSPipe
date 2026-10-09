@@ -8,7 +8,7 @@ import pytest
 
 from tests._fingerprint import CLI_ARGS, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
-from fnirs_pipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
     _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, traces, xy,
 )

@@ -27,11 +27,11 @@ import plotly.graph_objects as go
 import pytest
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.subject.condition_views import (
+from nirspipe.qc.subject.condition_views import (
     apply_carpet_window, rescale_y_to_window, zoom_to_condition,
 )
-from fnirs_pipe.qc.common.figure_io import _save_multi_fig_html
-from fnirs_pipe.qc.subject.report import _carpet_views, _condition_views, _save_plotly_html
+from nirspipe.qc.common.figure_io import _save_multi_fig_html
+from nirspipe.qc.subject.report import _carpet_views, _condition_views, _save_plotly_html
 
 WINDOW = (120.0, 320.0)
 SLUG = "baseline"
@@ -162,7 +162,7 @@ def _motion_figure():
 def _carpet_figure():
     """Two GVTD rows over a heatmap, shaped like the real carpet: the rows carry the named
     stat labels a condition view rewrites, and share one y range as the builder gives them."""
-    from fnirs_pipe.qc.figures.common.motion_panel import GVTD_STAT_SLOT
+    from nirspipe.qc.figures.common.motion_panel import GVTD_STAT_SLOT
 
     t = np.arange(0, 1000, 0.5)
     rng = np.random.default_rng(1)
@@ -263,7 +263,7 @@ def _coherence_map():
     inside it. The window carries its own set and the view swaps the whole array in, which is
     the branch of the shim below this exercises.
     """
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import build_wtc_map_interactive
+    from nirspipe.qc.figures.hyper.hyper_post_figures import build_wtc_map_interactive
 
     freqs = np.logspace(-2, np.log10(0.2), 40)
     times = np.arange(0.0, 1000.0, 0.5)
@@ -284,8 +284,8 @@ def _coherence_map():
 
 
 def test_a_coherence_map_picked_by_fragment_carries_the_window_s_own_arrows(tmp_path):
-    from fnirs_pipe.qc.figures.hyper.hyper_post_figures import wtc_condition_views
-    from fnirs_pipe.qc.common.figure_io import _save_figure_html
+    from nirspipe.qc.figures.hyper.hyper_post_figures import wtc_condition_views
+    from nirspipe.qc.common.figure_io import _save_figure_html
 
     # the third saver, and the one the dyad report writes its ROI maps with
     reference, data, freqs, times = _coherence_map()

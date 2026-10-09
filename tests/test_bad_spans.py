@@ -10,20 +10,20 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.cli.workflows import run_participant_level
-from fnirs_pipe.exceptions import AlignmentError
-from fnirs_pipe.io.snirf import read_snirf
-from fnirs_pipe.pipeline.glm import run_glm_pipeline
-from fnirs_pipe.pipeline.hyper.alignment import align_recordings, onset_residuals
-from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
-from fnirs_pipe.pipeline.restingstate import compute_alff
-from fnirs_pipe.qc.common.figure_io import extract_markers
-from fnirs_pipe.qc.common.windows import condition_windows
-from fnirs_pipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_figure
-from fnirs_pipe.qc.metrics.windowed import task_scope_windows
-from fnirs_pipe.qc.subject.sqm_record import _condition_cnr
-from fnirs_pipe.utils.lineage import lineage_of
-from fnirs_pipe.utils.run_script import write_run_script
+from nirspipe.cli.workflows import run_participant_level
+from nirspipe.exceptions import AlignmentError
+from nirspipe.io.snirf import read_snirf
+from nirspipe.pipeline.glm import run_glm_pipeline
+from nirspipe.pipeline.hyper.alignment import align_recordings, onset_residuals
+from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
+from nirspipe.pipeline.restingstate import compute_alff
+from nirspipe.qc.common.figure_io import extract_markers
+from nirspipe.qc.common.windows import condition_windows
+from nirspipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_figure
+from nirspipe.qc.metrics.windowed import task_scope_windows
+from nirspipe.qc.subject.sqm_record import _condition_cnr
+from nirspipe.utils.lineage import lineage_of
+from nirspipe.utils.run_script import write_run_script
 
 from tests._synth import synth_raw
 
@@ -136,7 +136,7 @@ def test_the_exported_script_censors_what_the_run_censored(mini_bids, tmp_path):
         gvtd_censor="long", gvtd_censor_n_std=5.0, gvtd_min_epoch_s=30.0,
         bids_dir=mini_bids, output_dir=cli_out, participant_label=["01"])
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(mini_bids), str(cli_out), "participant"]
+    sys.argv = ["nirspipe", str(mini_bids), str(cli_out), "participant"]
     try:
         run_participant_level(args)
     finally:

@@ -9,7 +9,7 @@ files are served, the interesting question stops being "does the report show" an
 import pytest
 from flask import Flask
 
-from fnirs_pipe.interface.report_serve import _ROOTS, attach, register, report_url
+from nirspipe.interface.report_serve import _ROOTS, attach, register, report_url
 
 
 @pytest.fixture

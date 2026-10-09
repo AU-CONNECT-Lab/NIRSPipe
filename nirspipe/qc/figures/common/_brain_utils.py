@@ -7,7 +7,7 @@ from functools import lru_cache
 import mne
 import numpy as np
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 _logger = get_logger("qc.figures.brain_utils")
 

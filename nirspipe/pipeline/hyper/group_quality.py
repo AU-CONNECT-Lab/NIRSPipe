@@ -1,6 +1,6 @@
 """What a group's members are worth: rejected channels, screening, and the dyad's record.
 
-Reads :mod:`~fnirs_pipe.pipeline.hyper.group_io`; nothing reads this. Everything that reduces two
+Reads :mod:`~nirspipe.pipeline.hyper.group_io`; nothing reads this. Everything that reduces two
 members to one answer applies the same rule: a dyad's channel is usable only while it is
 coupled in **both** of them.
 """
@@ -15,16 +15,16 @@ import mne
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from fnirs_pipe.io.derivatives import group_output_path, read_json
-from fnirs_pipe.pipeline.hyper.group_io import (
+from nirspipe.utils import pair_of
+from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.io.derivatives import group_output_path, read_json
+from nirspipe.pipeline.hyper.group_io import (
     GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
 )
-from fnirs_pipe.pipeline.prep_pipeline import _expand_bad_pairs
-from fnirs_pipe.utils.lineage import path_from
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
+from nirspipe.utils.lineage import path_from
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
 
 logger = get_logger("pipeline.group_quality")
 
@@ -136,13 +136,13 @@ def compute_group_sqm_raw(
     Returns {subject_id: sqm_dict} for use in the HTML report.
 
     The dict is the long-channel verdict, assembled by
-    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
+    :func:`~nirspipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
     per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
-    channel set as the same subject's numbers in the individual reports and in `fnirs-hyper`.
+    channel set as the same subject's numbers in the individual reports and in `nirspipe-hyper`.
     """
-    from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
-    from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
-    from fnirs_pipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
+    from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+    from nirspipe.qc.common.screen_scope import resolve_screen_scope
+    from nirspipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
 
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
                               good_frac=min_good_frac)
@@ -180,7 +180,7 @@ def compute_group_sqm_raw(
         screen_windows: dict = {}
         if raw_od is not None:
             # the coupled-window grid, kept so the panels shade the windows the verdict used
-            from fnirs_pipe.qc.metrics.windowed import coupled_windows
+            from nirspipe.qc.metrics.windowed import coupled_windows
             counted = coupled_windows(
                 raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
                 scope=resolve_screen_scope(raw, screen_scope))
@@ -189,7 +189,7 @@ def compute_group_sqm_raw(
                                   ("mask", "centers", "sci", "psp", "channel_order")}
                 # CV on the same grid, off raw intensity: after OD sigma/mu is not relative
                 try:
-                    from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv
+                    from nirspipe.qc.metrics.windowed import compute_windowed_cv
                     cv_m, cv_t = compute_windowed_cv(raw)
                     if cv_m is not None and len(cv_t) == len(counted["centers"]):
                         screen_windows["cv"] = cv_m
@@ -198,7 +198,7 @@ def compute_group_sqm_raw(
                                    entry.subject_id, exc_info=True)
                 # motion on the same window grid, which the screening pass does not measure
                 try:
-                    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
+                    from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
                     means, _p95, gvtd_t = compute_windowed_filtered_gvtd(raw_od)
                     if len(gvtd_t) == len(counted["centers"]):
                         screen_windows["gvtd"] = means
@@ -324,8 +324,8 @@ def load_group_sqm(
     if bads_scope not in ("run", "subject"):
         raise ValueError(f"bads_scope must be 'run' or 'subject', got {bads_scope!r}")
 
-    from fnirs_pipe.qc.subject.record_io import read_record
-    from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, raw_verdict_view
+    from nirspipe.qc.subject.record_io import read_record
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIX, raw_verdict_view
 
     result: dict[str, dict] = {}
     for entry in group:
@@ -396,11 +396,11 @@ def load_group_sqm(
             logger.warning(
                 "%s has neither a desc-sci sidecar nor channel metrics, so no channel is "
                 "rejected for task-%s and every bad channel enters the inter-brain metrics. "
-                "Rerun fnirs-pipe on this subject.", entry.subject_id, entry.task)
+                "Rerun nirspipe on this subject.", entry.subject_id, entry.task)
         elif not run_marks:
             logger.warning(
                 "%s has a %s but none for task-%s, so no channel is rejected for it. "
-                "Rerun fnirs-pipe on this task.", entry.subject_id, kind, entry.task)
+                "Rerun nirspipe on this task.", entry.subject_id, kind, entry.task)
 
         for path in run_marks:
             if sidecars:
@@ -463,8 +463,8 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     The cutoffs are the run's own, since a record screened at a different SCI line has to be
     re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one.
     """
-    from fnirs_pipe.qc.metrics._helpers import PSP_PASS
-    from fnirs_pipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
+    from nirspipe.qc.metrics._helpers import PSP_PASS
+    from nirspipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
 
     windowed = record.get("windowed") or {}
     lines = cutoffs or {}
@@ -516,7 +516,7 @@ def _screen_cutoffs(json_path: Path) -> dict:
     ``{"sci": 0.8, "psp": 0.1, "good_frac": 0.75}``, or an empty dict when the sidecar
     predates them. A per-condition view rebuilds the coupled-window share from the stored
     matrices, and it has to apply the lines that subject was actually screened by, not the
-    registry defaults or ``fnirs-hyper``'s own ``--sci-threshold``, which only colours the
+    registry defaults or ``nirspipe-hyper``'s own ``--sci-threshold``, which only colours the
     dyad page.
     """
     params = read_json(json_path).get("parameters") or {}
@@ -565,10 +565,10 @@ def resolve_group_bands(
 ) -> "tuple[float, float, float | None]":
     """The separation bands a dyad's inter-brain metrics run on, read off the members' records.
 
-    ``fnirs-hyper`` works on derivatives that prep has already split into long and short
+    ``nirspipe-hyper`` works on derivatives that prep has already split into long and short
     channels and stamped with the bands it split them by, so the bands are read back rather
     than taken again from the command line.
-    ``fnirs-qc hyper-raw`` is not a caller: it reads BIDS raw data and computes the record
+    ``nirspipe-qc hyper-raw`` is not a caller: it reads BIDS raw data and computes the record
     itself, so there is nothing on disk to read back and its flags stay the source of truth.
 
     Two members are two prep runs, so they can disagree. **That is refused, not
@@ -585,7 +585,7 @@ def resolve_group_bands(
     A member whose record predates the stamp reads back as today's defaults. That is a guess
     rather than a fact, so it is warned about and does not count towards agreement.
     """
-    from fnirs_pipe.qc.metrics._helpers import (
+    from nirspipe.qc.metrics._helpers import (
         bands_from_record,
         bands_phrase,
         record_has_bands,
@@ -609,7 +609,7 @@ def resolve_group_bands(
         raise ValueError(
             "the members were prepped with different separation bands, so this dyad has no "
             f"one definition of a long channel:\n{spread}\n"
-            "Re-run fnirs-pipe on the odd one out so the two match, or pass "
+            "Re-run nirspipe on the odd one out so the two match, or pass "
             "--short-max-dist / --long-min-dist / --long-max-dist to force one set for this "
             "run. They are not reconciled for you: the bands also chose what short-channel "
             "regression removed from each member, so a band taken from both would describe "
@@ -624,7 +624,7 @@ def resolve_group_bands(
         logger.warning(
             "no separation bands stamped for %s, so %s is assumed for %s: the record "
             "predates the stamp and what it was prepped with is not recoverable from it. "
-            "Re-run fnirs-pipe on it, or pass --short-max-dist / --long-min-dist / "
+            "Re-run nirspipe on it, or pass --short-max-dist / --long-min-dist / "
             "--long-max-dist to say what it was.",
             ", ".join(unstamped), bands_phrase(from_records),
             "it" if len(unstamped) == 1 else "them")

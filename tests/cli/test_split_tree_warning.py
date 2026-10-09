@@ -1,7 +1,7 @@
-"""`fnirs-pipe group` says so when quality records sit in a subtree it does not aggregate."""
+"""`nirspipe group` says so when quality records sit in a subtree it does not aggregate."""
 
-from fnirs_pipe.cli.workflows import _warn_on_split_tree
-from fnirs_pipe.qc.subject.sqm_record import record_path
+from nirspipe.cli.workflows import _warn_on_split_tree
+from nirspipe.qc.subject.sqm_record import record_path
 
 _LINE = "not part of this cohort page"
 

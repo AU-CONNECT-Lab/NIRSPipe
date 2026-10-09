@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.pair_null_group import (
+from nirspipe.pipeline.hyper.pair_null_group import (
     _exact_p, _tailed_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
     write_group_null)
 from tests.hyper._names import cohort as _cohort, name
@@ -19,9 +19,9 @@ from tests.hyper._names import cohort as _cohort, name
 
 @pytest.fixture(autouse=True)
 def _hyper_tree(tmp_path):
-    """tmp_path is the fnirs-hyper tree, which every command stamps before it writes."""
-    from fnirs_pipe.io.derivatives import write_dataset_description
-    write_dataset_description(tmp_path, name="fnirs-hyper output", generated_by="fnirs-hyper")
+    """tmp_path is the nirspipe-hyper tree, which every command stamps before it writes."""
+    from nirspipe.io.derivatives import write_dataset_description
+    write_dataset_description(tmp_path, name="nirspipe-hyper output", generated_by="nirspipe-hyper")
 
 
 SEP = chr(9)
@@ -387,7 +387,7 @@ def test_two_bands_in_one_tree_are_refused(tmp_path):
 # ---- the per-cell tables, corrected ----
 
 def _write_cells(root, percentiles, n_iter=9):
-    """One per-cell null table per occasion, the shape `fnirs-hyper-pairnull` writes."""
+    """One per-cell null table per occasion, the shape `nirspipe-hyper-pairnull` writes."""
     for occ, pcts in zip(OCCASIONS, percentiles):
         d = root / f"group-{occ}" / "nirs"
         d.mkdir(parents=True, exist_ok=True)
@@ -620,14 +620,14 @@ def _recorded(root: Path, gid: str, **params) -> str:
 
 
 def test_the_region_minimum_is_the_one_the_real_tables_recorded(tmp_path):
-    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+    from nirspipe.pipeline.hyper.pair_null_group import _roi_min_of
 
     paths = {_recorded(tmp_path, g, roi_min_channels=3) for g in OCCASIONS}
     assert _roi_min_of(paths) == 3
 
 
 def test_real_tables_grouped_under_two_minimums_are_refused(tmp_path):
-    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+    from nirspipe.pipeline.hyper.pair_null_group import _roi_min_of
 
     paths = {_recorded(tmp_path, "G01", roi_min_channels=2),
              _recorded(tmp_path, "G03", roi_min_channels=3)}
@@ -636,7 +636,7 @@ def test_real_tables_grouped_under_two_minimums_are_refused(tmp_path):
 
 
 def test_a_real_table_that_does_not_record_the_minimum_is_refused(tmp_path):
-    from fnirs_pipe.pipeline.hyper.pair_null_group import _roi_min_of
+    from nirspipe.pipeline.hyper.pair_null_group import _roi_min_of
 
     paths = {_recorded(tmp_path, "G01", roi_min_channels=2),
              _recorded(tmp_path, "G03", band_fmin=0.06, band_fmax=0.15)}
@@ -685,7 +685,7 @@ def test_the_crossed_roi_cells_are_corrected_as_their_own_family(tmp_path):
 
 def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     """No report carries a cohort test, so its paragraph lands beside the tables."""
-    from fnirs_pipe.cli.hyper import cmd_group_null
+    from nirspipe.cli.hyper import cmd_group_null
 
     _write_tree(tmp_path)
     cmd_group_null(tmp_path, task="main", chroma="hbo", null="repaired",
@@ -781,7 +781,7 @@ def test_the_whole_run_rows_take_no_part(tmp_path):
 
 
 def test_each_statistic_gets_its_own_methods_paragraph(tmp_path):
-    from fnirs_pipe.cli.hyper import cmd_group_null
+    from nirspipe.cli.hyper import cmd_group_null
 
     _write_tree(tmp_path)
     _write_isc_tree(tmp_path, [0.3] * 4)

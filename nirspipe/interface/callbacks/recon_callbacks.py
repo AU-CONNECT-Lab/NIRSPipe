@@ -53,7 +53,7 @@ def _row_command(row: dict, bids_dir: str, overwrite: bool, cont: str) -> str | 
     if not subject or not task:
         return None
     argv = [
-        "fnirs-recon",
+        "nirspipe-recon",
         f'"{row["path"]}"',
         f'"{bids_dir}"',
         "--participant-label", subject,
@@ -102,7 +102,7 @@ def run_all(n_clicks, rows, bids_dir, overwrite):
     if not rows:
         return dbc.Alert("Detect files first.", color="warning")
 
-    from fnirs_pipe.io.bids import write_bids_from_snirf
+    from nirspipe.io.bids import write_bids_from_snirf
 
     out = Path(bids_dir)
     lines, n_ok, n_fail = [], 0, 0

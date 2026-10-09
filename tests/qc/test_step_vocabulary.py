@@ -9,8 +9,8 @@ import json
 
 import pytest
 
-from fnirs_pipe.qc.boilerplate.generate import step_sentence
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe.qc.boilerplate.generate import step_sentence
+from nirspipe.qc.boilerplate.vocabulary import (
     STEP_SUMMARY,
     boilerplate_key,
     steps_from_sidecars,
@@ -165,7 +165,7 @@ def test_the_screening_sentence_names_every_cutoff_that_rejects_a_channel():
     Driven off CRITERIA rather than a list written here, so a new screening criterion that
     never reaches the prose fails instead of shipping silently.
     """
-    from fnirs_pipe.qc.metrics import CRITERIA, criterion_cutoffs
+    from nirspipe.qc.metrics import CRITERIA, criterion_cutoffs
 
     cutoffs = criterion_cutoffs()
     sentence = step_sentence("sci_pruning", {"sci_threshold": 0.8, "psp_threshold": 0.1,
@@ -180,7 +180,7 @@ def test_the_screening_sentence_names_every_cutoff_that_rejects_a_channel():
 def test_the_screening_sentence_quotes_the_pinned_window_not_the_qc_grid():
     """The screening window does not follow --window-length; `qc_window_s` does. Quoting
     the record's value would print a window the screening never used."""
-    from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+    from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 
     slots = template_slots("sci_marking", {"sci_threshold": 0.8, "qc_window_s": 30.0})
     assert slots["window_s"] == f"{SCREEN_WINDOW_S:g}"
@@ -254,7 +254,7 @@ def test_every_citation_key_has_a_reference():
     into the Methods paragraph and into the reference list under it. Nothing else notices,
     and the Methods paragraph is the part of the report that ends up in a manuscript.
     """
-    from fnirs_pipe.qc.boilerplate.generate import _load_refs, _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_refs, _load_steps
 
     refs = _load_refs()
     missing = sorted({
@@ -357,7 +357,7 @@ def test_a_crossed_run_says_so_once_whatever_its_null_did(tmp_path):
 
 
 def test_the_crossed_sentence_fills_the_same_slots():
-    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_steps
 
     params = {"wtc_fmin": 0.01, "wtc_fmax": 0.2, "band_fmin": 0.02, "band_fmax": 0.1}
     assert template_slots("hyper_wtc_crossed", params) == template_slots("hyper_wtc", params)
@@ -414,7 +414,7 @@ def test_the_condition_sentence_names_the_route_the_tables_record(pad, said, uns
 
 
 def test_a_run_without_conditions_says_nothing_about_them():
-    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_steps
 
     assert template_slots("hyper_wtc", {"wtc_cond_pad_s": 30.0})["conditions"] == ""
     assert "{conditions}" in _load_steps()["hyper_wtc"]["plain"]
@@ -426,7 +426,7 @@ def test_a_run_that_named_no_band_averaged_the_whole_axis():
 
 
 def test_the_hyper_sentences_all_exist():
-    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_steps
 
     steps = _load_steps()
     for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_isc"):
@@ -436,7 +436,7 @@ def test_the_hyper_sentences_all_exist():
 
 def test_the_hyper_citations_are_still_placeholders():
     # a reminder, not a failure: replace the TODO_ keys in references.bib and this goes away
-    from fnirs_pipe.qc.boilerplate.generate import _load_refs, _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_refs, _load_steps
 
     steps, refs = _load_steps(), _load_refs()
     todo = sorted({key for section in steps.values()
@@ -480,14 +480,14 @@ _PREP = ["od_conversion", "sci_marking", "motion_tddr", "beer_lambert"]
 
 
 def test_an_early_stage_is_described_up_to_itself(tmp_path):
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_lineage
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_lineage
 
     path = _member_chain(tmp_path)
     assert [k for k, _ in steps_from_lineage(path("preproc"))] == _PREP
 
 
 def test_the_residual_carries_its_filter_and_its_regression(tmp_path):
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_lineage
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_lineage
 
     path = _member_chain(tmp_path)
     steps = steps_from_lineage(path("errts"))
@@ -496,7 +496,7 @@ def test_the_residual_carries_its_filter_and_its_regression(tmp_path):
 
 
 def test_a_file_with_no_record_has_no_lineage(tmp_path):
-    from fnirs_pipe.qc.boilerplate.vocabulary import steps_from_lineage
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_lineage
 
     _member_chain(tmp_path)
     assert steps_from_lineage(tmp_path / "sub-12_task-hold_desc-errts_nirs.snirf") is None
@@ -534,7 +534,7 @@ def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expect
 
 
 def test_the_wavelet_sentence_states_the_package_design():
-    from fnirs_pipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
+    from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
 
     line = step_sentence("motion_correction", {"motion_correction": "wavelet"})
     assert f"({WAVELET})" in line and f"{WAVELET_IQR_FACTOR:g} interquartile ranges" in line
@@ -551,7 +551,7 @@ def test_bad_channels_are_described_as_marked_and_a_glm_says_it_fitted_them():
 
 
 def _load_steps_plain(key):
-    from fnirs_pipe.qc.boilerplate.generate import _load_steps
+    from nirspipe.qc.boilerplate.generate import _load_steps
 
     return _load_steps()[key]["plain"]
 

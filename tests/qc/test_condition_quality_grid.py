@@ -1,10 +1,10 @@
 """The run page's per-condition channel grid: regrouped by metric, cell for cell the condition pages'."""
 
-from fnirs_pipe.qc.common.channel_table import heatmap_args
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.figures import channel_quality_heatmap, condition_quality_heatmap
-from fnirs_pipe.qc.subject.report import _condition_channel_rows, _section_condition_summary
+from nirspipe.qc.common.channel_table import heatmap_args
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.common.figure_io import figure_namer
+from nirspipe.qc.figures import channel_quality_heatmap, condition_quality_heatmap
+from nirspipe.qc.subject.report import _condition_channel_rows, _section_condition_summary
 
 
 def _args(sci_b: float, bad: bool) -> dict:

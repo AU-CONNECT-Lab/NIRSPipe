@@ -5,14 +5,14 @@ from __future__ import annotations
 import mne
 import numpy as np
 
-from fnirs_pipe.io.snirf import _DRIFT_KEYS
-from fnirs_pipe.pipeline.hyper.group_io import (
+from nirspipe.io.snirf import _DRIFT_KEYS
+from nirspipe.pipeline.hyper.group_io import (
     _low_edge,
     unfiltered_stage_note,
     warn_outside_passband,
 )
-from fnirs_pipe.pipeline.post_pipeline import _ANALYSIS_KEYS
-from fnirs_pipe.utils.lineage import stamp
+from nirspipe.pipeline.post_pipeline import _ANALYSIS_KEYS
+from nirspipe.utils.lineage import stamp
 
 
 def _raw_stamped(**params):
@@ -88,10 +88,10 @@ def test_changing_the_cutoff_counts_as_a_different_analysis():
 def test_a_denoise_run_records_its_drift_cutoff(tmp_path):
     import json
 
-    from fnirs_pipe.io.snirf import read_snirf
-    from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-    from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-    from fnirs_pipe.utils.lineage import lineage_of
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+    from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+    from nirspipe.utils.lineage import lineage_of
 
     from tests._synth import synth_raw
 

@@ -9,8 +9,8 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.subject.condition_views import (
+from nirspipe.qc.common.figure_io import figure_namer
+from nirspipe.qc.subject.condition_views import (
     UNSLICEABLE, figure_leaks, rescale_y_to_window, slice_record,
     carpet_window_spec, window_view_spec, zoom_to_condition,
 )
@@ -199,8 +199,8 @@ def carpet_fig():
     """A real carpet through the shipped builder, quiet for the first half of the run."""
     import mne
     from tests._synth import synth_raw
-    from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure
-    from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+    from nirspipe.qc.figures.common.motion_panel import carpet_gvtd_figure
+    from nirspipe.qc.metrics import gvtd_channel_blocks
 
     raw = synth_raw("01", "tapping", duration=600.0)
     rng = np.random.default_rng(0)
@@ -276,8 +276,8 @@ def test_the_imu_row_is_refitted_to_the_window_by_its_own_rule():
     """A jolt in one condition must not flatten the IMU row on every other condition's page,
     and the row is not in GVTD units, so it does not share the GVTD rows' top."""
     from tests._synth import synth_raw
-    from fnirs_pipe.io.auxiliary import ImuTrace
-    from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure
+    from nirspipe.io.auxiliary import ImuTrace
+    from nirspipe.qc.figures.common.motion_panel import carpet_gvtd_figure
 
     raw = synth_raw("01", "tapping", duration=600.0)
     t = np.arange(0.0, 600.0, 0.01)

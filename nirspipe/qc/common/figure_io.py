@@ -17,8 +17,8 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.utils import is_marker, pair_of
-from fnirs_pipe.io.naming import figure_name
+from nirspipe.utils import is_marker, pair_of
+from nirspipe.io.naming import figure_name
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
 
@@ -150,7 +150,7 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
 def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) -> int:
     """Stack multiple Plotly figures in one HTML file. Returns total height px.
 
-    ``views`` maps a condition key to the :func:`~fnirs_pipe.qc.subject.condition_views.window_view_spec`
+    ``views`` maps a condition key to the :func:`~nirspipe.qc.subject.condition_views.window_view_spec`
     that names its window, so ``…_chan-S1D1760_desc-motion_nirs.html#video`` opens the run's
     figure narrowed to that condition and the bare path opens the run's own view.
     """

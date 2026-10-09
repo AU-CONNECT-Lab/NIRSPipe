@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import socket
 
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("utils.net")
 

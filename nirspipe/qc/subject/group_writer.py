@@ -9,14 +9,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.boilerplate.vocabulary import (
     COHORT_ID_COLUMN, COHORT_SECTIONS, metric_label, record_key_summary,
 )
-from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
-from fnirs_pipe.qc.common.figure_io import _save_figure_html
-from fnirs_pipe.qc.figures.subject.group_figures import (
+from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
+from nirspipe.qc.common.figure_io import _save_figure_html
+from nirspipe.qc.figures.subject.group_figures import (
     SCORE_THRESHOLD,
     SMOOTH_S,
     _split_column,
@@ -31,17 +31,17 @@ from fnirs_pipe.qc.figures.subject.group_figures import (
     deviation_scores,
     group_metrics,
 )
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.common.report_shell import (
     footer_vars,
     guard,
     note,
     page_vars,
     render,
 )
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.naming import derivative_path
-from fnirs_pipe.qc.subject.record_io import read_record
-from fnirs_pipe.qc.subject.sqm_record import (
+from nirspipe.exceptions import StageError
+from nirspipe.io.naming import derivative_path
+from nirspipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
     PRE_BANDPASS_HAEMO_STAGE,
@@ -50,8 +50,8 @@ from fnirs_pipe.qc.subject.sqm_record import (
     SQM_DESCS,
     fill_skipped_long_sections,
 )
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.tables import write_tsv
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.tables import write_tsv
 
 # Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
 # the rest of that subject's files. The figure is an iframe one dir down from the group HTML,
@@ -291,7 +291,7 @@ def _render_group(
     notes: list[str] = []
     if df.empty:
         note(notes, out_desc, "no quality records found, so the report is empty; run the "
-                              "pipeline or `fnirs-qc prep-raw` first")
+                              "pipeline or `nirspipe-qc prep-raw` first")
 
     tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc=out_desc).name
     write_tsv(df, tsv_path)

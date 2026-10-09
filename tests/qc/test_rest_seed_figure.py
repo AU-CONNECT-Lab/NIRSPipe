@@ -14,10 +14,10 @@ import numpy as np
 import plotly.graph_objects as go
 import pytest
 
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.pipeline.restingstate import compute_fc_seed
-from fnirs_pipe.qc.figures.subject.rest_figures import _head_for, fc_seed_topo_figure
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.pipeline.restingstate import compute_fc_seed
+from nirspipe.qc.figures.subject.rest_figures import _head_for, fc_seed_topo_figure
 
 from tests._synth import synth_raw
 
@@ -109,7 +109,7 @@ def test_one_colour_bar_for_the_whole_grid(haemo, seed_frames):
 def test_a_seed_s_own_channels_are_drawn_without_a_colour(haemo, roi_map, seed_frames):
     """They sit inside the average, so their correlation says nothing; grey is the claim
     that none is being made, where a blue channel would claim no connection."""
-    from fnirs_pipe.qc.figures.common.head_map import BLANK_COLOR
+    from nirspipe.qc.figures.common.head_map import BLANK_COLOR
 
     fig = fc_seed_topo_figure(haemo, seed_frames["hbo"])
     assert any(t.marker.color == BLANK_COLOR for t in fig.data)
@@ -141,7 +141,7 @@ def test_the_head_drops_a_pair_with_no_location(haemo):
 def test_the_head_carries_the_long_channels_and_only_those(haemo):
     """A short channel measures extracerebral signal, so a correlation with it is not a
     connectivity claim and it is left off every map in this module."""
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     long_names, short_names = long_short_channels(haemo, None)
     drawn = set(_head_for(haemo, None)["long"]["names"])
@@ -152,6 +152,6 @@ def test_the_head_carries_the_long_channels_and_only_those(haemo):
 # ---- the optode layout draws on the shared head outline ----
 
 def test_optode_layout_still_renders_after_the_outline_moved(haemo):
-    from fnirs_pipe.qc.figures import optode_layout_static
+    from nirspipe.qc.figures import optode_layout_static
     b64 = optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)
     assert base64.b64decode(b64)[:8] == b"\x89PNG\r\n\x1a\n"

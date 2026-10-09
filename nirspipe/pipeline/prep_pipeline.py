@@ -20,18 +20,18 @@ import mne
 import mne.io
 import numpy as np
 
-from fnirs_pipe import __version__
-from fnirs_pipe.io.auxiliary import aux_table_path, write_aux_table
-from fnirs_pipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
-from fnirs_pipe.io.snirf import write_snirf
-from fnirs_pipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
-from fnirs_pipe.utils import is_optical_density, pair_of
-from fnirs_pipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
-from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
+from nirspipe import __version__
+from nirspipe.io.auxiliary import aux_table_path, write_aux_table
+from nirspipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json
+from nirspipe.io.snirf import write_snirf
+from nirspipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
+from nirspipe.exceptions import StageError
+from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
+from nirspipe.utils import is_optical_density, pair_of
+from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+from nirspipe.qc.common.screen_scope import resolve_screen_scope
 
 logger = get_logger("pipeline.prep")
 
@@ -91,7 +91,7 @@ def mark_bad_channels(
 ) -> tuple[mne.io.Raw, list[str], dict[str, float], dict[str, float]]:
     """Screen channels into raw.info['bads'].
 
-    The criteria are :data:`fnirs_pipe.qc.metrics.screening.CRITERIA` and a channel is
+    The criteria are :data:`nirspipe.qc.metrics.screening.CRITERIA` and a channel is
     rejected if it fails any criterion that screens, so what gets pruned is decided by that
     table rather than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one,
     both applied inside a window; ``min_good_frac`` is the share of windows that has to clear
@@ -287,8 +287,8 @@ def run_prep(
         logger.info("sub-%s | GVTD censoring on %s channels (n_std=%s, min epoch %.0fs)",
                     config.subject, config.gvtd_censor, config.gvtd_censor_n_std,
                     config.gvtd_min_epoch_s)
-        from fnirs_pipe.qc.metrics import gvtd_censor_spans
-        from fnirs_pipe.qc.metrics._helpers import separation_bands
+        from nirspipe.qc.metrics import gvtd_censor_spans
+        from nirspipe.qc.metrics._helpers import separation_bands
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
             min_epoch_s=config.gvtd_min_epoch_s,

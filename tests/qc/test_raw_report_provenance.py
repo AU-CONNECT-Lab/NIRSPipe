@@ -2,11 +2,11 @@
 
 import json
 
-from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.hyper import hyper_report
-from fnirs_pipe.qc.subject.prep_raw_report import _page_provenance, _shell_vars
+from nirspipe.io.derivatives import group_data_dir, group_report_dir
+from nirspipe.io.naming import report_name
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.hyper import hyper_report
+from nirspipe.qc.subject.prep_raw_report import _page_provenance, _shell_vars
 
 
 def _sidecar(directory, name):

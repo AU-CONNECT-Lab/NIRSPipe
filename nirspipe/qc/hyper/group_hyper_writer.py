@@ -13,10 +13,10 @@ What it reports is what a dyad has and a subject cannot:
 - where that time went, per channel pair and per condition
 
 Deliberately not here: SCI, PSP, CV, retention and motion distributions across the cohort.
-Those are ``fnirs-qc cohort``'s, measured per subject, and a second copy of them here
+Those are ``nirspipe-qc cohort``'s, measured per subject, and a second copy of them here
 would be the same numbers under a heading that implies they are about the dyad.
 
-Nor synchrony. Whether a dyad is coupled is ``fnirs-hyper``'s question, asked of the
+Nor synchrony. Whether a dyad is coupled is ``nirspipe-hyper``'s question, asked of the
 preprocessed signal against its nulls; a raw-stage coherence would mostly measure the shared
 physiology and drift that preprocessing removes.
 """
@@ -29,18 +29,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.io.tables import read_tsv_or_none, write_tsv
-from fnirs_pipe.io.naming import derivative_path, report_name
-from fnirs_pipe.qc.common.figure_io import _save_figure_html
-from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.io.tables import read_tsv_or_none, write_tsv
+from nirspipe.io.naming import derivative_path, report_name
+from nirspipe.qc.common.figure_io import _save_figure_html
+from nirspipe.qc.figures.hyper.group_hyper_figures import (
     N_DIALS, build_condition_dials, build_pair_field, build_usable_bars,
     cohort_order,
 )
-from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, record_label
-from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import entity_of
+from nirspipe.qc.subject.sqm_record import RECORD_SUFFIX, record_label
+from nirspipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.derivatives import entity_of
 
 logger = get_logger("qc.group_hyper_writer")
 
@@ -191,7 +191,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     output_dir = Path(output_dir)
     rows = collect_rows(output_dir)
     if not rows:
-        logger.warning("no dyad records under %s; run `fnirs-qc hyper-raw` first", output_dir)
+        logger.warning("no dyad records under %s; run `nirspipe-qc hyper-raw` first", output_dir)
         return None
 
     errors: list[str] = []
@@ -234,8 +234,8 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     versions = collect_software_versions()
     html = render(
         "group_hyper_report.html.j2",
-        **page_vars(title=f"fnirs-pipe cohort QC, hyper ({output_dir.name})",
-                    heading="fnirs-pipe Cohort QC (hyperscanning groups)",
+        **page_vars(title=f"nirspipe cohort QC, hyper ({output_dir.name})",
+                    heading="nirspipe Cohort QC (hyperscanning groups)",
                     nav_meta=[("dyads", len(rows))]),
         **footer_vars(versions=versions, errors=errors, notes=notes),
         n_rows=len(rows),
@@ -246,7 +246,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
             ("Dyads", len(rows)),
             ("Tree", output_dir.name),
             ("Table", f'<a href="{tsv_path.name}" download>{tsv_path.name}</a>'),
-            ("fnirs-pipe", f"v{versions.get('fnirs-pipe', 'n/a')}"),
+            ("nirspipe", f"v{versions.get('nirspipe', 'n/a')}"),
         ],
         headline_rows=_headline_rows(flats),
         figure_paths=figure_paths,

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 import copy
 
-from fnirs_pipe.io.derivatives import entity_of
+from nirspipe.io.derivatives import entity_of
 
 _ENTITY_RE = re.compile(r"^([a-z]+)-([A-Za-z0-9]+)$")
 
@@ -137,7 +137,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         if pick("sci_threshold") is None:
             return ""
         # local: qc.metrics pulls in mne, and the GUI imports this module at start-up
-        from fnirs_pipe.qc.metrics import resolve_cutoffs
+        from nirspipe.qc.metrics import resolve_cutoffs
         lines = resolve_cutoffs(sci=pick("sci_threshold"), psp=pick("psp_threshold"),
                                 good_frac=pick("min_good_frac"))
         return f"SCI {lines['sci']:g} + PSP {lines['psp']:g}, coupled ≥ {lines['good_frac']:g}"

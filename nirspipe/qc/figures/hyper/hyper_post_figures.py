@@ -11,9 +11,9 @@ from matplotlib.ticker import FixedFormatter, FixedLocator, NullFormatter
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-from fnirs_pipe.qc.common.figure_io import fig_png_b64
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.hyper_post")
 
@@ -344,7 +344,7 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
              if a.name != _ARROW_NAME]
 
     out = {}
-    from fnirs_pipe.qc.common.figure_io import _pair_fname
+    from nirspipe.qc.common.figure_io import _pair_fname
     for label, t0, t1 in spans:
         keep = (times >= float(t0)) & (times <= float(t1))
         if not keep.any():
@@ -517,13 +517,13 @@ NODE_COLORS = ("#8e44ad", "#27ae60")
 
 # The scales, the blank cell and the printed cell value are the report's, not this figure's;
 # see figures.common.matrix_map for which quantity takes which and why
-from fnirs_pipe.qc.figures.common.matrix_map import (  # noqa: E402
+from nirspipe.qc.figures.common.matrix_map import (  # noqa: E402
     COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
     matrix_ground, scale_color as _arc_color,
 )
 # The circle itself is the report's, not this figure's: one subject's channels against each
 # other and two members' against each other are the same picture on different matrices
-from fnirs_pipe.qc.figures.common.circle_map import (  # noqa: E402
+from nirspipe.qc.figures.common.circle_map import (  # noqa: E402
     DYAD_GAP as _CIRCLE_GAP, bezier as _bezier, node_arc, radial_label,
     ring_angles,
 )

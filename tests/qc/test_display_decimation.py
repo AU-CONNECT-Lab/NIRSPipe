@@ -8,8 +8,8 @@ carpet draws one column for twenty.
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.figures.common.motion_panel import CARPET_Z, carpet_z
-from fnirs_pipe.qc.figures.subject.raw_figures import (build_channel_figure,
+from nirspipe.qc.figures.common.motion_panel import CARPET_Z, carpet_z
+from nirspipe.qc.figures.subject.raw_figures import (build_channel_figure,
                                                         build_evoked_topo_figure)
 
 SFREQ = 10.0

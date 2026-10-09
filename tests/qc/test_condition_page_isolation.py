@@ -9,8 +9,8 @@ catches what it was not handed, by looking at the assembled values rather than a
 names somebody has to remember to extend.
 """
 
-from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.subject.report import (
+from nirspipe.qc.common.figure_io import figure_namer
+from nirspipe.qc.subject.report import (
     _blanked, _carpet_views, _condition_carpet, _figure_leaks,
     _segments_in_window,
 )
@@ -172,7 +172,7 @@ def test_a_run_with_no_carpet_hands_the_condition_page_none():
 def test_a_carpet_view_names_the_condition_and_its_window():
     # what a view carries beyond the window is pinned in test_condition_views, against a
     # figure the real builder made; here it is only the slug and the span
-    from fnirs_pipe.qc.figures.common.motion_panel import carpet_gvtd_figure  # noqa: F401
+    from nirspipe.qc.figures.common.motion_panel import carpet_gvtd_figure  # noqa: F401
     views = _carpet_views(_FakeFig(), [("game 1", 10.0, 20.0), ("video", 30.0, 40.0)])
     assert set(views) == {"game1", "video"}
     assert views["game1"]["x"] == [10.0, 20.0]
@@ -234,7 +234,7 @@ def test_a_condition_with_nothing_flagged_gets_no_zoom():
 
 def test_the_shell_reads_page_heading_and_page_title():
     # the keys a page must set to be titled at all
-    from fnirs_pipe.qc.common.report_shell import page_vars
+    from nirspipe.qc.common.report_shell import page_vars
     keys = page_vars(title="t", heading="h")
     assert keys["page_heading"] == "h" and keys["page_title"] == "t"
     assert "heading" not in keys
@@ -245,7 +245,7 @@ def test_a_condition_page_sets_the_keys_the_shell_reads():
     # Scope row would be the only thing telling them apart
     import inspect
 
-    from fnirs_pipe.qc.subject.report import _write_condition_reports
+    from nirspipe.qc.subject.report import _write_condition_reports
 
     source = inspect.getsource(_write_condition_reports)
     assert '"page_heading": f"{report_vars[' in source

@@ -11,20 +11,20 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics.coupling import (
+from nirspipe.qc.metrics.coupling import (
     _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics,
     _intensity_metrics, _psp_metrics, _sci_metrics, _sci_win_metrics,
 )
-from fnirs_pipe.qc.metrics.gvtd import _motion_metrics
-from fnirs_pipe.qc.metrics.haemo import (
+from nirspipe.qc.metrics.gvtd import _motion_metrics
+from nirspipe.qc.metrics.haemo import (
     gcor_metrics, haemo_quality_metrics, _band_mean, _cnr_metrics, _drift_metrics,
     _retention_metrics, _spectral_metrics,
 )
-from fnirs_pipe.qc.metrics.motion import _spike_metrics
-from fnirs_pipe.pipeline.denoise import band_limited
-from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import require_stage
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics.motion import _spike_metrics
+from nirspipe.pipeline.denoise import band_limited
+from nirspipe.utils import is_optical_density
+from nirspipe.utils.lineage import require_stage
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.aggregate")
 
@@ -44,7 +44,7 @@ def compute_raw_sqm(
     raw_intensity : mne.io.Raw
         Raw intensity, or already-OD, recording.
     sci_scores : dict[str, float]
-        Per-channel SCI, as returned by :func:`~fnirs_pipe.qc.metrics.coupling.compute_sci_scores`.
+        Per-channel SCI, as returned by :func:`~nirspipe.qc.metrics.coupling.compute_sci_scores`.
     bad_channels : list[str]
         Channel names marked bad.
     cardiac_l_freq, cardiac_h_freq : float

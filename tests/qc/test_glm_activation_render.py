@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 from PIL import Image
 
-from fnirs_pipe.qc.figures.subject import glm_figures
+from nirspipe.qc.figures.subject import glm_figures
 
 VIEWS = [{"azimuth": 180, "elevation": 90}, {"azimuth": 0, "elevation": 0},
          {"azimuth": 90, "elevation": 90}]
@@ -86,7 +86,7 @@ def test_conditions_render_from_parallel_threads(subjects_dir):
 
 
 def test_a_failed_condition_render_is_listed_on_the_run_page(mini_bids, tmp_path, monkeypatch):
-    from fnirs_pipe.cli.run import main
+    from nirspipe.cli.run import main
 
     def broken(*a, **k):
         raise RuntimeError("renderer unavailable")

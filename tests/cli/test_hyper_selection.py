@@ -2,8 +2,8 @@
 
 import pytest
 
-from fnirs_pipe.cli import _shared
-from fnirs_pipe.cli.hyper import _parsers, _select_groups
+from nirspipe.cli import _shared
+from nirspipe.cli.hyper import _parsers, _select_groups
 
 
 @pytest.fixture
@@ -46,5 +46,5 @@ def test_participant_label_parses_both_spellings_and_strips_sub():
 
 @pytest.mark.parametrize("flag", ["--task-label", "--task_label", "--task"])
 def test_groupnull_takes_task_label(flag):
-    args = _parsers()["fnirs-hyper-groupnull"].parse_args(["out", "group", flag, "task-main"])
+    args = _parsers()["nirspipe-hyper-groupnull"].parse_args(["out", "group", flag, "task-main"])
     assert args.task == "main"

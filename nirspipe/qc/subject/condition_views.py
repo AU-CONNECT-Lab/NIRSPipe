@@ -3,7 +3,7 @@
 A recording preprocessed whole holds its conditions as annotations, so a per-condition view
 is a column selection out of the windowed metrics the run already computed, never a cut of
 the recording, so its numbers stay on the run's filter and window grid. See
-:func:`~fnirs_pipe.qc.metrics.windowed.condition_window_means`.
+:func:`~nirspipe.qc.metrics.windowed.condition_window_means`.
 
 Each view screens on its own stretch, so a channel coupled through one condition and loose
 through another is named in the one it was loose in. That is what a per-condition page is
@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from fnirs_pipe.io.naming import parse_path
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.metrics.imu import IMU_STAT_KEYS
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.io.naming import parse_path
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.metrics.imu import IMU_STAT_KEYS
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.condition_views")
 
@@ -92,7 +92,7 @@ def slice_record(record_view: dict, sliced: "dict[str, dict[str, float]]") -> di
     ``sliced`` is ``{"sci_win_per_channel": {ch: v}, ...}`` for this condition. Every section's
     per-channel dict is rebuilt from it, restricted to the channels that section already
     described, so a short channel's row stays in the short section and a long channel's in
-    the long one; :func:`~fnirs_pipe.qc.common.channel_table.channel_rows` reads the sections and
+    the long one; :func:`~nirspipe.qc.common.channel_table.channel_rows` reads the sections and
     would otherwise put every channel in both.
 
     The unsliceable keys are dropped rather than carried over. Scalars are left alone: the
@@ -155,7 +155,7 @@ def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict,
     Returns the scalars plus ``hbo_hbr_corr_per_channel``, measured on the same cut so the
     caller does not pay for it twice.
     """
-    from fnirs_pipe.qc.metrics.haemo import (
+    from nirspipe.qc.metrics.haemo import (
         _retention_metrics, _spectral_metrics, gcor_metrics, haemo_quality_metrics,
     )
 
@@ -380,7 +380,7 @@ def carpet_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict | N
     The heatmaps keep the run's colour scale and only the line rows move;
     :func:`carpet_window_spec` says why, and computes each view.
     """
-    from fnirs_pipe.qc.common.figure_io import _pair_fname
+    from nirspipe.qc.common.figure_io import _pair_fname
 
     if not spans or not hasattr(fig, "add_annotation"):
         return None
@@ -418,7 +418,7 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
     """
     if not spans or not hasattr(fig, "add_annotation"):
         return None
-    from fnirs_pipe.qc.common.figure_io import _pair_fname
+    from nirspipe.qc.common.figure_io import _pair_fname
 
     specs = [(_pair_fname(label), window_view_spec(fig, t0, t1)) for label, t0, t1 in spans]
     placed: set = set()
@@ -502,7 +502,7 @@ def carpet_window_spec(figure, t0: float, t1: float) -> dict:
     same two numbers, so one colour means one deviation on every page. The lines print the
     scale they are on in the rewritten stat labels below.
     """
-    from fnirs_pipe.qc.figures.common.motion_panel import (
+    from nirspipe.qc.figures.common.motion_panel import (
         GVTD_STAT_SLOT, IMU_SLOT, _gvtd_stat_label, gvtd_y_top, imu_y_top,
     )
 
@@ -603,7 +603,7 @@ def condition_payloads(
     """One viewer payload per condition, read out of the quality record.
 
     Every number here comes from ``by_condition``, which
-    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_condition_sections` wrote; nothing is measured. A
+    :func:`~nirspipe.qc.subject.sqm_record.raw_condition_sections` wrote; nothing is measured. A
     record with no such section gets no pages rather than a second copy of the numbers free
     to disagree with the first.
 
@@ -640,14 +640,14 @@ def condition_payloads(
     failing on this condition's windows alone, and that the columns with no windowed series
     behind them are absent rather than zero.
     """
-    from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
-    from fnirs_pipe.qc.common.channel_table import (
+    from nirspipe.qc.boilerplate.vocabulary import metric_rows
+    from nirspipe.qc.common.channel_table import (
         CONDITION_OD_SPLIT_COLUMNS, HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS,
         WHOLE_RUN_ONLY_COLUMNS,
         channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
     )
-    from fnirs_pipe.qc.common.figure_io import _pair_fname
-    from fnirs_pipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
+    from nirspipe.qc.common.figure_io import _pair_fname
+    from nirspipe.qc.figures import build_sci_psp_figure, channel_quality_heatmap
 
     od_cols = CONDITION_OD_SPLIT_COLUMNS
     motion_cols = tuple((k, t) for k, t in MOTION_SPLIT_COLUMNS
@@ -821,7 +821,7 @@ def _condition_trial_figure(trial_rows, window, slug, save_figure):
     nothing outside it, so a condition's rows are the run's rows. A block design gets
     nothing here, its condition window holding only the annotation that defines it.
     """
-    from fnirs_pipe.qc.figures import trial_quality_heatmap
+    from nirspipe.qc.figures import trial_quality_heatmap
 
     t0, t1 = window[1], window[2]
     keep = [(lab, sqm) for onset, lab, sqm in (trial_rows or []) if t0 < onset < t1]
@@ -919,7 +919,7 @@ def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold
     Returns the figure itself, or None when no window of the run's grid falls inside this
     condition, so the caller can write it to a file of its own.
     """
-    from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
+    from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 
     def _cut(matrix_key, times_key):
         """One metric's matrix and window times, cut on that metric's own grid."""
@@ -965,7 +965,7 @@ def condition_slices_from_record(
 
     The coupled-window share is rebuilt here rather than read, because the record stores
     only its whole-run value. It goes through
-    :func:`~fnirs_pipe.qc.metrics.windowed.coupled_mask_from_matrices`, the same AND the
+    :func:`~nirspipe.qc.metrics.windowed.coupled_mask_from_matrices`, the same AND the
     screening applied, so a condition's share cannot disagree with the verdict the run was
     screened by. Both cutoffs have to be the run's own; passing anything else produces a
     number no channel was judged against.
@@ -973,7 +973,7 @@ def condition_slices_from_record(
     Returns an empty dict when the record carries no stored matrices: the values cannot be
     recovered from the whole-run scalars.
     """
-    from fnirs_pipe.qc.metrics.windowed import (
+    from nirspipe.qc.metrics.windowed import (
         condition_window_means, coupled_mask_from_matrices,
     )
 

@@ -13,9 +13,9 @@ import tomllib
 
 import pytest
 
-from fnirs_pipe.cli.workflows import run_participant_level
+from nirspipe.cli.workflows import run_participant_level
 
-_INVOCATION = ["fnirs-pipe", "/bids", "/out", "participant", "--mode", "glm",
+_INVOCATION = ["nirspipe", "/bids", "/out", "participant", "--mode", "glm",
                "--config", "glm.toml", "--noise-model", "ar2"]
 
 # Only in the TOML, never on the command line. drift_order and stim_dur are
@@ -132,9 +132,9 @@ def test_execution_section_records_the_selection(record):
 
 
 def test_environment_records_the_pipeline_version(record):
-    from fnirs_pipe import __version__
+    from nirspipe import __version__
 
-    assert record["environment"]["fnirs_pipe_version"] == __version__
+    assert record["environment"]["nirspipe_version"] == __version__
 
 
 def test_a_prep_only_run_has_no_post_section(prep_only_record):
@@ -151,7 +151,7 @@ def test_a_prep_only_run_has_no_post_section(prep_only_record):
 def group_record(tmp_path):
     import tomllib
 
-    from fnirs_pipe.utils.run_record import write_group_run_record
+    from nirspipe.utils.run_record import write_group_run_record
 
     out = write_group_run_record(
         {"pairs_csv": tmp_path / "pairs.csv", "wtc_fmin": 0.004, "wtc_fmax": 0.2,

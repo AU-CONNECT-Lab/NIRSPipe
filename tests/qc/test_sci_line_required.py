@@ -2,12 +2,12 @@
 
 import pytest
 
-from fnirs_pipe.cli import qc as qc_cli
-from fnirs_pipe.cli import rate as rate_cli
-from fnirs_pipe.cli.hyper import _parsers as hyper_parsers
-from fnirs_pipe.interface.cli_args import missing_raw_qc
-from fnirs_pipe.qc.common.channel_table import format_rows
-from fnirs_pipe.qc.rating.app import HyperRatingApp, RawRatingApp
+from nirspipe.cli import qc as qc_cli
+from nirspipe.cli import rate as rate_cli
+from nirspipe.cli.hyper import _parsers as hyper_parsers
+from nirspipe.interface.cli_args import missing_raw_qc
+from nirspipe.qc.common.channel_table import format_rows
+from nirspipe.qc.rating.app import HyperRatingApp, RawRatingApp
 
 SCREEN = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
 
@@ -25,7 +25,7 @@ def test_a_screening_command_refuses_to_run_without_a_line(command, positionals)
 
 
 def test_the_dyad_analysis_takes_no_line_of_its_own():
-    parser = hyper_parsers()["fnirs-hyper"]
+    parser = hyper_parsers()["nirspipe-hyper"]
     assert "--sci-threshold" not in parser._option_string_actions
 
 
@@ -67,7 +67,7 @@ def test_the_gui_asks_for_the_line_before_running_a_raw_report(command):
 
 
 def test_the_alignment_table_colours_against_the_page_s_line_or_not_at_all():
-    from fnirs_pipe.interface.callbacks.hyper_align_callbacks import _build_ha_decisions_table
+    from nirspipe.interface.callbacks.hyper_align_callbacks import _build_ha_decisions_table
 
     def red(line):
         table = _build_ha_decisions_table(["A"], ["S1_D1"], {"A": {"S1_D1": 0.7}}, {}, line)

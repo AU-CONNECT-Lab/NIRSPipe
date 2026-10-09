@@ -1,4 +1,4 @@
-"""The cohort page over groups (fnirs-qc cohort-hyper): each figure against each group's record."""
+"""The cohort page over groups (nirspipe-qc cohort-hyper): each figure against each group's record."""
 
 import pytest
 

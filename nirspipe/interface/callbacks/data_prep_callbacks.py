@@ -13,15 +13,15 @@ import dash_bootstrap_components as dbc
 import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
-from fnirs_pipe.utils import is_marker, pair_of
-from fnirs_pipe.interface.callbacks._cli_run import run_and_report
-from fnirs_pipe.interface.callbacks._sections import rng, summary, value
-from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
-from fnirs_pipe.interface.grid import rows_minus_clicked
-from fnirs_pipe.interface.theme import style_figure
-from fnirs_pipe.io.derivatives import channel_decisions_path, subject_labels
-from fnirs_pipe.qc.common.channel_table import channel_columns
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import is_marker, pair_of
+from nirspipe.interface.callbacks._cli_run import run_and_report
+from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
+from nirspipe.interface.grid import rows_minus_clicked
+from nirspipe.interface.theme import style_figure
+from nirspipe.io.derivatives import channel_decisions_path, subject_labels
+from nirspipe.qc.common.channel_table import channel_columns
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.data_prep_callbacks")
 
@@ -179,13 +179,13 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
 
     sci_threshold = float(sci_thresh)
     cardiac_l, cardiac_h, dpf = float(cardiac_l), float(cardiac_h), float(dpf)
-    from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
+    from nirspipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN
     window_s   = float(window_s if window_s is not None else 10.0)
     ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
     ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
     trial_qc   = bool(epoch_qc)
-    from fnirs_pipe.cli._shared import separation_bands_from_args
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
+    from nirspipe.cli._shared import separation_bands_from_args
+    from nirspipe.qc.metrics._helpers import separation_bands
     try:
         sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
             "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
@@ -218,7 +218,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
 
     if result is None:
         try:
-            from fnirs_pipe.qc.subject.prep_raw_report import _process_run
+            from nirspipe.qc.subject.prep_raw_report import _process_run
             run_label = Path(snirf_path).stem
             run_dir   = Path(output_dir) / ".fnirs_cache"
             # the second half is what the per-condition report pages need: windowed
@@ -531,9 +531,9 @@ def update_channel_detail(channel_pair, store):
                     no_update, no_update, _SHOW, no_update, no_update,
                 )
         try:
-            from fnirs_pipe.qc.common.figure_io import extract_markers
-            from fnirs_pipe.qc.figures import build_channel_figure
-            from fnirs_pipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
+            from nirspipe.qc.common.figure_io import extract_markers
+            from nirspipe.qc.figures import build_channel_figure
+            from nirspipe.qc.subject.prep_raw_report import _EPOCH_TMAX, _EPOCH_TMIN, _MAX_TS_PTS
             # off the raw being drawn, not the payload, whose list is on the data axis and
             # late by first_time when cropped; `_section_channel_detail` does the same
             markers = extract_markers(raw_haemo)
@@ -708,7 +708,7 @@ def save_markers(n_clicks, rows, store, output_dir):
         return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
 
     import pandas as pd
-    from fnirs_pipe.pipeline.edit_markers import apply_markers_from_df
+    from nirspipe.pipeline.edit_markers import apply_markers_from_df
 
     snirf_path = Path(store["snirf_path"])
     entities = _parse_bids_entities(snirf_path.name)
@@ -1079,7 +1079,7 @@ def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_
         return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
 
     import pandas as pd
-    from fnirs_pipe.pipeline.crop import crop_snirf_from_path
+    from nirspipe.pipeline.crop import crop_snirf_from_path
 
     snirf_path = Path(store["snirf_path"])
     entities   = _parse_bids_entities(snirf_path.name)
@@ -1215,7 +1215,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
                             run_decisions: dict) -> html.Div:
     """Per-channel metrics with the rating decision as the last column.
 
-    Rows arrive from fnirs_pipe.qc.common.channel_table with their numbers formatted and their
+    Rows arrive from nirspipe.qc.common.channel_table with their numbers formatted and their
     cells classed, so this table, the raw viewer's and the subject report's cannot print one
     channel three ways.
     """
@@ -1402,7 +1402,7 @@ def section_summaries(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
                 rng("epoch", tmin, tmax, " s"),
                 "per-trial QC" if epoch_qc else None,
                 rng("separations", short_max, long_min, " mm")),
-        "written" if report_status else "fnirs-qc prep-raw",
+        "written" if report_status else "nirspipe-qc prep-raw",
     )
 
 

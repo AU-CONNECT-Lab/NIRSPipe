@@ -15,7 +15,7 @@ clearing the cone would still return plausible numbers.
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper.wtc import (
+from nirspipe.pipeline.hyper.wtc import (
     _FLAMBDA,
     _cwt,
     _pair_from_prepared,
@@ -47,7 +47,7 @@ def _at_length(grid, n_fft):
     at the length asked for and smooth at the length it picked for itself.
     """
     from dataclasses import replace
-    from fnirs_pipe.pipeline.hyper.wtc import _morlet
+    from nirspipe.pipeline.hyper.wtc import _morlet
     mother = _morlet()
     mother.n_fft = n_fft
     return replace(grid, n_fft=n_fft, mother=mother)

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from mne_nirs.preprocessing import peak_power, scalp_coupling_index_windowed
 
-from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od
-from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv
+from nirspipe.pipeline.prep_pipeline import intensity_to_od
+from nirspipe.qc.metrics.windowed import compute_windowed_cv
 from tests._synth import synth_raw
 
 
@@ -33,7 +33,7 @@ def test_cv_windows_are_the_sci_and_psp_windows(sfreq):
 def test_a_flat_channel_is_counted_and_kept_out_of_both_means():
     import mne
 
-    from fnirs_pipe.qc.metrics.coupling import _intensity_metrics
+    from nirspipe.qc.metrics.coupling import _intensity_metrics
 
     rng = np.random.default_rng(0)
     data = np.vstack([1.0 + 0.02 * rng.standard_normal(400),   # a real channel, CV ~ 2%

@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from fnirs_pipe.io.derivatives import write_dataset_description
-from fnirs_pipe.utils import job_db
+from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.utils import job_db
 
 WORKERS = 8
 
@@ -46,7 +46,7 @@ def _read_description_repeatedly(output_dir: str, times: int) -> list[str]:
             # the instant of the rename; a retry, not a corrupt tree
             continue
         try:
-            if json.loads(text).get("Name") != "fnirs-pipe output":
+            if json.loads(text).get("Name") != "nirspipe output":
                 bad.append(text[:80])
         except json.JSONDecodeError:
             bad.append(text[:80])
@@ -56,7 +56,7 @@ def _read_description_repeatedly(output_dir: str, times: int) -> list[str]:
 def _log_one_execution(db_path: str, subject: str) -> int:
     db = Path(db_path)
     execution_id = job_db.log_execution(
-        db, command_line=f"fnirs-pipe ... {subject}", fnirs_pipe_version="test",
+        db, command_line=f"nirspipe ... {subject}", nirspipe_version="test",
         input_dir="in", output_dir="out", subjects=[subject],
     )
     job_db.log_run_start(db, execution_id, subject, bids_task="rest")
@@ -79,7 +79,7 @@ def test_concurrent_writers_leave_a_valid_description(tmp_path):
             assert f.result() == "ok"
 
     written = json.loads((Path(out) / "dataset_description.json").read_text(encoding="utf-8"))
-    assert written["Name"] == "fnirs-pipe output"
+    assert written["Name"] == "nirspipe output"
     assert written["BIDSVersion"] == "1.8.0"
 
 

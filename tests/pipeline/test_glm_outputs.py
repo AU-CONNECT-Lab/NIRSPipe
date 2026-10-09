@@ -12,8 +12,8 @@ import pytest
 
 TAB = chr(9)
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.glm import _glm_name, _save_glm_outputs, compute_contrasts
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.glm import _glm_name, _save_glm_outputs, compute_contrasts
 
 PREPROC = "/out/sub-01/nirs/sub-01_task-tapping_desc-preproc_nirs.snirf"
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from fnirs_pipe.cli import workflows
+from nirspipe.cli import workflows
 
 ARGS = {"mode": "denoise", "task_label": None}
 
@@ -26,7 +26,7 @@ class _FakeLayout:
 @pytest.fixture
 def post_calls(monkeypatch):
     """Record the file each run_post call received, and run nothing."""
-    import fnirs_pipe.pipeline.post_pipeline as post_pipeline
+    import nirspipe.pipeline.post_pipeline as post_pipeline
 
     seen: list[Path] = []
 

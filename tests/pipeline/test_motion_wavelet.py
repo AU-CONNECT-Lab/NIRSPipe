@@ -35,14 +35,14 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline import motion
-from fnirs_pipe.pipeline.motion import (
+from nirspipe.pipeline import motion
+from nirspipe.pipeline.motion import (
     _wavelet_motion_correct,
     _wl_clip_iqr,
     _wl_filter_coeffs,
     correct_motion,
 )
-from fnirs_pipe.utils.lineage import stage_of
+from nirspipe.utils.lineage import stage_of
 
 try:
     import pywt
@@ -237,8 +237,8 @@ def test_spline_is_not_offered_by_the_clis():
     # offering it would pass argparse and fail only at the correction step
     import argparse
 
-    from fnirs_pipe.cli.qc import _build_parser as qc_parser
-    from fnirs_pipe.cli.run import _build_parser as run_parser
+    from nirspipe.cli.qc import _build_parser as qc_parser
+    from nirspipe.cli.run import _build_parser as run_parser
 
     def motion_choices(parser):
         for action in parser._actions:
@@ -260,8 +260,8 @@ def test_gui_does_not_offer_spline():
     # which raises outside a running app
     from pathlib import Path
 
-    import fnirs_pipe
-    src = (Path(fnirs_pipe.__file__).parent / "interface" / "pages" / "analysis.py"
+    import nirspipe
+    src = (Path(nirspipe.__file__).parent / "interface" / "pages" / "analysis.py"
            ).read_text(encoding="utf-8")
     assert '"an-motion-correction"' in src
     assert '"value": "spline"' not in src

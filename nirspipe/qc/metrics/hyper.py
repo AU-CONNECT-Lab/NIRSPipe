@@ -9,9 +9,9 @@ from __future__ import annotations
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
+from nirspipe.utils import pair_of
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.hyper")
 
@@ -220,8 +220,8 @@ def shared_screen_windows(
     like at zero offset. The verdict a member was rejected by is untouched: that stays the
     one from its own screening, which its own report shows.
     """
-    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
-    from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv, coupled_windows
+    from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
+    from nirspipe.qc.metrics.windowed import compute_windowed_cv, coupled_windows
 
     out = {}
     for sid in subject_ids:

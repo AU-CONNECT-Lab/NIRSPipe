@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from fnirs_pipe.cli.workflows import run_participant_level
+from nirspipe.cli.workflows import run_participant_level
 
 _ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
@@ -31,12 +31,12 @@ def attempted(mini_bids, tmp_path, monkeypatch):
         seen.append(config.subject)
         raise RuntimeError("synthetic prep failure")
 
-    monkeypatch.setattr("fnirs_pipe.cli.workflows.run_prep", _boom)
+    monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _boom)
     args = {**_ARGS, "bids_dir": mini_bids, "output_dir": tmp_path / "out",
             "participant_label": ["01", "02"]}
 
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(mini_bids), str(tmp_path / "out"), "participant"]
+    sys.argv = ["nirspipe", str(mini_bids), str(tmp_path / "out"), "participant"]
     try:
         with pytest.raises(SystemExit) as exit_info:
             run_participant_level(args)
@@ -64,13 +64,13 @@ def parallel_attempted(mini_bids, tmp_path, monkeypatch):
         seen.append(config.subject)
         raise RuntimeError("synthetic prep failure")
 
-    monkeypatch.setattr("fnirs_pipe.cli.workflows.run_prep", _boom)
+    monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _boom)
     out = tmp_path / "out"
     args = {**_ARGS, "bids_dir": mini_bids, "output_dir": out,
             "participant_label": ["01", "02"], "n_jobs": 2}
 
     original = sys.argv
-    sys.argv = ["fnirs-pipe", str(mini_bids), str(out), "participant", "--n-jobs", "2"]
+    sys.argv = ["nirspipe", str(mini_bids), str(out), "participant", "--n-jobs", "2"]
     try:
         with pytest.raises(SystemExit):
             run_participant_level(args)

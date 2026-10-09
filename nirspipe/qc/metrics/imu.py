@@ -3,7 +3,7 @@ with GVTD.
 
 The IMU is the one record of movement not taken from the optical data, and its numbers
 mirror the GVTD family (mean and p95, per run, per condition and per window). The traces come from
-:func:`~fnirs_pipe.io.auxiliary.imu_traces`; nothing here reads a file.
+:func:`~nirspipe.io.auxiliary.imu_traces`; nothing here reads a file.
 """
 
 from typing import Any
@@ -12,8 +12,8 @@ import mne
 import numpy as np
 from scipy.stats import spearmanr
 
-from fnirs_pipe.qc.metrics._helpers import _safe_metrics, as_optical_density
-from fnirs_pipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_timetrace,
+from nirspipe.qc.metrics._helpers import _safe_metrics, as_optical_density
+from nirspipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_timetrace,
                                        window_grid)
 
 # record name of each magnitude -> its key in `imu_traces`

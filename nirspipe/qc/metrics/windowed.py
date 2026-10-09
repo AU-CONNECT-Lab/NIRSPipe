@@ -9,13 +9,13 @@ drift apart over a long run.
 import mne
 import numpy as np
 
-from fnirs_pipe.qc.metrics._helpers import long_short_channels
-from fnirs_pipe.qc.metrics.coupling import _window_samples, _windowed_cv, blank_flat_windows
-from fnirs_pipe.qc.metrics.gvtd import (
+from nirspipe.qc.metrics._helpers import long_short_channels
+from nirspipe.qc.metrics.coupling import _window_samples, _windowed_cv, blank_flat_windows
+from nirspipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
 )
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.windowed")
 
@@ -147,7 +147,7 @@ def attach_windowed_series(
     SCI/PSP and GVTD fail independently; whichever survives is still attached. Center
     times collapse the mne-nirs [start, end] window pairs to their midpoint. ``window_s``
     is stored as ``qc_window_s`` so a record says which grid its series were binned on;
-    ``psp_mean`` is deliberately not on that grid, see :data:`~fnirs_pipe.qc.metrics.coupling.PSP_WINDOW_S`.
+    ``psp_mean`` is deliberately not on that grid, see :data:`~nirspipe.qc.metrics.coupling.PSP_WINDOW_S`.
 
     ``gvtd_od`` lets GVTD run on the motion-corrected file while SCI and PSP stay on the
     uncorrected one, where the per-channel scores were taken. Both grids

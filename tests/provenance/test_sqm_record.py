@@ -33,15 +33,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.auxiliary import aux_table_path
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from fnirs_pipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from fnirs_pipe.qc.metrics import long_short_channels
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.qc.subject.group_writer import _scalars, build_group_raw_report
-from fnirs_pipe.qc.subject.record_io import read_record, write_record
-from fnirs_pipe.qc.subject.sqm_record import (
+from nirspipe.io.auxiliary import aux_table_path
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.qc.metrics import long_short_channels
+from nirspipe.exceptions import StageError
+from nirspipe.qc.subject.group_writer import _scalars, build_group_raw_report
+from nirspipe.qc.subject.record_io import read_record, write_record
+from nirspipe.qc.subject.sqm_record import (
     SECTIONS,
     build_sqm_records,
     compute_run_sections,
@@ -77,7 +77,7 @@ def _run(out_dir, subject="01", task="tapping", post=True, censor=None, blocks=N
     (bids / f"sub-{subject}" / "nirs").mkdir(parents=True, exist_ok=True)
     source = bids / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-{task}_nirs.snirf"
 
-    from fnirs_pipe.io.snirf import read_snirf, write_snirf
+    from nirspipe.io.snirf import read_snirf, write_snirf
     raw = synth_raw(subject, task)
     if blocks:
         raw.set_annotations(mne.Annotations(*zip(*blocks)))
@@ -381,7 +381,7 @@ def censored_run(tmp_path_factory):
 
 def _n_bad_gvtd(path):
     """How many BAD_gvtd annotations the file on disk carries."""
-    from fnirs_pipe.io.snirf import read_snirf
+    from nirspipe.io.snirf import read_snirf
     return sum(1 for d in read_snirf(path).annotations.description if d == "BAD_gvtd")
 
 

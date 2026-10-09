@@ -20,14 +20,14 @@ from PIL import Image as _PILImage
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
-from fnirs_pipe.qc.common.figure_io import fig_png_b64
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
-from fnirs_pipe.qc.figures.common._surface_overlay import (
+from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
+from nirspipe.qc.figures.common._surface_overlay import (
     activation_rgba, smoothing_matrix, vertex_normals,
 )
-from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 
 if TYPE_CHECKING:
     import pandas as pd

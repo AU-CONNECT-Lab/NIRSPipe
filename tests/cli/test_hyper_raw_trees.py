@@ -1,12 +1,12 @@
-"""`fnirs-qc hyper-raw` writes the fnirs-hyper tree and reads the corrected recordings from the
-fnirs-pipe tree, never one directory standing in for the other."""
+"""`nirspipe-qc hyper-raw` writes the nirspipe-hyper tree and reads the corrected recordings from the
+nirspipe tree, never one directory standing in for the other."""
 
 import json
 
 import pytest
 
-from fnirs_pipe.cli import qc
-from fnirs_pipe.pipeline import hyper as hyper_pkg
+from nirspipe.cli import qc
+from nirspipe.pipeline import hyper as hyper_pkg
 
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
 
@@ -30,14 +30,14 @@ def stage_reads(monkeypatch):
 def test_the_corrected_side_is_read_from_the_derivatives_tree(
         mini_hyper_bids, tmp_path, stage_reads):
     bids, pairs = mini_hyper_bids
-    deriv, out = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
+    deriv, out = tmp_path / "nirspipe", tmp_path / "nirspipe-hyper"
     deriv.mkdir()
     qc.main(_argv(bids, pairs, out, "--derivatives-dir", str(deriv)))
 
     assert stage_reads == [(deriv, "motcorrected")]
     assert list((out / "group-G01").glob("*_desc-raw_report.html"))
     desc = json.loads((out / "dataset_description.json").read_text())
-    # it reads both, so both are linked, under the names fnirs-hyper and fnirs-pipe use
+    # it reads both, so both are linked, under the names nirspipe-hyper and nirspipe use
     links = desc["DatasetLinks"]
     assert (out / links["preprocessed"]).resolve() == deriv.resolve()
     assert (out / links["raw"]).resolve() == bids.resolve()
@@ -47,13 +47,13 @@ def test_the_corrected_side_is_read_from_the_derivatives_tree(
 def test_without_a_derivatives_tree_no_stage_is_looked_for(
         mini_hyper_bids, tmp_path, stage_reads, capsys):
     bids, pairs = mini_hyper_bids
-    qc.main(_argv(bids, pairs, tmp_path / "fnirs-hyper"))
+    qc.main(_argv(bids, pairs, tmp_path / "nirspipe-hyper"))
 
     assert stage_reads == []
     assert "no --derivatives-dir" in capsys.readouterr().err
 
 
-def test_the_hyper_tree_cannot_be_the_fnirs_pipe_tree(mini_hyper_bids, tmp_path, capsys):
+def test_the_hyper_tree_cannot_be_the_nirspipe_tree(mini_hyper_bids, tmp_path, capsys):
     bids, pairs = mini_hyper_bids
     tree = tmp_path / "shared"
     tree.mkdir()
@@ -65,8 +65,8 @@ def test_the_hyper_tree_cannot_be_the_fnirs_pipe_tree(mini_hyper_bids, tmp_path,
 
 
 @pytest.mark.parametrize("entry", ["main", "main_pair_null"])
-def test_fnirs_hyper_refuses_to_write_into_the_tree_it_reads(entry, tmp_path, capsys):
-    from fnirs_pipe.cli import hyper
+def test_nirspipe_hyper_refuses_to_write_into_the_tree_it_reads(entry, tmp_path, capsys):
+    from nirspipe.cli import hyper
 
     tree = tmp_path / "shared"
     tree.mkdir()
@@ -79,33 +79,33 @@ def test_fnirs_hyper_refuses_to_write_into_the_tree_it_reads(entry, tmp_path, ca
     assert not any(tree.iterdir())
 
 
-def test_a_fnirs_pipe_tree_is_refused_as_the_output(mini_hyper_bids, tmp_path, capsys):
-    from fnirs_pipe.io.derivatives import write_dataset_description
+def test_a_nirspipe_tree_is_refused_as_the_output(mini_hyper_bids, tmp_path, capsys):
+    from nirspipe.io.derivatives import write_dataset_description
 
     bids, pairs = mini_hyper_bids
-    tree = tmp_path / "fnirs-pipe"
+    tree = tmp_path / "nirspipe"
     write_dataset_description(tree)
     before = (tree / "dataset_description.json").read_text()
     with pytest.raises(SystemExit) as exit_:
         qc.main(_argv(bids, pairs, tree))
     assert exit_.value.code != 0
-    assert "is a fnirs-pipe tree" in capsys.readouterr().err
+    assert "is a nirspipe tree" in capsys.readouterr().err
     assert (tree / "dataset_description.json").read_text() == before
     assert not list(tree.glob("group-*"))
 
 
 def test_without_a_derivatives_tree_the_existing_stamp_is_kept(
         mini_hyper_bids, tmp_path, stage_reads):
-    from fnirs_pipe.io.derivatives import LINK_PREPROCESSED, write_dataset_description
+    from nirspipe.io.derivatives import LINK_PREPROCESSED, write_dataset_description
 
     bids, pairs = mini_hyper_bids
-    deriv, out = tmp_path / "fnirs-pipe", tmp_path / "fnirs-hyper"
+    deriv, out = tmp_path / "nirspipe", tmp_path / "nirspipe-hyper"
     deriv.mkdir()
-    write_dataset_description(out, name="fnirs-hyper output", generated_by="fnirs-hyper",
+    write_dataset_description(out, name="nirspipe-hyper output", generated_by="nirspipe-hyper",
                               source=deriv, link=LINK_PREPROCESSED)
     qc.main(_argv(bids, pairs, out))
 
-    # the link fnirs-hyper wrote stays, and the raw recordings this read are added beside it
+    # the link nirspipe-hyper wrote stays, and the raw recordings this read are added beside it
     desc = json.loads((out / "dataset_description.json").read_text())
     assert (out / desc["DatasetLinks"]["preprocessed"]).resolve() == deriv.resolve()
     assert (out / desc["DatasetLinks"]["raw"]).resolve() == bids.resolve()

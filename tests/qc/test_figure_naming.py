@@ -10,8 +10,8 @@ overwritten and a rendered tree shows nothing.
 `tests/qc/test_condition_page_isolation.py`, which builds its cases from this same namer.
 """
 
-from fnirs_pipe.io.naming import parse_path
-from fnirs_pipe.qc.common.figure_io import figure_namer
+from nirspipe.io.naming import parse_path
+from nirspipe.qc.common.figure_io import figure_namer
 
 # Every panel the subject report writes whose name comes from the namer alone, as
 # (desc, kwargs). The list is here so a panel added without a thought for collisions turns

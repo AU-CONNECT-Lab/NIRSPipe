@@ -6,9 +6,9 @@ import mne
 import mne.io
 import numpy as np
 
-from fnirs_pipe.exceptions import FilterDesignError
-from fnirs_pipe.utils.lineage import stamp
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.exceptions import FilterDesignError
+from nirspipe.utils.lineage import stamp
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("post.denoise")
 

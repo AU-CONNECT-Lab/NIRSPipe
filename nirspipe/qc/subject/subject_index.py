@@ -13,7 +13,7 @@ The Conditions section covers per-condition *views* only, the ``by_condition`` b
 whole-run pass leaves in its record. A tree cropped per condition first is already listed
 above, one run per condition, and belongs there rather than here: its numbers are not
 comparable with a view's, so the two must not share a table. See
-:mod:`fnirs_pipe.qc.subject.condition_views`.
+:mod:`nirspipe.qc.subject.condition_views`.
 """
 
 from __future__ import annotations
@@ -23,23 +23,23 @@ import json
 import statistics
 from pathlib import Path
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.utils import pair_of
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
-from fnirs_pipe.qc.common.figure_io import figure_namer, _save_figure_html
-from fnirs_pipe.io.derivatives import entity_of
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.qc.common.figure_io import figure_namer, _save_figure_html
+from nirspipe.io.derivatives import entity_of
+from nirspipe.io.naming import report_name
+from nirspipe.qc.common.channel_table import (
     CHANNEL_METRICS_SUFFIX, CHANNEL_METRICS_SUFFIXES, RAW_CHANNEL_METRICS_SUFFIX,
 )
-from fnirs_pipe.qc.subject.record_io import read_record
-from fnirs_pipe.qc.subject.sqm_record import (
+from nirspipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, SQM_DESCS, entities_of,
 )
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.subject.condition_views import span_share
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.subject.condition_views import span_share
 
 logger = get_logger("qc.subject_index")
 
@@ -61,7 +61,7 @@ _COLUMNS = (
 
 
 # The report files a run can leave behind, best first, as (link text, path relative to
-# sub_dir). `fnirs-pipe` writes the first and `fnirs-qc prep-raw` the second, so a run that
+# sub_dir). `nirspipe` writes the first and `nirspipe-qc prep-raw` the second, so a run that
 # saw both commands has both pages and a run that saw one has one. The row's title links
 # whichever comes first; the rest join the artefact links beside it.
 _REPORTS = (
@@ -220,7 +220,7 @@ def _condition_pages(sub_dir: Path, label: str,
     come from the record rather than from a glob, so a task that happens to share a
     condition's name cannot contribute a row.
     """
-    from fnirs_pipe.qc.subject.report import condition_page_name
+    from nirspipe.qc.subject.report import condition_page_name
 
     return [[{"text": text, "href": page}
              for (text, _), desc in zip(_REPORTS, (None, "raw"))
@@ -426,11 +426,11 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     profile takes the runs together because that is the comparison it is for; the other two
     are of one run's channels and one run's clock and cannot be pooled.
     """
-    from fnirs_pipe.qc.figures.subject.group_figures import (
+    from nirspipe.qc.figures.subject.group_figures import (
         SMOOTH_S, build_channel_condition_matrix, build_condition_panels,
         build_condition_timeline,
     )
-    from fnirs_pipe.qc.subject.group_writer import _sqm_row
+    from nirspipe.qc.subject.group_writer import _sqm_row
 
     fig_dir = sub_dir / "figures"
     out: dict = {"profile": None, "per_run": [], "smooth_s": SMOOTH_S}

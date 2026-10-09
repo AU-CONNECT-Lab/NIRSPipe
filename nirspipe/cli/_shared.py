@@ -16,8 +16,8 @@ import json
 import sys
 from pathlib import Path
 
-from fnirs_pipe.utils import bare_roi_map, roi_overlaps
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import bare_roi_map, roi_overlaps
+from nirspipe.utils.logging import get_logger
 
 
 class BidsLabel(str):
@@ -52,7 +52,7 @@ def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str) -> None:
 
 
 def refuse_output_is_source(derivatives_dir: Path, output_dir: Path) -> None:
-    """Exit non-zero when the fnirs-hyper tree would be the fnirs-pipe tree it reads."""
+    """Exit non-zero when the nirspipe-hyper tree would be the nirspipe tree it reads."""
     if Path(output_dir).resolve() == Path(derivatives_dir).resolve():
         print("Error: the source and the output directory are the same. Each tree carries "
               "its own dataset_description.json, so one path cannot be both.",
@@ -103,7 +103,7 @@ def add_separation_bands(container, note: str = "") -> None:
     They are validated together in :func:`separation_bands_from_args`, so moving one and
     leaving the others cannot produce overlapping bands.
     """
-    from fnirs_pipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
+    from nirspipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
 
     container.add_argument(
         "--short-max-dist", type=float, default=None, metavar="MM",
@@ -140,7 +140,7 @@ def separation_bands_from_args(args) -> dict:
     keeps the package default; validation therefore runs on the resolved bands rather
     than on what was typed.
     """
-    from fnirs_pipe.qc.metrics._helpers import separation_bands, validate_bands
+    from nirspipe.qc.metrics._helpers import separation_bands, validate_bands
 
     def _mm(name):
         value = getattr(args, name, None) if not isinstance(args, dict) else args.get(name)
@@ -159,7 +159,7 @@ def resolved_separation_bands(args):
     has to be split on the bands the run was processed with, and reaching for
     :func:`separation_bands` directly would give it the package defaults.
     """
-    from fnirs_pipe.qc.metrics._helpers import separation_bands
+    from nirspipe.qc.metrics._helpers import separation_bands
 
     return separation_bands(type("Args", (), separation_bands_from_args(args)))
 
@@ -175,7 +175,7 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
 
 def add_psp_threshold(container, note: str = "") -> None:
     """``--psp-threshold``: the other line, from the same criteria table."""
-    from fnirs_pipe.qc.metrics import PSP_PASS
+    from nirspipe.qc.metrics import PSP_PASS
 
     container.add_argument(
         "--psp-threshold", type=float, default=None,
@@ -186,7 +186,7 @@ def add_psp_threshold(container, note: str = "") -> None:
 
 def add_min_good_frac(container, note: str = "") -> None:
     """``--min-good-frac``: how much of the recording a channel has to be coupled for."""
-    from fnirs_pipe.qc.metrics import GOOD_FRAC_PASS
+    from nirspipe.qc.metrics import GOOD_FRAC_PASS
 
     container.add_argument(
         "--min-good-frac", type=float, default=None,
@@ -257,7 +257,7 @@ def alignment_window() -> argparse.ArgumentParser:
                    help="Report up to this time (s) on the aligned clock. Omit to run to "
                         "the end; a value past the end is clipped. The window narrows the "
                         "synchrony metrics only: the per-subject quality record describes "
-                        "the whole recording either way. For `fnirs-hyper` this selects "
+                        "the whole recording either way. For `nirspipe-hyper` this selects "
                         "rather than cuts: the wavelet transform is computed over the whole "
                         "recording and the window read out of it, so the window carries the "
                         "recording's cone of influence rather than two edges of its own, "

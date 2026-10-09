@@ -16,10 +16,10 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.figures.hyper.hyper_figures import (
+from nirspipe.qc.figures.hyper.hyper_figures import (
     _BAD_COLOR, _GOOD_COLOR, _MIX_COLOR,
 )
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_hyper_figures")
 

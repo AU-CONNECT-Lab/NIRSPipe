@@ -7,13 +7,13 @@ these build a subject folder rather than running anything.
 
 import json
 
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.io.naming import report_name
+from nirspipe.qc.common.channel_table import (
     CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX,
 )
-from fnirs_pipe.qc.common.report_shell import outlier_flags as _outlier_flags
-from fnirs_pipe.qc.subject.record_io import write_record
-from fnirs_pipe.qc.subject.subject_index import (
+from nirspipe.qc.common.report_shell import outlier_flags as _outlier_flags
+from nirspipe.qc.subject.record_io import write_record
+from nirspipe.qc.subject.subject_index import (
     _COLUMNS,
     _condition_pages,
     _links,
@@ -160,7 +160,7 @@ def test_the_index_rows_carry_the_links_and_the_marks(tmp_path):
 
 def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
     """The two ends of one name, bound together rather than spelled twice."""
-    from fnirs_pipe.qc.subject.report import condition_page_name
+    from nirspipe.qc.subject.report import condition_page_name
 
     label = _run(tmp_path, "rest")
     page = tmp_path / condition_page_name(label, "game 1")
@@ -172,7 +172,7 @@ def test_a_condition_page_is_found_where_the_report_writes_it(tmp_path):
 
 def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, conditions):
     """Drive the raw viewer's page writer with the payloads stubbed, which is all it names."""
-    from fnirs_pipe.qc.subject import condition_views, prep_raw_report as prr
+    from nirspipe.qc.subject import condition_views, prep_raw_report as prr
 
     record = sub_dir / f"{run_label}_desc-sqmraw_qc.json"
     write_record(record, {"by_condition": {c: {} for c in conditions}})
@@ -220,7 +220,7 @@ def test_a_label_that_repeats_once_reduced_gets_no_second_page(tmp_path, monkeyp
 
 def test_a_condition_both_commands_wrote_links_both_pages(tmp_path, monkeypatch):
     """The index row links the pipeline's page and lists the raw viewer's beside it."""
-    from fnirs_pipe.qc.subject.report import condition_page_name
+    from nirspipe.qc.subject.report import condition_page_name
 
     label = _run(tmp_path, "rest")
     _write_raw_condition_pages(monkeypatch, tmp_path, label, label, ["game1", "video"])
@@ -246,7 +246,7 @@ def test_a_run_in_a_session_folder_is_listed_and_linked_there(tmp_path):
 
 def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
     """prep-raw used to write the pipeline's name, so whichever ran last set the index's marks."""
-    from fnirs_pipe.cli import qc as qc_cli, run as run_cli
+    from nirspipe.cli import qc as qc_cli, run as run_cli
     from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
     bids = tmp_path / "bids"

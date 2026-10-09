@@ -20,14 +20,14 @@ demands success will ever notice.
 import numpy as np
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.snirf import read_snirf
-from fnirs_pipe.pipeline.post_pipeline import PostConfig, run_post
-from fnirs_pipe.pipeline.prep_pipeline import PrepConfig, compute_sci, run_prep
-from fnirs_pipe.qc.subject.sqm_record import build_sqm_records
-from fnirs_pipe.qc.subject.record_io import read_record
-from fnirs_pipe.utils import is_optical_density
-from fnirs_pipe.utils.lineage import stage_of
+from nirspipe.exceptions import StageError
+from nirspipe.io.snirf import read_snirf
+from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.pipeline.prep_pipeline import PrepConfig, compute_sci, run_prep
+from nirspipe.qc.subject.sqm_record import build_sqm_records
+from nirspipe.qc.subject.record_io import read_record
+from nirspipe.utils import is_optical_density
+from nirspipe.utils.lineage import stage_of
 
 from tests._synth import SFREQ, synth_raw
 

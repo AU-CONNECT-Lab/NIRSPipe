@@ -8,9 +8,9 @@ refuses outright rather than rounding, so a single stand-in would take a whole d
 import numpy as np
 import pytest
 
-from fnirs_pipe.pipeline.hyper import group_io, group_quality, pair_null
-from fnirs_pipe.pipeline.hyper.group_io import GroupEntry
-from fnirs_pipe.pipeline.hyper.pair_null import _draw_condition_pairs
+from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
+from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.pipeline.hyper.pair_null import _draw_condition_pairs
 
 FIXED = "sub-01G01"
 WINDOWS = [("baseline", 0.0, 300.0), ("game1", 500.0, 1400.0)]
@@ -193,7 +193,7 @@ def _run_windows(state, windows, sources, partners=("sub-02G02",), fixed_duratio
 
 def test_a_window_is_cut_at_the_partners_own_marker_plus_its_offset(wired):
     """The whole point: the offset rides on the stand-in's clock, not the real dyad's."""
-    from fnirs_pipe.qc.common.windows import split_windows
+    from nirspipe.qc.common.windows import split_windows
 
     windows, sources = split_windows([("game1", 500.0, 1400.0)], 300.0)
     assert [w[0] for w in windows] == ["game1-w1", "game1-w2", "game1-w3"]
@@ -205,7 +205,7 @@ def test_a_window_is_cut_at_the_partners_own_marker_plus_its_offset(wired):
 
 
 def test_every_window_of_a_draw_is_the_same_length(wired):
-    from fnirs_pipe.qc.common.windows import split_windows
+    from nirspipe.qc.common.windows import split_windows
 
     windows, sources = split_windows([("baseline", 0.0, 300.0), ("game1", 500.0, 1400.0)], 300.0)
     wired["onsets"] = {"baseline": 0.0, "game1": 450.0}
@@ -221,7 +221,7 @@ def test_every_window_of_a_draw_is_the_same_length(wired):
 
 def test_a_partner_too_short_for_a_late_window_is_refused_by_condition_name(wired):
     """Refused under the condition, not the window: the marker is what it lacks."""
-    from fnirs_pipe.qc.common.windows import split_windows
+    from nirspipe.qc.common.windows import split_windows
 
     windows, sources = split_windows([("game1", 500.0, 1400.0)], 300.0)
     wired["onsets"] = {}                    # never entered game1
@@ -241,7 +241,7 @@ def test_without_a_mapping_the_labels_are_the_conditions_themselves(wired):
 
 def _markers(monkeypatch, *pairs):
     marks = [{"description": d, "onset": t, "duration": 300.0} for d, t in pairs]
-    monkeypatch.setattr("fnirs_pipe.qc.common.windows.markers_on_data_axis", lambda raw: marks)
+    monkeypatch.setattr("nirspipe.qc.common.windows.markers_on_data_axis", lambda raw: marks)
 
 
 def test_a_numbered_repeat_finds_that_occurrence_in_the_stand_in(monkeypatch):

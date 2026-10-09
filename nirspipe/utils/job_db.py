@@ -1,7 +1,7 @@
-"""JSONL-based job tracking with SQLite merge for fnirs-pipe.
+"""JSONL-based job tracking with SQLite merge for nirspipe.
 
 Write flow: pipeline events → JSONL files under logs/json/
-Merge flow: fnirs-log merge → finished executions into logs/fnirs_pipe.db, their JSONLs to archived/
+Merge flow: nirspipe-log merge → finished executions into logs/nirspipe.db, their JSONLs to archived/
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def _json_dir(db_path: Path) -> Path:
 def log_execution(
     db_path: Path,
     command_line: str,
-    fnirs_pipe_version: str,
+    nirspipe_version: str,
     input_dir: str,
     output_dir: str,
     subjects: list[str],
@@ -58,7 +58,7 @@ def log_execution(
         "execution_id": execution_id,
         "timestamp": datetime.now().isoformat(),
         "command_line": command_line,
-        "fnirs_pipe_version": fnirs_pipe_version,
+        "nirspipe_version": nirspipe_version,
         "input_dir": input_dir,
         "output_dir": output_dir,
         "work_dir": work_dir,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS pipeline_executions (
     execution_id         INTEGER UNIQUE,
     execution_time       TEXT,
     command_line         TEXT,
-    fnirs_pipe_version   TEXT,
+    nirspipe_version   TEXT,
     input_dir            TEXT,
     output_dir           TEXT,
     work_dir             TEXT,
@@ -542,7 +542,7 @@ def _dispatch(
             "execution_id": eid,
             "execution_time": rec.get("timestamp"),
             "command_line": rec.get("command_line"),
-            "fnirs_pipe_version": rec.get("fnirs_pipe_version"),
+            "nirspipe_version": rec.get("nirspipe_version"),
             "input_dir": rec.get("input_dir"),
             "output_dir": rec.get("output_dir"),
             "work_dir": rec.get("work_dir"),
@@ -630,7 +630,7 @@ def _dispatch(
 
 def _upsert_execution(conn: sqlite3.Connection, ex: dict[str, Any]) -> None:
     keys = [
-        "execution_id", "execution_time", "command_line", "fnirs_pipe_version",
+        "execution_id", "execution_time", "command_line", "nirspipe_version",
         "input_dir", "output_dir", "work_dir", "subjects", "session_labels",
         "task_labels", "mode", "dry_run", "status", "error_msg",
     ]

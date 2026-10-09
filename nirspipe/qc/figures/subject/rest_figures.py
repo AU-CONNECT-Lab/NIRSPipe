@@ -6,7 +6,7 @@ fc_roi_matrix_figure(): connectivity ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
 The panel answers how much and with whom, the flat maps answer where. Both flat maps are
-built on the shared head in :mod:`fnirs_pipe.qc.figures.common.head_map` rather than on their
+built on the shared head in :mod:`nirspipe.qc.figures.common.head_map` rather than on their
 own projection, so a channel sits where the report's other head figures put it.
 
 # TODO: project ALFF/fALFF onto a brain surface (not just the flat map) via mne_nirs when
@@ -21,14 +21,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import pair_of
+from nirspipe.utils.logging import get_logger
 
-from fnirs_pipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
-from fnirs_pipe.qc.figures.common.head_map import (
+from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common.head_map import (
     BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
 )
-from fnirs_pipe.qc.figures.common.matrix_map import (
+from nirspipe.qc.figures.common.matrix_map import (
     CORRELATION_SCALE, cell_values, matrix_ground,
 )
 
@@ -64,7 +64,7 @@ def _pair_blocks(pairs, raw, sep_bands):
     """
     groups = {}
     if raw is not None:
-        from fnirs_pipe.qc.metrics import long_short_channels
+        from nirspipe.qc.metrics import long_short_channels
         long_names, short_names = long_short_channels(raw, sep_bands)
         of = {pair_of(c): "long" for c in long_names}
         of.update({pair_of(c): "short" for c in short_names})
@@ -323,7 +323,7 @@ def _head_for(raw: mne.io.Raw, sep_bands) -> "dict | None":
     Short channels are left out of every map in this module: they measure extracerebral
     signal.
     """
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     long_names, _ = long_short_channels(raw, sep_bands)
     pairs = sorted({pair_of(ch) for ch in (long_names or raw.ch_names)})

@@ -1,4 +1,4 @@
-"""Dash application factory and entry point for fnirs-gui."""
+"""Dash application factory and entry point for nirspipe-gui."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import dash_bootstrap_components as dbc
 import dash_cytoscape as cyto
 from dash import Input, Output, State, callback, dcc, html
 
-from fnirs_pipe.interface.theme import SIDEBAR_BG
-from fnirs_pipe.utils.net import resolve_port
+from nirspipe.interface.theme import SIDEBAR_BG
+from nirspipe.utils.net import resolve_port
 
 DEFAULT_PORT = 8050
 
@@ -64,7 +64,7 @@ def _sidebar() -> html.Div:
                         id="app-sidebar-title",
                         className="me-auto",
                         children=[
-                            html.H5("fnirs-pipe", className="text-white mb-0"),
+                            html.H5("NIRSPipe", className="text-white mb-0"),
                             html.Small("Interface", className="text-white-50"),
                         ],
                     ),
@@ -113,18 +113,18 @@ def launch(port: int | None = None) -> None:
         suppress_callback_exceptions=True,
     )
 
-    import fnirs_pipe.interface.callbacks._sections
-    import fnirs_pipe.interface.callbacks.data_prep_callbacks
-    import fnirs_pipe.interface.callbacks.recon_callbacks
-    import fnirs_pipe.interface.callbacks.batch_prep_callbacks
-    import fnirs_pipe.interface.callbacks.hyper_align_callbacks
-    import fnirs_pipe.interface.callbacks.analysis_callbacks
-    import fnirs_pipe.interface.callbacks.hyper_analysis_callbacks
-    import fnirs_pipe.interface.callbacks.qc_callbacks  # noqa: F401  (side effect: registers callbacks)
+    import nirspipe.interface.callbacks._sections
+    import nirspipe.interface.callbacks.data_prep_callbacks
+    import nirspipe.interface.callbacks.recon_callbacks
+    import nirspipe.interface.callbacks.batch_prep_callbacks
+    import nirspipe.interface.callbacks.hyper_align_callbacks
+    import nirspipe.interface.callbacks.analysis_callbacks
+    import nirspipe.interface.callbacks.hyper_analysis_callbacks
+    import nirspipe.interface.callbacks.qc_callbacks  # noqa: F401  (side effect: registers callbacks)
 
     # lets the QC page show a generated report in an iframe; group reports are iframe shells
     # whose panels are sibling files, so they have to be served rather than inlined
-    from fnirs_pipe.interface.report_serve import attach as _attach_reports
+    from nirspipe.interface.report_serve import attach as _attach_reports
     _attach_reports(app.server)
 
     app.layout = html.Div([

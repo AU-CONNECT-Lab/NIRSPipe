@@ -11,26 +11,26 @@ from pathlib import Path
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
-from fnirs_pipe.io.derivatives import group_data_dir, group_label, group_report_dir
-from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
-from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
-from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
-from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
-from fnirs_pipe.pipeline.hyper import (
+from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
+from nirspipe.io.derivatives import group_data_dir, group_label, group_report_dir
+from nirspipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
+from nirspipe.pipeline.hyper.wtc_null import write_wtc_null
+from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
+from nirspipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
+from nirspipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.qc.common.channel_table import (
     channel_columns, channel_rows, format_rows, pair_rows, roi_overlap_note,
 )
-from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.boilerplate.vocabulary import (
     MISSING_VALUE, format_metric, grid_window_label, is_key_metric, metric_class, metric_label,
     metric_summary, shared_window, steps_from_lineage, steps_from_sidecars, template_slots,
 )
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.common.figure_io import (
+from nirspipe.io.naming import report_name
+from nirspipe.qc.common.figure_io import (
     _fig_href,
     _pair_fname,
     figure_namer,
@@ -38,23 +38,23 @@ from fnirs_pipe.qc.common.figure_io import (
     _save_figure_html,
     save_png,
 )
-from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
-from fnirs_pipe.qc.figures.subject.sci_psp_panel import member_condition_heatmap
-from fnirs_pipe.qc.figures.hyper.hyper_figures import _cond_colors
-from fnirs_pipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
-from fnirs_pipe.qc.metrics._helpers import long_short_channels
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.figures.common.provenance_figure import write_provenance
+from nirspipe.qc.figures.subject.sci_psp_panel import member_condition_heatmap
+from nirspipe.qc.figures.hyper.hyper_figures import _cond_colors
+from nirspipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
+from nirspipe.qc.metrics._helpers import long_short_channels
+from nirspipe.qc.common.report_shell import (
     footer_vars,
     guard,
     note,
     page_vars,
     render,
 )
-from fnirs_pipe.qc.common.windows import crop_provenance, markers_on_data_axis
-from fnirs_pipe.utils.lineage import paths_from
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.common.record_views import condition_set_view
-from fnirs_pipe.qc.figures.hyper.hyper_post_figures import (
+from nirspipe.qc.common.windows import crop_provenance, markers_on_data_axis
+from nirspipe.utils.lineage import paths_from
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.common.record_views import condition_set_view
+from nirspipe.qc.figures.hyper.hyper_post_figures import (
     ARROW_MIN_COHERENCE, _clears, build_isc_panel, build_isc_roi_matrix, build_wtc_channel,
     build_wtc_cross_matrix, build_wtc_map_interactive, wtc_condition_views,
 )
@@ -380,7 +380,7 @@ def condition_subject_metrics(
     Each value is what :func:`subject_metric_tables` returns, one table per channel set.
 
     Every number is read out of each member's ``by_condition`` record section, which
-    :func:`~fnirs_pipe.qc.subject.sqm_record.condition_sections` wrote once after that member's
+    :func:`~nirspipe.qc.subject.sqm_record.condition_sections` wrote once after that member's
     pipeline finished. Nothing is measured here and nothing is sliced a second time, so a
     channel's SCI under one condition cannot differ between a subject page and a dyad page.
 
@@ -570,14 +570,14 @@ def build_hyper_report(
     label = group_label(group_id, task, session)
     output_path = group_report_dir(output_dir, group_id) / report_name(label, desc="raw")
 
-    # the post report if `fnirs-hyper` has written one; a raw-only tree has none, and
+    # the post report if `nirspipe-hyper` has written one; a raw-only tree has none, and
     # the index is built from the same coherence tables, so neither link is offered there.
     # The two differ by the desc- entity alone, so neither name is derived from the other
     post = output_path.with_name(report_name(label))
     post_href = post.name if post.exists() else None
 
     # after the writer's passes, so every sidecar the scan reads is on disk; the same name
-    # `fnirs-qc provenance` gives it, so re-running that refreshes the image this page links
+    # `nirspipe-qc provenance` gives it, so re-running that refreshes the image this page links
     provenance_path = None
     with guard("Provenance diagram", errors, meta["label"]):
         scope = label
@@ -913,12 +913,12 @@ def build_hyper_post_report(
 
     ``wtc_save_maps`` writes the full time-frequency maps beside the tables as ``.npz``, one
     per chromophore, so a different band can be averaged later without a second wavelet
-    transform. See :mod:`fnirs_pipe.pipeline.hyper.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
+    transform. See :mod:`nirspipe.pipeline.hyper.wtc_store`. ``wtc_limit_scales`` computes only the scales inside
     ``[wtc_fmin, wtc_fmax]`` plus margin, which is most of the runtime and, given that the
     scales land on pycwt's own grid and the margin exceeds the scale-smoothing window,
     reproduces the unrestricted coherences bit for bit.
 
-    ``result`` is an already-computed :class:`~fnirs_pipe.pipeline.hyper.hyper_post.HyperPostResult`.
+    ``result`` is an already-computed :class:`~nirspipe.pipeline.hyper.hyper_post.HyperPostResult`.
     Passed one, this draws it and runs no transform, which is how a page is rebuilt after a
     figure or a caption changes without paying for the wavelet pass again. Left at None the
     analysis is run here from the ``wtc_*`` arguments, which is what the CLI does. The
@@ -927,9 +927,9 @@ def build_hyper_post_report(
 
     ``wtc_arrow_min`` is the coherence a cell has to reach before its phase arrow is drawn
     when no Monte Carlo level was computed. Display only: no table or figure value changes
-    with it. ``None`` takes :data:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
+    with it. ``None`` takes :data:`~nirspipe.qc.figures.hyper.hyper_post_figures.ARROW_MIN_COHERENCE`.
 
-    ``wtc_nulls`` is what :func:`~fnirs_pipe.pipeline.hyper.wtc_null.run_wtc_null` drew, with
+    ``wtc_nulls`` is what :func:`~nirspipe.pipeline.hyper.wtc_null.run_wtc_null` drew, with
     ``wtc_phase_null`` and ``wtc_phase_null_cross`` the iteration count and crossing it was
     drawn with. Its table is written here, once the real tables it is ranked against exist
     and before the provenance diagram is drawn, so the diagram lists it on the first run.
@@ -1114,7 +1114,7 @@ def build_hyper_post_report(
         one shape and the pair of selectors above each panel is the only difference.
         ``roi_view_of`` hands a window the run's own ROI map set, and the window then points
         at those files with its slug on the end instead of drawing its own. See
-        :func:`~fnirs_pipe.qc.figures.hyper.hyper_post_figures.wtc_condition_views` for when that
+        :func:`~nirspipe.qc.figures.hyper.hyper_post_figures.wtc_condition_views` for when that
         is the same figure and when it is not.
 
         ``pair`` is which two members these maps are of. A group of three holds three
@@ -1436,7 +1436,7 @@ def build_hyper_post_report(
 
     # Rendered here rather than by the caller: every sidecar the scan reads was written by
     # the passes above, so this is the first moment the graph is complete. Same namer
-    # `fnirs-qc provenance` uses, so re-running that refreshes the image this report links.
+    # `nirspipe-qc provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
         for written in write_provenance(

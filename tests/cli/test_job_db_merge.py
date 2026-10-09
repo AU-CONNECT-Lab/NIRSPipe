@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from fnirs_pipe.utils import job_db
+from nirspipe.utils import job_db
 
 
 def _execution(db: Path, subject: str, *, finished: bool = True) -> int:
-    eid = job_db.log_execution(db, command_line="fnirs-pipe ...", fnirs_pipe_version="test",
+    eid = job_db.log_execution(db, command_line="nirspipe ...", nirspipe_version="test",
                                input_dir="in", output_dir="out", subjects=[subject])
     job_db.log_run_start(db, eid, subject, bids_task="rest")
     job_db.log_sqm(db, eid, subject, "raw", {"sci_mean": 0.9}, bids_task="rest")
@@ -39,7 +39,7 @@ def _live_logs(db: Path) -> list[Path]:
 
 @pytest.fixture
 def db(tmp_path) -> Path:
-    return tmp_path / "logs" / "fnirs_pipe.db"
+    return tmp_path / "logs" / "nirspipe.db"
 
 
 def test_merging_twice_inserts_nothing_the_second_time(db):
@@ -93,7 +93,7 @@ def test_an_existing_database_is_backed_up_before_a_merge(db):
     job_db.merge_jsonl(db)
     _execution(db, "02")
     job_db.merge_jsonl(db)
-    backups = list((db.parent / "backup").glob("fnirs_pipe.backup_*.db"))
+    backups = list((db.parent / "backup").glob("nirspipe.backup_*.db"))
     assert len(backups) == 1
     assert _counts(backups[0]) == {"pipeline_executions": 1, "runs": 1, "sqm": 1}
 

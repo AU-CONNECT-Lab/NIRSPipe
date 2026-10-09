@@ -9,9 +9,9 @@ import json
 
 import pytest
 
-from fnirs_pipe.qc.common.provenance import scan, to_mermaid
-from fnirs_pipe.qc.common.figure_io import figure_namer
-from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
+from nirspipe.qc.common.provenance import scan, to_mermaid
+from nirspipe.qc.common.figure_io import figure_namer
+from nirspipe.qc.figures.common.provenance_figure import write_provenance
 
 
 def _sidecar(directory, name, step=None, sources=(), data_file=True, **extra):
@@ -81,7 +81,7 @@ def test_a_collapsed_box_counts_the_conditions_it_holds(tmp_path):
 
     The condition count reads the `cond-` entity; a member without one is the whole run.
     """
-    from fnirs_pipe.qc.common.provenance import simplify
+    from nirspipe.qc.common.provenance import simplify
 
     root = ["/bids/group-G1_task-rest_desc-errts_nirs.snirf"]
     for chromo in ("hbo", "hbr"):
@@ -312,7 +312,7 @@ def test_only_a_checkpoint_loses_its_edges(tmp_path):
 
 def test_the_table_names_the_record_rather_than_the_metrics(tmp_path):
     # 121 metric names in one cell is a paragraph nobody reads; they stay in the record
-    from fnirs_pipe.qc.common.report_shell import provenance_rows
+    from nirspipe.qc.common.report_shell import provenance_rows
 
     _chain_plus_record(tmp_path)
     rows = provenance_rows(tmp_path, scope="sub-01")
@@ -357,7 +357,7 @@ def test_write_provenance_writes_nothing_without_sidecars(tmp_path):
 def test_cmd_provenance_writes_where_the_report_looks_for_it(tmp_path, capsys):
     # a subject's report embeds the diagram by relative path, so re-rendering has to land
     # on the name the namer gives or an existing report keeps showing the old diagram
-    from fnirs_pipe.cli.qc import cmd_provenance
+    from nirspipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "sub-01" / "nirs"
     nirs.mkdir(parents=True)
@@ -377,7 +377,7 @@ def test_a_group_gets_the_graph_its_dyad_report_links(tmp_path):
 
     The report links `group-G01_task-rest_desc-provenance`, so the name carries the task.
     """
-    from fnirs_pipe.cli.qc import cmd_provenance
+    from nirspipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "group-G01" / "nirs"
     nirs.mkdir(parents=True)
@@ -391,7 +391,7 @@ def test_a_group_gets_the_graph_its_dyad_report_links(tmp_path):
 
 def test_a_session_tree_is_found_and_drawn_beside_the_reports(tmp_path):
     # a subject's reports sit in sub-<id>/ whatever its sessions, and so do their figures
-    from fnirs_pipe.cli.qc import cmd_provenance
+    from nirspipe.cli.qc import cmd_provenance
 
     nirs = tmp_path / "sub-01" / "ses-a" / "nirs"
     nirs.mkdir(parents=True)

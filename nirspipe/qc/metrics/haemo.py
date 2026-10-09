@@ -11,8 +11,8 @@ from typing import Any
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.qc.metrics._helpers import (
+from nirspipe.utils import pair_of
+from nirspipe.qc.metrics._helpers import (
     _mean_or_none, _safe_metrics, epochable_events,
 )
 

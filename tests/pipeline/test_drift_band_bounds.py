@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.post_pipeline import (
+from nirspipe.pipeline.post_pipeline import (
     PostConfig,
     _repeat_intervals,
     _warn_drift_absorbs_task,
@@ -170,8 +170,8 @@ def test_the_cli_takes_any_order_the_library_takes():
 
     import pytest as _pytest
 
-    from fnirs_pipe.cli.run import _NOISE_CHOICES, _noise_model
-    from fnirs_pipe.pipeline.glm import NoiseModel
+    from nirspipe.cli.run import _NOISE_CHOICES, _noise_model
+    from nirspipe.pipeline.glm import NoiseModel
 
     for value in set(_NOISE_CHOICES) | set(NoiseModel.__args__):
         assert _noise_model(value) == value
@@ -188,8 +188,8 @@ def test_the_default_does_not_shadow_a_config_file():
     field here has it."""
     import inspect
 
-    from fnirs_pipe.cli import workflows
-    from fnirs_pipe.cli.run import _build_parser
+    from nirspipe.cli import workflows
+    from nirspipe.cli.run import _build_parser
 
     assert 'noise_model=pick("noise_model", default="auto")' in inspect.getsource(workflows)
     action = next(a for a in _build_parser()._actions
@@ -203,7 +203,7 @@ def test_every_mode_fits_the_model_that_was_asked_for():
     and dropping it."""
     import inspect
 
-    from fnirs_pipe.pipeline import post_pipeline
+    from nirspipe.pipeline import post_pipeline
 
     src = inspect.getsource(post_pipeline.run_post)
     assert 'noise_model="ols"' not in src
@@ -224,9 +224,9 @@ def test_the_gui_field_takes_what_the_cli_takes():
 
     from pathlib import Path
 
-    from fnirs_pipe.cli.run import NOISE_MODEL_PATTERN, _noise_model
+    from nirspipe.cli.run import NOISE_MODEL_PATTERN, _noise_model
 
-    src = Path("fnirs_pipe/interface/pages/analysis.py").read_text(encoding="utf-8")
+    src = Path("nirspipe/interface/pages/analysis.py").read_text(encoding="utf-8")
     # empty by default, so the chosen mode's default fills it in rather than a value the page picked
     assert 'id="an-noise-model"' in src and 'placeholder="mode default"' in src
     assert 'value="auto"' not in src, "a typed default here would override the mode's"

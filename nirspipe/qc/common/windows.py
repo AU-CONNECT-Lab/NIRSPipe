@@ -9,11 +9,11 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.derivatives import read_json
-from fnirs_pipe.qc.common.figure_io import _pair_fname, extract_markers
-from fnirs_pipe.utils.lineage import path_from
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import read_json
+from nirspipe.qc.common.figure_io import _pair_fname, extract_markers
+from nirspipe.utils.lineage import path_from
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.windows")
 
@@ -26,7 +26,7 @@ def crop_provenance(raw: "mne.io.Raw") -> "dict | None":
       a file cut to [3555, 3927] with a 47 s margin
         -> {"window": [3555.0, 3927.0], "analysis": [3602.4, 3902.5], "margin_s": 47.1}
 
-    ``fnirs-prep crop`` records the span it wrote and, with ``--margin``, the narrower span
+    ``nirspipe-prep crop`` records the span it wrote and, with ``--margin``, the narrower span
     the cut was made for.
 
     The sidecar is read off disk rather than the lineage stamp, which carries only the filter
@@ -55,7 +55,7 @@ def markers_on_data_axis(raw: "mne.io.Raw") -> list[dict]:
 
     Annotations of a cropped recording still sit on the original recording's axis, with the
     offset held in ``first_time``, while the data axis and everything computed from it start
-    at zero. :func:`~fnirs_pipe.pipeline.hyper.align_recordings` crops every member
+    at zero. :func:`~nirspipe.pipeline.hyper.align_recordings` crops every member
     from its first shared trigger, so raw annotation onsets are late by that trigger's onset
     against any figure or window drawn on the aligned clock.
 

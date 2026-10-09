@@ -6,8 +6,8 @@ import re
 import pandas as pd
 import pytest
 
-from fnirs_pipe.exceptions import GroupCSVError
-from fnirs_pipe.pipeline.hyper.group_io import parse_group_csv
+from nirspipe.exceptions import GroupCSVError
+from nirspipe.pipeline.hyper.group_io import parse_group_csv
 
 TASK = "mixed"
 OCCASION = "7"
@@ -54,9 +54,9 @@ def test_an_occasion_that_is_not_a_bids_label_is_refused(tmp_path):
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
     """Two dyads whose members each carry their own session label, through every dyad command."""
-    from fnirs_pipe.cli import hyper as hyper_cli
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.cli import run as run_cli
+    from nirspipe.cli import hyper as hyper_cli
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.cli import run as run_cli
     from tests._fingerprint import CLI_ARGS
     from tests._synth import make_hyper_dataset
 
@@ -133,7 +133,7 @@ def test_the_merged_table_and_the_cohort_page_carry_the_occasion(tree):
 
 
 def test_hyper_raw_session_label_selects_occasions_not_member_sessions(tree, tmp_path):
-    from fnirs_pipe.cli import qc as qc_cli
+    from nirspipe.cli import qc as qc_cli
 
     with pytest.raises(SystemExit) as exc:
         qc_cli.main(["hyper-raw", str(tree["bids"]), str(tmp_path), "group",

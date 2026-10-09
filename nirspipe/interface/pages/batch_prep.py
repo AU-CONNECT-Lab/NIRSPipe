@@ -9,10 +9,10 @@ import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import (
+from nirspipe.interface.components import (
     FULL, PATH, action_field, actions, card, field, params, section, split,
 )
-from fnirs_pipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
+from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
 dash.register_page(__name__, path="/batch-prep", name="Batch Prep")
 
@@ -200,7 +200,7 @@ def _command_panel():
             className="mb-2",
         ),
         html.Pre(id="bp-command-preview", className="fp-command"),
-        subtitle="what this form is, as fnirs-prep",
+        subtitle="what this form is, as nirspipe-prep",
     )
 
 

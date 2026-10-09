@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - The `--bad-channels` table takes optional `session`, `task` and `run` columns; a row matching no recording stops the run
 
 ### Changed
+- **Breaking**: the package is renamed NIRSPipe: import and distribution `nirspipe`, commands `nirspipe` and `nirspipe-<x>`; old derivative trees must be re-run
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together
 - **Breaking**: `fnirs-hyper --isc-whiten ORDER` is `--isc-whiten-s SECONDS`, one AR order for every channel of both members fitted on the whole record; `ar_order` columns are gone
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works

@@ -14,7 +14,7 @@ montage than the regression used. The consistency test at the end is what enforc
 The *stamp*: the record carries the bands it was split with, so a reader of a record can
 tell which separations produced its numbers rather than assuming the defaults.
 
-The *read-back*: `fnirs-hyper` takes the bands off the members' records rather than
+The *read-back*: `nirspipe-hyper` takes the bands off the members' records rather than
 off its own flags, so the dyad metrics cannot be split one way while the member reports
 were split another. Two members prepped differently are refused rather than reconciled.
 
@@ -30,9 +30,9 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.cli._shared import separation_bands_from_args
-from fnirs_pipe.io.snirf import has_short_channels, long_channel_picks
-from fnirs_pipe.qc.metrics._helpers import (
+from nirspipe.cli._shared import separation_bands_from_args
+from nirspipe.io.snirf import has_short_channels, long_channel_picks
+from nirspipe.qc.metrics._helpers import (
     _ORPHANS_WARNED,
     LONG_MAX_DIST,
     LONG_MIN_DIST,
@@ -206,9 +206,9 @@ def test_the_flags_are_validated_together_rather_than_one_at_a_time():
 def test_every_cli_that_splits_channels_offers_the_flags():
     """Four commands split a montage; a fifth that grew the split later must not quietly
     keep the constants."""
-    from fnirs_pipe.cli.hyper import _parsers as hyper_parsers
-    from fnirs_pipe.cli.qc import _build_parser as qc_parser
-    from fnirs_pipe.cli.run import _build_parser as run_parser
+    from nirspipe.cli.hyper import _parsers as hyper_parsers
+    from nirspipe.cli.qc import _build_parser as qc_parser
+    from nirspipe.cli.run import _build_parser as run_parser
 
     wanted = {"--short-max-dist", "--long-min-dist", "--long-max-dist"}
 
@@ -222,14 +222,14 @@ def test_every_cli_that_splits_channels_offers_the_flags():
     assert wanted <= _flags(run_parser())
     assert wanted <= _flags(qc_parser(), "prep-raw")
     assert wanted <= _flags(qc_parser(), "hyper-raw")
-    assert wanted <= _flags(hyper_parsers()["fnirs-hyper"])
+    assert wanted <= _flags(hyper_parsers()["nirspipe-hyper"])
 
 
 def test_no_cli_offers_a_gvtd_channel_set_any_more():
     """The bands decide the GVTD channel set, so no parser offers a flag that would widen
     it to channels `long_channel_picks` and the GLM never touch."""
-    from fnirs_pipe.cli.qc import _build_parser as qc_parser
-    from fnirs_pipe.cli.run import _build_parser as run_parser
+    from nirspipe.cli.qc import _build_parser as qc_parser
+    from nirspipe.cli.run import _build_parser as run_parser
 
     def _flags(parser, subcommand=None):
         target = parser
@@ -246,7 +246,7 @@ def test_no_cli_offers_a_gvtd_channel_set_any_more():
 def test_the_old_channel_set_argument_cannot_be_passed_by_position():
     """The second positional is `sep_bands`. A caller handing it a channel-set name such as
     "long" has to fail loudly rather than have it read as a set of bands."""
-    from fnirs_pipe.qc.metrics import gvtd_channel_picks
+    from nirspipe.qc.metrics import gvtd_channel_picks
 
     with pytest.raises(ValueError):
         gvtd_channel_picks(_montage([8, 30]), "long")
@@ -255,8 +255,8 @@ def test_the_old_channel_set_argument_cannot_be_passed_by_position():
 def test_the_analysis_page_emits_the_flags():
     """The GUI's command builder is a hand-written copy of the CLI surface; this is the
     same contract `test_gui_cli_surface` holds for the postprocessing flags."""
-    from fnirs_pipe.cli.run import _build_parser
-    from fnirs_pipe.interface.callbacks.analysis_callbacks import _build_cli_args
+    from nirspipe.cli.run import _build_parser
+    from nirspipe.interface.callbacks.analysis_callbacks import _build_cli_args
 
     base = dict(bids_dir="/b", output_dir="/o", subjects=["001"], dpf=6.0, sci_thresh=0.8,
                 cardiac_l=0.7, cardiac_h=2.0, resp_l=0.1, resp_h=0.5, post_mode="none")
@@ -296,16 +296,16 @@ def test_an_upper_bound_switched_off_is_not_the_same_as_one_never_stamped():
 
 
 def test_the_writer_and_the_reader_share_one_set_of_keys():
-    from fnirs_pipe.qc.metrics._helpers import BANDS_RECORD_KEYS
+    from nirspipe.qc.metrics._helpers import BANDS_RECORD_KEYS
     assert set(bands_to_record(separation_bands())) == set(BANDS_RECORD_KEYS)
 
 
 # ---- Read back from the members' records ----
-# `fnirs-hyper` works on derivatives prep already split and stamped, so being told the
+# `nirspipe-hyper` works on derivatives prep already split and stamped, so being told the
 # bands again is an invitation to type a number that does not match the one on disk.
 
 def _dyad():
-    from fnirs_pipe.pipeline.hyper import GroupEntry
+    from nirspipe.pipeline.hyper import GroupEntry
     return [GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")]
 
 
@@ -316,7 +316,7 @@ def _sqm(*per_member):
 
 
 def test_agreeing_records_decide_the_bands():
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     assert resolve_group_bands(_dyad(), _sqm(bands, bands)) == bands
 
@@ -325,14 +325,14 @@ def test_members_prepped_with_different_bands_are_refused():
     """Not reconciled: the bands also chose what short-channel regression removed from each
     member upstream, so a band taken from both would describe neither. Nothing is lost by
     refusing, since the homologous channel set already intersects by label."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     with pytest.raises(ValueError, match="different separation bands"):
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, None)))
 
 
 def test_the_refusal_names_both_members_and_their_bands():
     """A message saying only "they disagree" leaves the operator to grep two records."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     with pytest.raises(ValueError) as excinfo:
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, 0.055)))
     message = str(excinfo.value)
@@ -343,7 +343,7 @@ def test_the_refusal_names_both_members_and_their_bands():
 def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
     """Refusing an unstamped dyad outright would make it unanalysable, so it is a warning;
     the value is a guess and says so."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
     assert "no separation bands stamped" in caplog.text
@@ -353,7 +353,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
     """The other member's stamp is the best evidence available, so it is what gets applied,
     but the warning has to name that value rather than the package defaults, or a reader
     is told 10 mm was assumed while 12 mm was used."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm((0.012, 0.02, None), None)) == (0.012, 0.02, None)
     assert "sub-02 task-tap" in caplog.text
@@ -361,7 +361,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
 
 
 def test_a_flag_overrides_the_records_and_says_so(caplog):
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands),
@@ -373,7 +373,7 @@ def test_a_flag_overrides_the_records_and_says_so(caplog):
 def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default():
     """Capping the long band must not silently re-assert 10 / 15 mm on a dyad prepped at
     12 / 20 mm, which is what falling back to `separation_bands()` would do."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {"long_max_dist": 0.055})
     assert resolved == (0.012, 0.02, 0.055)
@@ -382,7 +382,7 @@ def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default
 def test_an_override_of_only_none_values_is_not_an_override(caplog):
     """argparse hands over three Nones when no flag was given, which must not read as a
     request to force the package defaults."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {
@@ -394,14 +394,14 @@ def test_an_override_of_only_none_values_is_not_an_override(caplog):
 def test_a_forced_band_is_still_validated():
     """The override merges with the records, so the pair it produces was never validated by
     the CLI: forcing a short edge past the records' long edge has to be caught here."""
-    from fnirs_pipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper import resolve_group_bands
     bands = (0.012, 0.02, None)
     with pytest.raises(ValueError, match="overlap"):
         resolve_group_bands(_dyad(), _sqm(bands, bands), {"short_max_dist": 0.03})
 
 
 def test_a_record_stamps_whether_it_carries_bands_at_all():
-    from fnirs_pipe.qc.metrics._helpers import record_has_bands
+    from nirspipe.qc.metrics._helpers import record_has_bands
     assert record_has_bands(bands_to_record((0.01, 0.015, None)))
     assert not record_has_bands({"n_long_channels": 1})
     # partial is not a stamp: the writer always writes the three together, and mixing a
@@ -429,8 +429,8 @@ def test_a_positionless_montage_builds_no_short_channel_regressors():
 
     It is a refusal rather than an empty return: a skip would leave the methods text naming
     regressors the residual does not carry."""
-    from fnirs_pipe.exceptions import StageError
-    from fnirs_pipe.pipeline.glm import _short_channel_regressors
+    from nirspipe.exceptions import StageError
+    from nirspipe.pipeline.glm import _short_channel_regressors
 
     raw = _montage([8, 30], ch_type="hbo", positioned=False)
     with pytest.raises(StageError, match="no channel at or under"):
@@ -442,8 +442,8 @@ def test_the_refusal_names_the_shortest_channel_there_is():
     """The other arm of that message, and the one a montage sitting just outside the short
     band hits: the number to raise --short-max-dist to has to be in the error rather than
     left for the reader to go measure."""
-    from fnirs_pipe.exceptions import StageError
-    from fnirs_pipe.pipeline.glm import _short_channel_regressors
+    from nirspipe.exceptions import StageError
+    from nirspipe.pipeline.glm import _short_channel_regressors
 
     raw = _montage([12.8, 30], ch_type="hbo")
     with pytest.raises(StageError, match="shortest is 12.8 mm"):
@@ -451,7 +451,7 @@ def test_the_refusal_names_the_shortest_channel_there_is():
 
 
 def test_the_gvtd_channel_set_follows_the_bands():
-    from fnirs_pipe.qc.metrics import gvtd_channel_picks
+    from nirspipe.qc.metrics import gvtd_channel_picks
 
     raw = _montage([8, 30, 58])
     assert gvtd_channel_picks(raw) == (["S2_D2 760", "S3_D3 760"], "long")
@@ -477,7 +477,7 @@ def test_the_orphans_are_named_with_their_own_separations():
     """The gap is a package default; the separations are this montage's. A note that says
     only "10-15 mm" tells a reader a gap exists, not whether moving a bound by 1 mm or 5
     would take their channels in."""
-    from fnirs_pipe.qc.metrics import separation_orphans
+    from nirspipe.qc.metrics import separation_orphans
 
     raw = _montage([8, 12.8, 13.8, 30])
     assert separation_orphans(raw) == pytest.approx({"S2_D2 760": 12.8, "S3_D3 760": 13.8})
@@ -490,7 +490,7 @@ def test_the_orphans_are_named_with_their_own_separations():
 
 
 def test_the_note_says_where_the_orphans_sit_and_which_bound_would_take_them():
-    from fnirs_pipe.qc.common.channel_table import separation_notes
+    from nirspipe.qc.common.channel_table import separation_notes
 
     scalars = {"n_long_channels": 1, "n_short_channels": 1}
     rows = [{"separation": "unclassified"}, {"separation": "unclassified"}]
@@ -509,7 +509,7 @@ def test_the_note_says_where_the_orphans_sit_and_which_bound_would_take_them():
 def test_a_config_toml_can_carry_the_separation_bands():
     """They have to be resolved before prep runs, because prep stamps them into the record
     and only the post config builder is handed the TOML."""
-    from fnirs_pipe.cli import _shared
+    from nirspipe.cli import _shared
 
     assert _shared.SEPARATION_BAND_KEYS == ("short_max_dist", "long_min_dist", "long_max_dist")
     args = {"short_max_dist": None, "long_min_dist": 16.0}
@@ -532,8 +532,8 @@ def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
     would, on a montage with no channel under 10 mm, describe a channel set the regression
     had not used.
     """
-    from fnirs_pipe.cli import _shared
-    from fnirs_pipe.qc.subject import sqm_record
+    from nirspipe.cli import _shared
+    from nirspipe.qc.subject import sqm_record
 
     seen = {}
 
@@ -561,7 +561,7 @@ def test_the_report_note_quotes_the_run_s_own_gap():
     Reading them back off that dict would give the note the package defaults, so a run
     measured on any other pair would be told its channels sat in a gap it does not have.
     """
-    from fnirs_pipe.qc.subject.report import _note_separation
+    from nirspipe.qc.subject.report import _note_separation
 
     notes: list = []
     scalars = {"n_long_channels": 1, "n_short_channels": 1}   # no sep_*_mm keys
@@ -601,7 +601,7 @@ def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
     Its scores are only in the whole-montage section, so reading the row off the split
     sections would leave every column None.
     """
-    from fnirs_pipe.qc.common.channel_table import channel_rows
+    from nirspipe.qc.common.channel_table import channel_rows
 
     sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
     rows = {r["name"]: r for r in channel_rows(_split_record(), sci, ["O 760"])}
@@ -619,7 +619,7 @@ def test_a_channel_in_neither_range_carries_the_whole_montage_scores():
 def test_a_rejected_channel_in_neither_range_prints_why_it_went():
     """The reason is derived from the row's own scores, so an empty row would read as a
     manual rejection the screening never made."""
-    from fnirs_pipe.qc.common.channel_table import channel_rows, format_rows
+    from nirspipe.qc.common.channel_table import channel_rows, format_rows
 
     sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
     rows = channel_rows(_split_record(), sci, ["O 760"])
@@ -631,7 +631,7 @@ def test_a_rejected_channel_in_neither_range_prints_why_it_went():
 
 
 def test_orphans_are_counted_by_pair_and_advised_only_between_the_ranges():
-    from fnirs_pipe.qc.common.channel_table import separation_notes
+    from nirspipe.qc.common.channel_table import separation_notes
 
     scalars = {"n_long_channels": 1, "n_short_channels": 1}
     # one orphan pair, handed over the way the raw viewer does, one row per wavelength

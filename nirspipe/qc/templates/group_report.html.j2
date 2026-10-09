@@ -101,7 +101,7 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
       {%- endfor %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       {%- if versions %}
-      <tr><th>fnirs-pipe</th><td>v{{ versions.get('fnirs-pipe', 'n/a') }}</td></tr>
+      <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>Python</th><td>{{ versions.get('python', 'n/a') }}</td></tr>
       {%- endif %}
     </table>

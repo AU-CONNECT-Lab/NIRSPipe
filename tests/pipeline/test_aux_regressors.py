@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fnirs_pipe.io.auxiliary import (
+from nirspipe.io.auxiliary import (
     TIME_COLUMN,
     aux_table_path,
     find_aux_table,
@@ -41,10 +41,10 @@ from fnirs_pipe.io.auxiliary import (
     write_aux_table,
     write_aux_window,
 )
-from fnirs_pipe.io.snirf import write_snirf
-from fnirs_pipe.pipeline.crop import crop_snirf_from_path
-from fnirs_pipe.pipeline.glm import _aux_regressors
-from fnirs_pipe.pipeline.post_pipeline import (
+from nirspipe.io.snirf import write_snirf
+from nirspipe.pipeline.crop import crop_snirf_from_path
+from nirspipe.pipeline.glm import _aux_regressors
+from nirspipe.pipeline.post_pipeline import (
     PostConfig,
     _has_confounds,
     _warn_unmatched_design_band,

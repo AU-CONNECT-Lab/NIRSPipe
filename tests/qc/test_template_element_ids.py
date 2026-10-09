@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-TEMPLATES = Path(__file__).resolve().parents[2] / "fnirs_pipe" / "qc" / "templates"
+TEMPLATES = Path(__file__).resolve().parents[2] / "nirspipe" / "qc" / "templates"
 PAGES = sorted(p.name for p in TEMPLATES.iterdir() if p.suffix in {".html", ".j2"})
 
 _LOOKUP = re.compile(r"""getElementById\(\s*["']([\w\-]+)["']\s*\)""")

@@ -22,12 +22,12 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.metrics import (
     compute_prep_haemo_sqm,
     compute_raw_sqm,
     compute_sci_scores,
 )
-from fnirs_pipe.utils.lineage import stamp
+from nirspipe.utils.lineage import stamp
 from tests._synth import synth_raw
 
 CARDIAC = (0.7, 1.5)

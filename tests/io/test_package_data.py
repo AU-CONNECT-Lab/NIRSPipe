@@ -16,15 +16,15 @@ import glob
 import tomllib
 from pathlib import Path
 
-import fnirs_pipe
+import nirspipe
 
-PACKAGE = Path(fnirs_pipe.__file__).resolve().parent
+PACKAGE = Path(nirspipe.__file__).resolve().parent
 ROOT = PACKAGE.parent
 
 
 def _patterns() -> list[str]:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    return config["tool"]["setuptools"]["package-data"]["fnirs_pipe"]
+    return config["tool"]["setuptools"]["package-data"]["nirspipe"]
 
 
 def _declared() -> set[str]:

@@ -7,10 +7,10 @@ whose uncoupled pair is known, plus its all-channels-fail refusal.
 
 import pytest
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, mark_bad_channels
-from fnirs_pipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, SCI_PASS
-from fnirs_pipe.qc.metrics.screening import resolve_cutoffs, screen_channels
+from nirspipe.exceptions import StageError
+from nirspipe.pipeline.prep_pipeline import intensity_to_od, mark_bad_channels
+from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, SCI_PASS
+from nirspipe.qc.metrics.screening import resolve_cutoffs, screen_channels
 
 from tests._synth import synth_raw
 

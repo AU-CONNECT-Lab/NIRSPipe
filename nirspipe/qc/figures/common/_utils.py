@@ -4,8 +4,8 @@ import numpy as np
 import mne
 import plotly.graph_objects as go
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.utils import pair_of
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.figures.utils")
 

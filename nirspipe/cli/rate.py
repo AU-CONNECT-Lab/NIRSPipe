@@ -1,4 +1,4 @@
-"""fnirs-rate CLI entry point (argparse)."""
+"""nirspipe-rate CLI entry point (argparse)."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ import argparse
 import sys
 from pathlib import Path
 
-from fnirs_pipe import __version__
+from nirspipe import __version__
 
-from fnirs_pipe.io.derivatives import group_label, subject_labels
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.cli import _shared
+from nirspipe.io.derivatives import group_label, subject_labels
+from nirspipe.io.naming import report_name
+from nirspipe.cli import _shared
 
 
 def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
-    """Launch QC rating interface for fnirs-pipe reports."""
-    from fnirs_pipe.qc.rating.app import FNIRSRatingApp
+    """Launch QC rating interface for nirspipe reports."""
+    from nirspipe.qc.rating.app import FNIRSRatingApp
 
     subjects = participant_label or subject_labels(output_dir)
     if not subjects:
@@ -31,7 +31,7 @@ def cmd_raw(
     sci_threshold: float, port: int | None,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
-    from fnirs_pipe.qc.rating.app import RawRatingApp
+    from nirspipe.qc.rating.app import RawRatingApp
 
     name_parts = [f"sub-{participant_label}"]
     if session_label:
@@ -55,8 +55,8 @@ def cmd_hyper(
     derivatives_dir: Path | None = None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
-    from fnirs_pipe.pipeline.hyper import parse_group_csv
-    from fnirs_pipe.qc.rating.app import HyperRatingApp
+    from nirspipe.pipeline.hyper import parse_group_csv
+    from nirspipe.qc.rating.app import HyperRatingApp
 
     fname = report_name(group_label(group_id, task_label, session_label), desc="raw")
     html_path = output_dir / f"group-{group_id}" / fname
@@ -77,7 +77,7 @@ def cmd_hyper(
 
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
-              "members' raw pages in the fnirs-pipe tree do not read them.", file=sys.stderr)
+              "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
     print(f"Launching hyper viewer: {html_path.name} ...")
     HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
                    decisions_dir=derivatives_dir).run(port=port)
@@ -85,14 +85,14 @@ def cmd_hyper(
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="fnirs-rate",
+        prog="nirspipe-rate",
         description="Interactive QC review for fNIRS data: rating, individual viewer, hyperscanning viewer.",
     )
-    p.add_argument("--version", action="version", version=f"fnirs-rate {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-rate {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     pr = sub.add_parser("rate", help="Launch QC rating interface.")
-    pr.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    pr.add_argument("output_dir", type=Path, help="nirspipe output directory.")
     pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
                     type=_shared.BidsLabel,
                     help="Subject ID(s) to open. Default: all found.")
@@ -101,7 +101,7 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.set_defaults(func=cmd_rate)
 
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
-    pw.add_argument("output_dir", type=Path, help="fnirs-pipe output directory.")
+    pw.add_argument("output_dir", type=Path, help="nirspipe output directory.")
     # one subject, not a list: the viewer opens one recording at a time
     pw.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
                     help="Subject ID to open, e.g. '01'.")
@@ -118,13 +118,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
     ph.add_argument("output_dir", type=Path,
-                    help="The fnirs-hyper tree holding the group-<id>/ raw report.")
+                    help="The nirspipe-hyper tree holding the group-<id>/ raw report.")
     ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
                     help="Group ID to open, e.g. 'A'.")
     ph.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,
                     help="Task label, e.g. 'tapping'.")
     ph.add_argument("--pairs-csv", type=Path, required=True,
-                    help="CSV with columns: group_id, subject_id, task (same as fnirs-qc hyper-raw). "
+                    help="CSV with columns: group_id, subject_id, task (same as nirspipe-qc hyper-raw). "
                          "Used to look up subject IDs in this group.")
     ph.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
@@ -134,7 +134,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5053, or the next free port above it.")
     ph.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
-                    help="The fnirs-pipe tree. Each member's channel decisions are kept there, "
+                    help="The nirspipe tree. Each member's channel decisions are kept there, "
                          "in the file their raw page reads; without it they go to OUTPUT_DIR.")
     ph.set_defaults(func=cmd_hyper)
     return p

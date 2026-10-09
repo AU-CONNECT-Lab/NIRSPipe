@@ -8,22 +8,22 @@ from pathlib import Path
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import pair_of
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.auxiliary import imu_traces, read_aux_snirf
-from fnirs_pipe.io.derivatives import bids_uris
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.subject.condition_views import (
+from nirspipe.utils import pair_of
+from nirspipe.exceptions import StageError
+from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
+from nirspipe.io.derivatives import bids_uris
+from nirspipe.io.naming import report_name
+from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.common.figure_io import (
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
-from fnirs_pipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
-from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
+from nirspipe.qc.figures.common.provenance_figure import write_provenance
+from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     channel_columns,
     channel_rows, format_rows, heatmap_args, pair_rows, registration_note, save_channel_csv,
@@ -31,22 +31,22 @@ from fnirs_pipe.qc.common.channel_table import (
     separation_notes,
     split_table,
 )
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.metrics import (
     IMU_STAT_KEYS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
     haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
     screen_channels, screening_scores,
 )
-from fnirs_pipe.qc.metrics._helpers import registration_offset, separation_orphans
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.metrics._helpers import registration_offset, separation_orphans
+from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.qc.boilerplate.vocabulary import metric_rows
-from fnirs_pipe.qc.common.screen_scope import resolve_screen_scope
-from fnirs_pipe.qc.subject.record_io import read_record, write_record
-from fnirs_pipe.qc.subject.sqm_record import (
+from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.boilerplate.vocabulary import metric_rows
+from nirspipe.qc.common.screen_scope import resolve_screen_scope
+from nirspipe.qc.subject.record_io import read_record, write_record
+from nirspipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES, haemo_sections, motion_sections, raw_condition_sections, raw_sections,
     sqm_record_dict,
 )
@@ -122,7 +122,7 @@ def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> No
     No ``motion_corrected_spans_s``: that needs the optical density either side of the
     correction step and this pass runs before it. The key is absent rather than empty.
     """
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.qc.metrics import (
         gvtd_above_segments, long_short_channels, spike_segments,
     )
 
@@ -174,7 +174,7 @@ def _process_run(
     see: the windowed matrices, the record and the condition windows. It is kept out of the
     payload, which is serialised with ``json.dumps`` and cannot hold a numpy array.
     """
-    from fnirs_pipe.qc.figures import (
+    from nirspipe.qc.figures import (
         build_channel_figure,
         build_epoch_preview_figure,
         build_evoked_topo_figure,
@@ -218,7 +218,7 @@ def _process_run(
     raw_motcorr = None
     if motion_correction and motion_correction != "none":
         with guard("Motion correction", errors, label):
-            from fnirs_pipe.pipeline.motion import correct_motion
+            from nirspipe.pipeline.motion import correct_motion
             raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction)
 
     ppf = dpf[0] if len(dpf) == 1 else dpf
@@ -263,8 +263,8 @@ def _process_run(
     # the exception, and the per-condition views read it afterwards.
     cond_windows: list = []
     with guard("Condition windows", errors, label):
-        from fnirs_pipe.qc.common.windows import condition_windows
-        from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
+        from nirspipe.qc.common.windows import condition_windows
+        from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
         cond_windows = condition_windows(raw, min_duration=2 * SCREEN_WINDOW_S)
     # measured under every label, but the views and pages below are named by a slug of it;
     # two labels sharing one would overwrite each other, so neither is drawn
@@ -302,7 +302,7 @@ def _process_run(
 
     if raw_motcorr is not None:
         with guard("Motion sections", errors, label):
-            from fnirs_pipe.qc.subject.sqm_record import _section_writer
+            from nirspipe.qc.subject.sqm_record import _section_writer
             motion_sections(
                 raw_od, raw_motcorr, _section_writer(raw_secs, raw_pc), windowed,
                 lambda name: (raw_secs.get(name) or {}).get("gvtd_thresh"),
@@ -414,7 +414,7 @@ def _process_run(
             windowed.update(imu_windowed(imu, gvtd_od.times, float(gvtd_od.info["sfreq"]),
                                          window_s))
     with guard("GVTD carpet", errors, label):
-        from fnirs_pipe.qc.metrics import gvtd_channel_blocks
+        from nirspipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
         gvtd_set = gvtd_blocks[0][0]
         gvtd_picks = [c for _, names in gvtd_blocks for c in names]
@@ -527,7 +527,7 @@ def _process_run(
     motion_channels: list[str] = []
     if raw_motcorr is not None:
         with guard("Motion detail", errors, label):
-            from fnirs_pipe.qc.subject.report import (
+            from nirspipe.qc.subject.report import (
                 _motion_detail_figures, _section_motion_detail,
             )
             built = _motion_detail_figures(
@@ -563,7 +563,7 @@ def _process_run(
     # ── file: HbO-HbR correlation ──────────────────────────────────────────────
     if raw_haemo is not None:
         with guard("HbO-HbR correlation panel", errors, label):
-            from fnirs_pipe.qc.figures import hbo_hbr_fit_js
+            from nirspipe.qc.figures import hbo_hbr_fit_js
             fig = _hbo_hbr_figure(raw_haemo, raw_haemo_post, sep_bands, motion_correction,
                                   {pair_of(c) for c in bad_channels})
             if fig is not None:
@@ -610,7 +610,7 @@ def _process_run(
         detail_spans = [(lab, t0 + detail_origin, t1 + detail_origin)
                         for lab, t0, t1 in view_windows]
         # rejected pairs too, named as such, as the subject report's picker has them
-        from fnirs_pipe.qc.subject.report import _pair_label
+        from nirspipe.qc.subject.report import _pair_label
         channel_pairs = get_channel_pairs(raw_haemo, exclude=())
         short_pairs = {pair_of(n) for n in long_short_channels(raw_haemo, sep_bands)[1]}
         rejected = {pair_of(c) for c in bad_channels}
@@ -790,7 +790,7 @@ def _marked_copy(raw_od, bad_channels: "set[str]"):
 
 def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method, bad_pairs):
     """The subject report's correlation panel, with motion correction as the step between."""
-    from fnirs_pipe.qc.figures import hbo_hbr_correlation_figure
+    from nirspipe.qc.figures import hbo_hbr_correlation_figure
     return hbo_hbr_correlation_figure(
         haemo, title="HbO–HbR correlation", sep_bands=sep_bands, raw_after=haemo_post,
         stage_labels=("before motion correction", f"after {method}"), bad_pairs=bad_pairs)
@@ -869,7 +869,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     """One report file per condition, beside the run's own, read out of the quality record.
 
     Every number on these pages comes from the record's ``by_condition`` section, which
-    :func:`~fnirs_pipe.qc.subject.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
+    :func:`~nirspipe.qc.subject.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
     is measured here. A record carrying no such section gets no pages rather than a second
     copy of the numbers free to disagree with the first.
 
@@ -877,9 +877,9 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     to be learned twice. The file name comes from :func:`condition_page_name`, keyed by the
     run's own label and not the report's, since one report holds every run of a task.
     """
-    from fnirs_pipe.qc.figures import hbo_hbr_fit_js
-    from fnirs_pipe.qc.subject.condition_views import condition_payloads
-    from fnirs_pipe.qc.subject.report import condition_page_name
+    from nirspipe.qc.figures import hbo_hbr_fit_js
+    from nirspipe.qc.subject.condition_views import condition_payloads
+    from nirspipe.qc.subject.report import condition_page_name
 
     sqm_path = ctx.get("sqm_path")
     if sqm_path is None or not Path(sqm_path).exists():
@@ -1006,7 +1006,7 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
         meta.append(("session", session))
     return {
         **page_vars(
-            title=f"fnirs-pipe raw QC  \u00b7  {output_path.stem}",
+            title=f"nirspipe raw QC  \u00b7  {output_path.stem}",
             heading="fnirs\u2011pipe Raw Viewer",
             nav_meta=meta,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
@@ -1044,7 +1044,7 @@ def build_prep_raw_report(
     ``by_condition`` writes one extra report per annotated condition beside the run's own,
     carrying the condition in its ``cond-`` entity. Their numbers are sliced out of the run's
     windowed pass rather than measured on a cut of it. See
-    :mod:`fnirs_pipe.qc.subject.condition_views`.
+    :mod:`nirspipe.qc.subject.condition_views`.
     """
     # the report sits in the subject's own folder, so its figures are one level in from it
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole

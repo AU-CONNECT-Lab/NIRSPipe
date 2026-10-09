@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import pytest
 
-from fnirs_pipe.pipeline.hyper.group_io import parse_group_csv
+from nirspipe.pipeline.hyper.group_io import parse_group_csv
 
 SESSIONS = ("a", "b")
 TASK = "mixed"
@@ -35,9 +35,9 @@ def test_a_csv_without_sessions_keys_every_group_under_none(tmp_path):
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
     """One dyad recorded in two sessions, through every dyad command."""
-    from fnirs_pipe.cli import hyper as hyper_cli
-    from fnirs_pipe.cli import qc as qc_cli
-    from fnirs_pipe.cli import run as run_cli
+    from nirspipe.cli import hyper as hyper_cli
+    from nirspipe.cli import qc as qc_cli
+    from nirspipe.cli import run as run_cli
     from tests._fingerprint import CLI_ARGS
     from tests._synth import make_hyper_dataset
 

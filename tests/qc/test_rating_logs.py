@@ -1,8 +1,8 @@
 """The two append-only rating logs sit under `logs/`, which `.bidsignore` already exempts."""
 
-from fnirs_pipe.io.derivatives import write_bidsignore
-from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.rating.app import FNIRSRatingApp, RawRatingApp
+from nirspipe.io.derivatives import write_bidsignore
+from nirspipe.io.naming import report_name
+from nirspipe.qc.rating.app import FNIRSRatingApp, RawRatingApp
 
 
 def test_the_subject_rating_log_goes_under_logs(tmp_path):
@@ -24,7 +24,7 @@ def test_logs_is_one_of_the_exemptions(tmp_path):
 
 
 def test_a_rating_file_reads_back_what_was_written(tmp_path):
-    from fnirs_pipe.qc.rating.app import _read_rating_file, _write_rating_file
+    from nirspipe.qc.rating.app import _read_rating_file, _write_rating_file
 
     path = tmp_path / "r.json"
     assert _read_rating_file(path) == {"ratings": {}, "notes": {}}

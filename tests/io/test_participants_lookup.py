@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from fnirs_pipe.io.bids import get_participant_age
+from nirspipe.io.bids import get_participant_age
 
 
 @pytest.mark.parametrize("pid", ["sub-01", "01"])

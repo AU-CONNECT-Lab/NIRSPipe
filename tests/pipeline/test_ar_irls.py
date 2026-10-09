@@ -13,7 +13,7 @@ import pytest
 import statsmodels.api as sm
 from scipy import stats
 
-from fnirs_pipe.pipeline.ar_irls import (
+from nirspipe.pipeline.ar_irls import (
     bic_ar_order,
     fit_channel,
     resolve_pmax,
@@ -298,7 +298,7 @@ def _null_rejection_rates(n_draws, n, n_bursts, seed0):
     """Share of draws where a nominal 5% test rejects, under noise containing no effect."""
     from nilearn.glm.regression import ARModel
 
-    from fnirs_pipe.pipeline.ar_irls import bic_ar_order
+    from nirspipe.pipeline.ar_irls import bic_ar_order
 
     hits = {"ar_irls": 0, "ar_only": 0, "ols": 0}
     for k in range(n_draws):
@@ -386,7 +386,7 @@ def test_pmax_follows_the_same_rule_as_auto():
 # ---- the CLI surface ----
 @pytest.mark.parametrize("value", ["ar_irls", "ar_irls40", "auto", "ols", "ar16"])
 def test_the_validator_takes_it(value):
-    from fnirs_pipe.cli.run import _noise_model
+    from nirspipe.cli.run import _noise_model
     assert _noise_model(value) == value
 
 
@@ -394,6 +394,6 @@ def test_the_validator_takes_it(value):
 def test_the_validator_refuses_a_near_miss(value):
     import argparse
 
-    from fnirs_pipe.cli.run import _noise_model
+    from nirspipe.cli.run import _noise_model
     with pytest.raises(argparse.ArgumentTypeError):
         _noise_model(value)

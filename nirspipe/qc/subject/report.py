@@ -54,14 +54,14 @@ Report sections
 
 import base64
 from contextlib import contextmanager
-from fnirs_pipe.utils import is_marker, pair_of
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.auxiliary import (
+from nirspipe.utils import is_marker, pair_of
+from nirspipe.exceptions import StageError
+from nirspipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
 )
-from fnirs_pipe.io.derivatives import entity_of
-from fnirs_pipe.pipeline.denoise import band_limited
-from fnirs_pipe.io.naming import parse_path, report_name
+from nirspipe.io.derivatives import entity_of
+from nirspipe.pipeline.denoise import band_limited
+from nirspipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -73,29 +73,29 @@ import html as _html
 import mne
 import mne.io
 
-from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
-from fnirs_pipe.qc.boilerplate.notes import section_note
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from fnirs_pipe.qc.metrics.motion import SPIKE_CH_FRAC
-from fnirs_pipe.qc.common.channel_table import (
+from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
+from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
+from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     channel_rows, format_rows, heatmap_args, measured_columns,
     registration_note, roi_overlap_note, separation_blocks, separation_notes,
 )
-from fnirs_pipe.qc.common.figure_io import (
+from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, _fig_href, _pair_fname, save_png,
     _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.metrics import (
     CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks,
     registration_offset, separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
-from fnirs_pipe.qc.metrics._helpers import bands_from_record
-from fnirs_pipe.qc.figures.common._utils import chunk_annotations
-from fnirs_pipe.qc.figures import (
+from nirspipe.qc.metrics._helpers import bands_from_record
+from nirspipe.qc.figures.common._utils import chunk_annotations
+from nirspipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,
     trial_quality_heatmap,
@@ -127,26 +127,26 @@ from fnirs_pipe.qc.figures import (
     fc_seed_topo_figure,
     rest_channel_panel,
 )
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.common.report_shell import (
     footer_vars, guard, note, page_vars, render,
 )
-from fnirs_pipe.qc.subject.record_io import read_record
-from fnirs_pipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
-from fnirs_pipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
-from fnirs_pipe.utils.lineage import lineage_of
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.metrics.windowed import _in_scope, window_centers
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
+from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
+from nirspipe.utils.lineage import lineage_of
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.metrics.windowed import _in_scope, window_centers
+from nirspipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_label, metric_summary,
 )
-from fnirs_pipe.qc.common.record_views import condition_verdict_view
-from fnirs_pipe.qc.common.windows import refuse_colliding_labels
-from fnirs_pipe.qc.subject.condition_views import (
+from nirspipe.qc.common.record_views import condition_verdict_view
+from nirspipe.qc.common.windows import refuse_colliding_labels
+from nirspipe.qc.subject.condition_views import (
     condition_view_table, carpet_view_table, slice_record, with_condition_corr,
 )
 
 if TYPE_CHECKING:
-    from fnirs_pipe.pipeline.prep_pipeline import PrepConfig
+    from nirspipe.pipeline.prep_pipeline import PrepConfig
 
 logger = get_logger("qc.report")
 
@@ -261,7 +261,7 @@ def _save_plotly_html(fig, path: Path, div_id: str | None = None, extra_css: str
 def _prepare_long_raw(
     raw_intensity: mne.io.Raw, subject: str, sep_bands=None,
 ) -> mne.io.Raw:
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     raw = raw_intensity.copy()
     long_names, _ = long_short_channels(raw, sep_bands)
@@ -391,7 +391,7 @@ def _section_channel_detail(
     resp: "tuple[float, float] | None" = None,
     sep_bands=None,
 ) -> dict:
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     markers = extract_markers(raw_haemo)
     # rejected pairs too, named as such: this section is where a reader looks to see why
@@ -471,7 +471,7 @@ def _motion_detail_figures(
 def _condition_views(fig, spans: "list[tuple[str, float, float]]") -> "dict | None":
     """Every condition's view of one run-wide figure, on this report's figures.
 
-    The table is assembled by :func:`~fnirs_pipe.qc.subject.condition_views.condition_view_table`,
+    The table is assembled by :func:`~nirspipe.qc.subject.condition_views.condition_view_table`,
     which the raw viewer builds its own fragment views with, so the two cannot fork.
     """
     return condition_view_table(fig, spans)
@@ -527,7 +527,7 @@ def _section_psd_detail(
     psd_stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     sep_bands=None,
 ) -> dict:
-    from fnirs_pipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import long_short_channels
 
     pairs = get_channel_pairs(raw_haemo, exclude=())
     rejected = {pair_of(n) for n in raw_haemo.info["bads"]}
@@ -733,7 +733,7 @@ def _section_haemo(
     panels and the spectra can be cut and then measured: a correlation is over whatever
     samples it gets, and ``compute_psd`` is Welch, which segments and tapers but does not
     band-pass. The stage comparison band-limits every stage (see
-    :func:`~fnirs_pipe.qc.metrics.comparable_stage_metrics`), so the stages are filtered over
+    :func:`~nirspipe.qc.metrics.comparable_stage_metrics`), so the stages are filtered over
     the whole run and cut afterwards, and ``comparable_stage_metrics`` is then told not to
     filter again.
 
@@ -785,7 +785,7 @@ def _section_haemo(
         stages.append(("desc-errts", raw_errts))
 
     if len(stages) > 1:
-        from fnirs_pipe.qc.metrics import (
+        from nirspipe.qc.metrics import (
             comparable_stage_metrics, long_short_channels,
         )
 
@@ -954,12 +954,12 @@ def _section_trial_qc(
 
     Scored over the same window the epoch figures average, and on the intensity recording,
     so a trial's SCI and SNR are on the scale the metrics table prints rather than on the
-    haemoglobin one. The scoring is shared with ``fnirs-qc prep-raw``, which is where this
+    haemoglobin one. The scoring is shared with ``nirspipe-qc prep-raw``, which is where this
     panel came from, and so is the meaning of an unset window: the figures fall back to
     ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
     which is what a block design records and a fixed window would cut off.
     """
-    from fnirs_pipe.qc.common.windows import markers_on_data_axis
+    from nirspipe.qc.common.windows import markers_on_data_axis
 
     tmin = getattr(config, "epoch_tmin", None)
     tmax = getattr(config, "epoch_tmax", None)
@@ -1068,7 +1068,7 @@ def _section_condition_trial_images(
     rebuilt panels: a scale taken on one cropped condition at a time would differ from page
     to page, and these pages are read against each other.
     """
-    from fnirs_pipe.qc.common.windows import markers_on_data_axis
+    from nirspipe.qc.common.windows import markers_on_data_axis
 
     # the annotations alone say whether any window could fill a panel, and answering from
     # them costs nothing; the pass below epochs the recording once per channel
@@ -1225,8 +1225,8 @@ def _load_stage_raw(
     if out_dir is None or sqm_label is None:
         return None
     with _guard(f"Reading desc-{desc}", errors, subject):
-        from fnirs_pipe.io.snirf import read_snirf
-        from fnirs_pipe.qc.subject.sqm_record import scan_runs
+        from nirspipe.io.snirf import read_snirf
+        from nirspipe.qc.subject.sqm_record import scan_runs
         path = (scan_runs(out_dir).get(sqm_label) or {}).get(desc)
         return None if path is None else read_snirf(path)
     return None
@@ -1242,7 +1242,7 @@ def _load_imu(
     if out_dir is None or sqm_label is None:
         return None
     with _guard("Reading IMU", errors, subject):
-        from fnirs_pipe.qc.subject.sqm_record import scan_runs
+        from nirspipe.qc.subject.sqm_record import scan_runs
         stages = list((scan_runs(out_dir).get(sqm_label) or {}).values())
         table = find_aux_table(stages[0]) if stages else None
         if table is None:
@@ -1274,7 +1274,7 @@ def _section_sqm(
     They are screened by the same criteria as everything else, so their status is
     a real verdict with a downstream cost -- a bad short channel is a bad regressor -- and
     printing that verdict without the score behind it leaves it uncheckable. Assembling
-    those rows is :mod:`fnirs_pipe.qc.common.channel_table`, which the raw views share, so the
+    those rows is :mod:`nirspipe.qc.common.channel_table`, which the raw views share, so the
     three per-channel tables in the package read one record the same way.
 
     Every family is read at its long-channel split where the record carries one, so the
@@ -1613,7 +1613,7 @@ def _section_glm(
     # switch a comparison rather than five separate pictures.
     if glm_est is not None and conditions and raw_haemo is not None:
         with _guard("GLM activation panel", errors, subject):
-            from fnirs_pipe.qc.figures import activation_condition_figures
+            from nirspipe.qc.figures import activation_condition_figures
             df = glm_est.to_dataframe().reset_index()
             if "Contrast" not in df.columns:
                 for alt in ("contrast", "Regressor", "regressor", "condition", "Condition"):
@@ -2287,7 +2287,7 @@ def _cropped_sections(
              "resp": (config.resp_l_freq, config.resp_h_freq)}
     # the same floor the record holds the band scalars to, so a page cannot show a spectrum
     # for a number the record refused to write
-    from fnirs_pipe.qc.subject.condition_views import PSD_NFFT_CAP
+    from nirspipe.qc.subject.condition_views import PSD_NFFT_CAP
     n_fft_floor = min(PSD_NFFT_CAP, len(raw_haemo.times))
     psd_ok = len(haemo.times) >= n_fft_floor
     if not psd_ok:
@@ -2436,7 +2436,7 @@ def _write_condition_reports(
     """One subject-report page per annotated condition, read out of the quality record.
 
     Every number on these pages comes from the record's ``by_condition`` section, which
-    :func:`~fnirs_pipe.qc.subject.sqm_record.condition_sections` wrote. Nothing is measured here;
+    :func:`~nirspipe.qc.subject.sqm_record.condition_sections` wrote. Nothing is measured here;
     a run whose record predates that section gets no pages rather than a second, possibly
     disagreeing, copy of the numbers.
 

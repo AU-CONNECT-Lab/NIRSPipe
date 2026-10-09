@@ -11,7 +11,7 @@ samples however you round, so every grid disagreement here is invisible; at 7.81
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics import (
+from nirspipe.qc.metrics import (
     PSP_WINDOW_S,
     attach_windowed_series,
     compute_windowed_gvtd,
@@ -77,7 +77,7 @@ def test_psp_scales_with_window_length_and_sci_does_not(od_raw):
 def test_psp_mean_uses_the_pinned_window_not_the_library_default(od_raw, monkeypatch):
     import mne_nirs.preprocessing as nirs_prep
 
-    from fnirs_pipe.qc import metrics as qm
+    from nirspipe.qc import metrics as qm
 
     seen = {}
     real = nirs_prep.peak_power
@@ -123,7 +123,7 @@ def test_the_window_is_recorded_even_when_every_series_fails(od_raw):
 def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
     import sqlite3
 
-    from fnirs_pipe.utils import job_db
+    from nirspipe.utils import job_db
 
     db = tmp_path / "runs.db"
     # the schema as the previous version left it: everything but the newest column
@@ -141,7 +141,7 @@ def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
 
 # ---- the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
-    from fnirs_pipe.qc.metrics.windowed import window_centers as _window_centers
+    from nirspipe.qc.metrics.windowed import window_centers as _window_centers
 
     pairs = [(0.0, 10.1), (10.1, 20.2), (20.2, 30.3)]
     assert np.allclose(_window_centers(pairs), [5.05, 15.15, 25.25])
@@ -157,7 +157,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
     import matplotlib.pyplot as plt
     from mne_nirs.visualisation import plot_timechannel_quality_metric
 
-    from fnirs_pipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
+    from nirspipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
 
     plt.switch_backend("Agg")
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
@@ -181,7 +181,7 @@ def test_our_heatmap_has_one_column_per_window_like_mne_nirs_own_figure(od_raw):
 
 
 def test_sci_heatmap_time_axis_spans_the_recording(od_raw):
-    from fnirs_pipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
+    from nirspipe.qc.figures.subject.sci_psp_panel import build_sci_psp_figure
 
     sci_matrix, sci_times = compute_windowed_sci(od_raw, *CARDIAC, WINDOW_S)
     fig = build_sci_psp_figure(

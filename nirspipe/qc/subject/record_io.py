@@ -9,13 +9,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.exceptions import StageError
-from fnirs_pipe.io.naming import record_table_name
-from fnirs_pipe.io.tables import NA, write_tsv
-from fnirs_pipe.qc.boilerplate.vocabulary import (
+from nirspipe.exceptions import StageError
+from nirspipe.io.naming import record_table_name
+from nirspipe.io.tables import NA, write_tsv
+from nirspipe.qc.boilerplate.vocabulary import (
     RECORD_CHANNEL_COLUMNS, RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
 )
-from fnirs_pipe.qc.metrics.imu import IMU_QUANTITIES
+from nirspipe.qc.metrics.imu import IMU_QUANTITIES
 
 MATRIX_STATS = ("sci", "psp", "cv")
 SUMMARY_STAT = "summary"

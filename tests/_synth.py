@@ -188,7 +188,7 @@ def synth_raw(
 
 def _write_subject(bids_dir: Path, subject: str, task: str, raw: mne.io.Raw,
                    session: "str | None" = None) -> Path:
-    from fnirs_pipe.io.snirf import write_snirf
+    from nirspipe.io.snirf import write_snirf
 
     nirs_dir = bids_dir / f"sub-{subject}" / (f"ses-{session}" if session else "") / "nirs"
     prefix = f"sub-{subject}" + (f"_ses-{session}" if session else "")

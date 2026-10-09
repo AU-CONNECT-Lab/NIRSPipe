@@ -11,8 +11,8 @@ the dyad path cannot end up screening on different things.
 inside one short window and counts how many windows a channel passes; the two whole-run numbers stay in the table because every report
 prints them and because they are the lines ``good_frac`` applies per window.
 
-The scores themselves are measured in :mod:`fnirs_pipe.qc.metrics.coupling`; this module
-only decides. Cutoffs live in :mod:`fnirs_pipe.qc.metrics._helpers` beside the other
+The scores themselves are measured in :mod:`nirspipe.qc.metrics.coupling`; this module
+only decides. Cutoffs live in :mod:`nirspipe.qc.metrics._helpers` beside the other
 per-channel lines.
 """
 
@@ -23,12 +23,12 @@ from typing import Callable
 
 import mne
 
-from fnirs_pipe.qc.metrics._helpers import (
+from nirspipe.qc.metrics._helpers import (
     GOOD_FRAC_PASS, PSP_PASS, SCI_PASS, require_cardiac_below_nyquist,
 )
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
-from fnirs_pipe.qc.metrics.windowed import good_window_fraction
+from nirspipe.utils.logging import get_logger
+from nirspipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
+from nirspipe.qc.metrics.windowed import good_window_fraction
 
 logger = get_logger("qc.metrics.screening")
 

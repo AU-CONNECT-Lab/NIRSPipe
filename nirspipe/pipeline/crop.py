@@ -12,15 +12,15 @@ from pathlib import Path
 import pandas as pd
 import mne
 
-from fnirs_pipe import __version__
-from fnirs_pipe.io.auxiliary import write_aux_window
-from fnirs_pipe.io.derivatives import (bids_uris, data_state, dataset_root_of, entity_of,
+from nirspipe import __version__
+from nirspipe.io.auxiliary import write_aux_window
+from nirspipe.io.derivatives import (bids_uris, data_state, dataset_root_of, entity_of,
                                        read_json, write_dataset_description,
                                        write_sidecar_json)
-from fnirs_pipe.io.snirf import read_snirf, write_snirf
-from fnirs_pipe.io.tables import read_table, write_tsv
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.utils.snirf_prep import (
+from nirspipe.io.snirf import read_snirf, write_snirf
+from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.utils.logging import get_logger
+from nirspipe.utils.snirf_prep import (
     annotations_to_df,
     bids_stem,
     copy_dataset_root,
@@ -149,7 +149,7 @@ def _setup_deriv_dir(derivatives_dir: Path, sub: str, ses: str | None,
     out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
     # the dataset the cut file sits in, found the same way from the CLI and the GUI
     write_dataset_description(derivatives_dir / _DERIV_NAME, name=_DERIV_NAME,
-                              generated_by="fnirs-prep crop",
+                              generated_by="nirspipe-prep crop",
                               source=dataset_root_of(snirf_path) if snirf_path else None)
     out_nirs_dir.mkdir(parents=True, exist_ok=True)
     return out_nirs_dir
@@ -341,7 +341,7 @@ def crop_snirf(
     span that was asked for as ``crop_analysis_windows_s``. A segment cut to its own
     boundaries cannot be analysed at those boundaries by anything that convolves, which is
     every wavelet method; the margin is what a later stage windows back off. See
-    :func:`~fnirs_pipe.pipeline.hyper.wtc.cone_margin_s` for the width that suffices.
+    :func:`~nirspipe.pipeline.hyper.wtc.cone_margin_s` for the width that suffices.
 
     ``input_desc`` cuts a pipeline stage instead of a recording: `bids_dir` is then a
     derivatives tree and the file carrying that desc- entity is the input, e.g. "errts" for

@@ -3,7 +3,7 @@
 import numpy as np
 import mne
 
-from fnirs_pipe.qc.figures.subject.psd_plot import psd_figure
+from nirspipe.qc.figures.subject.psd_plot import psd_figure
 
 
 def _haemo(sfreq: float = 5.0, dur: float = 200.0, n_pairs: int = 3) -> mne.io.Raw:

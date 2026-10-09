@@ -1,4 +1,4 @@
-"""The dyad post page (fnirs-hyper) and its condition pages: each figure against its table and the planted truth."""
+"""The dyad post page (nirspipe-hyper) and its condition pages: each figure against its table and the planted truth."""
 
 from itertools import combinations
 

@@ -9,9 +9,9 @@ from uuid import uuid4
 from pathlib import Path
 from typing import Any, Iterable
 
-from fnirs_pipe.exceptions import MissingDerivativesError, StageError
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe import __version__
+from nirspipe.exceptions import MissingDerivativesError, StageError
+from nirspipe.utils.logging import get_logger
+from nirspipe import __version__
 
 logger = get_logger("io.derivatives")
 
@@ -35,12 +35,12 @@ def build_output_path(
       entities={"task": "rest", "desc": "preproc"}, suffix="nirs", extension=".snirf"
         -> <out>/sub-01/nirs/sub-01_task-rest_desc-preproc_nirs.snirf
 
-    The name comes from :mod:`fnirs_pipe.io.naming`, which reads it off the one config every
+    The name comes from :mod:`nirspipe.io.naming`, which reads it off the one config every
     reader parses against. This is the writing half: it exists so a caller that is about to
     write a file does not have to remember to create the folder, and so a caller that only
     wants a name can ask naming directly and leave no tree behind.
     """
-    from fnirs_pipe.io.naming import derivative_path
+    from nirspipe.io.naming import derivative_path
 
     path = derivative_path(output_dir, suffix, extension,
                            subject=subject, session=session, **entities)
@@ -53,9 +53,9 @@ def channel_decisions_path(
 ) -> Path:
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
-    Re-exported from :mod:`fnirs_pipe.io.naming`, which builds it.
+    Re-exported from :mod:`nirspipe.io.naming`, which builds it.
     """
-    from fnirs_pipe.io.naming import channel_decisions_path as _path
+    from nirspipe.io.naming import channel_decisions_path as _path
 
     return _path(output_dir, subject, task, session)
 
@@ -116,7 +116,7 @@ def group_output_path(
     The mirror of :func:`build_output_path` for the group side. It builds the whole name
     rather than handing out a prefix to append to, so each dimension stays its own entity.
     """
-    from fnirs_pipe.io.naming import derivative_path
+    from nirspipe.io.naming import derivative_path
 
     path = derivative_path(output_dir, suffix, extension,
                            group=group_id, session=session, **entities)
@@ -311,7 +311,7 @@ def find_preproc_snirf(
             f"No desc-{desc} snirf found for {subject_id} (task={task}) in {where}. "
             f"Available desc: {', '.join(available) if available else 'none'}. "
             + (f"desc-{desc} exists for task: {', '.join(tasks)}. " if tasks else "")
-            + "Run fnirs-pipe preprocessing first."
+            + "Run nirspipe preprocessing first."
         )
     return select_one_run(candidates, what=f"desc-{desc} snirf", subject_id=subject_id,
                           task=task, session=session, run=run)
@@ -477,8 +477,8 @@ def _source_dataset(source: Path, url: str) -> dict:
 
 
 def write_dataset_description(
-    output_dir: Path, *, name: str = "fnirs-pipe output",
-    generated_by: str = "fnirs-pipe", source: "Path | None" = None,
+    output_dir: Path, *, name: str = "nirspipe output",
+    generated_by: str = "nirspipe", source: "Path | None" = None,
     link: "str | None" = None,
 ) -> None:
     """Write dataset_description.json for the derivatives dataset.

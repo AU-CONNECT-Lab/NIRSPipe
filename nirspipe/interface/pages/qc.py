@@ -1,4 +1,4 @@
-"""Page: cohort-level quality control (`fnirs-qc`), which aggregates records already on disk."""
+"""Page: cohort-level quality control (`nirspipe-qc`), which aggregates records already on disk."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import dcc, html
 
-from fnirs_pipe.interface.components import PATH, actions, card, field, params, split
+from nirspipe.interface.components import PATH, actions, card, field, params, split
 
 dash.register_page(__name__, path="/qc", name="Cohort Reports")
 

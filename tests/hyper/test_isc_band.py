@@ -12,8 +12,8 @@ import mne
 import numpy as np
 import pytest
 
-from fnirs_pipe.cli.hyper import _warn_band_mismatch
-from fnirs_pipe.pipeline.hyper.isc import _band_limit, compute_isc
+from nirspipe.cli.hyper import _warn_band_mismatch
+from nirspipe.pipeline.hyper.isc import _band_limit, compute_isc
 
 SFREQ = 10.0
 N = 4000
@@ -80,7 +80,7 @@ def test_a_band_does_not_destroy_in_band_coupling():
 
 def _warnings(caplog, isc_band, wtc=(0.06, 0.15)):
     caplog.clear()
-    with caplog.at_level(logging.WARNING, logger="fnirs_pipe.cli.hyper"):
+    with caplog.at_level(logging.WARNING, logger="nirspipe.cli.hyper"):
         _warn_band_mismatch(isc_band, *wtc)
     return [r.getMessage() for r in caplog.records]
 
@@ -108,7 +108,7 @@ def test_no_coherence_band_means_nothing_to_compare(caplog):
     ((0.01, 0.1), False),
 ])
 def test_the_unfiltered_note_stands_down_when_the_correlation_is_high_passed(isc_band, warned):
-    from fnirs_pipe.pipeline.hyper.group_io import unfiltered_stage_note
+    from nirspipe.pipeline.hyper.group_io import unfiltered_stage_note
 
     raws = _pair(0.05)
     assert (unfiltered_stage_note(raws, isc_band) is not None) is warned

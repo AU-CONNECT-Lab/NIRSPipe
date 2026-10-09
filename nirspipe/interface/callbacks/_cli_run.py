@@ -8,9 +8,9 @@ from pathlib import Path
 import dash_bootstrap_components as dbc
 from dash import html, no_update
 
-from fnirs_pipe.interface import process_stream
-from fnirs_pipe.interface.report_serve import report_url
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.interface import process_stream
+from nirspipe.interface.report_serve import report_url
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.cli_run")
 
@@ -79,7 +79,7 @@ def preview_text(argv: list[str], shell: str) -> str:
 REPORT_PATTERNS: dict[str, list[str]] = {
     "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
     "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],
-    # the dyad's landing page is its index, which `fnirs-hyper` writes too; the task page is the
+    # the dyad's landing page is its index, which `nirspipe-hyper` writes too; the task page is the
     # fallback for a tree whose index failed. A bare `_task-*_report.html` glob would also
     # match the per-condition and per-pairing pages, and those are not where to land
     "run":          ["group-*/group-*_desc-index_report.html",
@@ -109,7 +109,7 @@ def run_and_report(stored: dict | None):
     try:
         proc = subprocess.run(argv, capture_output=True, text=True)
     except FileNotFoundError:
-        return dbc.Alert(f"`{argv[0]}` not found on PATH. Make sure fnirs-pipe is installed.",
+        return dbc.Alert(f"`{argv[0]}` not found on PATH. Make sure nirspipe is installed.",
                          color="danger", className="mb-0"), None
     except Exception as exc:
         return dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"), None

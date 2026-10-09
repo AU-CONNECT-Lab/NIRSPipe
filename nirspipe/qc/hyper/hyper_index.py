@@ -21,15 +21,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from fnirs_pipe.qc.boilerplate import collect_software_versions
-from fnirs_pipe.io.tables import read_tsv_or_none
-from fnirs_pipe.io.naming import report_name, derivative_path, parse_path
-from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
-from fnirs_pipe.qc.common.report_shell import (
+from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.io.tables import read_tsv_or_none
+from nirspipe.io.naming import report_name, derivative_path, parse_path
+from nirspipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
+from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
-from fnirs_pipe.utils import fisher_r_to_z
-from fnirs_pipe.utils.logging import get_logger
-from fnirs_pipe.io.derivatives import entity_of, group_label
+from nirspipe.utils import fisher_r_to_z
+from nirspipe.utils.logging import get_logger
+from nirspipe.io.derivatives import entity_of, group_label
 
 logger = get_logger("qc.hyper_index")
 
@@ -369,8 +369,8 @@ def write_hyper_index(
     html = render(
         "hyper_index.html.j2",
         **page_vars(
-            title=f"fnirs-pipe hyper  ·  group-{group_id}",
-            heading=f"fnirs-pipe hyper  ·  group-{group_id}",
+            title=f"nirspipe hyper  ·  group-{group_id}",
+            heading=f"nirspipe hyper  ·  group-{group_id}",
         ),
         **footer_vars(versions=collect_software_versions()),
         group_id=group_id,

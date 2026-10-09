@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, _window_samples
-from fnirs_pipe.utils.logging import get_logger
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, _window_samples
+from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.trial_qc")
 
@@ -95,7 +95,7 @@ def trial_sqm(raw, t0: float, t1: float,
     shorter than two screening windows gets no coupled-window share, so its status row
     screens nothing rather than rejecting everything.
     """
-    from fnirs_pipe.qc.metrics import (
+    from nirspipe.qc.metrics import (
         compute_raw_sqm, compute_sci_scores, resolve_cutoffs, screen_channels,
         screening_scores,
     )

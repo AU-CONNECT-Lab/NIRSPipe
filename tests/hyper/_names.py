@@ -2,11 +2,11 @@
 
 Spelling these out in each test is how a check and its writer drift apart: both halves read
 right, both agree with each other, and neither is what lands on disk. Everything here goes
-through the same config `fnirs_pipe.io.naming` writes against, so a rename breaks the tests
+through the same config `nirspipe.io.naming` writes against, so a rename breaks the tests
 that are actually wrong rather than every test at once.
 """
 
-from fnirs_pipe.io.naming import derivative_path
+from nirspipe.io.naming import derivative_path
 
 # the entity sets the WTC pass writes, under the names this suite refers to them by
 KINDS = {
@@ -81,7 +81,7 @@ def archive(group: str, task: str, chromophore: str, **entities) -> str:
 
 def cohort(nulldist: str, desc: str, task: str = "main", chromophore: str = "hbo",
            statistic: str = "wtc") -> str:
-    """One cross-dyad verdict table at the tree root, from `fnirs-hyper-groupnull`.
+    """One cross-dyad verdict table at the tree root, from `nirspipe-hyper-groupnull`.
 
     No group- and no sub-: having no analysis unit in the name is what marks a table as
     cross-dyad. The task and the chromophore stay, both being a filter the command was given.

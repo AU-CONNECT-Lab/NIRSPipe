@@ -19,7 +19,7 @@ def setup_logging(verbose: bool = False, log_file: Path | None = None) -> None:
     File (log_file):  DEBUG always, full timestamp + logger name.
     MNE verbosity is suppressed to WARNING to avoid noise.
     """
-    root = logging.getLogger("fnirs_pipe")
+    root = logging.getLogger("nirspipe")
     root.setLevel(logging.DEBUG)
     root.handlers.clear()
 
@@ -63,7 +63,7 @@ def thread_log_file(log_file: Path):
     with it. This adds a handler and filters on the calling thread, so parallel units each
     get their own file and nothing lands in two of them.
     """
-    root = logging.getLogger("fnirs_pipe")
+    root = logging.getLogger("nirspipe")
     handler = _ThreadFileHandler(log_file)
     root.addHandler(handler)
     try:
@@ -74,4 +74,4 @@ def thread_log_file(log_file: Path):
 
 
 def get_logger(name: str) -> logging.Logger:
-    return logging.getLogger(f"fnirs_pipe.{name}")
+    return logging.getLogger(f"nirspipe.{name}")
