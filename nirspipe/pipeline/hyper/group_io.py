@@ -92,7 +92,8 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
         key = (str(row["group_id"]).strip(), str(row["task"]).strip(), occasion or session)
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),
-            subject_id=str(row["subject_id"]).strip(),
+            # one spelling downstream: files are found by the sub- label, written either way
+            subject_id="sub-" + str(row["subject_id"]).strip().removeprefix("sub-"),
             task=str(row["task"]).strip(),
             session=session,
             run=optional(row, "run"),

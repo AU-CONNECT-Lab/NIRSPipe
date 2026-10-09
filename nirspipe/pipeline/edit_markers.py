@@ -10,7 +10,7 @@ import pandas as pd
 import mne
 
 from nirspipe.io.auxiliary import write_aux_window
-from nirspipe.io.derivatives import dataset_root_of, write_dataset_description
+from nirspipe.io.derivatives import dataset_root_of, entity_of, write_dataset_description
 from nirspipe.io.snirf import write_snirf
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.utils.logging import get_logger
@@ -50,7 +50,9 @@ def apply_markers_from_df(
     Returns the path to the written SNIRF.
     """
     stem = bids_stem(snirf_path)
-    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub, ses)
+    # an unnamed session is the input's own, so the folder agrees with the filename it keeps
+    out_nirs_dir = deriv_nirs_dir(derivatives_dir, _DERIV_NAME, sub,
+                                  ses or entity_of(snirf_path, "ses"))
     write_dataset_description(derivatives_dir / _DERIV_NAME, name=_DERIV_NAME,
                               generated_by="nirspipe-prep edit-markers",
                               source=dataset_root_of(snirf_path))

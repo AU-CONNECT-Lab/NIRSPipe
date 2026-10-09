@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-10-09
+
+### Changed
+- **Breaking**: the package is renamed NIRSPipe: import and distribution `nirspipe`, commands `nirspipe` and `nirspipe-<x>`; old derivative trees must be re-run
+
+### Fixed
+- `nirspipe-prep edit-markers apply` and `crop` keep a session-labelled input's `ses-` folder when `--session-label` is not given
+
+## [0.62.0] - 2026-10-09
+
 ### Added
 - `fnirs-hyper --isc-phase-null` keeps every surrogate per condition in a `desc-draws` table, as the coherence's phase null does
 - `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
@@ -16,7 +26,6 @@ All notable changes to this project will be documented in this file.
 - The `--bad-channels` table takes optional `session`, `task` and `run` columns; a row matching no recording stops the run
 
 ### Changed
-- **Breaking**: the package is renamed NIRSPipe: import and distribution `nirspipe`, commands `nirspipe` and `nirspipe-<x>`; old derivative trees must be re-run
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together
 - **Breaking**: `fnirs-hyper --isc-whiten ORDER` is `--isc-whiten-s SECONDS`, one AR order for every channel of both members fitted on the whole record; `ar_order` columns are gone
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works
@@ -29,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `fnirs-qc hyper-raw` no longer measures coherence or its null; `--coh-fmin`, `--coh-fmax` and the cohort page's null panel are gone
 
 ### Fixed
+- A pairs table may name subjects without the `sub-` prefix; `101` and `sub-101` now find the same recordings
 - `fnirs-qc hyper-raw` usable-time and head panels no longer come out empty when the members recorded at different sampling rates
 - The `EDGE boundary` written where recordings are joined is no longer a condition, trigger, dyad onset row or event count
 - The exported run script screens with the run's `--psp-threshold`, `--min-good-frac` and `--screen-scope`
