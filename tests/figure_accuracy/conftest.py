@@ -124,6 +124,65 @@ def raw_condition_run(tmp_path_factory) -> Run:
     return Run(root / "out", done["truth"], task="main")
 
 
+# ---- the group commands, on the dyad fingerprint ----
+
+def _flag(name: str) -> list[str]:
+    """One flag of CLI_ARGS with its values."""
+    i = CLI_ARGS.index(name) + 1
+    j = next((k for k in range(i, len(CLI_ARGS)) if CLI_ARGS[k].startswith("--")), len(CLI_ARGS))
+    return [name, *CLI_ARGS[i:j]]
+
+
+# hyper-raw takes the physiology and the SCI line, and none of the pipeline's other settings
+DYAD_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq")
+                 for a in _flag(flag)]
+DYAD_HYPER_ARGS = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
+
+
+@pytest.fixture(scope="session")
+def groups(tmp_path_factory):
+    """The dyad and the triad through every command that draws a group or cohort page:
+    fnirs-pipe, fnirs-qc cohort, fnirs-qc hyper-raw, fnirs-hyper, its index, and
+    fnirs-qc cohort-hyper, with the channel coherence maps' builder inputs captured."""
+    from tests._dyad_fingerprint import make_group_dataset, write_roi_map
+    from tests.figure_accuracy._dyad import Groups
+    from fnirs_pipe.cli import hyper as hyper_cli
+    from fnirs_pipe.cli import qc as qc_cli
+    from fnirs_pipe.cli import run as run_cli
+    from fnirs_pipe.qc.hyper import hyper_report
+
+    root = tmp_path_factory.mktemp("dyad")
+    bids, pairs, truth = make_group_dataset(root)
+    deriv, hyper = root / "deriv", root / "hyper"
+    calls: dict = {}
+    spied = [(hyper_report, "build_wtc_channel")]
+
+    def spy(name, original):
+        def wrapper(*a, **kw):
+            out = original(*a, **kw)
+            calls.setdefault(name, []).append((a, kw, out))
+            return out
+        return wrapper
+
+    originals = [(module, name, getattr(module, name)) for module, name in spied]
+    for module, name, original in originals:
+        setattr(module, name, spy(name, original))
+    try:
+        run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--by-condition",
+                      "--skip-bids-validation"])
+        qc_cli.main(["cohort", str(deriv)])
+        qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
+                     "--derivatives-dir", str(deriv), "--skip-bids-validation", *DYAD_RAW_ARGS])
+        hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
+                        "--roi-mapping", str(write_roi_map(root)), *DYAD_HYPER_ARGS])
+        hyper_cli.main_index([str(hyper), "group"])
+        qc_cli.main(["cohort-hyper", str(hyper)])
+    finally:
+        for module, name, original in originals:
+            setattr(module, name, original)
+    return Groups(root, bids, deriv, hyper, truth, calls=calls)
+
+
 @pytest.fixture(scope="session")
 def raw_viewer_run(tmp_path_factory) -> Run:
     """The task recording through fnirs-qc prep-raw, with motion correction and per-trial scoring."""
