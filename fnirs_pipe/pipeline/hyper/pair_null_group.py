@@ -472,15 +472,18 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str,
 
 
 def by_cell_from_draws(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool = False,
-                       method: str = "none") -> "pd.DataFrame | None":
-    """Each channel pairing ranked in its own draws, for tables that store no percentile.
+                       method: str = "none", roi_map: "dict | None" = None,
+                       min_channels: int = ROI_MIN_CHANNELS) -> "pd.DataFrame | None":
+    """Each channel pairing, and each region, ranked in its own draws.
 
     ::
 
       one occasion's S1_D1 > S2_D2 in game, real 0.31 against 9 draws  ->  one row with its p
 
-    The correlation's cells are ranked here rather than read back, so that one switch sets
-    their tail and the cohort's.
+    For tables that store no percentile: the correlation's cells are ranked here rather than
+    read back, so that one switch sets their tail and the cohort's. The levels and families
+    are the ones `by_cell` reads for the coherence: channel, homologous region, and the
+    crossed region matrix, each corrected on its own.
     """
     keys = [k for k in ("occasion", "condition", "sub1", "sub2", "label", "label2")
             if k in draws.columns and k in real.columns]
@@ -499,10 +502,42 @@ def by_cell_from_draws(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool 
                      "null_p95": float(np.percentile(pool, 95)),
                      "percentile": float((value > pool).mean() * 100),
                      "n_iter": int(pool.size), "p": _tailed_p(value, pool, two_sided)})
-    if not rows:
+    parts = []
+    if rows:
+        parts.append(_correct(pd.DataFrame(rows), ["condition"], method).assign(level="channel"))
+    parts += _roi_cells(draws, real, two_sided, method, roi_map, min_channels)
+    if not parts:
         return None
-    out = _correct(pd.DataFrame(rows), ["condition"], method).assign(level="channel")
-    return _cell_table(out, method)
+    return _cell_table(pd.concat(parts, ignore_index=True), method)
+
+
+def _roi_cells(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool, method: str,
+               roi_map: "dict | None", min_channels: int) -> list[pd.DataFrame]:
+    """Each region's mean ranked in its occasion's own draws, which is `by_occasion` per region.
+
+    ::
+
+      region front, homologous   ->  level roi, label front
+      region front > back, all   ->  level roi_crossed, label front, label2 back
+    """
+    if not roi_map:
+        return []
+    by_level: dict[str, list] = {"roi": [], "roi_crossed": []}
+    for gran, name, pairings, d, r in _variants(draws, real, roi_map,
+                                                min_channels=min_channels):
+        if gran != "roi":
+            continue
+        occ = by_occasion(d, r, two_sided=two_sided)
+        if occ.empty:
+            continue
+        if pairings == "all":
+            a, b = name.split(">", 1)
+            by_level["roi_crossed"].append(occ.assign(label=a, label2=b))
+        else:
+            by_level["roi"].append(occ.assign(label=name))
+    return [_correct(pd.concat(parts, ignore_index=True), ["condition"], method)
+            .assign(level=level)
+            for level, parts in by_level.items() if parts]
 
 
 def _cell_table(out: pd.DataFrame, method: str) -> pd.DataFrame:
@@ -581,7 +616,9 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
             f"whitening order, lag search): {sorted(settings, key=str)}. Finish whichever "
             f"rerun is in progress before reading this.")
     two_sided = isc_test == "signed"
-    cells = by_cell_from_draws(draws, real, two_sided=two_sided, method=p_correction)
+    min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
+    cells = by_cell_from_draws(draws, real, two_sided=two_sided, method=p_correction,
+                               roi_map=roi_map, min_channels=min_channels)
     magnitude = "|Fisher z|" if isc_test == "magnitude" else "Fisher z"
     return _write_levels(output_dir, task, chroma, null, "isc", draws, real, cells, roi_map,
                          n_resample, seed, p_correction, two_sided=two_sided,

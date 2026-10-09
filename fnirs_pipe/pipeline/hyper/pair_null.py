@@ -16,11 +16,13 @@ import json
 import logging
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.derivatives import group_output_path
-from fnirs_pipe.pipeline.hyper.surrogate import compute_wtc_pair_null, _average_iterations, _p95
+from fnirs_pipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
+                                                 _null_percentile, _p95)
 from fnirs_pipe.pipeline.hyper.wtc import cone_margin_s
 from fnirs_pipe.io.tables import write_tsv
 from fnirs_pipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
@@ -716,6 +718,12 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
         table = table.merge(abs_p95, on=group_keys, how="left")
         table.insert(table.columns.get_loc("null_p95") + 1, "null_abs_p95",
                      table.pop("null_abs_p95"))
+        # ranked as |r| among |draws|, as the phase null's correlation is and as the chords read
+        if real is not None:
+            magnitude = {k: np.abs(v.to_numpy(dtype=float))
+                         for k, v in stacked.groupby(group_keys, sort=False)["coherence"]}
+            table["percentile"] = _null_percentile(
+                table, group_keys, magnitude, real.assign(coherence=real["coherence"].abs()))
         path = write_tsv(table, path_of(entities))
         _hyper_sidecar(path, step, sources,
                        **({"conditions": [w[0] for w in windows]} if cond and windows else {}),

@@ -322,3 +322,24 @@ def test_the_re_paired_isc_null_carries_a_level_for_the_size_of_r(tmp_path):
                         sep="\t")
     assert table["null_p95"].iloc[0] < 0.3
     assert table["null_abs_p95"].iloc[0] > 0.8
+
+
+def test_the_re_paired_isc_percentile_ranks_the_size_of_r(tmp_path):
+    """The phase null ranks |r| among |draws|; the re-paired one has to say the same thing,
+    or a strongly negative pair reads as beating none of its stand-ins."""
+    from fnirs_pipe.pipeline.hyper.pair_null import _write_isc_null
+
+    keys = {"chromophore": ["hbo"], "condition": ["talk"], "sub1": ["a"], "sub2": ["b"],
+            "label": ["S1_D1"], "label2": ["S1_D1"]}
+    draws = [pd.DataFrame({**keys, "coherence": [r], "n_valid_frac": [1.0]})
+             for r in (-0.9, -0.8, 0.1, 0.2, 0.1, -0.85)]
+
+    def path_of(entities):
+        return tmp_path / ("_".join(f"{k}-{v}" for k, v in sorted(entities.items())) + ".tsv")
+
+    pd.DataFrame({**keys, "r": [-0.95]}).to_csv(path_of({"statistic": "isc"}), sep="\t",
+                                                index=False)
+    _write_isc_null([], draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
+    table = pd.read_csv(path_of({"condition": "all", "nulldist": "pair", "statistic": "isc"}),
+                        sep="\t")
+    assert table["percentile"].iloc[0] == pytest.approx(100.0)

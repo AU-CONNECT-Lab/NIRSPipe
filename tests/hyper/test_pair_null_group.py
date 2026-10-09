@@ -852,3 +852,52 @@ def test_the_paired_read_is_two_sided_when_asked():
                     two_sided=True).query("test == 'paired'").iloc[0]
     assert one.p > 0.99
     assert two.p < 0.01
+
+
+def _write_crossed_isc_tree(root, r=0.3):
+    """Every ordered channel pairing, real and drawn, as a crossed run and null write them."""
+    rng = np.random.default_rng(2)
+    pairs = [(a, b) for a in CHANNELS for b in CHANNELS]
+
+    def rows(values):
+        values = np.asarray(values, dtype=float)
+        return pd.DataFrame({"chromophore": "hbo", "condition": "game", "sub1": "sub-a",
+                             "sub2": "sub-b", "label": [a for a, _ in pairs],
+                             "label2": [b for _, b in pairs], "r": values,
+                             "r_z": np.arctanh(values)})
+    for occ in OCCASIONS:
+        d = root / f"group-{occ}" / "nirs"
+        d.mkdir(parents=True, exist_ok=True)
+        real_tsv = d / name(occ, "main", "iscpairs")
+        rows([r] * len(pairs)).to_csv(real_tsv, sep="\t", index=False)
+        draws_tsv = d / name(occ, "main", "iscbycond-pairnull-draws")
+        pd.concat([rows(rng.normal(0, 0.03, len(pairs))).assign(draw=f"x{i}")
+                   for i in range(9)]).to_csv(draws_tsv, sep="\t", index=False)
+        for tsv in (real_tsv, draws_tsv):
+            tsv.with_suffix(".json").write_text(json.dumps({"parameters": ISC_SETTINGS}))
+
+
+def test_the_isc_cells_include_each_region_corrected_apart_from_the_channels(tmp_path):
+    _write_isc_tree(tmp_path, [-0.4] * 4)
+    write_group_null(tmp_path, "main", roi_map=ROI, n_resample=200, seed=3,
+                     p_correction="holm")
+    cells = pd.read_csv(tmp_path / _cohort("pair", "bycell", statistic="isc"), sep="\t")
+    roi = cells[cells.level == "roi"]
+    # "thin" has one channel per member, under the recorded minimum of two
+    assert set(roi.label) == {"front", "back"}
+    assert len(roi) == 2 * len(OCCASIONS) and set(roi.family) == {6}
+    assert roi.r_z.to_numpy() == pytest.approx(np.arctanh(-0.4))
+    # beating all nine draws, two-sided
+    assert roi.p.to_numpy() == pytest.approx(0.2)
+    assert set(cells[cells.level == "channel"].family) == {12}
+
+
+def test_a_crossed_isc_null_gives_the_region_matrix_its_own_family(tmp_path):
+    _write_crossed_isc_tree(tmp_path)
+    write_group_null(tmp_path, "main", roi_map=ROI, n_resample=200, seed=3)
+    cells = pd.read_csv(tmp_path / _cohort("pair", "bycell", statistic="isc"), sep="\t")
+    crossed = cells[cells.level == "roi_crossed"]
+    assert {(a, b) for a, b in zip(crossed.label, crossed.label2)} == {
+        ("front", "front"), ("front", "back"), ("back", "front"), ("back", "back")}
+    assert len(crossed) == 4 * len(OCCASIONS) and set(crossed.family) == {12}
+    assert set(cells[cells.level == "channel"].family) == {16 * len(OCCASIONS)}
