@@ -49,7 +49,7 @@ def test_a_bad_row_in_an_events_table_is_not_a_condition(tmp_path):
 # ---- screening scope ----
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D2: every annotation of 20 s or more is a task block, BAD_ spans included")
+                   reason="D2: any annotation of 20 s or more is a task block, BAD_ included")
 def test_task_scope_leaves_out_a_long_bad_span():
     raw = _hbo_raw(np.zeros(int(SFREQ * 600)), [20.0, 400.0], [300.0, 60.0], ["rest", "BAD_gvtd"])
     assert task_scope_windows(raw) == [("rest", 20.0, 320.0)]
@@ -58,7 +58,7 @@ def test_task_scope_leaves_out_a_long_bad_span():
 # ---- per-condition CNR ----
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D3: a BAD_ span starting before the condition is dropped with the other annotations")
+                   reason="D3: a BAD_ span starting before the condition is dropped")
 def test_a_bad_span_reaching_into_a_condition_still_rejects_its_epochs():
     rng = np.random.default_rng(0)
     # epochs run 5 s before to 15 s after each tap, so the span covers the first two
