@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from fnirs_pipe.qc.boilerplate import collect_software_versions
@@ -26,6 +27,7 @@ from fnirs_pipe.io.naming import report_name, derivative_path, parse_path
 from fnirs_pipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from fnirs_pipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
+from fnirs_pipe.utils import fisher_r_to_z
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.derivatives import entity_of
 
@@ -100,9 +102,14 @@ def _pairings(*frames) -> list:
     return [None]
 
 
+def _crossed_rows(df: "pd.DataFrame") -> bool:
+    """Whether a band or null table holds pairings off the diagonal, which a crossed run writes."""
+    return "label2" in df.columns and bool((df["label"] != df["label2"]).any())
+
+
 def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
                     where: "tuple[str, str] | None" = None,
-                    pair: "tuple[str, str] | None" = None) -> dict:
+                    pair: "tuple[str, str] | None" = None, crossed: bool = False) -> dict:
     """``{chromophore: mean of column}``, over one condition's rows when ``where`` is given.
 
     ::
@@ -110,9 +117,8 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
       _mean_by_chroma(wtcbycond, "coherence", ("condition", "task1"))
       -> {"hbo": 0.25, "hbr": 0.24}
 
-    Homologous pairs only. A crossed table's mean over every channel against every other is
-    a different quantity, so mixing the two down one column would make a crossed run and an
-    uncrossed one incomparable.
+    Homologous pairs by default; ``crossed`` takes every pairing instead, and is empty for an
+    uncrossed table. The two are different quantities and get a column each.
     """
     if df is None or column not in df.columns:
         return {}
@@ -123,7 +129,10 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
         if key not in df.columns:
             return {}
         df = df[df[key] == value]
-    if "label2" in df.columns:
+    if crossed:
+        if not _crossed_rows(df):
+            return {}
+    elif "label2" in df.columns:
         df = df[df["label"] == df["label2"]]
     if df.empty or "chromophore" not in df.columns:
         return {}
@@ -131,7 +140,7 @@ def _mean_by_chroma(df: "pd.DataFrame | None", column: str,
 
 
 def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None,
-               pair: "tuple[str, str] | None" = None) -> dict:
+               pair: "tuple[str, str] | None" = None, crossed: bool = False) -> dict:
     """``{chromophore: (pairs past their null, pairs measured)}`` for one window.
 
     ::
@@ -142,6 +151,9 @@ def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None
     compare and neither is readable on its own. Each channel pair's own surrogate draws are
     the scale that makes them both, and this is that scale reduced to the one number a table
     cell holds: how many of the dyad's pairs the real value beat the draws for.
+
+    Over the homologous pairs by default, every pairing with ``crossed``, as
+    :func:`_mean_by_chroma` splits them.
     """
     if df is None or "percentile" not in df.columns:
         return {}
@@ -152,6 +164,11 @@ def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None
         if key not in df.columns:
             return {}
         df = df[df[key] == value]
+    if crossed:
+        if not _crossed_rows(df):
+            return {}
+    elif "label2" in df.columns:
+        df = df[df["label"] == df["label2"]]
     if df.empty or "chromophore" not in df.columns:
         return {}
     out = {}
@@ -163,12 +180,12 @@ def _past_null(df: "pd.DataFrame | None", where: "tuple[str, str] | None" = None
 
 
 def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
-              slug: str = "") -> dict:
-    """``{chromophore: mean same-channel ISC}`` from the two ISC matrices of one window.
+              slug: str = "", crossed: bool = False) -> dict:
+    """``{chromophore: mean ISC}`` from the two ISC matrices of one window, in Fisher z.
 
-    The diagonal, which is a channel against the other member's copy of the same channel.
-    The off-diagonal is every site against every other and belongs to the connectogram, not
-    to a single number. NaN cells are the channels a member lost and are skipped.
+    The diagonal by default, a channel against the other member's copy of it; ``crossed``
+    every cell, and nothing for an uncrossed run, whose off-diagonal is blank. NaN cells are
+    the channels a member lost and are skipped. Averaged in z as the ROI ISC is.
 
     ``label`` reads a condition's own matrices, written under the ``cond-`` entity its page
     takes. A window analysed before per-condition ISC existed has none, and the row shows a
@@ -186,9 +203,13 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
         values = df.set_index(df.columns[0]).to_numpy(dtype=float)
         if values.shape[0] != values.shape[1]:
             continue
-        diagonal = pd.Series(values.diagonal()).dropna()
-        if not diagonal.empty:
-            out[chroma] = float(diagonal.mean())
+        off = ~np.eye(values.shape[0], dtype=bool)
+        if crossed and not np.isfinite(values[off]).any():
+            continue
+        cells = values if crossed else values.diagonal()
+        z = fisher_r_to_z(cells[np.isfinite(cells)])
+        if z.size:
+            out[chroma] = float(np.tanh(z.mean()))
     return out
 
 
@@ -262,9 +283,13 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
                 # not one window's; the raw report among them, which nothing else links
                 "links": _links(group_dir, stem) if label is None else [],
                 "coherence": _mean_by_chroma(source, "coherence", where, pair),
+                "coherence_crossed": _mean_by_chroma(source, "coherence", where, pair,
+                                                     crossed=True),
                 "past_null": _past_null(null, where, pair),
+                "past_null_crossed": _past_null(null, where, pair, crossed=True),
                 "valid_frac": _mean_by_chroma(source, "n_valid_frac", where, pair),
                 "isc": _isc_mean(nirs_dir, stem, label, slug),
+                "isc_crossed": _isc_mean(nirs_dir, stem, label, slug, crossed=True),
                 "window": _window_of(
                     nirs_dir / _table(stem, condition="all", statistic="wtc"), label),
             }
@@ -278,9 +303,10 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
     # a window is marked against the dyad's other windows, so this waits until every row is
     # in hand. Flagged per chromophore, the two being separate measurements
     for chroma in ("hbo", "hbr"):
-        flags = outlier_flags([r["coherence"].get(chroma) for r in rows])
-        for row, flagged in zip(rows, flags):
-            row.setdefault("flagged", {})[chroma] = flagged
+        for key, flag_key in (("coherence", "flagged"), ("coherence_crossed", "flagged_crossed")):
+            flags = outlier_flags([r[key].get(chroma) for r in rows])
+            for row, flagged in zip(rows, flags):
+                row.setdefault(flag_key, {})[chroma] = flagged
     return rows
 
 
@@ -337,7 +363,7 @@ def write_hyper_index(
         n_tasks=len({row["task"] for row in rows}),
         outlier_z=OUTLIER_Z,
         null_percentile=NULL_PERCENTILE,
-        has_null=any(row["past_null"] for row in rows),
+        has_null=any(row["past_null"] or row["past_null_crossed"] for row in rows),
         run_command=run_command,
     )
     out_path = group_dir / report_name(f"group-{group_id}", desc="index")

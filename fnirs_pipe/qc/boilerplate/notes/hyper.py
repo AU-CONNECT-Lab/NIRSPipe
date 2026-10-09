@@ -291,15 +291,16 @@ NOTES = {
 
     # ---- A dyad's window index ----
     "hyper_index.columns":
-        "Coherence: the mean band WTC over the homologous pairs; a crossed run&rsquo;s "
-        "other pairings are on each window&rsquo;s page. <b>outside COI</b>: the share of "
-        "band cells clear of the recording&rsquo;s edges, smaller for a window near either "
-        "end. <b>ISC</b>: the mean same-channel correlation, computed on the cut window "
-        "and z-scored inside it. Open a window for its maps, matrices and phase arrows.",
+        "<b>WTC</b>: the mean band coherence over the same-channel pairs, and under "
+        "<b>crossed</b> over every pairing, a dash where the run was not crossed. "
+        "<b>outside COI</b>: the share of band cells clear of the recording&rsquo;s edges, "
+        "smaller for a window near either end. <b>ISC</b>: the mean correlation in Fisher z, "
+        "same-channel and crossed the same way, computed on the cut window and z-scored "
+        "inside it. Open a window for its maps, matrices and phase arrows.",
     "hyper_index.past_null":
-        "<b>past null</b> counts the channel pairings the null was drawn for (every "
-        "crossed pairing when the null is crossed, the default) whose coherence beat the "
-        "{pct}th percentile of their own surrogate draws, out of those measured. Read it "
+        "<b>past null</b> counts the same-channel pairs, and under <b>crossed</b> every "
+        "pairing the null was drawn for, whose coherence beat the {pct}th percentile of their "
+        "own surrogate draws, out of those measured. Read it "
         "before the coherence: a coherence on its own has no line to clear, and a short "
         "window&rsquo;s mean scatters more than a long one&rsquo;s, while a rank inside a "
         "null drawn for that window is readable on its own.",

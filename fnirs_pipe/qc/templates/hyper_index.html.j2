@@ -43,12 +43,12 @@ tr.whole td.num { font-weight: 600; }
       {% if has_pairs %}<th>Pair</th>{% endif %}
       <th>Task</th>
       <th>Span</th>
-      {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th><th>WTC {{ chroma_labels[c] }} crossed</th>{% endfor %}
       {% if has_null %}
-      {% for c in chroma %}<th>past null {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>past null {{ chroma_labels[c] }}</th><th>past null {{ chroma_labels[c] }} crossed</th>{% endfor %}
       {% endif %}
       {% for c in chroma %}<th>outside COI {{ chroma_labels[c] }}</th>{% endfor %}
-      {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th><th>ISC {{ chroma_labels[c] }} crossed</th>{% endfor %}
     </tr>
   </thead>
   <tbody>
@@ -70,17 +70,21 @@ tr.whole td.num { font-weight: 600; }
       <td>{{ row.task }}</td>
       <td class="num">{% if row.window %}{{ row.window }}{% else %}<span class="muted">&mdash;</span>{% endif %}</td>
       {% for c in chroma %}
-      <td class="num{% if row.flagged.get(c) %} flag{% endif %}">
-        {%- if c in row.coherence %}{{ "%.3f"|format(row.coherence[c]) }}
-        {%- else %}<span class="muted">n/a</span>{% endif -%}
+      {% for values, flags in ((row.coherence, row.flagged), (row.coherence_crossed, row.flagged_crossed)) %}
+      <td class="num{% if flags.get(c) %} flag{% endif %}">
+        {%- if c in values %}{{ "%.3f"|format(values[c]) }}
+        {%- else %}<span class="muted">&mdash;</span>{% endif -%}
       </td>
+      {% endfor %}
       {% endfor %}
       {% if has_null %}
       {% for c in chroma %}
+      {% for counts in (row.past_null, row.past_null_crossed) %}
       <td class="num">
-        {%- if c in row.past_null %}{{ row.past_null[c][0] }}/{{ row.past_null[c][1] }}
+        {%- if c in counts %}{{ counts[c][0] }}/{{ counts[c][1] }}
         {%- else %}<span class="muted">&mdash;</span>{% endif -%}
       </td>
+      {% endfor %}
       {% endfor %}
       {% endif %}
       {% for c in chroma %}
@@ -90,10 +94,12 @@ tr.whole td.num { font-weight: 600; }
       </td>
       {% endfor %}
       {% for c in chroma %}
+      {% for values in (row.isc, row.isc_crossed) %}
       <td class="num">
-        {%- if c in row.isc %}{{ "%+.3f"|format(row.isc[c]) }}
+        {%- if c in values %}{{ "%+.3f"|format(values[c]) }}
         {%- else %}<span class="muted">&mdash;</span>{% endif -%}
       </td>
+      {% endfor %}
       {% endfor %}
     </tr>
   {% endfor %}
