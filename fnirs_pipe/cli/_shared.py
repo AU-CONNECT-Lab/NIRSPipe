@@ -227,8 +227,10 @@ def pairs_selection() -> argparse.ArgumentParser:
     """``--pairs-csv`` / ``--group-id`` / ``--participant-label`` / ``--task-label``: which dyads to process."""
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--pairs-csv", type=Path, required=True,
-                   help="CSV with columns: group_id, subject_id, task. Each unique "
-                        "(group_id, task) pair is processed as one session.")
+                   help="CSV with columns: group_id, subject_id, task, and optionally "
+                        "session, run and occasion. Each unique (group_id, task, session) is "
+                        "processed as one group; an occasion column joins members whose "
+                        "session labels differ and names the group's outputs ses-<occasion>.")
     p.add_argument("--group-id", default=None, type=BidsLabel,
                    help="Process only this group_id. Omit to process all groups.")
     p.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",

@@ -53,6 +53,12 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
 
     ``session`` is None for a row without one, so a CSV with no session column keys every
     group as before; one group recorded in two sessions is two groups, never four members.
+
+    An ``occasion`` column names the sitting when members carry different session labels for
+    it; the key's third element is then the occasion (a blank one falls back to the row's
+    session), while each entry keeps its own session to find its file::
+
+        G1,sub-A,chat,3,1  +  G1,sub-B,chat,1,1  ->  {("G1", "chat", "1"): [A ses 3, B ses 1]}
     """
     try:
         df = read_table(csv_path, dtype=str)
@@ -68,7 +74,7 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
         raise GroupCSVError("CSV contains no valid rows after dropping NaN values")
 
     def optional(row, column: str) -> str | None:
-        """A session or run label if the CSV carries one for this row, else None."""
+        """A session, occasion or run label if the CSV carries one for this row, else None."""
         if column not in df.columns:
             return None
         value = str(row[column]).strip()
@@ -77,7 +83,13 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
     result: dict[tuple[str, str], list[GroupEntry]] = {}
     for _, row in df.iterrows():
         session = optional(row, "session")
-        key = (str(row["group_id"]).strip(), str(row["task"]).strip(), session)
+        occasion = optional(row, "occasion")
+        # it becomes the dyad's ses- entity, so it has to be a label a filename can carry
+        if occasion is not None and not occasion.isalnum():
+            raise GroupCSVError(
+                f"occasion {occasion!r} is not a BIDS label: letters and digits only, "
+                "without a 'ses-' prefix")
+        key = (str(row["group_id"]).strip(), str(row["task"]).strip(), occasion or session)
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),
             subject_id=str(row["subject_id"]).strip(),
@@ -90,9 +102,13 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
     for (gid, task, ses), members in result.items():
         if len(members) < 2:
             where = f" session '{ses}'" if ses else ""
+            split = sorted(s or "(none)" for g, t, s in result if (g, t) == (gid, task) and s != ses)
+            hint = (f" Its other rows sit under session(s) {', '.join(split)}: if they are "
+                    "one sitting whose members carry different session labels, name it in "
+                    "an 'occasion' column." if split else "")
             raise GroupCSVError(
                 f"Group '{gid}' task '{task}'{where} has only {len(members)} subject, "
-                "need at least 2"
+                f"need at least 2.{hint}"
             )
 
     return result

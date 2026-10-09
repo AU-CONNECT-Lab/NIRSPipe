@@ -49,6 +49,7 @@ def write_group_bads(
     group: list[GroupEntry],
     sqm_by_subject: dict[str, dict],
     bads_scope: str,
+    session: "str | None" = None,
 ) -> Path:
     """Write the rejected channels the inter-brain metrics actually excluded, one row each.
 
@@ -71,7 +72,7 @@ def write_group_bads(
             })
 
     out_path = group_output_path(output_dir, gid, {"task": task, "desc": "bad"},
-                                 "qc", ".tsv", session=group[0].session)
+                                 "qc", ".tsv", session=session)
     columns = ["group_id", "task", "subject_id", "channel", "bads_scope", "rejected_in"]
     write_tsv(pd.DataFrame(rows, columns=columns), out_path)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
@@ -124,6 +125,7 @@ def compute_group_sqm_raw(
     sep_bands=None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",
+    session: "str | None" = None,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -265,7 +267,7 @@ def compute_group_sqm_raw(
     sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
 
     scalar_path = group_output_path(output_dir, gid, {"task": task, "desc": "subject"},
-                                    "qc", ".tsv", session=group[0].session)
+                                    "qc", ".tsv", session=session)
     write_tsv(pd.DataFrame(scalar_rows), scalar_path)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
@@ -275,7 +277,7 @@ def compute_group_sqm_raw(
     # not `_channels.tsv`: that name is BIDS's own channel description, and this holds
     # one row per subject and channel of cross-subject quality
     channel_path = group_output_path(output_dir, gid, {"task": task, "desc": "channel"},
-                                     "qc", ".tsv", session=group[0].session)
+                                     "qc", ".tsv", session=session)
     write_tsv(pd.DataFrame(channel_rows), channel_path)
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,

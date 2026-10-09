@@ -254,6 +254,8 @@ def make_hyper_dataset(
     tasks: tuple[str, ...] = ("hold", "rest"),
     name: str = "bids_hyper",
     sessions: "tuple[str, ...] | None" = None,
+    member_sessions: "dict[str, str] | None" = None,
+    occasion: "str | None" = None,
     **raw_kwargs,
 ) -> tuple[Path, Path]:
     """Write a dyad dataset plus its pairs CSV. Returns (bids_dir, pairs_csv).
@@ -261,7 +263,9 @@ def make_hyper_dataset(
     ``hold`` carries triggers so alignment has something to align on; ``rest``
     carries none, which is the case trigger alignment refuses outright. ``sessions``
     records every group once per session, each a recording of its own, and gives the
-    pairs CSV a session column.
+    pairs CSV a session column. ``member_sessions`` records each subject once under its
+    own session label, as per-person visit numbering does, and ``occasion`` adds the
+    column naming that sitting.
     """
     groups = groups or {"G01": ("11", "12")}
     subjects = [s for members in groups.values() for s in members]
@@ -270,7 +274,12 @@ def make_hyper_dataset(
     _write_dataset_root(bids_dir, subjects)
     for subject in subjects:
         for task in tasks:
-            if sessions is None:
+            if member_sessions:
+                ses = member_sessions[subject]
+                seed = zlib.crc32(f"{subject}/{task}/{ses}".encode())
+                _write_subject(bids_dir, subject, task,
+                               synth_raw(subject, task, seed=seed, **raw_kwargs), session=ses)
+            elif sessions is None:
                 _write_subject(bids_dir, subject, task,
                                synth_raw(subject, task, **raw_kwargs))
             for ses in sessions or ():
@@ -279,10 +288,14 @@ def make_hyper_dataset(
                                synth_raw(subject, task, seed=seed, **raw_kwargs), session=ses)
 
     pairs_csv = Path(root) / f"{name}_pairs.csv"
-    rows = ["group_id,subject_id,task" + (",session" if sessions else "")]
+    rows = ["group_id,subject_id,task" + (",session" if sessions or member_sessions else "")
+            + (",occasion" if occasion else "")]
     for group_id, members in groups.items():
         for subject in members:
-            if sessions is None:
+            if member_sessions:
+                rows += [f"{group_id},sub-{subject},{task},{member_sessions[subject]}"
+                         + (f",{occasion}" if occasion else "") for task in tasks]
+            elif sessions is None:
                 rows += [f"{group_id},sub-{subject},{task}" for task in tasks]
             rows += [f"{group_id},sub-{subject},{task},{ses}"
                      for ses in sessions or () for task in tasks]

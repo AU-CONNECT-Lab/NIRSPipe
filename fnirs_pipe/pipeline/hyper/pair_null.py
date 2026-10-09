@@ -367,6 +367,7 @@ def run_pair_null(
     isc_whiten: int = 0,
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
+    session: "str | None" = None,
 ) -> Path:
     """Draw, rank and write one group's re-paired null.
 
@@ -396,8 +397,6 @@ def run_pair_null(
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
     cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
-
-    session = members[0].session if members else None
 
     def _path(entities: dict) -> Path:
         return group_output_path(output_dir, group_id, {"task": task, **entities},

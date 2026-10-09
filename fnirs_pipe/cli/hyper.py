@@ -358,7 +358,7 @@ def cmd_run(
         if check_only:
             return None
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
-        write_group_bads(output_dir, members, group_sqm, bads_scope)
+        write_group_bads(output_dir, members, group_sqm, bads_scope, session=ses)
         # resolved here rather than twice downstream: the report and the null have to agree
         # on the windows or their tables cannot be subtracted row by row
         ref = next(iter(aligned_raws.values()), None)
@@ -633,7 +633,7 @@ def cmd_pair_null(
                 bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
                 cross=wtc_pair_cross, limit_scales=wtc_limit_scales,
                 roi_map=roi_map, roi_map_name=roi_map_name(roi_mapping),
-                roi_min_channels=wtc_roi_min_channels)
+                roi_min_channels=wtc_roi_min_channels, session=ses)
             print(f"     pair null -> {path}")
         except Exception as exc:
             print(f"     [error] {exc}", file=sys.stderr)

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
 - `fnirs-hyper`, `fnirs-hyper-pairnull` and `fnirs-qc hyper-raw` take `--participant-label`, keeping the groups a listed subject belongs to
 - `fnirs-qc hyper-raw --seed` seeds the screening null, so its percentiles repeat between runs; the seed is recorded
+- A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
 
 ### Changed
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works

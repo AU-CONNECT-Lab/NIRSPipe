@@ -225,9 +225,9 @@ def cmd_hyper_raw(
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
     if session_label:
-        # as a BIDS App reads it: the sessions to process. A row naming its own session is
-        # kept when listed; a row naming none is read once per listed session
-        groups = {(gid, task, s): [replace(e, session=s) for e in members]
+        # as a BIDS App reads it: the sessions to process. A key naming its session (or its
+        # occasion) is kept when listed; a key naming none is read once per listed session
+        groups = {(gid, task, s): [e if ses else replace(e, session=s) for e in members]
                   for (gid, task, ses), members in groups.items()
                   for s in ([ses] if ses else session_label) if s in session_label}
         if not groups:
@@ -244,7 +244,7 @@ def cmd_hyper_raw(
                                          psp_threshold=psp_threshold,
                                          min_good_frac=min_good_frac,
                                          screen_scope=screen_scope,
-                                         sep_bands=sep_bands)
+                                         sep_bands=sep_bands, session=ses)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -450,8 +450,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Upper bound (Hz) of that band.")
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Session label(s) to process. A group-CSV row without a session "
-                         "column is read once per listed session.")
+                    help="Session label(s) to process: a group's occasion where the group "
+                         "CSV has one, else its session. A group-CSV row without either is "
+                         "read once per listed session.")
     _shared.add_skip_bids_validation(hr)
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
