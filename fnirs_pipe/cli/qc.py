@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 from collections import defaultdict
+from dataclasses import replace
 
 from fnirs_pipe import __version__
 
@@ -223,9 +224,12 @@ def cmd_hyper_raw(
     from fnirs_pipe.utils.lineage import path_from
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
-    if session_label and any(key[2] for key in groups):
-        # a pairs table with sessions names them itself; the flag only picks among them
-        groups = {k: v for k, v in groups.items() if k[2] in session_label}
+    if session_label:
+        # as a BIDS App reads it: the sessions to process. A row naming its own session is
+        # kept when listed; a row naming none is read once per listed session
+        groups = {(gid, task, s): [replace(e, session=s) for e in members]
+                  for (gid, task, ses), members in groups.items()
+                  for s in ([ses] if ses else session_label) if s in session_label}
         if not groups:
             print(f"[error] session_label {session_label} not found in CSV", file=sys.stderr)
             raise SystemExit(1)
@@ -234,8 +238,6 @@ def cmd_hyper_raw(
               "correction only.", file=sys.stderr)
 
     def _process(gid, task, ses, members):
-        # a pairs table without sessions keeps --session-label naming the output, as before
-        ses = ses or (session_label[0] if session_label else None)
         raws_cw = load_group_raw_bids(bids_dir, members)
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
@@ -448,7 +450,8 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Upper bound (Hz) of that band.")
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Session label(s) to include.")
+                    help="Session label(s) to process. A group-CSV row without a session "
+                         "column is read once per listed session.")
     _shared.add_skip_bids_validation(hr)
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "

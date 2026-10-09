@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw --normalize` labelled z-scored traces in µmol/L
 - The cohort dyad page drew a block a dyad lacks, and a missing share, as zero
 - A pairs CSV with a `session` column merged one group's sessions into one group; each session is now its own, every dyad output named `ses-`
+- `fnirs-qc hyper-raw --session-label` only renamed some outputs; it now picks each listed session to read, every output under `ses-`
 
 ## [0.61.0] - 2026-10-08
 

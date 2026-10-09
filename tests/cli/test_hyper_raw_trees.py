@@ -124,3 +124,24 @@ def test_a_seeded_screening_null_repeats_and_is_recorded(mini_hyper_bids, tmp_pa
         record = json.loads(next(nirs.glob("*_desc-sqm_qc.json")).read_text())
         assert record["screening"]["seed"] == 7
     assert tables[0] == tables[1]
+
+
+def test_session_label_picks_the_session_read_and_every_output_follows_it(tmp_path, stage_reads):
+    """A pairs table without sessions, as a BIDS App reads --session-label: which session to
+    process, every output of it under ses-."""
+    from tests._synth import make_hyper_dataset
+
+    bids, _ = make_hyper_dataset(tmp_path, tasks=("hold",), sessions=("a", "b"))
+    pairs = tmp_path / "pairs.csv"
+    pairs.write_text("group_id,subject_id,task\nG01,sub-11,hold\nG01,sub-12,hold\n")
+    out = tmp_path / "out"
+    qc.main(_argv(bids, pairs, out, "--session-label", "b"))
+
+    group = out / "group-G01"
+    written = [p for p in group.rglob("*") if p.is_file() and p.parent.name == "nirs"]
+    assert written
+    assert all(p.parent == group / "ses-b" / "nirs" and "_ses-b_" in p.name for p in written)
+    for sidecar in (p for p in written if p.suffix == ".json"):
+        sources = json.loads(sidecar.read_text()).get("Sources") or []
+        assert all("ses-a" not in s for s in sources), (sidecar.name, sources)
+    assert (group / "group-G01_ses-b_task-hold_desc-raw_report.html").exists()
