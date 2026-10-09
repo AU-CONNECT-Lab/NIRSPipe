@@ -751,6 +751,7 @@ def run_hyper_post(
     # long-format WTC tables can. A window here is a real cut, unlike the coherence, which is
     # sliced out of the whole-run transform; see `compute_isc` and `window_result`.
     isc_pair_frames: list = []
+    isc_draw_frames: list = []
 
     def _isc_params() -> dict:
         """What the correlation was computed on, for the sidecar to carry."""
@@ -813,11 +814,14 @@ def run_hyper_post(
         arc_level = None
         with guard(f"ISC ({what}, {ch_type})", errors, scope):
             pair_ids = list(pair) if pair else subject_ids
+            # per condition only, as the coherence's phase draws are
+            keep = (lambda d: isc_draw_frames.append(
+                d.assign(chromophore=ch_type, condition=label))) if label else None
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
                 whiten=isc_whiten, max_lag_s=isc_max_lag_s,
                 n_null=isc_phase_null, seed=wtc_seed, band=isc_band,
-                cross=bool(wtc_channel_cross))
+                cross=bool(wtc_channel_cross), on_draws=keep)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)
@@ -888,6 +892,26 @@ def run_hyper_post(
             )
             tables[tsv_path.name] = tsv_path
             logger.info("ISC pair table saved: %s", tsv_path)
+
+    if isc_draw_frames:
+        # every surrogate kept, not only their summary, so the correlation can be read above
+        # the cell the way the coherence can
+        with guard("ISC phase draws", errors, scope):
+            draws = pd.concat(isc_draw_frames, ignore_index=True)
+            front = ["chromophore", "condition"]
+            draws = draws[front + [c for c in draws.columns if c not in front]]
+            path = group_output_path(output_dir, group_id,
+                                     {"task": task, "condition": "all", "nulldist": "phase",
+                                      "statistic": "isc", "desc": "draws"},
+                                     "relmat", ".tsv")
+            write_tsv(draws, path)
+            _hyper_sidecar(
+                path, "hyper_isc_bycondition_phasenull_draws",
+                paths_from(aligned_raws.values()),
+                **_isc_params(), seed=wtc_seed,
+                conditions=[w[0] for w in cond_windows], **align_info,
+            )
+            logger.info("ISC phase draws saved: %s", path)
 
     return HyperPostResult(
         subject_ids=subject_ids,

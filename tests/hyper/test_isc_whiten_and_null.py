@@ -329,3 +329,37 @@ def test_an_uncrossed_isc_keeps_the_same_channel_pairs_only(dyad):
     assert np.isnan(mat[off]).all() and np.isnan(level[off]).all()
     np.testing.assert_allclose(np.diag(mat), np.diag(crossed))
     assert (frame["label"] == frame["label2"]).all() and len(frame) == len(names)
+
+
+# ---- the surrogates kept as rows ----
+
+def test_every_surrogate_comes_back_as_rows_its_summary_was_taken_from(dyad):
+    kept = []
+    _, _, frame, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=7, seed=4,
+                                       on_draws=kept.append)
+    assert len(kept) == 1
+    draws = kept[0]
+    assert len(draws) == 7 * len(frame)
+    assert set(draws["draw"]) == set(range(7))
+    assert draws["r_z"].to_numpy() == pytest.approx(
+        np.arctanh(draws["r"].clip(-0.999999, 0.999999).to_numpy()), nan_ok=True)
+    # the per-cell summary is what these rows give back
+    p95 = (draws.assign(a=draws["r"].abs()).groupby(["label", "label2"])["a"]
+           .quantile(0.95, interpolation="linear"))
+    merged = frame.set_index(["label", "label2"])["null_abs_p95"]
+    assert p95.reindex(merged.index).to_numpy() == pytest.approx(merged.to_numpy(), nan_ok=True)
+
+
+def test_no_null_hands_back_no_draws(dyad):
+    kept = []
+    compute_isc_pairs(dyad, ["11", "12"], "hbo", on_draws=kept.append)
+    assert kept == []
+
+
+def test_an_uncrossed_isc_keeps_draws_for_the_same_channel_pairs_only(dyad):
+    kept = []
+    _, names, _, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", n_null=3, seed=3,
+                                       cross=False, on_draws=kept.append)
+    draws = kept[0]
+    assert (draws["label"] == draws["label2"]).all()
+    assert len(draws) == 3 * len(names)

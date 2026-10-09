@@ -67,7 +67,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _text("--group-id", opts.get("group_id"))
         args += _split("--task-label", opts.get("hyper_task"))
         args += _text("--roi-mapping", opts.get("roi_mapping"))
-        args += _text("--wtc-chroma", opts.get("wtc_chroma"))
+        args += _text("--chroma", opts.get("wtc_chroma"))
         args += _text("--wtc-pair-pool", opts.get("wtc_pair_pool"))
         args += _num("--wtc-pair-max", opts.get("wtc_pair_max"))
         # unticked, the crossing follows the real table
@@ -79,7 +79,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     # those tables carry. Only what to read and how finely to resample is this form's
     if command == "group-null":
         args += _text("--task", opts.get("gn_task"))
-        args += _text("--wtc-chroma", opts.get("gn_chroma"))
+        args += _text("--chroma", opts.get("gn_chroma"))
         args += _text("--null", opts.get("gn_null"))
         args += _text("--roi-mapping", opts.get("gn_roi_mapping"))
         args += _num("--n-resample", opts.get("gn_resample"))

@@ -195,7 +195,7 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
         derivatives_dir=tmp_path, output_dir=tmp_path,
         pairs_csv=tmp_path / "pairs.csv", group_id="G01",
         task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
-        bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
+        bads_scope="run", chroma="both", wtc_pair_pool="position",
         wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
         wtc_limit_scales=True, verbose=False)
 
@@ -213,7 +213,7 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
             derivatives_dir=tmp_path, output_dir=tmp_path,
             pairs_csv=tmp_path / "pairs.csv", group_id=None,
             task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
-            bads_scope="run", wtc_chroma="both", wtc_pair_pool="position",
+            bads_scope="run", chroma="both", wtc_pair_pool="position",
             wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
             wtc_limit_scales=True, verbose=False)
 

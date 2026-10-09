@@ -688,7 +688,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     from fnirs_pipe.cli.hyper import cmd_group_null
 
     _write_tree(tmp_path)
-    cmd_group_null(tmp_path, task="main", wtc_chroma="hbo", null="repaired",
+    cmd_group_null(tmp_path, task="main", chroma="hbo", null="repaired",
                    roi_mapping=None, n_resample=500, seed=3, verbose=False)
 
     written = list((tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md"))

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 
 import mne
 import numpy as np
@@ -319,6 +320,7 @@ def compute_isc_pairs(
     seed: int | None = None,
     band: "tuple[float | None, float | None] | None" = None,
     cross: bool = True,
+    on_draws: "Callable[[pd.DataFrame], None] | None" = None,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -338,6 +340,9 @@ def compute_isc_pairs(
     side of zero.
 
     With whitening and the null both on, the null is drawn through the whitening too.
+
+    ``on_draws`` receives every surrogate as rows, one per pair and draw, signed ``r`` and
+    ``r_z``, so a test that averages before ranking can be rebuilt from them.
 
     ``cross`` False keeps each channel against the other member's copy of it only, as an
     uncrossed coherence does: the matrix keeps its shape with every off-diagonal cell NaN,
@@ -377,7 +382,25 @@ def compute_isc_pairs(
         if off is not None:
             draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
+        if on_draws is not None:
+            on_draws(_draw_rows(frame, ch_names, draws))
     return isc_mat, ch_names, frame, null_level
+
+
+def _draw_rows(frame: pd.DataFrame, ch_names: list[str], draws: np.ndarray) -> pd.DataFrame:
+    """The surrogate matrices as long rows on ``frame``'s pairs.
+
+    ::
+
+      draws (3, 2, 2), frame with 4 pairs  ->  12 rows, draw 0..2
+    """
+    index = {name: i for i, name in enumerate(ch_names)}
+    ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
+    keys = frame[["sub1", "sub2", "label", "label2"]]
+    out = pd.concat([keys.assign(draw=i, r=draw[ij]) for i, draw in enumerate(draws)],
+                    ignore_index=True)
+    out["r_z"] = fisher_r_to_z(out["r"])
+    return out
 
 
 def _isc_null_draws(

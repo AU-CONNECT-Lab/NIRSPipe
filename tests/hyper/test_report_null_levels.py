@@ -208,3 +208,25 @@ def test_the_null_table_is_written_without_a_report(dyad, tmp_path):
     _build_with_null(dyad, tmp_path, no_report=True)
     assert _null_table(tmp_path).exists()
     assert not list((tmp_path / "group-G1").rglob("*provenance*.mmd"))
+
+
+def test_the_isc_phase_null_keeps_its_draws_per_condition(dyad, tmp_path):
+    build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", s, "tap") for s in SUBS],
+        aligned_raws=dyad, offsets={s: 0.0 for s in SUBS}, output_dir=tmp_path,
+        wtc_fmin=FMIN, wtc_fmax=FMAX, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
+        wtc_chroma=("hbo",), wtc_by_condition=True, isc_phase_null=4, wtc_seed=1,
+        no_report=True)
+    entities = {"condition": "all", "nulldist": "phase", "statistic": "isc", "desc": "draws"}
+    path = group_output_path(tmp_path, "G1", {"task": "tap", **entities}, "relmat", ".tsv")
+    draws = pd.read_csv(path, sep="\t")
+    assert list(draws.columns[:2]) == ["chromophore", "condition"]
+    # the correlation runs both chromophores whatever the coherence was asked for
+    assert set(draws["chromophore"]) == {"hbo", "hbr"}
+    assert set(draws["condition"]) == set(_spans(dyad))
+    assert set(draws["draw"]) == set(range(4))
+    assert {"r", "r_z", "sub1", "sub2", "label", "label2"} <= set(draws.columns)
+    side = _sidecar(tmp_path, entities)
+    assert side["isc_phase_null_iter"] == 4
+    assert side["conditions"] == list(_spans(dyad))

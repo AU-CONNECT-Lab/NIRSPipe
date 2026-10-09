@@ -505,7 +505,7 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, wtc_chroma: str, null: str, roi_mapping: "Path | None",
+    output_dir: Path, task: str, chroma: str, null: str, roi_mapping: "Path | None",
     n_resample: int, seed: int | None, verbose: bool, p_correction: str = "none",
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
@@ -513,7 +513,7 @@ def cmd_group_null(
 
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
-    written = write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
+    written = write_group_null(output_dir, task=task, chroma=chroma, null=null,
                                roi_map=roi_map, n_resample=n_resample, seed=seed,
                                p_correction=p_correction)
     for path in written:
@@ -574,7 +574,7 @@ def cmd_pair_null(
     desc: str | None,
     roi_mapping: str | None,
     bads_scope: str | None,
-    wtc_chroma: str,
+    chroma: str,
     wtc_pair_pool: str,
     wtc_pair_max: int | None,
     wtc_pair_cross: bool | None,
@@ -598,7 +598,7 @@ def cmd_pair_null(
 
     roi_map = _shared.load_roi_mapping(roi_mapping)
 
-    chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
+    chroma = ("hbo", "hbr") if chroma == "both" else (chroma,)
     scope_tasks = sorted({key[1] for key in all_groups})
 
     failures = 0
@@ -906,7 +906,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "runs no transform.")
     group_null.add_argument("--task", required=True,
                             help="Task whose tables to read, one at a time.")
-    group_null.add_argument("--wtc-chroma", choices=("hbo", "hbr"), default="hbo",
+    group_null.add_argument("--chroma", choices=("hbo", "hbr"), default="hbo",
                             help="Chromophore to read (default hbo), one at a time.")
     group_null.add_argument("--null", choices=("repaired", "phase"), default="repaired",
                             help="Which null's draws to read (default repaired). Both are "
@@ -973,8 +973,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "it is the scope the real tables recorded; a different one is "
                            "refused. A stand-in with no quality record is refused rather than "
                            "kept whole.")
-    pair.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
-                      help="Chromophore(s) to draw the null on (default both).")
+    pair.add_argument("--chroma", choices=("hbo", "hbr", "both"), default="both",
+                      help="Chromophore(s) to draw the null on, coherence and correlation alike (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
                       help="Who may stand in. 'position' (default) replaces a member only "
                            "with another group's member at the same index, which keeps "
