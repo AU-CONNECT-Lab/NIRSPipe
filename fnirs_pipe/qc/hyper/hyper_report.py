@@ -16,6 +16,7 @@ from fnirs_pipe.io.derivatives import group_data_dir, group_report_dir
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
+from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
@@ -1353,6 +1354,7 @@ def build_hyper_post_report(
     isc_roi_matrices: dict = {}
     isc_values: dict = {}
     isc_roi_values: dict = {}
+    isc_hom_values: dict = {}
     for pr in pairings:
         labels = [None] + [label for label, _, _ in cond_windows]
         isc_panels[pr] = {k: {c: _isc_panel_of(pr, k, c) for c in ("hbo", "hbr")}
@@ -1363,6 +1365,12 @@ def build_hyper_post_report(
                           for k in labels}
         isc_roi_values[pr] = {k: {c: result.isc_roi.get(pr, {}).get(k, {}).get(
                                       c, (None, None))
+                                  for c in ("hbo", "hbr")}
+                              for k in labels}
+        # the homologous table's ISC: same-channel pairs only, as the coherence beside it
+        isc_hom_values[pr] = {k: {c: roi_mean_of_homologous_isc(
+                                      *isc_values[pr][k][c], roi_map,
+                                      min_channels=wtc_roi_min_channels)
                                   for c in ("hbo", "hbr")}
                               for k in labels}
 
@@ -1499,7 +1507,7 @@ def build_hyper_post_report(
             ("Channel pairs", "chan", chan_axis, isc_values),
             ("ROI pairs", "roichan", roi_labels, isc_roi_values),
             # the homologous subset of the table above, for a homologous-only reading
-            ("ROI homologous pairs", "roihom", roi_labels, isc_roi_values),
+            ("ROI homologous pairs", "roihom", roi_labels, isc_hom_values),
         ):
             per_scope = []
             for heading, band_frames, isc_label in number_scopes:

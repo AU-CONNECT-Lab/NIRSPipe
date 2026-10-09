@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Dyad pages show each member's run verdict and per-condition pass or fail by channel pair: one condition on its page, every condition on the run page
 
 ### Changed
+- `fnirs-qc cohort-hyper` refuses a dyad record whose screening is not kept per pairing
+- The dyad page's ROI homologous table prints the ISC over same-channel pairs, as its coherence
 - Per-channel tables print `SCI (10 s)` and `SCI (whole run)`, and `_desc-channel_qc.tsv` writes them as `sci_win` and `sci_whole`
 - Per-channel grids, tables and the per-trial heatmap name each metric's window; the SCI/PSP panel names its `--window-length`
 - Condition pages and the subject index no longer show the windowed SCI under the whole-run SCI's name

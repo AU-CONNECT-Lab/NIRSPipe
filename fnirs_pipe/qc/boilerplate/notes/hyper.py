@@ -220,8 +220,8 @@ NOTES = {
     "hyper_post.roi_value":
         "An ROI value averages channel values rather than analysing an averaged signal: "
         "the WTC as a plain mean, the ISC in Fisher z, a correlation being signed where a "
-        "coherence is not. In the homologous table the WTC averages only the same-channel "
-        "pairs, while the ISC beside it averages every pairing inside the region.",
+        "coherence is not. In the homologous table both average only the same-channel "
+        "pairs.",
     "hyper_post.member_metrics":
         "One table per channel set. Hover a column header for which end is better; the "
         "windowed SCI is coloured against each member&rsquo;s own <code>--sci-threshold</code>, "

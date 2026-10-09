@@ -516,3 +516,33 @@ def roi_mean_of_isc(
         logger.info("ROI ISC: %d cell(s) with a member under %d channels, left blank",
                     thin, min_channels)
     return out, labels
+
+
+def roi_mean_of_homologous_isc(
+    isc_mat,
+    ch_names: list[str],
+    roi_map: dict[str, list[str]],
+    min_channels: int = ROI_MIN_CHANNELS,
+) -> "tuple[np.ndarray, list[str]] | tuple[None, None]":
+    """:func:`roi_mean_of_isc` over the same-channel pairs only, the ISC beside the homologous ROI coherence.
+
+    ::
+
+      4x4 r matrix + {"L": ["S1_D1", "S2_D2"], ...}
+        -> L x L is the Fisher z mean of (S1_D1, S1_D1) and (S2_D2, S2_D2); off the
+           diagonal NaN
+
+    The counterpart of :func:`~fnirs_pipe.pipeline.hyper.roi.roi_mean_of_homologous`: the
+    crossed ROI diagonal averages every pairing inside a region, this averages only a channel
+    against the other member's copy of it.
+    """
+    if isc_mat is None or not ch_names or not roi_map:
+        return None, None
+    mat = np.asarray(isc_mat, dtype=float)
+    same = np.full_like(mat, np.nan)
+    np.fill_diagonal(same, np.diag(mat))
+    out, labels = roi_mean_of_isc(same, ch_names, roi_map, min_channels=min_channels)
+    if out is not None:
+        # a channel listed in two regions would otherwise put its own pair off the diagonal
+        out[~np.eye(len(labels), dtype=bool)] = np.nan
+    return out, labels

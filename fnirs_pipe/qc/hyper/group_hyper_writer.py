@@ -133,8 +133,8 @@ def collect_rows(output_dir: Path) -> list[dict]:
         table = read_tsv_or_none(record_path.parent / _usable_name(label), "its panel loses a row")
         screening = record.get("screening") or {}
         if screening and "pairings" not in screening:
-            logger.warning("%s was written before screening was kept per pairing; rerun "
-                           "fnirs-qc hyper-raw for its null panel", label)
+            raise ValueError(f"{record_path.name} was written before screening was kept per "
+                             f"pairing. Rerun fnirs-qc hyper-raw for group {group_dir.name}.")
         pairings = screening.get("pairings") or []
         # one strip row per pairing, each ranked against its own null; a dyad keeps its label
         percentile = {
