@@ -337,8 +337,6 @@ def test_the_numbers_table_prints_each_pairing_s_own_band_means(groups, group):
                         (page.name, l1, l2, scope, chroma)
 
 
-@pytest.mark.xfail(strict=True, reason="the homologous table's ISC is the crossed ROI diagonal, "
-                                        "every pairing inside the region")
 @pytest.mark.parametrize("scope", SCOPES)
 def test_the_homologous_table_s_isc_averages_only_same_channel_pairs(groups, scope):
     from tests._dyad_fingerprint import ROI_MAP

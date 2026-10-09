@@ -456,6 +456,20 @@ def test_a_crossed_roi_correlation_cell_needs_channels_on_both_sides():
     assert np.isfinite(out[labels.index("L"), labels.index("L")])
 
 
+def test_the_homologous_roi_correlation_averages_only_same_channel_pairs():
+    """The homologous table's ISC sits beside a coherence over same-channel pairs, so the
+    crossed pairings inside a region must not reach it."""
+    from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
+
+    mat = np.full((4, 4), 0.9)
+    np.fill_diagonal(mat, [0.2, 0.4, 0.1, 0.3])
+    out, labels = roi_mean_of_homologous_isc(mat, ISC_LABELS, ISC_ROIS, min_channels=1)
+
+    z = np.arctanh([0.2, 0.4])
+    assert out[labels.index("L"), labels.index("L")] == pytest.approx(float(np.tanh(z.mean())))
+    assert np.isnan(out[labels.index("L"), labels.index("R")])
+
+
 def test_no_roi_map_is_no_matrix_rather_than_an_empty_one():
     assert _isc_roi(np.zeros((4, 4)))[0] is not None
     from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_isc

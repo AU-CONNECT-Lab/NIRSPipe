@@ -7,8 +7,10 @@ page beside it; these pin both pages on one rendered tree.
 import json
 import re
 
+import pytest
+
 from fnirs_pipe.io.naming import parse_path
-from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report
+from fnirs_pipe.qc.hyper.group_hyper_writer import build_group_hyper_report, collect_rows
 from fnirs_pipe.qc.subject.group_writer import build_group_raw_report
 from fnirs_pipe.qc.subject.record_io import write_record
 
@@ -55,3 +57,13 @@ def test_every_cohort_figure_is_named_by_the_config(tmp_path):
     for path in (tmp_path / "figures").iterdir():
         entities = parse_path(f"figures/{path.name}")
         assert entities.get("suffix") == "nirs" and entities.get("desc"), path.name
+
+
+def test_a_dyad_record_without_per_pairing_screening_is_refused(tmp_path):
+    _tree(tmp_path)
+    path = tmp_path / "group-G1" / "nirs" / "group-G1_task-rest_desc-sqm_qc.json"
+    record = json.loads(path.read_text())
+    record["screening"] = {"windows": {"game1": {"percentile": 80.0}}}
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="Rerun fnirs-qc hyper-raw for group group-G1"):
+        collect_rows(tmp_path)
