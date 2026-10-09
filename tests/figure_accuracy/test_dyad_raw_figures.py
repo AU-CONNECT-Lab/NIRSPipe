@@ -275,14 +275,29 @@ def test_the_usable_carpet_sits_on_the_shared_clock(groups, group):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_the_usable_carpet_loses_each_pair_to_the_member_that_rejected_it(groups, group):
-    rejected = {m.rejected for m in groups.truth.group(group)}
-    for pair, (_, status) in _carpet(groups, group).items():
-        both, one = np.mean(status == 2), np.mean(status == 1)
+def test_the_usable_carpet_loses_each_pair_to_the_members_that_fail_it(groups, group):
+    from tests._dyad_fingerprint import CONDITION_FAILING
+    members = groups.truth.group(group)
+    rejected = {m.rejected for m in members}
+    spans: dict = {}
+    for m in members:
+        name, onset, span = CONDITION_FAILING[m.subject]
+        spans.setdefault(name, []).append((onset, onset + span))
+    for pair, (x, status) in _carpet(groups, group).items():
+        half = np.diff(x)[0] / 2
+        inside = np.zeros(len(x), bool)
+        touched = np.zeros(len(x), bool)
+        for t0, t1 in spans.get(pair, []):
+            inside |= (x - half >= t0) & (x + half <= t1)
+            touched |= (x + half > t0) & (x - half < t1)
+        # a member's planted span costs the pair every window inside it
+        assert inside.any() == (pair in spans), pair
+        assert np.all(status[inside] < 2), pair
+        rest = status[~touched]
         if pair in rejected:
-            assert one > 0.85, (pair, one)
+            assert np.mean(rest == 1) > 0.85, (pair, np.mean(rest == 1))
         else:
-            assert both > 0.85, (pair, both)
+            assert np.mean(rest == 2) > 0.85, (pair, np.mean(rest == 2))
 
 
 @pytest.mark.parametrize("group", GROUPS)
@@ -295,7 +310,8 @@ def test_the_usable_table_is_the_carpet_cut_by_condition(groups, group):
         t0, t1 = blocks[r.condition]
         inside = status[(x >= t0) & (x <= t1)]
         assert len(inside) == r.n_windows, (r.pair, r.condition)
-        assert np.mean(inside == 2) == pytest.approx(r.usable_frac), (r.pair, r.condition)
+        # the table keeps four decimals
+        assert np.mean(inside == 2) == pytest.approx(r.usable_frac, abs=5e-5), (r.pair, r.condition)
 
 
 @pytest.mark.parametrize("group", GROUPS)

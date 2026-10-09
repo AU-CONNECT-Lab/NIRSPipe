@@ -270,6 +270,83 @@ def condition_quality_heatmap(
     return fig
 
 
+def member_condition_heatmap(
+    pairs: "list[str]",
+    status: "dict[str, dict]",
+    subject_ids: "list[str]",
+    labels: "list[str]",
+    *,
+    split_at: "int | None" = None,
+    row_label: "str | None" = None,
+) -> "go.Figure | None":
+    """A group's channel status, one block per member: the run's verdict, then each condition's.
+
+    ``status`` is :func:`~fnirs_pipe.qc.hyper.hyper_report.condition_channel_status`. Each
+    block is a Run row (kept / rejected) and one row per label (pass / fail); ``row_label``
+    names a lone condition row instead of the label, as a condition page does.
+
+    Example: two members, labels ["ca", "cb"] -> two blocks of three rows, pairs across.
+
+    None when no member has a result in any of ``labels``.
+    """
+    if not any(label in (status.get(sid) or {}).get("conditions", {})
+               for sid in subject_ids for label in labels):
+        return None
+    xs, ys, colors, hover, tickvals, ticktext, headings = [], [], [], [], [], [], []
+    row = 0
+    for sid in subject_ids:
+        member = status.get(sid) or {}
+        headings.append((row, sid))
+        row += 1
+        rows = [("Run", None)] + [(row_label or label, label) for label in labels]
+        for text, label in rows:
+            y = row * _SPACING
+            tickvals.append(y)
+            ticktext.append(text)
+            cells = (member.get("conditions") or {}).get(label) or {}
+            for i, ch in enumerate(pairs):
+                if label is None:
+                    color, cell = _channel_cell("Run", ch in (member.get("run") or ()), None,
+                                                None, ch, words=("kept", "rejected"))
+                else:
+                    share, failing = cells.get(ch, (None, None))
+                    color, cell = _channel_cell("In condition", failing, None, None, ch,
+                                                words=("pass", "fail"))
+                    if share is not None:
+                        line = member.get("line")
+                        cell += f"<br>coupled {share:.2f}" + (
+                            f" against {sid}'s line {line:.2f}" if line is not None else "")
+                    cell = f"{label} · {cell}"
+                xs.append(i * _SPACING)
+                ys.append(y)
+                colors.append(color)
+                hover.append(f"{sid} · {cell}")
+            row += 1
+
+    fig = go.Figure(go.Scatter(
+        x=xs, y=ys, mode="markers",
+        marker=dict(symbol="square", size=12, color=colors, line=dict(width=0)),
+        text=hover, hovertemplate="%{text}<extra></extra>", showlegend=False,
+    ))
+    for at, sid in headings:
+        fig.add_annotation(x=0, xref="paper", xanchor="right", xshift=-6,
+                           y=at * _SPACING, yref="y", text=f"<b>{sid}</b>", showarrow=False,
+                           font=dict(size=10, color=AXIS_TEXT_COLOR))
+    left = max(70, 7 * max(len(t) for t in ticktext + list(subject_ids)) + 20)
+    top_px = 52 if _long_short_divider(fig, split_at, len(pairs)) else 20
+    fig.update_layout(
+        xaxis=_channel_xaxis(pairs),
+        yaxis=dict(tickvals=tickvals, ticktext=ticktext,
+                   tickfont=dict(size=9, color=AXIS_TEXT_COLOR),
+                   showgrid=False, zeroline=False,
+                   range=[(row - 0.5) * _SPACING, -0.5 * _SPACING]),
+        plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=left, r=20, t=top_px, b=100),
+        height=top_px + 100 + row * _CONDITION_ROW_PX,
+    )
+    return fig
+
+
 # key and row label only. The hover format and which end is the better one come from the
 # metric registry, which is also where the reports read them, so the two cannot disagree.
 # Labels stay local because a heatmap row is a few characters wide and the registry's are

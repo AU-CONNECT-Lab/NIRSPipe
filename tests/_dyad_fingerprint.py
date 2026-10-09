@@ -11,7 +11,8 @@ import zlib
 import mne
 import numpy as np
 
-from tests._fingerprint import (CARDIAC_AMP, CARDIAC_FREQ, DPF, LONG_DISTANCE, SHORT_DISTANCE,
+from tests._fingerprint import (CARDIAC_AMP, CARDIAC_FREQ, DEAD_OD, DPF, LONG_DISTANCE,
+                                SHORT_DISTANCE,
                                 _haemo_to_od, _info, _layout)
 from tests._synth import _write_dataset_root, _write_subject
 
@@ -50,6 +51,13 @@ COHORT_ONLY = (
 )
 NO_SHORT = {"00"}
 DEAD = {"00"}                        # the rejected pair is constant rather than uncoupled
+# per member, a kept and uncoupled pair whose wavelengths decouple over part of one block only
+# (aligned onset, span): the run keeps it (0.85 coupled) and that block alone fails it (0.625).
+# Each starts on a multiple of 60 s of its member's own clock, so the 10 s and 12 s window
+# grids both cut it whole and every member's windowed SCI drops by the same amount
+CONDITION_FAILING = {"01": ("S3_D3", 228.0, 60.0), "02": ("S5_D5", 83.0, 60.0),
+                     "03": ("S3_D3", 228.0, 60.0), "04": ("S1_D1", 83.0, 60.0),
+                     "05": ("S2_D2", 239.0, 60.0)}
 
 
 @dataclass(frozen=True)
@@ -213,6 +221,13 @@ def member_raw(member: Member) -> tuple[mne.io.Raw, dict[str, np.ndarray]]:
         if name == member.rejected:
             od[2 * k: 2 * k + 2] = 0.01 * rng.normal(size=(2, n))
     od += member.noise * OD_NOISE * rng.normal(size=od.shape)
+    if member.subject in CONDITION_FAILING:
+        name, onset, span = CONDITION_FAILING[member.subject]
+        k = [l[0] for l in layout].index(name)
+        off = (t_al >= onset) & (t_al < onset + span)
+        anti = DEAD_OD * np.sin(2 * np.pi * CARDIAC_FREQ * t[off])
+        od[2 * k, off] += anti
+        od[2 * k + 1, off] -= anti
     if member.subject in DEAD:
         k = [l[0] for l in layout].index(member.rejected)
         od[2 * k: 2 * k + 2] = 0.0

@@ -45,6 +45,7 @@
   ("ISC", "ISC"),
   ("Numbers", "Numbers"),
   ("Quality", "Quality"),
+  ("ConditionChannels", "Channels"),
 ], rated=false, siblings=nav_links or [], index=index_href or "",
    index_label="← All windows")] %}
 {% set nav_chip = "group-" ~ group_id %}
@@ -346,6 +347,23 @@
 <div class="qm-box">
   <p class="qm-note">{{ section_note('hyper_post.member_metrics_missing', href=run_href) }}</p>
 </div>
+{% endif %}
+
+{% if condition_grid.wtc %}
+<!-- ================================================ per-condition channel quality -->
+{% if condition_label %}
+<h2 id="ConditionChannels">Channels in this condition</h2>
+<p class="qm-note">{{ section_note('hyper_post.condition_grid') }}</p>
+{% else %}
+<h2 id="ConditionChannels">Per-condition channel quality</h2>
+<p class="qm-note">{{ section_note('hyper_post.condition_summary') }}</p>
+{% endif %}
+<div style="overflow-x:auto;">
+  <iframe class="plotly-frame" src="{{ condition_grid.wtc }}"
+          title="channel status per member{{ ' in this condition' if condition_label }}"
+          style="height:{{ condition_grid.h or 300 }}px;min-width:500px"></iframe>
+</div>
+<p class="fig-path">{{ condition_grid.wtc }}</p>
 {% endif %}
 
 <script>

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `fnirs-qc prep-raw` reports HbO-HbR correlation: a channel-table column, a per-set table and a correlation panel, before and after `--motion-correction`, condition pages included
+- Dyad pages show each member's run verdict and per-condition pass or fail by channel pair: one condition on its page, every condition on the run page
 
 ### Changed
 - Per-channel tables print `SCI (10 s)` and `SCI (whole run)`, and `_desc-channel_qc.tsv` writes them as `sci_win` and `sci_whole`

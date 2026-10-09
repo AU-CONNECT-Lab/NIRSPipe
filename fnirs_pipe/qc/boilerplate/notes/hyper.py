@@ -236,6 +236,21 @@ NOTES = {
         "has no per-condition value for. This reports, it does not re-decide: the channel set "
         "is the whole recording&rsquo;s, so a channel that came loose here is still in. "
         '<a href="{href}">Whole-run page</a>.',
+    "hyper_post.condition_grid":
+        "Each member&rsquo;s channel pairs over this window, read off that member&rsquo;s "
+        "own record. <b>Run</b> is the member&rsquo;s whole-run screening, the set every "
+        "coherence on this page was computed on, so <i>rejected</i> is always the run&rsquo;s "
+        "verdict. <b>In condition</b> says whether a pair passes on this window&rsquo;s stretch "
+        "alone, against that member&rsquo;s own recorded line, a pair rejected by hand failing "
+        "everywhere. It is a guide to choosing conditions and rejects nothing. Hover a cell "
+        "for its coupled-window share.",
+    "hyper_post.condition_summary":
+        "Every condition page&rsquo;s channel grid in one figure, a column per channel pair, so "
+        "a pair that fails in one condition only shows as a lone red cell in its column. "
+        "<b>Run</b> is each member&rsquo;s whole-run screening, the set every coherence was "
+        "computed on. Each condition row says whether a pair passes on that condition&rsquo;s "
+        "stretch alone, against that member&rsquo;s own recorded line, a pair rejected by hand "
+        "failing everywhere. It is a guide to choosing conditions and rejects nothing.",
     "hyper_post.member_metrics_missing":
         'No member&rsquo;s record holds this window (no <code>by_condition</code> section, '
         'a split window from <code>--wtc-window-s</code>, or bounds that do not match), so '

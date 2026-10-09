@@ -38,8 +38,10 @@ from fnirs_pipe.qc.common.figure_io import (
     save_png,
 )
 from fnirs_pipe.qc.figures.common.provenance_figure import write_provenance
+from fnirs_pipe.qc.figures.subject.sci_psp_panel import member_condition_heatmap
 from fnirs_pipe.qc.figures.hyper.hyper_figures import _cond_colors
 from fnirs_pipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
+from fnirs_pipe.qc.metrics._helpers import long_short_channels
 from fnirs_pipe.qc.common.report_shell import (
     footer_vars,
     guard,
@@ -269,6 +271,104 @@ def _record_window_matches(
     return True
 
 
+def member_condition_entries(
+    subject_sqm: dict,
+    subject_ids: "list[str]",
+    windows: "list[tuple[str, float, float]]",
+    offsets: "dict[str, float] | None" = None,
+    sfreq: "float | None" = None,
+) -> "dict[str, dict[str, dict]]":
+    """``{sid: {label: by_condition entry}}`` for every dyad window a member's record holds.
+
+    ::
+
+      windows [("ca", 30.0, 190.0)], sub-02 offset 37.0, its record's ca at [67.0, 227.0]
+      -> {"sub-01": {"ca": {...}}, "sub-02": {"ca": {...}}}
+
+    A member whose record has no ``by_condition`` section is absent.
+    """
+    offsets = offsets or {}
+    # the dyad resolves its windows from one member, the records carry each member's own
+    tol = _TRIGGER_JITTER_SAMPLES / float(sfreq) if sfreq else 0.0
+
+    out: dict = {}
+    for sid in subject_ids:
+        by_condition = (subject_sqm.get(sid) or {}).get("by_condition") or {}
+        if not by_condition:
+            logger.info("%s: no by_condition section in the quality record, so the "
+                        "per-condition quality tables and grids have nothing for it", sid)
+            continue
+        # `windows` drives the loop, not the record's own set: the record keeps shorter
+        # conditions than hyper, and one too short for a coherence must not reach a WTC page
+        for label, t0, t1 in windows:
+            entry = by_condition.get(label)
+            if entry is None:
+                continue
+            if _record_window_matches(entry.get("window_s"), t0, t1,
+                                      float(offsets.get(sid, 0.0)), tol, sid, label):
+                out.setdefault(sid, {})[label] = entry
+    return out
+
+
+def condition_channel_status(
+    subject_sqm: dict,
+    subject_ids: "list[str]",
+    entries: "dict[str, dict[str, dict]]",
+    bad_channels: "dict[str, list[str]] | None",
+) -> "dict[str, dict]":
+    """Per member and pair: the run's verdict, and each condition's own result beside it.
+
+    ::
+
+      -> {"sub-01": {"run": {"S5_D5"}, "line": 0.7,
+                     "conditions": {"cb": {"S3_D3": (0.5, True), "S1_D1": (1.0, False)}}}}
+
+    A condition's tuple is ``(coupled share, failing)``, folded from the two wavelengths of a
+    pair: the lower share, and failing when either is in the entry's ``bad_channels``. That
+    assessment rejects nothing; ``run`` is the set every coherence was computed on.
+    """
+    out: dict = {}
+    for sid in subject_ids:
+        conditions: dict = {}
+        for label, entry in (entries.get(sid) or {}).items():
+            frac = (entry.get("per_channel") or {}).get("good_frac_per_channel") or {}
+            failing = {pair_of(c) for c in entry.get("bad_channels") or ()}
+            pairs: dict = {}
+            for ch, share in frac.items():
+                p = pair_of(ch)
+                low = min(float(share), pairs.get(p, (np.inf,))[0])
+                pairs[p] = (low, p in failing)
+            conditions[label] = pairs
+        cutoffs = (subject_sqm.get(sid) or {}).get("screen_cutoffs") or {}
+        out[sid] = {"run": {pair_of(c) for c in (bad_channels or {}).get(sid) or ()},
+                    "line": cutoffs.get("good_frac"),
+                    "conditions": conditions}
+    return out
+
+
+def condition_status_axis(
+    aligned_raws: "dict[str, mne.io.Raw]", subject_ids: "list[str]", sep_bands=None,
+) -> "tuple[list[str], int | None]":
+    """The grid's pair columns, long block first, and the index the short block starts at.
+
+    ::
+
+      sub-01 long S1..S5 short S6, sub-02 the same  ->  (["S1_D1", ..., "S6_D6"], 5)
+    """
+    long_pairs: list[str] = []
+    short_pairs: list[str] = []
+    for sid in subject_ids:
+        raw = aligned_raws.get(sid)
+        if raw is None:
+            continue
+        long_names, short_names = long_short_channels(raw, sep_bands)
+        for names, dest in ((long_names, long_pairs), (short_names, short_pairs)):
+            for p in dict.fromkeys(pair_of(c) for c in names):
+                if p not in long_pairs and p not in short_pairs:
+                    dest.append(p)
+    return long_pairs + short_pairs, (len(long_pairs) if short_pairs else None)
+
+
 def condition_subject_metrics(
     subject_sqm: dict,
     subject_ids: "list[str]",
@@ -297,26 +397,10 @@ def condition_subject_metrics(
     if not windows:
         return {}
 
-    offsets = offsets or {}
-    # the dyad resolves its windows from one member, the records carry each member's own
-    tol = _TRIGGER_JITTER_SAMPLES / float(sfreq) if sfreq else 0.0
-
     per_subject: dict = {}
-    for sid in subject_ids:
-        by_condition = (subject_sqm.get(sid) or {}).get("by_condition") or {}
-        if not by_condition:
-            logger.info("%s: no by_condition section in the quality record, so the "
-                        "per-condition quality table has no column for it", sid)
-            continue
-        # `windows` drives the loop, not the record's own set: the record keeps shorter
-        # conditions than hyper, and one too short for a coherence must not reach a WTC page
-        for label, t0, t1 in windows:
-            entry = by_condition.get(label)
-            if entry is None:
-                continue
-            if not _record_window_matches(entry.get("window_s"), t0, t1,
-                                          float(offsets.get(sid, 0.0)), tol, sid, label):
-                continue
+    for sid, entries in member_condition_entries(subject_sqm, subject_ids, windows,
+                                                 offsets, sfreq).items():
+        for label, entry in entries.items():
             for set_name, _ in _CHANNEL_SETS:
                 view = condition_set_view(entry, set_name)
                 if view:
@@ -1304,6 +1388,31 @@ def build_hyper_post_report(
             subject_sqm or {}, subject_ids, cond_windows, sci_lines,
             offsets=offsets,
             sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None)
+    # the channel grids: each member's run verdict beside every window's own result
+    cond_status: dict = {}
+    with guard("Per-condition channel grid", errors, scope):
+        cond_status = condition_channel_status(
+            subject_sqm or {}, subject_ids,
+            member_condition_entries(
+                subject_sqm or {}, subject_ids, cond_windows, offsets,
+                sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None),
+            bad_channels)
+
+    def _condition_grid(pair: "tuple[str, str]", label: "str | None") -> dict:
+        """A condition page's grid of that condition; the run page's of every condition."""
+        pair_ids = list(pair)
+        labels = [label] if label else [lab for lab, _, _ in cond_windows]
+        fig_name = figure_namer(scope, _pair_fname(label) if label else None)
+        out: dict = {}
+        with guard(f"Per-condition channel grid ({label or 'whole run'})",
+                   page_errors[(pair, label)], scope):
+            axis, split_at = condition_status_axis(aligned_raws, pair_ids, sep_bands)
+            out = _fig_html(member_condition_heatmap(
+                axis, cond_status, pair_ids, labels, split_at=split_at,
+                row_label="In condition" if label else None,
+            ), fig_name("condstatus" if label else "condsummary", suffix="qc",
+                        pairing=_pair_slug(pair).lstrip("_") or None)) or {}
+        return out
 
     # per member: each channel selector marks the rejections of the member it lists
     bad_pairs = {sid: sorted({pair_of(c) for c in chs})
@@ -1491,6 +1600,7 @@ def build_hyper_post_report(
             isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
             isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
             subject_metrics_rows=member_rows,
+            condition_grid=_condition_grid(pair, label) if pair else {},
         )
         out_path.write_text(html, encoding="utf-8")
         return out_path
