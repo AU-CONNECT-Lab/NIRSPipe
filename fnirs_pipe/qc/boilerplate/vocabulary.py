@@ -401,7 +401,7 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
                  else "the member in the same position of each other group"),
         # the correlation's tables carry its own settings; without them only coherence ran
         "measures": ("coherence and the inter-subject correlation were"
-                     if "isc_whiten_max_order" in params else "coherence was"),
+                     if "isc_whiten_s" in params else "coherence was"),
         "pairs": "every channel pair" if params.get("cross") else "homologous channel pairs",
         "count": (f"{n} of the {pool_size} eligible stand-ins were used."
                   if pool_size is not None and n < int(pool_size)
@@ -411,8 +411,12 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
 
 
 def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
-    """The correlation's optional steps, in the order they ran: band limit, whitening, lag."""
+    """The correlation's optional steps, in the order they ran: whitening, band limit, lag."""
     before = []
+    if params.get("isc_whiten_s"):
+        before.append("prewhitened with an autoregressive model of order "
+                      f"{params.get('isc_whiten_order')} ({_num(params['isc_whiten_s'])} s), "
+                      "fitted on the whole aligned recording")
     low, high = params.get("isc_band_hz") or (None, None)
     if low is not None and high is not None:
         before.append(f"band-pass filtered to {_num(low)}–{_num(high)} Hz")
@@ -420,9 +424,6 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
         before.append(f"high-pass filtered at {_num(low)} Hz")
     elif high is not None:
         before.append(f"low-pass filtered at {_num(high)} Hz")
-    if params.get("isc_whiten_max_order"):
-        before.append("prewhitened with an autoregressive model whose order was chosen by BIC "
-                      f"(at most {params['isc_whiten_max_order']})")
     options = (f" Before correlating, each signal was {' and '.join(before)}."
                if before else "")
     if params.get("isc_max_lag_s"):

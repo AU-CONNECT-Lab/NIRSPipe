@@ -57,7 +57,8 @@ class HyperPostConfig:
     wtc_chroma: Any = ("hbo", "hbr")
     # seconds of AR order for prewhitening before the coherence, 0 for none
     wtc_whiten_s: float = 0.0
-    isc_whiten: int = 0
+    # the same for the correlation, its own order
+    isc_whiten_s: float = 0.0
     isc_max_lag_s: float = 0.0
     isc_phase_null: int = 0
     isc_band: "tuple[float | None, float | None] | None" = None
@@ -248,7 +249,8 @@ def run_hyper_post(
     wtc_save_maps          = config.wtc_save_maps
     wtc_mask_coi           = config.wtc_mask_coi
     wtc_roi_min_channels   = config.wtc_roi_min_channels
-    isc_whiten, isc_phase_null = config.isc_whiten, config.isc_phase_null
+    isc_phase_null         = config.isc_phase_null
+    isc_whiten_s           = float(config.isc_whiten_s or 0.0)
     isc_max_lag_s          = config.isc_max_lag_s
     isc_band               = config.isc_band
     chroma, cond_pad_s     = config.chroma, config.cond_pad_s
@@ -259,6 +261,8 @@ def run_hyper_post(
     wtc_whiten_s           = float(config.wtc_whiten_s or 0.0)
     # the coherence alone reads the whitened copies; the correlation has its own whitening
     wtc_raws = (whiten_raws(aligned_raws, wtc_whiten_s, sep_bands) if wtc_whiten_s
+                else aligned_raws)
+    isc_raws = (whiten_raws(aligned_raws, isc_whiten_s, sep_bands) if isc_whiten_s
                 else aligned_raws)
 
     def _whiten_params() -> dict:
@@ -777,7 +781,9 @@ def run_hyper_post(
     def _isc_params() -> dict:
         """What the correlation was computed on, for the sidecar to carry."""
         return {"isc_band_hz": list(isc_band) if isc_band else None,
-                "isc_whiten_max_order": isc_whiten,
+                "isc_whiten_s": isc_whiten_s,
+                **({"isc_whiten_order": whiten_order(aligned_raws, isc_whiten_s)}
+                   if isc_whiten_s else {}),
                 "isc_max_lag_s": isc_max_lag_s,
                 "isc_phase_null_iter": isc_phase_null,
                 "channel_cross": bool(wtc_channel_cross),
@@ -797,7 +803,7 @@ def run_hyper_post(
                                  {"task": task, "condition": "all", "nulldist": "pair",
                                   "statistic": "isc"}, "relmat", ".tsv", session=session)
         expected = {**wtc_grid_params(aligned_raws), **align_info,
-                    "isc_whiten_max_order": isc_whiten, "isc_max_lag_s": isc_max_lag_s,
+                    "isc_whiten_s": isc_whiten_s, "isc_max_lag_s": isc_max_lag_s,
                     "isc_band_hz": list(isc_band) if isc_band else None}
         if not path.exists():
             return {}
@@ -839,16 +845,17 @@ def run_hyper_post(
             # per condition only, as the coherence's phase draws are
             keep = (lambda d: isc_draw_frames.append(
                 d.assign(chromophore=ch_type, condition=label))) if label else None
+            # whitened on the whole record, then cut past the zeroed transient
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
-                aligned_raws, pair_ids, ch_type, sep_bands, window=window,
-                whiten=isc_whiten, max_lag_s=isc_max_lag_s,
+                isc_raws, pair_ids, ch_type, sep_bands, window=window,
+                max_lag_s=isc_max_lag_s,
                 n_null=isc_phase_null, seed=wtc_seed, band=isc_band,
-                cross=bool(wtc_channel_cross), on_draws=keep)
+                cross=bool(wtc_channel_cross), on_draws=keep, skip_s=isc_whiten_s)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)
-            # the same numbers one row per pairing, which is the shape the z, the AR order
-            # and the null columns fit in and the shape a group analysis reads
+            # the same numbers one row per pairing, which is the shape the z, the lag and
+            # the null columns fit in and the shape a group analysis reads
             pairs_df.insert(0, "chromophore", ch_type)
             if label:
                 pairs_df.insert(0, "condition", label)

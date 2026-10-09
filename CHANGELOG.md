@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper`, `fnirs-hyper-pairnull` and `fnirs-qc hyper-raw` take `--participant-label`, keeping the groups a listed subject belongs to
 - `fnirs-qc hyper-raw --seed` seeds the screening null, so its percentiles repeat between runs; the seed is recorded
 - A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
+- The dyad raw page's alignment timeline and a table show each block's onset difference between the members after alignment, flagged past two samples
 
 ### Changed
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together

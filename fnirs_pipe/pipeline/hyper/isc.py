@@ -1,8 +1,8 @@
 """Inter-subject correlation: the same question as wavelet coherence, in the time domain.
 
   compute_isc                     One correlation per channel pair between two members,
-                                  optionally after autoregressive whitening and a lag
-                                  search. The matrix a report draws.
+                                  optionally after a lag search. The matrix a report
+                                  draws.
   compute_isc_pairs               The same computation delivered as a long table, with the
                                   scrambled null beside it.
   roi_mean_of_isc                 Groups those correlations into ROIs.
@@ -16,88 +16,14 @@ from collections.abc import Callable
 import mne
 import numpy as np
 import pandas as pd
-from scipy.signal import lfilter
 
 from fnirs_pipe.io.snirf import long_channel_picks
 from fnirs_pipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
 from fnirs_pipe.pipeline.hyper.surrogate import phase_scramble
-from fnirs_pipe.pipeline.hyper.whiten import _yule_walker, autocov
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("pipeline.isc")
-
-
-ISC_MAX_AR_ORDER = 32
-
-
-def _ar_whiten(x: np.ndarray, max_order: int = ISC_MAX_AR_ORDER) -> tuple[np.ndarray, int]:
-    r"""Residuals of the best autoregressive fit to ``x``, and the order that won.
-
-    ::
-
-      a slow, strongly autocorrelated trace  ->  a near-white one of the same length, 22
-
-    A haemodynamic trace is heavily autocorrelated: the response is a low-pass filter on
-    whatever drove it, so neighbouring samples are near copies and a correlation between two
-    such traces has far fewer independent observations than it has samples. Fitting
-
-    .. math::
-
-        x_t = \sum_{k=1}^{p} a_k\, x_{t-k} + e_t
-
-    and keeping :math:`e_t` leaves a series whose own samples are close to independent, so
-    the correlation between two of them sits on the scale its sample count implies.
-
-    Coefficients come from the Yule-Walker equations at each order, and ``p`` is the one
-    minimising the Bayesian information criterion over ``1..max_order``, which trades the
-    variance explained against the coefficients spent. The residual keeps the input's length:
-    the filter is applied from the start rather than from sample ``p``, so the first ``p``
-    samples are a startup transient the caller drops.
-
-    An all-NaN row, a constant one, or one too short for a single lag comes back unchanged
-    at order 0.
-    """
-    finite = np.isfinite(x)
-    if not finite.all() or x.size < 8:
-        return x, 0
-    centred = x - x.mean()
-    n = centred.size
-    n_lag = min(int(max_order), n // 4)
-    if n_lag < 1:
-        return x, 0
-    acov = autocov(centred, n_lag)
-    if acov[0] <= 0:
-        return x, 0
-
-    best_bic, best_coef, best_order = np.inf, None, 0
-    for p in range(1, n_lag + 1):
-        fit = _yule_walker(acov, p)
-        if fit is None:
-            break
-        coef, resid_var = fit
-        bic = n * np.log(resid_var) + p * np.log(n)
-        if bic < best_bic:
-            best_bic, best_coef, best_order = bic, coef, p
-    if best_order == 0:
-        return x, 0
-    return lfilter(np.r_[1.0, -best_coef], [1.0], x), best_order
-
-
-def _whiten_rows(data: np.ndarray, max_order: int) -> tuple[np.ndarray, list[int]]:
-    """:func:`_ar_whiten` over every row, with the startup transient dropped from all of them.
-
-    Each row gets its own order, so the transient to discard is the longest of them: cutting
-    per row would leave the rows on different clocks, and they are about to be correlated
-    sample by sample.
-    """
-    out = np.empty_like(data)
-    orders: list[int] = []
-    for i, row in enumerate(data):
-        out[i], order = _ar_whiten(row, max_order)
-        orders.append(order)
-    drop = max(orders) if orders else 0
-    return (out[:, drop:] if drop else out), orders
 
 
 def _isc_from_rows(
@@ -151,12 +77,14 @@ def _isc_rows(
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
     band: "tuple[float | None, float | None] | None" = None,
+    skip_s: float = 0.0,
 ) -> "tuple[np.ndarray, np.ndarray, list[str]] | tuple[None, None, None]":
     """The two members' signals on one montage axis and one clock, ready to correlate.
 
     One row per axis label per member, NaN where that member has no usable channel
-    there, cut to ``window`` if one was asked for. Everything :func:`compute_isc` and
-    :func:`compute_isc_pairs` disagree about happens after this.
+    there, cut to ``window`` if one was asked for. Nothing before ``skip_s`` is kept, which
+    is where a whitened record carries its filter transient. Everything
+    :func:`compute_isc` and :func:`compute_isc_pairs` disagree about happens after this.
     """
     if len(subject_ids) < 2:
         return None, None, None
@@ -203,9 +131,10 @@ def _isc_rows(
         data1 = _band_limit(data1, sfreq_hz, band)
         data2 = _band_limit(data2, sfreq_hz, band)
 
-    if window is not None:
+    if window is not None or skip_s:
         sfreq = float(raw1.info["sfreq"])
-        first = max(0, int(round(float(window[0]) * sfreq)))
+        window = window if window is not None else (0.0, n_times / sfreq)
+        first = max(0, int(round(float(window[0]) * sfreq)), int(np.ceil(skip_s * sfreq)))
         last  = min(n_times, int(round(float(window[1]) * sfreq)))
         # two samples is the least a correlation can be computed from at all
         if last - first < 2:
@@ -224,9 +153,9 @@ def compute_isc(
     ch_type: str = "hbo",
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
-    whiten: int = 0,
     max_lag_s: float = 0.0,
     band: "tuple[float | None, float | None] | None" = None,
+    skip_s: float = 0.0,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -260,20 +189,21 @@ def compute_isc(
     Raises ValueError if the members were recorded at different sampling rates, which is
     the refusal WTC makes: alignment equalises duration, not rate.
 
-    ``whiten`` is the largest autoregressive order :func:`_ar_whiten` may spend on each
-    channel before the correlation, 0 to correlate the signals themselves. Whitening shrinks
-    r, so a whitened matrix and an unwhitened one are not comparable and the sidecar records
-    which was written.
+    Whitening is the caller's: hand in the copies
+    :func:`~fnirs_pipe.pipeline.hyper.whiten.whiten_raws` made of the whole record, with
+    ``skip_s`` past their zeroed transient, so every channel of both members carries one
+    order. Whitening shrinks r, so a whitened matrix and an unwhitened one are not
+    comparable and the sidecar records which was written.
 
     Args:
         ch_type: "hbo" or "hbr".
     """
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
-                                       window, band)
+                                       window, band, skip_s)
     if ch_names is None:
         return None, None
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
-    return _isc_matrix(data1, data2, whiten, max_lag)[0], ch_names
+    return _isc_matrix(data1, data2, max_lag)[0], ch_names
 
 
 def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
@@ -314,24 +244,23 @@ def compute_isc_pairs(
     ch_type: str = "hbo",
     sep_bands=None,
     window: "tuple[float, float] | None" = None,
-    whiten: int = 0,
     max_lag_s: float = 0.0,
     n_null: int = 0,
     seed: int | None = None,
     band: "tuple[float | None, float | None] | None" = None,
     cross: bool = True,
     on_draws: "Callable[[pd.DataFrame], None] | None" = None,
+    skip_s: float = 0.0,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
     ::
 
-      a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z, ar_order, ar_order2
+      a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z
 
     The matrix is what the report draws; the frame is what a group analysis reads, and it is
-    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. ``ar_order``
-    and ``ar_order2`` are what each side's channel was whitened at, and are absent when
-    ``whiten`` is 0.
+    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. Whitening and
+    ``skip_s`` are as in :func:`compute_isc`.
 
     ``n_null`` phase-scrambles the second member and recomputes; scrambling preserves each
     signal's own power spectrum and so its autocorrelation. It adds ``null_mean``,
@@ -339,7 +268,7 @@ def compute_isc_pairs(
     real value beat. All four are on ``|r|``, since a surrogate is as likely to land either
     side of zero.
 
-    With whitening and the null both on, the null is drawn through the whitening too.
+    On whitened recordings the null scrambles the residuals, as the coherence's does.
 
     ``on_draws`` receives every surrogate as rows, one per pair and draw, signed ``r`` and
     ``r_z``, so a test that averages before ranking can be rebuilt from them.
@@ -349,12 +278,12 @@ def compute_isc_pairs(
     and the frame holds the diagonal's rows.
     """
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
-                                       window, band)
+                                       window, band, skip_s)
     if ch_names is None:
         return None, None, None, None
 
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
-    isc_mat, orders1, orders2, lags = _isc_matrix(data1, data2, whiten, max_lag)
+    isc_mat, lags = _isc_matrix(data1, data2, max_lag)
     off = None if cross else ~np.eye(len(ch_names), dtype=bool)
     if off is not None:
         isc_mat[off] = np.nan
@@ -369,16 +298,13 @@ def compute_isc_pairs(
     frame = pd.DataFrame(rows)
     frame.insert(frame.columns.get_loc("r") + 1, "r_z", fisher_r_to_z(frame["r"]))
     index = {name: i for i, name in enumerate(ch_names)}
-    if orders1 is not None:
-        frame["ar_order"]  = frame["label"].map(lambda c: orders1[index[c]])
-        frame["ar_order2"] = frame["label2"].map(lambda c: orders2[index[c]])
     if max_lag:
         ij = (frame["label"].map(index).to_numpy(), frame["label2"].map(index).to_numpy())
         frame["lag_s"] = lags[ij] / sfreq
 
     null_level = None
     if n_null > 0:
-        draws = _isc_null_draws(data1, data2, whiten, max_lag, n_null, seed)
+        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed)
         if off is not None:
             draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
@@ -404,8 +330,7 @@ def _draw_rows(frame: pd.DataFrame, ch_names: list[str], draws: np.ndarray) -> p
 
 
 def _isc_null_draws(
-    data1: np.ndarray, data2: np.ndarray, whiten: int, max_lag: int, n_iter: int,
-    seed: int | None,
+    data1: np.ndarray, data2: np.ndarray, max_lag: int, n_iter: int, seed: int | None,
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
@@ -420,7 +345,7 @@ def _isc_null_draws(
         surrogate = data2.copy()
         for row in np.flatnonzero(finite):
             surrogate[row] = phase_scramble(data2[row], rng)
-        draws[i] = _isc_matrix(data1, surrogate, whiten, max_lag)[0]
+        draws[i] = _isc_matrix(data1, surrogate, max_lag)[0]
     return draws
 
 
@@ -462,24 +387,10 @@ def _add_isc_null_columns(
 
 
 def _isc_matrix(
-    data1: np.ndarray, data2: np.ndarray, whiten: int, max_lag: int = 0,
-) -> "tuple[np.ndarray, list[int] | None, list[int] | None, np.ndarray]":
-    """The r matrix, the AR order each row was whitened at, and the lag each cell won at.
-
-    Whitening happens after the window has been cut, so each stretch is fitted on its own,
-    and before the lag search, so the search runs on the residuals rather than on the
-    autocorrelation that would make every shift look alike.
-    """
-    orders1 = orders2 = None
-    if whiten:
-        # one transient cut for both members, or sample t of one meets sample t + k of the other
-        n1 = data1.shape[0]
-        both, orders = _whiten_rows(np.vstack([data1, data2]), whiten)
-        data1, data2 = both[:n1], both[n1:]
-        orders1, orders2 = orders[:n1], orders[n1:]
-    # a rejected channel contributed a row of NaN above, which the products carry
-    isc_mat, lags = _isc_from_rows(data1, data2, max_lag)
-    return isc_mat, orders1, orders2, lags
+    data1: np.ndarray, data2: np.ndarray, max_lag: int = 0,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """The r matrix and the lag each cell won at; a rejected channel's NaN row carries through."""
+    return _isc_from_rows(data1, data2, max_lag)
 
 
 def roi_mean_of_isc(

@@ -411,12 +411,13 @@ def compute_wtc_pair_null(
     # with whatever both recordings can spare either side, so the fixed member's stretch is
     # the same only across draws that got the same pad
     caches: dict[tuple, dict[tuple[str, str], _ChannelWavelet]] = {}
-    # a fifth element is the pair the coherence reads, whitened, where --wtc-whiten is on
-    for partner_id, label, pair, inner, *whitened in draws:
+    # a fifth element is the pair the coherence reads, whitened, where --wtc-whiten is on; a
+    # sixth is the correlation's window, past its own whitening transient
+    for partner_id, label, pair, inner, *extra in draws:
         # other metrics on the same re-paired pool ride on this draw rather than a second pass
         if on_draw is not None:
-            on_draw(partner_id, label, pair, inner)
-        wtc_pair = whitened[0] if whitened else pair
+            on_draw(partner_id, label, pair, extra[1] if len(extra) > 1 else inner)
+        wtc_pair = extra[0] if extra else pair
         signals = {sid: _long_signals(raw, ch_type, sep_bands)
                    for sid, raw in wtc_pair.items()}
         segment = float(min(raw.times[-1] for raw in pair.values()))

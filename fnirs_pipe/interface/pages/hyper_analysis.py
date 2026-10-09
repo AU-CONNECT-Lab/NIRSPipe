@@ -131,7 +131,7 @@ def _run_section():
                 field("ISC threshold",
                       dbc.Input(id="hy-isc-threshold", type="number", step=0.05,
                                 placeholder="default")),
-                field("Whitening order",
+                field("Prewhitening order (s)",
                       dbc.Input(id="hy-isc-whiten", type="number", min=0, step=1,
                                 placeholder="0, off")),
                 field("Max lag (s)",

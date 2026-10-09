@@ -18,7 +18,6 @@ from datetime import datetime
 from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
-from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
 from fnirs_pipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
 from fnirs_pipe.qc.metrics import SCI_WINDOW_S
 from fnirs_pipe.utils.logging import get_logger, setup_logging
@@ -243,7 +242,7 @@ def cmd_run(
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
-    bads_scope: str, isc_threshold: "float | None", isc_whiten: int,
+    bads_scope: str, isc_threshold: "float | None", isc_whiten_s: float,
     isc_max_lag: float, isc_phase_null: int,
     isc_fmin: "float | None", isc_fmax: "float | None",
     no_report: bool,
@@ -451,7 +450,7 @@ def cmd_run(
             wtc_phase_null=wtc_phase_null,
             wtc_phase_null_cross=wtc_phase_null_cross,
             isc_threshold=isc_threshold,
-            isc_whiten=isc_whiten,
+            isc_whiten_s=isc_whiten_s,
             isc_max_lag_s=isc_max_lag,
             isc_phase_null=isc_phase_null,
             isc_band=isc_band,
@@ -875,15 +874,17 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "phase-scrambled null follows it, the re-paired null reads it off "
                           "the real table, and the sidecars record wtc_whiten_s. The first "
                           "order's worth of samples is a filter transient and is zeroed. The "
-                          "correlation is not affected; see --isc-whiten.")
-    run.add_argument("--isc-whiten", type=int, default=0, metavar="ORDER",
-                     help="Fit an autoregressive model of at most this order to each channel "
-                          "before the inter-subject correlation and correlate the residuals; "
-                          "0, the default, correlates the signals themselves. The order is "
-                          f"picked per channel by BIC up to this ceiling, e.g. {ISC_MAX_AR_ORDER}. "
-                          "Whitening shrinks r, so a whitened matrix is not comparable with "
-                          "an unwhitened one. The order each channel used reaches "
-                          "stat-isc_relmat.tsv as ar_order.")
+                          "correlation is not affected; see --isc-whiten-s.")
+    run.add_argument("--isc-whiten-s", type=float, default=0.0, metavar="SECONDS",
+                     help="Prewhiten each long channel with an autoregressive model of this "
+                          "many seconds of order before the inter-subject correlation, one "
+                          "order for every channel of both members, fitted on the whole "
+                          "aligned record; 0, the default, correlates the signals themselves. "
+                          "The first order's worth of samples is a filter transient and is "
+                          "left out. Whitening shrinks r, so a whitened matrix is not "
+                          "comparable with an unwhitened one. The phase-scrambled null "
+                          "follows it, the re-paired null reads it off the real table, and "
+                          "the sidecars record isc_whiten_s.")
     run.add_argument("--isc-max-lag", type=float, default=0.0, metavar="SECONDS",
                      help="Re-correlate the pair at every shift within this many seconds "
                           "either way and keep the strongest, instead of correlating sample "

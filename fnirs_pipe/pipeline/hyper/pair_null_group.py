@@ -655,17 +655,17 @@ def _isc_settings_of(paths: "set[str]") -> set:
 
     ::
 
-      every sidecar band 0.01-0.1, AR 32, lag 2 s  ->  {((0.01, 0.1), 32, 2.0)}
+      every sidecar band 0.01-0.1, AR 10 s, lag 2 s  ->  {((0.01, 0.1), 10.0, 2.0)}
     """
     found = set()
     for tsv in paths:
         params = _params_of(tsv)
-        if "isc_whiten_max_order" not in params:
+        if "isc_whiten_s" not in params:
             raise ValueError(
                 f"{Path(tsv).name} does not record how its correlation was computed. Rerun "
                 f"`fnirs-hyper` (and its null) for that dyad on current code.")
         band = params.get("isc_band_hz")
-        found.add((tuple(band) if band else None, params["isc_whiten_max_order"],
+        found.add((tuple(band) if band else None, params["isc_whiten_s"],
                    params.get("isc_max_lag_s")))
     return found
 

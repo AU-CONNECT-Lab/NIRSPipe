@@ -225,12 +225,16 @@ def _draw_condition_pairs(
     window_sources: "dict[str, tuple[str, float]] | None" = None,
     whiten_s: float = 0.0,
     sep_bands=None,
+    isc_whiten_s: float = 0.0,
 ):
-    """Yield ``(partner_id, label, segments, the condition's place in them, whitened segments)``.
+    """Yield ``(partner_id, label, segments, the condition's place in them, whitened segments,
+    the correlation's place in them)``.
 
-    The segments are ``{fixed, partner}`` cuts of the two recordings, and the whitened ones
-    the same cuts of their whole-record ``--wtc-whiten`` copies, which is what the coherence
-    reads; with whitening off the two are the same objects.
+    The segments are ``{fixed, partner}`` cuts of the two recordings as the correlation reads
+    them, cut from whole-record ``--isc-whiten-s`` copies where that is on, and the whitened
+    ones the same cuts of the whole-record ``--wtc-whiten`` copies, which is what the
+    coherence reads; with whitening off they are plain cuts. The correlation's place is the
+    condition's, started past either copy's zeroed transient.
 
     Each condition is taken from **the stand-in's own onset**, not from where it sat in the
     real dyad's clock: sessions that run to one timetable drift apart between blocks.
@@ -247,6 +251,8 @@ def _draw_condition_pairs(
     # fitted on the whole record and then cut, as the real table's transform was
     fixed_white = (whiten_raws({fixed_id: fixed_raw}, whiten_s, sep_bands)[fixed_id]
                    if whiten_s else fixed_raw)
+    fixed_isc = (whiten_raws({fixed_id: fixed_raw}, isc_whiten_s, sep_bands)[fixed_id]
+                 if isc_whiten_s else fixed_raw)
     drawn = 0
     for entry in candidates:
         if n_max is not None and drawn >= n_max:
@@ -314,6 +320,8 @@ def _draw_condition_pairs(
         try:
             partner_white = (whiten_raws({pid: partner_raw}, whiten_s, sep_bands)[pid]
                              if whiten_s else partner_raw)
+            partner_isc = (whiten_raws({pid: partner_raw}, isc_whiten_s, sep_bands)[pid]
+                           if isc_whiten_s else partner_raw)
         except StageError:
             # too short for the order the real table was whitened at
             refused.setdefault("too_short_to_whiten", []).append(pid)
@@ -324,12 +332,15 @@ def _draw_condition_pairs(
             # crop refuses
             fixed_cut = (real_t0 - lead, min(real_t0 + span + trail, fixed_end))
             partner_cut = (start - lead, min(start + span + trail, end))
-            pair = _same_length({fixed_id: fixed_raw.copy().crop(*fixed_cut),
-                                 pid: partner_raw.copy().crop(*partner_cut)})
-            white = (pair if not whiten_s else
+            pair = _same_length({fixed_id: fixed_isc.copy().crop(*fixed_cut),
+                                 pid: partner_isc.copy().crop(*partner_cut)})
+            white = (pair if whiten_s == isc_whiten_s else
                      _same_length({fixed_id: fixed_white.copy().crop(*fixed_cut),
                                    pid: partner_white.copy().crop(*partner_cut)}))
-            yield pid, label, pair, (lead, lead + span), white
+            # each copy's first isc_whiten_s seconds are zeroed, in that copy's own time
+            transient = max(0.0, isc_whiten_s - fixed_cut[0], isc_whiten_s - partner_cut[0])
+            yield (pid, label, pair, (lead, lead + span), white,
+                   (max(lead, transient), lead + span))
 
 
 def _same_length(cuts: dict) -> dict:
@@ -364,7 +375,7 @@ def run_pair_null(
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
     roi_min_channels: "int | None" = None,
-    isc_whiten: int = 0,
+    isc_whiten_s: float = 0.0,
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
     session: "str | None" = None,
@@ -424,9 +435,9 @@ def run_pair_null(
         logger.warning("crossed null over an uncrossed real table: the off-diagonal draws "
                        "have no real value to be ranked against")
 
-    isc_whiten, isc_max_lag_s, isc_band = _isc_settings_of(
+    isc_whiten_s, isc_max_lag_s, isc_band = _isc_settings_of(
         _path({"statistic": "isc"}).with_suffix(".json"),
-        isc_whiten, isc_max_lag_s, isc_band)
+        isc_whiten_s, isc_max_lag_s, isc_band)
 
     raws = load_group_haemo(derivatives_dir, members, desc=desc)
     group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
@@ -503,8 +514,7 @@ def run_pair_null(
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
                         pair, ids, ch_type, sep_bands, window=inner,
-                        whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band,
-                        cross=bool(cross))
+                        max_lag_s=isc_max_lag_s, band=isc_band, cross=bool(cross))
                 except Exception:
                     logger.debug("re-paired ISC failed against %s (%s)", partner_id, label)
                     continue
@@ -531,7 +541,8 @@ def run_pair_null(
             derivatives_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=n_max, refused=refused,
-            window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands)
+            window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
+            isc_whiten_s=isc_whiten_s)
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
@@ -646,31 +657,32 @@ def run_pair_null(
                        n_iter=len(partners), pair_partners=sorted(partners))
 
     _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, _path, sources,
-                    params, windows, isc_whiten, isc_max_lag_s, isc_band)
+                    params, windows, isc_whiten_s, isc_max_lag_s, isc_band)
     return out_path
 
 
-def _isc_settings_of(sidecar: Path, whiten: int, max_lag_s: float, band):
+def _isc_settings_of(sidecar: Path, whiten_s: float, max_lag_s: float, band):
     """The band, whitening and lag the real ISC used, read off its sidecar.
 
-    Taken from the file rather than the command line, like the coherence's band. A sidecar
-    without those fields leaves what the caller passed standing, with a line in the log
-    saying the two were not checked against each other.
+    Taken from the file rather than the command line, like the coherence's band. Without a
+    real ISC table what the caller passed stands, with a line in the log saying the two were
+    not checked against each other; a table written before ``isc_whiten_s`` was recorded is
+    refused.
     """
     try:
         params = json.loads(sidecar.read_text(encoding="utf-8")).get("parameters", {})
     except Exception:
-        params = {}
-    if "isc_whiten_max_order" not in params:
-        logger.warning("%s records no ISC settings, so the re-paired ISC cannot be checked "
-                       "against the real one; rerun `fnirs-hyper` to stamp them",
-                       sidecar.name)
-        return whiten, max_lag_s, band
+        logger.warning("%s is not readable, so the re-paired ISC cannot be checked against "
+                       "the real one", sidecar.name)
+        return whiten_s, max_lag_s, band
+    if "isc_whiten_s" not in params:
+        raise StageError(f"{sidecar.name} does not record isc_whiten_s. Rerun `fnirs-hyper` "
+                         "for this dyad on current code.")
     stored_band = params.get("isc_band_hz")
-    settings = (int(params.get("isc_whiten_max_order", whiten)),
+    settings = (float(params["isc_whiten_s"]),
                 float(params.get("isc_max_lag_s", max_lag_s)),
                 tuple(stored_band) if stored_band else None)
-    logger.info("re-paired ISC follows the real table: band %s, whitening up to AR(%d), "
+    logger.info("re-paired ISC follows the real table: band %s, whitening AR %g s, "
                 "lag search %gs", settings[2] or "none", settings[0], settings[1])
     return settings
 
@@ -693,7 +705,7 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
 
 
 def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
-                    windows, isc_whiten, isc_max_lag_s, isc_band) -> None:
+                    windows, isc_whiten_s, isc_max_lag_s, isc_band) -> None:
     """Summarise the re-paired correlations and write them beside the coherence tables.
 
     ``path_of`` is the caller's namer, so these land under the same group and task its
@@ -704,7 +716,7 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()
                   if k not in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi")}
-    isc_params.update(isc_whiten_max_order=isc_whiten, isc_max_lag_s=isc_max_lag_s,
+    isc_params.update(isc_whiten_s=isc_whiten_s, isc_max_lag_s=isc_max_lag_s,
                       isc_band_hz=list(isc_band) if isc_band else None)
 
     for bucket, entities, step, cond in (
