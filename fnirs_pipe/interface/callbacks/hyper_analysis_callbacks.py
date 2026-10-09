@@ -45,6 +45,7 @@ _STATES = [
     State("hy-gn-task", "value"), State("hy-gn-chroma", "value"),
     State("hy-gn-null", "value"), State("hy-gn-roi-mapping", "value"),
     State("hy-gn-resample", "value"), State("hy-gn-seed", "value"),
+    State("hy-gn-p-correction", "value"),
     State("hy-band-fmin", "value"), State("hy-band-fmax", "value"),
     State("hy-band-suffix", "value"), State("hy-band-flags", "value"),
     State("hy-tstart", "value"), State("hy-tend", "value"),
@@ -58,7 +59,7 @@ _KEYS = ["output_dir", "derivatives_dir", "pairs_csv", "group_id", "desc", "roi_
          "wtc_chroma", "hyper_task", "hyper_flags",
          "wtc_pair_pool", "wtc_pair_max", "pair_flags",
          "gn_task", "gn_chroma", "gn_null", "gn_roi_mapping",
-         "gn_resample", "gn_seed",
+         "gn_resample", "gn_seed", "gn_p_correction",
          "band_fmin", "band_fmax", "band_suffix", "band_flags",
          "tstart", "tend"]
 

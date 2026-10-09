@@ -84,6 +84,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _text("--roi-mapping", opts.get("gn_roi_mapping"))
         args += _num("--n-resample", opts.get("gn_resample"))
         args += _num("--seed", opts.get("gn_seed"))
+        args += _text("--p-correction", opts.get("gn_p_correction"))
         return args
 
     if command == "run":

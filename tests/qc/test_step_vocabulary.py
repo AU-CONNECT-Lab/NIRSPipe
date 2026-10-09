@@ -692,8 +692,24 @@ def test_the_phase_reads_after_the_coherence_and_before_the_correlation(tmp_path
 def test_every_cohort_table_maps_to_one_test_sentence(null, said, table):
     step = f"hyper_{null}_null_{table}"
     assert boilerplate_key(step, {}) == "hyper_groupnull"
-    slots = template_slots("hyper_groupnull", {"null_kind": null, "n_resample": 20000})
-    assert slots == {"null": said, "n_resample": "20000"}
+    slots = template_slots("hyper_groupnull", {"null_kind": null, "n_resample": 20000,
+                                               "p_correction": "none"})
+    assert slots == {"null": said, "n_resample": "20000",
+                     "correction": " P values were not corrected for multiple comparisons."}
+
+
+@pytest.mark.parametrize("method, named", [("fdr_bh", "Benjamini–Hochberg"),
+                                           ("fdr_by", "Benjamini–Yekutieli"),
+                                           ("holm", "Holm–Bonferroni"),
+                                           ("bonferroni", "Bonferroni correction")])
+def test_the_cohort_sentence_names_the_correction_that_ran(method, named):
+    slots = template_slots("hyper_groupnull", {"null_kind": "repaired", "p_correction": method})
+    assert named in slots["correction"]
+    assert "within each condition, level and test" in slots["correction"]
+
+
+def test_a_sidecar_without_the_setting_gets_no_correction_sentence():
+    assert template_slots("hyper_groupnull", {"null_kind": "repaired"})["correction"] == ""
 
 
 

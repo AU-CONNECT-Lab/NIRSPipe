@@ -364,47 +364,60 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]") -> di
     return row
 
 
-_CORRECTIONS = {"q": "fdr_bh", "q_by": "fdr_by",
-                "q_holm": "holm", "q_bonferroni": "bonferroni"}
+# the multipletests method names; none leaves the raw p as the only one written
+P_CORRECTIONS = ("none", "fdr_bh", "fdr_by", "holm", "bonferroni")
 
 
-def correct_cohort(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add a corrected p per method, the family being one condition at one level.
+def _correct(frame: pd.DataFrame, keys: list[str], method: str) -> pd.DataFrame:
+    """Add ``family`` and, unless ``method`` is none, a ``p_<method>`` column beside ``p``.
 
     ::
 
-      channel granularity, N channels in one condition  ->  family N, four q columns
+      4 channels in one condition, holm  ->  family 4, p kept, p_holm added
 
-    ``q`` is Benjamini-Hochberg. ``q_by`` is the version valid under arbitrary dependence and
-    is the conservative bound.
-
-    ``family`` is the number of tests the correction ran over. At whole-brain granularity the
-    family is one cell, so every q equals its p and no correction happened.
-
-    Rows whose ``p`` is absent, which is what a paired test over fewer than three occasions
-    leaves, take no part in any family and keep a blank q.
+    Rows whose ``p`` is absent take no part in any family and keep a blank corrected p.
     """
     from statsmodels.stats.multitest import multipletests
 
+    if method not in P_CORRECTIONS:
+        raise ValueError(f"unknown p correction {method!r}; one of {P_CORRECTIONS}")
     frame = frame.copy()
-    for col in _CORRECTIONS:
+    col = f"p_{method}"
+    if method != "none":
         frame[col] = np.nan
     frame["family"] = 0
-    keys = [k for k in ("granularity", "pairings", "test", "condition") if k in frame.columns]
     if "p" not in frame.columns or not keys:
         return frame
     for _, part in frame.groupby(keys, dropna=False):
         usable = part[part["p"].notna()]
         if usable.empty:
             continue
-        for col, method in _CORRECTIONS.items():
+        if method != "none":
             frame.loc[usable.index, col] = multipletests(usable["p"], method=method)[1]
         frame.loc[part.index, "family"] = len(usable)
     return frame
 
 
-def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFrame | None":
-    """The per-cell percentiles a null already wrote, turned into corrected p values.
+def correct_cohort(frame: pd.DataFrame, method: str = "none") -> pd.DataFrame:
+    """Correct the cohort p within one condition at one level, when a method is asked for.
+
+    ::
+
+      channel granularity, N channels in one condition  ->  family N
+
+    ``family`` is the number of tests a correction runs over, written whether or not one ran.
+    At whole-brain granularity the family is one cell, so a corrected p equals its p.
+
+    Rows whose ``p`` is absent, which is what a paired test over fewer than three occasions
+    leaves, take no part in any family.
+    """
+    keys = [k for k in ("granularity", "pairings", "test", "condition") if k in frame.columns]
+    return _correct(frame, keys, method)
+
+
+def by_cell(output_dir: Path, task: str, chroma: str, null: str,
+            method: str = "none") -> "pd.DataFrame | None":
+    """The per-cell percentiles a null already wrote, turned into p values.
 
     ::
 
@@ -414,8 +427,6 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
     across cells. One family per condition and level, so the crossed ROI matrix is corrected
     apart from the homologous regions: its diagonal is a different quantity from theirs.
     """
-    from statsmodels.stats.multitest import multipletests
-
     parts = []
     for level, suffix in CELL_SUFFIX[null].items():
         try:
@@ -428,24 +439,21 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str) -> "pd.DataFram
         # the real value counted into its own null, as everywhere else here
         beaten = frame["percentile"] / 100 * frame["n_iter"]
         frame["p"] = _exact_p(beaten, frame["n_iter"])
-        frame["q"] = np.nan
-        for cond, part in frame.groupby("condition"):
-            frame.loc[part.index, "q"] = multipletests(part["p"], method="fdr_bh")[1]
-            frame.loc[part.index, "family"] = len(part)
-        parts.append(frame.assign(level=level))
+        parts.append(_correct(frame, ["condition"], method).assign(level=level))
     if not parts:
         return None
     out = pd.concat(parts, ignore_index=True)
     front = ["level", "condition", "occasion", "label"]
     keep = front + [c for c in ("label2", "coherence", "null_mean", "null_sd", "null_p95",
-                                "percentile", "n_iter", "p", "q", "family")
+                                "percentile", "n_iter", "p", f"p_{method}", "family")
                     if c in out.columns]
-    return out[keep].sort_values(["level", "condition", "q"], ignore_index=True)
+    return out[keep].sort_values(["level", "condition", "p"], ignore_index=True)
 
 
 def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
-                     n_resample: int = 20000, seed: int | None = None) -> list[Path]:
+                     n_resample: int = 20000, seed: int | None = None,
+                     p_correction: str = "none") -> list[Path]:
     """Every level the draws support, written beside the merged tables.
 
     Two files, not one per level: the levels differ in two columns and are read against each
@@ -494,15 +502,19 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                   **({"roi_min_channels": min_channels} if roi_map else {}),
                   granularities=sorted(pd.concat(coh_parts).granularity.unique()),
                   statistic="mean over channel pairings, then over occasions",
-                  cell_fdr_family="one condition and level, over occasions and pairings",
-                  cohort_corrections=dict(_CORRECTIONS),
+                  p_correction=p_correction,
+                  cell_correction_family="one condition and level, over occasions and "
+                                         "pairings",
                   cohort_correction_family="one condition, one granularity, one pairing set "
                                            "and one test, over that level's cells; the "
                                            "`family` column carries its size")
-    cells = by_cell(output_dir, task, chroma, null)
+    cells = by_cell(output_dir, task, chroma, null, method=p_correction)
     if cells is not None:
-        passing = int((cells["q"] < 0.05).sum())
-        logger.info("%s null, per cell: %d cells, %d at q<0.05", null, len(cells), passing)
+        logger.info("%s null, per cell: %d cells, %d at uncorrected p<0.05", null,
+                    len(cells), int((cells["p"] < 0.05).sum()))
+        if p_correction != "none":
+            logger.info("%s null, per cell: %d at %s-corrected p<0.05", null,
+                        int((cells[f"p_{p_correction}"] < 0.05).sum()), p_correction)
 
     # at the root, so no group- and no sub-: what marks a table as cross-dyad is having no
     # analysis unit in its name. The task and the chromophore stay, both being a filter this
@@ -514,7 +526,8 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
     for frame, desc, step in (
             ([] if cells is None else cells, "bycell", f"hyper_{null}_null_by_cell"),
             (tidy(occ_parts), "byoccasion", f"hyper_{null}_null_by_occasion"),
-            (correct_cohort(tidy(coh_parts)), "cohort", f"hyper_{null}_null_cohort")):
+            (correct_cohort(tidy(coh_parts), p_correction), "cohort",
+             f"hyper_{null}_null_cohort")):
         if len(frame) == 0:
             continue
         path = derivative_path(output_dir, "relmat", ".tsv", **common, desc=desc)

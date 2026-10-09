@@ -151,6 +151,24 @@ def _filter_phrase(params: dict[str, Any]) -> str:
     return "a zero-phase filter"
 
 
+_P_CORRECTION_NAMES = {
+    "fdr_bh": "the Benjamini–Hochberg false discovery rate",
+    "fdr_by": "the Benjamini–Yekutieli false discovery rate",
+    "holm": "the Holm–Bonferroni method",
+    "bonferroni": "the Bonferroni correction",
+}
+
+
+def _correction_phrase(value: Any) -> str:
+    # a sidecar from before the setting was recorded gets no sentence rather than a guessed one
+    if value is None:
+        return ""
+    if value == "none":
+        return " P values were not corrected for multiple comparisons."
+    return (f" P values were corrected by {_P_CORRECTION_NAMES[value]} within each "
+            "condition, level and test.")
+
+
 def _noise_phrase(value: Any) -> str:
     """The noise model as prose, expanding the one spelling that names no order.
 
@@ -446,7 +464,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "hyper_groupnull":
         return {"null": "re-paired" if params.get("null_kind") == "repaired"
                 else "phase-randomised",
-                "n_resample": str(int(params.get("n_resample") or 0))}
+                "n_resample": str(int(params.get("n_resample") or 0)),
+                "correction": _correction_phrase(params.get("p_correction"))}
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":

@@ -19,6 +19,7 @@ from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.cli import _shared
 from fnirs_pipe.io.naming import roi_map_name
 from fnirs_pipe.pipeline.hyper.isc import ISC_MAX_AR_ORDER
+from fnirs_pipe.pipeline.hyper.pair_null_group import P_CORRECTIONS
 from fnirs_pipe.qc.metrics import SCI_WINDOW_S
 from fnirs_pipe.utils.logging import get_logger, setup_logging
 from fnirs_pipe import __version__
@@ -505,7 +506,7 @@ def cmd_band(
 
 def cmd_group_null(
     output_dir: Path, task: str, wtc_chroma: str, null: str, roi_mapping: "Path | None",
-    n_resample: int, seed: int | None, verbose: bool,
+    n_resample: int, seed: int | None, verbose: bool, p_correction: str = "none",
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
     from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
@@ -513,7 +514,8 @@ def cmd_group_null(
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
     written = write_group_null(output_dir, task=task, chroma=wtc_chroma, null=null,
-                               roi_map=roi_map, n_resample=n_resample, seed=seed)
+                               roi_map=roi_map, n_resample=n_resample, seed=seed,
+                               p_correction=p_correction)
     for path in written:
         print(f"group-null -> {path}")
     cohort = next((p for p in written if entity_of(p.name, "desc") == "cohort"), None)
@@ -928,6 +930,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "express is 1/(n+1).")
     group_null.add_argument("--seed", type=int, default=None,
                             help="Seed the resampling, so the cohort p is reproducible.")
+    group_null.add_argument("--p-correction", default="none",
+                            choices=P_CORRECTIONS,
+                            help="Multiple-comparison correction, within one condition at one "
+                                 "level (default none). The uncorrected p column is always "
+                                 "written; a method adds a p_<method> column beside it, and "
+                                 "the family column says how many tests it ran over.")
 
     index = _command_parser(
         "fnirs-hyper-index", reads_subjects=False, parents=[common],

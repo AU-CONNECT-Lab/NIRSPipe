@@ -220,6 +220,14 @@ def _group_null_section():
                             value=20000)),
             field("Seed",
                   dbc.Input(id="hy-gn-seed", type="number", placeholder="none")),
+            field("P correction",
+                  dbc.Select(id="hy-gn-p-correction",
+                             options=[{"label": "None (raw p only)", "value": "none"},
+                                      {"label": "FDR, Benjamini–Hochberg", "value": "fdr_bh"},
+                                      {"label": "FDR, Benjamini–Yekutieli", "value": "fdr_by"},
+                                      {"label": "Holm", "value": "holm"},
+                                      {"label": "Bonferroni", "value": "bonferroni"}],
+                             value="none")),
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
                  "cohort, so it tests the pairing as a whole, not each channel. Reads what "

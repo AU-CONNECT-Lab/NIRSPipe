@@ -407,8 +407,15 @@ def test_the_percentile_becomes_an_exact_p(tmp_path):
 
 def test_nothing_clears_the_correction_when_the_cells_are_middling(tmp_path):
     _write_cells(tmp_path, [[50, 55, 45, 50]] * 3)
+    out = by_cell(tmp_path, "main", "hbo", "repaired", method="fdr_bh")
+    assert int((out.p_fdr_bh < 0.05).sum()) == 0
+
+
+def test_the_cell_table_carries_only_the_raw_p_by_default(tmp_path):
+    _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
     out = by_cell(tmp_path, "main", "hbo", "repaired")
-    assert int((out.q < 0.05).sum()) == 0
+    assert "p" in out.columns and "family" in out.columns
+    assert not [c for c in out.columns if c.startswith("p_")]
 
 
 def test_the_family_is_one_condition_and_is_reported(tmp_path):
@@ -522,52 +529,77 @@ def test_the_family_is_the_cells_of_one_condition_at_one_level():
     assert fam[("whole", "game")] == 1
 
 
-def test_a_family_of_one_leaves_q_equal_to_p():
-    out = correct_cohort(_cohort_frame())
+@pytest.mark.parametrize("method", ["fdr_bh", "fdr_by", "holm", "bonferroni"])
+def test_a_family_of_one_leaves_the_corrected_p_equal_to_p(method):
+    out = correct_cohort(_cohort_frame(), method)
     whole = out[out.granularity == "whole"]
-    for col in ("q", "q_by", "q_holm", "q_bonferroni"):
-        assert whole[col].to_numpy() == pytest.approx(whole.p.to_numpy())
+    assert whole[f"p_{method}"].to_numpy() == pytest.approx(whole.p.to_numpy())
 
 
-def test_q_stays_benjamini_hochberg_so_an_existing_reader_is_unaffected():
-    from statsmodels.stats.multitest import multipletests
+def test_no_correction_is_the_default_and_adds_no_column():
     out = correct_cohort(_cohort_frame())
+    assert not [c for c in out.columns if c.startswith("p_")]
+    assert out["p"].to_numpy() == pytest.approx(_cohort_frame()["p"].to_numpy())
+
+
+@pytest.mark.parametrize("method", ["fdr_bh", "fdr_by", "holm", "bonferroni"])
+def test_a_chosen_method_is_the_multipletests_one_and_leaves_p_alone(method):
+    from statsmodels.stats.multitest import multipletests
+    out = correct_cohort(_cohort_frame(), method)
     part = out[(out.granularity == "channel") & (out.condition == "game")]
-    assert part["q"].to_numpy() == pytest.approx(
-        multipletests(part["p"], method="fdr_bh")[1])
+    assert part[f"p_{method}"].to_numpy() == pytest.approx(
+        multipletests(part["p"], method=method)[1])
+    assert out["p"].to_numpy() == pytest.approx(_cohort_frame()["p"].to_numpy())
 
 
-def test_the_four_methods_are_ordered_bh_then_the_stricter_ones():
-    """BH is the most permissive of the four, which is why it is the one reported."""
+def test_an_unknown_method_is_refused():
+    with pytest.raises(ValueError, match="unknown p correction"):
+        correct_cohort(_cohort_frame(), "fdr")
+
+
+def test_bh_is_no_stricter_than_by_or_bonferroni():
     frame = _cohort_frame()
     # a family with a spread of p values, so the methods can differ
     ch = frame[(frame.granularity == "channel") & (frame.condition == "game")].index
     frame.loc[ch, "p"] = [0.001, 0.02, 0.2, 0.6]
-    out = correct_cohort(frame)
-    part = out.loc[ch]
-    assert (part["q"] <= part["q_by"] + 1e-12).all()
-    assert (part["q"] <= part["q_bonferroni"] + 1e-12).all()
+    bh, by, bonf = (correct_cohort(frame, m).loc[ch, f"p_{m}"]
+                    for m in ("fdr_bh", "fdr_by", "bonferroni"))
+    assert (bh <= by + 1e-12).all()
+    assert (bh <= bonf + 1e-12).all()
 
 
 def test_a_row_without_a_p_takes_no_part_in_its_family():
     frame = _cohort_frame()
     ch = frame[(frame.granularity == "channel") & (frame.condition == "game")].index
     frame.loc[ch[0], "p"] = np.nan
-    out = correct_cohort(frame)
+    out = correct_cohort(frame, "fdr_bh")
     part = out.loc[ch]
-    assert pd.isna(part.loc[ch[0], "q"])
+    assert pd.isna(part.loc[ch[0], "p_fdr_bh"])
     assert (part["family"] == len(CHANNELS) - 1).all()
 
 
-def test_the_written_cohort_table_carries_the_corrections(tmp_path):
+def test_the_written_cohort_table_is_uncorrected_by_default(tmp_path):
     _write_tree(tmp_path)
     written = write_group_null(tmp_path, "main", roi_map=ROI, n_resample=500, seed=3)
     cohort = pd.read_csv(written[1], sep="	")
-    for col in ("q", "q_by", "q_holm", "q_bonferroni", "family"):
-        assert col in cohort.columns
+    assert {"p", "family"} <= set(cohort.columns)
+    assert not [c for c in cohort.columns if c.startswith("p_")]
     # the sidecar has to name the family, the count being uninterpretable without it
     side = json.loads(Path(str(written[1]).replace(".tsv", ".json")).read_text())
+    assert side["parameters"]["p_correction"] == "none"
     assert "cohort_correction_family" in side["parameters"]
+
+
+def test_a_chosen_correction_reaches_both_tables_beside_the_raw_p(tmp_path):
+    _write_tree(tmp_path)
+    _write_cells(tmp_path, [[100, 50, 0, 100]] * 3)
+    written = write_group_null(tmp_path, "main", n_resample=200, seed=3,
+                               p_correction="holm")
+    cells, cohort = (pd.read_csv(p, sep="	") for p in (written[0], written[2]))
+    for table in (cells, cohort):
+        assert {"p", "p_holm", "family"} <= set(table.columns)
+    side = json.loads(Path(str(written[2]).replace(".tsv", ".json")).read_text())
+    assert side["parameters"]["p_correction"] == "holm"
 
 
 def test_a_suffixed_region_map_gives_the_same_levels_as_a_bare_one():
@@ -664,3 +696,4 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     text = written[0].read_text(encoding="utf-8")
     assert "Cohort-level coupling was tested against the re-paired null" in text
     assert "among 500 cohort means" in text
+    assert "P values were not corrected for multiple comparisons." in text

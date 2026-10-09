@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Breaking**: `fnirs-hyper --wtc-channel-cross` is `--channel-cross`, since it crosses the ISC as well as the coherence
+- **Breaking**: `fnirs-hyper-groupnull` corrects p only under `--p-correction` (default none), writing `p_<method>` beside the raw `p`; the `q` columns are gone
 - `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
 
 ### Fixed
