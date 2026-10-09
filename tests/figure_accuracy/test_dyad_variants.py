@@ -23,7 +23,6 @@ def _summary_row(html: str, name: str) -> str:
 
 # ---- --wtc-cond-transform ----
 
-@pytest.mark.xfail(strict=True, reason="A: a condition transformed on its own keeps the cut's clock, not the aligned one")
 def test_a_condition_transformed_on_its_own_is_drawn_on_the_aligned_clock(dyad_variants):
     g = dyad_variants["condtransform"]
     seen = 0
@@ -46,7 +45,6 @@ def test_a_crossed_phase_null_reaches_every_whole_run_channel_map(dyad_variants)
         assert g.map_inputs(path)[0][0].get("sig") is not None, path.name
 
 
-@pytest.mark.xfail(strict=True, reason="J: an uncrossed null's levels are keyed by label, a crossed map by label pair")
 def test_an_uncrossed_phase_null_reaches_the_same_channel_maps(dyad_variants):
     """The homologous null is the null for the homologous cells of a crossed real table."""
     g = dyad_variants["phasenull_homologous"]
@@ -97,7 +95,6 @@ def test_an_uncrossed_run_prints_dashes_in_the_index_s_crossed_columns(dyad_vari
 
 # ---- fnirs-qc hyper-raw --tstart / --normalize ----
 
-@pytest.mark.xfail(strict=True, reason="S10: the record's alignment block keeps the offsets from before the --tstart cut")
 def test_the_record_s_offsets_are_the_page_s_under_tstart(dyad_variants):
     g = dyad_variants["tstart"]
     html = g.page("G01", raw=True).read_text(encoding="utf-8")
@@ -109,7 +106,6 @@ def test_the_record_s_offsets_are_the_page_s_under_tstart(dyad_variants):
         assert recorded[sid] == pytest.approx(offset, abs=1e-3), sid
 
 
-@pytest.mark.xfail(strict=True, reason="S11: --normalize z-scores the traces and the axis still reads umol/L")
 def test_a_normalized_detail_trace_is_not_labelled_in_concentration(dyad_variants):
     g = dyad_variants["normalize"]
     path = next(iter(sorted((g.gdir("G01") / "figures").glob("*_desc-rawdetail_nirs.html"))))
@@ -121,7 +117,6 @@ def test_a_normalized_detail_trace_is_not_labelled_in_concentration(dyad_variant
 
 # ---- fnirs-qc cohort-hyper with a block one dyad lacks ----
 
-@pytest.mark.xfail(strict=True, reason="cohort-hyper draws a block a dyad lacks as a 0% arc")
 def test_a_block_a_dyad_lacks_draws_no_arc(dyad_variants):
     g = dyad_variants["cohortgap"]
     fig = one_figure(g.hyper / "figures" / "desc-groupsconditiondials_nirs.html")
