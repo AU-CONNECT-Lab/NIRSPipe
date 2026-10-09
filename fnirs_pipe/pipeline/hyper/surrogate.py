@@ -18,7 +18,8 @@ import numpy as np
 import pandas as pd
 
 from fnirs_pipe.pipeline.hyper._helpers import _long_signals, long_axis_over
-from fnirs_pipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
+from fnirs_pipe.pipeline.hyper.roi import (roi_maps_from_channels, roi_mean_of_channels,
+                                           roi_mean_of_homologous)
 from fnirs_pipe.pipeline.hyper.wtc import (
     WTCResult,
     _ChannelWavelet,
@@ -85,6 +86,8 @@ class NullDraws:
     # condition -> (sub1, sub2, label) -> level, re-pairing only: its draws are conditions,
     # so its level is counted per condition and there is no whole-run one
     cond_levels: "dict | None" = None
+    # (sub1, sub2, roi key) -> level of the ROI-averaged surrogate maps, where an ROI map was given
+    roi_levels: "dict | None" = None
 
     def summarise(self, real: "pd.DataFrame | None" = None,
                   real_by_cond: "pd.DataFrame | None" = None,
@@ -216,11 +219,14 @@ def _collect_draw(
     mask_coi: bool,
     windows: "list[tuple[str, float, float]] | None",
     analysis_window: "tuple[float, float] | None",
+    roi: "tuple[dict, dict, int] | None" = None,
 ) -> None:
     """Fold one surrogate WTC run into the draws the null is summarised from.
 
     Shared by both nulls, so each reads its cells off the map by the same rule as the table
-    it is subtracted from.
+    it is subtracted from. ``roi`` is ``(roi_hists, roi_map, min_channels)``: the surrogate's
+    channel maps are averaged into ROI maps exactly as the real ones are, and counted into
+    histograms of their own, so an ROI map's level is its own null and not its channels'.
     """
     # --tstart/--tend, read off this draw's transform the way the real table reads it off
     # its own
@@ -230,6 +236,11 @@ def _collect_draw(
     # counted off the whole-run transform, not the windowed read: a condition is a slice
     # of the same map, so its cells are draws from the same per-frequency null
     _accumulate_null_hist(hists, result, mask_coi)
+    if roi is not None:
+        roi_hists, roi_map, min_channels = roi
+        _accumulate_null_hist(roi_hists,
+                              roi_maps_from_channels(result, roi_map, min_channels=min_channels),
+                              mask_coi)
     # windowed off this draw's own transform, never recomputed on the cut: the real table
     # is windowed the same way
     for label, tstart, tstop in (windows or []):
@@ -254,6 +265,8 @@ def compute_wtc_phase_null(
     sep_bands=None,
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
+    roi_map: "dict[str, list[str]] | None" = None,
+    roi_min_channels: int = ROI_MIN_CHANNELS,
 ) -> "NullDraws":
     """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -288,6 +301,10 @@ def compute_wtc_phase_null(
     ``analysis_window`` is ``--tstart``/``--tend``, and does the same job for the whole-run
     row that ``windows`` does for the per-condition ones: the real whole-run table describes
     that stretch, so its null has to as well.
+
+    ``roi_map`` also fills ``NullDraws.roi_levels``, the level each ROI map's arrows clear:
+    the per-frequency quantile of the surrogate maps averaged into ROIs with the same
+    ``roi_min_channels``, never an average of the channels' levels.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -310,6 +327,8 @@ def compute_wtc_phase_null(
     cond_frames: list[pd.DataFrame] = []
     cond_draw_ids: list[str] = []
     hists: dict[tuple, np.ndarray] = {}
+    roi_hists: dict[tuple, np.ndarray] = {}
+    roi = (roi_hists, roi_map, roi_min_channels) if roi_map else None
     # the unscrambled side is the same signal in every iteration, so its transforms are
     # computed once and reused; one montage of transforms stays resident, whatever n_iter
     cache1: dict[tuple[str, str], _ChannelWavelet] = {}
@@ -329,7 +348,7 @@ def compute_wtc_phase_null(
         _collect_draw(result, frames, cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
                       mask_coi=mask_coi, windows=windows,
-                      analysis_window=analysis_window)
+                      analysis_window=analysis_window, roi=roi)
         cond_draw_ids.extend([f"iter-{i:04d}"] * (len(cond_frames) - before))
         if (i + 1) % 10 == 0:
             logger.info("phase-scrambled WTC: %d/%d iterations", i + 1, n_iter)
@@ -337,7 +356,9 @@ def compute_wtc_phase_null(
     keys = ["sub1", "sub2", "label"] + (["label2"] if "label2" in frames[0].columns else [])
     return NullDraws(draws=frames, cond_draws=cond_frames, keys=keys,
                       levels={key: _null_level(hist) for key, hist in hists.items()},
-                      cond_draw_ids=cond_draw_ids)
+                      cond_draw_ids=cond_draw_ids,
+                      roi_levels=({key: _null_level(hist) for key, hist in roi_hists.items()}
+                                  if roi else None))
 
 
 def compute_wtc_pair_null(

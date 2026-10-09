@@ -165,10 +165,17 @@ NOTES = {
     "hyper_post.selector_order":
         "The left selector is {left} and the right {right}, the order the map title reads in.",
     "hyper_post.wtc_roi":
-        "The member channels&rsquo; maps averaged cell by cell, bad channels excluded; arrows "
-        "and cone as above. <b>These ones are live</b>: hover for the time, frequency and "
-        "coherence under the pointer, and drag to zoom. The per-channel maps above are "
+        "The member channels&rsquo; maps averaged cell by cell, bad channels excluded; cone "
+        "as above, and arrows where the averaged coherence reaches {arrow_min}, no null having "
+        "been drawn for these maps. <b>These ones are live</b>: hover for the time, frequency "
+        "and coherence under the pointer, and drag to zoom. The per-channel maps above are "
         "stills.",
+    "hyper_post.wtc_roi_null":
+        "The member channels&rsquo; maps averaged cell by cell, bad channels excluded; cone "
+        "as above, and arrows where the averaged map clears its own null: the phase-scrambled "
+        "surrogate maps averaged the same way, at the 95th percentile of each frequency. "
+        "<b>These ones are live</b>: hover for the time, frequency and coherence under the "
+        "pointer, and drag to zoom. The per-channel maps above are stills.",
     "hyper_post.wtc_roi_matrix":
         "Band mean per ROI pair, the cone of influence excluded by default: one number per "
         "map the selectors above reach, and the rows of the "

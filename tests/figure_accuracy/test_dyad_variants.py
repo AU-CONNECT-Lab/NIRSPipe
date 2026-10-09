@@ -54,14 +54,84 @@ def test_an_uncrossed_phase_null_reaches_the_same_channel_maps(dyad_variants):
         assert g.map_inputs(path)[0][0].get("sig") is not None, path.name
 
 
-@pytest.mark.xfail(strict=True, reason="I: the ROI maps drop the level and draw at --wtc-arrow-min, under a note saying 'as above'")
-def test_the_roi_maps_say_what_their_arrows_cleared(dyad_variants):
-    """The ROI maps carry no level of their own, so a page whose channel maps used the null
-    cannot describe the ROI arrows as the channel ones."""
-    html = dyad_variants["phasenull"].page("G01").read_text(encoding="utf-8")
-    assert "null" in _summary_row(html, "Arrow threshold")
-    roi_note = re.search(r'id="WTCRoi".*?<p class="step-desc">(.*?)</p>', html, re.S).group(1)
-    assert "as above" not in roi_note, roi_note
+def _roi_maps(g):
+    return [p for p in sorted((g.gdir("G01") / "figures").glob("*_agg-roi_desc-wtcmap_nirs.html"))
+            if not entities(p).get("cond")]
+
+
+def _levels(g, chroma, roi=False):
+    from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
+    seg = "_seg-roidyad_agg-roi" if roi else ""
+    path = (g.gdir("G01") / "nirs"
+            / f"group-G01_task-main_chromo-{chroma}{seg}_null-phase_stat-wtc_desc-level_relmat.npz")
+    return load_null_levels(path)[("sub-01", "sub-02")] if path.exists() else None
+
+
+def _roi_key(path):
+    label = entities(path)["label"]
+    return tuple(label.split("x")) if "x" in label else (label, label)
+
+
+def _drawn_level(path):
+    """The per-frequency level a live map was drawn against, off its own contour of wtc/level."""
+    fig = one_figure(path)
+    heat = np.asarray(fig["data"][0]["z"], float)
+    ratio = [t for t in fig["data"] if t["type"] == "contour"]
+    if not ratio:
+        return None
+    with np.errstate(divide="ignore", invalid="ignore"):
+        implied = heat / np.asarray(ratio[0]["z"], float)
+    implied[heat < 0.2] = np.nan
+    return np.nanmedian(implied, axis=1)
+
+
+def test_the_roi_maps_carry_their_own_level_when_a_null_ran(dyad_variants):
+    g = dyad_variants["phasenull"]
+    maps = _roi_maps(g)
+    assert maps
+    for path in maps:
+        chroma = entities(path)["chromo"]
+        want = _levels(g, chroma, roi=True)[_roi_key(path)]
+        got = _drawn_level(path)
+        assert got is not None, path.name
+        ok = np.isfinite(got) & np.isfinite(want)
+        assert ok.sum() > 10, path.name
+        np.testing.assert_allclose(got[ok], want[ok], rtol=0.02, err_msg=path.name)
+        assert "phase-scrambled null" in path.read_text(encoding="utf-8"), path.name
+    html = g.page("G01").read_text(encoding="utf-8")
+    note = re.search(r'id="WTCRoi".*?<p class="step-desc">(.*?)</p>', html, re.S).group(1)
+    assert "its own null" in note and "as above, and arrows where the averaged map" in note
+
+
+def test_an_roi_level_is_the_averaged_maps_own_not_its_channels(dyad_variants):
+    """Averaging surrogate maps narrows their spread, so an ROI's own level sits below the
+    mean of its channel pairings' levels; the channels' average would not."""
+    from tests._dyad_fingerprint import ROI_MAP
+    g = dyad_variants["phasenull"]
+    seen = 0
+    for chroma in ("hbo", "hbr"):
+        roi, chan = _levels(g, chroma, roi=True), _levels(g, chroma)
+        for (r1, r2), level in roi.items():
+            members = [chan[(a, b)] for a in ROI_MAP[r1] for b in ROI_MAP[r2] if (a, b) in chan]
+            if len(members) < 2:
+                continue
+            mean = np.nanmean(members, axis=0)
+            ok = np.isfinite(level) & np.isfinite(mean)
+            assert np.nanmedian(mean[ok] - level[ok]) > 0.02, (chroma, r1, r2)
+            seen += 1
+    assert seen
+
+
+def test_an_uncrossed_null_gives_a_crossed_run_s_roi_maps_no_level(dyad_variants):
+    """A crossed (R, R) map averages every pairing inside R, an uncrossed null's R only the
+    same-channel ones: no level is drawn for the maps, and the note says what they cleared."""
+    g = dyad_variants["phasenull_homologous"]
+    assert _levels(g, "hbo", roi=True) is None
+    for path in _roi_maps(g):
+        assert _drawn_level(path) is None, path.name
+    html = g.page("G01").read_text(encoding="utf-8")
+    note = re.search(r'id="WTCRoi".*?<p class="step-desc">(.*?)</p>', html, re.S).group(1)
+    assert "reaches 0.5, no null having been drawn" in note, note
 
 
 # ---- --no-channel-cross ----

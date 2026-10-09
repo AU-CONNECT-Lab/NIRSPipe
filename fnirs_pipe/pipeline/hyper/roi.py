@@ -48,6 +48,7 @@ def roi_maps_from_channels(
     result: WTCResult,
     roi_map: dict[str, list[str]],
     min_channels: int = ROI_MIN_CHANNELS,
+    levels: "dict | None" = None,
 ) -> WTCResult:
     """Average the channel-pair WTC maps cell by cell into one map per ROI pair.
 
@@ -62,7 +63,8 @@ def roi_maps_from_channels(
 
     The COI depends only on record length and sampling rate, so every member shares one and
     it is carried through unchanged. ``sig`` is dropped: a Monte Carlo level belongs to the
-    pair it was computed for and does not average.
+    pair it was computed for and does not average. ``levels``, ``{pairing: {roi key:
+    ndarray}}``, puts back the ROI maps' own phase-scrambled level, matched on the exact key.
 
     Phase averages as a direction, not as a number: the arithmetic mean of 179 degrees and
     -179 degrees is 0, the one direction neither member points in. The members are summed as
@@ -76,6 +78,7 @@ def roi_maps_from_channels(
     rois_of = _rois_of(roi_map)
 
     pairs: dict = {}
+    levels = levels or {}
     for pair_key, labels in result.pairs.items():
         bucket: dict = {}
         # the channels behind each cell, per member, for the minimum
@@ -100,6 +103,10 @@ def roi_maps_from_channels(
             for key, members in bucket.items()
             if min(len(s) for s in sides[key]) >= min_channels
         }
+        for key, level in levels.get(pair_key, {}).items():
+            data = pairs[pair_key].get(key)
+            if data is not None and len(level) == len(result.freqs):
+                data.update(sig=level, sig_source="null")
 
     return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times)
 

@@ -181,7 +181,7 @@
 <details id="WTCRoi" open>
   <summary>b. Per ROI</summary>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_post.wtc_roi') }}
+    <p class="step-desc">{% if roi_null_level %}{{ section_note('hyper_post.wtc_roi_null') }}{% else %}{{ section_note('hyper_post.wtc_roi', arrow_min='%g'|format(arrow_min)) }}{% endif %}
       {%- if roi_crossed %} {{ section_note('hyper_post.selector_order', left=subject_ids[0], right=subject_ids[1]) }}{% endif %}</p>
     <div class="map-pick">
       <select id="roi-select-post" aria-label="{{ subject_ids[0] }} region"></select>

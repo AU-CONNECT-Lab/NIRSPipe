@@ -23,7 +23,7 @@ import pandas as pd
 
 from fnirs_pipe.io.derivatives import group_output_path
 from fnirs_pipe.io.tables import write_tsv
-from fnirs_pipe.utils import ROI_MIN_CHANNELS
+from fnirs_pipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,9 @@ def run_wtc_null(
     analysis_window: "tuple[float, float] | None" = None,
     whiten_s: float = 0.0,
     session: "str | None" = None,
+    roi_map: "dict[str, list[str]] | None" = None,
+    roi_map_name: str = "custom",
+    roi_min_channels: int = ROI_MIN_CHANNELS,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -66,6 +69,8 @@ def run_wtc_null(
 
     ``windows`` is what ``--wtc-by-condition`` read its conditions out of, and carries through
     to the second table. Both tables come out of this one pass of ``n_iter`` transforms.
+
+    ``roi_map`` adds the ROI maps' own level, :func:`roi_level_path`, from the same pass.
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
@@ -94,7 +99,8 @@ def run_wtc_null(
             wtc_raws, band_fmin, band_fmax, n_iter=n_iter,
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
-            sep_bands=sep_bands, windows=windows, analysis_window=analysis_window)
+            sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
+            roi_map=roi_map, roi_min_channels=roi_min_channels)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
             path = save_null_levels(null.levels, group_output_path(
@@ -107,7 +113,36 @@ def run_wtc_null(
                            **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
                                           mask_coi=mask_coi, whiten_s=whiten_s),
                            n_iter=n_iter, seed=seed)
+        if getattr(null, "roi_levels", None):
+            path = save_null_levels(null.roi_levels, roi_level_path(
+                output_dir, group_id, task, ch_type, roi_map_name, session))
+            _hyper_sidecar(path, "hyper_wtc_phasenull_level",
+                           paths_from(aligned_raws.values()),
+                           **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+                                          mask_coi=mask_coi, whiten_s=whiten_s),
+                           **roi_level_params(roi_map, roi_min_channels, cross),
+                           n_iter=n_iter, seed=seed)
     return nulls
+
+
+def roi_level_path(output_dir: Path, group_id: str, task: str, ch_type: str,
+                   roi_map_name: str, session: "str | None" = None) -> Path:
+    """Where the ROI maps' phase-scrambled level goes, beside the channels' own."""
+    return group_output_path(
+        output_dir, group_id,
+        {"task": task, "segmentation": roi_map_name, "aggregation": "roi",
+         "chromophore": ch_type, "nulldist": "phase", "statistic": "wtc", "desc": "level"},
+        "relmat", ".npz", session=session)
+
+
+def roi_level_params(roi_map: dict, roi_min_channels: int, cross: bool) -> dict:
+    """What an ROI level depends on beyond a channel level: the map, its minimum, the crossing.
+
+    A crossed (R, R) map averages every pairing inside R and an uncrossed R only the
+    same-channel ones, so a level of one is not a level of the other.
+    """
+    return {"roi_map": {k: list(v) for k, v in bare_roi_map(roi_map).items()},
+            "roi_min_channels": int(roi_min_channels), "channel_cross": bool(cross)}
 
 
 def write_wtc_null(

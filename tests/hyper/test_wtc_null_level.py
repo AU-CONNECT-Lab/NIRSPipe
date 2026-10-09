@@ -343,3 +343,41 @@ def test_the_re_paired_isc_percentile_ranks_the_size_of_r(tmp_path):
     table = pd.read_csv(path_of({"condition": "all", "nulldist": "pair", "statistic": "isc"}),
                         sep="\t")
     assert table["percentile"].iloc[0] == pytest.approx(100.0)
+
+
+# ---- the ROI maps' own level ----
+
+def _two_channel_map(rows1, rows2, n_times=40):
+    wtc = [np.repeat(np.asarray(r, dtype=float)[:, None], n_times, axis=1) for r in (rows1, rows2)]
+    return WTCResult(pairs={("a", "b"): {
+        label: {"wtc": w, "coi": np.full(n_times, 1e6), "phase": np.zeros_like(w), "sig": None}
+        for label, w in zip(("S1_D1", "S2_D2"), wtc)}},
+        freqs=FREQS, times=np.arange(n_times, dtype=float))
+
+
+def test_an_roi_level_is_counted_off_the_averaged_surrogate_maps():
+    """Two channels at 0.2 and 0.8 average to a 0.5 map, so the ROI's level is 0.5: neither
+    channel's, and not the mean of the channels' levels taken over their own draws."""
+    from fnirs_pipe.pipeline.hyper.surrogate import _collect_draw
+
+    hists, roi_hists = {}, {}
+    for low, high in ((0.2, 0.8), (0.8, 0.2)):
+        _collect_draw(_two_channel_map([low] * 3, [high] * 3), [], [], hists,
+                      band_fmin=0.02, band_fmax=0.15, mask_coi=True, windows=None,
+                      analysis_window=None, roi=(roi_hists, {"L": ["S1_D1", "S2_D2"]}, 1))
+    roi_level = _null_level(roi_hists[("a", "b", "L")])
+    channel_level = _null_level(hists[("a", "b", "S1_D1")])
+    assert roi_level == pytest.approx([0.5005] * 3)
+    assert channel_level == pytest.approx([0.8005] * 3)
+
+
+def test_roi_maps_take_back_only_a_level_keyed_to_them():
+    from fnirs_pipe.pipeline.hyper.roi import roi_maps_from_channels
+
+    level = np.array([0.4, 0.5, 0.6])
+    got = roi_maps_from_channels(_two_channel_map([0.2] * 3, [0.8] * 3),
+                                 {"L": ["S1_D1", "S2_D2"]},
+                                 levels={("a", "b"): {"L": level, ("L", "L"): level * 0}})
+    data = got.pairs[("a", "b")]["L"]
+    assert data["sig_source"] == "null"
+    np.testing.assert_array_equal(data["sig"], level)

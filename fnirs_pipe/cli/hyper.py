@@ -406,6 +406,11 @@ def cmd_run(
             analysis_window=analysis_window,
             whiten_s=wtc_whiten,
             session=ses,
+            # an ROI level only where the null crosses as the real maps do: a crossed (R, R)
+            # map and an uncrossed R average different pairings
+            roi_map=roi_map if wtc_phase_null_cross == wtc_channel_cross else None,
+            roi_map_name=roi_name,
+            roi_min_channels=wtc_roi_min_channels,
         ) if wtc_phase_null else None
 
         report_path = build_hyper_post_report(

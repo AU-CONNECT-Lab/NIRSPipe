@@ -131,6 +131,9 @@ class HyperPostResult:
     isc_level_sources: dict = field(default_factory=dict)
     align_info: dict = field(default_factory=dict)
     tables: dict = field(default_factory=dict)
+    # {chromophore: {pairing: {roi key: ndarray}}}, the phase-scrambled level of the ROI maps
+    # themselves, where one was drawn on these recordings with this map and crossing
+    roi_levels: dict = field(default_factory=dict)
 
 
 def _level_source(result) -> "str | list[str]":
@@ -374,14 +377,14 @@ def run_hyper_post(
                                   "nulldist": nulldist, "statistic": "wtc", "desc": "level"},
                                  "relmat", ".npz", session=session)
 
-    def _usable_level(path: Path, what: str) -> bool:
+    def _usable_level(path: Path, what: str, **expected) -> bool:
         """Whether a level on disk was drawn on these recordings with these settings."""
         from fnirs_pipe.pipeline.hyper.wtc_store import level_mismatch, level_params
         if not path.exists():
             return False
-        why = level_mismatch(path, level_params(aligned_raws, wtc_fmin=wtc_fmin,
-                                                wtc_fmax=wtc_fmax, mask_coi=wtc_mask_coi,
-                                                whiten_s=wtc_whiten_s),
+        why = level_mismatch(path, {**level_params(aligned_raws, wtc_fmin=wtc_fmin,
+                                                   wtc_fmax=wtc_fmax, mask_coi=wtc_mask_coi,
+                                                   whiten_s=wtc_whiten_s), **expected},
                              aligned_raws)
         if why:
             note(notes, scope, f"{path.name} is on disk but was not used for the {what}: "
@@ -434,6 +437,22 @@ def run_hyper_post(
                                len(result.freqs))
             logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
+
+    roi_levels: dict = {}
+
+    def _load_roi_level(ch_type: str) -> None:
+        """The ROI maps' own phase-scrambled level, kept for the report that draws the maps."""
+        from fnirs_pipe.pipeline.hyper.wtc_null import roi_level_params, roi_level_path
+        from fnirs_pipe.pipeline.hyper.wtc_store import load_null_levels
+        if not roi_map:
+            return
+        path = roi_level_path(output_dir, group_id, task, ch_type, config.roi_map_name, session)
+        if not _usable_level(path, f"{ch_type} ROI arrows",
+                             **roi_level_params(roi_map, wtc_roi_min_channels,
+                                                wtc_channel_cross)):
+            return
+        with guard(f"WTC ROI null level ({ch_type})", errors, scope):
+            roi_levels[ch_type] = load_null_levels(path)
 
     pair_levels: dict = {}
 
@@ -599,6 +618,7 @@ def run_hyper_post(
                 wtc_result = window_result(wtc_result, *analysis_window)
 
         _apply_null_level(wtc_result, ch_type)
+        _load_roi_level(ch_type)
 
         chan_band_df = _band_means(wtc_result, "wtc", ch_type)
         out["chan"] = chan_band_df
@@ -934,4 +954,5 @@ def run_hyper_post(
         isc_level_sources=isc_level_sources,
         align_info=align_info,
         tables=tables,
+        roi_levels=roi_levels,
     )

@@ -1151,8 +1151,10 @@ def build_hyper_post_report(
         if result is not None and roi_view_of is None:
             with guard(f"ROI WTC maps from channels ({what}, {ch_type})",
                        page_errors[page], scope):
-                roi_wtc = roi_maps_from_channels(result, roi_map,
-                                                 min_channels=wtc_roi_min_channels)
+                # the run's own ROI level; a window drawn as a figure of its own has none
+                roi_wtc = roi_maps_from_channels(
+                    result, roi_map, min_channels=wtc_roi_min_channels,
+                    levels=roi_levels.get(ch_type) if cond_slug is None else None)
         roi_pair_key = pair_key if (roi_wtc and pair_key in roi_wtc.pairs) else (
             next(iter(roi_wtc.pairs)) if roi_wtc and roi_wtc.pairs else None)
 
@@ -1299,6 +1301,7 @@ def build_hyper_post_report(
     roi_labels   = result.roi_labels
     roi_rows     = result.roi_rows
     passes       = result.passes
+    roi_levels   = result.roi_levels
 
     # One ROI map file per pairing, carrying the run and a view per window, rather than one
     # file per window. Only where a window really is a slice of the run's own transform:
@@ -1576,6 +1579,9 @@ def build_hyper_post_report(
             bad_pairs_json=json.dumps({sid: bad_pairs.get(sid, []) for sid in pair_ids}),
             pair_ids_json=json.dumps(pair_ids),
             roi_rows=roi_rows,
+            # a window shows the run's ROI figure where it is a view of it
+            roi_null_level=any(pair in roi_levels.get(c, {}) for c in chroma)
+                           and (label is None or roi_view_spans is not None),
             roi_labels_json=json.dumps(roi_labels),
             per_roi_post_json=json.dumps(per_roi),
             wtc_roi_matrix=roi_matrix,
