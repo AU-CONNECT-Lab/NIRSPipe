@@ -217,7 +217,7 @@ def test_the_correlation_keeps_its_draws_too(tmp_path):
         return tmp_path / name("G01", "main", "iscpairs", **entities)
 
     _write_isc_null([], draws, draws, _path, [], {}, [],
-                    isc_whiten=32, isc_max_lag_s=2.0, isc_band=(0.06, 0.15))
+                    isc_whiten_s=10.0, isc_max_lag_s=2.0, isc_band=(0.06, 0.15))
 
     out = tmp_path / name("G01", "main", "iscbycond-pairnull-draws")
     assert out.exists() and out.with_suffix(".json").exists()

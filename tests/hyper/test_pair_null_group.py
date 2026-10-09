@@ -701,7 +701,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
 
 # ---- the correlation, read above the cell ----
 
-ISC_SETTINGS = {"isc_band_hz": None, "isc_whiten_max_order": 0, "isc_max_lag_s": 0.0,
+ISC_SETTINGS = {"isc_band_hz": None, "isc_whiten_s": 0.0, "isc_max_lag_s": 0.0,
                 "roi_min_channels": 2}
 
 

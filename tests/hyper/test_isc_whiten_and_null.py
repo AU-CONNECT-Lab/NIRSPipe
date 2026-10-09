@@ -1,11 +1,13 @@
-"""What `--isc-whiten` and `--isc-phase-null` add to the inter-brain correlation.
+"""What `--isc-whiten-s` and `--isc-phase-null` add to the inter-brain correlation.
 
 A haemoglobin trace is strongly autocorrelated, so a Pearson r between two of them rests on
 far fewer independent observations than it has samples and the value it reaches with no
 coupling at all is large. Two answers to that, and the tests here hold both: whitening moves
 the estimate onto the scale its sample count implies, and the phase-scrambled null measures
 that scale directly. Scrambling preserves each signal's own spectrum, so the null carries the
-autocorrelation whether or not the whitening ran, which is why the two compose.
+autocorrelation whether or not the whitening ran, which is why the two compose. How the
+whitening reaches the correlation, one order fitted on the whole record, is
+`test_isc_whiten_route.py`'s.
 
 The statistical tests run on the private row-level helpers rather than through Raw objects:
 what is under test is the estimator, and building a montage around it would only make the
@@ -17,11 +19,13 @@ import numpy as np
 import pytest
 
 from fnirs_pipe.pipeline.hyper.isc import (
-    _ar_whiten, _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
+    _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
 )
+from fnirs_pipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
 from tests._synth import synth_raw
 
 N = 4000
+ORDER = 32
 
 
 def _ar(rng, coefs, n=N):
@@ -34,42 +38,15 @@ def _ar(rng, coefs, n=N):
     return x
 
 
+def _white(rows):
+    """Every row at the one order, its transient left out."""
+    return np.array([ar_whiten_fixed(row, ORDER)[ORDER:] for row in rows])
+
+
 def _haemo(subject: str) -> mne.io.Raw:
     raw = synth_raw(subject, "hold", duration=40.0, motion_onset=None)
     od = mne.preprocessing.nirs.optical_density(raw, verbose="error")
     return mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0)
-
-
-# ---- the autoregressive fit ----
-
-def test_the_order_chosen_is_the_order_the_process_has():
-    """BIC has to find the generating order, or whitening either leaves autocorrelation
-    behind or spends coefficients removing signal."""
-    rng = np.random.default_rng(0)
-    assert _ar_whiten(_ar(rng, np.array([0.9])))[1] == 1
-    order = _ar_whiten(_ar(rng, np.array([0.4, -0.3, 0.2, -0.1, 0.25])))[1]
-    assert 4 <= order <= 7
-
-
-def test_whitening_leaves_a_series_without_its_autocorrelation():
-    rng = np.random.default_rng(1)
-    x = _ar(rng, np.array([0.97]))
-    lag1 = lambda s: float(np.corrcoef(s[:-1], s[1:])[0, 1])
-
-    assert lag1(x) > 0.9
-    assert abs(lag1(_ar_whiten(x)[0][40:])) < 0.1
-
-
-@pytest.mark.parametrize("bad", ["nan", "constant", "short"])
-def test_a_row_that_cannot_be_fitted_comes_back_untouched(bad):
-    """A rejected channel arrives as NaN and has to survive as NaN: order 0 and the input
-    back, not an exception and not zeros."""
-    x = {"nan": np.full(N, np.nan), "constant": np.ones(N), "short": np.arange(4.0)}[bad]
-    out, order = _ar_whiten(x)
-
-    assert order == 0
-    assert out.shape == x.shape
-    np.testing.assert_array_equal(np.isnan(out), np.isnan(x))
 
 
 # ---- what whitening does to the correlation ----
@@ -81,9 +58,9 @@ def test_whitening_puts_r_back_on_the_scale_its_sample_count_implies():
     a = np.array([_ar(rng, np.array([0.97])) for _ in range(24)])
     b = np.array([_ar(rng, np.array([0.97])) for _ in range(24)])
 
-    raw_r = _isc_matrix(a, b, 0)[0].ravel()
-    wht_r = _isc_matrix(a, b, 32)[0].ravel()
-    expected = 1.0 / np.sqrt(N)
+    raw_r = _isc_matrix(a, b)[0].ravel()
+    wht_r = _isc_matrix(_white(a), _white(b))[0].ravel()
+    expected = 1.0 / np.sqrt(N - ORDER)
 
     assert raw_r.std() > 4 * expected
     assert wht_r.std() == pytest.approx(expected, rel=0.25)
@@ -98,36 +75,20 @@ def test_whitening_keeps_a_shared_driver_visible_against_its_own_null():
     b = np.array([driver + 2.0 * _ar(rng, np.array([0.97])) for _ in range(6)])
     independent = np.array([_ar(rng, np.array([0.97])) for _ in range(6)])
 
-    coupled = np.abs(_isc_matrix(a, b, 32)[0]).mean()
-    uncoupled = np.abs(_isc_matrix(a, independent, 32)[0]).mean()
+    coupled = np.abs(_isc_matrix(_white(a), _white(b))[0]).mean()
+    uncoupled = np.abs(_isc_matrix(_white(a), _white(independent))[0]).mean()
     assert coupled > 5 * uncoupled
 
 
-def test_whiten_zero_is_the_unwhitened_correlation():
-    """The off switch has to be a true one: the matrix a 0 gives is the plain Pearson r."""
+def test_the_matrix_without_whitening_is_the_plain_pearson_r():
     rng = np.random.default_rng(4)
     a = np.array([_ar(rng, np.array([0.9])) for _ in range(3)])
     b = np.array([_ar(rng, np.array([0.9])) for _ in range(3)])
 
-    mat, orders1, orders2, lags = _isc_matrix(a, b, 0)
-    assert orders1 is None and orders2 is None
+    mat, lags = _isc_matrix(a, b, 0)
     assert not lags.any(), "no search was asked for, so every cell won at lag 0"
     assert mat == pytest.approx(_isc_from_rows(a, b)[0])
     assert mat[0, 0] == pytest.approx(np.corrcoef(a[0], b[0])[0, 1], abs=1e-9)
-
-
-def test_both_members_lose_the_same_transient_so_their_clocks_stay_paired():
-    """Each member's longest AR order sets how much start-up it drops. Cut apart, a member
-    with a higher-order channel would start later, and a shared row would be correlated
-    against a shifted copy of itself: near zero once whitened, instead of one."""
-    rng = np.random.default_rng(5)
-    shared = _ar(rng, np.array([0.9]))
-    a = np.array([shared, _ar(rng, np.array([0.9]))])
-    b = np.array([shared, _ar(rng, np.array([0.4, -0.3, 0.2, -0.1, 0.25]))])
-
-    mat, orders1, orders2, _ = _isc_matrix(a, b, 32)
-    assert max(orders2) > max(orders1), "the setup needs member 2 to drop more"
-    assert mat[0, 0] == pytest.approx(1.0, abs=1e-9)
 
 
 # ---- the pair table ----
@@ -137,25 +98,18 @@ def dyad():
     return {"11": _haemo("11"), "12": _haemo("12")}
 
 
-def test_the_pair_table_carries_the_z_and_the_order_each_channel_used(dyad):
-    mat, names, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo", whiten=16)
+def test_the_pair_table_carries_the_z_and_no_per_channel_order(dyad):
+    mat, names, frame, level = compute_isc_pairs(dyad, ["11", "12"], "hbo")
 
     assert len(frame) == len(names) ** 2
     assert list(frame.columns[:6]) == ["sub1", "sub2", "label", "label2", "r", "r_z"]
     assert frame["r_z"].to_numpy() == pytest.approx(
         np.arctanh(frame["r"].clip(-0.999999, 0.999999).to_numpy()), nan_ok=True)
-    assert {"ar_order", "ar_order2"} <= set(frame.columns)
-    assert (frame["ar_order"] >= 0).all()
+    assert not {"ar_order", "ar_order2", "percentile"} & set(frame.columns)
     # the frame is the matrix, read the other way round
     index = {n: i for i, n in enumerate(names)}
     row = frame.iloc[7]
     assert row["r"] == pytest.approx(mat[index[row["label"]], index[row["label2"]]])
-
-
-def test_the_order_columns_are_absent_when_nothing_was_whitened(dyad):
-    _, _, frame, _ = compute_isc_pairs(dyad, ["11", "12"], "hbo", whiten=0)
-    assert "ar_order" not in frame.columns
-    assert "percentile" not in frame.columns
 
 
 def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
@@ -170,7 +124,7 @@ def test_the_null_columns_rank_the_magnitude_not_the_sign(dyad):
     raws["11"]._data[picks[0]] = 1e-6 * shared
     raws["12"]._data[picks[0]] = -1e-6 * shared
 
-    _, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=0, n_null=20, seed=1)
+    _, names, frame, level = compute_isc_pairs(raws, ids, "hbo", n_null=20, seed=1)
     assert {"null_abs_mean", "null_abs_sd", "null_abs_p95", "percentile"} <= set(frame.columns)
 
     label = names[0]
@@ -189,7 +143,7 @@ def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
     raws["11"].info["bads"] = [c for c in raws["11"].ch_names
                                   if c.startswith(rejected)]
 
-    mat, names, frame, level = compute_isc_pairs(raws, ids, "hbo", whiten=16, n_null=5, seed=1)
+    mat, names, frame, level = compute_isc_pairs(raws, ids, "hbo", n_null=5, seed=1)
     assert rejected in names                       # the axis is the montage, not the survivors
     blanked = frame[frame["label"] == rejected]
     assert blanked["r"].isna().all()
@@ -202,8 +156,9 @@ def test_the_matrix_entry_point_agrees_with_the_table(dyad):
     """`compute_isc` and `compute_isc_pairs` are two doors onto one computation; the report
     draws one and writes the other, so a divergence would be invisible."""
     ids = ["11", "12"]
-    direct, names_a = compute_isc(dyad, ids, "hbo", whiten=16)
-    via_table, names_b, _, _ = compute_isc_pairs(dyad, ids, "hbo", whiten=16)
+    white = whiten_raws(dyad, 2.0)
+    direct, names_a = compute_isc(white, ids, "hbo", skip_s=2.0)
+    via_table, names_b, _, _ = compute_isc_pairs(white, ids, "hbo", skip_s=2.0)
 
     assert names_a == names_b
     assert direct == pytest.approx(via_table, nan_ok=True)

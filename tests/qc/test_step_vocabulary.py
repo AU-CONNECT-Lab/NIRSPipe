@@ -389,13 +389,15 @@ def test_the_coherence_options_a_run_used_each_get_a_sentence():
 
 def test_the_correlation_sentence_states_each_option_that_changed_it():
     slots = template_slots("hyper_isc", {
-        "isc_band_hz": [0.06, 0.15], "isc_whiten_max_order": 8, "isc_max_lag_s": 2.0,
+        "isc_band_hz": [0.06, 0.15], "isc_whiten_s": 10.0, "isc_whiten_order": 100,
+        "isc_max_lag_s": 2.0,
     })
-    assert "band-pass filtered to 0.06–0.15 Hz and prewhitened" in slots["options"]
-    assert "(at most 8)" in slots["options"]
+    # in the order they ran: whitening on the whole record, then the band
+    assert ("prewhitened with an autoregressive model of order 100 (10 s), fitted on the "
+            "whole aligned recording and band-pass filtered to 0.06–0.15 Hz") in slots["options"]
     assert "within ±2 s" in slots["options"]
     # the defaults change nothing, so they add nothing
-    assert template_slots("hyper_isc", {"isc_band_hz": None, "isc_whiten_max_order": 0,
+    assert template_slots("hyper_isc", {"isc_band_hz": None, "isc_whiten_s": 0.0,
                                         "isc_max_lag_s": 0.0}) == {"options": ""}
 
 
@@ -619,7 +621,7 @@ def test_the_null_sentence_names_the_pool_the_pairs_the_count_and_the_pad():
 def test_a_capped_any_pool_crossed_null_with_the_correlation_says_so():
     slots = template_slots("hyper_pairnull", {
         **_PAIRNULL, "n_iter": 10, "pair_candidates": 44, "pair_pool": "any", "cross": True,
-        "isc_whiten_max_order": 0})
+        "isc_whiten_s": 0.0})
     assert slots["pool"] == "each member of every other group"
     assert slots["pairs"] == "every channel pair"
     assert slots["count"] == "10 of the 44 eligible stand-ins were used."

@@ -165,7 +165,7 @@ def test_the_chords_name_the_re_paired_null_where_it_drew_them(dyad, tmp_path):
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
     _hyper_sidecar(path, "test", [], **wtc_grid_params(dyad), **alignment_params(dyad),
-                   isc_whiten_max_order=0, isc_max_lag_s=0.0, isc_band_hz=None,
+                   isc_whiten_s=0.0, isc_max_lag_s=0.0, isc_band_hz=None,
                    condition_windows_s=_spans(dyad), n_iter=5)
     _build(dyad, tmp_path)
     assert _cell(_page(tmp_path, "talk"), "ISC chords") == (

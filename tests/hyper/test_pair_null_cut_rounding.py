@@ -56,7 +56,7 @@ def test_a_pad_reaching_the_recordings_end_is_cut_at_its_last_sample(wired):
     assert start + span + (end - start - span) > end   # the overshoot this guards against
     drawn, refused = _draw(_raw(30001, 10.0), [("game1", t0, t1)], band_fmin=0.02)
     assert refused == {}
-    (_, label, pair, (lo, hi), _), = drawn
+    (_, label, pair, (lo, hi), _, _), = drawn
     assert label == "game1" and hi - lo == pytest.approx(span)
     assert pair[PARTNER].n_times == pair[FIXED].n_times
 
@@ -67,7 +67,7 @@ def test_cuts_rounding_a_sample_apart_come_out_one_length(wired):
     wired["onsets"] = {"game1": 200.05}
     drawn, refused = _draw(_raw(5001, 5.0), [("game1", 100.0, 400.0)], band_fmin=0.06)
     assert refused == {}
-    (_, _, pair, (lo, hi), white), = drawn
+    (_, _, pair, (lo, hi), white, _), = drawn
     assert pair[FIXED].n_times == pair[PARTNER].n_times == 1972
     assert white is pair
     assert hi <= float(pair[FIXED].times[-1])
@@ -77,5 +77,5 @@ def test_equal_cuts_are_left_as_they_were(wired):
     wired["partner"] = _raw(5001, 5.0)
     wired["onsets"] = {"game1": 200.0}
     drawn, _ = _draw(_raw(5001, 5.0), [("game1", 100.0, 400.0)], band_fmin=0.06)
-    (_, _, pair, _, _), = drawn
+    (_, _, pair, _, _, _), = drawn
     assert pair[FIXED].n_times == pair[PARTNER].n_times == 1973

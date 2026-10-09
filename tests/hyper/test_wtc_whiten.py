@@ -180,7 +180,7 @@ def test_a_re_paired_draw_hands_the_coherence_whitened_cuts_and_the_correlation_
         windows=[("talk", 190.0, 370.0)], band_fmin=0.03, n_max=None, refused={},
         whiten_s=10.0))
     assert len(drawn) == 1
-    _, _, pair, _, white = drawn[0]
+    _, _, pair, _, white, _ = drawn[0]
     for sid in pair:
         assert pair[sid].n_times == white[sid].n_times
         assert not np.allclose(pair[sid].get_data(), white[sid].get_data())
