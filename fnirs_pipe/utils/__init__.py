@@ -23,6 +23,14 @@ def is_optical_density(raw: Any) -> bool:
     return "fnirs_od" in types and "fnirs_cw_amplitude" not in types
 
 
+def is_marker(description: Any) -> bool:
+    """Whether an annotation is an event: not a BAD_ span, nor the EDGE boundary mne writes at a join.
+
+    "task" -> True,  "BAD_gvtd" -> False,  "EDGE boundary" -> False
+    """
+    return not str(description).lower().startswith(("bad", "edge"))
+
+
 def pair_of(ch: Any) -> str:
     """A channel's source-detector pair: its name without the wavelength or chromophore.
 

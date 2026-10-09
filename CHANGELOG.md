@@ -27,7 +27,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
 
 ### Fixed
-- The `EDGE boundary` written where recordings are joined is no longer a condition
+- The `EDGE boundary` written where recordings are joined is no longer a condition, trigger, dyad onset row or event count
+- The exported run script screens with the run's `--psp-threshold`, `--min-good-frac` and `--screen-scope`
 - The exported run script applies `--gvtd-censor` as the run did
 - `fnirs-hyper --wtc-cond-transform` drew each condition map on its cut's own clock instead of the aligned one
 - A crossed dyad run never used an uncrossed phase-scrambled null, not even on its same-channel maps

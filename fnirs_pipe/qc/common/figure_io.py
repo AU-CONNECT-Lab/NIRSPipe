@@ -17,7 +17,7 @@ from pathlib import Path
 
 import mne
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import is_marker, pair_of
 from fnirs_pipe.io.naming import figure_name
 
 PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
@@ -314,6 +314,5 @@ def extract_markers(raw: mne.io.Raw) -> list[dict]:
             "description": str(a["description"]),
         }
         for a in raw.annotations
-        # mne writes "EDGE boundary" at every join of concatenated recordings
-        if not str(a["description"]).lower().startswith(("bad", "edge"))
+        if is_marker(a["description"])
     ]

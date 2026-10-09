@@ -16,6 +16,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from fnirs_pipe.qc.metrics._helpers import epochable_events
+from fnirs_pipe.utils import is_marker
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.qc.figures.common._utils import _optode_positions, _topomap_project
 
@@ -44,7 +45,7 @@ def _condition_evokeds(
     raw_haemo: mne.io.Raw, epoch_tmin: float, epoch_tmax: float,
 ) -> "dict[str, mne.Evoked]":
     """Condition -> evoked, epoched on the (non-BAD) annotations. Empty dict if there are none."""
-    if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
+    if not any(is_marker(a["description"]) for a in raw_haemo.annotations):
         return {}
     events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
     if len(events) == 0:

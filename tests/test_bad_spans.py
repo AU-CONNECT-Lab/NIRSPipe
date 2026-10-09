@@ -14,7 +14,7 @@ from fnirs_pipe.cli.workflows import run_participant_level
 from fnirs_pipe.exceptions import AlignmentError
 from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
-from fnirs_pipe.pipeline.hyper.alignment import align_recordings
+from fnirs_pipe.pipeline.hyper.alignment import align_recordings, onset_residuals
 from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from fnirs_pipe.pipeline.restingstate import compute_alff
 from fnirs_pipe.qc.common.figure_io import extract_markers
@@ -103,12 +103,16 @@ def test_a_join_between_segments_is_not_a_condition():
     assert [label for label, *_ in condition_windows(joined, min_duration=0.0)] == ["rest", "task"]
 
 
-@pytest.mark.xfail(strict=True, raises=pytest.fail.Exception,
-                   reason="D8: dyad alignment takes the EDGE boundary at a join as a shared trigger")
 def test_two_joined_members_without_a_shared_trigger_are_not_aligned():
     raws = {"01": _joined(["a1", "a2"]), "02": _joined(["b1", "b2"])}
     with pytest.raises(AlignmentError):
         align_recordings(raws, task="hold")
+
+
+def test_a_join_has_no_row_in_the_dyad_onset_table():
+    raws = {"sub-01": _joined(["rest", "task"]), "sub-02": _joined(["rest", "task"])}
+    rows = onset_residuals(raws, ["sub-01", "sub-02"])
+    assert [r["condition"] for r in rows] == ["rest", "task"]
 
 
 # ---- exported run script ----
@@ -150,17 +154,20 @@ def test_the_exported_script_censors_what_the_run_censored(mini_bids, tmp_path):
     assert _gvtd_spans(script_out) == run_spans
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D9: the exported run script screens without the run's PSP line, "
-                          "window share or screening scope")
 def test_the_exported_script_screens_as_the_run_screened(tmp_path):
+    # the synthetic channels are bimodal, so no setting of these moves the rejected set and
+    # only the script text can show whether they reach the call
     args = {"bids_dir": str(tmp_path), "dpf": [6.0], "sci_threshold": 0.8,
-            "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5,
+            "motion_correction": "tddr", "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5,
+            "resp_l_freq": 0.2, "resp_h_freq": 0.5,
             "psp_threshold": 0.05, "min_good_frac": 0.6, "screen_scope": "task"}
     write_run_script(args, "01", "20261009_120000", tmp_path)
     script = (tmp_path / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
+    for constant in ("PSP_THRESHOLD  = 0.05", "MIN_GOOD_FRAC  = 0.6", "SCREEN_SCOPE   = 'task'"):
+        assert constant in script
     call = script[script.index("mark_bad_channels(\n"):script.index("save_step(raw_od, \"sci\"")]
-    assert all(f"{key}=" in call for key in ("psp_threshold", "min_good_frac", "screen_scope"))
+    for key in ("PSP_THRESHOLD", "MIN_GOOD_FRAC", "SCREEN_SCOPE"):
+        assert f"={key}," in call
 
 
 # ---- evoked figures ----

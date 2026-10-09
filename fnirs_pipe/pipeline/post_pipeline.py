@@ -26,6 +26,7 @@ from fnirs_pipe.pipeline.denoise import (
 )
 from fnirs_pipe.pipeline.glm import run_glm_pipeline, sole_regressor_channels
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.utils import is_marker
 from fnirs_pipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
 from fnirs_pipe.qc.metrics._helpers import separation_bands
 from fnirs_pipe.utils.logging import get_logger
@@ -204,7 +205,7 @@ def _design_onsets(raw: mne.io.Raw, events: "pd.DataFrame | None") -> dict[str, 
         pairs = zip(raw.annotations.description, raw.annotations.onset)
     onsets: dict[str, list] = {}
     for desc, onset in pairs:
-        if str(desc).lower().startswith(("bad", "edge")):
+        if not is_marker(desc):
             continue
         onsets.setdefault(str(desc), []).append(float(onset))
     return onsets

@@ -13,7 +13,7 @@ import dash_bootstrap_components as dbc
 import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import is_marker, pair_of
 from fnirs_pipe.interface.callbacks._cli_run import run_and_report
 from fnirs_pipe.interface.callbacks._sections import rng, summary, value
 from fnirs_pipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
@@ -1421,7 +1421,7 @@ def drift_cutoff_hint(rows):
     intervals = {}
     for row in rows or []:
         name = str(row.get("trial_type") or "").strip()
-        if not name or name.lower().startswith(("bad", "edge")):
+        if not name or not is_marker(name):
             continue
         intervals.setdefault(name, []).append(float(row.get("onset") or 0.0))
 

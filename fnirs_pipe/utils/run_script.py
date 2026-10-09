@@ -66,6 +66,9 @@ def _build_script_text(
     gvtd_min_epoch_s: float = 30.0,
     sep_bands: tuple | None = None,
     bad_channels_table: str | None = None,
+    psp_threshold: float | None = None,
+    min_good_frac: float | None = None,
+    screen_scope: str = "run",
 ) -> str:
     dt_str = datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
@@ -155,6 +158,9 @@ def _build_script_text(
         '# ---- prep parameters ----',
         f'DPF            = {dpf!r}',
         f'SCI_THRESHOLD  = {sci_threshold!r}',
+        f'PSP_THRESHOLD  = {psp_threshold!r}',
+        f'MIN_GOOD_FRAC  = {min_good_frac!r}',
+        f'SCREEN_SCOPE   = {screen_scope!r}',
         f'MOTION_METHOD  = {motion_correction!r}',
         f'CARDIAC_L_FREQ = {cardiac_l_freq!r}',
         f'CARDIAC_H_FREQ = {cardiac_h_freq!r}',
@@ -209,6 +215,8 @@ def _build_script_text(
         'PREP_PARAMS = {',
         '    "subject": SUBJECT, "session": None, "dpf": DPF,',
         '    "motion_correction": MOTION_METHOD, "sci_threshold": SCI_THRESHOLD,',
+        '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
+        '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
         '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE,',
         '}',
@@ -273,7 +281,8 @@ def _build_script_text(
         '#   SCI clears SCI_THRESHOLD and its PSP clears its own line, both cardiac-band',
         '#   coupling measures, and the channel is kept when enough windows do.',
         'raw_od, bad_chs, sci_scores, good_frac_scores = mark_bad_channels(',
-        '    raw_od, threshold=SCI_THRESHOLD,',
+        '    raw_od, threshold=SCI_THRESHOLD, psp_threshold=PSP_THRESHOLD,',
+        '    min_good_frac=MIN_GOOD_FRAC, screen_scope=SCREEN_SCOPE,',
         '    cardiac_l_freq=CARDIAC_L_FREQ, cardiac_h_freq=CARDIAC_H_FREQ)',
         'if BAD_CHANNELS:  # merge manual --bad-channels, both wavelengths of each pair',
         '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, BAD_CHANNELS)))',
@@ -430,7 +439,9 @@ def write_run_script(
     )
 
     from fnirs_pipe.cli._shared import resolved_separation_bands
-    from fnirs_pipe.cli.workflows import _bad_channels_for
+    from fnirs_pipe.cli.workflows import _bad_channels_for, _make_prep_config
+    # resolved as the run resolves them, so a flag left off gets the same default
+    screening = _make_prep_config(subject, None, args)
     bad_spec = args.get("bad_channels")
     bad_channels = _bad_channels_for(bad_spec, subject)
     bad_channels_table = (_fwd(Path(str(bad_spec)).resolve())
@@ -483,6 +494,9 @@ def write_run_script(
         gvtd_min_epoch_s=_pick("gvtd_min_epoch_s", 30.0),
         sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
         bad_channels_table=bad_channels_table,
+        psp_threshold=screening.psp_threshold,
+        min_good_frac=screening.min_good_frac,
+        screen_scope=screening.screen_scope,
     )
 
     base = sub_dir if sub_dir is not None else output_dir

@@ -10,7 +10,7 @@ import functools
 import mne
 import numpy as np
 
-from fnirs_pipe.utils import is_optical_density
+from fnirs_pipe.utils import is_marker, is_optical_density
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.helpers")
@@ -388,7 +388,7 @@ def epochable_events(raw, tmin: float, tmax: float):
     window fits, so the run has no trials to epoch even though it carries annotations.
     """
     events, event_id = mne.events_from_annotations(raw, verbose=False)
-    event_id = {k: v for k, v in event_id.items() if not str(k).upper().startswith("BAD")}
+    event_id = {k: v for k, v in event_id.items() if is_marker(k)}
     empty = (np.empty((0, 3), dtype=int), {})
     if len(events) == 0 or not event_id:
         return empty

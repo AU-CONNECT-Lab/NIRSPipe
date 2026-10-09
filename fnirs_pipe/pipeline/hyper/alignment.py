@@ -17,6 +17,7 @@ from fnirs_pipe.exceptions import AlignmentError
 from fnirs_pipe.io.auxiliary import ImuTrace
 from fnirs_pipe.io.snirf import write_snirf
 from fnirs_pipe.pipeline.hyper._helpers import _zscore_rows
+from fnirs_pipe.utils import is_marker
 from fnirs_pipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.utils.lineage import path_from
@@ -164,13 +165,13 @@ def align_recordings(
 
     Raises AlignmentError if no shared trigger exists across all subjects.
     """
-    # Collect each subject's trigger descriptions, dropping BAD_* motion annotations.
+    # Collect each subject's trigger descriptions, dropping BAD_ spans and EDGE joins.
     desc_sets: dict[str, set[str]] = {}
     for sub_id, raw in raws.items():
         desc_sets[sub_id] = {
             ann["description"]
             for ann in raw.annotations
-            if not str(ann["description"]).upper().startswith("BAD")
+            if is_marker(ann["description"])
         }
 
     if not any(desc_sets.values()):
@@ -294,7 +295,7 @@ def onset_residuals(raws: dict[str, mne.io.Raw], subject_ids: list[str]) -> list
     def onsets(raw: mne.io.Raw) -> dict[str, list[float]]:
         out: dict[str, list[float]] = {}
         for a in raw.annotations:
-            if not str(a["description"]).upper().startswith("BAD"):
+            if is_marker(a["description"]):
                 out.setdefault(str(a["description"]), []).append(
                     float(a["onset"]) - float(raw.first_time))
         return {desc: sorted(times) for desc, times in out.items()}

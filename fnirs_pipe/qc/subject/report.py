@@ -54,7 +54,7 @@ Report sections
 
 import base64
 from contextlib import contextmanager
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import is_marker, pair_of
 from fnirs_pipe.exceptions import StageError
 from fnirs_pipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
@@ -185,8 +185,7 @@ def _epoch_window_mismatch(raw_haemo: mne.io.Raw, epoch_tmax: float) -> "float |
     A 240 s task block against the 25 s fallback -> 240.0; a 5 s trial -> None.
     """
     durations = [float(a["duration"]) for a in raw_haemo.annotations
-                 if not str(a["description"]).upper().startswith("BAD")
-                 and float(a["duration"]) > 0]
+                 if is_marker(a["description"]) and float(a["duration"]) > 0]
     if not durations:
         return None
     median = float(np.median(durations))
@@ -224,8 +223,7 @@ def _no_epoch_reason(
             return (f"no condition repeats ({len(counts)} condition(s), one event each), so "
                     f"nothing in this section would be averaged")
         return None
-    n_marks = sum(1 for a in raw_haemo.annotations
-                  if not str(a["description"]).upper().startswith("BAD"))
+    n_marks = sum(1 for a in raw_haemo.annotations if is_marker(a["description"]))
     if not n_marks:
         return "the run carries no events"
     return (f"the run carries {n_marks} marker(s), none of them leaving a full "
@@ -1146,7 +1144,7 @@ def _section_trial_image(
 ) -> dict:
     # raw_haemo here is the denoised (bandpassed, pre-regression) signal, not preproc.
     # only for task data with (non-BAD) events; skip early otherwise
-    if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
+    if not any(is_marker(a["description"]) for a in raw_haemo.annotations):
         return {"trial_image_pairs": [], "trial_image_roi_pairs": []}
 
     roi_saved = []

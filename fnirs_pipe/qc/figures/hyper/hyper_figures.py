@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import is_marker, pair_of
 from fnirs_pipe.utils.lineage import lineage_of
 from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
@@ -176,7 +176,7 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
     return [{"desc": str(a["description"]), "onset": float(a["onset"]) - t0,
              "duration": float(a["duration"] or 0.0)}
             for a in raw.annotations
-            if not str(a["description"]).upper().startswith("BAD")]
+            if is_marker(a["description"])]
 
 
 # ---------------------------------------------------------------------------

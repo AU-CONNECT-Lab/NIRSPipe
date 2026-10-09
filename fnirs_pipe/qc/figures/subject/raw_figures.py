@@ -7,7 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.utils import pair_of
+from fnirs_pipe.utils import is_marker, pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 from fnirs_pipe.qc.figures.common._brain_utils import mni_trans
@@ -661,7 +661,7 @@ def _trial_image_data(
     The pooled entry leads so a condition with few trials can be read against it, and is the
     only one carrying ``rows``, the condition each of its rows came from.
     """
-    if not any(not str(a["description"]).upper().startswith("BAD") for a in raw_haemo.annotations):
+    if not any(is_marker(a["description"]) for a in raw_haemo.annotations):
         return None
     if not picks:
         return None

@@ -15,6 +15,7 @@ from fnirs_pipe.pipeline.denoise import (
     filter_array,
 )
 from fnirs_pipe.exceptions import StageError
+from fnirs_pipe.utils import is_marker
 from fnirs_pipe.utils.lineage import stamp
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
@@ -274,8 +275,7 @@ def _annotation_events(raw: mne.io.Raw, stim_dur: float | None) -> pd.DataFrame:
     if stim_dur is None:
         raise ValueError("stim_dur required when no events DataFrame provided")
     # BAD_/EDGE_ spans mark unusable frames, not conditions
-    keep = [i for i, d in enumerate(raw.annotations.description)
-            if not str(d).lower().startswith(("bad", "edge"))]
+    keep = [i for i, d in enumerate(raw.annotations.description) if is_marker(d)]
     conditions = raw.annotations.description[keep]
     onsets = raw.annotations.onset[keep] - raw.first_time
     duration = stim_dur * np.ones(len(conditions))
