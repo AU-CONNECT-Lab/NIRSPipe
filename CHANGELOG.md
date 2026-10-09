@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together
+- **Breaking**: `fnirs-hyper --isc-whiten ORDER` is `--isc-whiten-s SECONDS`, one AR order for every channel of both members fitted on the whole record; `ar_order` columns are gone
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works
 - **Breaking**: `fnirs-hyper-pairnull` and `fnirs-hyper-groupnull` take `--chroma` for `--wtc-chroma`, since both cover the correlation too
 - `fnirs-hyper-pairnull` ranks each ISC cell's `percentile` as |r| among |draws|, as the phase null always did
