@@ -301,6 +301,25 @@ NOTES = {
         "another. The rank inside that window's own surrogate null is what is comparable, and "
         "it is the channel mean's rank, the channels pooled before the comparison.",
 
+    # ---- The cohort test page (fnirs-hyper-groupnull) ----
+    "groupnull.page":
+        "Each section is one statistic, one null and one chromophore, read off the tables "
+        "<code>fnirs-hyper-groupnull</code> wrote beside this page. Marks read the "
+        "<b>paired</b> test: each occasion against the mean of its own null draws, so its "
+        "spread is between occasions, which is the unit the left panels draw. The "
+        "<b>resample</b> test ranks the cohort mean inside a null redrawn from each "
+        "occasion&rsquo;s draws, so its spread is within occasions; both are in each "
+        "section&rsquo;s table.",
+    "groupnull.occasions":
+        "One row per condition over the whole brain. Left, each occasion&rsquo;s real value "
+        "against the mean of its own null draws, hollow where it is not above; right, the "
+        "same pairs side by side with the two means and their 95% intervals. The caption is "
+        "the paired test, absent where fewer than three occasions leave no spread to "
+        "estimate.",
+    "groupnull.regions":
+        "Each region&rsquo;s lift, the real mean minus the null mean, on a scale centred on "
+        "zero. A dot marks the ones whose paired test is below {alpha} ({p_col}).",
+
     # ---- A dyad's window index ----
     "hyper_index.columns":
         "<b>WTC</b>: the mean band coherence over the same-channel pairs, and under "

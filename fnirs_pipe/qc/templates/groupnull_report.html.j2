@@ -1,0 +1,51 @@
+{% extends "_report_base.html.j2" %}
+{# The cohort test page fnirs-hyper-groupnull writes: one section per statistic, null and
+   chromophore found for the task. Inference lives here, not on the cohort QC page. #}
+
+{% block css %}
+.plot-frame { width: 100%; border: none; display: block; }
+table.groupnull-table { border-collapse: collapse; font-size: 0.8rem; margin-top: 0.6rem;
+  font-variant-numeric: tabular-nums; }
+table.groupnull-table th, table.groupnull-table td { padding: 0.2rem 0.6rem;
+  border-bottom: 1px solid #eef0f3; text-align: right; }
+table.groupnull-table th:first-child, table.groupnull-table td:first-child { text-align: left; }
+table.groupnull-table th { color: #8a949e; font-weight: 600; }
+{% endblock %}
+
+{% block content %}
+<h2 id="Summary">Summary</h2>
+<div class="summary-box">
+  <p class="step-desc">{{ section_note('groupnull.page') }}</p>
+</div>
+
+{% for s in sections %}
+<details id="{{ s.anchor }}" open>
+  <summary>{{ s.title }}
+    <span class="hint">whole brain over {{ s.pairings }} pairings &bull; marks read
+      {{ s.p_col }}</span></summary>
+  <div class="details-body">
+    {% if s.figures.occasions %}
+    <p class="qm-note">{{ section_note('groupnull.occasions') }}</p>
+    <iframe class="plot-frame" src="{{ s.figures.occasions.src }}"
+            style="height:{{ s.figures.occasions.h }}px"></iframe>
+    {% endif %}
+    {% if s.figures.regions %}
+    <p class="qm-note">{{ section_note('groupnull.regions', alpha=alpha, p_col=s.p_col) }}</p>
+    <iframe class="plot-frame" src="{{ s.figures.regions.src }}"
+            style="height:{{ s.figures.regions.h }}px"></iframe>
+    {% endif %}
+    {% if s.rows %}
+    <table class="groupnull-table">
+      <thead><tr>{% for c in table_columns %}<th>{{ s.p_col if c == "p" else c }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for r in s.rows %}
+        <tr>{% for c in table_columns %}<td>{{ r[c] }}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <p class="fig-path"><a href="{{ s.byoccasion }}">{{ s.byoccasion }}</a>{% if s.cohort %} &bull; <a href="{{ s.cohort }}">{{ s.cohort }}</a>{% endif %}</p>
+  </div>
+</details>
+{% endfor %}
+{% endblock %}

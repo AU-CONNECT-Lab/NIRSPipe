@@ -114,3 +114,12 @@ def test_the_merged_table_carries_the_session(tree):
 def test_the_cohort_page_has_a_row_per_session(tree):
     table = pd.read_csv(tree / "desc-groups_qc.tsv", sep="	", dtype=str)
     assert sorted(table["label"]) == [f"group-G01_ses-{ses}_task-{TASK}" for ses in SESSIONS]
+
+
+def test_the_group_null_writes_its_page_with_every_link_on_disk(tree):
+    page = tree / f"task-{TASK}_desc-groupnull_report.html"
+    html = page.read_text(encoding="utf-8")
+    links = [h for h in set(re.findall(r'(?:src|href)="([^"#]+)"', html))
+             if not h.startswith(("http", "data:"))]
+    assert any(h.startswith("figures/") for h in links)
+    assert all((tree / h).exists() for h in links), links

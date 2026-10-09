@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw --seed` seeds the screening null, so its percentiles repeat between runs; the seed is recorded
 - A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
 - The dyad raw page's alignment timeline and a table show each block's onset difference between the members after alignment, flagged past two samples
+- `fnirs-hyper-groupnull` writes `task-<task>_desc-groupnull_report.html`: each occasion against its null, and each region's lift marked by the paired test
 
 ### Changed
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together

@@ -533,6 +533,7 @@ def cmd_group_null(
 ) -> None:
     """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
     from fnirs_pipe.pipeline.hyper.pair_null_group import write_group_null
+    from fnirs_pipe.qc.hyper.groupnull_report import write_groupnull_report
 
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
@@ -544,6 +545,10 @@ def cmd_group_null(
     # one per statistic read, coherence and correlation each having its own test
     for cohort in (p for p in written if entity_of(p.name, "desc") == "cohort"):
         print(f"group-null methods -> {_write_group_null_methods(cohort)}")
+    # every table on disk for the task, so a second chromophore or null adds a section
+    page = write_groupnull_report(output_dir, task)
+    if page is not None:
+        print(f"group-null page -> {page}")
 
 
 def _write_group_null_methods(cohort: Path) -> Path:
