@@ -42,7 +42,6 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
 {% set nav_modules = [nav_bar([
   ("Usable", "Usable time"),
   ("Where", "Where"),
-  ("Null", "Null"),
   ("Table", "All dyads"),
 ], rated=false, summary="#Summary",
    closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
@@ -116,19 +115,6 @@ table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left:
   <summary>Where the time went: not available for this cohort</summary>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_group.no_shared_pairs') }}</p>
-  </div>
-</details>
-{% endif %}
-
-{% if figure_paths.null_strip %}
-<details id="Null" open>
-  <summary>Coherence against its own null
-    <span class="hint">one row per dyad &bull; one marker per window &bull; the band is the
-      top {{ "%.0f"|format(100 - alpha) }}%</span></summary>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_group.null') }}</p>
-    <iframe class="plot-frame" src="{{ figure_paths.null_strip.src }}"
-            style="height:{{ figure_paths.null_strip.h }}px"></iframe>
   </div>
 </details>
 {% endif %}

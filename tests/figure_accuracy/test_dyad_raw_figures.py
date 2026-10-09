@@ -1,7 +1,6 @@
 """The dyad raw page (fnirs-qc hyper-raw): each figure against its table and against the planted truth."""
 
 import re
-from itertools import combinations
 
 import numpy as np
 import pytest
@@ -77,105 +76,6 @@ def test_the_onset_residuals_are_the_table_s_and_zero_for_planted_shared_blocks(
     # rounding to a sample is left
     assert {"ca", "cb"} <= {c for c, *_ in rows}
     assert all(abs(d) <= 0.051 and w == "yes" for _c, _m, d, w in rows), rows
-
-
-# ---- screening coherence ----
-
-@pytest.mark.parametrize("group", GROUPS)
-def test_the_screening_strip_draws_each_channel_s_percentile_from_the_table(groups, group):
-    fig = one_figure(groups.figure(group, "desc-rawscreening_nirs.html"))
-    table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
-    many = table.groupby(["sub1", "sub2"]).ngroups > 1
-    for window, rows in table.groupby("window", sort=False):
-        trace = traces(fig, window)[0]
-        drawn = dict(zip(trace["customdata"], np.asarray(trace["x"], float)))
-        rows = rows[rows.percentile.notna()]          # an unmeasured channel draws no point
-        names = (rows.ch_name + " · " + rows.sub1 + " × " + rows.sub2) if many else rows.ch_name
-        names = names.where(~rows.rejected.astype(bool), names + " (rejected)")
-        assert drawn == pytest.approx(dict(zip(names, rows.percentile)), abs=1e-6), window
-
-
-def _rejected_in_pairing(groups, a, b) -> set:
-    return {groups.truth.member(a).rejected, groups.truth.member(b).rejected}
-
-
-@pytest.mark.parametrize("group", GROUPS)
-def test_a_rejected_pair_is_drawn_flagged_on_the_strip(groups, group):
-    """Shown, not hidden: each member's rejected pair keeps its point, an open ring named so."""
-    fig = one_figure(groups.figure(group, "desc-rawscreening_nirs.html"))
-    table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
-    for (a, b), part in table.groupby(["sub1", "sub2"]):
-        assert set(part[part.rejected].ch_name) == _rejected_in_pairing(groups, a, b), (a, b)
-    trace = traces(fig, "whole run")[0]
-    for label, symbol in zip(trace["customdata"], trace["marker"]["symbol"]):
-        assert label.endswith(" (rejected)") == (symbol == "circle-open"), label
-
-
-@pytest.mark.parametrize("group", GROUPS)
-def test_a_rejected_pair_counts_toward_no_window_rank_or_dyad_number(groups, group):
-    table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
-    record = groups.record(group)
-    for p in record["screening"]["pairings"]:
-        n_kept = len(groups.truth.long_pairs) - len(_rejected_in_pairing(groups, p["sub1"], p["sub2"]))
-        for window, v in p["windows"].items():
-            assert v["n_channels"] == n_kept, (p["sub1"], p["sub2"], window)
-    kept = table[(table.window == "whole run") & ~table.rejected]
-    assert record["mean_coherence"] == pytest.approx(kept.coherence.mean(), abs=5e-4)
-    rejected = set().union(*(_rejected_in_pairing(groups, *pr)
-                             for pr in combinations([m.sid for m in groups.truth.group(group)], 2)))
-    assert record["peak_coherence_channel"] not in rejected
-
-
-def test_the_screening_strip_ranks_the_planted_block_coupling_first(groups):
-    """K1 couples S2_D2 to S2_D2 inside ca only: its channel tops ca, and is no standout in cb."""
-    fig = one_figure(groups.figure("G01", "desc-rawscreening_nirs.html"))
-    table = groups.table("G01", "cond-all_stat-coherence_relmat.tsv")
-    ca = table[table.window == "ca"].set_index("ch_name").coherence
-    assert ca.idxmax() == "S2_D2" and ca["S2_D2"] > 2 * ca.drop("S2_D2").max()
-    trace = traces(fig, "ca")[0]
-    assert dict(zip(trace["customdata"], trace["x"]))["S2_D2"] == 100.0
-
-
-def test_a_window_with_no_measurable_coherence_draws_no_point_and_says_so(groups):
-    fig = one_figure(groups.figure("G01", "desc-rawscreening_nirs.html"))
-    table = groups.table("G01", "cond-all_stat-coherence_relmat.tsv")
-    unmeasured = table[table.coherence.isna()]
-    assert len(unmeasured)                      # the 30 s trigger span: no bin in 0.01-0.10 Hz
-    ticks = fig["layout"]["yaxis"]["ticktext"]
-    for window in unmeasured.window.unique():
-        assert not len(traces(fig, window)[0]["x"]), window
-        assert f"{window} (no band bin)" in ticks, ticks
-    assert unmeasured.percentile.isna().all() and unmeasured.window_percentile.isna().all()
-
-
-def test_a_triad_s_screening_strip_names_the_pairing_of_every_point(groups):
-    fig = one_figure(groups.figure("G02", "desc-rawscreening_nirs.html"))
-    table = groups.table("G02", "cond-all_stat-coherence_relmat.tsv")
-    sids = [m.sid for m in groups.truth.group("G02")]
-    for window in table[table.percentile.notna()].window.unique():
-        trace = traces(fig, window)[0]
-        labels = [str(c) for c in trace["customdata"]]
-        for a, b in combinations(sids, 2):
-            assert any(a in s and b in s for s in labels), (window, a, b)
-
-
-def test_a_triad_s_record_ranks_every_pairing_against_its_own_null(groups):
-    table = groups.table("G02", "cond-all_stat-coherence_relmat.tsv")
-    screening = groups.record("G02")["screening"]
-    # no group-wide percentile: there is no null a group of three was ranked against
-    assert "windows" not in screening
-    recorded = {(p["sub1"], p["sub2"], w): v["percentile"]
-                for p in screening["pairings"] for w, v in p["windows"].items()}
-    first = table.groupby(["sub1", "sub2", "window"], sort=False).window_percentile.first()
-    assert set(recorded) == set(first.index)
-    for key, want in first.items():
-        assert recorded[key] == pytest.approx(want, abs=0.05, nan_ok=True), key
-
-
-def test_a_dyad_s_record_keeps_its_one_pairing_at_the_top(groups):
-    screening = groups.record("G01")["screening"]
-    (only,) = screening["pairings"]
-    assert screening["windows"] == only["windows"] and screening["above"] == only["above"]
 
 
 # ---- motion ----

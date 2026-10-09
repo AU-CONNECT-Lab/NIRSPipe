@@ -23,7 +23,6 @@ import pandas as pd
 import pytest
 
 from fnirs_pipe.pipeline.hyper._helpers import _long_by_label
-from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
 from fnirs_pipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
 from tests.hyper._names import archive, name
 
@@ -106,13 +105,6 @@ def test_the_error_names_the_chromophore_that_has_no_channel(dyad):
     raw.info["bads"] = [c for c in raw.ch_names if c.endswith(" hbr")]
     with pytest.raises(ValueError, match="no usable long HBR channel"):
         _long_by_label(raw, "hbr")
-
-
-def test_the_screening_coherence_stays_hbo():
-    """`fnirs-qc hyper-raw`'s coherence is a screening number rather than a result, so it
-    takes no chromophore at all."""
-    import inspect
-    assert "ch_type" not in inspect.signature(compute_pairwise_coherence).parameters
 
 
 # ---- what lands on disk ----

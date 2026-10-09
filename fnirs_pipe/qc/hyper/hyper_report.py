@@ -15,7 +15,6 @@ from fnirs_pipe.utils import ROI_MIN_CHANNELS, pair_of
 from fnirs_pipe.io.derivatives import group_data_dir, group_label, group_report_dir
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
-from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
 from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
 from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
 from fnirs_pipe.pipeline.hyper import (
@@ -548,10 +547,7 @@ def build_hyper_report(
     session: str | None = None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
-    coherence_fmin: float = 0.01,
-    coherence_fmax: float = 0.10,
     sep_bands=None,
-    seed: int | None = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
@@ -565,12 +561,10 @@ def build_hyper_report(
         full_raws=full_raws, full_after=full_after,
         session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-        coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-        sep_bands=sep_bands, errors=errors, notes=notes, seed=seed,
+        sep_bands=sep_bands, errors=errors, notes=notes,
     )
 
-    # no Methods on the raw pass: it screens the recordings, and the screening coherence is a
-    # flag rather than a measure a paper reports
+    # no Methods on the raw pass: it screens the recordings, which a paper does not report
     versions = collect_software_versions()
 
     label = group_label(group_id, task, session)
@@ -602,8 +596,7 @@ def build_hyper_report(
             heading=meta["label"],
             nav_meta=[("group", group_id), ("task", task),
                       ("subjects", ", ".join(meta["subject_ids"]))],
-            nav_note=(f"SCI thr: {sci_lines_text(member_sci_lines(sqm_data, meta['subject_ids']))} • "
-                      f"Coh: {coherence_fmin:.3f}–{coherence_fmax:.3f} Hz"),
+            nav_note=f"SCI thr: {sci_lines_text(member_sci_lines(sqm_data, meta['subject_ids']))}",
         ),
         **footer_vars(
             scope=meta["label"], errors=errors, notes=notes,
@@ -614,9 +607,6 @@ def build_hyper_report(
         task=task,
         subject_ids=meta["subject_ids"],
         sci_lines_text=sci_lines_text(member_sci_lines(sqm_data, meta["subject_ids"])),
-        screen_null_iter=SCREEN_NULL_ITER,
-        coherence_fmin=coherence_fmin,
-        coherence_fmax=coherence_fmax,
         alignment_json=json.dumps(meta["alignment"]),
         onset_residuals=meta.get("onset_residuals") or [],
         onset_tol_s=meta.get("onset_tol_s") or 0.0,

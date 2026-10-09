@@ -11,15 +11,14 @@ What it reports is what a dyad has and a subject cannot:
 - the **shared** usable time, a channel pair being usable only while it is coupled in both
   members at once, split into the asymmetric loss and the shared one
 - where that time went, per channel pair and per condition
-- each window's coherence against its own surrogate null, on the rank scale, since a raw
-  coherence is not comparable between windows of different length
 
 Deliberately not here: SCI, PSP, CV, retention and motion distributions across the cohort.
 Those are ``fnirs-qc cohort``'s, measured per subject, and a second copy of them here
 would be the same numbers under a heading that implies they are about the dyad.
 
-Nor group statistics. The distribution of a percentile across dyads is here to find the dyad
-that does not look like the others, not to decide whether synchrony is significant.
+Nor synchrony. Whether a dyad is coupled is ``fnirs-hyper``'s question, asked of the
+preprocessed signal against its nulls; a raw-stage coherence would mostly measure the shared
+physiology and drift that preprocessing removes.
 """
 
 from __future__ import annotations
@@ -35,10 +34,9 @@ from fnirs_pipe.io.tables import read_tsv_or_none, write_tsv
 from fnirs_pipe.io.naming import derivative_path, report_name
 from fnirs_pipe.qc.common.figure_io import _save_figure_html
 from fnirs_pipe.qc.figures.hyper.group_hyper_figures import (
-    N_DIALS, build_condition_dials, build_null_strip, build_pair_field, build_usable_bars,
+    N_DIALS, build_condition_dials, build_pair_field, build_usable_bars,
     cohort_order,
 )
-from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
 from fnirs_pipe.qc.subject.sqm_record import RECORD_SUFFIX, record_label
 from fnirs_pipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from fnirs_pipe.utils.logging import get_logger
@@ -63,7 +61,6 @@ _HEADLINE = (
     ("one_member_frac", "Lost to one member", "{:.0%}"),
     ("neither_frac", "Lost to both", "{:.0%}"),
     ("usable_stretch_s", "Median usable stretch", "{:.0f} s"),
-    ("percentile_median", "Coherence percentile", "{:.0f}"),
 )
 
 _COLUMNS = (
@@ -78,8 +75,6 @@ _COLUMNS = (
     ("max_offset_s", "Max offset", "{:.2f} s"),
     ("offsets_equal", "Offsets equal", "{}"),
     ("pct_all_good", "Good in both", "{:.0f}%"),
-    ("percentile_median", "Median pct", "{:.0f}"),
-    ("n_above", "Above null", "{:.0f}"),
 )
 
 _USABLE_KEYS = ("n_long_pairs", "n_windows", "usable_pairs_mean", "usable_window_frac",
@@ -133,17 +128,6 @@ def collect_rows(output_dir: Path) -> list[dict]:
         # group-G/nirs, or group-G/ses-S/nirs for a group recorded per session
         group_dir = next(p for p in record_path.parents if p.name.startswith("group-"))
         table = read_tsv_or_none(record_path.parent / _usable_name(label), "its panel loses a row")
-        screening = record.get("screening") or {}
-        if screening and "pairings" not in screening:
-            raise ValueError(f"{record_path.name} was written before screening was kept per "
-                             f"pairing. Rerun fnirs-qc hyper-raw for group {group_dir.name}.")
-        pairings = screening.get("pairings") or []
-        # one strip row per pairing, each ranked against its own null; a dyad keeps its label
-        percentile = {
-            (label if len(pairings) == 1 else f"{label} · {p['sub1']} × {p['sub2']}"): {
-                name: float(v["percentile"]) for name, v in (p.get("windows") or {}).items()
-                if v.get("percentile") is not None and np.isfinite(float(v["percentile"]))}
-            for p in pairings}
 
         report = group_dir / report_name(label, desc="raw")
         index = group_dir / report_name(group_dir.name, desc="index")
@@ -156,8 +140,6 @@ def collect_rows(output_dir: Path) -> list[dict]:
             "usable": {k: record[k] for k in _USABLE_KEYS if k in record},
             "by_pair": _shares(table, "pair"),
             "by_cond": _shares(table, "condition"),
-            "percentile": percentile,
-            "alpha": screening.get("alpha", NULL_ALPHA_PCT),
             "record": record,
         })
     return rows
@@ -166,8 +148,6 @@ def collect_rows(output_dir: Path) -> list[dict]:
 def _flat(row: dict) -> dict:
     """Every scalar one table row prints, the panels and the headline reading the same dict."""
     record = row["record"]
-    # every pairing's measured windows: a group of three counts its three pairings
-    values = [v for windows in row["percentile"].values() for v in windows.values()]
     return {
         "label": row["label"],
         "href": row["href"],
@@ -176,8 +156,6 @@ def _flat(row: dict) -> dict:
         "max_offset_s": record.get("max_offset_s"),
         "offsets_equal": _offsets_equal(record),
         "pct_all_good": record.get("pct_all_good"),
-        "percentile_median": round(float(np.median(values)), 1) if values else None,
-        "n_above": sum(v >= row["alpha"] for v in values) if values else None,
     }
 
 
@@ -227,7 +205,7 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     fig_dir.mkdir(parents=True, exist_ok=True)
     figure_paths: dict = {}
     builders = (("usable_bars", build_usable_bars), ("pair_field", build_pair_field),
-                ("condition_dials", build_condition_dials), ("null_strip", build_null_strip))
+                ("condition_dials", build_condition_dials))
     for name, builder in builders:
         with guard(f"{name} panel", errors, scope):
             fig = builder(rows, order)
@@ -239,10 +217,6 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
             figure_paths[name] = {"src": f"figures/{fname}",
                                   "h": _save_figure_html(fig, fig_dir / fname)}
 
-    if "null_strip" not in figure_paths:
-        note(notes, scope, "no dyad carries a screening verdict, so the null panel is "
-                           "empty; it needs records written by a run that measured the "
-                           "surrogate null")
     if "pair_field" not in figure_paths:
         note(notes, scope, "no usable-time table found beside the dyad records, so the "
                            "panels that split the usable time are empty")
@@ -268,11 +242,9 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
         n_dials=min(N_DIALS, len(order)),
         small_cohort=len(rows) < SMALL_COHORT_N,
         no_shared_pairs="pair_field" not in figure_paths,
-        alpha=rows[0]["alpha"],
         summary_meta=[
             ("Dyads", len(rows)),
             ("Tree", output_dir.name),
-            ("Alpha", f"top {100 - float(rows[0]['alpha']):.0f}% of the null"),
             ("Table", f'<a href="{tsv_path.name}" download>{tsv_path.name}</a>'),
             ("fnirs-pipe", f"v{versions.get('fnirs-pipe', 'n/a')}"),
         ],

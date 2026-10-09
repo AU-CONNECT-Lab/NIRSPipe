@@ -200,42 +200,6 @@ def test_one_filtered_member_is_still_flagged():
     assert note is not None and "sub-B" in note and "sub-A" not in note
 
 
-def test_coherence_matches_channels_by_label():
-    from fnirs_pipe.pipeline.hyper.coherence import compute_pairwise_coherence
-
-    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
-    df = compute_pairwise_coherence(raws, fmin=0.05, fmax=0.15).set_index("ch_name")
-
-    assert list(df.index) == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
-    assert np.isnan(df.loc["S2_D2", "coherence"])
-    assert df.loc[["S1_D1", "S3_D3", "S4_D4"], "coherence"].to_numpy() == pytest.approx(1.0)
-
-
-def test_screening_coherence_drops_a_pair_one_member_lacks():
-    # the screening pass drops the pair rather than keeping a blank row per window, because
-    # a channel one member does not have is not a channel the dyad can be screened on and a
-    # NaN row would be averaged into the window's mean
-    from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
-
-    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
-    df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0)
-
-    assert set(df["ch_name"]) == {"S1_D1", "S3_D3", "S4_D4"}
-    assert list(df["window"].unique()) == ["whole run"]
-    # every row of a window carries that window's own rank, so the page can read it off any
-    assert df["window_percentile"].nunique() == 1
-
-
-def test_screening_coherence_flags_a_rejected_pair_and_keeps_its_row():
-    from fnirs_pipe.pipeline.hyper.coherence import screening_coherence
-
-    raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12")}
-    df = screening_coherence(raws, 0.05, 0.15, n_iter=3, seed=0, rejected={"sub-B": {"S2_D2"}})
-
-    assert set(df["ch_name"]) == {"S1_D1", "S2_D2", "S3_D3", "S4_D4"}
-    assert set(df[df["rejected"]]["ch_name"]) == {"S2_D2"}
-
-
 def test_a_sampling_rate_mismatch_is_refused():
     # alignment equalises duration, not rate, and every metric here takes the rate off one
     # participant, so a mismatch would mislabel the other's frequency axis

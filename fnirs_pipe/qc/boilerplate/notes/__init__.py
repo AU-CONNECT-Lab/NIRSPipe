@@ -8,7 +8,7 @@ module per report family, merged into one table here.
 **Every paragraph a report prints lives here.** A template keeps the ``{% if %}`` that picks
 which paragraph to say, never the sentence itself: a paragraph that differs between two runs
 is split into one key per variant, and a clause that comes and goes is a key of its own
-(``hyper_post.selector_order``) or a slot filled by one (``hyper_raw.screening``). Headings,
+(``hyper_post.selector_order``) or a slot filled by one (``hyper_raw.onset_residuals``). Headings,
 table headers and the short hints beside a ``<summary>`` are labels and stay in the template.
 
 The strings carry HTML (``<code>``, ``<b>``, ``&nbsp;``) and reach the page unescaped,

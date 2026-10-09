@@ -111,21 +111,6 @@ def test_without_a_derivatives_tree_the_existing_stamp_is_kept(
     assert (out / desc["DatasetLinks"]["raw"]).resolve() == bids.resolve()
 
 
-def test_a_seeded_screening_null_repeats_and_is_recorded(mini_hyper_bids, tmp_path, stage_reads):
-    bids, pairs = mini_hyper_bids
-    tables = []
-    for name in ("one", "two"):
-        out = tmp_path / name
-        qc.main(_argv(bids, pairs, out, "--seed", "7"))
-        nirs = out / "group-G01" / "nirs"
-        table = next(nirs.glob("*_cond-all_stat-coherence_relmat.tsv"))
-        tables.append(table.read_text())
-        assert json.loads(table.with_suffix(".json").read_text())["parameters"]["seed"] == 7
-        record = json.loads(next(nirs.glob("*_desc-sqm_qc.json")).read_text())
-        assert record["screening"]["seed"] == 7
-    assert tables[0] == tables[1]
-
-
 def test_session_label_picks_the_session_read_and_every_output_follows_it(tmp_path, stage_reads):
     """A pairs table without sessions, as a BIDS App reads --session-label: which session to
     process, every output of it under ses-."""

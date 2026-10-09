@@ -106,10 +106,6 @@ citations = ["TODO_Wavelet"]
 plain = "The relative phase was summarised by its circular mean over the band cells{coi}, restricted to cells above the per-frequency significance level where one had been drawn, for the band and for each frequency within it; at each frequency it was also expressed as a time lag, positive when the first member leads."
 citations = []
 
-[hyper_coherence]
-plain = "Inter-brain coupling was screened with the magnitude-squared coherence (Welch's method) between homologous retained long HbO channels, averaged over {coh_fmin}–{coh_fmax} Hz {citations}."
-citations = ["TODO_Coherence"]
-
 [hyper_isc]
 plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every retained long channel of one member and every retained long channel of another, separately for HbO and HbR {citations}.{options}"
 citations = ["TODO_ISC"]

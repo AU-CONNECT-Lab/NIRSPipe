@@ -243,15 +243,12 @@ def test_prep_participant_label_required():
         prep_cli._build_parser().parse_args(["crop", "/b", "/d", "--tmin", "5"])
 
 
-def test_qc_subcommands_and_fmin_dest():
+def test_qc_hyper_raw_dispatches():
     args = qc_cli._build_parser().parse_args(
         ["hyper-raw", "/b", "/o", "group", "--pairs-csv", "p.csv", "--dpf", "6.0",
-         "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8",
-         "--fmin", "0.02", "--fmax", "0.2"]
+         "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
     )
     assert args.func is qc_cli.cmd_hyper_raw
-    assert args.coherence_fmin == 0.02
-    assert args.coherence_fmax == 0.2
 
 
 def test_hyper_stage_and_band_flags():

@@ -96,9 +96,8 @@ class NullDraws:
 
         ``real`` is the true-dyad band-mean table this null sits beside, matched on the key
         columns, and turns on the ``percentile`` column: the share of a cell's draws its real
-        value beat. Exact rather than interpolated from the stored quantiles, and the same
-        definition :func:`screening_coherence` uses, so "above the null" means one thing
-        across the report. ``real_by_cond`` does the same for the per-condition table.
+        value beat. Exact rather than interpolated from the stored quantiles. ``real_by_cond``
+        does the same for the per-condition table.
         """
         return (
             (_average_iterations(self.draws, self.keys, real=real) if self.draws else None),
@@ -144,8 +143,6 @@ class NullDraws:
 
 
 # Quantile of the surrogate coherence a cell has to clear before its phase arrow is drawn.
-# 0.95 is the alpha NULL_ALPHA_PCT grades on, so "above the null" reads the same on a
-# coherence map as on the screening panel.
 NULL_ARROW_QUANTILE = 0.95
 
 # Bins the surrogate coherences are counted into, per frequency. Coherence is bounded on

@@ -93,8 +93,8 @@ def _long_flags(action) -> set[str]:
 def _alias_map() -> dict[str, frozenset[str]]:
     """Every long spelling of one option, keyed by each of them.
 
-    ``--coh-fmin`` / ``--fmin`` and ``--participant-label`` / ``--participant_label`` are
-    each one option under two names. Without this the sweeps below would read a second
+    ``--session-label`` / ``--session_label`` and ``--participant-label`` /
+    ``--participant_label`` are each one option under two names. Without this the sweeps below would read a second
     spelling as a second thing for the page to grow a control for, and would read a
     write-off naming either spelling as covering only that one.
     """
@@ -664,15 +664,11 @@ RAW_QC_NOT_EXPOSED = {
         # the analysis window belongs to Hyper Analysis, which is where a window changes a
         # result. Here it would only trim what the report draws
         "--tstart", "--tend",
-        # the coherence band is Hyper Analysis's to set; this report does not average one
-        "--coh-fmin", "--fmin", "--coh-fmax", "--fmax",
         # the page reads a task per row out of the group CSV
         "--task-label",
         "--skip-bids-validation", "--no-skip-bids-validation",
         # the page reads its dyads out of the group CSV, as for --task-label
         "--participant-label", "--participant_label",
-        # a reproduction route for the screening null, not a setting to fill in on a form
-        "--seed",
     },
 }
 

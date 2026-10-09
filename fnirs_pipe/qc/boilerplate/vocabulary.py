@@ -31,7 +31,7 @@ from fnirs_pipe.utils import pair_of
 
 # ---- pipeline step -> steps.toml section ----
 
-_DIRECT = ("od_conversion", "beer_lambert", "resample", "hyper_coherence")
+_DIRECT = ("od_conversion", "beer_lambert", "resample")
 
 # A dyad's coherence is written once for the whole run and once per condition; they are one
 # method sentence. The nulls stay out: they record their own crossing, not the table's.
@@ -108,9 +108,6 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
         return "hyper_phasenull"
     if step in _PAIRNULL_STEPS:
         return "hyper_pairnull"
-    if step == "hyper_coherence_windowed":
-        # the same measure, taken in windows; one sentence covers both
-        return "hyper_coherence"
     return None
 
 
@@ -492,9 +489,6 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "hyper_input":
         desc = params.get("desc")
         return {"stage": f"desc-{desc}" if desc else "input"}
-    if key == "hyper_coherence":
-        return {"coh_fmin": _num(params.get("coherence_fmin")),
-                "coh_fmax": _num(params.get("coherence_fmax"))}
     return {}
 
 
@@ -531,10 +525,7 @@ STEP_SUMMARY = {
     "fc_roi": "Connectivity between ROI-averaged signals.",
     "fc_seed": "Correlation of one ROI's mean signal with every channel.",
     "hyper_bads": "The channels excluded for this dyad, over the scope named in the settings.",
-    "hyper_coherence": "Band-averaged coherence of each homologous channel pair, over the whole recording.",
-    "hyper_coherence_windowed": "The same coherence in sliding windows, one value per window and channel.",
     "hyper_sqm": "Quality metrics for the dyad: alignment, coupling and the members' own.",
-    "hyper_screening": "Each window's coherence beside the surrogate null drawn for that window.",
     "hyper_usable": "How much of each channel pair both members could use at once, per condition.",
     "group_sqm_raw": "Each member's quality metrics, one row per member.",
     "group_sqm_raw_channels": "Per member and channel: the windowed and the whole-run SCI, and whether the channel was rejected.",

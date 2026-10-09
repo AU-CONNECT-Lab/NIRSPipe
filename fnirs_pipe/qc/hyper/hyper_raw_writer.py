@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 
 import mne
-import pandas as pd
 
 from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
 from fnirs_pipe.pipeline.hyper import (
-    GroupEntry, _hyper_sidecar, alignment_params, onset_residuals,
+    GroupEntry, alignment_params, onset_residuals,
 )
 from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
 from fnirs_pipe.qc.subject.sqm_record import record_path
@@ -26,17 +25,14 @@ from fnirs_pipe.qc.figures.hyper.hyper_figures import (
     build_head_slider,
     build_motion_panel,
     build_psd,
-    build_screening_strip,
     build_signal_overlay_pair,
     build_usable_time,
     motion_series,
 )
 from fnirs_pipe.qc.figures.common.head_map import head_geometry
 from fnirs_pipe.qc.metrics.hyper import (
-    compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
-    shared_screen_windows,
+    compute_hyper_sqm, coupled_grid, member_series, motion_summary, shared_screen_windows,
 )
-from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.common.report_shell import guard, note
 from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
@@ -45,35 +41,8 @@ from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.lineage import paths_from
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
-from fnirs_pipe.io.tables import write_tsv
 
 logger = get_logger("qc.hyper_raw_writer")
-
-
-def _write_coherence_tsv(
-    df: pd.DataFrame,
-    path: Path,
-    step: str,
-    aligned_raws: dict[str, mne.io.Raw],
-    **params,
-) -> None:
-    """Write a coherence table beside the report, so its numbers can leave the report.
-
-    The figure and the file are the same DataFrame, which is the point: a reader who wants
-    the coherence of one channel should not have to hover a heatmap for it. An empty frame
-    writes nothing, because a dyad the measure could not be taken on has no table.
-
-    The alignment goes on the sidecar here rather than at the call sites, so a table added
-    later cannot be written without it.
-    """
-    if df is None or df.empty:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write_tsv(df, path)
-    _hyper_sidecar(path, step,
-                   paths_from(aligned_raws.values()),
-                   **alignment_params(aligned_raws), **params)
-    logger.info("coherence table -> %s", path)
 
 
 def _hyper_sqm_record(sqm: dict, aligned_raws: dict[str, mne.io.Raw]) -> dict:
@@ -135,12 +104,9 @@ def _process_hyper_raw_group(
     session: str | None = None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
-    coherence_fmin: float = 0.01,
-    coherence_fmax: float = 0.10,
     sep_bands=None,
     errors: list | None = None,
     notes: list | None = None,
-    seed: int | None = None,
 ) -> dict:
     """Compute hyper raw figures, save each as a standalone HTML, write SQM JSON.
 
@@ -193,34 +159,6 @@ def _process_hyper_raw_group(
     cutoffs = next((dict((sqm_data.get(sid) or {}).get("screen_cutoffs") or {})
                     for sid in subject_ids
                     if (sqm_data.get(sid) or {}).get("screen_cutoffs")), {})
-
-    screening_df = pd.DataFrame()
-    with guard("Screening coherence", errors, label):
-        screening_df = screening_coherence(
-            aligned_raws, fmin=coherence_fmin, fmax=coherence_fmax,
-            windows=[(name, a, b) for name, (a, b) in conditions.items()],
-            sep_bands=sep_bands, seed=seed,
-            # each member's own rejections: drawn and flagged, left out of every rank
-            rejected={sid: {pair_of(c) for c in (sqm_data.get(sid) or {}).get("bad_channels")
-                            or ()} for sid in subject_ids})
-    # The whole-run rows are the plain pairwise coherence, read out of the pass that already
-    # measured them, so a value on this page and its own null are the same estimate.
-    coherence_df = (screening_df[screening_df["window"] == "whole run"]
-                    [["ch_name", "sub1", "sub2", "rejected", "coherence"]].reset_index(drop=True)
-                    if not screening_df.empty else pd.DataFrame(
-                        columns=["ch_name", "sub1", "sub2", "rejected", "coherence"]))
-
-    with guard("Coherence tables", errors, label):
-        _write_coherence_tsv(
-            coherence_df, _table(sqm_dir, {"statistic": "coherence"}),
-            "hyper_coherence", aligned_raws,
-            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax)
-        _write_coherence_tsv(
-            screening_df, _table(sqm_dir, {"condition": "all",
-                                           "statistic": "coherence"}),
-            "hyper_screening", aligned_raws,
-            coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
-            n_iter=SCREEN_NULL_ITER, null="phase_scramble", seed=seed)
 
     figure_paths: dict = {}
 
@@ -296,8 +234,6 @@ def _process_hyper_raw_group(
             _safe_save("head_slider", "headslider", build_head_slider,
                        geo, subject_ids, grid, series, conditions)
 
-    _safe_save("screening_strip", "screening", build_screening_strip, screening_df)
-
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
     if not ch_pairs:
         note(notes, label, "no channel pairs on the aligned recordings: "
@@ -321,14 +257,7 @@ def _process_hyper_raw_group(
             f"figures/{fig_name('detail', channel='{pair}')}"
         )
 
-    sqm = compute_hyper_sqm(
-        sqm_data, coherence_df, aligned_raws, offsets, subject_ids, sci_threshold,
-    )
-    # the screening verdict beside the measured coherence, since the value alone is not
-    # readable: see `screening_summary`
-    sqm["screening"] = screening_summary(screening_df)
-    if sqm["screening"]:
-        sqm["screening"]["seed"] = seed
+    sqm = compute_hyper_sqm(sqm_data, aligned_raws, offsets, subject_ids, sci_threshold)
     sqm["motion"] = motion_scalars
     if grid is not None:
         sqm.update(usable_scalars(grid, subject_ids))

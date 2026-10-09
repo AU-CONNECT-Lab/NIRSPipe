@@ -1,9 +1,8 @@
 """Panels for the cohort-level hyperscanning report: one mark per dyad, not per channel.
 
 Kept apart from ``group_figures``, whose panels are the individual cohort's robust-z strip
-and boxes over a metric table. Nothing here is a z-score: a dyad is read against the alpha
-line of its own null and against the share of its own recording it could use. The two
-modules share the report shell and the row order convention and nothing else.
+and boxes over a metric table. Nothing here is a z-score: a dyad is read against the share
+of its own recording it could use. The two modules share the report shell and the row order convention and nothing else.
 
 Every panel takes the same ``rows``, one dict per dyad-task, and the same ``order``, so a
 dyad sits on the same line down the page and is read across the panels rather than looked up
@@ -17,9 +16,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from fnirs_pipe.qc.metrics.hyper import NULL_ALPHA_PCT
 from fnirs_pipe.qc.figures.hyper.hyper_figures import (
-    _BAD_COLOR, _GOOD_COLOR, _MIX_COLOR, _cond_colors,
+    _BAD_COLOR, _GOOD_COLOR, _MIX_COLOR,
 )
 from fnirs_pipe.utils.logging import get_logger
 
@@ -226,69 +224,4 @@ def build_condition_dials(rows: list[dict], order: list[str]) -> "go.Figure | No
                         showgrid=False, showline=False),
         angularaxis=dict(direction="clockwise", rotation=90, showticklabels=False,
                          ticks="", showgrid=False, showline=False))
-    return fig
-
-
-# ---- Against the null ----
-
-def build_null_strip(rows: list[dict], order: list[str]) -> "go.Figure | None":
-    """One row per pairing, one marker per window, on the rank scale the dyad strip uses.
-
-    Raw coherence cannot share an axis across windows: the estimator's floor sits near one
-    over the number of Welch segments and that count falls with the window. The rank inside
-    that window's own surrogate null is what goes on one axis, and it is the channel mean's
-    rank, the channels pooled before the comparison.
-
-    The row's span is drawn as a line, so a dyad whose windows disagree is a long row rather
-    than markers to be found. A dyad is one row under its own label; a larger group is one row
-    per member pairing, since each pairing is ranked against its own null. None when no dyad
-    carries a screening verdict.
-    """
-    by_label = _by_label(rows)
-    strip = [(who, pct) for label in order
-             for who, pct in (by_label[label].get("percentile") or {}).items()]
-    windows: list[str] = []
-    for _who, pct in strip:
-        for name in pct:
-            if name not in windows:
-                windows.append(name)
-    if not windows:
-        return None
-    colours = _cond_colors(windows)
-    order = [who for who, _pct in strip]
-
-    fig = go.Figure()
-    fig.add_vrect(x0=NULL_ALPHA_PCT, x1=100, fillcolor="#3498db", opacity=0.07, line_width=0)
-    fig.add_vline(x=NULL_ALPHA_PCT, line_color="#adb5bd", line_width=1, line_dash="dot")
-
-    for i, (_who, pct) in enumerate(strip):
-        values = list(pct.values())
-        if len(values) > 1:
-            fig.add_trace(go.Scatter(
-                x=[min(values), max(values)], y=[i, i], mode="lines", showlegend=False,
-                line=dict(color="#dfe4e9", width=1.6), hoverinfo="skip"))
-    for window in windows:
-        points = [(i, pct.get(window)) for i, (_who, pct) in enumerate(strip)]
-        points = [(i, v) for i, v in points if v is not None]
-        if not points:
-            continue
-        fig.add_trace(go.Scatter(
-            x=[v for _i, v in points], y=[i for i, _v in points], mode="markers",
-            name=window, customdata=[order[i] for i, _v in points],
-            marker=dict(size=10, color=colours[window],
-                        symbol="diamond" if window == "whole run" else "circle",
-                        line=dict(width=0.6, color="#fff")),
-            hovertemplate=("<b>%{customdata}</b><br>" + window
-                           + "<br>%{x:.0f}th percentile of its null<extra></extra>")))
-
-    fig.update_layout(height=110 + 24 * len(order), plot_bgcolor="white",
-                      margin=dict(l=150, r=24, t=52, b=46),
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                  xanchor="right", x=1, font=dict(size=10)))
-    fig.update_xaxes(title_text="Percentile inside its own phase-scrambled null",
-                     title_font=dict(size=10), range=[-2, 102], dtick=25,
-                     gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
-    fig.update_yaxes(tickvals=list(range(len(order))), ticktext=order, showgrid=False,
-                     range=[-0.6, len(order) - 0.4], tickfont=dict(size=9),
-                     autorange="reversed")
     return fig

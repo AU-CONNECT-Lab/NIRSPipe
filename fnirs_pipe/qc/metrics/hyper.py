@@ -8,20 +8,12 @@ from __future__ import annotations
 
 import mne
 import numpy as np
-import pandas as pd
 
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.hyper")
-
-# the percentile a window's measured coherence has to reach against its own phase-scrambled
-# null before the dyad is called coupled there. Read by the strip that draws it and by the
-# summary that grades it, so the picture and the verdict cannot part company.
-
-NULL_ALPHA_PCT = 95.0
-
 
 def sci_of(sqm_data: dict, sid: str) -> dict:
     """The per-channel windowed SCI a dyad page prints, for one member; never the whole-run one."""
@@ -354,53 +346,8 @@ def motion_summary(motion: dict) -> dict:
     return out
 
 
-def screening_summary(coherence_df: "pd.DataFrame") -> dict:
-    """The numbers the summary prints, per member pairing, off the same frame the strip draws.
-
-    ::
-
-      -> {"pairings": [{"sub1": "sub-01", "sub2": "sub-02",
-                        "windows": {"task": {"percentile": 100.0, "coherence": 0.224, ...}},
-                        "above": ["task"]}],
-          "windows": {...}, "above": [...], "alpha": 95.0}
-
-    ``mean_coherence`` stays in the record, but the **percentile is what grades it**: a raw
-    coherence has no meaning apart from the null it is read against. Each percentile ranks
-    one pairing against its own null, so a group of three has three; the top-level
-    ``windows`` and ``above`` are the sole pairing's and exist only while there is one. A
-    window with no measurable coherence has a NaN percentile and is never above the line.
-    """
-    if coherence_df is None or coherence_df.empty:
-        return {}
-    pairings = []
-    for (sub1, sub2), part in coherence_df.groupby(["sub1", "sub2"], sort=False):
-        # a rejected pair is on the strip, flagged, and counts toward none of these
-        if "rejected" in part.columns:
-            part = part[~part["rejected"].astype(bool)]
-        windows = {}
-        for name in dict.fromkeys(part["window"]):
-            sub = part[part["window"] == name]
-            windows[str(name)] = {
-                "coherence": round(float(sub["coherence"].mean()), 4),
-                "null_mean": round(float(sub["null_mean"].mean()), 4),
-                "percentile": round(float(sub["window_percentile"].iloc[0]), 1),
-                "n_channels_above": int((sub["percentile"] >= NULL_ALPHA_PCT).sum()),
-                "n_channels": int(len(sub)),
-                "n_seg": int(sub["n_seg"].iloc[0]),
-                "window_s": float(sub["window_s"].iloc[0]),
-            }
-        pairings.append({"sub1": str(sub1), "sub2": str(sub2), "windows": windows,
-                         "above": [k for k, v in windows.items()
-                                   if v["percentile"] >= NULL_ALPHA_PCT]})
-    out: dict = {"alpha": NULL_ALPHA_PCT, "pairings": pairings}
-    if len(pairings) == 1:
-        out["windows"], out["above"] = pairings[0]["windows"], pairings[0]["above"]
-    return out
-
-
 def compute_hyper_sqm(
     sqm_data: dict[str, dict],
-    coherence_df: pd.DataFrame,
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     subject_ids: list[str],
@@ -427,15 +374,6 @@ def compute_hyper_sqm(
     n_total  = len(ch_set)
     pct_good = round(n_all_good / n_total * 100, 1) if n_total > 0 else None
 
-    mean_coherence = peak_coherence = peak_coherence_channel = None
-    if "rejected" in coherence_df.columns:
-        coherence_df = coherence_df[~coherence_df["rejected"].astype(bool)]
-    if not coherence_df.empty:
-        mean_coherence         = round(float(coherence_df["coherence"].mean()), 3)
-        ch_mean                = coherence_df.groupby("ch_name")["coherence"].mean()
-        peak_coherence_channel = str(ch_mean.idxmax())
-        peak_coherence         = round(float(ch_mean.max()), 3)
-
     aligned_duration_s = None
     if aligned_raws:
         aligned_duration_s = round(float(next(iter(aligned_raws.values())).times[-1]), 1)
@@ -446,7 +384,5 @@ def compute_hyper_sqm(
         n_all_good=n_all_good, n_mixed=n_mixed,
         n_all_bad=n_all_bad, n_unknown=n_unknown, n_total=n_total,
         pct_all_good=pct_good,
-        mean_coherence=mean_coherence, peak_coherence=peak_coherence,
-        peak_coherence_channel=peak_coherence_channel,
         aligned_duration_s=aligned_duration_s, max_offset_s=max_offset_s,
     )

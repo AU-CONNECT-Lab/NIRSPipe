@@ -14,8 +14,8 @@ NOTES = {
     "hyper_raw.scope":
         "This page is the raw pass: every channel is screened on the recording as "
         "acquired, and the dyad numbers below are taken over the long channels. It is what "
-        "says whether the recording is worth preprocessing. The synchrony below it is a "
-        "screening flag read against its own null, not the analysis.",
+        "says whether the recording is worth preprocessing. Whether the two members are in "
+        "sync is not asked here: that is the analysis, run on the preprocessed signal.",
     "hyper_raw.scope_post_link":
         'That is on the <a href="{href}">post report</a>.',
     "hyper_raw.blocks_verdict":
@@ -69,7 +69,7 @@ NOTES = {
         "A member moving alone shows in that member&rsquo;s own trace above. <b>Both "
         "moving at once is the dyad&rsquo;s problem</b>: it raises any synchrony measure "
         "taken on the pair, and a shifted or scrambled copy of one member does not remove "
-        "it. This is what the screening synchrony below has to be read against.",
+        "it. This is what any synchrony measured on the pair has to be read against.",
     "hyper_raw.head":
         "The same screening, member by member and on the montage: panel a as each "
         "block&rsquo;s share of coupled windows, panel b as each window&rsquo;s SCI. A "
@@ -82,27 +82,6 @@ NOTES = {
     "hyper_raw.head_slider":
         "Colour is that window&rsquo;s SCI. The block the slider sits in is named above the "
         "heads and moves with it.",
-    "hyper_raw.screening":
-        "Band coherence in {fmin}&ndash;{fmax}&thinsp;Hz, read as each window&rsquo;s rank "
-        "inside a null drawn for <em>that</em> window by pairing one member against a "
-        "phase-scrambled copy of the other. The estimator&rsquo;s floor moves with the window "
-        "length, so two windows&rsquo; raw values are not on a common scale and neither is "
-        "readable alone.",
-    "hyper_raw.screening_scope":
-        "This is a screening flag, not the analysis: the wavelet coherence is on the post "
-        "report.",
-    "hyper_raw.screening_scope_linked":
-        "This is a screening flag, not the analysis: the wavelet coherence is on the post "
-        'report, <a href="{href}">here</a>.',
-    "hyper_raw.screening_strip":
-        "One dot per channel, pale below the line; the diamond is the window&rsquo;s own "
-        "rank with the channels pooled. Both are ranks over the same {n_iter} unseeded "
-        "draws, so both move between runs. Read the diamond: it is one test per window "
-        "rather than one per channel.",
-    "hyper_raw.screening_flag":
-        "<b>A flag, not a result.</b> Shared movement, shared task structure and shared "
-        "physiology all raise this number and the surrogate removes none of them: it removes "
-        "only that the two members were together <em>at that moment</em>.",
     "hyper_raw.comparable":
         "Everything downstream matches channels by S-D label and assumes one clock. An "
         "unmatched label is silent in every later panel, where it becomes a blank row. A "
@@ -115,7 +94,7 @@ NOTES = {
         "the montage has short channels, every channel where it has none.",
     "hyper_raw.group_sqm":
         "The dyad&rsquo;s own numbers rather than either member&rsquo;s: how many channel pairs "
-        "survived in both, and where the screening synchrony sits against its own null.",
+        "survived in both, and the aligned span they share.",
     "hyper_raw.channel_summary":
         "Green = kept by every member, yellow = mixed, red = kept by none.",
     "hyper_raw.channel_decisions":
@@ -295,11 +274,6 @@ NOTES = {
         "No channel pair has a usable share in every dyad (a dyad without a usable-time "
         "table has none), so a column of this panel would not be the same pair down the "
         "page.",
-    "hyper_group.null":
-        "Raw coherence cannot share an axis across windows: the estimator's floor moves with "
-        "the window length, so one value can be unremarkable in one window and out of reach in "
-        "another. The rank inside that window's own surrogate null is what is comparable, and "
-        "it is the channel mean's rank, the channels pooled before the comparison.",
 
     # ---- The cohort test page (fnirs-hyper-groupnull) ----
     "groupnull.page":

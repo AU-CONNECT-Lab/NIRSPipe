@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper --isc-phase-null` keeps every surrogate per condition in a `desc-draws` table, as the coherence's phase null does
 - `fnirs-hyper-groupnull` tests the correlation too, wherever its draws exist; `--isc-test` picks signed two-sided (default) or magnitude
 - `fnirs-hyper`, `fnirs-hyper-pairnull` and `fnirs-qc hyper-raw` take `--participant-label`, keeping the groups a listed subject belongs to
-- `fnirs-qc hyper-raw --seed` seeds the screening null, so its percentiles repeat between runs; the seed is recorded
 - A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
 - The dyad raw page's alignment timeline and a table show each block's onset difference between the members after alignment, flagged past two samples
 - `fnirs-hyper-groupnull` writes `task-<task>_desc-groupnull_report.html`: each occasion against its null, and each region's lift marked by the paired test
@@ -24,7 +23,9 @@ All notable changes to this project will be documented in this file.
 - `fnirs-hyper-pairnull` ranks each ISC cell's `percentile` as |r| among |draws|, as the phase null always did
 - **Breaking**: `fnirs-hyper --wtc-channel-cross` is `--channel-cross`, since it crosses the ISC as well as the coherence
 - **Breaking**: `fnirs-hyper-groupnull` corrects p only under `--p-correction` (default none), writing `p_<method>` beside the raw `p`; the `q` columns are gone
-- `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
+
+### Removed
+- **Breaking**: `fnirs-qc hyper-raw` no longer measures coherence or its null; `--coh-fmin`, `--coh-fmax` and the cohort page's null panel are gone
 
 ### Fixed
 - `fnirs-qc hyper-raw` usable-time and head panels no longer come out empty when the members recorded at different sampling rates

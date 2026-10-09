@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import mne
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -14,7 +13,7 @@ from fnirs_pipe.qc.common.figure_io import extract_markers as _extract_markers
 from fnirs_pipe.qc.metrics.coupling import SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
-    NULL_ALPHA_PCT, _ch_kept_by_member, dyad_status, sci_of,
+    _ch_kept_by_member, dyad_status, sci_of,
 )
 from fnirs_pipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
                                           _hex_to_rgba,
@@ -948,100 +947,6 @@ def build_head_slider(
                                              frame=dict(duration=0, redraw=True),
                                              transition=dict(duration=0))])
                              for fr in fig.frames])])
-    return fig
-
-
-# ---------------------------------------------------------------------------
-# Figure: screening synchrony against its null
-# ---------------------------------------------------------------------------
-
-def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
-    """Each window's coherence as its rank inside its own surrogate null, one row per window.
-
-    **Raw coherence cannot share an axis across windows.** The estimator's floor sits near
-    1/(number of Welch segments), and that count falls with the window. A value's percentile
-    inside the null drawn for *that* window puts every window on one axis with one line to
-    clear.
-
-    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded. A pair
-    either member rejected is an open ring named so, and is not in the diamond. A group
-    of more than two draws every pairing, each dot and diamond naming its pairing, since each
-    is ranked against that pairing's own null. A window with no measurable coherence keeps its
-    row, labelled so, and draws no point.
-
-    Expects the frame :func:`~fnirs_pipe.pipeline.hyper.coherence.screening_coherence` returns.
-    None when it is empty.
-    """
-    if coherence_df is None or coherence_df.empty:
-        return None
-    windows = list(dict.fromkeys(coherence_df["window"]))
-    rows = list(reversed(windows))
-    pairs = list(dict.fromkeys(zip(coherence_df["sub1"], coherence_df["sub2"])))
-    many = len(pairs) > 1
-    jitter = np.random.default_rng(0)
-    # each block in the colour panel 2 and 3 give it, so a reader carries one mapping across
-    # the page; the whole run is not a block and stays neutral
-    blocks = [w for w in windows if w != "whole run"]
-    colours = {**_cond_colors(blocks), "whole run": "#7f8c8d"}
-
-    fig = go.Figure()
-    fig.add_vrect(x0=NULL_ALPHA_PCT, x1=100, fillcolor="#3498db", opacity=0.07, line_width=0)
-    fig.add_vline(x=NULL_ALPHA_PCT, line_color="#adb5bd", line_width=1, line_dash="dot")
-    for i, name in enumerate(rows):
-        sub = coherence_df[coherence_df["window"] == name]
-        sub = sub[np.isfinite(sub["percentile"].to_numpy(dtype=float))]
-        pct = sub["percentile"].to_numpy(dtype=float)
-        colour = colours.get(name, "#7f8c8d")
-        labels = (sub["ch_name"] + " · " + sub["sub1"] + " × " + sub["sub2"] if many
-                  else sub["ch_name"])
-        flagged = (sub["rejected"].astype(bool).to_numpy() if "rejected" in sub.columns
-                   else np.zeros(len(sub), bool))
-        labels = labels.where(~flagged, labels + " (rejected)")
-        fig.add_trace(go.Scatter(
-            x=pct, y=i + jitter.uniform(-0.13, 0.13, len(pct)), mode="markers",
-            name=str(name), legendgroup=str(name), showlegend=False,
-            customdata=labels.tolist(),
-            # saturated only above the line; the rest are drawn as grey spread
-            marker=dict(size=8,
-                        symbol=["circle-open" if f else "circle" for f in flagged],
-                        color=[colour if p >= NULL_ALPHA_PCT else "#d7dde2" for p in pct],
-                        opacity=[0.95 if p >= NULL_ALPHA_PCT else 0.75 for p in pct],
-                        line=dict(width=0.6, color="#fff")),
-            hovertemplate=("<b>%{customdata}</b><br>" + str(name)
-                           + "<br>%{x:.1f}th percentile of its null<extra></extra>"),
-        ))
-    # the window's own rank (channels pooled, ranked once), not the mean of its channels' ranks;
-    # one per pairing, each pairing's diamonds a little apart on its own row
-    for k, (sub1, sub2) in enumerate(pairs):
-        part = coherence_df[(coherence_df["sub1"] == sub1) & (coherence_df["sub2"] == sub2)]
-        shift = (k - (len(pairs) - 1) / 2) * 0.12
-        xs, ys, names = [], [], []
-        for i, n in enumerate(rows):
-            got = part[part["window"] == n]["window_percentile"]
-            if len(got) and np.isfinite(float(got.iloc[0])):
-                xs.append(float(got.iloc[0]))
-                ys.append(i + shift)
-                names.append(f"{n} · {sub1} × {sub2}" if many else n)
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys, mode="markers",
-            name=f"channel mean · {sub1} × {sub2}" if many else "channel mean",
-            customdata=names, showlegend=False,
-            marker=dict(size=13, symbol="diamond",
-                        color=[colours.get(n.split(" · ")[0], "#7f8c8d") for n in names],
-                        line=dict(width=1.2, color="#fff")),
-            hovertemplate="%{customdata}<br>mean at the %{x:.1f}th percentile<extra></extra>"))
-    unmeasured = set(coherence_df.loc[coherence_df["window_percentile"].isna(), "window"])
-    ticks = [f"{n} (no band bin)" if n in unmeasured else n for n in rows]
-
-    fig.update_xaxes(title_text="Percentile inside its own phase-scrambled null",
-                     title_font=dict(size=10), range=[-2, 102], dtick=25,
-                     gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
-    fig.update_yaxes(tickvals=list(range(len(rows))), ticktext=ticks, showgrid=False,
-                     range=[-0.6, len(rows) - 0.4], tickfont=dict(size=9))
-    fig.update_layout(height=110 + 40 * len(rows), plot_bgcolor="white",
-                      margin=dict(l=110, r=24, t=52, b=48),
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                  xanchor="right", x=1, font=dict(size=10)))
     return fig
 
 

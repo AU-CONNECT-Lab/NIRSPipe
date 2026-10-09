@@ -53,9 +53,6 @@ from fnirs_pipe.pipeline.hyper.group_quality import (  # noqa: F401  re-exported
     resolve_group_bands,
     write_group_bads,
 )
-from fnirs_pipe.pipeline.hyper.coherence import (  # noqa: F401  re-exported
-    compute_pairwise_coherence,
-)
 from fnirs_pipe.pipeline.hyper.roi import (  # noqa: F401  re-exported
     roi_maps_from_channels,
     roi_mean_of_channels,

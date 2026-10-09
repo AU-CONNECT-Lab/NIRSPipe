@@ -164,7 +164,6 @@ def cmd_hyper_raw(
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
     min_good_frac: float | None, screen_scope: str,
     cardiac_l_freq: float, cardiac_h_freq: float,
-    coherence_fmin: float, coherence_fmax: float,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
     session_label: list[str] | None, task_label: list[str] | None,
     short_max_dist: float | None, long_min_dist: float | None,
@@ -172,7 +171,6 @@ def cmd_hyper_raw(
     skip_bids_validation: bool,
     derivatives_dir: Path | None = None,
     participant_label: list[str] | None = None,
-    seed: int | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "fnirs-hyper")
@@ -296,9 +294,6 @@ def cmd_hyper_raw(
             sci_threshold=sci_threshold,
             cardiac_l_freq=cardiac_l_freq,
             cardiac_h_freq=cardiac_h_freq,
-            coherence_fmin=coherence_fmin,
-            coherence_fmax=coherence_fmax,
-            seed=seed,
         )
 
     _run_groups(groups, _process)
@@ -446,11 +441,6 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
     _add_dpf_and_cardiac(hr)
-    # named for what they set; --fmin / --fmax stay as aliases
-    hr.add_argument("--coh-fmin", "--fmin", dest="coherence_fmin", type=float, default=0.01,
-                    help="Lower bound (Hz) of the band the Welch coherence is averaged over.")
-    hr.add_argument("--coh-fmax", "--fmax", dest="coherence_fmax", type=float, default=0.10,
-                    help="Upper bound (Hz) of that band.")
     _shared.add_separation_bands(hr)
     hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Session label(s) to process: a group's occasion where the group "
@@ -461,9 +451,6 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="The fnirs-pipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "
                          "there; without it, only the recordings before correction.")
-    hr.add_argument("--seed", type=int, default=None,
-                    help="Seed the phase randomisation behind the screening null, so its "
-                         "percentiles repeat from run to run. Default: unseeded.")
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

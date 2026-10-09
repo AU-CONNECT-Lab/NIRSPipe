@@ -24,8 +24,7 @@ ALL_STEPS = [
     "beer_lambert", "bandpass", "resample", "design_matrix", "glm_fit", "contrasts",
     "glm_residuals", "glm_residuals_broadband", "sqm", "sqm_raw", "alff", "fc",
     "fisher_z", "fc_roi", "fc_seed", "group_sqm_raw", "group_sqm_raw_channels",
-    "hyper_sqm", "hyper_bads", "hyper_coherence", "hyper_coherence_windowed",
-    "hyper_screening", "hyper_usable",
+    "hyper_sqm", "hyper_bads", "hyper_usable",
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_phasenull",
     "hyper_isc", "hyper_isc_roichan",
     "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
@@ -430,8 +429,7 @@ def test_the_hyper_sentences_all_exist():
     from fnirs_pipe.qc.boilerplate.generate import _load_steps
 
     steps = _load_steps()
-    for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_coherence",
-                "hyper_isc"):
+    for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_isc"):
         assert key in steps, f"{key} has no prose"
         assert "{citations}" in steps[key]["plain"]
 
@@ -548,7 +546,7 @@ def test_bad_channels_are_described_as_marked_and_a_glm_says_it_fitted_them():
                                               "min_good_frac": 0.75})
     assert "were marked as bad." in screening and "excluded" not in screening
     assert "fitted as well and flagged" in _load_steps_plain("glm")
-    for key in ("hyper_wtc", "hyper_wtc_crossed", "hyper_isc", "hyper_coherence"):
+    for key in ("hyper_wtc", "hyper_wtc_crossed", "hyper_isc"):
         assert "retained long" in _load_steps_plain(key)
 
 

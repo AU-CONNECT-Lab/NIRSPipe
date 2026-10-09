@@ -81,7 +81,7 @@ from fnirs_pipe.qc.metrics.aggregate import (  # noqa: F401
     _band_power, _variance_remaining,
 )
 from fnirs_pipe.qc.metrics.hyper import (  # noqa: F401
-    NULL_ALPHA_PCT, sci_of, _rejected_pairs, _ch_kept_by_member,
+    sci_of, _rejected_pairs, _ch_kept_by_member,
     coupled_grid, dyad_status, member_series,
-    motion_summary, screening_summary, compute_hyper_sqm,
+    motion_summary, compute_hyper_sqm,
 )

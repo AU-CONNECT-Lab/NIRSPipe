@@ -2,13 +2,12 @@
 {% from "_macros.html.j2" import subject_metrics %}
 
 {% block css %}
-/* the two panels a row holds are not the same width: a coherence bar beside a windowed
-   heatmap, an optode map beside a head. Both collapse to one column on a narrow screen */
+/* the two panels a row holds are not the same width: an optode map beside a head. They
+   collapse to one column on a narrow screen */
 .row { display: grid; gap: 1rem; margin-top: 0.5rem; }
-.row-coh    { grid-template-columns: 1fr 2fr; }
 .row-layout { grid-template-columns: 1fr 2fr; }
 @media (max-width: 900px) {
-  .row-coh, .row-layout { grid-template-columns: 1fr; }
+  .row-layout { grid-template-columns: 1fr; }
 }
 .row h3 { margin-top: 0; }
 
@@ -35,7 +34,6 @@
   ("Usable", "Usable time"),
   ("Motion", "Motion"),
   ("Head", "Head"),
-  ("Coherence", "Synchrony"),
   ("Signal_Quality", "Comparable", "#Quality"),
   ("Channels", "Channels"),
 ], siblings=[{"label": "Post report →", "href": post_href,
@@ -75,8 +73,6 @@
     </table>
     <table>
       <tr><th>SCI threshold</th><td>{{ sci_lines_text }}</td></tr>
-      <tr><th>Coherence band</th>
-          <td>{{ "%.3f"|format(coherence_fmin) }}&ndash;{{ "%.3f"|format(coherence_fmax) }}&thinsp;Hz</td></tr>
       <tr><th>Aligned duration</th>
           <td>{% if align_duration_s %}{{ "%.1f"|format(align_duration_s) }}&thinsp;s
               {%- else %}&mdash;{% endif %}</td></tr>
@@ -86,7 +82,6 @@
       <tr><th>Good in every member</th><td id="sum-all-good">&mdash;</td></tr>
       <tr><th>Bad in every member</th><td id="sum-all-bad">&mdash;</td></tr>
       <tr><th>Usable by the dyad</th><td id="sum-usable">&mdash;</td></tr>
-      <tr><th>Screening synchrony</th><td id="sum-screening">&mdash;</td></tr>
     </table>
   </div>
   <p class="qm-note" style="margin-top:0.75rem;">{{ section_note('hyper_raw.scope') }}{% if post_href %} {{ section_note('hyper_raw.scope_post_link', href=post_href) }}{% endif %}</p>
@@ -224,41 +219,8 @@
 {% endif %}
 {% endif %}
 
-<!-- ======================================================= 4. screening sync -->
-<h2 id="Coherence">5 &middot; Screening synchrony, against its null</h2>
-<p class="step-desc">{{ section_note('hyper_raw.screening',
-  fmin="%.3f"|format(coherence_fmin), fmax="%.3f"|format(coherence_fmax)) }}
-  {% if post_href %}{{ section_note('hyper_raw.screening_scope_linked', href=post_href) }}
-  {%- else %}{{ section_note('hyper_raw.screening_scope') }}{% endif %}</p>
-
-{% if figure_paths.screening_strip %}
-<details id="ScreeningPanel" open>
-  <summary>a. Percentile against the null</summary>
-  <div class="details-body">
-    <iframe class="plotly-frame" src="{{ figure_paths.screening_strip.src }}"
-            title="screening coherence against its null"
-            style="height:{{ figure_paths.screening_strip.h }}px"></iframe>
-    <p class="qm-note">{{ section_note('hyper_raw.screening_strip', n_iter=screen_null_iter) }}</p>
-    <p class="fig-path">{{ figure_paths.screening_strip.src }}</p>
-  </div>
-</details>
-
-<details id="ScreeningTable" open>
-  <summary>b. The numbers</summary>
-  <div class="details-body">
-    <table class="qm-table qm-flat" id="screening-table">
-      <thead><tr><th>Window</th><th>Length (s)</th><th>Welch segments</th>
-        <th>Measured</th><th>Null mean</th><th>Percentile</th>
-        <th>Channels above</th></tr></thead>
-      <tbody id="screening-tbody"></tbody>
-    </table>
-    <p class="qm-note">{{ section_note('hyper_raw.screening_flag') }}</p>
-  </div>
-</details>
-{% endif %}
-
 <!-- ================================================== 1. are they comparable -->
-<h2 id="Quality">6 &middot; Are the two members comparable</h2>
+<h2 id="Quality">5 &middot; Are the two members comparable</h2>
 <p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
 
 <details id="Comparable" open>
@@ -292,7 +254,7 @@
 </details>
 
 <!-- ============================================================= 5. channels -->
-<h2 id="Channels">7 &middot; Channels</h2>
+<h2 id="Channels">6 &middot; Channels</h2>
 
 {% if figure_paths.ch_summary %}
 <details id="ChannelSummary" open>
@@ -428,12 +390,6 @@ function _set(id, text, cls) {
     return "<li><span class='ql'>" + label + "</span>" +
            "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
   }
-  var _sc = q.screening || {};
-  var _alpha = _sc.alpha != null ? _sc.alpha : 95;
-  // each pairing is ranked against its own null, so a group of three prints three ranks
-  var _pairs = _sc.pairings || [];
-  var _pct = function(v) { return v != null && isFinite(v) ? v.toFixed(1) + "th pct" : "—"; };
-  var _wholeRun = _pairs.length === 1 ? (_pairs[0].windows || {})["whole run"] || null : null;
   var pct = q.pct_all_good;
   var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
   document.getElementById("sqm-list").innerHTML =
@@ -443,24 +399,6 @@ function _set(id, text, cls) {
     li("Channels: mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
     li("Channels: all bad", q.n_all_bad != null ? q.n_all_bad : "—",
        q.n_all_bad > 0 ? "qm-bad" : "") +
-    // the measured value is worth printing but cannot be graded on its own: this
-    // estimator's floor moves with the window, and 0.008 on a whole run is the floor and
-    // not a fault. The percentile against this window's own null is the verdict.
-    li("Screening coherence, whole run",
-       q.mean_coherence != null ? q.mean_coherence.toFixed(3) : "—") +
-    (_pairs.length > 1
-      ? _pairs.map(function(p) {
-          var w = (p.windows || {})["whole run"] || {};
-          return li(" " + p.sub1 + " × " + p.sub2 + " against its own null",
-                    _pct(w.percentile), w.percentile >= _alpha ? "qm-ok" : "");
-        }).join("")
-      : li(" against its own null",
-           _wholeRun ? _pct(_wholeRun.percentile) : "—",
-           _wholeRun ? (_wholeRun.percentile >= _alpha ? "qm-ok" : "") : "")) +
-    li("Peak coherence channel",
-       q.peak_coherence_channel
-         ? q.peak_coherence_channel + " (" + (q.peak_coherence != null ? q.peak_coherence.toFixed(3) : "—") + ")"
-         : "—") +
     li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
     li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");
 
@@ -579,43 +517,6 @@ function _set(id, text, cls) {
   });
   html += li("unit", unit);
   el.innerHTML = html;
-})();
-
-// ── screening synchrony ──────────────────────────────────────────────────────
-(function() {
-  var sc = (_SQM.screening || {});
-  var pairs = sc.pairings || [];
-  var many = pairs.length > 1;
-  var tbody = document.getElementById("screening-tbody");
-  var alpha = sc.alpha != null ? sc.alpha : 95;
-  // a window with no Welch bin in the band has no coherence and no rank: a dash, not a zero
-  var num = function(v, d) { return v != null && isFinite(v) ? v.toFixed(d) : "—"; };
-  var above = [], nWindows = 0;
-  pairs.forEach(function(p) {
-    var who = many ? " · " + p.sub1 + " × " + p.sub2 : "";
-    var windows = p.windows || {};
-    Object.keys(windows).forEach(function(name) {
-      var v = windows[name];
-      var hit = v.percentile >= alpha;
-      nWindows += 1;
-      if (hit) above.push(name + who);
-      if (!tbody) return;
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" + name + who + "</td>" +
-        "<td>" + v.window_s.toFixed(0) + "</td>" +
-        "<td>" + v.n_seg + "</td>" +
-        "<td>" + num(v.coherence, 4) + "</td>" +
-        "<td>" + num(v.null_mean, 4) + "</td>" +
-        "<td class='" + (hit ? "good" : "") + "'>" + num(v.percentile, 1) + "</td>" +
-        "<td>" + v.n_channels_above + " / " + v.n_channels + "</td>";
-      tbody.appendChild(tr);
-    });
-  });
-  _set("sum-screening",
-       above.length ? above.join(", ") + " above the null"
-                    : (nWindows ? "nothing above the null" : "—"),
-       above.length ? "qm-ok" : "");
 })();
 
 </script>
