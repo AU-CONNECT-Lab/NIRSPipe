@@ -78,7 +78,7 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     # reads the draws `pair-null` wrote, so the band, the mask and the window are whatever
     # those tables carry. Only what to read and how finely to resample is this form's
     if command == "group-null":
-        args += _text("--task", opts.get("gn_task"))
+        args += _text("--task-label", opts.get("gn_task"))
         args += _text("--chroma", opts.get("gn_chroma"))
         args += _text("--null", opts.get("gn_null"))
         args += _text("--roi-mapping", opts.get("gn_roi_mapping"))

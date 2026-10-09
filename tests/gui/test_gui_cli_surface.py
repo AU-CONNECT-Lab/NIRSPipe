@@ -347,7 +347,10 @@ QC_NOT_EXPOSED = {
             # transform. Without the padding the cone eats a share that grows as the
             # condition shortens. It is a reproduction route, which is not a thing to put in
             # front of someone filling in a form
-            "--wtc-cond-transform", "--wtc-cond-pad-s"},
+            "--wtc-cond-transform", "--wtc-cond-pad-s",
+            # a batch filter for a BIDS App runner; the page already picks its dyads by
+            # Group ID, and a subject filter on top would only hide rows of the CSV
+            "--participant-label", "--participant_label"},
     "band":  {"--verbose",
               # as above: the default, and the checkbox emits --no-wtc-mask-coi
               "--wtc-mask-coi"},
@@ -359,8 +362,12 @@ QC_NOT_EXPOSED = {
         "--wtc-limit-scales", "--no-wtc-limit-scales",
         # read off the real tables; a control here could only disagree with them, which the
         # command refuses
-        "--desc", "--bads-scope", "--wtc-roi-min-channels"},
-    "group-null": {"--verbose"},
+        "--desc", "--bads-scope", "--wtc-roi-min-channels",
+        # a batch filter for a BIDS App runner; the page already picks its dyads by
+        # Group ID, and a subject filter on top would only hide rows of the CSV
+        "--participant-label", "--participant_label"},
+    # --task is the old spelling of --task-label, which the page sends
+    "group-null": {"--verbose", "--task"},
     "merge": {"--verbose"},
     # every group-* directory by default, which is the whole shape of the aggregate form
     "index": {"--verbose", "--group-id"},
@@ -662,6 +669,8 @@ RAW_QC_NOT_EXPOSED = {
         # the page reads a task per row out of the group CSV
         "--task-label",
         "--skip-bids-validation", "--no-skip-bids-validation",
+        # the page reads its dyads out of the group CSV, as for --task-label
+        "--participant-label", "--participant_label",
     },
 }
 
