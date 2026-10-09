@@ -73,9 +73,10 @@ def test_the_onset_residuals_are_the_table_s_and_zero_for_planted_shared_blocks(
     # value: the panel draws the page's table, every other member against the first
     assert drawn == {(c, m): pytest.approx(d, abs=5e-4) for c, m, d, _w in rows}
     assert {m for _c, m, _d, _w in rows} == set(others)
-    # truth: every block was planted at one moment on the shared clock
+    # truth: every block was planted at one moment on the shared clock, so at most the crop's
+    # rounding to a sample is left
     assert {"ca", "cb"} <= {c for c, *_ in rows}
-    assert all(abs(d) < 1e-6 and w == "yes" for _c, _m, d, w in rows), rows
+    assert all(abs(d) <= 0.051 and w == "yes" for _c, _m, d, w in rows), rows
 
 
 # ---- screening coherence ----
