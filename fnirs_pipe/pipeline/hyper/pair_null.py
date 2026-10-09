@@ -493,7 +493,8 @@ def run_pair_null(
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
                         pair, ids, ch_type, sep_bands, window=inner,
-                        whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band)
+                        whiten=isc_whiten, max_lag_s=isc_max_lag_s, band=isc_band,
+                        cross=bool(cross))
                 except Exception:
                     logger.debug("re-paired ISC failed against %s (%s)", partner_id, label)
                     continue

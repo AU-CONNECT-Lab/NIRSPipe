@@ -742,7 +742,8 @@ def run_hyper_post(
         return {"isc_band_hz": list(isc_band) if isc_band else None,
                 "isc_whiten_max_order": isc_whiten,
                 "isc_max_lag_s": isc_max_lag_s,
-                "isc_phase_null_iter": isc_phase_null}
+                "isc_phase_null_iter": isc_phase_null,
+                "channel_cross": bool(wtc_channel_cross)}
 
     def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:
         """Put each condition's re-paired |r| level in place of its chord level, where it fits.
@@ -800,7 +801,8 @@ def run_hyper_post(
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 aligned_raws, pair_ids, ch_type, sep_bands, window=window,
                 whiten=isc_whiten, max_lag_s=isc_max_lag_s,
-                n_null=isc_phase_null, seed=wtc_seed, band=isc_band)
+                n_null=isc_phase_null, seed=wtc_seed, band=isc_band,
+                cross=bool(wtc_channel_cross))
             if isc_mat is None:
                 return channel_level, roi_level, arc_level
             channel_level = (isc_mat, isc_ch_names)

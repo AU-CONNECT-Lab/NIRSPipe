@@ -318,6 +318,7 @@ def compute_isc_pairs(
     n_null: int = 0,
     seed: int | None = None,
     band: "tuple[float | None, float | None] | None" = None,
+    cross: bool = True,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -337,6 +338,10 @@ def compute_isc_pairs(
     side of zero.
 
     With whitening and the null both on, the null is drawn through the whitening too.
+
+    ``cross`` False keeps each channel against the other member's copy of it only, as an
+    uncrossed coherence does: the matrix keeps its shape with every off-diagonal cell NaN,
+    and the frame holds the diagonal's rows.
     """
     data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
                                        window, band)
@@ -345,12 +350,17 @@ def compute_isc_pairs(
 
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
     isc_mat, orders1, orders2, lags = _isc_matrix(data1, data2, whiten, max_lag)
+    off = None if cross else ~np.eye(len(ch_names), dtype=bool)
+    if off is not None:
+        isc_mat[off] = np.nan
+        lags[off] = np.nan
     sfreq = _shared_sfreq({sid: aligned_raws[sid] for sid in subject_ids[:2]})
     sub1, sub2 = subject_ids[0], subject_ids[1]
 
     rows = [{"sub1": sub1, "sub2": sub2, "label": a, "label2": b,
              "r": float(isc_mat[i, j])}
-            for i, a in enumerate(ch_names) for j, b in enumerate(ch_names)]
+            for i, a in enumerate(ch_names) for j, b in enumerate(ch_names)
+            if cross or i == j]
     frame = pd.DataFrame(rows)
     frame.insert(frame.columns.get_loc("r") + 1, "r_z", fisher_r_to_z(frame["r"]))
     index = {name: i for i, name in enumerate(ch_names)}
@@ -364,6 +374,8 @@ def compute_isc_pairs(
     null_level = None
     if n_null > 0:
         draws = _isc_null_draws(data1, data2, whiten, max_lag, n_null, seed)
+        if off is not None:
+            draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
     return isc_mat, ch_names, frame, null_level
 

@@ -752,7 +752,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "n. The extra pairs reach the channel TSV with a label2 column, and "
                           "the time-frequency maps get a second selector for the partner's "
                           "channel. --no-wtc-channel-cross pairs each channel with its "
-                          "counterpart only.")
+                          "counterpart only, for the ISC as for the coherence.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length "
                           "and make the window the unit instead of the condition. Needs "

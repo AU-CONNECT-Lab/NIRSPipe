@@ -694,8 +694,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     contributes nothing to it, its band mean being NaN.
 
     Rows are every pairing that carries at least one value, so an uncrossed run shows the
-    coherence on the diagonal and the ISC everywhere, which is what those two actually
-    computed. ``isc`` is the matrices for this scope at this table's own level, channel or
+    diagonal alone, for the coherence and the ISC both. ``isc`` is the matrices for this scope at this table's own level, channel or
     ROI, and None where the scope produced none.
 
     ``diagonal_only`` drops the crossed pairings, for the table whose subject is the

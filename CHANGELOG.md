@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - `fnirs-qc cohort-hyper` refuses a dyad record whose screening is not kept per pairing
 - The dyad page's ROI homologous table prints the ISC over same-channel pairs, as its coherence
+- The ISC follows `--wtc-channel-cross`: uncrossed, it keeps the same-channel pairs only, in its tables, ROI matrix and both nulls
 - Per-channel tables print `SCI (10 s)` and `SCI (whole run)`, and `_desc-channel_qc.tsv` writes them as `sci_win` and `sci_whole`
 - Per-channel grids, tables and the per-trial heatmap name each metric's window; the SCI/PSP panel names its `--window-length`
 - Condition pages and the subject index no longer show the windowed SCI under the whole-run SCI's name
