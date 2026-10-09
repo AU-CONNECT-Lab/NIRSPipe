@@ -51,6 +51,15 @@ All notable changes to this project will be documented in this file.
 - The raw viewer's channel map folded the pulse the same way on runs with no events, where it draws the continuous signal
 - The GUI alignment table coloured SCI against 0.8 whatever the page's SCI threshold
 - The provenance diagram's screening arrow named only the SCI line, and its denoising arrow left out the short-channel regression
+- The dyad raw page dropped its usable-time and head panels whenever the members' clock offsets differed; they are screened on the shared clock now
+- The dyad raw page never drew its channel summary, and its channel table and record left the windowed SCI empty
+- A screening window too short for a coherence bin was ranked as the 0th percentile; it now draws no point
+- Groups of three ranked screening coherence by their first pairing only; every pairing now has its own percentile
+- The dyad motion panel flagged the shared clock's start as a joint spike; GVTD and spikes are now measured before the cut
+- Each dyad channel selector marked every member's rejections instead of its own member's
+- A triad's pairing page listed every member in its quality and alignment tables
+- Condition panels named a 10 s window for values measured on the run's `--window-length` grid
+- The cohort's windowed grid drew a highlighted run with the next run's values once an earlier run lacked that channel set
 
 ### Removed
 - `fnirs-hyper --sci-threshold`; members' own screening lines are read instead

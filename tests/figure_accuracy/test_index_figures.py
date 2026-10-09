@@ -5,13 +5,16 @@ import re
 import numpy as np
 import pytest
 
-from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from tests.figure_accuracy._payload import one_figure
 from tests.figure_accuracy._read import _failing_in
 from tests.figure_accuracy.conftest import HAND_MARKED
 
-PANELS = {f"SCI ({SCI_WINDOW_S:g} s)": "sci_win_mean", f"PSP ({PSP_WINDOW_S:g} s)": "psp_mean",
-          f"CV ({CV_WINDOW_S:g} s)": "cv_mean", f"SNR ({CV_WINDOW_S:g} s)": "snr_mean"}
+# a condition's windowed values are columns of the run's --window-length grid, and say so
+PANELS = {"SCI": "sci_win_mean", "PSP": "psp_mean", "CV": "cv_mean", "SNR": "snr_mean"}
+
+
+def _grid(run) -> str:
+    return f"{run.record()['windowed']['qc_window_s']:g} s"
 
 
 def _index_figure(run, name):
@@ -22,7 +25,8 @@ def test_the_condition_profile_draws_each_condition_s_recorded_scalars(condition
     by_condition = condition_run.record()["by_condition"]
     fig = _index_figure(condition_run, "sub-01_desc-condprofile_nirs.html")
     titles = [a["text"] for a in fig["layout"]["annotations"]]
-    for k, (title, key) in enumerate(PANELS.items()):
+    for k, (name, key) in enumerate(PANELS.items()):
+        title = f"{name} ({_grid(condition_run)})"
         assert titles[k] == title
         axis = "x" if k == 0 else f"x{k + 1}"
         median = next(t for t in fig["data"] if t.get("name") == "cohort median"
@@ -39,7 +43,7 @@ def test_the_condition_with_the_decoupled_stretch_has_the_lower_sci(condition_ru
 def test_the_channel_matrix_prints_each_condition_s_recorded_channel_sci(condition_run):
     by_condition = condition_run.record()["by_condition"]
     fig = _index_figure(condition_run, "sub-01_task-main_desc-condchannels_nirs.html")
-    assert fig["layout"]["annotations"][0]["text"] == f"SCI ({SCI_WINDOW_S:g} s)"
+    assert fig["layout"]["annotations"][0]["text"] == f"SCI ({_grid(condition_run)})"
     heat = fig["data"][0]
     for channel, row in zip(heat["y"], np.asarray(heat["text"])):
         for condition, printed in zip(heat["x"], row):

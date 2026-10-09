@@ -250,8 +250,9 @@ def cmd_hyper_raw(
         # `fnirs-pipe` run left in the tree --derivatives-dir names, and is simply absent for
         # a member who has not been through one.
         intensity_raws = align_like(raws_cw, aligned_raws)
-        after_raws = (align_like(load_group_stage(derivatives_dir, members, "motcorrected"),
-                                 aligned_raws) if derivatives_dir is not None else {})
+        full_after = (load_group_stage(derivatives_dir, members, "motcorrected")
+                      if derivatives_dir is not None else {})
+        after_raws = align_like(full_after, aligned_raws) if full_after else {}
         # the aux group rides only in the source file, on each member's own clock; it is
         # moved by the same shift the intensity copy was cut by. A panel row, so a file that
         # will not read costs the row and not the report
@@ -275,6 +276,9 @@ def cmd_hyper_raw(
             intensity_raws=intensity_raws,
             after_raws=after_raws,
             imu=imu,
+            # the uncut recordings, so the motion panel filters before it cuts
+            full_raws=raws_cw,
+            full_after=full_after,
             output_dir=output_dir,
             sep_bands=sep_bands,
             session=ses,

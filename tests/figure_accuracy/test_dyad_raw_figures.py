@@ -62,10 +62,13 @@ def test_the_timeline_draws_each_member_s_blocks_on_its_own_clock_then_on_the_sh
 def test_the_screening_strip_draws_each_channel_s_percentile_from_the_table(groups, group):
     fig = one_figure(groups.figure(group, "desc-rawscreening_nirs.html"))
     table = groups.table(group, "cond-all_stat-coherence_relmat.tsv")
+    many = table.groupby(["sub1", "sub2"]).ngroups > 1
     for window, rows in table.groupby("window", sort=False):
         trace = traces(fig, window)[0]
-        drawn = sorted(zip(trace["customdata"], np.asarray(trace["x"], float)))
-        assert drawn == sorted(zip(rows.ch_name, rows.percentile)), window
+        drawn = dict(zip(trace["customdata"], np.asarray(trace["x"], float)))
+        rows = rows[rows.percentile.notna()]          # an unmeasured channel draws no point
+        names = (rows.ch_name + " · " + rows.sub1 + " × " + rows.sub2) if many else rows.ch_name
+        assert drawn == pytest.approx(dict(zip(names, rows.percentile)), abs=1e-6), window
 
 
 def test_the_screening_strip_ranks_the_planted_block_coupling_first(groups):
@@ -78,39 +81,46 @@ def test_the_screening_strip_ranks_the_planted_block_coupling_first(groups):
     assert dict(zip(trace["customdata"], trace["x"]))["S2_D2"] == 100.0
 
 
-@pytest.mark.xfail(strict=True, reason="D3: a window too short for one Welch bin in the band "
-                   "has NaN coherence and is ranked as the 0th percentile")
-def test_a_window_with_no_measurable_coherence_is_not_drawn_at_the_0th_percentile(groups):
+def test_a_window_with_no_measurable_coherence_draws_no_point_and_says_so(groups):
     fig = one_figure(groups.figure("G01", "desc-rawscreening_nirs.html"))
     table = groups.table("G01", "cond-all_stat-coherence_relmat.tsv")
     unmeasured = table[table.coherence.isna()]
     assert len(unmeasured)                      # the 30 s trigger span: no bin in 0.01-0.10 Hz
+    ticks = fig["layout"]["yaxis"]["ticktext"]
     for window in unmeasured.window.unique():
-        assert not any(np.asarray(traces(fig, window)[0]["x"], float) == 0.0), window
+        assert not len(traces(fig, window)[0]["x"]), window
+        assert f"{window} (no band bin)" in ticks, ticks
+    assert unmeasured.percentile.isna().all() and unmeasured.window_percentile.isna().all()
 
 
-@pytest.mark.xfail(strict=True, reason="D4: a group of three draws three pairings' points "
-                   "under channel names alone, and its window summary is the first pairing's")
 def test_a_triad_s_screening_strip_names_the_pairing_of_every_point(groups):
     fig = one_figure(groups.figure("G02", "desc-rawscreening_nirs.html"))
     table = groups.table("G02", "cond-all_stat-coherence_relmat.tsv")
     sids = [m.sid for m in groups.truth.group("G02")]
-    for window in table.window.unique():
+    for window in table[table.percentile.notna()].window.unique():
         trace = traces(fig, window)[0]
         labels = [str(c) for c in trace["customdata"]]
         for a, b in combinations(sids, 2):
             assert any(a in s and b in s for s in labels), (window, a, b)
 
 
-@pytest.mark.xfail(strict=True, reason="D4: the record's window percentile is the first "
-                   "pairing's while its coherence is the mean over every pairing")
-def test_a_triad_s_window_percentile_is_not_one_pairing_s(groups):
+def test_a_triad_s_record_ranks_every_pairing_against_its_own_null(groups):
     table = groups.table("G02", "cond-all_stat-coherence_relmat.tsv")
-    windows = groups.record("G02")["screening"]["windows"]
-    first = table.groupby(["window", "sub1", "sub2"], sort=False).window_percentile.first()
-    for window, by_pair in first.groupby(level=0):
-        if by_pair.nunique() > 1:
-            assert windows[window]["percentile"] != by_pair.iloc[0], window
+    screening = groups.record("G02")["screening"]
+    # no group-wide percentile: there is no null a group of three was ranked against
+    assert "windows" not in screening
+    recorded = {(p["sub1"], p["sub2"], w): v["percentile"]
+                for p in screening["pairings"] for w, v in p["windows"].items()}
+    first = table.groupby(["sub1", "sub2", "window"], sort=False).window_percentile.first()
+    assert set(recorded) == set(first.index)
+    for key, want in first.items():
+        assert recorded[key] == pytest.approx(want, abs=0.05, nan_ok=True), key
+
+
+def test_a_dyad_s_record_keeps_its_one_pairing_at_the_top(groups):
+    screening = groups.record("G01")["screening"]
+    (only,) = screening["pairings"]
+    assert screening["windows"] == only["windows"] and screening["above"] == only["above"]
 
 
 # ---- motion ----
@@ -142,8 +152,6 @@ def test_both_at_once_is_high_only_where_both_members_moved(groups):
         assert _peak_near(x, y, OWN_SPIKE[m.subject]) < shared / 3, m.sid
 
 
-@pytest.mark.xfail(strict=True, reason="D5: the filter's edge at the start of the shared "
-                   "clock is flagged as a moment every member spiked")
 def test_both_spiking_spans_cover_only_the_moment_every_member_moved(groups):
     fig = one_figure(groups.figure("G01", "desc-rawmotionbefore_nirs.html"))
     xs = [v for v in traces(fig, "both spiking")[0]["x"] if v is not None]
@@ -217,14 +225,11 @@ def test_the_decision_table_s_sci_is_each_member_s_own_windowed_sci(groups, grou
                 own[f"{r['pair']} 760"], abs=1e-6), (m.sid, r["pair"])
 
 
-@pytest.mark.xfail(strict=True, reason="D1: group_quality reads sci_win_per_channel off the "
-                   "scalar sections, where it never is, so the channel summary is never drawn")
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_channel_summary_is_drawn(groups, group):
     assert groups.figure(group, "desc-rawchsummary_nirs.html").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="D1: the dyad channel table's sci_win is empty")
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_dyad_channel_table_carries_each_member_s_windowed_sci(groups, group):
     table = groups.table(group, "desc-channel_qc.tsv")
@@ -235,8 +240,6 @@ def test_the_dyad_channel_table_carries_each_member_s_windowed_sci(groups, group
             assert rows[ch] == pytest.approx(value, abs=1e-6), (m.sid, ch)
 
 
-@pytest.mark.xfail(strict=True, reason="D1: with no windowed SCI the group record counts no "
-                   "channel as all good, mixed or all bad")
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_group_record_counts_every_pair(groups, group):
     record = groups.record(group)
@@ -248,16 +251,86 @@ def test_the_group_record_counts_every_pair(groups, group):
 
 # ---- the panels that read the shared screening grid ----
 
-@pytest.mark.xfail(strict=True, reason="S1: coupled_grid gives up when the members' offsets "
-                   "differ, so the usable-time panel and both head figures are never drawn")
 @pytest.mark.parametrize("group", GROUPS)
 @pytest.mark.parametrize("desc", ["rawusable", "rawheadcond", "rawheadslider"])
 def test_the_panels_on_the_shared_screening_grid_are_drawn(groups, group, desc):
     assert groups.figure(group, f"desc-{desc}_nirs.html").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="S1: with no shared grid the comparability table "
-                   "counts no long pair for either member")
+def _carpet(groups, group):
+    """{pair: (window centres, status)} off the usable-time carpet; 2 both, 1 one, 0 neither."""
+    fig = one_figure(groups.figure(group, "desc-rawusable_nirs.html"))
+    heat = next(t for t in fig["data"] if t["type"] == "heatmap")
+    x, z = np.asarray(heat["x"], float), np.asarray(heat["z"], float)
+    return {label.split()[0]: (x, z[i]) for i, label in enumerate(heat["y"])}
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_usable_carpet_sits_on_the_shared_clock(groups, group):
+    for x, _ in _carpet(groups, group).values():
+        # windows from 0 on the shared clock, the last one cut short by the span's end
+        steps = np.diff(x)
+        assert x[0] == pytest.approx(steps[0] / 2) and np.allclose(steps[:-1], steps[0]), x[:3]
+        assert x[-1] <= groups.truth.block("cb")[1] + 40
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_usable_carpet_loses_each_pair_to_the_member_that_rejected_it(groups, group):
+    rejected = {m.rejected for m in groups.truth.group(group)}
+    for pair, (_, status) in _carpet(groups, group).items():
+        both, one = np.mean(status == 2), np.mean(status == 1)
+        if pair in rejected:
+            assert one > 0.85, (pair, one)
+        else:
+            assert both > 0.85, (pair, both)
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_usable_table_is_the_carpet_cut_by_condition(groups, group):
+    table = groups.table(group, "desc-usable_qc.tsv")
+    carpet = _carpet(groups, group)
+    blocks = js_var(_page(groups, group), "_BLOCKS")
+    for r in table.itertuples():
+        x, status = carpet[r.pair]
+        t0, t1 = blocks[r.condition]
+        inside = status[(x >= t0) & (x <= t1)]
+        assert len(inside) == r.n_windows, (r.pair, r.condition)
+        assert np.mean(inside == 2) == pytest.approx(r.usable_frac), (r.pair, r.condition)
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_each_head_by_block_colours_its_own_member_s_rejection(groups, group):
+    fig = one_figure(groups.figure(group, "desc-rawheadcond_nirs.html"))
+    members = groups.truth.group(group)
+    n_blocks = len([a for a in fig["layout"]["annotations"] if a.get("text")])
+    for trace in fig["data"]:
+        text, colour = trace.get("text"), (trace.get("marker") or {}).get("color")
+        if text is None or colour is None or isinstance(colour, str):
+            continue
+        n = int((trace.get("xaxis") or "x")[1:] or 1) - 1
+        member = members[n // n_blocks]
+        share = {}
+        for pair, value in zip(text, np.asarray(colour, float)):
+            share.setdefault(pair, []).append(value)
+        for pair, values in share.items():
+            if pair in groups.truth.long_pairs:
+                low = np.mean(values) < 0.3
+                assert low == (pair == member.rejected), (member.sid, pair, np.mean(values))
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_channel_summary_marks_a_pair_one_member_rejected_as_mixed(groups, group):
+    fig = one_figure(groups.figure(group, "desc-rawchsummary_nirs.html"))
+    dots = fig["data"][0]
+    legend = {t["name"]: t["marker"]["color"] for t in fig["data"][1:]}
+    rejected = {m.rejected for m in groups.truth.group(group)}
+    for pair, colour in zip(dots["x"], dots["marker"]["color"]):
+        want = "Mixed" if pair in rejected else "All good"
+        assert colour == legend[want], (pair, colour)
+
+
+@pytest.mark.xfail(strict=True, reason="S6: the comparability table's long-pair count is the "
+                   "length of the grid's every pair, short ones included")
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_comparability_table_counts_each_member_s_long_pairs(groups, group):
     members = js_var(_page(groups, group), "_MEMBERS")

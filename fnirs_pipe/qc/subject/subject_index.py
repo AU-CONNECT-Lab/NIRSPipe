@@ -443,8 +443,12 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
         return {"src": f"figures/{fname}", "h": height,
                 "w": getattr(fig.layout, "width", None)}
 
+    def _grid(group) -> "float | None":
+        return ((group.get("record") or {}).get("windowed") or {}).get("qc_window_s")
+
     panels = build_condition_panels(
-        [{"bids_name": g["label"], "by_condition": g["by_condition"]} for g in groups])
+        [{"bids_name": g["label"], "by_condition": g["by_condition"], "qc_window_s": _grid(g)}
+         for g in groups])
     out["profile"] = _save(f"sub-{subject}", "condprofile", panels)
 
     for group in groups:
@@ -453,7 +457,8 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
             "label": label,
             "task": group["task"],
             "channels": _save(label, "condchannels",
-                              build_channel_condition_matrix(group["by_condition"])),
+                              build_channel_condition_matrix(group["by_condition"],
+                                                             _grid(group))),
             "timeline": _save(label, "condtimeline",
                               build_condition_timeline(_sqm_row(label, group["record"]),
                                                        group["windows"])),

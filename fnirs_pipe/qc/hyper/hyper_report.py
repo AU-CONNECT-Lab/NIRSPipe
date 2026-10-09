@@ -25,8 +25,8 @@ from fnirs_pipe.qc.common.channel_table import (
 from fnirs_pipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from fnirs_pipe.qc.boilerplate.notes import section_note
 from fnirs_pipe.qc.boilerplate.vocabulary import (
-    MISSING_VALUE, format_metric, is_key_metric, metric_class, metric_label, metric_summary,
-    steps_from_lineage, steps_from_sidecars, template_slots,
+    MISSING_VALUE, format_metric, grid_window_label, is_key_metric, metric_class, metric_label,
+    metric_summary, shared_window, steps_from_lineage, steps_from_sidecars, template_slots,
 )
 from fnirs_pipe.io.naming import report_name
 from fnirs_pipe.qc.common.figure_io import (
@@ -138,6 +138,7 @@ def subject_metric_rows(
     subject_ids: list[str],
     sci_lines: "dict[str, float | None]",
     condition: bool = False,
+    grid_window: "float | None" = None,
 ) -> list[dict]:
     """One entry per metric the members carry a value for, with a cell per member.
 
@@ -165,8 +166,10 @@ def subject_metric_rows(
             else:
                 cells.append({"text": MISSING_VALUE, "cls": ""})
         if any(c["text"] != MISSING_VALUE for c in cells):
+            label = metric_label(key, condition=condition)
             rows.append({"key": key,
-                         "label": metric_label(key, condition=condition),
+                         "label": (grid_window_label(label, key, grid_window) if condition
+                                   else label),
                          "summary": metric_summary(key, condition),
                          "key_metric": is_key_metric(key),
                          "cells": cells})
@@ -186,6 +189,7 @@ def subject_metric_tables(
     subject_ids: list[str],
     sci_lines: "dict[str, float | None]",
     condition: bool = False,
+    grid_window: "float | None" = None,
 ) -> list[dict]:
     """One quality table per channel set.
 
@@ -208,7 +212,7 @@ def subject_metric_tables(
     a caller with no split at all passes, under ``all``.
     """
     def _table(heading: str, data: dict) -> "dict | None":
-        metrics = subject_metric_rows(data, subject_ids, sci_lines, condition)
+        metrics = subject_metric_rows(data, subject_ids, sci_lines, condition, grid_window)
         if not metrics:
             return None
         # a quarter turn: metric-major in, column-major out. One row per member is what the
@@ -318,7 +322,11 @@ def condition_subject_metrics(
                 if view:
                     per_subject.setdefault(label, {}).setdefault(set_name, {})[sid] = view
 
-    return {label: subject_metric_tables(by_set, subject_ids, sci_lines, condition=True)
+    # a condition's windowed values are sliced off each member's --window-length grid
+    grid = shared_window(((subject_sqm.get(sid) or {}).get("windowed") or {}).get("qc_window_s")
+                         for sid in subject_ids)
+    return {label: subject_metric_tables(by_set, subject_ids, sci_lines, condition=True,
+                                         grid_window=grid)
             for label, by_set in per_subject.items()}
 
 
@@ -452,6 +460,8 @@ def build_hyper_report(
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
     imu: "dict[str, dict[str, tuple]] | None" = None,
+    full_raws: dict[str, mne.io.Raw] | None = None,
+    full_after: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
@@ -468,6 +478,7 @@ def build_hyper_report(
         sqm_data=sqm_data, aligned_raws=aligned_raws, offsets=offsets,
         output_dir=output_dir,
         raw_raws=raw_raws, intensity_raws=intensity_raws, after_raws=after_raws, imu=imu,
+        full_raws=full_raws, full_after=full_after,
         session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
         coherence_fmin=coherence_fmin, coherence_fmax=coherence_fmax,
@@ -1294,10 +1305,9 @@ def build_hyper_post_report(
             offsets=offsets,
             sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None)
 
-    bad_pairs_all: set[str] = set()
-    if bad_channels:
-        for chs in bad_channels.values():
-            bad_pairs_all |= {pair_of(c) for c in chs}
+    # per member: each channel selector marks the rejections of the member it lists
+    bad_pairs = {sid: sorted({pair_of(c) for c in chs})
+                 for sid, chs in (bad_channels or {}).items()}
 
     # A condition keeps the run's task- entity and takes a cond- of its own,
     # `..._task-experiment_cond-baseline_report.html`, which is the rule the subject
@@ -1367,6 +1377,11 @@ def build_hyper_post_report(
         chan_matrix = matrices.get("chan_matrix") or {}
 
         pair_ids = list(pair) if pair else subject_ids
+        # a pairing page describes its own two members, not the whole group
+        page_alignment = [r for r in alignment_rows if r["subject_id"] in pair_ids]
+        member_rows = [{**t, "rows": [r for r in t["rows"] if r["member"] in pair_ids]}
+                       for t in (run_metric_rows if label is None
+                                 else cond_metric_rows.get(label, []))]
         # One table per kind of pairing rather than one grid holding all three, so a table
         # carries only the columns it filled and the page has one level of nesting instead
         # of a scope inside a kind inside a grid.
@@ -1425,12 +1440,12 @@ def build_hyper_post_report(
             arrow_min=arrow_min,
             arrow_rule=_arrow_rule(maps or [], pair, arrow_min),
             mask_coi=wtc_mask_coi,
-            sci_lines_text=sci_lines_text(sci_lines),
+            sci_lines_text=sci_lines_text({sid: sci_lines.get(sid) for sid in pair_ids}),
             run_command=" ".join(sys.argv),
             # the summary states the pair in one line; the table below it is per member
-            align_duration_s=next((r["duration_s"] for r in alignment_rows
+            align_duration_s=next((r["duration_s"] for r in page_alignment
                                    if r["duration_s"] is not None), None),
-            align_max_offset_s=max((abs(r["offset_s"]) for r in alignment_rows),
+            align_max_offset_s=max((abs(r["offset_s"]) for r in page_alignment),
                                    default=0.0),
             wtc_chroma_labels=[_CHROMA_LABEL[c] for c in chroma],
             wtc_chroma_json=json.dumps(list(chroma)),
@@ -1438,12 +1453,13 @@ def build_hyper_post_report(
                 isc_threshold, isc_phase_null,
                 max((result.isc_level_sources.get(pair, {}).get(label) or {}).values(),
                     default=None)),
-            alignment_json=json.dumps(alignment_rows),
+            alignment_json=json.dumps(page_alignment),
             per_channel_post_json=json.dumps(per_channel),
             # the long axis, not `ch_pairs_post`: the selector has to name the set the
             # matrix beside it is drawn on, and the short channels have no coherence
             ch_pairs_post_json=json.dumps(chan_axis),
-            bad_pairs_json=json.dumps(sorted(bad_pairs_all)),
+            bad_pairs_json=json.dumps({sid: bad_pairs.get(sid, []) for sid in pair_ids}),
+            pair_ids_json=json.dumps(pair_ids),
             roi_rows=roi_rows,
             roi_labels_json=json.dumps(roi_labels),
             per_roi_post_json=json.dumps(per_roi),
@@ -1474,8 +1490,7 @@ def build_hyper_post_report(
             isc_roi_matrix=(isc_roi_matrices.get(pair) or {}).get(label) or {},
             isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
             isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
-            subject_metrics_rows=(run_metric_rows if label is None
-                                  else cond_metric_rows.get(label, [])),
+            subject_metrics_rows=member_rows,
         )
         out_path.write_text(html, encoding="utf-8")
         return out_path

@@ -165,16 +165,19 @@ def screening_coherence(
                     null[k, i] = _band_coherence(
                         d1[i, i0:i1], phase_scramble(d2[i, i0:i1], rng),
                         sfreq, nperseg, fmin, fmax)
-            # window percentile: the channel mean ranked among the null's channel means
+            # window percentile: the channel mean ranked among the null's channel means; a
+            # window with no Welch bin in the band has no coherence, so it has no rank either
             mean_null = null.mean(axis=1)
-            window_pct = float((mean_null < real.mean()).mean() * 100)
+            window_pct = (float((mean_null < real.mean()).mean() * 100)
+                          if np.isfinite(real.mean()) else float("nan"))
             for i, label in enumerate(labels):
                 rows.append({
                     "window": name, "ch_name": label, "sub1": sub1, "sub2": sub2,
                     "coherence": float(real[i]),
                     "null_mean": float(null[:, i].mean()),
                     "null_p95": float(np.percentile(null[:, i], 95)),
-                    "percentile": float((null[:, i] < real[i]).mean() * 100),
+                    "percentile": (float((null[:, i] < real[i]).mean() * 100)
+                                   if np.isfinite(real[i]) else float("nan")),
                     "window_percentile": window_pct,
                     "n_seg": int(n_seg), "window_s": round(seg / sfreq, 1),
                 })

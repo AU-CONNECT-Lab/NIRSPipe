@@ -353,6 +353,7 @@ var _CHROMA       = {{ wtc_chroma_json | safe }};
 var _PER_CH       = {{ per_channel_post_json | safe }};
 var _CH_PAIRS     = {{ ch_pairs_post_json | safe }};
 var _BAD_PAIRS    = {{ bad_pairs_json | safe }};
+var _PAIR_IDS     = {{ pair_ids_json | safe }};
 var _PER_ROI      = {{ per_roi_post_json | safe }};
 var _ROI_LABELS   = {{ roi_labels_json | safe }};
 var _ALIGN        = {{ alignment_json | safe }};
@@ -431,9 +432,14 @@ function _selectRoi() {
 }
 
 (function() {
-  ["ch-select-post", "ch-select-post-2"].forEach(function(id) {
-    var sel = document.getElementById(id);
-    _fill(sel, _CH_PAIRS, _BAD_PAIRS);
+  // each crossed selector lists one member's channels and marks that member's rejections; an
+  // uncrossed run's one selector is the same channel in both, so either member's counts
+  var bad1 = _BAD_PAIRS[_PAIR_IDS[0]] || [], bad2 = _BAD_PAIRS[_PAIR_IDS[1]] || [];
+  var crossed = !!document.getElementById("ch-select-post-2");
+  [["ch-select-post", crossed ? bad1 : bad1.concat(bad2)],
+   ["ch-select-post-2", bad2]].forEach(function(entry) {
+    var sel = document.getElementById(entry[0]);
+    _fill(sel, _CH_PAIRS, entry[1]);
     if (sel) sel.addEventListener("change", _selectCh);
   });
   ["roi-select-post", "roi-select-post-2"].forEach(function(id) {

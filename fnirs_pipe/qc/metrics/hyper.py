@@ -109,9 +109,9 @@ def coupled_grid(
     on the aligned span, so windows outside it are dropped rather than drawn past the ends of
     the shared clock.
 
-    ``sqm_data`` carries ``screen_windows`` whichever command produced it: the dyad raw pass
-    keeps the grid it screened by, and a record read from disk is re-masked at that run's own
-    lines. Neither is re-measured here, so the shading and the verdict are one measurement.
+    The dyad raw pass hands over :func:`shared_screen_windows`, measured on the aligned
+    recordings, so the offsets are zero and every member's windows coincide; grids measured on
+    each member's own clock stop coinciding as soon as the members' offsets differ.
 
     None when a member has no grid, or when the members were not screened on the same one.
     """
@@ -165,6 +165,62 @@ def coupled_grid(
             "pairs": pairs,
             "long_pairs": long_pairs,
             "ok": {sid: np.array(rows[sid])[:, keep] for sid in subject_ids}}
+
+
+def shared_screen_windows(
+    intensity_raws: dict[str, mne.io.Raw],
+    sqm_data: dict[str, dict],
+    subject_ids: list[str],
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+) -> dict[str, dict]:
+    """``sqm_data`` with each member's ``screen_windows`` measured again on its aligned recording.
+
+    ::
+
+      -> {"sub-01": {..., "screen_windows": {"mask", "centers", "sci", "psp", "cv", "gvtd",
+                                             "channel_order"}}, ...}
+
+    Each member's own screening runs on its own clock from its first sample, so two members
+    whose triggers sit at different points of their recordings were screened on windows that
+    never coincide. Measured on the aligned copies, every member's windows start at 0 on the
+    shared clock and are the same stretches of it, so :func:`coupled_grid` compares like with
+    like at zero offset. The verdict a member was rejected by is untouched: that stays the
+    one from its own screening, which its own report shows.
+    """
+    from fnirs_pipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
+    from fnirs_pipe.qc.metrics.windowed import compute_windowed_cv, coupled_windows
+
+    out = {}
+    for sid in subject_ids:
+        member = dict(sqm_data.get(sid) or {})
+        raw = intensity_raws.get(sid)
+        cutoffs = member.get("screen_cutoffs") or {}
+        if raw is None or "sci" not in cutoffs or "psp" not in cutoffs:
+            logger.warning("%s: no aligned recording or screening lines; the dyad grid is "
+                           "empty", sid)
+            return {}
+        od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+        counted = coupled_windows(od, cardiac_l_freq, cardiac_h_freq,
+                                  cutoffs["sci"], cutoffs["psp"])
+        if counted["mask"] is None:
+            return {}
+        windows = {k: counted[k] for k in ("mask", "centers", "sci", "psp", "channel_order")}
+        # the CV and motion rows are extras on the grid; losing one costs that row alone
+        n = len(counted["centers"])
+        try:
+            cv_m, cv_t = compute_windowed_cv(raw)
+            if cv_m is not None and len(cv_t) == n:
+                windows["cv"] = cv_m
+            gvtd, _p95, gvtd_t = compute_windowed_filtered_gvtd(od)
+            if len(gvtd_t) == n:
+                windows["gvtd"] = gvtd
+        except Exception:
+            logger.warning("%s: windowed CV or GVTD could not be measured on the aligned "
+                           "recording", sid, exc_info=True)
+        member["screen_windows"] = windows
+        out[sid] = member
+    return out
 
 
 def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
@@ -259,32 +315,43 @@ def motion_summary(motion: dict) -> dict:
 
 
 def screening_summary(coherence_df: "pd.DataFrame") -> dict:
-    """The dyad-level numbers the summary prints, off the same frame the strip draws.
+    """The numbers the summary prints, per member pairing, off the same frame the strip draws.
 
     ::
 
-      -> {"windows": {"task": {"percentile": 100.0, "coherence": 0.224, ...}},
-          "above": ["task"], "alpha": 95.0}
+      -> {"pairings": [{"sub1": "sub-01", "sub2": "sub-02",
+                        "windows": {"task": {"percentile": 100.0, "coherence": 0.224, ...}},
+                        "above": ["task"]}],
+          "windows": {...}, "above": [...], "alpha": 95.0}
 
     ``mean_coherence`` stays in the record, but the **percentile is what grades it**: a raw
-    coherence has no meaning apart from the null it is read against.
+    coherence has no meaning apart from the null it is read against. Each percentile ranks
+    one pairing against its own null, so a group of three has three; the top-level
+    ``windows`` and ``above`` are the sole pairing's and exist only while there is one. A
+    window with no measurable coherence has a NaN percentile and is never above the line.
     """
     if coherence_df is None or coherence_df.empty:
         return {}
-    out: dict = {"alpha": NULL_ALPHA_PCT, "windows": {}}
-    for name in dict.fromkeys(coherence_df["window"]):
-        sub = coherence_df[coherence_df["window"] == name]
-        out["windows"][str(name)] = {
-            "coherence": round(float(sub["coherence"].mean()), 4),
-            "null_mean": round(float(sub["null_mean"].mean()), 4),
-            "percentile": round(float(sub["window_percentile"].iloc[0]), 1),
-            "n_channels_above": int((sub["percentile"] >= NULL_ALPHA_PCT).sum()),
-            "n_channels": int(len(sub)),
-            "n_seg": int(sub["n_seg"].iloc[0]),
-            "window_s": float(sub["window_s"].iloc[0]),
-        }
-    out["above"] = [k for k, v in out["windows"].items()
-                    if v["percentile"] >= NULL_ALPHA_PCT]
+    pairings = []
+    for (sub1, sub2), part in coherence_df.groupby(["sub1", "sub2"], sort=False):
+        windows = {}
+        for name in dict.fromkeys(part["window"]):
+            sub = part[part["window"] == name]
+            windows[str(name)] = {
+                "coherence": round(float(sub["coherence"].mean()), 4),
+                "null_mean": round(float(sub["null_mean"].mean()), 4),
+                "percentile": round(float(sub["window_percentile"].iloc[0]), 1),
+                "n_channels_above": int((sub["percentile"] >= NULL_ALPHA_PCT).sum()),
+                "n_channels": int(len(sub)),
+                "n_seg": int(sub["n_seg"].iloc[0]),
+                "window_s": float(sub["window_s"].iloc[0]),
+            }
+        pairings.append({"sub1": str(sub1), "sub2": str(sub2), "windows": windows,
+                         "above": [k for k, v in windows.items()
+                                   if v["percentile"] >= NULL_ALPHA_PCT]})
+    out: dict = {"alpha": NULL_ALPHA_PCT, "pairings": pairings}
+    if len(pairings) == 1:
+        out["windows"], out["above"] = pairings[0]["windows"], pairings[0]["above"]
     return out
 
 

@@ -143,8 +143,6 @@ def test_the_condition_lines_put_the_cohort_median_through_each_condition(groups
             assert y == pytest.approx(want, rel=1e-9), (title, condition)
 
 
-@pytest.mark.xfail(strict=True, reason="D7: a condition's windowed values come from the run's "
-                   "--window-length grid, and the panel titles print the 10 s constants")
 @pytest.mark.parametrize("desc", ["conditions", "conditionmatrix"])
 def test_the_condition_panels_name_the_window_the_runs_were_measured_in(groups, desc):
     window = groups.member_record("sub-01")["windowed"]["qc_window_s"]
@@ -216,16 +214,12 @@ def test_the_grid_highlights_the_planted_outliers(groups):
     assert {line[0] for line in _grid_lines(groups)} == {f"sub-{s}" for s in ("00", "03b")}
 
 
-@pytest.mark.xfail(strict=True, reason="D8: a run missing a channel set shifts the stack, so "
-                   "a highlighted line carries the next run's values under its own name")
 def test_no_run_is_drawn_in_a_channel_set_it_does_not_have(groups):
     for run, _, channel_set, _, _ in _grid_lines(groups):
         if channel_set == "short":
             assert run.removeprefix("sub-") not in NO_SHORT, run
 
 
-@pytest.mark.xfail(strict=True, reason="D8: a highlighted line is the stack row at the run's "
-                   "index, which is another run's once an earlier run lacks the set")
 def test_every_highlighted_line_is_its_own_run_s_series(groups):
     lines = _grid_lines(groups)
     assert lines

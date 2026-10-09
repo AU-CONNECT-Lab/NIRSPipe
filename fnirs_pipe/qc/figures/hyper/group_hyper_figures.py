@@ -220,7 +220,7 @@ def build_condition_dials(rows: list[dict], order: list[str]) -> "go.Figure | No
 # ---- Against the null ----
 
 def build_null_strip(rows: list[dict], order: list[str]) -> "go.Figure | None":
-    """One row per dyad, one marker per window, on the rank scale the dyad strip uses.
+    """One row per pairing, one marker per window, on the rank scale the dyad strip uses.
 
     Raw coherence cannot share an axis across windows: the estimator's floor sits near one
     over the number of Welch segments and that count falls with the window. The rank inside
@@ -228,31 +228,35 @@ def build_null_strip(rows: list[dict], order: list[str]) -> "go.Figure | None":
     rank, the channels pooled before the comparison.
 
     The row's span is drawn as a line, so a dyad whose windows disagree is a long row rather
-    than markers to be found. None when no dyad carries a screening verdict.
+    than markers to be found. A dyad is one row under its own label; a larger group is one row
+    per member pairing, since each pairing is ranked against its own null. None when no dyad
+    carries a screening verdict.
     """
     by_label = _by_label(rows)
+    strip = [(who, pct) for label in order
+             for who, pct in (by_label[label].get("percentile") or {}).items()]
     windows: list[str] = []
-    for label in order:
-        for name in (by_label[label].get("percentile") or {}):
+    for _who, pct in strip:
+        for name in pct:
             if name not in windows:
                 windows.append(name)
     if not windows:
         return None
     colours = _cond_colors(windows)
+    order = [who for who, _pct in strip]
 
     fig = go.Figure()
     fig.add_vrect(x0=NULL_ALPHA_PCT, x1=100, fillcolor="#3498db", opacity=0.07, line_width=0)
     fig.add_vline(x=NULL_ALPHA_PCT, line_color="#adb5bd", line_width=1, line_dash="dot")
 
-    for i, label in enumerate(order):
-        values = list((by_label[label].get("percentile") or {}).values())
+    for i, (_who, pct) in enumerate(strip):
+        values = list(pct.values())
         if len(values) > 1:
             fig.add_trace(go.Scatter(
                 x=[min(values), max(values)], y=[i, i], mode="lines", showlegend=False,
                 line=dict(color="#dfe4e9", width=1.6), hoverinfo="skip"))
     for window in windows:
-        points = [(i, (by_label[label].get("percentile") or {}).get(window))
-                  for i, label in enumerate(order)]
+        points = [(i, pct.get(window)) for i, (_who, pct) in enumerate(strip)]
         points = [(i, v) for i, v in points if v is not None]
         if not points:
             continue

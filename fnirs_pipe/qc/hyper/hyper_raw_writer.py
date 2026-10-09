@@ -33,6 +33,7 @@ from fnirs_pipe.qc.figures.hyper.hyper_figures import (
 from fnirs_pipe.qc.figures.common.head_map import head_geometry
 from fnirs_pipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, screening_summary,
+    shared_screen_windows,
 )
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER, screening_coherence
 from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
@@ -126,6 +127,8 @@ def _process_hyper_raw_group(
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
     imu: "dict[str, dict[str, tuple]] | None" = None,
+    full_raws: dict[str, mne.io.Raw] | None = None,
+    full_after: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
@@ -237,7 +240,7 @@ def _process_hyper_raw_group(
     motion, motion_scalars = {}, {}
     with guard("Motion panel", errors, label):
         motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands,
-                               imu=imu)
+                               imu=imu, full_raws=full_raws, full_after=full_after)
     if not motion:
         note(notes, label, "no optical density for the members: the motion panels "
                            "are empty")
@@ -257,15 +260,19 @@ def _process_hyper_raw_group(
 
     duration_s = first_raw.times[-1] if first_raw is not None else None
     grid, series, geo = None, {}, {}
+    # the panels below are screened again on the aligned recordings, whose windows coincide
+    # on the shared clock; each member's verdict stays its own screening's
+    shared = {}
     with guard("Screening grid", errors, label):
-        grid = coupled_grid(sqm_data, subject_ids, offsets, duration_s=duration_s)
+        if intensity_raws and cardiac_l_freq is not None and cardiac_h_freq is not None:
+            shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids,
+                                           cardiac_l_freq, cardiac_h_freq)
+        grid = coupled_grid(shared, subject_ids, {}, duration_s=duration_s) if shared else None
     if grid is None:
-        note(notes, label, "no shared screening grid: the members were screened on "
-                           "different window grids, or their records carry none. The "
-                           "usable-time and head panels are empty")
+        note(notes, label, "no shared screening grid: a member's aligned recording could "
+                           "not be screened. The usable-time and head panels are empty")
     else:
-        series = {sid: member_series(sqm_data, sid, grid, offsets.get(sid, 0.0))
-                  for sid in subject_ids}
+        series = {sid: member_series(shared, sid, grid, 0.0) for sid in subject_ids}
         geo = {sid: head_geometry(aligned_raws[sid],
                                   grid.get("long_pairs") or grid["pairs"])
                for sid in subject_ids if sid in aligned_raws}

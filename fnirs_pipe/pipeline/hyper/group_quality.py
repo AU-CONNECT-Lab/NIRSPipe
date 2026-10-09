@@ -227,8 +227,9 @@ def compute_group_sqm_raw(
         # which channel set the row above describes, so a table read on its own says so
         sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
         sqm["sci_per_channel"] = sci_scores
-        sqm["sci_win_per_channel"] = _pairwise(
-            (sections.get("raw") or {}).get("sci_win_per_channel") or {})
+        # per-channel values are filed under per_channel; the sections hold scalars only
+        sci_win = ((_per_channel or {}).get("raw") or {}).get("sci_win_per_channel") or {}
+        sqm["sci_win_per_channel"] = _pairwise(sci_win)
         sqm["bad_channels"]    = bad_channels
         sqm["screen_windows"]  = screen_windows
         sqm["screen_cutoffs"]  = dict(cutoffs)
@@ -249,7 +250,6 @@ def compute_group_sqm_raw(
                if isinstance(v, (int, float)) and not isinstance(v, bool)},
         })
 
-        sci_win = (sections.get("raw") or {}).get("sci_win_per_channel") or {}
         for ch, sci_val in sci_cw.items():
             channel_rows.append({
                 "group_id":   gid,

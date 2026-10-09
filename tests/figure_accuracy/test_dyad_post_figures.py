@@ -347,8 +347,6 @@ def test_the_post_page_carries_each_member_s_planted_offset(groups, group):
             assert rows[sid] == pytest.approx(groups.truth.member(sid).offset, abs=0.1)
 
 
-@pytest.mark.xfail(strict=True, reason="D6: both channel selectors mark the union of every "
-                   "member's rejections, so a member's selector flags a channel it kept")
 @pytest.mark.parametrize("group", GROUPS)
 def test_each_member_s_channel_selector_marks_only_its_own_rejection(groups, group):
     for a, b in _pairings(groups, group):
@@ -375,8 +373,17 @@ def test_the_quality_table_prints_each_member_s_own_record(groups, scope):
         section = (rec["by_condition"][scope]["od_by_set"]["long"] if scope
                    else rec["raw_long"])
         printed = table[m.sid]
-        assert float(printed["Mean SCI (10 s)●"]) == pytest.approx(section["sci_win_mean"],
-                                                                   abs=5e-4), (m.sid, scope)
+        sci = next(v for k, v in printed.items() if k.startswith("Mean SCI ("))
+        assert float(sci) == pytest.approx(section["sci_win_mean"], abs=5e-4), (m.sid, scope)
+
+
+@pytest.mark.parametrize("scope", ["ca", "cb"])
+def test_a_condition_table_names_the_grid_its_windowed_values_were_cut_from(groups, scope):
+    window = groups.member_record("sub-01")["windowed"]["qc_window_s"]
+    head = list(_quality(groups.page("G01", cond=scope), "Long channels").values())[0]
+    for name in ("SCI", "PSP", "CV", "SNR"):
+        label = next(k for k in head if k.startswith(f"Mean {name} ("))
+        assert f"({window:g} s)" in label, label
 
 
 def test_the_condition_quality_table_shows_each_member_s_movement_in_its_own_block(groups):
@@ -390,8 +397,6 @@ def test_the_condition_quality_table_shows_each_member_s_movement_in_its_own_blo
             assert (spikes > 0) == moved, (scope, m.sid, spikes)
 
 
-@pytest.mark.xfail(strict=True, reason="E: a triad's pairing page lists every member in its "
-                   "quality and alignment tables, not the two it is about")
 def test_a_pairing_page_lists_only_its_own_two_members(groups):
     for a, b in _pairings(groups, "G02"):
         page = groups.page("G02", pair=(a, b))

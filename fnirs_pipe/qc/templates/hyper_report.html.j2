@@ -419,7 +419,10 @@ function _set(id, text, cls) {
   }
   var _sc = q.screening || {};
   var _alpha = _sc.alpha != null ? _sc.alpha : 95;
-  var _wholeRun = (_sc.windows || {})["whole run"] || null;
+  // each pairing is ranked against its own null, so a group of three prints three ranks
+  var _pairs = _sc.pairings || [];
+  var _pct = function(v) { return v != null && isFinite(v) ? v.toFixed(1) + "th pct" : "—"; };
+  var _wholeRun = _pairs.length === 1 ? (_pairs[0].windows || {})["whole run"] || null : null;
   var pct = q.pct_all_good;
   var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
   document.getElementById("sqm-list").innerHTML =
@@ -434,9 +437,15 @@ function _set(id, text, cls) {
     // not a fault. The percentile against this window's own null is the verdict.
     li("Screening coherence, whole run",
        q.mean_coherence != null ? q.mean_coherence.toFixed(3) : "—") +
-    li(" against its own null",
-       _wholeRun ? _wholeRun.percentile.toFixed(1) + "th pct" : "—",
-       _wholeRun ? (_wholeRun.percentile >= _alpha ? "qm-ok" : "") : "") +
+    (_pairs.length > 1
+      ? _pairs.map(function(p) {
+          var w = (p.windows || {})["whole run"] || {};
+          return li(" " + p.sub1 + " × " + p.sub2 + " against its own null",
+                    _pct(w.percentile), w.percentile >= _alpha ? "qm-ok" : "");
+        }).join("")
+      : li(" against its own null",
+           _wholeRun ? _pct(_wholeRun.percentile) : "—",
+           _wholeRun ? (_wholeRun.percentile >= _alpha ? "qm-ok" : "") : "")) +
     li("Peak coherence channel",
        q.peak_coherence_channel
          ? q.peak_coherence_channel + " (" + (q.peak_coherence != null ? q.peak_coherence.toFixed(3) : "—") + ")"
@@ -564,29 +573,37 @@ function _set(id, text, cls) {
 // ── screening synchrony ──────────────────────────────────────────────────────
 (function() {
   var sc = (_SQM.screening || {});
-  var windows = sc.windows || {};
+  var pairs = sc.pairings || [];
+  var many = pairs.length > 1;
   var tbody = document.getElementById("screening-tbody");
   var alpha = sc.alpha != null ? sc.alpha : 95;
-  if (tbody) {
+  // a window with no Welch bin in the band has no coherence and no rank: a dash, not a zero
+  var num = function(v, d) { return v != null && isFinite(v) ? v.toFixed(d) : "—"; };
+  var above = [], nWindows = 0;
+  pairs.forEach(function(p) {
+    var who = many ? " · " + p.sub1 + " × " + p.sub2 : "";
+    var windows = p.windows || {};
     Object.keys(windows).forEach(function(name) {
       var v = windows[name];
       var hit = v.percentile >= alpha;
+      nWindows += 1;
+      if (hit) above.push(name + who);
+      if (!tbody) return;
       var tr = document.createElement("tr");
       tr.innerHTML =
-        "<td>" + name + "</td>" +
+        "<td>" + name + who + "</td>" +
         "<td>" + v.window_s.toFixed(0) + "</td>" +
         "<td>" + v.n_seg + "</td>" +
-        "<td>" + v.coherence.toFixed(4) + "</td>" +
-        "<td>" + v.null_mean.toFixed(4) + "</td>" +
-        "<td class='" + (hit ? "good" : "") + "'>" + v.percentile.toFixed(1) + "</td>" +
+        "<td>" + num(v.coherence, 4) + "</td>" +
+        "<td>" + num(v.null_mean, 4) + "</td>" +
+        "<td class='" + (hit ? "good" : "") + "'>" + num(v.percentile, 1) + "</td>" +
         "<td>" + v.n_channels_above + " / " + v.n_channels + "</td>";
       tbody.appendChild(tr);
     });
-  }
-  var above = sc.above || [];
+  });
   _set("sum-screening",
        above.length ? above.join(", ") + " above the null"
-                    : (Object.keys(windows).length ? "nothing above the null" : "—"),
+                    : (nWindows ? "nothing above the null" : "—"),
        above.length ? "qm-ok" : "");
 })();
 

@@ -939,6 +939,32 @@ def condition_label(metric: str) -> "str | None":
     return _CONDITION_LABELS.get(metric)
 
 
+# A condition's windowed values are columns of the run's --window-length grid, not the fixed
+# screening window their whole-run labels name.
+_GRID_SLICED = {"sci_win_mean": SCI_WINDOW_S, "psp_mean": PSP_WINDOW_S,
+                "cv_mean": CV_WINDOW_S, "snr_mean": CV_WINDOW_S}
+
+
+def grid_window_label(label: str, metric: str, window_s: "float | None") -> str:
+    """``label`` naming the grid a condition value was sliced from: ``window_s``, or
+    "windowed" when the runs read together were measured on different grids.
+
+    ::
+
+      ("SCI (10 s)", "sci_win_mean", 12.0) -> "SCI (12 s)"
+    """
+    if metric not in _GRID_SLICED:
+        return label
+    return label.replace(f"({_GRID_SLICED[metric]:g} s)",
+                         f"({window_s:g} s)" if window_s else "(windowed)")
+
+
+def shared_window(windows) -> "float | None":
+    """The one grid every run was measured on, or None when they differ or one is unknown."""
+    found = {float(w) if w else None for w in windows}
+    return found.pop() if len(found) == 1 else None
+
+
 def metric_label(metric: str, fallback: str | None = None, condition: bool = False) -> str:
     if condition and metric in _CONDITION_LABELS:
         return _CONDITION_LABELS[metric]

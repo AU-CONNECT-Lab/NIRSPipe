@@ -132,9 +132,16 @@ def collect_rows(output_dir: Path) -> list[dict]:
         group_dir = record_path.parent.parent
         table = read_tsv_or_none(record_path.parent / _usable_name(label), "its panel loses a row")
         screening = record.get("screening") or {}
-        percentile = {name: float(v["percentile"])
-                      for name, v in (screening.get("windows") or {}).items()
-                      if v.get("percentile") is not None}
+        if screening and "pairings" not in screening:
+            logger.warning("%s was written before screening was kept per pairing; rerun "
+                           "fnirs-qc hyper-raw for its null panel", label)
+        pairings = screening.get("pairings") or []
+        # one strip row per pairing, each ranked against its own null; a dyad keeps its label
+        percentile = {
+            (label if len(pairings) == 1 else f"{label} · {p['sub1']} × {p['sub2']}"): {
+                name: float(v["percentile"]) for name, v in (p.get("windows") or {}).items()
+                if v.get("percentile") is not None and np.isfinite(float(v["percentile"]))}
+            for p in pairings}
 
         report = group_dir / report_name(label, desc="raw")
         index = group_dir / report_name(group_dir.name, desc="index")
@@ -157,7 +164,8 @@ def collect_rows(output_dir: Path) -> list[dict]:
 def _flat(row: dict) -> dict:
     """Every scalar one table row prints, the panels and the headline reading the same dict."""
     record = row["record"]
-    values = list(row["percentile"].values())
+    # every pairing's measured windows: a group of three counts its three pairings
+    values = [v for windows in row["percentile"].values() for v in windows.values()]
     return {
         "label": row["label"],
         "href": row["href"],

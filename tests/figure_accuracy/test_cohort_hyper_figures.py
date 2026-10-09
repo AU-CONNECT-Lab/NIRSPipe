@@ -20,17 +20,28 @@ def _table(groups):
     return {r[0]: dict(zip(head, r)) for r in rows[1:]}
 
 
-def test_every_null_strip_marker_is_its_group_s_window_percentile(groups):
+def _measured(groups, group):
+    """{strip row: {window: percentile}} off the group record, unmeasured windows left out."""
+    pairings = groups.record(group)["screening"]["pairings"]
+    return {(_label(group) if len(pairings) == 1
+             else f"{_label(group)} · {p['sub1']} × {p['sub2']}"):
+            {w: v["percentile"] for w, v in p["windows"].items() if np.isfinite(v["percentile"])}
+            for p in pairings}
+
+
+def test_the_null_strip_has_one_row_per_pairing_each_its_own_percentiles(groups):
     fig = one_figure(groups.hyper / "figures" / "desc-groupsnullstrip_nirs.html")
     ticks = dict(zip(fig["layout"]["yaxis"]["tickvals"], fig["layout"]["yaxis"]["ticktext"]))
-    markers = [t for t in fig["data"] if t.get("mode") == "markers"]
-    assert {t["name"] for t in markers} >= {"whole run", "ca", "cb"}
-    for trace in markers:
+    want = {row: pct for group in GROUPS for row, pct in _measured(groups, group).items()}
+    assert set(ticks.values()) == set(want)       # a dyad one row, the triad three
+    drawn: dict = {}
+    for trace in (t for t in fig["data"] if t.get("mode") == "markers"):
         for x, y, label in zip(trace["x"], trace["y"], trace["customdata"]):
             assert ticks[y] == label
-            group = label.split("_")[0].removeprefix("group-")
-            want = groups.record(group)["screening"]["windows"][trace["name"]]["percentile"]
-            assert x == pytest.approx(want), (label, trace["name"])
+            drawn.setdefault(label, {})[trace["name"]] = x
+    assert set(drawn) == set(want)
+    for row, pct in want.items():
+        assert drawn[row] == pytest.approx(pct), row
 
 
 def test_the_table_carries_each_group_s_alignment(groups):
@@ -40,29 +51,25 @@ def test_the_table_carries_each_group_s_alignment(groups):
         offsets = [m.offset for m in groups.truth.group(group)]
         assert float(row["Max offset"].split()[0]) == pytest.approx(max(offsets), abs=0.01)
         assert row["Offsets equal"] == "no"
-        windows = groups.record(group)["screening"]["windows"]
-        assert int(row["Above null"]) == sum(w["percentile"] >= 95 for w in windows.values())
+        values = [v for pct in _measured(groups, group).values() for v in pct.values()]
+        assert int(row["Above null"]) == sum(v >= 95 for v in values)
 
 
-@pytest.mark.xfail(strict=True, reason="D3: the window too short for a Welch bin counts as the "
-                   "0th percentile in the median the table prints")
 def test_the_median_percentile_leaves_out_a_window_with_no_measurable_coherence(groups):
     table = _table(groups)
     for group in GROUPS:
-        windows = groups.record(group)["screening"]["windows"].values()
-        measured = [w["percentile"] for w in windows if np.isfinite(w["coherence"])]
-        assert float(table[_label(group)]["Median pct"]) == pytest.approx(np.median(measured))
+        records = groups.record(group)["screening"]["pairings"]
+        assert any(not np.isfinite(v["coherence"]) for p in records for v in p["windows"].values())
+        values = [v for pct in _measured(groups, group).values() for v in pct.values()]
+        assert float(table[_label(group)]["Median pct"]) == pytest.approx(np.median(values),
+                                                                          abs=0.5)
 
 
-@pytest.mark.xfail(strict=True, reason="S1: no shared screening grid, so no group has a "
-                   "usable-time table and the panels that split it are never drawn")
 @pytest.mark.parametrize("desc", ["groupsusablebars", "groupspairfield", "groupsconditiondials"])
 def test_the_usable_time_panels_are_drawn(groups, desc):
     assert (groups.hyper / "figures" / f"desc-{desc}_nirs.html").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="D1: no windowed SCI in the group record, so no share "
-                   "of channels good in both members")
 def test_the_table_prints_the_share_of_channels_good_in_every_member(groups):
     table = _table(groups)
     for group in GROUPS:

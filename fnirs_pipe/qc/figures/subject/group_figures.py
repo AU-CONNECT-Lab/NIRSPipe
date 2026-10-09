@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from fnirs_pipe.qc.boilerplate.vocabulary import grid_window_label, shared_window
 from fnirs_pipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from fnirs_pipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from fnirs_pipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
@@ -397,12 +398,13 @@ def _bundle(x, ys, colour: str = "#c8d0d8", width: float = 0.5, opacity: float =
 
 
 def _stacked_series(rows: list[dict], key: str, channel_set: str) -> tuple:
-    """(times, matrix) of one metric and channel set over the cohort, on a shared grid.
+    """(times, matrix, run names) of one metric and channel set over the cohort, on a shared grid.
 
     Each run is smoothed and then sampled at the smoothing step. Runs binned differently land
-    on the union of their grids, with the gaps left as NaN rather than interpolated.
+    on the union of their grids, with the gaps left as NaN rather than interpolated. A run
+    without this set has no row, so the names say which run each row is.
     """
-    series = []
+    series, names = [], []
     for row in rows:
         got = _window_series(row, key).get(channel_set)
         if got is None:
@@ -410,13 +412,14 @@ def _stacked_series(rows: list[dict], key: str, channel_set: str) -> tuple:
         times, values = got
         window = max(1, int(round(SMOOTH_S / float(row.get("qc_window_s") or 10.0))))
         series.append((times[::window], _smooth(values, window)[::window]))
+        names.append(str(row.get("bids_name", "")))
     if not series:
-        return None, None
+        return None, None, []
     grid = np.unique(np.concatenate([t for t, _ in series]))
     stack = np.full((len(series), grid.size), np.nan)
     for i, (times, values) in enumerate(series):
         stack[i, np.searchsorted(grid, times)] = values
-    return grid, stack
+    return grid, stack, names
 
 
 def build_window_grid(
@@ -452,10 +455,13 @@ def build_window_grid(
     )
     for r, (key, label) in enumerate(panels, start=1):
         for c, channel_set in enumerate(sets, start=1):
-            grid, stack = _stacked_series(rows, key, channel_set)
+            grid, stack, stacked = _stacked_series(rows, key, channel_set)
             if grid is None:
                 continue
-            rest = [i for i in range(stack.shape[0]) if i not in marked]
+            # by name: a run lacking this set has no row, so a position would name the next one
+            marked_rows = [(names.index(n), stacked.index(n)) for n in stacked
+                           if names.index(n) in marked]
+            rest = [j for j in range(stack.shape[0]) if j not in {m for _, m in marked_rows}]
             if rest:
                 fig.add_trace(_bundle(grid, stack[rest], opacity=0.3 if many else 0.5),
                               row=r, col=c)
@@ -472,11 +478,10 @@ def build_window_grid(
                 showlegend=(r == 1 and c == 1),
                 hovertemplate="t=%{x:.0f}s<br>median %{y:.4g}<extra></extra>",
             ), row=r, col=c)
-            for k, i in enumerate(marked):
-                if i >= stack.shape[0]:
-                    continue
+            for i, j in marked_rows:
+                k = marked.index(i)
                 fig.add_trace(go.Scatter(
-                    x=grid, y=stack[i], mode="lines",
+                    x=grid, y=stack[j], mode="lines",
                     line=dict(color=_HIGHLIGHT_COLOURS[k % len(_HIGHLIGHT_COLOURS)],
                               width=1.3),
                     name=_short_run_labels(names)[i], legendgroup=names[i],
@@ -578,6 +583,12 @@ _CONDITION_METRICS = [
     ("gyro_speed_mean", "Motion sensor: gyroscope speed"),
 ]
 
+def _condition_metrics(window_s: "float | None") -> list[tuple[str, str]]:
+    """``_CONDITION_METRICS`` with each windowed label naming the grid it was sliced from."""
+    return [(metric, grid_window_label(label, metric, window_s))
+            for metric, label in _CONDITION_METRICS]
+
+
 def condition_names(rows: list[dict]) -> list[str]:
     """Conditions the cohort has, in the order the first run that carries them wrote them."""
     names: list[str] = []
@@ -616,7 +627,8 @@ def build_condition_panels(
     marked = [i for i, name in enumerate(names) if name in set(highlight or [])]
     many = len(rows) > 12
 
-    panels = [(metric, label) for metric, label in _CONDITION_METRICS
+    grid = shared_window(r.get("qc_window_s") for r in rows)
+    panels = [(metric, label) for metric, label in _condition_metrics(grid)
               if np.isfinite(_condition_matrix(rows, conditions, metric)).any()]
     if not panels:
         return None
@@ -714,8 +726,9 @@ def build_condition_matrix(
         index.sort(key=lambda i: rank.get(names[i], len(order)))
     labels = [_short_run_labels(names)[i] for i in index]
 
+    grid = shared_window(r.get("qc_window_s") for r in rows)
     panels = [(label, _condition_matrix(rows, conditions, metric)[index])
-              for metric, label in _CONDITION_METRICS
+              for metric, label in _condition_metrics(grid)
               if np.isfinite(_condition_matrix(rows, conditions, metric)).any()]
     if not panels:
         return None
@@ -763,7 +776,8 @@ def _channel_matrix(by_condition: dict, conditions: list[str],
     return names, values
 
 
-def build_channel_condition_matrix(by_condition: dict) -> "go.Figure | None":
+def build_channel_condition_matrix(by_condition: dict,
+                                   window_s: "float | None" = None) -> "go.Figure | None":
     """channel x condition for one run, the panels and order of ``build_condition_panels``.
 
     The cohort's matrix asks which *run* moved in a condition; a subject has one run per
@@ -779,7 +793,8 @@ def build_channel_condition_matrix(by_condition: dict) -> "go.Figure | None":
         return None
 
     fields = [(_CONDITION_PER_CHANNEL[metric], label)
-              for metric, label in _CONDITION_METRICS if metric in _CONDITION_PER_CHANNEL]
+              for metric, label in _condition_metrics(window_s)
+              if metric in _CONDITION_PER_CHANNEL]
     fields += list(_EXTRA_CHANNEL_PANELS)
 
     found = [(label, *_channel_matrix(by_condition, conditions, field))

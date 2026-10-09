@@ -25,8 +25,9 @@ def _tree(out):
         (nirs / f"group-{group}_task-rest_desc-sqm_qc.json").write_text(json.dumps({
             "step": "hyper_sqm", "usable_window_frac": 0.6, "one_member_frac": 0.2,
             "neither_frac": 0.2, "n_long_pairs": 10, "n_windows": 20,
-            "screening": {"windows": {"game1": {"percentile": 80.0},
-                                      "video": {"percentile": 40.0}}},
+            "screening": {"pairings": [{"sub1": "sub-01", "sub2": "sub-02",
+                                        "windows": {"game1": {"percentile": 80.0},
+                                                    "video": {"percentile": 40.0}}}]},
         }))
         (nirs / f"group-{group}_task-rest_desc-usable_qc.tsv").write_text(
             "pair\tcondition\tusable_frac\nS1D1\tgame1\t0.5\nS1D2\tvideo\t0.7\n")

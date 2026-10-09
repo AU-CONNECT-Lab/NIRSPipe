@@ -341,6 +341,8 @@ def motion_series(
     subject_ids: list[str],
     sep_bands=None,
     imu: "dict[str, dict[str, ImuTrace]] | None" = None,
+    full_raws: "dict[str, mne.io.Raw] | None" = None,
+    full_after: "dict[str, mne.io.Raw] | None" = None,
 ) -> dict:
     """Everything the two motion figures draw, measured once off the aligned recordings.
 
@@ -370,6 +372,10 @@ def motion_series(
 
     Spikes are kept only where **every** member was spiking at once; a member spiking alone
     shows on the usable-time carpet.
+
+    ``full_raws`` and ``full_after`` are the same recordings before the cut, on each member's
+    own clock. Given, GVTD is filtered and spikes are found over the whole recording and then
+    cut to the shared window, so the cut's edges are not a filter edge both members share.
 
     Returns ``{}`` when no member carries usable optical density.
     """
@@ -405,6 +411,18 @@ def motion_series(
         od_data = od.get_data(picks=ordered)
         after_data = _matched_after(after_od, ordered, od_data.shape, sfreq, sid)
 
+        # what is filtered: the whole recording where it was handed over, then cut at `shift`
+        full = (full_raws or {}).get(sid)
+        src_od, src_after, shift = od, after_od, 0
+        if full is not None:
+            src_od = mne.preprocessing.nirs.optical_density(full.copy(), verbose=False)
+            shift = int(round((raw.first_time - full.first_time) * sfreq))
+            src_after = (full_after or {}).get(sid) if after_data is not None else None
+        src_data = src_od.get_data(picks=ordered)
+        src_after_data = (_matched_after(src_after, ordered, src_data.shape, sfreq, sid)
+                          if src_after is not None else None)
+        cut = slice(shift, shift + len(times) - 1)
+
         start = 0
         carpet_spans = []
         for name, names in blocks:
@@ -413,26 +431,30 @@ def motion_series(
             start += len(names)
             if name not in sets:
                 sets.append(name)
-            g = gvtd_timetrace(od_data[rows], sfreq, *GVTD_MOTION_BAND)
+            g = gvtd_timetrace(src_data[rows], sfreq, *GVTD_MOTION_BAND)[cut]
             mid = float(np.nanmedian(g))
             mid = mid if np.isfinite(mid) and mid > 0 else 1.0
             divisors[(sid, name)] = mid
             series["before"].setdefault(name, []).append((sid, g / mid))
-            if after_data is not None:
+            if after_data is not None and (full is None or src_after_data is not None):
                 if "after" not in stages:
                     stages.append("after")
                     series["after"], carpets["after"], spikes["after"] = {}, [], {}
-                after_g = gvtd_timetrace(after_data[rows], sfreq, *GVTD_MOTION_BAND)
+                source = src_after_data if src_after_data is not None else after_data
+                after_g = gvtd_timetrace(source[rows], sfreq, *GVTD_MOTION_BAND)[cut]
                 series["after"].setdefault(name, []).append((sid, after_g / mid))
 
         # spikes on the canonical set only: the test is ">= 10% of *these* channels"
         canonical = blocks[0][1]
-        for stage, source in (("before", od), ("after", after_od)):
+        for stage, source in (("before", src_od), ("after", src_after)):
             if stage not in stages or source is None:
                 continue
             try:
                 picked = source.copy().pick([c for c in canonical if c in source.ch_names])
-                spikes[stage][sid] = _spans_to_mask(spike_segments(picked), t)
+                # (onset, duration) on the source's own clock, moved onto the shared one
+                spans = [(onset - shift / sfreq, duration)
+                         for onset, duration in spike_segments(picked)]
+                spikes[stage][sid] = _spans_to_mask(spans, t)
             except Exception:
                 logger.warning("%s: spike spans failed on the %s file", sid, stage,
                                exc_info=True)
@@ -908,7 +930,10 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     inside the null drawn for *that* window puts every window on one axis with one line to
     clear.
 
-    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded.
+    One pale dot per channel, a diamond for the channel mean, and the top 5% shaded. A group
+    of more than two draws every pairing, each dot and diamond naming its pairing, since each
+    is ranked against that pairing's own null. A window with no measurable coherence keeps its
+    row, labelled so, and draws no point.
 
     Expects the frame :func:`~fnirs_pipe.pipeline.hyper.coherence.screening_coherence` returns.
     None when it is empty.
@@ -917,6 +942,8 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
         return None
     windows = list(dict.fromkeys(coherence_df["window"]))
     rows = list(reversed(windows))
+    pairs = list(dict.fromkeys(zip(coherence_df["sub1"], coherence_df["sub2"])))
+    many = len(pairs) > 1
     jitter = np.random.default_rng(0)
     # each block in the colour panel 2 and 3 give it, so a reader carries one mapping across
     # the page; the whole run is not a block and stays neutral
@@ -928,12 +955,15 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
     fig.add_vline(x=NULL_ALPHA_PCT, line_color="#adb5bd", line_width=1, line_dash="dot")
     for i, name in enumerate(rows):
         sub = coherence_df[coherence_df["window"] == name]
+        sub = sub[np.isfinite(sub["percentile"].to_numpy(dtype=float))]
         pct = sub["percentile"].to_numpy(dtype=float)
         colour = colours.get(name, "#7f8c8d")
+        labels = (sub["ch_name"] + " · " + sub["sub1"] + " × " + sub["sub2"] if many
+                  else sub["ch_name"])
         fig.add_trace(go.Scatter(
             x=pct, y=i + jitter.uniform(-0.13, 0.13, len(pct)), mode="markers",
             name=str(name), legendgroup=str(name), showlegend=False,
-            customdata=sub["ch_name"].tolist(),
+            customdata=labels.tolist(),
             # saturated only above the line; the rest are drawn as grey spread
             marker=dict(size=8,
                         color=[colour if p >= NULL_ALPHA_PCT else "#d7dde2" for p in pct],
@@ -942,21 +972,33 @@ def build_screening_strip(coherence_df: "pd.DataFrame") -> "go.Figure | None":
             hovertemplate=("<b>%{customdata}</b><br>" + str(name)
                            + "<br>%{x:.1f}th percentile of its null<extra></extra>"),
         ))
-    # the window's own rank (channels pooled, ranked once), not the mean of its channels' ranks
-    means = [float(coherence_df[coherence_df["window"] == n]["window_percentile"].iloc[0])
-             for n in rows]
-    fig.add_trace(go.Scatter(
-        x=means, y=list(range(len(rows))), mode="markers", name="channel mean",
-        customdata=rows, showlegend=False,
-        marker=dict(size=13, symbol="diamond",
-                    color=[colours.get(n, "#7f8c8d") for n in rows],
-                    line=dict(width=1.2, color="#fff")),
-        hovertemplate="%{customdata}<br>mean at the %{x:.1f}th percentile<extra></extra>"))
+    # the window's own rank (channels pooled, ranked once), not the mean of its channels' ranks;
+    # one per pairing, each pairing's diamonds a little apart on its own row
+    for k, (sub1, sub2) in enumerate(pairs):
+        part = coherence_df[(coherence_df["sub1"] == sub1) & (coherence_df["sub2"] == sub2)]
+        shift = (k - (len(pairs) - 1) / 2) * 0.12
+        xs, ys, names = [], [], []
+        for i, n in enumerate(rows):
+            got = part[part["window"] == n]["window_percentile"]
+            if len(got) and np.isfinite(float(got.iloc[0])):
+                xs.append(float(got.iloc[0]))
+                ys.append(i + shift)
+                names.append(f"{n} · {sub1} × {sub2}" if many else n)
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="markers",
+            name=f"channel mean · {sub1} × {sub2}" if many else "channel mean",
+            customdata=names, showlegend=False,
+            marker=dict(size=13, symbol="diamond",
+                        color=[colours.get(n.split(" · ")[0], "#7f8c8d") for n in names],
+                        line=dict(width=1.2, color="#fff")),
+            hovertemplate="%{customdata}<br>mean at the %{x:.1f}th percentile<extra></extra>"))
+    unmeasured = set(coherence_df.loc[coherence_df["window_percentile"].isna(), "window"])
+    ticks = [f"{n} (no band bin)" if n in unmeasured else n for n in rows]
 
     fig.update_xaxes(title_text="Percentile inside its own phase-scrambled null",
                      title_font=dict(size=10), range=[-2, 102], dtick=25,
                      gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9))
-    fig.update_yaxes(tickvals=list(range(len(rows))), ticktext=rows, showgrid=False,
+    fig.update_yaxes(tickvals=list(range(len(rows))), ticktext=ticks, showgrid=False,
                      range=[-0.6, len(rows) - 0.4], tickfont=dict(size=9))
     fig.update_layout(height=110 + 40 * len(rows), plot_bgcolor="white",
                       margin=dict(l=110, r=24, t=52, b=48),
