@@ -91,7 +91,11 @@ def _run_groups(groups: dict, process) -> None:
             print(f"     [skip] {exc}", file=sys.stderr)
             n_fail += 1
         except AlignmentError as exc:
-            print(f"     [skip] alignment failed: {exc}", file=sys.stderr)
+            # never a silent fallback: trimming is only right when the members started together
+            print(f"     [skip] alignment failed: {exc} If the members started recording at "
+                  "the same moment (a task without triggers), --no-align trims every "
+                  "recording to the shortest instead; it assumes simultaneous starts.",
+                  file=sys.stderr)
             n_fail += 1
         except StageError as exc:
             print(f"     [error] {exc}", file=sys.stderr)

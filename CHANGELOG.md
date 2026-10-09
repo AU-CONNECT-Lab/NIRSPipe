@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
 
 ### Changed
+- A failed dyad alignment now names `--no-align` and its assumption that the members started recording together
 - `fnirs-hyper-groupnull` takes `--task-label` like the other commands; `--task` still works
 - **Breaking**: `fnirs-hyper-pairnull` and `fnirs-hyper-groupnull` take `--chroma` for `--wtc-chroma`, since both cover the correlation too
 - `fnirs-hyper-pairnull` ranks each ISC cell's `percentile` as |r| among |draws|, as the phase null always did
@@ -30,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - A pairs CSV with a `session` column merged one group's sessions into one group; each session is now its own, every dyad output named `ses-`
 - `fnirs-qc hyper-raw --session-label` only renamed some outputs; it now picks each listed session to read, every output under `ses-`
 - A dyad's provenance diagram drew every task of its group; it now holds its own run's files, and `fnirs-qc provenance` reaches session folders
+- `--noise-model ar1` snapped each channel's AR coefficient down onto a 1/n_channels grid; it is now the channel's own estimate
 - `fnirs-hyper` ROI maps drew arrows at `--wtc-arrow-min` beside a null; `--wtc-phase-null` now gives them their own level, averaged surrogate maps
 
 ## [0.61.0] - 2026-10-08

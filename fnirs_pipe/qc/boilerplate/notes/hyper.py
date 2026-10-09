@@ -30,7 +30,12 @@ NOTES = {
         "Both show up as a block that does not line up below.",
     "hyper_raw.alignment_timeline":
         "One row per member. The top pair is what was recorded; the bottom pair is what every "
-        "later panel reads.",
+        "later panel reads. The last row is what alignment left between the members, too "
+        "small for the bars to show.",
+    "hyper_raw.onset_residuals":
+        "Each block's onset on the shared clock minus {ref}&rsquo;s copy of it. A difference "
+        "beyond {tol}&nbsp;s ({n} samples) is a trigger that landed late in one member or two "
+        "clocks drifting apart.",
     "hyper_raw.usable":
         "A channel is usable by the dyad only while it is coupled in <em>both</em> members at "
         "the same moment, so the dyad&rsquo;s usable time is the intersection of the two and "

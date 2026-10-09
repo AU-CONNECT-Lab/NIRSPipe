@@ -275,6 +275,45 @@ def aligned_offsets(
             if sid in raws}
 
 
+# how far two members' copies of one trigger may sit apart and still be the same condition
+_TRIGGER_JITTER_SAMPLES = 2.0
+
+
+def onset_residuals(raws: dict[str, mne.io.Raw], subject_ids: list[str]) -> list[dict]:
+    """Each block's onset on the shared clock, minus the first member's copy of it.
+
+    ::
+
+      ca at 30.0 s in sub-01 and 30.098 s in sub-02
+        -> [{"condition": "ca", "subject_id": "sub-02", "residual_s": 0.098}]
+
+    What alignment cannot remove: a trigger that landed late in one member, or two clocks
+    drifting apart. Blocks are matched by description and by order of occurrence, a repeat
+    labelled ``ca (2)``; a block the first member or this member lacks has no row.
+    """
+    def onsets(raw: mne.io.Raw) -> dict[str, list[float]]:
+        out: dict[str, list[float]] = {}
+        for a in raw.annotations:
+            if not str(a["description"]).upper().startswith("BAD"):
+                out.setdefault(str(a["description"]), []).append(
+                    float(a["onset"]) - float(raw.first_time))
+        return {desc: sorted(times) for desc, times in out.items()}
+
+    if not subject_ids or subject_ids[0] not in raws:
+        return []
+    ref = onsets(raws[subject_ids[0]])
+    rows = []
+    for sid in subject_ids[1:]:
+        if sid not in raws:
+            continue
+        own = onsets(raws[sid])
+        for desc, ref_times in ref.items():
+            for i, (t_ref, t_own) in enumerate(zip(ref_times, own.get(desc, []))):
+                rows.append({"condition": desc if len(ref_times) == 1 else f"{desc} ({i + 1})",
+                             "subject_id": sid, "residual_s": t_own - t_ref})
+    return rows
+
+
 def _aligned_shift(raw: mne.io.Raw, aligned: mne.io.Raw) -> float:
     """Seconds into ``raw`` at which ``aligned`` starts; ``crop`` accumulates into first_samp."""
     return float(aligned.first_time) - float(raw.first_time)

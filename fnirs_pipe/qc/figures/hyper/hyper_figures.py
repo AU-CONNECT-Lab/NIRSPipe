@@ -79,10 +79,15 @@ def build_alignment_timeline(
     raw_raws: "dict[str, mne.io.Raw] | None",
     aligned_raws: dict[str, mne.io.Raw],
     subject_ids: list[str],
+    residuals: "list[dict] | None" = None,
+    tol_s: float = 0.0,
 ) -> "go.Figure | None":
     """Every member's annotated blocks, on its own clock above and the shared one below.
 
-    The second row is the shared clock every later panel reads.
+    The second row is the shared clock every later panel reads. ``residuals`` are
+    :func:`~fnirs_pipe.pipeline.hyper.alignment.onset_residuals`, drawn as a third row: what
+    is left between the members after alignment, which the bars are too coarse to show.
+    Points beyond ``tol_s`` are red.
 
     One row per member in each panel. None when nothing is annotated.
     """
@@ -91,6 +96,9 @@ def build_alignment_timeline(
     rows = [(title, raws) for title, raws in rows if raws]
     if not rows:
         return None
+    titles = [t for t, _r in rows]
+    if residuals:
+        titles.append(f"Onset after alignment, minus {subject_ids[0]}'s (s)")
 
     descs = list(dict.fromkeys(
         b["desc"] for _title, raws in rows for sid in subject_ids
@@ -99,8 +107,8 @@ def build_alignment_timeline(
         return None
     colours = _cond_colors(descs)
 
-    fig = make_subplots(rows=len(rows), cols=1, vertical_spacing=0.22,
-                        subplot_titles=[t for t, _r in rows])
+    fig = make_subplots(rows=len(titles), cols=1, vertical_spacing=0.22,
+                        subplot_titles=titles)
     seen: set[str] = set()
     for r, (_title, raws) in enumerate(rows, start=1):
         for yi, sid in enumerate(subject_ids):
@@ -123,12 +131,36 @@ def build_alignment_timeline(
         fig.update_xaxes(gridcolor="#f5f5f5", zeroline=False, tickfont=dict(size=9),
                          row=r, col=1)
     fig.update_xaxes(title_text="Time (s)", title_font=dict(size=10), row=len(rows), col=1)
+    if residuals:
+        _residual_row(fig, len(titles), residuals, tol_s)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=170 * len(rows), plot_bgcolor="white", barmode="overlay",
+    fig.update_layout(height=170 * len(titles), plot_bgcolor="white", barmode="overlay",
                       margin=dict(l=96, r=24, t=70, b=48),
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig
+
+
+def _residual_row(fig, row: int, residuals: list[dict], tol_s: float) -> None:
+    """One point per member and block, the jitter tolerance shaded around zero."""
+    conditions = list(dict.fromkeys(r["condition"] for r in residuals))
+    if tol_s:
+        fig.add_hrect(y0=-tol_s, y1=tol_s, fillcolor="#ecf0f1", line_width=0, layer="below",
+                      row=row, col=1)
+    fig.add_hline(y=0.0, line=dict(color="#95a5a6", width=1), row=row, col=1)
+    for sid in dict.fromkeys(r["subject_id"] for r in residuals):
+        own = [r for r in residuals if r["subject_id"] == sid]
+        fig.add_trace(go.Scatter(
+            x=[r["condition"] for r in own], y=[r["residual_s"] for r in own],
+            mode="markers", showlegend=False, name=sid,
+            marker=dict(size=9, color=["#c0392b" if abs(r["residual_s"]) > tol_s
+                                       else "#34495e" for r in own]),
+            hovertemplate=f"{sid}<br>%{{x}}<br>%{{y:.3f}} s<extra></extra>",
+        ), row=row, col=1)
+    fig.update_xaxes(type="category", categoryorder="array", categoryarray=conditions,
+                     tickfont=dict(size=9), row=row, col=1)
+    fig.update_yaxes(zeroline=False, gridcolor="#f5f5f5", tickfont=dict(size=9),
+                     row=row, col=1)
 
 
 def _blocks(raw: "mne.io.Raw | None") -> list[dict]:

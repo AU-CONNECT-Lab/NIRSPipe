@@ -121,6 +121,17 @@
             style="height:{{ figure_paths.alignment_timeline.h }}px"></iframe>
     <p class="qm-note">{{ section_note('hyper_raw.alignment_timeline') }}</p>
     <p class="fig-path">{{ figure_paths.alignment_timeline.src }}</p>
+    {% if onset_residuals %}
+    <p class="qm-note">{{ section_note('hyper_raw.onset_residuals', ref=subject_ids[0], tol="%.3f"|format(onset_tol_s), n="%g"|format(onset_tol_samples)) }}</p>
+    <table class="qm-table qm-flat" id="onset-residual-table">
+      <thead><tr><th>Condition</th><th>Member</th><th>Onset difference (s)</th><th>Within tolerance</th></tr></thead>
+      <tbody>
+      {% for r in onset_residuals %}
+        <tr><td>{{ r.condition }}</td><td>{{ r.subject_id }}</td><td>{{ "%.3f"|format(r.residual_s) }}</td><td>{{ "yes" if r.within else "no" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </div>
 </details>
 {% endif %}

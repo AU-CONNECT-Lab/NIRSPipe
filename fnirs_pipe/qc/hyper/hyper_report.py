@@ -16,6 +16,7 @@ from fnirs_pipe.io.derivatives import group_data_dir, group_label, group_report_
 from fnirs_pipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from fnirs_pipe.pipeline.hyper.wtc_null import write_wtc_null
 from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER
+from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
 from fnirs_pipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
 from fnirs_pipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
@@ -178,9 +179,6 @@ def subject_metric_rows(
                          "cells": cells})
     return rows
 
-
-# how far two members' copies of one trigger may sit apart and still be the same condition
-_TRIGGER_JITTER_SAMPLES = 2.0
 
 # The channel sets a quality table is printed over, and what each is headed on the page.
 # Same order and same names the subject report's own metrics section uses.
@@ -620,6 +618,9 @@ def build_hyper_report(
         coherence_fmin=coherence_fmin,
         coherence_fmax=coherence_fmax,
         alignment_json=json.dumps(meta["alignment"]),
+        onset_residuals=meta.get("onset_residuals") or [],
+        onset_tol_s=meta.get("onset_tol_s") or 0.0,
+        onset_tol_samples=_TRIGGER_JITTER_SAMPLES,
         run_command=" ".join(sys.argv),
         # the summary states the pair in one line; the table below it is per member
         align_duration_s=next((r["duration_s"] for r in meta["alignment"]

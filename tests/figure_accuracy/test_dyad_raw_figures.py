@@ -1,5 +1,6 @@
 """The dyad raw page (fnirs-qc hyper-raw): each figure against its table and against the planted truth."""
 
+import re
 from itertools import combinations
 
 import numpy as np
@@ -53,7 +54,28 @@ def test_the_timeline_draws_each_member_s_blocks_on_its_own_clock_then_on_the_sh
             assert bar["base"][0] == pytest.approx(onset + (member.offset if own else 0.0),
                                                    abs=0.1), (axis, member.sid, bar["name"])
             assert bar["x"][0] == pytest.approx(stop - onset, abs=0.1)
-    assert {t["y"][0] for t in fig["data"]} == set(range(len(members)))
+    assert {t["y"][0] for t in fig["data"] if t["type"] == "bar"} == set(range(len(members)))
+
+
+def _residual_table(page: str) -> list[tuple[str, str, float, str]]:
+    body = re.search(r'id="onset-residual-table">.*?<tbody>(.*?)</tbody>', page, re.S).group(1)
+    return [(c, m, float(d), w) for c, m, d, w in
+            re.findall(r"<tr><td>(.*?)</td><td>(.*?)</td><td>(.*?)</td><td>(.*?)</td></tr>", body)]
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_onset_residuals_are_the_table_s_and_zero_for_planted_shared_blocks(groups, group):
+    fig = one_figure(groups.figure(group, "desc-rawalignment_nirs.html"))
+    rows = _residual_table(_page(groups, group))
+    first, *others = [m.sid for m in groups.truth.group(group)]
+    drawn = {(x, t["name"]): y for t in fig["data"] if t["yaxis"] == "y3"
+             for x, y in zip(t["x"], t["y"])}
+    # value: the panel draws the page's table, every other member against the first
+    assert drawn == {(c, m): pytest.approx(d, abs=5e-4) for c, m, d, _w in rows}
+    assert {m for _c, m, _d, _w in rows} == set(others)
+    # truth: every block was planted at one moment on the shared clock
+    assert {"ca", "cb"} <= {c for c, *_ in rows}
+    assert all(abs(d) < 1e-6 and w == "yes" for _c, _m, d, w in rows), rows
 
 
 # ---- screening coherence ----

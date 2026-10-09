@@ -21,6 +21,7 @@ from fnirs_pipe.pipeline.hyper.alignment import (  # noqa: F401  re-exported
     alignment_params,
     crop_aligned_window,
     normalize_raws,
+    onset_residuals,
     resolve_analysis_window,
     trim_to_shortest,
     write_aligned_member,

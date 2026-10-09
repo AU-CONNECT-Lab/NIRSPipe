@@ -10,8 +10,9 @@ import pandas as pd
 
 from fnirs_pipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
 from fnirs_pipe.pipeline.hyper import (
-    GroupEntry, _hyper_sidecar, alignment_params,
+    GroupEntry, _hyper_sidecar, alignment_params, onset_residuals,
 )
+from fnirs_pipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
 from fnirs_pipe.qc.subject.sqm_record import record_path
 from fnirs_pipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, figure_namer,
@@ -232,8 +233,13 @@ def _process_hyper_raw_group(
             h = _save_figure_html(fig, fig_dir / fname)
             figure_paths[name] = {"src": f"figures/{fname}", "h": h}
 
+    residuals = onset_residuals(aligned_raws, subject_ids)
+    sfreq = float(next(iter(aligned_raws.values())).info["sfreq"]) if aligned_raws else 0.0
+    tol_s = _TRIGGER_JITTER_SAMPLES / sfreq if sfreq else 0.0
+    for r in residuals:
+        r["within"] = abs(r["residual_s"]) <= tol_s
     _safe_save("alignment_timeline", "alignment",
-               build_alignment_timeline, raw_raws, aligned_raws, subject_ids)
+               build_alignment_timeline, raw_raws, aligned_raws, subject_ids, residuals, tol_s)
     _safe_save("ch_summary", "chsummary",
                build_channel_summary, sqm_data, subject_ids, sci_threshold)
 
@@ -360,6 +366,8 @@ def _process_hyper_raw_group(
         "label":         label,
         "sqm_dir":       sqm_dir,
         "alignment":     alignment_rows,
+        "onset_residuals": residuals,
+        "onset_tol_s":   tol_s,
         "conditions":    {k: [round(a, 2), round(b, 2)]
                           for k, (a, b) in conditions.items()},
         "member_info":   member_info,

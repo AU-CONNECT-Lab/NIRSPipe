@@ -39,6 +39,8 @@ SCRStrategy = Literal["mean", "pca"]
 
 # the prefix every short-channel confound column carries, whatever the strategy built it
 SHORT_CH_PREFIX = "short_ch_"
+# AR(1) coefficients are truncated onto a 1/bins grid; arN uses min(bins, n_channels) clusters
+AR_BINS_MIN = 1000
 
 
 def _short_channel_regressors(
@@ -347,7 +349,8 @@ def fit_glm(
 ) -> Any:
     from mne_nirs.statistics import run_glm
     if not noise_model.startswith("ar_irls"):
-        return run_glm(haemo, design_matrix, noise_model=noise_model)
+        bins = max(len(haemo.ch_names), AR_BINS_MIN)
+        return run_glm(haemo, design_matrix, noise_model=noise_model, bins=bins)
     return _fit_glm_ar_irls(haemo, design_matrix, noise_model)
 
 
