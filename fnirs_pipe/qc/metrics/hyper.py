@@ -10,6 +10,7 @@ import mne
 import numpy as np
 import pandas as pd
 
+from fnirs_pipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.logging import get_logger
 
@@ -81,6 +82,35 @@ def _ch_kept_by_member(
     return result
 
 
+def _nearest_windows(ref: "np.ndarray", t: "np.ndarray") -> "np.ndarray":
+    """For each reference centre, the index of the member's window nearest it, or -1.
+
+    ::
+
+      ref [5.0, 15.0, 25.0], t [5.025, 15.075]  ->  [0, 1, -1]
+
+    A window is taken only within half a screening window of the reference centre, so the
+    two always overlap by at least half. Members recorded at different rates cut a window
+    into a whole number of samples, so each window runs a fraction of a sample long or short
+    and their grids drift apart every window; matching by time keeps them paired where index
+    would not.
+    """
+    if not len(t):
+        return np.full(len(ref), -1)
+    # the nearer of the two neighbours searchsorted lands between
+    right = np.clip(np.searchsorted(t, ref), 0, len(t) - 1)
+    left = np.clip(right - 1, 0, len(t) - 1)
+    idx = np.where(np.abs(t[left] - ref) <= np.abs(t[right] - ref), left, right)
+    return np.where(np.abs(t[idx] - ref) <= SCREEN_WINDOW_S / 2, idx, -1)
+
+
+def _take_windows(matrix: "np.ndarray", idx: "np.ndarray", fill) -> "np.ndarray":
+    """``matrix[..., idx]`` with the columns of unmatched windows (-1) set to ``fill``."""
+    out = np.asarray(matrix)[..., np.maximum(idx, 0)].copy()
+    out[..., idx < 0] = fill
+    return out
+
+
 def coupled_grid(
     sqm_data: dict[str, dict],
     subject_ids: list[str],
@@ -113,7 +143,11 @@ def coupled_grid(
     recordings, so the offsets are zero and every member's windows coincide; grids measured on
     each member's own clock stop coinciding as soon as the members' offsets differ.
 
-    None when a member has no grid, or when the members were not screened on the same one.
+    The first member's windows are the dyad's; every other member contributes its window
+    nearest each of them in time (:func:`_nearest_windows`), and counts as not coupled where
+    it has none. ``index`` keeps that choice so :func:`member_series` reads the same columns.
+
+    None when a member has no grid, or shares no window with the first member.
     """
     grids, masks = {}, {}
     for sid in subject_ids:
@@ -127,12 +161,17 @@ def coupled_grid(
         masks[sid] = np.asarray(mask, dtype=bool)
 
     ref = grids[subject_ids[0]]
-    for sid, t in grids.items():
-        if t.shape != ref.shape or not np.allclose(t, ref, atol=1.0):
-            logger.warning("%s was screened on a different window grid; skipping the dyad "
-                           "grid rather than comparing windows that are not the same window",
-                           sid)
+    index = {sid: _nearest_windows(ref, t) for sid, t in grids.items()}
+    for sid, idx in index.items():
+        if (idx < 0).all():
+            logger.warning("%s shares no screening window with %s; the dyad grid is empty",
+                           sid, subject_ids[0])
             return None
+        if (idx < 0).any():
+            logger.info("%s has no window within %g s of %d of the dyad's %d; counted as "
+                        "not coupled there", sid, SCREEN_WINDOW_S / 2, int((idx < 0).sum()),
+                        len(ref))
+    masks = {sid: _take_windows(masks[sid], index[sid], False) for sid in subject_ids}
 
     keep = ref >= 0
     if duration_s is not None:
@@ -164,7 +203,8 @@ def coupled_grid(
     return {"t": ref[keep],
             "pairs": pairs,
             "long_pairs": long_pairs,
-            "ok": {sid: np.array(rows[sid])[:, keep] for sid in subject_ids}}
+            "ok": {sid: np.array(rows[sid])[:, keep] for sid in subject_ids},
+            "index": {sid: index[sid][keep] for sid in subject_ids}}
 
 
 def shared_screen_windows(
@@ -229,7 +269,7 @@ def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
     return np.where(stack.all(axis=0), 2, np.where(stack.any(axis=0), 1, 0))
 
 
-def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
+def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     """One member's long-channel means per window, on the dyad's clock.
 
     ::
@@ -240,7 +280,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
     The three series are averaged over the same rows the carpet folds into pairs, off the
     same matrices its mask came from, so a dip in a line and a hole under it are one
     measurement and not two. GVTD is absent unless the member's record carried it; see
-    :func:`coupled_grid`.
+    :func:`coupled_grid`. A dyad window the member has no window for is NaN.
 
     ``per_pair_sci`` keeps every pair separately, short ones included, because the head
     figures colour one marker per channel and draw both separations.
@@ -251,20 +291,20 @@ def member_series(sqm_data: dict, sid: str, grid: dict, offset: float) -> dict:
         return {}
     long_pairs = set(grid.get("long_pairs") or grid["pairs"])
     rows = [i for i, name in enumerate(order) if pair_of(name) in long_pairs]
-    t = np.asarray(sw["centers"], dtype=float) - float(offset)
-    keep = np.isin(np.round(t, 2), np.round(np.asarray(grid["t"], dtype=float), 2))
-    out = {"t": t[keep]}
+    idx = grid["index"][sid]
+    out = {"t": np.asarray(grid["t"], dtype=float)}
     for key in ("sci", "psp", "cv"):
         m = sw.get(key)
         if m is not None and rows:
-            out[key] = np.asarray(m, dtype=float)[rows][:, keep].mean(axis=0)
+            out[key] = _take_windows(np.asarray(m, dtype=float)[rows], idx,
+                                     np.nan).mean(axis=0)
     gvtd = sw.get("gvtd")
-    if gvtd is not None and len(gvtd) == len(t):
-        out["gvtd"] = np.asarray(gvtd, dtype=float)[keep]
+    if gvtd is not None and len(gvtd) == len(sw["centers"]):
+        out["gvtd"] = _take_windows(np.asarray(gvtd, dtype=float), idx, np.nan)
 
     sci_m = sw.get("sci")
     if sci_m is not None:
-        sci_m = np.asarray(sci_m, dtype=float)[:, keep]
+        sci_m = _take_windows(np.asarray(sci_m, dtype=float), idx, np.nan)
         by_pair: dict[str, list[int]] = {}
         for i, name in enumerate(order):
             by_pair.setdefault(pair_of(name), []).append(i)

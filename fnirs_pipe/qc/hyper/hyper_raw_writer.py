@@ -268,8 +268,8 @@ def _process_hyper_raw_group(
 
     duration_s = first_raw.times[-1] if first_raw is not None else None
     grid, series, geo = None, {}, {}
-    # the panels below are screened again on the aligned recordings, whose windows coincide
-    # on the shared clock; each member's verdict stays its own screening's
+    # the panels below are screened again on the aligned recordings, whose windows are matched
+    # by time on the shared clock; each member's verdict stays its own screening's
     shared = {}
     with guard("Screening grid", errors, label):
         if intensity_raws and cardiac_l_freq is not None and cardiac_h_freq is not None:
@@ -280,7 +280,7 @@ def _process_hyper_raw_group(
         note(notes, label, "no shared screening grid: a member's aligned recording could "
                            "not be screened. The usable-time and head panels are empty")
     else:
-        series = {sid: member_series(shared, sid, grid, 0.0) for sid in subject_ids}
+        series = {sid: member_series(shared, sid, grid) for sid in subject_ids}
         geo = {sid: head_geometry(aligned_raws[sid],
                                   grid.get("long_pairs") or grid["pairs"])
                for sid in subject_ids if sid in aligned_raws}
