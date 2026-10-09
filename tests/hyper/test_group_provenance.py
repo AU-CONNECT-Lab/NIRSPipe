@@ -31,7 +31,7 @@ def tree(tmp_path_factory):
     figures = hyper / "group-G01" / "figures"
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
     qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", "--no-align", "--seed", "0", *PHYS])
+                 "--skip-bids-validation", "--no-align", *PHYS])
     # the post page writes its graph under the same name, so the raw page's is read first
     raw = {task: _mmd(figures, f"group-G01_task-{task}") for task in TASKS}
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
@@ -65,7 +65,7 @@ def test_the_provenance_command_reaches_a_dyad_recorded_per_session(tmp_path):
     bids, pairs = make_hyper_dataset(tmp_path, tasks=("hold",), sessions=("a", "b"))
     hyper = tmp_path / "hyper"
     qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", "--seed", "0", *PHYS])
+                 "--skip-bids-validation", *PHYS])
     figures = hyper / "group-G01" / "figures"
     for path in figures.glob("*_desc-provenance_*"):
         path.unlink()

@@ -46,7 +46,7 @@ def tree(tmp_path_factory):
     deriv, hyper = root / "deriv", root / "hyper"
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
     qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", "--seed", "0", *PHYS])
+                 "--skip-bids-validation", *PHYS])
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                     "--wtc-fmin", "0.02", "--wtc-phase-null", "2", "--wtc-seed", "0"])
     hyper_cli.main_pair_null([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs)])
