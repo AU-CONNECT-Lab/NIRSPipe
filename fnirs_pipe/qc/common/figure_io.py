@@ -302,7 +302,7 @@ def get_channel_pairs(raw: mne.io.Raw, exclude="bads") -> list[str]:
 
 
 def extract_markers(raw: mne.io.Raw) -> list[dict]:
-    """Return non-BAD annotations as marker dicts (onset, duration, description).
+    """Return annotations other than BAD_/EDGE_ spans as marker dicts (onset, duration, description).
 
     Unrounded: ``condition_windows`` builds window bounds from these, and a rounded bound
     no longer matches the annotation it came from.
@@ -314,5 +314,6 @@ def extract_markers(raw: mne.io.Raw) -> list[dict]:
             "description": str(a["description"]),
         }
         for a in raw.annotations
-        if not str(a["description"]).upper().startswith("BAD")
+        # mne writes "EDGE boundary" at every join of concatenated recordings
+        if not str(a["description"]).lower().startswith(("bad", "edge"))
     ]

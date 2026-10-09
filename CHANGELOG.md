@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - A pairs CSV `occasion` column joins members whose session labels differ for one sitting, naming the group's outputs `ses-<occasion>`
 - The dyad raw page's alignment timeline and a table show each block's onset difference between the members after alignment, flagged past two samples
 - `fnirs-hyper-groupnull` writes `task-<task>_desc-groupnull_report.html`: each occasion against its null, and each region's lift marked by the paired test
+- The `--bad-channels` table takes optional `session`, `task` and `run` columns; a row matching no recording stops the run
 
 ### Changed
 - A failed dyad alignment now names `--no-align` and its assumption that the members started recording together
@@ -26,6 +27,8 @@ All notable changes to this project will be documented in this file.
 - `fnirs-qc hyper-raw` draws each member's rejected pairs on the screening strip, flagged, and leaves them out of every window rank and dyad coherence
 
 ### Fixed
+- The `EDGE boundary` written where recordings are joined is no longer a condition
+- The exported run script applies `--gvtd-censor` as the run did
 - `fnirs-hyper --wtc-cond-transform` drew each condition map on its cut's own clock instead of the aligned one
 - A crossed dyad run never used an uncrossed phase-scrambled null, not even on its same-channel maps
 - `fnirs-qc hyper-raw --tstart` left the record's alignment offsets and duration at their values before the cut

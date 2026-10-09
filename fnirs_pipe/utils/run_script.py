@@ -61,6 +61,11 @@ def _build_script_text(
     events_path: str | None = None,
     contrast_file: str | None = None,
     combine_runs: bool = False,
+    gvtd_censor: str | None = None,
+    gvtd_censor_n_std: float = 10.0,
+    gvtd_min_epoch_s: float = 30.0,
+    sep_bands: tuple | None = None,
+    bad_channels_table: str | None = None,
 ) -> str:
     dt_str = datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
@@ -72,6 +77,18 @@ def _build_script_text(
         '    data_band=(HIGH_PASS, LOW_PASS),',
         '    data_filter_method=FILTER_METHOD, data_filter_order=FILTER_ORDER,',
     ] if aux else [])
+    # before desc-sci is written, as in run_prep, so every later stage inherits the spans
+    _gvtd_lines = ([
+        '',
+        '# ===== block: gvtd | censor GVTD spikes as BAD_gvtd annotations =====',
+        'censor_spans, censor_metrics = gvtd_censor_spans(',
+        '    raw_od, n_std=GVTD_N_STD, min_epoch_s=GVTD_MIN_EPOCH,',
+        '    sep_bands=SEP_BANDS, channel_set=GVTD_CENSOR)',
+        'if censor_spans:',
+        '    raw_od.set_annotations(raw_od.annotations + mne.Annotations(',
+        '        [o for o, _ in censor_spans], [d for _, d in censor_spans],',
+        '        ["BAD_gvtd"] * len(censor_spans), orig_time=raw_od.annotations.orig_time))',
+    ] if gvtd_censor else [])
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
     bad_channels  = bad_channels or []
@@ -108,6 +125,10 @@ def _build_script_text(
         '    _expand_bad_pairs,',
         ')',
     )
+    if gvtd_censor:
+        w('from fnirs_pipe.qc.metrics import gvtd_censor_spans')
+    if bad_channels_table:
+        w('from fnirs_pipe.cli.workflows import _bad_channels_for')
     if mode:
         w('from fnirs_pipe.pipeline.denoise import bandpass_filter, resample')
     if mode in ("glm", "rest") or denoise_regress:
@@ -142,6 +163,15 @@ def _build_script_text(
         f'BAD_CHANNELS   = {bad_channels!r}',
         f'IGNORE         = {ignore!r}',
     )
+    if bad_channels_table:
+        w(f'BAD_CHANNELS_TABLE = Path({_lit(bad_channels_table)})')
+    if gvtd_censor:
+        w(
+            f'GVTD_CENSOR    = {gvtd_censor!r}',
+            f'GVTD_N_STD     = {gvtd_censor_n_std!r}',
+            f'GVTD_MIN_EPOCH = {gvtd_min_epoch_s!r}',
+            f'SEP_BANDS      = {tuple(sep_bands) if sep_bands else None!r}',
+        )
 
     # ---- post parameters ----
     if mode:
@@ -219,6 +249,12 @@ def _build_script_text(
         f'{i3}ses = src.get("session")',
         f'{i3}raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)',
     )
+    if bad_channels_table:
+        w(
+            f'{i3}# the --bad-channels rows that match this recording',
+            f'{i3}BAD_CHANNELS = _bad_channels_for(str(BAD_CHANNELS_TABLE), SUBJECT, src)',
+            f'{i3}PREP_PARAMS["bad_channels"] = BAD_CHANNELS',
+        )
 
     # ---- per-file processing body (built unindented, then indented into the loop) ----
     body: list[str] = []
@@ -242,8 +278,10 @@ def _build_script_text(
         'if BAD_CHANNELS:  # merge manual --bad-channels, both wavelengths of each pair',
         '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, BAD_CHANNELS)))',
         '    raw_od.info["bads"] = bad_chs',
+        *_gvtd_lines,
         'save_step(raw_od, "sci", "sci_pruning", src,',
-        '          extra={"bad_channels": bad_chs})',
+        ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics})'
+         if gvtd_censor else '          extra={"bad_channels": bad_chs})'),
         '# QC (not run here): none of these steps measures anything. The quality record is',
         '#   assembled from the files they leave on disk, once both passes have finished',
         '#   (qc.sqm_record.build_sqm_records).',
@@ -391,8 +429,12 @@ def write_run_script(
         tuple(int(x) for x in raw_fir.split(",")) if raw_fir else (0,)
     )
 
+    from fnirs_pipe.cli._shared import resolved_separation_bands
     from fnirs_pipe.cli.workflows import _bad_channels_for
-    bad_channels = _bad_channels_for(args.get("bad_channels"), subject)
+    bad_spec = args.get("bad_channels")
+    bad_channels = _bad_channels_for(bad_spec, subject)
+    bad_channels_table = (_fwd(Path(str(bad_spec)).resolve())
+                          if bad_spec and Path(str(bad_spec)).exists() else None)
 
     def _pick(key: str, default: Any) -> Any:
         v = args.get(key)
@@ -436,6 +478,11 @@ def write_run_script(
         events_path=_fwd(args.get("events_path")),
         contrast_file=_fwd(args.get("contrast_file")),
         combine_runs=args.get("combine_runs", False),
+        gvtd_censor=_unwrap(args.get("gvtd_censor")),
+        gvtd_censor_n_std=_pick("gvtd_censor_n_std", 10.0),
+        gvtd_min_epoch_s=_pick("gvtd_min_epoch_s", 30.0),
+        sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
+        bad_channels_table=bad_channels_table,
     )
 
     base = sub_dir if sub_dir is not None else output_dir

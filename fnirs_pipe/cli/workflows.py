@@ -232,6 +232,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         if missing:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
+    _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
 
@@ -340,7 +341,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 # the file's own session, which --session-label only filters on;
                                 # without it the outputs of a session tree lose their ses- level
                                 prep_config = _make_prep_config(
-                                    subject, src_entities.get("session") or session, args)
+                                    subject, src_entities.get("session") or session, args,
+                                    entities=src_entities)
                                 logger.info("processing: %s", snirf_path)
                                 try:
                                     raw = read_snirf(snirf_path)
@@ -513,28 +515,18 @@ def _log_run_notes(run_notes: "list[tuple[str, str]]") -> None:
         logger.info("  %s | %s", label, note)
 
 
-def _bad_channels_for(spec: str | None, subject: str) -> list[str]:
-    """Resolve --bad-channels for one subject: a shared list, or a table with one row each.
+# --bad-channels table column -> (pybids entity, optional prefix)
+_BAD_CHANNEL_KEYS = {"participant_id": ("subject", "sub-"), "session": ("session", "ses-"),
+                     "task": ("task", "task-"), "run": ("run", "run-")}
 
-    e.g. "S1_D1,S2_D3" gives that list for every subject, while a table
 
-    ::
+def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
+    """The rows of a --bad-channels table, each label cell with its prefix taken off.
 
-        participant_id  bad_channels
-        sub-01          S1_D1,S2_D3
-        sub-02          S4_D4
-
-    gives "sub-01" the first row and "sub-02" the second. A subject the table does not list
-    has none, which is how a cohort where only some caps slipped is described. The prefix is
-    optional on either side, so "01" and "sub-01" name the same subject.
+    A row ``sub-01 | ses-02 | | 1 | S1_D1`` comes back as
+    ``{"participant_id": "01", "session": "02", "task": "", "run": "1",
+    "bad_channels": "S1_D1", "line": 2}``; a blank or absent session, task or run means all.
     """
-    if not spec:
-        return []
-    spec = str(spec)
-    path = Path(spec)
-    if not path.exists():
-        return [c.strip() for c in spec.split(",") if c.strip()]
-
     from fnirs_pipe.io.tables import read_table
 
     table = read_table(path, dtype=str).fillna("")
@@ -544,14 +536,92 @@ def _bad_channels_for(spec: str | None, subject: str) -> list[str]:
             f"--bad-channels table {path} needs columns participant_id and bad_channels; "
             f"missing {sorted(missing)}"
         )
-    wanted = subject.removeprefix("sub-")
-    rows = table[table["participant_id"].str.removeprefix("sub-") == wanted]
-    if rows.empty:
+    rows = []
+    for i, record in enumerate(table.to_dict("records")):
+        line = i + 2  # the header is line 1
+        row: dict[str, Any] = {"bad_channels": record["bad_channels"], "line": line}
+        for column, (_, prefix) in _BAD_CHANNEL_KEYS.items():
+            label = str(record.get(column, "")).strip().removeprefix(prefix)
+            if (label or column == "participant_id") and not (
+                    label.isdigit() if column == "run" else label.isalnum()):
+                kind = "a run number" if column == "run" else "a BIDS label (letters and digits)"
+                raise ValueError(
+                    f"--bad-channels table {path} line {line}: {column} "
+                    f"{record.get(column, '')!r} is not {kind}")
+            row[column] = label
+        rows.append(row)
+    return rows
+
+
+def _bad_channel_row_matches(row: dict[str, Any], subject: str, entities: dict | None) -> bool:
+    if row["participant_id"] != subject.removeprefix("sub-"):
+        return False
+    for column in ("session", "task", "run"):
+        if not row[column]:
+            continue
+        if entities is None:
+            return False
+        value = entities.get(_BAD_CHANNEL_KEYS[column][0])
+        if value is None:
+            return False
+        # pybids reads run as a padded integer, so "1" and "01" are one run
+        same = (int(row[column]) == int(value) if column == "run"
+                else row[column] == str(value))
+        if not same:
+            return False
+    return True
+
+
+def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = None) -> list[str]:
+    """Resolve --bad-channels for one recording: a shared list, or a table of rows.
+
+    e.g. "S1_D1,S2_D3" gives that list for every recording, while a table
+
+    ::
+
+        participant_id  session  run  bad_channels
+        sub-01                        S1_D1,S2_D3
+        sub-01          02       1    S4_D4
+        sub-02                        S4_D4
+
+    gives every recording of "sub-01" the first row and its ses-02 run-1 both rows. A
+    recording's list is the union of every row that matches it, and a blank session, task
+    or run matches all. ``entities`` are the recording's parsed BIDS entities; without them
+    only the rows that hold for every recording count. A subject the table does not list
+    has none. The prefixes are optional, so "01" and "sub-01" name the same subject.
+    """
+    if not spec:
         return []
-    return [c.strip() for c in ",".join(rows["bad_channels"]).split(",") if c.strip()]
+    spec = str(spec)
+    path = Path(spec)
+    if not path.exists():
+        return [c.strip() for c in spec.split(",") if c.strip()]
+
+    rows = [row for row in _bad_channel_rows(path)
+            if _bad_channel_row_matches(row, subject, entities)]
+    return [c.strip() for c in ",".join(r["bad_channels"] for r in rows).split(",") if c.strip()]
 
 
-def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -> "PrepConfig":
+def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
+    """Stop before any subject runs when a --bad-channels table row names no recording."""
+    if not spec or not Path(str(spec)).exists():
+        return
+    try:
+        rows = _bad_channel_rows(Path(str(spec)))
+    except ValueError as err:
+        raise SystemExit(f"[error] {err}") from None
+    recordings = [f.get_entities() for f in layout.get(extension=".snirf")]
+    for row in rows:
+        if not any(_bad_channel_row_matches(row, ent["subject"], ent) for ent in recordings):
+            named = " ".join(f"{_BAD_CHANNEL_KEYS[c][1]}{row[c]}" for c in _BAD_CHANNEL_KEYS
+                             if row[c])
+            raise SystemExit(
+                f"[error] --bad-channels table {spec} line {row['line']} ({named}) matches no "
+                f"recording in the dataset.")
+
+
+def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
+                      entities: dict | None = None) -> "PrepConfig":
     return PrepConfig(
         subject=subject,
         session=session,
@@ -564,7 +634,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any]) -
         **({"screen_scope": args["screen_scope"]}
            if args.get("screen_scope") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
-        bad_channels=_bad_channels_for(args.get("bad_channels"), subject),
+        bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],

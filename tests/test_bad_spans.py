@@ -1,5 +1,8 @@
 """`BAD_` spans are censoring marks, never conditions or task time, and no stage may lose them."""
 
+import re
+import subprocess
+import sys
 from datetime import datetime, timezone
 
 import mne
@@ -7,7 +10,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from fnirs_pipe.cli.workflows import run_participant_level
+from fnirs_pipe.exceptions import AlignmentError
+from fnirs_pipe.io.snirf import read_snirf
 from fnirs_pipe.pipeline.glm import run_glm_pipeline
+from fnirs_pipe.pipeline.hyper.alignment import align_recordings
 from fnirs_pipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from fnirs_pipe.pipeline.restingstate import compute_alff
 from fnirs_pipe.qc.common.figure_io import extract_markers
@@ -85,25 +92,75 @@ def test_an_all_nan_channel_has_no_falff():
 
 # ---- condition windows ----
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D5: the EDGE boundary mne writes at a join becomes a condition")
+def _joined(descs):
+    raw = _hbo_raw(np.zeros(int(SFREQ * 600)), [50.0, 400.0], [100.0, 100.0], descs)
+    return mne.concatenate_raws([raw.copy().crop(40, 160), raw.copy().crop(390, 510)],
+                                verbose="error")
+
+
 def test_a_join_between_segments_is_not_a_condition():
-    raw = _hbo_raw(np.zeros(int(SFREQ * 600)), [50.0, 400.0], [100.0, 100.0], ["rest", "task"])
-    joined = mne.concatenate_raws([raw.copy().crop(40, 160), raw.copy().crop(390, 510)],
-                                  verbose="error")
+    joined = _joined(["rest", "task"])
     assert [label for label, *_ in condition_windows(joined, min_duration=0.0)] == ["rest", "task"]
+
+
+@pytest.mark.xfail(strict=True, raises=pytest.fail.Exception,
+                   reason="D8: dyad alignment takes the EDGE boundary at a join as a shared trigger")
+def test_two_joined_members_without_a_shared_trigger_are_not_aligned():
+    raws = {"01": _joined(["a1", "a2"]), "02": _joined(["b1", "b2"])}
+    with pytest.raises(AlignmentError):
+        align_recordings(raws, task="hold")
 
 
 # ---- exported run script ----
 
+def _gvtd_spans(out_dir):
+    (path,) = out_dir.rglob("*desc-sci*_nirs.snirf")
+    ann = read_snirf(path).annotations
+    return [(round(o, 3), round(d, 3)) for o, d, desc
+            in zip(ann.onset, ann.duration, ann.description) if desc == "BAD_gvtd"]
+
+
+def test_the_exported_script_censors_what_the_run_censored(mini_bids, tmp_path):
+    cli_out, script_out = tmp_path / "cli", tmp_path / "script"
+    args = dict(
+        analysis_level="participant", session_label=None, task_label=["tapping"],
+        bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
+        ignore=None, n_jobs=1, no_report=True, mode=None,
+        dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr",
+        cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5,
+        # a line low enough that the synthetic run has a few short spans to lose
+        gvtd_censor="long", gvtd_censor_n_std=5.0, gvtd_min_epoch_s=30.0,
+        bids_dir=mini_bids, output_dir=cli_out, participant_label=["01"])
+    original = sys.argv
+    sys.argv = ["fnirs-pipe", str(mini_bids), str(cli_out), "participant"]
+    try:
+        run_participant_level(args)
+    finally:
+        sys.argv = original
+
+    script = (cli_out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
+    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
+                    script, count=1, flags=re.M)
+    script_path = tmp_path / "script.py"
+    script_path.write_text(script, encoding="utf-8")
+    subprocess.run([sys.executable, str(script_path)], check=True, cwd=tmp_path)
+
+    run_spans = _gvtd_spans(cli_out)
+    assert run_spans
+    assert _gvtd_spans(script_out) == run_spans
+
+
 @pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D6: the exported run script never applies --gvtd-censor")
-def test_the_exported_script_censors_what_the_run_censored(tmp_path):
+                   reason="D9: the exported run script screens without the run's PSP line, "
+                          "window share or screening scope")
+def test_the_exported_script_screens_as_the_run_screened(tmp_path):
     args = {"bids_dir": str(tmp_path), "dpf": [6.0], "sci_threshold": 0.8,
-            "gvtd_censor": "long", "gvtd_censor_n_std": 10.0}
+            "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5,
+            "psp_threshold": 0.05, "min_good_frac": 0.6, "screen_scope": "task"}
     write_run_script(args, "01", "20261009_120000", tmp_path)
     script = (tmp_path / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    assert "gvtd_censor_spans(" in script
+    call = script[script.index("mark_bad_channels(\n"):script.index("save_step(raw_od, \"sci\"")]
+    assert all(f"{key}=" in call for key in ("psp_threshold", "min_good_frac", "screen_scope"))
 
 
 # ---- evoked figures ----

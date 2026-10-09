@@ -200,6 +200,48 @@ def test_a_table_missing_its_columns_is_refused(tmp_path):
         _bad_channels_for(str(table), "01")
 
 
+def test_a_table_row_can_name_one_run(tmp_path):
+    from fnirs_pipe.cli.workflows import _bad_channels_for
+
+    table = tmp_path / "bads.tsv"
+    table.write_text("participant_id\tsession\ttask\trun\tbad_channels\n"
+                     "sub-01\t\t\t\tS1_D1\n"
+                     "01\tses-02\t\t01\tS2_D2\n"
+                     "01\t\ttask-rest\t\tS3_D3\n", encoding="utf-8")
+    first = {"subject": "01", "session": "02", "task": "tapping", "run": 1}
+
+    assert _bad_channels_for(str(table), "01", first) == ["S1_D1", "S2_D2"]
+    assert _bad_channels_for(str(table), "01", {**first, "run": 2}) == ["S1_D1"]
+    assert _bad_channels_for(str(table), "01", {**first, "task": "rest"}) == ["S1_D1", "S2_D2",
+                                                                              "S3_D3"]
+    # without a recording, only the rows that hold for every one of them
+    assert _bad_channels_for(str(table), "01") == ["S1_D1"]
+
+
+@pytest.mark.parametrize("cell", ["0 1", "run-x", "ses_02"])
+def test_a_table_label_that_is_not_bids_is_refused(tmp_path, cell):
+    from fnirs_pipe.cli.workflows import _bad_channels_for
+
+    column = "run" if cell.startswith("run") else "session"
+    table = tmp_path / "bads.tsv"
+    table.write_text(f"participant_id\t{column}\tbad_channels\n01\t{cell}\tS1_D1\n",
+                     encoding="utf-8")
+    with pytest.raises(ValueError, match=f"line 2: {column}"):
+        _bad_channels_for(str(table), "01", {"subject": "01"})
+
+
+def test_a_table_row_matching_no_recording_stops_the_run(mini_bids, tmp_path):
+    from fnirs_pipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from fnirs_pipe.io.bids import get_layout
+
+    table = tmp_path / "bads.tsv"
+    table.write_text("participant_id\ttask\trun\tbad_channels\n"
+                     "01\ttapping\t\tS1_D1\n"
+                     "02\ttapping\t2\tS1_D1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"line 3 \(sub-02 task-tapping run-2\) matches no"):
+        _refuse_unmatched_bad_channel_rows(str(table), get_layout(mini_bids))
+
+
 # ---- exclude: blanked for a reason that is not rejection ----
 
 def test_an_excluded_channel_is_blanked_like_a_rejected_one(haemo):
