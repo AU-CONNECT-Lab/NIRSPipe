@@ -8,9 +8,11 @@ that reads as a result.
 """
 
 import pandas as pd
+import pytest
 
 from fnirs_pipe.io.naming import report_name
-from fnirs_pipe.qc.hyper.hyper_index import NULL_PERCENTILE, _links, _past_null, collect_rows
+from fnirs_pipe.qc.hyper.hyper_index import (NULL_PERCENTILE, _links, _mean_by_chroma, _past_null,
+                                             collect_rows)
 from tests.hyper._names import name
 
 
@@ -56,6 +58,22 @@ def test_a_tree_with_no_null_gets_no_column():
     # the column is hidden on an empty dict; a 0/0 would read as "nothing was coupled"
     assert _past_null(None) == {}
     assert _past_null(_null_table(chromophore=["hbo"], coherence=[0.4])) == {}
+
+
+def test_a_crossed_null_is_counted_same_channel_and_crossed_apart():
+    """The same-channel count is the diagonal only, so a crossed null does not inflate it."""
+    df = _null_table(chromophore=["hbo"] * 4, label=["S1", "S1", "S2", "S2"],
+                     label2=["S1", "S2", "S1", "S2"], percentile=[99.0, 99.0, 99.0, 10.0])
+    assert _past_null(df) == {"hbo": (1, 2)}
+    assert _past_null(df, crossed=True) == {"hbo": (3, 4)}
+
+
+def test_an_uncrossed_table_has_no_crossed_value():
+    df = _null_table(chromophore=["hbo"] * 2, label=["S1", "S2"], label2=["S1", "S2"],
+                     percentile=[99.0, 10.0], coherence=[0.4, 0.2])
+    assert _past_null(df, crossed=True) == {}
+    assert _mean_by_chroma(df, "coherence", crossed=True) == {}
+    assert _mean_by_chroma(df, "coherence")["hbo"] == pytest.approx(0.3)
 
 
 def test_only_the_artefacts_on_disk_are_linked(tmp_path):
