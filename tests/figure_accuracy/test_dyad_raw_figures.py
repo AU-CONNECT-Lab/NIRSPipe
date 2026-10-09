@@ -329,8 +329,6 @@ def test_the_channel_summary_marks_a_pair_one_member_rejected_as_mixed(groups, g
         assert colour == legend[want], (pair, colour)
 
 
-@pytest.mark.xfail(strict=True, reason="S6: the comparability table's long-pair count is the "
-                   "length of the grid's every pair, short ones included")
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_comparability_table_counts_each_member_s_long_pairs(groups, group):
     members = js_var(_page(groups, group), "_MEMBERS")

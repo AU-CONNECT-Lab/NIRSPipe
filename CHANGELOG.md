@@ -60,6 +60,7 @@ All notable changes to this project will be documented in this file.
 - A triad's pairing page listed every member in its quality and alignment tables
 - Condition panels named a 10 s window for values measured on the run's `--window-length` grid
 - The cohort's windowed grid drew a highlighted run with the next run's values once an earlier run lacked that channel set
+- The dyad raw page's comparability table counted every pair, short ones included, as a long pair
 
 ### Removed
 - `fnirs-hyper --sci-threshold`; members' own screening lines are read instead

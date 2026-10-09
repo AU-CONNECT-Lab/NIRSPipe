@@ -39,6 +39,8 @@ from fnirs_pipe.pipeline.hyper.coherence import SCREEN_NULL_ITER, screening_cohe
 from fnirs_pipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from fnirs_pipe.qc.common.report_shell import guard, note
 from fnirs_pipe.qc.common.windows import condition_windows, markers_on_data_axis
+from fnirs_pipe.qc.metrics._helpers import long_short_channels
+from fnirs_pipe.utils import pair_of
 from fnirs_pipe.utils.lineage import paths_from
 from fnirs_pipe.utils.logging import get_logger
 from fnirs_pipe import __version__
@@ -343,7 +345,10 @@ def _process_hyper_raw_group(
                           if sid in aligned_raws else None,
             "n_pairs": len(get_channel_pairs(aligned_raws[sid]))
                        if sid in aligned_raws else 0,
-            "n_long": len((grid or {}).get("pairs") or []),
+            # this member's own long pairs, by the run's separation bands
+            "n_long": (len({pair_of(ch) for ch in
+                            long_short_channels(aligned_raws[sid], sep_bands)[0]})
+                       if sid in aligned_raws else 0),
         }
         for sid in subject_ids
     ]
