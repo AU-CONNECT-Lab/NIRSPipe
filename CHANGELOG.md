@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `--keep-spans` takes a table of the stretches of each recording to use; the rest is marked `BAD_unselected`
 - Each derivative sidecar lists its `excluded_spans`, with kind and source
+- `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
+- The analysis page offers the fill method beside GVTD censoring
 
 ### Changed
 - **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run

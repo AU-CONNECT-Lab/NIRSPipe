@@ -53,7 +53,7 @@ _FULL_OPTS = dict(
     min_good_frac=0.75, screen_scope="run", window_length=10.0,
     short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
     epoch_tmin=-5.0, epoch_tmax=25.0, epoch_chunk=25.0,
-    by_condition=True, gvtd_censor="long", gvtd_n_std=10.0,
+    by_condition=True, gvtd_censor="long", gvtd_n_std=10.0, censor_fill="lomb",
     cardiac_l=0.7, cardiac_h=1.5, resp_l=0.1, resp_h=0.5,
     high_pass=0.01, low_pass=0.1, filter_method="iir", filter_order=4,
     resample=2.0, n_jobs=1,

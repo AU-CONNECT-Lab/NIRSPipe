@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.io.auxiliary import find_aux_table
+from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL, fill_corrupted
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
@@ -35,6 +36,7 @@ from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
 )
 from nirspipe.io.snirf import write_snirf
+from nirspipe.utils.spans import excluded_spans
 
 logger = get_logger("post.pipeline")
 
@@ -55,6 +57,8 @@ class PostConfig:
     low_pass:  float | None = None
     filter_method: str = DEFAULT_FILTER_METHOD
     filter_order:  int = DEFAULT_FILTER_ORDER
+    # how corrupted BAD_ spans are filled before the bandpass; see pipeline/censor_fill.py
+    censor_fill:   str = DEFAULT_CENSOR_FILL
 
     roi_map: dict | None = None
     # names the seg- entity on every ROI output, so one tree can hold two ROI
@@ -284,7 +288,14 @@ def run_post(
     nirs_dir = output_dir / f"sub-{config.subject}" / (
         f"ses-{config.session}" if config.session else "") / "nirs"
 
-    result = raw_haemo.copy()
+    known_spans = _known_spans(source_path)
+    if config.censor_fill == "spline":
+        logger.warning("sub-%s | --censor-fill spline: a cubic spline across a shared gap may "
+                       "inflate coherence when both members of a pair miss the same stretch",
+                       config.subject)
+    # before every continuous step, the broadband branch's included
+    filled = fill_corrupted(raw_haemo.copy(), config.censor_fill)
+    result = filled.copy()
 
     aux_path = None
     if config.aux:
@@ -305,12 +316,12 @@ def run_post(
                                        config.filter_method, config.filter_order))
         result = bandpass_filter(result, l_freq=config.high_pass, h_freq=config.low_pass,
                                  method=config.filter_method, order=config.filter_order)
-        _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities)
+        _write_step_snirf(result, config, output_dir, desc="filtered", rec=rec, source_entities=source_entities, known_spans=known_spans)
 
     if config.resample_sfreq is not None:
         logger.info("sub-%s | resample -> %.1f Hz", config.subject, config.resample_sfreq)
         result = resample(result, config.resample_sfreq)
-        _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities)
+        _write_step_snirf(result, config, output_dir, desc="resampled", rec=rec, source_entities=source_entities, known_spans=known_spans)
 
     # SQM is not computed here either; the record is assembled from disk after this
     # pipeline returns, which is what lets one writer own the whole file.
@@ -357,7 +368,7 @@ def run_post(
             output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
 
         # FC on the task residual: the task is in the design matrix, so what correlates here
         # is what the model did not explain.
@@ -390,7 +401,7 @@ def run_post(
             source_path=rec.path_of(result),
             **rest_glm_kwargs,
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
 
         # ALFF/fALFF need a broadband residual: fALFF's denominator spans the full spectrum,
         # so its input must not be low-passed. Re-run the same confound regression on the
@@ -413,7 +424,7 @@ def run_post(
                     config.subject, config.drift_model, config.drift_order,
                 )
             else:
-                result_bb = raw_haemo.copy()
+                result_bb = filled.copy()
                 if config.resample_sfreq is not None:
                     result_bb = resample(result_bb, config.resample_sfreq)
                 # its input skipped the bandpass, so band-matching the aux to one would
@@ -432,7 +443,7 @@ def run_post(
                          "high_pass": None, "low_pass": None,
                          "filter_method": None, "filter_order": None})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
-                                  rec=rec, source_entities=source_entities)
+                                  rec=rec, source_entities=source_entities, known_spans=known_spans)
 
         alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
@@ -463,7 +474,7 @@ def run_post(
                 output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
             )
-            _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities)
+            _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
 
         # No ALFF, for glm's reason: the source is bandpassed and fALFF's denominator spans
         # the full spectrum, so the number would be ~1 by construction.
@@ -692,7 +703,18 @@ def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subjec
     )
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None) -> Path:
+def _known_spans(source_path: Path | None) -> list[dict]:
+    """The input stage's ``excluded_spans``, whose recorded sources the post stages keep."""
+    if source_path is None:
+        return []
+    sidecar = read_json(Path(source_path).with_suffix(".json"))
+    if "excluded_spans" not in sidecar:
+        raise StageError(f"{Path(source_path).name} records no excluded_spans; this "
+                         f"derivative tree predates them, rerun nirspipe")
+    return sidecar["excluded_spans"]
+
+
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None) -> Path:
     entities = carry_entities(source_entities)
     entities["desc"] = desc
     lin = lineage_of(haemo)
@@ -716,6 +738,7 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "filter_method": config.filter_method,
         "filter_order": config.filter_order if config.filter_method == "iir" else None,
         "resample_sfreq": config.resample_sfreq,
+        "censor_fill": config.censor_fill,
         # which channels the run treated as short, so a reader of a derivatives tree can
         # reproduce the split. Without it neither the short-channel regressors nor the
         # blanking of a channel fitted against itself can be recovered from the file.
@@ -733,6 +756,7 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "data": data_state(haemo),
         # read back by read_snirf: SNIRF itself cannot carry the marks
         "bad_channels": list(haemo.info["bads"]),
+        "excluded_spans": excluded_spans(haemo, known=known_spans or ()),
     })
     logger.info("sub-%s | %s snirf -> %s", config.subject, desc, out_path)
     return rec.written(out_path, haemo)

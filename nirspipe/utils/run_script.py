@@ -8,6 +8,7 @@ noted in comments rather than re-run here.
 
 from datetime import datetime
 
+from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from pathlib import Path
 from typing import Any
@@ -70,6 +71,7 @@ def _build_script_text(
     min_good_frac: float | None = None,
     screen_scope: str = "run",
     keep_spans_table: str | None = None,
+    censor_fill: str = DEFAULT_CENSOR_FILL,
 ) -> str:
     dt_str = datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
@@ -135,7 +137,8 @@ def _build_script_text(
         w('from nirspipe.cli.workflows import _keep_spans_for',
           'from nirspipe.utils.spans import mark_unselected')
     if mode:
-        w('from nirspipe.pipeline.denoise import bandpass_filter, resample')
+        w('from nirspipe.pipeline.denoise import bandpass_filter, resample',
+          'from nirspipe.pipeline.censor_fill import fill_corrupted')
     if mode in ("glm", "rest") or denoise_regress:
         w('from nirspipe.pipeline.glm import run_glm_pipeline')
     if mode == "rest" or denoise_regress:
@@ -186,7 +189,8 @@ def _build_script_text(
     # ---- post parameters ----
     if mode:
         w('', '# ---- post parameters ----', f'HIGH_PASS      = {high_pass!r}',
-          f'LOW_PASS       = {low_pass!r}', f'FILTER_METHOD  = {filter_method!r}',
+          f'LOW_PASS       = {low_pass!r}', f'CENSOR_FILL    = {censor_fill!r}',
+          f'FILTER_METHOD  = {filter_method!r}',
           f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}')
     # every mode that fits a regression honours --noise-model, so the constant cannot live
     # in the glm branch: the script would report a model the run did not use
@@ -331,7 +335,9 @@ def _build_script_text(
     )
 
     if mode:
-        b('', '# ================= post =================', 'result = raw_haemo.copy()')
+        b('', '# ================= post =================', 'result = raw_haemo.copy()',
+          '# corrupted BAD_ spans filled before the bandpass; BAD_unselected stays as measured',
+          'result = fill_corrupted(result, CENSOR_FILL)')
 
         if high_pass is not None or low_pass is not None:
             b(
@@ -490,6 +496,7 @@ def write_run_script(
         low_pass=args.get("low_pass"),
         filter_method=_pick("filter_method", DEFAULT_FILTER_METHOD),
         filter_order=_pick("filter_order", DEFAULT_FILTER_ORDER),
+        censor_fill=_pick("censor_fill", DEFAULT_CENSOR_FILL),
         resample_sfreq=args.get("resample_sfreq"),
         stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),

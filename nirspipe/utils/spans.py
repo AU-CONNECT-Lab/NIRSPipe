@@ -117,7 +117,7 @@ def mark_unselected(raw: mne.io.BaseRaw, keep) -> mne.io.BaseRaw:
     return raw
 
 
-def excluded_spans(raw: mne.io.BaseRaw, input_spans=()) -> list[dict[str, Any]]:
+def excluded_spans(raw: mne.io.BaseRaw, input_spans=(), known=()) -> list[dict[str, Any]]:
     """The sidecar's ``excluded_spans``: each ``BAD_`` span with its kind and where it came from.
 
     ::
@@ -127,13 +127,17 @@ def excluded_spans(raw: mne.io.BaseRaw, input_spans=()) -> list[dict[str, Any]]:
             "kind": "unselected", "source": "--keep-spans"}, {... "source": "--gvtd-censor"}]
 
     ``input_spans`` is :func:`bad_spans` of the recording as read, so a span the input
-    already carried is credited to the input file whatever its description.
+    already carried is credited to the input file whatever its description. ``known`` is
+    an upstream sidecar's ``excluded_spans``, whose source a matching span keeps.
     """
     given = {(round(a, 6), round(b, 6), d) for a, b, d in input_spans}
+    recorded = {(round(k["onset"], 6), round(k["onset"] + k["duration"], 6), k["description"]):
+                k["source"] for k in known}
     out = []
     for start, stop, desc in bad_spans(raw):
-        source = (INPUT_SOURCE if (round(start, 6), round(stop, 6), desc) in given
-                  else _ADDED_BY.get(desc, INPUT_SOURCE))
+        key = (round(start, 6), round(stop, 6), desc)
+        source = (INPUT_SOURCE if key in given
+                  else recorded.get(key) or _ADDED_BY.get(desc, INPUT_SOURCE))
         out.append({"onset": start, "duration": stop - start, "description": desc,
                     "kind": span_kind(desc), "source": source})
     return out

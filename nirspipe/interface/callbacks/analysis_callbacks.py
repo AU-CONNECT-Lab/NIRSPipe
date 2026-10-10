@@ -242,6 +242,9 @@ def _build_cli_args(opts: dict) -> list[str]:
             args += ["--filter-method", str(opts["filter_method"])]
         if opts.get("filter_order") is not None:
             args += ["--filter-order", str(int(opts["filter_order"]))]
+        # a post setting, but it only acts on the spans GVTD censoring marks
+        if opts.get("gvtd_censor") not in (None, "off") and opts.get("censor_fill"):
+            args += ["--censor-fill", opts["censor_fill"]]
         if opts.get("resample") is not None:
             args += ["--resample-sfreq", str(opts["resample"])]
         if opts.get("roi_mapping"):
@@ -303,6 +306,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-by-condition",      "value"),
     State("an-gvtd-censor",       "value"),
     State("an-gvtd-n-std",        "value"),
+    State("an-censor-fill",       "value"),
     State("an-motion-correction", "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
@@ -334,7 +338,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
                      min_good_frac, screen_scope, window_length,
                      short_max_dist, long_min_dist, long_max_dist,
                      epoch_tmin, epoch_tmax, epoch_chunk,
-                     by_condition, gvtd_censor, gvtd_n_std,
+                     by_condition, gvtd_censor, gvtd_n_std, censor_fill,
                      motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
@@ -363,6 +367,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         long_max_dist=long_max_dist,
         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax, epoch_chunk=epoch_chunk,
         by_condition=bool(by_condition), gvtd_censor=gvtd_censor, gvtd_n_std=gvtd_n_std,
+        censor_fill=censor_fill,
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
@@ -447,6 +452,7 @@ _GONE  = {"display": "none"}
     Input("an-epoch-tmin", "value"), Input("an-epoch-tmax", "value"),
     Input("an-epoch-chunk", "value"), Input("an-by-condition", "value"),
     Input("an-gvtd-censor", "value"), Input("an-gvtd-n-std", "value"),
+    Input("an-censor-fill", "value"),
     Input("an-drift-model", "value"), Input("an-drift-high-pass", "value"),
     Input("an-short-channel", "value"), Input("an-fc", "value"),
     Input("an-hrf-model", "value"), Input("an-noise-model", "value"),
@@ -454,7 +460,7 @@ _GONE  = {"display": "none"}
 )
 def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, window,
                       card_l, card_h, resp_l, resp_h, tmin, tmax, chunk, by_cond,
-                      censor, n_std, drift, drift_hp, short_ch, fc,
+                      censor, n_std, fill, drift, drift_hp, short_ch, fc,
                       hrf, noise, stim_dur, mode):
     # what the run will use, so an empty field still says what it gets
     defaults = mode_defaults(mode)
@@ -474,7 +480,8 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
                 value("chunk", chunk, " s"),
                 "per-condition QC" if by_cond else None) or "not set",
         summary("off" if censor in (None, "off") else f"{censor} channels",
-                value("at", n_std, " SD") if censor not in (None, "off") else None),
+                value("at", n_std, " SD") if censor not in (None, "off") else None,
+                value("fill", fill) if censor not in (None, "off") else None),
         summary(value("drift", drift), value("high-pass", drift_hp, " Hz"),
                 value("short channel", short_ch), "FC products" if fc else None),
         summary(value("HRF", hrf), value("noise", noise), value("stim", stim_dur, " s")),
@@ -483,6 +490,7 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
 
 @callback(
     Output("an-gvtd-n-std-wrap",  "style"),
+    Output("an-censor-fill-wrap", "style"),
     Output("an-drift-hp-wrap",    "style"),
     Output("an-drift-order-wrap", "style"),
     Input("an-gvtd-censor", "value"),
@@ -493,6 +501,7 @@ def hide_what_does_not_apply(censor, drift, mode):
     # each of these is read by exactly one setting of the control above it
     drift = drift or mode_defaults(mode).get("drift_model")
     return (
+        _SHOWN if censor not in (None, "off") else _GONE,
         _SHOWN if censor not in (None, "off") else _GONE,
         _SHOWN if drift == "cosine" else _GONE,
         _SHOWN if drift == "polynomial" else _GONE,

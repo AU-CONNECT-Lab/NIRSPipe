@@ -7,6 +7,12 @@ from pathlib import Path
 
 from nirspipe import __version__
 from nirspipe.cli import _shared
+from nirspipe.pipeline.censor_fill import (
+    DEFAULT_CENSOR_FILL,
+    FILL_METHODS,
+    LOMB_FMAX_HZ,
+    LOMB_OVERSAMPLE,
+)
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -223,6 +229,17 @@ def _build_parser() -> argparse.ArgumentParser:
                       help=f"Butterworth order, default {DEFAULT_FILTER_ORDER}, ignored by "
                            "--filter-method fir. Applied with filtfilt, so the effective rolloff "
                            "is twice this and the cutoff sits at -6 dB.")
+    post.add_argument("--censor-fill", choices=FILL_METHODS,
+                      help=f"How corrupted BAD_ spans (every BAD_ span but BAD_unselected, "
+                           f"such as BAD_gvtd) are filled before the bandpass, default "
+                           f"{DEFAULT_CENSOR_FILL!r}. 'linear' joins the kept samples either "
+                           f"side; 'spline' runs one cubic spline through every kept sample; "
+                           f"'lomb' rebuilds each span from a Lomb-Scargle fit to the kept "
+                           f"samples (sinusoids up to {LOMB_FMAX_HZ:g} Hz at "
+                           f"{LOMB_OVERSAMPLE}x oversampling, scaled to the kept samples' SD). "
+                           f"A span at the recording's edge takes the nearest kept value under "
+                           f"linear and spline. The fill keeps the artefact out of the filter; "
+                           f"the spans stay marked, and desc-preproc keeps the measured data.")
     post.add_argument("--resample-sfreq", type=float,
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
     # None rather than False, here and on --drift-order, so a --config or mode value can show

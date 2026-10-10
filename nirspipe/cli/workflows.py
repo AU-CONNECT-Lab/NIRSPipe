@@ -25,6 +25,7 @@ from nirspipe.io.derivatives import (
 )
 from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
+from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils import job_db as _jdb
@@ -75,6 +76,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         low_pass=pick("low_pass"),
         filter_method=pick("filter_method", default=DEFAULT_FILTER_METHOD),
         filter_order=pick("filter_order", default=DEFAULT_FILTER_ORDER),
+        censor_fill=pick("censor_fill", default=DEFAULT_CENSOR_FILL),
         resample_sfreq=pick("resample_sfreq"),
         stim_dur=pick("stim_dur"),
         hrf_model=pick("hrf_model"),
