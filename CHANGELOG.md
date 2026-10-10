@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
 - Every QC report table drops its cell grid for hairline rows, numeric columns and their headers right-aligned
+- QC reports print no exponents: drift in µM, band power in µM²/Hz, GVTD in mOD/sample, unit in the label
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

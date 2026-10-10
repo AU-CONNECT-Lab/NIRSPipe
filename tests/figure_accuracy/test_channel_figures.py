@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from mne.time_frequency import psd_array_welch
 
+from nirspipe.qc.boilerplate.vocabulary import display_value
 from nirspipe.qc.figures.common._utils import PSD_NFFT
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
 from nirspipe.qc.subject.record_io import read_record
@@ -181,11 +182,12 @@ def test_each_gvtd_line_is_the_threshold_the_record_holds(request, run_name, des
     run = request.getfixturevalue(run_name)
     rec = read_record(run.nirs / f"sub-01_task-tapping_desc-{record}_qc.json")
     carpet = plotly_figures(run.figure(desc.replace("motion", "carpet")))[0]
-    assert _threshold_lines(carpet) == pytest.approx(
-        [rec["raw_long"]["gvtd_thresh"], rec["raw_short"]["gvtd_thresh"]], rel=1e-9)
+    # the figure draws GVTD in the unit the metrics table prints it in
+    shown = [display_value("gvtd_thresh", rec[s]["gvtd_thresh"]) for s in ("raw_long", "raw_short")]
+    assert _threshold_lines(carpet) == pytest.approx(shown, rel=1e-9)
     for pair in run.truth.pairs:
         fig = plotly_figures(run.figure(desc, chan=f"{_fname(pair.name)}760"))[0]
-        own = rec["raw_short" if pair.short else "raw_long"]["gvtd_thresh"]
+        own = display_value("gvtd_thresh", rec["raw_short" if pair.short else "raw_long"]["gvtd_thresh"])
         assert _threshold_lines(fig) == pytest.approx([own], rel=1e-9), pair.name
 
 
@@ -194,12 +196,13 @@ def test_the_gvtd_row_is_its_set_s_gvtd_in_the_motion_band(denoise_run):
     for short in (False, True):
         pair = next(p for p in denoise_run.truth.pairs if p.short == short)
         names = [c for c in od.ch_names if denoise_run.truth.pair(c.rsplit(" ", 1)[0]).short == short]
-        expected = gvtd_timetrace(od.get_data(picks=names), od.info["sfreq"], *GVTD_MOTION_BAND)
+        expected = display_value("gvtd_filt_mean", gvtd_timetrace(
+            od.get_data(picks=names), od.info["sfreq"], *GVTD_MOTION_BAND))
         gvtd = next(t for t in _motion(denoise_run, pair.name)["data"]
                     if (t.get("name") or "").startswith("GVTD"))
         x, y = xy(gvtd)
         np.testing.assert_allclose(x, od.times[1:], atol=1e-6)
-        np.testing.assert_allclose(y, expected, rtol=1e-6, atol=1e-12)
+        np.testing.assert_allclose(y, expected, rtol=1e-6, atol=1e-9)
 
 
 def _strings(node):
