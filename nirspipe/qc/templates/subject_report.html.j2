@@ -24,12 +24,12 @@
 {% set _ = _sections.append(none) %}
 {% set _ = _sections.append(("Metrics", "Metrics")) %}
 {% if channel_summary_path %}
-  {% set _ = _sections.append(("ChannelSummary", "Ch. Summary")) %}
+  {% set _ = _sections.append(("ChannelSummary", "By channel")) %}
 {% endif %}
 {% if condition_summary_path %}
-  {% set _ = _sections.append(("ConditionSummary", "Per-condition")) %}
+  {% set _ = _sections.append(("ConditionSummary", "By condition")) %}
 {% endif %}
-{% if trial_qc_path %}{% set _ = _sections.append(("TrialQC", "Per-trial")) %}{% endif %}
+{% if trial_qc_path %}{% set _ = _sections.append(("TrialQC", "By trial")) %}{% endif %}
 {% set _ = _sections.append(("Errors", "Errors")) %}
 
 {# the run and its conditions are one set of pages, so each reaches any other in a click #}
@@ -458,7 +458,7 @@
 {% macro mv_pair(key, before, after) %}{% if after is not none %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% else %}{{ mv(key, before) }}{% endif %}{% endmacro %}
 
 <h2 id="Metrics">Quality Metrics</h2>
-{#- the two tables, then the figures; not lettered: a-f are processing steps -#}
+{#- the two tables here, the figures under Quality Figures; not lettered: a-f are processing steps -#}
 <section id="RunSummary" class="step">
 <h3 class="step-title">Run summary</h3>
 <div class="details-body">
@@ -732,6 +732,10 @@
   {% endif %}
 </div>
 </section>
+{% endif %}
+
+{% if stage_metrics_path or channel_summary_path or condition_summary_path or trial_qc_path %}
+<h2 id="QualityFigures">Quality Figures</h2>
 {% endif %}
 
 {% if stage_metrics_path %}
