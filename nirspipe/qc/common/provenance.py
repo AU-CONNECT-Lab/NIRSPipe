@@ -43,6 +43,7 @@ class Node:
     state: str = ""                            # shape of the data here, e.g. "40/56 ch · 2 Hz"
     missing: bool = False                      # the sidecar is here, the file it describes is not
     checkpoint: bool = False                   # a QC record, measured off the chain rather than on it
+    excluded_spans: list = field(default_factory=list)  # the file's BAD_ spans, as its sidecar lists them
 
 
 def _key(path: str | Path) -> str:
@@ -237,6 +238,7 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
             state=_state_line(data),
             missing=_file_is_gone(sidecar, data),
             checkpoint=_is_checkpoint(data),
+            excluded_spans=list(meta.get("excluded_spans") or []),
         )
 
     # Sources may name files outside nirs_dir (the BIDS input); add them as roots.

@@ -334,7 +334,14 @@ def run_prep(
         "good_frac_scores": {k: float(v) for k, v in good_frac_scores.items()},
         **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
         "excluded_time": excluded_time(raw_od),
-    }, extra_parameters={"screen_scope_counted": counted})
+    }, extra_parameters={
+        "screen_scope_counted": counted,
+        # what the Methods sentence on GVTD censoring is written from
+        **({"gvtd_censor": config.gvtd_censor,
+            **{k: censor_metrics.get(k) for k in ("gvtd_censor_n_std", "gvtd_censor_min_epoch_s",
+                                                  "gvtd_censor_channel_set")}}
+           if config.gvtd_censor else {}),
+    })
 
     # step 3: motion correction (spike/step artifact repair)
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)

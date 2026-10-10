@@ -174,7 +174,7 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_step_sidecar(path: Path, step: str, source: "str | None", bads: "list[str]",
-                       **params: Any) -> None:
+                       excluded_spans: "list[dict] | None" = None, **params: Any) -> None:
     """The sidecar of one post-stage output: the step, the file it came from, its settings, the bads."""
     write_sidecar_json(path, {
         "pipeline_version": __version__,
@@ -182,6 +182,7 @@ def write_step_sidecar(path: Path, step: str, source: "str | None", bads: "list[
         "Sources": [source] if source else [],
         "parameters": params,
         "bad_channels": bads,
+        **({"excluded_spans": excluded_spans} if excluded_spans is not None else {}),
     })
 
 

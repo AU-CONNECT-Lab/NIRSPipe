@@ -250,3 +250,51 @@ def test_a_re_paired_draw_excludes_the_real_union_and_the_stand_ins_corrupted_ti
     partner = np.flatnonzero(excluded[pid]) / SFREQ + pair[pid].first_time
     assert ((partner >= 150) & (partner < 160)).all()                 # its unselected time is not
     assert excluded[pid].sum() == pytest.approx(10 * SFREQ, abs=1)
+
+
+# ---- the dyad report ----
+
+def test_excluded_columns_are_washed_out_and_carry_no_arrow():
+    from nirspipe.qc.figures.hyper.hyper_post_figures import (_excluded_runs,
+                                                             build_wtc_map_interactive)
+    times = np.arange(5.0)
+    assert _excluded_runs(times, np.array([0, 1, 1, 0, 1], bool)) == [(0.5, 2.5), (3.5, 4.5)]
+    assert _excluded_runs(times, None) == [] and _excluded_runs(times, np.zeros(5, bool)) == []
+
+    result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
+    (pair_key, labels), = result.pairs.items()
+    data = next(d for d in labels.values() if d is not None)
+    plain = build_wtc_map_interactive(data, result.freqs, result.times, "a × b", [], {}, "S1_D1",
+                                      arrow_min=0.0)
+    marked = build_wtc_map_interactive({**data, "excluded": result.excluded[pair_key]},
+                                       result.freqs, result.times, "a × b", [], {}, "S1_D1",
+                                       arrow_min=0.0)
+    runs = _excluded_runs(result.times, result.excluded[pair_key])
+    washed = [s for s in marked.layout.shapes if s.type == "rect"]
+    assert [(s.x0, s.x1) for s in washed] == runs and not [s for s in plain.layout.shapes
+                                                          if s.type == "rect"]
+    arrows = [a.x for a in marked.layout.annotations if a.name == "wtcarrow"]
+    assert arrows and not any(a0 <= x <= a1 for x in arrows for a0, a1 in runs)
+    assert any(a0 <= a.x <= a1 for a in plain.layout.annotations if a.name == "wtcarrow"
+               for a0, a1 in runs)
+
+
+def test_a_scope_header_leads_with_the_kept_seconds_only_when_spans_exist():
+    from nirspipe.qc.hyper.hyper_report import _number_table
+    band = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
+                         "coherence": [0.3], "n_valid_frac": [0.25], "kept_s": [75.6]})
+    plain = _number_table({"hbo": band}, None, ["S1_D1"], "channel", ("hbo",))
+    assert plain["valid"] == "25% outside COI"
+    spanned = _number_table({"hbo": band}, None, ["S1_D1"], "channel", ("hbo",), spans=True)
+    assert spanned["valid"] == "kept 75.6 s · 25% outside COI and BAD_ spans"
+
+
+def test_the_dyad_report_builds_with_spans_and_says_what_it_kept(tmp_path):
+    build_hyper_post_report(
+        group_id="G1", task="tap", group=[GroupEntry("G1", s, "tap") for s in SUBS],
+        aligned_raws=_dyad(SPANS), offsets={s: 0.0 for s in SUBS}, output_dir=tmp_path,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
+        wtc_chroma=("hbo",), wtc_by_condition=True)
+    pages = {p.name: p.read_text(encoding="utf-8") for p in tmp_path.rglob("*.html")}
+    assert any("outside COI and BAD_ spans" in text and "kept 320.0 s" in text
+               for text in pages.values())

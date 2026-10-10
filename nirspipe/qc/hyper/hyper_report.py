@@ -53,6 +53,7 @@ from nirspipe.qc.common.report_shell import (
 from nirspipe.qc.common.windows import crop_provenance, markers_on_data_axis
 from nirspipe.utils.lineage import paths_from
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans
 from nirspipe.qc.common.record_views import condition_set_view
 from nirspipe.qc.figures.hyper.hyper_post_figures import (
     ARROW_MIN_COHERENCE, _clears, build_isc_panel, build_isc_roi_matrix, build_wtc_channel,
@@ -654,7 +655,7 @@ def _slice_pair(df, pair: "tuple[str, str] | None"):
 
 
 def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
-                  chroma: tuple, diagonal_only: bool = False) -> dict:
+                  chroma: tuple, diagonal_only: bool = False, spans: bool = False) -> dict:
     """Every number behind one scope's panels, one row per pairing.
 
     ::
@@ -679,6 +680,10 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     and the band, so every pairing in a scope has the same share. A rejected pairing
     contributes nothing to it, its band mean being NaN.
 
+    ``spans`` is whether either member carries a ``BAD_`` span. The share then also leaves
+    out the excluded columns, the header says so, and it leads with the pairing's kept
+    seconds; without spans the header reads as it always did.
+
     Rows are every pairing that carries at least one value, so an uncrossed run shows the
     diagonal alone, for the coherence and the ISC both. ``isc`` is the matrices for this scope at this table's own level, channel or
     ROI, and None where the scope produced none.
@@ -690,6 +695,7 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     """
     cells: dict = {}
     fracs: set = set()
+    kept: set = set()
 
     def _put(pair: tuple, column: str, text: str) -> None:
         cells.setdefault(pair, {})[column] = text
@@ -710,6 +716,9 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
             frac = getattr(row, "n_valid_frac", None)
             if frac is not None and np.isfinite(frac):
                 fracs.add(round(float(frac), 4))
+            seconds = getattr(row, "kept_s", None)
+            if seconds is not None and np.isfinite(seconds):
+                kept.add(round(float(seconds), 1))
 
     for ch_type in (chroma if isc else ()):
         mat, names = isc.get(ch_type) or (None, None)
@@ -733,9 +742,14 @@ def _number_table(bands: dict, isc: "dict | None", axis: list[str], kind: str,
     # off the rows that survived, so a column only the dropped pairings filled goes with them
     used = {col for row in rows for col in row["cells"]}
     lo, hi = (min(fracs), max(fracs)) if fracs else (None, None)
+    outside = "outside COI and BAD_ spans" if spans else "outside COI"
     valid = "" if lo is None else (
-        f"{100 * lo:.0f}% outside COI" if lo == hi
-        else f"{100 * lo:.0f}–{100 * hi:.0f}% outside COI")
+        f"{100 * lo:.0f}% {outside}" if lo == hi
+        else f"{100 * lo:.0f}–{100 * hi:.0f}% {outside}")
+    if spans and kept:
+        k_lo, k_hi = min(kept), max(kept)
+        seconds = f"kept {k_lo:.1f} s" if k_lo == k_hi else f"kept {k_lo:.1f}–{k_hi:.1f} s"
+        valid = f"{seconds} · {valid}" if valid else seconds
     return ({"kind": kind, "columns": [c for c in order if c in used],
              "rows": rows, "valid": valid} if rows else {})
 
@@ -1062,6 +1076,8 @@ def build_hyper_post_report(
                 if result and pair_key:
                     key = (label1, label2) if wtc_channel_cross else label1
                     data = result.pairs.get(pair_key, {}).get(key)
+                    if data is not None and pair_key in result.excluded:
+                        data = {**data, "excluded": result.excluded[pair_key]}
                     site = label1 if label1 == label2 else f"{label1} × {label2}"
                     axis_value = (_pair_fname(label1) if label1 == label2 else
                                   f"{_pair_fname(label1)}x{_pair_fname(label2)}")
@@ -1493,6 +1509,7 @@ def build_hyper_post_report(
         # carries only the columns it filled and the page has one level of nesting instead
         # of a scope inside a kind inside a grid.
         number_tables = []
+        has_spans = any(bad_spans(raw) for raw in aligned_raws.values())
         for kind, key, axis, values in (
             ("Channel pairs", "chan", chan_axis, isc_values),
             ("ROI pairs", "roichan", roi_labels, isc_roi_values),
@@ -1505,7 +1522,7 @@ def build_hyper_post_report(
                 table = _number_table(
                     {c: _slice_pair(bands[c].get(key), pair) for c in chroma},
                     (values.get(pair) or {}).get(isc_label) or {}, axis, kind, chroma,
-                    diagonal_only=key == "roihom")
+                    diagonal_only=key == "roihom", spans=has_spans)
                 if table:
                     per_scope.append((heading, table))
             merged = _merge_scopes(kind, axis, per_scope)

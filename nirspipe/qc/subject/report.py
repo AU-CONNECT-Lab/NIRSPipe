@@ -59,7 +59,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
 )
-from nirspipe.io.derivatives import entity_of
+from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.pipeline.denoise import band_limited
 from nirspipe.io.naming import parse_path, report_name
 import matplotlib
@@ -1204,6 +1204,69 @@ def _load_record(
     return {}
 
 
+def _sidecar_of(nirs_dir: Path, sqm_label: "str | None", subject: str, suffix: str) -> dict:
+    """One of the run's sidecars, or empty when it is not there."""
+    label = sqm_label or f"sub-{subject}"
+    path = nirs_dir / f"{label}_{suffix}.json"
+    try:
+        return read_json(path) if path.exists() else {}
+    except Exception:
+        return {}
+
+
+def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
+                      subject: str) -> dict:
+    """The run's excluded time: kept seconds, share per kind, the spans, and each condition's part.
+
+    Empty for a run without ``BAD_`` spans, so its report is the one it always was. The spans
+    are desc-sci's, which every later stage carries unchanged; trials left per condition
+    come from a task GLM's fit sidecar.
+    """
+    excluded = record.get("excluded") or {}
+    if not excluded.get("n_spans"):
+        return {"excluded": {}, "excluded_spans": [], "excluded_conditions": [],
+                "excluded_skipped": []}
+    spans = _sidecar_of(nirs_dir, sqm_label, subject, "desc-sci_nirs").get("excluded_spans") or []
+    glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
+    events_left = glm.get("events_left") or {}
+    conditions = []
+    for label, entry in (record.get("by_condition") or {}).items():
+        t0, t1 = entry.get("window_s") or (None, None)
+        left = events_left.get(label) or {}
+        conditions.append({
+            "label": label,
+            "window": f"{t0:.1f}–{t1:.1f}" if t0 is not None else "",
+            "kept_s": entry.get("kept_s"),
+            "counted_windows": entry.get("counted_windows"),
+            "trials": (f"{left['left']} of {left['total']}" if left else ""),
+        })
+    # a condition GLM'd but not sliced, on a run without --by-condition
+    for label, left in events_left.items():
+        if label not in (record.get("by_condition") or {}):
+            conditions.append({"label": label, "window": "", "kept_s": None,
+                               "counted_windows": None,
+                               "trials": f"{left['left']} of {left['total']}"})
+    skipped = [section_note("excluded.skipped", output=item.get("output"),
+                            reason=item.get("reason"))
+               for suffix in ("desc-errts_nirs", "desc-errtsbroad_nirs", "desc-filtered_nirs",
+                              "desc-resampled_nirs")
+               for item in _sidecar_of(nirs_dir, sqm_label, subject, suffix).get(
+                   "skipped_outputs") or []]
+    return {
+        "excluded": {**excluded,
+                     "summary": section_note(
+                         "excluded.summary", kept=f"{excluded['kept_s']:.1f}",
+                         total=f"{excluded['total_s']:.1f}",
+                         unselected=f"{100 * excluded['unselected_frac']:.1f}%",
+                         corrupted=f"{100 * excluded['corrupted_frac']:.1f}%",
+                         n=int(excluded["n_spans"]))},
+        "excluded_spans": [{**span, "onset": f"{span['onset']:.1f}",
+                            "duration": f"{span['duration']:.1f}"} for span in spans],
+        "excluded_conditions": conditions,
+        "excluded_skipped": skipped,
+    }
+
+
 def _record_pair(record: dict, before: str, after: str, key: str) -> "tuple[dict, dict]":
     """One per-channel metric at two sections of the record, as ``(before, after)``.
 
@@ -1999,6 +2062,7 @@ def build_subject_report(
                                       fc_hbr_df=fc_hbr_df,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
+    excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=nirs_dir,
                                      sqm_label=sqm_label,
@@ -2088,6 +2152,7 @@ def build_subject_report(
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
+        **excluded_vars,
         **brain_vars,
 
         **epoch_vars,
@@ -2116,7 +2181,8 @@ def build_subject_report(
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
                               topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
-                              glm_vars, rest_vars, carpet_vars, cond_summary_vars),
+                              glm_vars, rest_vars, carpet_vars, cond_summary_vars,
+                              excluded_vars),
                 config=config, subject=subject,
                 out_path=out_path, out_dir=nirs_dir, sqm_label=sqm_label,
                 figures_dir=figures_dir, sci_scores=sci_scores, errors=errors,
@@ -2617,6 +2683,14 @@ def _write_condition_reports(
             "page_title": f"{report_vars['page_title']}  \u00b7  {label}",
             "condition_label": label,
             "condition_unassessed": entry.get("counted_windows") == 0,
+            # only on a run with spans, whose kept time differs from the window
+            "condition_kept": (
+                section_note("summary.condition_kept",
+                             kept=f"{entry['kept_s']:.1f}",
+                             window=f"{entry['window_s'][1] - entry['window_s'][0]:.1f}",
+                             windows=entry.get("counted_windows"))
+                if (report_vars.get("excluded") or {}).get("n_spans")
+                and entry.get("kept_s") is not None and entry.get("window_s") else ""),
             # what keeps this page's rating keys out of the run's; see the template's `_rk`
             "condition_slug": slug,
             "index_href": out_path.name,

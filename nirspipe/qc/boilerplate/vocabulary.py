@@ -295,6 +295,10 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
         "manual": (f" {'Channels' if len(manual) > 1 else 'Channel'} {_series(manual)} "
                    f"{'were' if len(manual) > 1 else 'was'} also marked as bad by hand."
                    if manual else ""),
+        # GVTD's spans come after the screening and never reach its count
+        "spans": (" Windows touching a BAD_ span were not counted."
+                  if any(span.get("source") != "--gvtd-censor"
+                         for span in params.get("excluded_spans") or []) else ""),
     }
 
 def _dpf_phrase(dpf: Any) -> str:
@@ -344,13 +348,18 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
         "coi": ", excluding the cone of influence" if params.get("mask_coi") else "",
         "whiten": (" Before the transform, each long channel was prewhitened with an "
                    f"autoregressive model of order {params.get('wtc_whiten_order')} "
-                   f"({_num(whiten_s)} s)." if whiten_s else ""),
+                   f"({_num(whiten_s)} s)"
+                   + (", its coefficients fitted on that member's samples outside BAD_ spans"
+                      if _has_member_spans(params) else "") + "."
+                   if whiten_s else ""),
         "conditions": _condition_route(params),
         "significance": _monte_carlo(params),
         "window": (f" Only {_num(window[0])}–{_num(window[1])} s of the aligned recordings "
                    "were analysed." if window else ""),
         "bads": (" A channel rejected in any of a member's runs was left out of all of them."
                  if params.get("bads_scope") == "subject" else ""),
+        "excluded": (" Time inside a BAD_ span of either member was left out of every average, "
+                     "with no guard band around it." if _has_member_spans(params) else ""),
     }
 
 def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
@@ -378,13 +387,55 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
         "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
     }
 
+def _has_member_spans(params: dict[str, Any]) -> bool:
+    """Whether a dyad table's members carried any BAD_ span."""
+    return any((params.get("excluded_spans_s") or {}).values())
+
+
+def _censoring_phrase(params: dict[str, Any]) -> str:
+    """What a regression left out of its fit, or nothing for a run without BAD_ spans."""
+    frac = params.get("censored_frac")
+    if not frac:
+        return ""
+    dropped = params.get("dropped_conditions") or []
+    # ordinary least squares estimates no noise model, so it has no lags to keep in kept time
+    noise = ("" if params.get("noise_model") == "ols" else
+             " the noise model was estimated only from stretches whose lags all lay in kept "
+             "time,")
+    return (f" Frames inside BAD_ spans ({100 * float(frac):.0f}% of the recording) were left "
+            f"out of the fit: the design was built on the full time axis,{noise} and the "
+            "residual kept its full length."
+            + (f" {'Conditions' if len(dropped) > 1 else 'Condition'} {_series(dropped)} "
+               f"{'were' if len(dropped) > 1 else 'was'} dropped from the model, having no "
+               "signal in the kept frames." if dropped else ""))
+
+
+def _min_time_phrase(params: dict[str, Any], what: str) -> str:
+    min_time = params.get("min_time")
+    return (f" {what} computed only when at least {_num(min_time)} s lay outside BAD_ spans."
+            if min_time else "")
+
+
+# how each fill method is described; the Lomb-Scargle numbers are the package's constants
+def _fill_phrase(method: Any) -> str:
+    from nirspipe.pipeline.censor_fill import LOMB_FMAX_HZ, LOMB_OVERSAMPLE
+    return {
+        "linear": "by linear interpolation between the kept samples either side",
+        "spline": "with one cubic spline through every kept sample",
+        "lomb": (f"from a Lomb-Scargle fit to the kept samples (sinusoids up to "
+                 f"{LOMB_FMAX_HZ:g} Hz at {LOMB_OVERSAMPLE}x oversampling)"),
+    }.get(str(method), f"({method})")
+
+
 def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The correlation's optional steps, in the order they ran: whitening, band limit, lag."""
     before = []
     if params.get("isc_whiten_s"):
         before.append("prewhitened with an autoregressive model of order "
                       f"{params.get('isc_whiten_order')} ({_num(params['isc_whiten_s'])} s), "
-                      "fitted on the whole aligned recording")
+                      "fitted on the whole aligned recording"
+                      + (" with its coefficients taken from that member's samples outside "
+                         "BAD_ spans" if _has_member_spans(params) else ""))
     low, high = params.get("isc_band_hz") or (None, None)
     if low is not None and high is not None:
         before.append(f"band-pass filtered to {_num(low)}–{_num(high)} Hz")
@@ -394,6 +445,9 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
         before.append(f"low-pass filtered at {_num(high)} Hz")
     options = (f" Before correlating, each signal was {' and '.join(before)}."
                if before else "")
+    if _has_member_spans(params):
+        options += (" Samples inside a BAD_ span of either member were left out of every "
+                    "correlation.")
     if params.get("isc_max_lag_s"):
         options += (" The correlation was taken at the lag of largest magnitude within "
                     f"±{_num(params['isc_max_lag_s'])} s, keeping its sign.")
@@ -428,11 +482,25 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"sfreq": _num(params.get("sfreq") or params.get("resample_sfreq"))}
     if key == "confound_regression":
         return {"regressors": _regressor_phrase(params),
-                "noise_model": _noise_phrase(params.get("noise_model"))}
+                "noise_model": _noise_phrase(params.get("noise_model")),
+                "censoring": _censoring_phrase(params)}
     if key == "glm":
         return {"conditions": _conditions_phrase(params),
                 "regressors": _regressor_phrase(params),
-                "noise_model": _noise_phrase(params.get("noise_model"))}
+                "noise_model": _noise_phrase(params.get("noise_model")),
+                "censoring": _censoring_phrase(params)}
+    if key == "gvtd_censoring":
+        return {"channel_set": str(params.get("gvtd_censor_channel_set")
+                                   or params.get("gvtd_censor") or "long"),
+                "band": f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz",
+                "n_std": _num(params.get("gvtd_censor_n_std")),
+                "min_epoch_s": _num(params.get("gvtd_censor_min_epoch_s"))}
+    if key == "censor_fill":
+        return {"method": _fill_phrase(params.get("censor_fill"))}
+    if key == "fc":
+        return {"kept": " over the frames outside BAD_ spans"
+                if params.get("excluded_spans") else "",
+                "min_time": _min_time_phrase(params, "Connectivity was")}
     if key in ("hyper_wtc", "hyper_wtc_crossed"):
         return _wtc_slots(params)
     if key == "hyper_isc":
@@ -450,7 +518,11 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":
-        return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass"))}
+        return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
+                "kept": (", from a Lomb-Scargle periodogram of the samples outside BAD_ spans, "
+                         "whose fALFF denominator ran up to the Nyquist frequency on the same "
+                         "samples" if params.get("excluded_spans") else ""),
+                "min_time": _min_time_phrase(params, "ALFF and fALFF were")}
     if key == "hyper_roi":
         least = int(params.get("roi_min_channels") or 1)
         return {"min_channels": (" A region pair was left empty where either member "
@@ -1085,7 +1157,27 @@ def metric_rows(
 # phase, its correlation, how both were grouped into regions, then its nulls; a run's
 # regression before ALFF and FC.
 _RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3,
-         "hyper_pairnull": 4, "alff": 3, "fc": 4}
+         "hyper_pairnull": 4, "alff": 3, "fc": 4,
+         "excluded_unselected": -1, "gvtd_censoring": 0.5, "censor_fill": -0.5}
+
+# the post steps that run on the filled copy, any of which can carry the fill sentence
+_FILLED_STEPS = ("bandpass", "resample", "glm_fit", "glm_residuals", "glm_residuals_broadband")
+
+
+def span_keys(step: str | None, params: dict[str, Any], spans: list) -> list[str]:
+    """Sections a step's ``BAD_`` spans add beside its own sentence.
+
+    ::
+
+      sci_pruning with BAD_unselected and --gvtd-censor  ->  ["excluded_unselected", "gvtd_censoring"]
+    """
+    kinds = {span.get("kind") for span in spans or []}
+    if step == "sci_pruning":
+        return ((["excluded_unselected"] if "unselected" in kinds else [])
+                + (["gvtd_censoring"] if params.get("gvtd_censor") else []))
+    if step in _FILLED_STEPS and "corrupted" in kinds and params.get("censor_fill"):
+        return ["censor_fill"]
+    return []
 
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
     """(steps.toml key, filled slots) for the method steps among ``nodes``, in data order.
@@ -1093,12 +1185,15 @@ def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
     the earlier ones left out (a regression's fit table and its residual each carry part of
     the picture).
     """
-    keyed = [(node, boilerplate_key(node.step, node.params)) for node in nodes]
+    keyed = [(node, key) for node in nodes
+             for key in [boilerplate_key(node.step, node.params),
+                         *span_keys(node.step, node.params, node.excluded_spans)]]
     keyed = sorted(((node, key) for node, key in keyed if key is not None),
                    key=lambda nk: (nk[0].depth, _RANK.get(nk[1], 0), nk[0].label))
     merged: dict[str, dict[str, Any]] = {}
     for node, key in keyed:
-        merged[key] = {**node.params, **merged.get(key, {})}
+        merged[key] = {**node.params, "excluded_spans": node.excluded_spans,
+                       **merged.get(key, {})}
     return [(key, template_slots(key, params)) for key, params in merged.items()]
 
 def steps_from_sidecars(

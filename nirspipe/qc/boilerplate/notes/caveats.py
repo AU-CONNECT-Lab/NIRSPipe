@@ -112,6 +112,8 @@ NOTES = {
         "drawn only where coherence clears {clears}",
     "figure.coi_band":
         "washed-out band: the cone of influence, where the record's edges reach",
+    "figure.excluded_band":
+        "washed-out columns: BAD_ time of either member, left out of every average",
 
     # ---- Every report's footer ----
     "footer.provenance_not_rendered":

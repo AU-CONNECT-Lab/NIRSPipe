@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The analysis page offers the fill method beside GVTD censoring
 - `--min-time` skips FC and ALFF for a run with less kept time; default 0, also on the analysis page
 - `--export-mean-filled` writes `desc-meanfilled`, the final residual with `BAD_` frames at each channel's kept mean; also on the analysis page
+- The subject report gains an Excluded time section on runs with `BAD_` spans; condition pages show their kept seconds
 
 ### Changed
 - **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run
@@ -27,6 +28,9 @@ All notable changes to this project will be documented in this file.
 - Both dyad nulls leave out the real pairing's excluded time; the re-paired null also leaves out its stand-in's corrupted spans
 - Channel and optical-density spectra in the subject report use only frames outside `BAD_` spans
 - The bad-segment zoom draws corrupted spans only, not `BAD_unselected`
+- Methods describe unselected time, GVTD censoring, the fill, and what each regression, FC, ALFF and dyad measure leaves out
+- desc-sci records the GVTD censoring settings; FC and ALFF sidecars list their `excluded_spans`
+- Dyad WTC maps wash out excluded columns and draw no arrows there; scope headers lead with the kept seconds
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns

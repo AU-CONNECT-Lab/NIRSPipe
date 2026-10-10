@@ -76,6 +76,7 @@
         {% if condition_unassessed %}<td>n/a</td>
         {% else %}<td><span class="{{ badge_class }}">{{ n_bad }}/{{ n_total }} ({{ "%.0f"|format(bad_rate) }}%)</span></td>{% endif %}
       </tr>
+      {% if condition_kept %}<tr><th>Kept</th><td>{{ condition_kept }}</td></tr>{% endif %}
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
       <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
@@ -702,6 +703,36 @@
         {% for row in channel_cells %}{{ ch_row(row) }}{% endfor %}
       </tbody>
       {% endif %}
+
+{% if excluded %}
+<!-- ======================================================== excluded time -->
+<section id="Excluded" class="step">
+<h3 class="step-title">Excluded time</h3>
+<div class="details-body">
+  <p class="qm-note">{{ excluded.summary }}</p>
+  {% for line in excluded_skipped %}<p class="qm-note">{{ line }}</p>{% endfor %}
+  <div style="overflow-x:auto;">
+    <table class="qm-table">
+      <thead><tr><th>Onset (s)</th><th>Duration (s)</th><th>Description</th><th>Kind</th><th>Source</th></tr></thead>
+      <tbody>
+        {% for span in excluded_spans %}<tr><td class="qv">{{ span.onset }}</td><td class="qv">{{ span.duration }}</td><td>{{ span.description }}</td><td>{{ span.kind }}</td><td>{{ span.source }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if excluded_conditions %}
+  <p class="qm-note">{{ section_note('excluded.conditions') }}</p>
+  <div style="overflow-x:auto;">
+    <table class="qm-table">
+      <thead><tr><th>Condition</th><th>Window (s)</th><th>Kept (s)</th><th>Screening windows</th><th>Trials left</th></tr></thead>
+      <tbody>
+        {% for row in excluded_conditions %}<tr><td>{{ row.label }}</td><td class="qv">{{ row.window }}</td><td class="qv">{% if row.kept_s is not none %}{{ "%.1f"|format(row.kept_s) }}{% endif %}</td><td class="qv">{% if row.counted_windows is not none %}{{ row.counted_windows }}{% endif %}</td><td class="qv">{{ row.trials }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+</section>
+{% endif %}
 
 {% if stage_metrics_path %}
 <section id="Stages" class="step">

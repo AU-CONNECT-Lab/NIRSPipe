@@ -95,7 +95,24 @@ def _clears(wtc_data: dict, arrow_min: float = ARROW_MIN_COHERENCE) -> str:
                                               "the Monte Carlo level")
 
 
-def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE):
+def _excluded_runs(times: np.ndarray, excluded) -> "list[tuple[float, float]]":
+    """Each run of excluded columns as ``(start, stop)`` seconds, half a column wider each side.
+
+    ::
+
+      columns at 0, 1, 2, 3, 4 s, excluded [F, T, T, F, T]  ->  [(0.5, 2.5), (3.5, 4.5)]
+    """
+    if excluded is None or not np.any(excluded):
+        return []
+    mask = np.asarray(excluded, dtype=bool)
+    half = (times[1] - times[0]) / 2 if len(times) > 1 else 0.5
+    edges = np.flatnonzero(np.diff(np.r_[0, mask.astype(int), 0]))
+    return [(float(times[a]) - half, float(times[b - 1]) + half)
+            for a, b in zip(edges[::2], edges[1::2])]
+
+
+def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE,
+                excluded=None):
     """Where a phase arrow is worth drawing: outside the cone, and above the noise.
 
     ::
@@ -105,13 +122,16 @@ def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHE
     **Inside the cone**, because a coefficient built against the padding has a phase built
     against the padding too. **Above the level**, the Monte Carlo one when
     ``--wtc-significance`` produced it and ``arrow_min`` otherwise, because the relative
-    phase of two uncorrelated series is a uniformly random direction.
+    phase of two uncorrelated series is a uniformly random direction. **Outside the
+    excluded columns**, the pairing's BAD_ time, which no average reads either.
     """
     inside = freqs[:, None] >= freq_coi[None, :]
     if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
         above = wtc_arr >= np.asarray(sig, dtype=float)[:, None]
     else:
         above = wtc_arr >= float(arrow_min)
+    if excluded is not None:
+        above = above & ~np.asarray(excluded, dtype=bool)[None, :]
     return inside & above
 
 
@@ -166,6 +186,10 @@ def build_wtc_channel(
     freq_coi = _freq_coi(coi, freqs)
     ax.fill_between(times, freq_coi, freqs.min(), color="white", alpha=0.45, lw=0, zorder=2)
     ax.plot(times, freq_coi, color="white", lw=1.3, ls="--", zorder=3)
+    excluded = wtc_data.get("excluded")
+    # the pairing's BAD_ time, washed out as the cone is
+    for start, stop in _excluded_runs(times, excluded):
+        ax.axvspan(start, stop, color="white", alpha=0.45, lw=0, zorder=2)
 
     if sig is not None and len(sig) == wtc_arr.shape[0]:
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -194,7 +218,7 @@ def build_wtc_channel(
     # thumbnails elsewhere do
     _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
                   n_time=34, n_freq=13, scale=WTC_QUIVER_SCALE, width=0.0022,
-                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min))
+                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min, excluded))
 
     lead = (pair_label.split("×")[0].strip() or "the first member"
             if pair_label else "the first member")
@@ -223,7 +247,9 @@ def build_wtc_channel(
     # two lines: on one, the caption is wider than the map and the crop pads it with white
     caption = (section_note("figure.phase_arrows", lead=lead,
                             clears=_clears(wtc_data, arrow_min)).replace(", drawn", ",\ndrawn")
-               + "    " + section_note("figure.coi_band"))
+               + "    " + section_note("figure.coi_band")
+               + ("    " + section_note("figure.excluded_band")
+                  if _excluded_runs(times, excluded) else ""))
     fig.text(0.5, -0.02, caption, ha="center", va="top", fontsize=8, color="#444444",
              linespacing=1.5)
     return fig_png_b64(fig, facecolor="white")
@@ -283,7 +309,8 @@ def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
 
     fi = _grid(len(freqs), 13)
     ti = _grid(len(times), 34)
-    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min)[np.ix_(fi, ti)]
+    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min,
+                       wtc_data.get("excluded"))[np.ix_(fi, ti)]
     if not keep.any():
         return []
 
@@ -353,7 +380,9 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
                "phase": (None if wtc_data.get("phase") is None
                          else np.asarray(wtc_data["phase"])[:, keep]),
                "sig": wtc_data.get("sig"),
-               "sig_source": wtc_data.get("sig_source")}
+               "sig_source": wtc_data.get("sig_source"),
+               "excluded": (None if wtc_data.get("excluded") is None
+                            else np.asarray(wtc_data["excluded"])[keep])}
         coi = _freq_coi(np.asarray(wtc_data["coi"])[keep], freqs)
         out[_pair_fname(label)] = {
             "x": [float(t0), float(t1)],
@@ -442,6 +471,12 @@ def build_wtc_map_interactive(
 
     # ---- one span bar per block, one legend entry per condition ----
     shapes, seen = [], {}
+    # the pairing's BAD_ time, washed out as the cone is
+    excluded_runs = _excluded_runs(times, wtc_data.get("excluded"))
+    for start, stop in excluded_runs:
+        shapes.append(dict(type="rect", xref="x", yref="paper", x0=start, x1=stop, y0=0.0,
+                           y1=1.0, fillcolor="rgba(255,255,255,0.45)", line=dict(width=0),
+                           layer="above"))
     for m in markers_list:
         onset, duration = float(m["onset"]), float(m["duration"])
         if duration <= 0.1 or not (t0 <= onset <= t1):
@@ -489,7 +524,9 @@ def build_wtc_map_interactive(
             xref="paper", yref="paper", x=0.0, y=-0.155, xanchor="left", yanchor="top",
             showarrow=False, font=dict(size=11, color="#444444"),
             text=(section_note("figure.phase_arrows", lead=lead, clears=clears)
-                  + "&nbsp;&nbsp;&nbsp;&nbsp;" + section_note("figure.coi_band")),
+                  + "&nbsp;&nbsp;&nbsp;&nbsp;" + section_note("figure.coi_band")
+                  + ("&nbsp;&nbsp;&nbsp;&nbsp;" + section_note("figure.excluded_band")
+                     if excluded_runs else "")),
         )],
     )
     fig.update_yaxes(minor=dict(tickvals=minor, showgrid=False))

@@ -381,7 +381,7 @@ def run_post(
         if config.fc:
             _warn_fc_without_bandpass(config)
             fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
-                raw_resid, config, output_dir, rec, source_entities=source_entities)
+                raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
     elif mode == "rest":
         if config.drift_model is None:
@@ -452,7 +452,7 @@ def run_post(
                                   rec=rec, source_entities=source_entities, known_spans=known_spans)
 
         alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
-            raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities)
+            raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
     elif mode == "denoise":
         # The regression and the FC are independent here. Either can run without the other,
@@ -488,7 +488,7 @@ def run_post(
             _warn_fc_without_bandpass(config)
             fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
                 raw_resid if raw_resid is not None else result,
-                config, output_dir, rec, source_entities=source_entities)
+                config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
     if config.export_mean_filled:
         # the residual FC reads: the regression's, or the last stage when none ran
@@ -537,6 +537,7 @@ def _write_fc_derivatives(
     output_dir: Path,
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
+    known_spans: "list[dict] | None" = None,
 ) -> tuple:
     """Write the FC, ROI FC and seed-map TSVs for one residual.
 
@@ -583,7 +584,9 @@ def _write_fc_derivatives(
         return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
 
     def _sidecar(path: Path, step: str, **params) -> None:
-        write_step_sidecar(path, step, src_bp, bads, **params, **kept)
+        write_step_sidecar(path, step, src_bp, bads,
+                           excluded_spans=excluded_spans(raw_resid, known=known_spans or ()),
+                           **params, **kept)
 
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
     # written and both reach the report.
@@ -661,6 +664,7 @@ def _write_rest_derivatives(
     output_dir: Path,
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
+    known_spans: "list[dict] | None" = None,
 ) -> tuple:
     """Write ALFF/fALFF and everything :func:`_write_fc_derivatives` writes.
 
@@ -686,8 +690,9 @@ def _write_rest_derivatives(
             entities={**entities, "statistic": "alff"}, suffix="nirsmap", extension=".tsv",
         )
         write_tsv(alff_df, alff_path)
+        spans = excluded_spans(raw_resid_bb, known=known_spans or ())
         write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
-                       list(raw_resid.info["bads"]),
+                       list(raw_resid.info["bads"]), excluded_spans=spans,
                        low_pass=config.low_pass, high_pass=config.high_pass, **kept)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
 
@@ -702,7 +707,7 @@ def _write_rest_derivatives(
                 )
                 write_tsv(alff_roi_df, alff_roi_path)
                 write_step_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
-                               list(raw_resid.info["bads"]),
+                               list(raw_resid.info["bads"]), excluded_spans=spans,
                                low_pass=config.low_pass, high_pass=config.high_pass,
                                roi_channels={c: _roi_members(raw_resid_bb, config.roi_map, c)
                                              for c in ("hbo", "hbr")}, **kept)
@@ -711,7 +716,7 @@ def _write_rest_derivatives(
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
     fc_hbo_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
-        raw_resid, config, output_dir, rec, source_entities=source_entities)
+        raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
     return alff_df, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
 
 

@@ -14,6 +14,21 @@ NOTES = {
         "rejects nothing.",
     "summary.condition_failing":
         "Failing in this condition",
+    "summary.condition_kept":
+        "{kept} of {window} s outside every BAD_ span; {windows} screening windows counted",
+    "excluded.summary":
+        "{kept} s of the {total} s recording lie outside every BAD_ span. Of the recording, "
+        "{unselected} is BAD_unselected, outside the stretches --keep-spans named: real data "
+        "left out of every estimate. {corrupted} lies under corrupted spans, BAD_gvtd or spans "
+        "the input carried; a stretch can be both, so the two shares can add up to more than "
+        "what was left out. {n} span(s) in all; each analysis leaves them out, and its section "
+        "says how.",
+    "excluded.conditions":
+        "Per condition: its window, the seconds of it outside every BAD_ span, the screening "
+        "windows its coupled share counted, and, for a task GLM, the trials whose own interval "
+        "touches no BAD_ span.",
+    "excluded.skipped":
+        "{output} was not computed: {reason}.",
     "summary.condition_not_assessed":
         "Every screening window of this condition touches a BAD_ span, so it is not "
         "assessed: no channel is counted as failing here, and its coupled-window shares are "

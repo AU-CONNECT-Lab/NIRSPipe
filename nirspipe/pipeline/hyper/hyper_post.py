@@ -280,6 +280,12 @@ def run_hyper_post(
     run_span = (analysis_window if analysis_window is not None else
                 (0.0, min(r.n_times / float(r.info["sfreq"]) for r in aligned_raws.values())))
 
+    def _member_spans() -> dict:
+        """Each member's merged BAD_ spans on the aligned clock, for the sidecars and Methods."""
+        return {sid: [[round(a, 3), round(b, 3)]
+                      for a, b in merged((s, e) for s, e, _ in bad_spans(raw))]
+                for sid, raw in aligned_raws.items()}
+
     def _kept_s(pair_key, t0: float, t1: float) -> float:
         """Seconds of ``[t0, t1]`` outside the union of the pairing's two members' BAD_ spans."""
         spans = merged((a, b) for sid in pair_key for a, b, _ in bad_spans(aligned_raws[sid]))
@@ -332,6 +338,7 @@ def run_hyper_post(
             **({"desc": config.desc} if config.desc else {}),
             **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
             **wtc_grid_params(aligned_raws), **align_info, **_whiten_params(),
+            excluded_spans_s=_member_spans(),
         )
 
     def _transform_condition(tstart: float, tstop: float, ch_type: str):
@@ -675,6 +682,7 @@ def run_hyper_post(
                 continue
 
             out["cond_wtc"][-1] = cond_wtc
+            cond_chan = _with_kept(cond_chan, tstart, tstop)
 
             cond_roi = _with_kept(_roi_band(cond_chan, ch_type, f"condition {label}"),
                                   tstart, tstop)
@@ -692,7 +700,7 @@ def run_hyper_post(
                 cond_hom.insert(0, "condition", label)
                 out["cond_roihom"].append(_tag(cond_hom, ch_type))
 
-            cond_chan = _with_kept(cond_chan, tstart, tstop)
+            cond_chan = cond_chan.copy()
             cond_chan.insert(0, "condition", label)
             out["cond_chan"].append(_tag(cond_chan, ch_type))
 
@@ -817,7 +825,8 @@ def run_hyper_post(
                 "isc_max_lag_s": isc_max_lag_s,
                 "isc_phase_null_iter": isc_phase_null,
                 "channel_cross": bool(wtc_channel_cross),
-                "roi_min_channels": int(wtc_roi_min_channels)}
+                "roi_min_channels": int(wtc_roi_min_channels),
+                "excluded_spans_s": _member_spans()}
 
     def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:
         """Put each condition's re-paired |r| level in place of its chord level, where it fits.
