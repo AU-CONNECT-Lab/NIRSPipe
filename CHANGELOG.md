@@ -48,6 +48,7 @@ All notable changes to this project will be documented in this file.
 - A channel's own PSD page overlays its stages, HbO and HbR side by side, the last stage dark
 - The denoising-stage panels draw HbO only and drop cardiac power: six panels in two rows
 - Quality Metrics lists its two tables first, then its figures; the per-channel table says which stage its scores come from
+- The per-channel table's HbO–HbR corr prints before → after denoising where the record has the residual's value
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

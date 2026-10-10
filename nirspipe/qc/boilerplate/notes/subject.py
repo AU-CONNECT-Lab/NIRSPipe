@@ -276,8 +276,8 @@ NOTES = {
         "Low-frequency drift is not among these: it grows with the span it is fitted over. The "
         "run's own page carries it.",
     "metrics.per_channel_stage":
-        "Scores on the recording before any correction; HbO&ndash;HbR corr after "
-        "Beer-Lambert, before denoising.",
+        "Scores on the recording before any correction. HbO&ndash;HbR corr is after "
+        "Beer-Lambert, before and after denoising where two values are shown.",
     "metrics.per_channel":
         "Screening counts the windows in which SCI and PSP both pass, so a channel can be BAD "
         "with a passing whole-run SCI. Channels rejected by hand also show as BAD, and a BAD "

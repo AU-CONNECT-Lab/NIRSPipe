@@ -686,7 +686,8 @@
         <tr>
           {#- a column measured per wavelength prints both, named under its header -#}
           {%- for key, label in channel_columns %}<th>{{ label }}
-            {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}</th>{% endfor %}
+            {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}
+            {%- if key == 'corr' and channel_cells | selectattr('corr_denoised') | list %}<span class="wl">before &rarr; after denoising</span>{% endif %}</th>{% endfor %}
         </tr>
       </thead>
       {% if n_blocks > 1 %}

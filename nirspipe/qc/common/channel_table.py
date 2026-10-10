@@ -72,7 +72,8 @@ def channel_rows(
     same per-channel numbers either way, and only the scalar means they feed differ.
     ``corr`` is the exception and comes from the whole-file ``preproc`` section, so it is
     filled for short channels too. A raw-only record has no ``preproc`` and reads
-    ``rawhaemo`` instead, the uncorrected side.
+    ``rawhaemo`` instead, the uncorrected side. ``corr_post`` is the same correlation on
+    the regression residual (``errts``), None where the record has none.
     """
     per_channel = record.get("per_channel") or {}
     short_pc = per_channel.get("raw_short") or {}
@@ -82,6 +83,7 @@ def channel_rows(
     # the whole-file section, not the long split: this column is the one short channels have
     corr_pc = (per_channel.get("preproc") or per_channel.get("rawhaemo")
                or {}).get("hbo_hbr_corr_per_channel") or {}
+    corr_post_pc = (per_channel.get("errts") or {}).get("hbo_hbr_corr_per_channel") or {}
     bad = set(bad_channels)
 
     def _named(pc: dict) -> set:
@@ -126,6 +128,7 @@ def channel_rows(
             "cv":         value_of("cv_per_channel"),
             "spike":      value_of("spike_pct_per_channel"),
             "corr":       corr_pc.get(pair_of(ch)),
+            "corr_post":  corr_post_pc.get(pair_of(ch)),
             "is_bad":     ch in bad,
             "separation": sep,
         }
@@ -191,6 +194,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
             "cv":         _first(group, "cv"),
             "spike":      _first(group, "spike"),
             "corr":       _first(group, "corr"),
+            "corr_post":  _first(group, "corr_post"),
             # the share a pair is rejected on, so its Status can name the criterion
             "good_frac":  min((row["good_frac"] for row in group
                                if row.get("good_frac") is not None), default=None),
@@ -606,8 +610,14 @@ def format_rows(
         if (sci_threshold is not None and row.get("sci_win") is not None
                 and row["sci_win"] < sci_threshold):
             formatted["sci_win_cls"] = "bad"
-        if row.get("corr") is not None:
-            formatted["corr_cls"] = "neg" if row["corr"] < 0 else "pos"
+        # the denoised side beside it where the record has one, coloured by the result
+        post = row.get("corr_post")
+        if post is not None:
+            formatted["corr"] = f"{formatted['corr']} → {format_metric('hbo_hbr_corr_mean', post)}"
+            formatted["corr_denoised"] = True
+        shown = post if post is not None else row.get("corr")
+        if shown is not None:
+            formatted["corr_cls"] = "neg" if shown < 0 else "pos"
         out.append(formatted)
     return out
 
