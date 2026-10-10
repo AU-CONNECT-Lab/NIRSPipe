@@ -274,6 +274,26 @@ def provenance_rows(
     return rows
 
 
+def merge_provenance_rows(rows: list[dict]) -> list[dict]:
+    """Outputs whose step said the same thing with the same settings share one row.
+
+    Twelve FC matrices from one ``fc`` step become one row with twelve names, so the
+    table reads one line per thing that happened. ``family`` is the names' shared first
+    word when more than two merge (``relmat`` for every ``relmat ...``), else empty.
+    """
+    merged: dict[tuple, dict] = {}
+    for row in rows:
+        m = merged.setdefault((row["what"], row["settings"]), {
+            "names": [], "steps": [], "what": row["what"], "settings": row["settings"]})
+        m["names"].append(row["name"])
+        if row["step"] not in m["steps"]:
+            m["steps"].append(row["step"])
+    for m in merged.values():
+        heads = {n.split()[0] for n in m["names"] if n.split()}
+        m["family"] = heads.pop() if len(m["names"]) > 2 and len(heads) == 1 else ""
+    return list(merged.values())
+
+
 def collapse_messages(messages: list[str]) -> list[str]:
     """One line per distinct message, in first-seen order, counted when it repeats.
 
@@ -317,7 +337,7 @@ def footer_vars(
         # a tree with no sidecars has no provenance to show, and a heading over an empty
         # table plus a "diagram not rendered" placeholder says less than nothing
         if rows or provenance_path is not None:
-            out["provenance_rows"] = rows
+            out["provenance_rows"] = merge_provenance_rows(rows)
             out["provenance_path"] = provenance_path
     elif provenance_path is not None:
         out["provenance_path"] = provenance_path

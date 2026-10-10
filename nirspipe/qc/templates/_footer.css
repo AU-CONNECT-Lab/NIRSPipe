@@ -31,7 +31,16 @@ img.prov-graph { width: auto; max-width: 100%; max-height: 560px; margin: 0 auto
   color: var(--faint); font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
 }
 
-table.versions { max-width: 400px; }
+/* results above, the run's record below */
+.part-rule { margin: 3rem 0 1.2rem; border-top: 2px solid var(--rule); padding-top: 0.5rem;
+             font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+
+td.prov-outs { white-space: nowrap; }
+.prov-names { margin-top: 0.3rem; font-size: 0.75rem; color: var(--faint); font-family: var(--mono); }
+
+table.versions { width: auto; }
+table.versions td.pkg { color: var(--muted); padding-left: 1.6rem; }
+table.versions td.pkg:first-child { padding-left: 0.8rem; }
 
 /* ---- methods tabs ---- */
 .tab-bar { display: flex; align-items: center; gap: 0.25rem; border-bottom: 1px solid var(--rule);

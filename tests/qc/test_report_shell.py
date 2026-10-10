@@ -23,6 +23,7 @@ from nirspipe.qc.common.report_shell import (
     TOKENS_CSS,
     footer_vars,
     guard,
+    merge_provenance_rows,
     nav_bar,
     note,
     page_vars,
@@ -109,6 +110,32 @@ def test_a_diagram_alone_is_enough_for_the_section(tmp_path):
     out = footer_vars(nirs_dir=tmp_path, provenance_path="figures/provenance.png")
     assert out["provenance_rows"] == []
     assert out["provenance_path"] == "figures/provenance.png"
+
+
+def test_outputs_of_one_step_with_one_setting_share_a_row():
+    def row(name, step, what="Correlated.", settings=""):
+        return {"name": name, "step": step, "what": what, "settings": settings}
+
+    rows = [row("od", "od_conversion", "Converted."),
+            row("relmat pearson hbo", "fc"), row("relmat pearson hbr", "fc"),
+            row("relmat fisherz hbo", "fisher_z"),
+            row("errts", "glm_residuals", "Regressed.", "ols"), row("nirsmap glm", "glm_fit", "Regressed.", "ols")]
+    merged = merge_provenance_rows(rows)
+
+    assert [m["names"] for m in merged] == [
+        ["od"], ["relmat pearson hbo", "relmat pearson hbr", "relmat fisherz hbo"], ["errts", "nirsmap glm"]]
+    assert merged[1]["steps"] == ["fc", "fisher_z"]
+    assert [m["family"] for m in merged] == ["", "relmat", ""], "two names are listed, not counted"
+
+
+def test_the_version_table_fills_three_columns_top_down(env):
+    versions = {f"pkg{i}": str(i) for i in range(7)}
+    html = env.get_template("group_report.html.j2").render(
+        **page_vars(title="T", heading="T"), **footer_vars(versions=versions))
+    table = html[html.index('<table class="versions">'):]
+    rows = re.findall(r"<tr>(.*?)</tr>", table[:table.index("</table>")], re.S)
+    assert len(rows) == 3
+    assert re.findall(r'class="pkg">(\w+)<', rows[0]) == ["pkg0", "pkg3", "pkg5"]
 
 
 # ---- error and note collection ----

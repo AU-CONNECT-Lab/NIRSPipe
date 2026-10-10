@@ -481,9 +481,15 @@
     <tr class="qm-group"><td colspan="{{ ncol + 1 }}"><span class="qm-group-title{% if help %} ql{% endif %}"{% if help %} title="{{ help }}"{% endif %}>{{ title }}</span>
       {%- if note %}<sup>{{ note }}</sup>{% endif %}{% if tag %}<span class="qm-group-tag">{{ tag }}</span>{% endif %}</td></tr>
   {%- endmacro %}
+  {#- a share printed with its count beside it, ``12.9% (1098)``; the count's own row is dropped -#}
+  {%- set count_beside = {'spike_pct': 'spike_count', 'gvtd_pct_above_thresh': 'gvtd_num_above_thresh',
+                          'spike_pct_frames': 'spike_num_frames', 'motion_corrected_pct': 'motion_corrected_num'} %}
+  {%- macro with_count(key, d, sfx='') %}{{ mv(key, d.get(key ~ sfx)) }}
+    {%- set c = d.get(count_beside[key] ~ sfx) if key in count_beside else none %}{% if c is not none %} ({{ mv(count_beside[key], c) }}){% endif %}
+  {%- endmacro %}
   {#- one cell per channel set; colour is read off the long set alone -#}
   {%- macro set_cells(key, all, long, short) -%}
-    <td class="qv">{{ mv(key, all.get(key)) }}</td><td class="qv {{ metric_class(key, long.get(key)) }}">{{ mv(key, long.get(key)) }}</td><td class="qv">{{ mv(key, short.get(key)) }}</td>
+    <td class="qv">{{ with_count(key, all) }}</td><td class="qv {{ metric_class(key, long.get(key)) }}">{{ with_count(key, long) }}</td><td class="qv">{{ with_count(key, short) }}</td>
   {%- endmacro %}
   {#- a value no channel set owns: in the first value column, the set columns left blank -#}
   {%- macro span_row(key, text, value, cls='') %}
@@ -497,7 +503,7 @@
     {%- set before = d.get(key) %}{% set after = d.get(key ~ '_post') -%}
     <td class="qv {{ metric_class(key, after if after is not none else before) if is_long }}">
       {%- if before is none and after is none %}<span class="na">&mdash;</span>
-      {%- else %}{{ mv_pair(key, before, after) }}{% endif -%}
+      {%- else %}{{ with_count(key, d) }}{% if after is not none %} &rarr; {{ with_count(key, d, '_post') }}{% endif %}{% endif -%}
     </td>
   {%- endmacro %}
 
@@ -515,7 +521,7 @@
     <tr><td>Channels</td>{% for n in counts %}<td class="qv">{{ n if n is not none else '—' }}</td>{% endfor %}</tr>
     {#- the columns come from nirspipe.qc.channel_table, so this table and the raw viewer's
         cannot end up listing different metrics for the same recording -#}
-    {%- for key, text in od_split_columns %}
+    {%- for key, text in od_split_columns if key not in count_beside.values() %}
     <tr><td>{{ ql(key, text) }}</td>{{ set_cells(key, sqm_all, sqm_long, sqm_short) }}</tr>
     {%- endfor %}
     {%- else %}
@@ -582,7 +588,8 @@
                  section_note('metrics.gvtd_set_help', pct=100 * spike_ch_frac) if split_motion else '') }}
     {%- if split_motion %}
     {#- three measurements, not three groupings of one; no threshold on a condition page -#}
-    {%- for key, text in motion_split_columns if not (condition_label and key == 'gvtd_thresh') %}
+    {%- for key, text in motion_split_columns
+          if not (condition_label and key == 'gvtd_thresh') and key not in count_beside.values() %}
     <tr><td>{{ ql(key, text) }}</td>
       {%- for d, is_long in [(motion_sets.get('all') or {}, false), (motion_sets.get('long') or {}, true),
                              (motion_sets.get('short') or {}, false)] %}{{ motion_cell(d, key, is_long) }}{% endfor %}</tr>

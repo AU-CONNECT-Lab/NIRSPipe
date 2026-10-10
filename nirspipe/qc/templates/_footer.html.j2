@@ -5,6 +5,7 @@
    skipped, so a report can carry three of the four and the page still reads straight.
 #}
 <section class="report-footer">
+<div class="part-rule">Appendix: run record</div>
 
 {% if errors is defined %}
 <h2 id="Errors">Errors &amp; Warnings</h2>
@@ -42,11 +43,13 @@
 {% if provenance_rows %}
 <table>
   <tr><th>Output</th><th>Step</th><th>What it did</th><th>Settings</th></tr>
+  {#- one row per thing that happened; a family of outputs prints once with its count -#}
   {% for row in provenance_rows %}
   <tr>
-    <td><code>{{ row.name }}</code></td>
-    <td><code>{{ row.step }}</code></td>
-    <td>{{ row.what }}</td>
+    <td class="prov-outs">{% if row.family %}<code>{{ row.family }}</code> &times; {{ row.names | length }}
+      {%- else %}{% for n in row.names %}<code>{{ n }}</code>{{ '<br>' | safe if not loop.last }}{% endfor %}{% endif %}</td>
+    <td>{% for st in row.steps %}<code>{{ st }}</code>{{ ', ' if not loop.last }}{% endfor %}</td>
+    <td>{{ row.what }}{% if row.family %}<div class="prov-names">{{ row.names | join(', ') }}</div>{% endif %}</td>
     <td>{{ row.settings }}</td>
   </tr>
   {% endfor %}
@@ -93,10 +96,11 @@ document.getElementById('copy-methods').addEventListener('click', e => {
 
 {% if versions %}
 <h2 id="Versions">Software Versions</h2>
+{#- a lookup list, so three package columns sized to their content rather than one long column -#}
+{% set vcols = versions.items() | list | slice(3) | list %}
 <table class="versions">
-  <tr><th>Package</th><th>Version</th></tr>
-  {% for pkg, ver in versions.items() %}
-  <tr><td>{{ pkg }}</td><td>{{ ver }}</td></tr>
+  {% for r in range(vcols[0] | length) %}
+  <tr>{% for col in vcols %}{% if r < col | length %}<td class="pkg">{{ col[r][0] }}</td><td>{{ col[r][1] }}</td>{% else %}<td></td><td></td>{% endif %}{% endfor %}</tr>
   {% endfor %}
 </table>
 {% endif %}
