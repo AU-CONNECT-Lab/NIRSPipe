@@ -44,8 +44,6 @@ def _hbo_raw(data, onsets=(), durations=(), descs=()):
 
 # ---- GLM events table ----
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D1: rows read from --events-path are not filtered for BAD_ spans")
 def test_a_bad_row_in_an_events_table_is_not_a_condition(tmp_path):
     raw = synth_raw("01", "tapping", duration=120.0, bad_pair=None, motion_onset=None)
     haemo = od_to_haemo(intensity_to_od(raw), [6.0])

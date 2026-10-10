@@ -16,7 +16,11 @@ from nirspipe.pipeline.denoise import (
 )
 from nirspipe.exceptions import StageError
 from nirspipe.utils import is_marker
+from nirspipe.pipeline.glm_censored import (censor_summary, condition_columns, events_left,
+                                           fit_censored, kept_frames, refuse_too_few_frames,
+                                           silent_conditions)
 from nirspipe.utils.lineage import stamp
+from nirspipe.utils.spans import bad_spans
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.auxiliary import TIME_COLUMN, read_aux_table, resample_to_grid
 from nirspipe.io.derivatives import entity_of, write_step_sidecar
@@ -437,8 +441,10 @@ def run_glm_pipeline(
         )
     # explicit events take precedence; then external TSV; then snirf annotations
     from_annotations = events is None and not events_path
-    if events is None:
-        events = read_table(events_path) if events_path else None
+    if events is None and events_path:
+        events = read_table(events_path)
+        # a BAD_ row in the table marks unusable time, not a condition
+        events = events[events["trial_type"].map(is_marker)]
     if events is None:
         events = _annotation_events(haemo, stim_dur)
     # recorded so a reader of the residual can tell a task GLM from a confound regression
@@ -481,15 +487,42 @@ def run_glm_pipeline(
     )
     logger.debug("design matrix: %d scans x %d regressors - %s", dm.shape[0], dm.shape[1], list(dm.columns))
 
-    glm_est = fit_glm(haemo, dm, noise_model=noise_model)
-
-    # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
-    # design's fit instead, which differs from this under any AR noise model
-    # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
-    resid_data = np.array([
-        np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
-        for res in (glm_est.data[ch] for ch in glm_est.ch_names)
-    ]).squeeze(-1)
+    keep = kept_frames(haemo)
+    censor_params: dict = censor_summary(haemo, keep)
+    if conditions:
+        censor_params["events_left"] = events_left(events, bad_spans(haemo))
+    if keep.all():
+        glm_est = fit_glm(haemo, dm, noise_model=noise_model)
+        # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
+        # design's fit instead, which differs from this under any AR noise model
+        # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
+        resid_data = np.array([
+            np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
+            for res in (glm_est.data[ch] for ch in glm_est.ch_names)
+        ]).squeeze(-1)
+    else:
+        name = Path(source_path).name if source_path else "the recording"
+        dropped = silent_conditions(dm, conditions, keep)
+        if dropped:
+            logger.warning("%s: no kept frame carries any signal of %s; dropped from the "
+                           "design", name, ", ".join(dropped))
+            dm = dm.drop(columns=[c for cond in dropped for c in condition_columns(dm, cond)])
+            conditions = [c for c in conditions if c not in dropped]
+        censor_params["dropped_conditions"] = dropped
+        refuse_too_few_frames(keep, dm.shape[1], name)
+        left = censor_params.get("events_left", {})
+        logger.info("GLM fitted on %d of %d frames (%.0f%% unselected, %.0f%% corrupted, %d "
+                    "BAD_ span(s))%s", keep.sum(), len(keep),
+                    100 * censor_params["censored_unselected_frac"],
+                    100 * censor_params["censored_corrupted_frac"],
+                    censor_params["censored_n_spans"],
+                    "; events left " + ", ".join(f"{c} {n['left']}/{n['total']}"
+                                                 for c, n in left.items()) if left else "")
+        glm_est = fit_censored(haemo, dm, keep, noise_model)
+        theta = np.column_stack([np.asarray(glm_est.data[ch].theta).ravel()
+                                 for ch in haemo.ch_names])
+        # estimated on the kept rows, applied to the whole run, so the residual is full length
+        resid_data = haemo.get_data() - (dm.values @ theta).T
     raw_resid = haemo.copy()
     raw_resid._data[:] = resid_data
     # spelled drift_high_pass, not high_pass: the sidecar merges these with the bandpass
@@ -509,13 +542,19 @@ def run_glm_pipeline(
           conditions=conditions,
           # the HRF only shapes a design that holds conditions
           **({"hrf_model": hrf_model} if conditions else {}),
-          **design_params, **drift_params)
+          **design_params, **drift_params, **censor_params)
 
+    dropped = censor_params.get("dropped_conditions") or []
+    for name, weights in (contrast_def or {}).items():
+        if lost := sorted(set(weights) & set(dropped)):
+            raise StageError(f"contrast {name!r} weights {lost}, dropped from the design "
+                             f"because no kept frame carries any of their signal")
     contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
                           source_path=source_path, bads=list(haemo.info["bads"]),
+                          censored=~keep, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
@@ -549,6 +588,7 @@ def _save_glm_outputs(
     contrasts: dict[str, Any] | None = None,
     source_path: str | None = None,
     bads: list[str] | None = None,
+    censored: "np.ndarray | None" = None,
     **params: Any,
 ) -> None:
     bads = bads or []
@@ -571,7 +611,9 @@ def _save_glm_outputs(
         return output_dir / _glm_name(source_path, suffix, **extra)
 
     dm_path = _named("design")
-    write_tsv(design_matrix, dm_path)
+    # full length: the rows the fit left out are flagged, not removed
+    flags = np.zeros(len(design_matrix), dtype=int) if censored is None else censored.astype(int)
+    write_tsv(design_matrix.assign(censored=flags), dm_path)
     write_step_sidecar(dm_path, "design_matrix", source_path, bads, **params)
 
     res_path = _named("nirsmap", desc="glm")
