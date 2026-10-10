@@ -197,14 +197,17 @@ class _NoKeptTime(Exception):
 def _kept_psd(raw: mne.io.BaseRaw, picks) -> "tuple[np.ndarray, np.ndarray] | None":
     """Welch spectra of ``picks`` over the frames outside BAD_ spans, or None when there are none.
 
-    ``compute_psd`` leaves those frames out by mne's own rule and averages the good segments
-    weighted by length; on a recording without spans it is the plain Welch spectrum.
+    The route ``compute_psd`` takes (BAD_ frames as NaN, each good segment weighted by its
+    length), called directly because ``compute_psd`` refuses channels marked bad, which these
+    figures draw too. On a recording without spans it is the plain Welch spectrum.
     """
-    if raw.get_data(picks=[picks[0]], reject_by_annotation="omit", verbose=False).shape[1] == 0:
+    from mne.time_frequency import psd_array_welch
+    data = raw.get_data(picks=picks, reject_by_annotation="NaN", verbose=False)
+    if np.isnan(data[0]).all():
         return None
-    spectrum = raw.compute_psd(picks=picks, exclude=(), n_fft=min(PSD_NFFT, raw.n_times),
-                               verbose=False)
-    return spectrum.get_data(), spectrum.freqs
+    psds, freqs = psd_array_welch(data, raw.info["sfreq"], n_fft=min(PSD_NFFT, raw.n_times),
+                                  verbose=False)
+    return psds, freqs
 
 
 def _with_bad_spans(raw: mne.io.BaseRaw, onsets, durations, descriptions) -> mne.Annotations:
