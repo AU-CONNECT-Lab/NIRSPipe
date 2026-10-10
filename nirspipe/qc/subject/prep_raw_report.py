@@ -1007,7 +1007,7 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
     return {
         **page_vars(
             title=f"nirspipe raw QC  \u00b7  {output_path.stem}",
-            heading="fnirs\u2011pipe Raw Viewer",
+            heading="nirspipe Raw Viewer",
             nav_meta=meta,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
         ),

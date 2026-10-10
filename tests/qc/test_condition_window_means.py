@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from nirspipe.qc.metrics.windowed import condition_window_means
+from nirspipe.qc.subject.condition_views import condition_set_scalars
 
 # 40 windows on a 10 s grid, centres 5, 15, ... 395
 CENTERS = np.arange(5.0, 400.0, 10.0)
@@ -80,3 +81,21 @@ def test_no_conditions_gives_nothing_rather_than_the_whole_run():
     # an empty window list must not fall through to "no scope keeps every window", which is
     # what _in_scope does on its own and would silently label the run as a condition
     assert condition_window_means(_ramp(), CENTERS, []) == {}
+
+
+# ---- windows with no value ----
+
+def test_a_window_with_no_value_is_skipped_as_the_whole_run_skips_it():
+    # one NaN column inside the condition: the channel's mean comes from the other nine
+    matrix = _ramp(2).astype(float)
+    matrix[0, 12] = np.nan
+    out = condition_window_means(matrix, CENTERS, [("mid", 100.0, 200.0)])["mid"]
+    assert out[0] == pytest.approx(np.mean([10, 11, 13, 14, 15, 16, 17, 18, 19]))
+    assert out[1] == pytest.approx(114.5)
+
+
+def test_a_set_mean_leaves_out_a_channel_with_no_value():
+    sliced = {"sci_win_per_channel": {"a": 0.9, "b": float("nan"), "c": 0.7}}
+    out = condition_set_scalars(sliced, set(), ["a", "b"], ["c"])
+    assert out["long"]["sci_win_mean"] == pytest.approx(0.9)
+    assert out["all"]["sci_win_mean"] == pytest.approx(0.8)

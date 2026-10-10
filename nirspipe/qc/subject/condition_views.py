@@ -13,6 +13,8 @@ verdict, and the run's own page carries it, one click away through the run index
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from nirspipe.io.naming import parse_path
@@ -835,7 +837,7 @@ def _condition_trial_figure(trial_rows, window, slug, save_figure):
 
 
 def _mean_or_none(values) -> "float | None":
-    vals = [float(v) for v in values if v is not None]
+    vals = [float(v) for v in values if v is not None and math.isfinite(v)]
     return sum(vals) / len(vals) if vals else None
 
 
@@ -986,8 +988,10 @@ def condition_slices_from_record(
                        "per-condition view can be built from it")
         return {}
 
+    # a channel with no value in the condition is left out, as the whole run leaves it out
     def _named(vals) -> "dict[str, float]":
-        return {ch: float(vals[i]) for i, ch in enumerate(ch_names) if i < len(vals)}
+        return {ch: float(vals[i]) for i, ch in enumerate(ch_names)
+                if i < len(vals) and np.isfinite(vals[i])}
 
     out: dict[str, dict[str, dict[str, float]]] = {}
     sci_by_cond = condition_window_means(sci_matrix, sci_times, windows)

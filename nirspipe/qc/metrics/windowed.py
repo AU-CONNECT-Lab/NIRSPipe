@@ -6,6 +6,8 @@ on purpose: ``window_s * sfreq`` is rarely an integer, and three independently d
 drift apart over a long run.
 """
 
+import warnings
+
 import mne
 import numpy as np
 
@@ -541,6 +543,9 @@ def condition_window_means(
             logger.warning("condition %s holds no whole window of the metric grid",
                            window[0])
             continue
-        out[window[0]] = matrix[..., keep].mean(axis=-1)
+        # a window with no value is skipped, as the whole-run mean skips it
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            out[window[0]] = np.nanmean(matrix[..., keep].astype(float), axis=-1)
     return out
 
