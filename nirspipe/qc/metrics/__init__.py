@@ -40,7 +40,7 @@ Per-channel dicts always list every channel, in both domains.
 """
 
 from nirspipe.qc.metrics._helpers import (  # noqa: F401
-    SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels,
+    SHORT_MAX_DIST, LONG_MIN_DIST, LONG_MAX_DIST, long_short_channels, usable_split,
     separation_bands, unclaimed_separations, separation_orphans, registration_offset,
     REGISTRATION_MAX_RATIO, _mean_or_none,
     _safe_metrics, _mask_to_segments, epochable_events,

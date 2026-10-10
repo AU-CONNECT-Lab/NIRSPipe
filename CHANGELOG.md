@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - A pairs table may name subjects without the `sub-` prefix; `101` and `sub-101` now find the same recordings
+- A run whose every short channel was rejected leaves its short sections out instead of logging tracebacks, and keeps its per-condition record
 - `fnirs-qc hyper-raw` usable-time and head panels no longer come out empty when the members recorded at different sampling rates
 - The `EDGE boundary` written where recordings are joined is no longer a condition, trigger, dyad onset row or event count
 - The exported run script screens with the run's `--psp-threshold`, `--min-good-frac` and `--screen-scope`

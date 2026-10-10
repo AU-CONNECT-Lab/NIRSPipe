@@ -449,7 +449,11 @@ def raw_sections(
         sections["raw"]["n_long_channels"] = len(long_names)
         sections["raw"]["n_short_channels"] = len(short_names)
         sections["raw"].update(bands_to_record(sep_bands))
-    if long_names and len(long_names) < len(raw_intensity.ch_names):
+    rejected = set(bad_channels) | set(raw_intensity.info["bads"])
+    # a set every channel of which was rejected has nothing to measure; the counts above
+    # still describe the montage
+    if (long_names and len(long_names) < len(raw_intensity.ch_names)
+            and not set(long_names) <= rejected):
         def long_section():
             raw_long = raw_intensity.copy().pick(long_names)
             long_sci = {k: v for k, v in sci_scores.items() if k in set(long_names)}
@@ -459,7 +463,7 @@ def raw_sections(
             return compute_raw_sqm(
                 raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq, long_frac)
         section("raw_long", long_section)
-    if short_names:
+    if short_names and not set(short_names) <= rejected:
         # already returns the (scalars, nested) split, so it bypasses `section`
         try:
             sections["raw_short"], per_channel["raw_short"] = _short_section(
@@ -486,7 +490,7 @@ def haemo_sections(
 
     A subset that turns out to be the whole file is skipped rather than written twice.
     """
-    from nirspipe.qc.metrics import long_short_channels
+    from nirspipe.qc.metrics import usable_split
 
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
@@ -494,7 +498,7 @@ def haemo_sections(
 
     section(name, lambda: compute(raw_haemo))
 
-    long_names, short_names = long_short_channels(raw_haemo, sep_bands)
+    long_names, short_names = usable_split(raw_haemo, sep_bands)
     for suffix, names in zip(_SPLIT_SUFFIXES, (long_names, short_names)):
         if not names or len(names) == len(raw_haemo.ch_names):
             continue
@@ -576,12 +580,12 @@ def motion_sections(
     copy in memory and never writes it.
     """
     from nirspipe.qc.metrics import (
-        long_short_channels, motion_corrected_segments, motion_correction_metrics,
+        motion_corrected_segments, motion_correction_metrics, usable_split,
     )
 
     if before_od is not None:
         section("motion", lambda: motion_correction_metrics(before_od, after_od))
-        mc_long, mc_short = long_short_channels(before_od, sep_bands)
+        mc_long, mc_short = usable_split(before_od, sep_bands)
         if mc_long and len(mc_long) < len(before_od.ch_names):
             section("motion_long", lambda: motion_correction_metrics(
                 before_od.copy().pick(mc_long), after_od.copy().pick(mc_long)))
@@ -613,7 +617,7 @@ def motion_sections(
 
     section("motion_post", lambda: _motion_post_section(
         after_od, cardiac_l_freq, cardiac_h_freq, raw_thresh("raw")))
-    post_long, post_short = long_short_channels(after_od, sep_bands)
+    post_long, post_short = usable_split(after_od, sep_bands)
     if post_long and len(post_long) < len(after_od.ch_names):
         section("motion_post_long", lambda: _motion_post_section(
             after_od.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
@@ -752,7 +756,7 @@ def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
     the samples it is handed and nothing here filters. The per-channel dict is the before
     side over every kept channel, the one the channel table prints.
     """
-    from nirspipe.qc.metrics import haemo_quality_metrics, long_short_channels
+    from nirspipe.qc.metrics import haemo_quality_metrics, usable_split
 
     def _cut(raw):
         if raw is None:
@@ -763,7 +767,7 @@ def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
     before, after = _cut(haemo), _cut(haemo_post)
     if before is None:
         return {}, {}
-    long_names, short_names = long_short_channels(before, sep_bands)
+    long_names, short_names = usable_split(before, sep_bands)
     by_set: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
     for set_name, names in (("all", None), ("long", long_names), ("short", short_names)):
@@ -996,7 +1000,9 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
         return {}, {}
     by_set = {"all": condition_haemo_scalars(haemo_cut, errts_cut, n_fft_floor, bands,
                                              filtered=filt_cut)}
-    long_names, short_names = long_short_channels(haemo_cut, sep_bands)
+    # a set every channel of which was rejected has nothing to measure
+    long_names, short_names = ([] if set(names) <= set(haemo_cut.info["bads"]) else names
+                               for names in long_short_channels(haemo_cut, sep_bands))
     for set_name, names in (("long", long_names), ("short", short_names)):
         picks = [c for c in names if c in haemo_cut.ch_names]
         if not picks:
@@ -1046,7 +1052,7 @@ def compute_run_sections(
     from nirspipe.io.snirf import read_snirf
     from nirspipe.qc.metrics import (
         attach_windowed_series, compute_haemo_sqm, compute_prep_haemo_sqm,
-        long_short_channels,
+        long_short_channels, usable_split,
     )
     from nirspipe.qc.metrics._helpers import separation_bands
 
@@ -1082,6 +1088,10 @@ def compute_run_sections(
         # the input carries no marks of its own; the run's rejections come from the sci file
         bad_channels = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
         raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
+        _, all_short = long_short_channels(raw_intensity, sep_bands)
+        if all_short and set(all_short) <= set(raw_intensity.info["bads"]):
+            logger.info("every short channel was rejected, so the short-channel sections "
+                        "are left out")
 
         raw_secs, raw_pc = raw_sections(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
@@ -1115,7 +1125,7 @@ def compute_run_sections(
         try:
             from nirspipe.qc.metrics import spike_segments
             spike_source = raw_intensity if raw_intensity is not None else read_snirf(spike_stage)
-            spike_long, spike_short = long_short_channels(spike_source, sep_bands)
+            spike_long, spike_short = usable_split(spike_source, sep_bands)
             # one list per channel set, because the test is ">= 10% of *these* channels
             # spiking" and the panel draws each set its own row: a span found on the short
             # channels is not a claim about the long ones. The long list keeps the plain key,
@@ -1145,7 +1155,7 @@ def compute_run_sections(
             # and one list per other set, each against its own threshold, following
             # `spike_spans_short_s`. Three sets, three traces, three cutoffs: one set's share
             # is not a second reading of another's, and the panel says so
-            _, span_short = long_short_channels(span_raw, sep_bands)
+            _, span_short = usable_split(span_raw, sep_bands)
             for key, span_picks in (("gvtd_above_spans_short_s", span_short),
                                     ("gvtd_above_spans_all_s", list(span_raw.ch_names))):
                 if span_picks:

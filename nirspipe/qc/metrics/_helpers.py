@@ -210,6 +210,24 @@ def long_short_channels(
     return long_names, short_names
 
 
+def usable_split(
+    raw: mne.io.Raw, sep_bands: "Bands | None" = None,
+) -> "tuple[list[str], list[str]]":
+    """:func:`long_short_channels`, with a set every channel of which is bad emptied.
+
+    ::
+
+        short ["S5_D5 760", "S5_D5 850"], both in info["bads"]  ->  short []
+
+    For the callers that measure a set: every metric drops bads, so a set with no good
+    channel has nothing to measure and is left out rather than raising. Counting a montage
+    stays with :func:`long_short_channels`.
+    """
+    bads = set(raw.info["bads"])
+    return tuple([] if set(names) <= bads else names
+                 for names in long_short_channels(raw, sep_bands))
+
+
 def separation_orphans(
     raw: mne.io.Raw, sep_bands: "Bands | None" = None,
 ) -> "dict[str, float]":
