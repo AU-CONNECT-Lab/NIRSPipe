@@ -26,6 +26,8 @@ All notable changes to this project will be documented in this file.
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
 - GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run
 - `BAD_` rows in an `--events-path` table are no longer turned into conditions
+- Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
+- Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 
 ## [0.63.0] - 2026-10-09
 

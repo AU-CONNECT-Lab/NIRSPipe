@@ -542,9 +542,12 @@
                          ('cardiac_band_power_hbo', 'Cardiac band power (HbO)')]
                       + ([] if condition_label
                          else [('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')]) %}
+    {#- a row with no value anywhere on the page is left out, e.g. spectra on a condition too short for them -#}
     {%- for key, text in hb_rows %}
     {%- set after = sqm.get(key ~ '_errts') if key in errts_pairs else none %}
-    {%- if split_hb %}
+    {%- set values = [hb_all.get(key), hb_long.get(key), hb_short.get(key)] if split_hb else [sqm.get(key)] %}
+    {%- if after is none and values | select('ne', none) | list | length == 0 %}
+    {%- elif split_hb %}
     {#- the long set's denoised side joins its cell when its before side is that cell's value -#}
     {%- set folds = after is not none and sqm.get(key) == hb_long.get(key) %}
     <tr><td>{{ ql(key, text) }}</td><td class="qv">{{ mv(key, hb_all.get(key)) }}</td>
@@ -564,8 +567,10 @@
     {%- endif %}
     {%- endfor %}
     {#- a share of the recording's duration, which no channel set owns -#}
+    {%- if sqm.get('pct_data_retained') is not none %}
     {{ span_row('pct_data_retained', '% data retained', mv('pct_data_retained', sqm.get('pct_data_retained')),
                 metric_class('pct_data_retained', sqm.get('pct_data_retained'))) }}
+    {%- endif %}
 
     {#- ---- motion, either side of the correction ---- -#}
     {{ group_row('Motion', 'optical density', 2,
