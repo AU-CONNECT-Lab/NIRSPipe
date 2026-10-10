@@ -953,6 +953,7 @@ def condition_slices_from_record(
     windows: "list[tuple[str, float, float]]",
     sci_cutoff: float,
     psp_cutoff: float,
+    spans=(),
 ) -> "dict[str, dict[str, dict[str, float]]]":
     """Per-condition per-channel metrics read out of a quality record, nothing recomputed.
 
@@ -972,11 +973,15 @@ def condition_slices_from_record(
     screened by. Both cutoffs have to be the run's own; passing anything else produces a
     number no channel was judged against.
 
+    ``spans`` are the run's ``BAD_`` spans as ``(start, stop)``: a window touching one is left
+    out of the share, as the screening leaves it out, while the SCI, PSP and CV means keep
+    every window, as the run's own means do.
+
     Returns an empty dict when the record carries no stored matrices: the values cannot be
     recovered from the whole-run scalars.
     """
     from nirspipe.qc.metrics.windowed import (
-        condition_window_means, coupled_mask_from_matrices,
+        condition_window_means, coupled_mask_from_matrices, windows_touching,
     )
 
     windowed = record.get("windowed") or {}
@@ -999,6 +1004,9 @@ def condition_slices_from_record(
                    else condition_window_means(psp_matrix, psp_times, windows))
     mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, sci_cutoff, psp_cutoff) \
         if psp_matrix else None
+    if mask is not None and len(spans):
+        mask = mask.astype(float)
+        mask[:, windows_touching(sci_times, spans)] = np.nan
     frac_by_cond = ({} if mask is None
                     else condition_window_means(mask.astype(float), sci_times, windows))
     # a record with no CV matrix leaves CV off its pages

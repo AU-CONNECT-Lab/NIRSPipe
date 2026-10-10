@@ -90,6 +90,7 @@
       explanation reads as a broken report; it belongs to Summary rather than above it -#}
   <p class="qm-note" style="margin-top:0.75rem;">
     {{ section_note('summary.condition_scope') }}
+    {% if condition_unassessed %}{{ section_note('summary.condition_not_assessed') }}{% endif %}
     {% if epoch_preview_path %}{{ section_note('summary.condition_rebuilt') }}{% else %}{{ section_note('summary.condition_empty') }}{% endif %}
     {%- if not (trial_qc_path or trial_image_pairs or trial_image_roi_pairs) %}
     {{ section_note('summary.condition_no_trials',

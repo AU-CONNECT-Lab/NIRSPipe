@@ -66,8 +66,6 @@ def test_task_scope_leaves_out_a_long_bad_span():
 
 # ---- per-condition CNR ----
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D3: a BAD_ span starting before the condition is dropped")
 def test_a_bad_span_reaching_into_a_condition_still_rejects_its_epochs():
     rng = np.random.default_rng(0)
     # epochs run 5 s before to 15 s after each tap, so the span covers the first two
@@ -88,8 +86,6 @@ def test_an_all_nan_channel_has_no_falff():
 
 # ---- trials ----
 
-@pytest.mark.xfail(strict=True, raises=ValueError,
-                   reason="D11: mne.events_from_annotations raises when every annotation is BAD_")
 def test_a_run_marked_only_with_bad_spans_has_nothing_to_epoch():
     raw = _hbo_raw(np.zeros(int(SFREQ * 100)), [10.0], [20.0], ["BAD_gvtd"])
     events, _ = epochable_events(raw, -5.0, 25.0)

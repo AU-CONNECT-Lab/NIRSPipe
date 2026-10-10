@@ -405,9 +405,15 @@ def epochable_events(raw, tmin: float, tmax: float):
     That is the block design that marks only where a condition starts and ends: neither
     window fits, so the run has no trials to epoch even though it carries annotations.
     """
-    events, event_id = mne.events_from_annotations(raw, verbose=False)
-    event_id = {k: v for k, v in event_id.items() if is_marker(k)}
     empty = (np.empty((0, 3), dtype=int), {})
+    try:
+        events, event_id = mne.events_from_annotations(raw, verbose=False)
+    except ValueError as exc:
+        # mne raises rather than returning nothing when every annotation is bad or edge
+        if "Could not find any of the events" not in str(exc):
+            raise
+        return empty
+    event_id = {k: v for k, v in event_id.items() if is_marker(k)}
     if len(events) == 0 or not event_id:
         return empty
     events = events[np.isin(events[:, 2], list(event_id.values()))]

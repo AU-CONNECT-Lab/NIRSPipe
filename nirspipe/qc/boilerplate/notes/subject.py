@@ -14,6 +14,10 @@ NOTES = {
         "rejects nothing.",
     "summary.condition_failing":
         "Failing in this condition",
+    "summary.condition_not_assessed":
+        "Every screening window of this condition touches a BAD_ span, so it is not "
+        "assessed: no channel is counted as failing here, and its coupled-window shares are "
+        "blank.",
     "summary.condition_rebuilt":
         "The motion carpet and per-channel motion figures are the run&rsquo;s, narrowed to "
         "this condition; the SCI/PSP panel, brain maps, haemoglobin panels, spectra, epoch "

@@ -66,6 +66,7 @@ from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
 from nirspipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans, is_bad_span
 from nirspipe import __version__
 from nirspipe.qc.common.channel_table import channel_rows, save_channel_csv
 from nirspipe.qc.subject.record_io import write_record
@@ -691,8 +692,12 @@ def condition_sections(
                                 filtered=filtered)
 
     cutoffs = _cutoffs_from_sidecar(stages)
+    # the input carries none of the run's own spans; desc-sci's sidecar lists every one
+    recorded = _sidecar(stages["sci"]).get("excluded_spans") or [] if "sci" in stages else []
+    spans = [(s["onset"], s["onset"] + s["duration"]) for s in recorded]
     return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands, haemo_of,
-                              imu_of=_imu_slicer(imu), forced=_forced_bads(stages, cutoffs))
+                              imu_of=_imu_slicer(imu), forced=_forced_bads(stages, cutoffs),
+                              excluded=spans)
 
 
 def _forced_bads(stages: dict[str, Path], cutoffs: dict[str, float]) -> "frozenset[str]":
@@ -739,8 +744,9 @@ def raw_condition_sections(
     if haemo is not None:
         def haemo_of(t0, t1):
             return _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands)
+    spans = [(a, b) for a, b, _ in bad_spans(raw_intensity)]
     return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands,
-                              haemo_of=haemo_of, imu_of=_imu_slicer(imu))
+                              haemo_of=haemo_of, imu_of=_imu_slicer(imu), excluded=spans)
 
 
 def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
@@ -800,6 +806,7 @@ def _condition_entries(
     haemo_of=None,
     imu_of=None,
     forced: "frozenset[str]" = frozenset(),
+    excluded=(),
 ) -> dict[str, Any]:
     """The ``by_condition`` entries themselves, for whichever writer holds the record.
 
@@ -809,10 +816,16 @@ def _condition_entries(
     of ``sections`` rather than measured, so the two writers cannot end up with different
     numbers for one recording. ``forced`` are the run's channels rejected by hand or for
     non-finite samples, which fail every condition whatever their coupling there.
+
+    ``excluded`` are the run's ``BAD_`` spans as ``(start, stop)``. They leave the coupled share,
+    and so the assessment; each entry states its ``kept_s`` and ``counted_windows``, and one
+    with no counted window is not assessed.
     """
     from nirspipe.qc.metrics import long_short_channels, screen_channels
     from nirspipe.qc.metrics.screening import CRITERIA
-    from nirspipe.qc.metrics.windowed import condition_window_means
+    from nirspipe.qc.metrics.windowed import (
+        condition_window_means, window_centers, windows_touching,
+    )
 
     unscreened = sorted(c.name for c in CRITERIA
                         if c.screens and c.name not in _CONDITION_SCREENABLE)
@@ -825,11 +838,14 @@ def _condition_entries(
     per_channel = sections.get("per_channel") or {}
     ch_names = list((per_channel.get("raw") or {}).get("sci_per_channel") or {})
     sliced_all = condition_slices_from_record(
-        sections, ch_names, windows, cutoffs["sci"], cutoffs["psp"])
+        sections, ch_names, windows, cutoffs["sci"], cutoffs["psp"], spans=excluded)
     if not sliced_all:
         return {}
 
     windowed = sections.get("windowed") or {}
+    sci_times = windowed.get("sci_times") or []
+    centers = window_centers(sci_times)
+    untouched = ~windows_touching(sci_times, excluded)
     gvtd_times = windowed.get("gvtd_window_times_s") or []
     # measured on the corrected file where there is one, which is what the report says on
     # the rows it prints; on a raw-only record there is only the one stage
@@ -870,11 +886,13 @@ def _condition_entries(
     out: dict[str, Any] = {}
     for label, sliced in sliced_all.items():
         t0, t1 = window_of[label][1], window_of[label][2]
+        counted_windows = int(((centers >= t0) & (centers <= t1) & untouched).sum())
         # which channels pass on this stretch alone, against the run's line: an assessment
         # for choosing conditions, not a rejection; the data was processed under the run's
         cond_frac = sliced.get("good_frac_per_channel") or {}
         screened, _ = screen_channels({"good_frac": cond_frac}, cutoffs)
-        cond_bad = sorted(set(screened) | (forced & set(cond_frac)))
+        cond_bad = ([] if excluded and not counted_windows
+                    else sorted(set(screened) | (forced & set(cond_frac))))
         retention = (1.0 - len(cond_bad) / len(cond_frac)) if cond_frac else None
 
         # the frame count is that share of this stretch's samples, not a second pass. The
@@ -923,6 +941,8 @@ def _condition_entries(
             # unrounded, so a reader can pair these bounds back to the annotations they
             # came from
             "window_s": [float(t0), float(t1)],
+            "kept_s": _kept_seconds(t0, t1, excluded),
+            "counted_windows": counted_windows,
             "bad_channels": cond_bad,
             "scalars": scalars,
             "od_by_set": condition_set_scalars(sliced, set(cond_bad), long_names,
@@ -937,12 +957,26 @@ def _condition_entries(
     return out
 
 
+def _kept_seconds(t0: float, t1: float, spans) -> float:
+    """The seconds of ``[t0, t1]`` outside every span, overlaps counted once."""
+    covered, edge = 0.0, float(t0)
+    for start, stop in sorted((max(float(a), float(t0)), min(float(b), float(t1)))
+                              for a, b in spans):
+        start = max(start, edge)
+        if stop > start:
+            covered += stop - start
+            edge = stop
+    return float(t1) - float(t0) - covered
+
+
 def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
     """CNR over one condition's own events, on a cut widened for the epoch windows.
 
     The bare span puts a block's onset at t=0 with no baseline before it, and mne drops the
     epoch for want of one. Widening can reach the next condition's onset, hence the filter:
-    the events kept are this condition's, the extra samples only give them room.
+    the events kept are this condition's, the extra samples only give them room. A ``BAD_``
+    span is kept whenever it reaches into the cut, wherever it starts, so the epochs it
+    covers still drop.
     """
     from nirspipe.qc.metrics.haemo import (
         CNR_BASELINE_S, CNR_RESPONSE_S, _cnr_metrics,
@@ -956,10 +990,13 @@ def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
     # anywhere but zero needs the offset off before the two compare
     origin = float(haemo.first_time)
     tol = 0.5 / float(haemo.info["sfreq"])
-    keep = [i for i, a in enumerate(cut.annotations)
-            if float(t0) - tol <= float(a["onset"]) - origin <= float(t1) + tol]
-    if not keep:
+    events = [i for i, a in enumerate(cut.annotations)
+              if not is_bad_span(a["description"])
+              and float(t0) - tol <= float(a["onset"]) - origin <= float(t1) + tol]
+    if not events:
         return {}
+    keep = sorted(events + [i for i, a in enumerate(cut.annotations)
+                            if is_bad_span(a["description"])])
     if len(keep) < len(cut.annotations):
         cut.set_annotations(cut.annotations[keep])
     if picks is not None:

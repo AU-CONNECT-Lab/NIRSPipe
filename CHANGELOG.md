@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The GLM and confound regressions fit only frames outside `BAD_` spans, on the full-length design with gap-aware AR whitening; the residual stays full length
 - A condition with no signal in kept frames is dropped and named; a fit with fewer than three kept frames per regressor is refused
 - The saved design matrix gains a `censored` column; GLM and residual sidecars record kept frames, excluded shares and events left per condition
+- Per-condition coupled-window shares and assessments leave out windows touching a `BAD_` span; each condition records its kept seconds
 - FC uses only frames outside `BAD_` spans, and ALFF and fALFF a Lomb-Scargle spectrum of them; FC and ALFF sidecars record the kept seconds
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
@@ -33,6 +34,8 @@ All notable changes to this project will be documented in this file.
 - Provenance settings no longer name an HRF for a regression with no conditions
 - `BAD_` rows in an `--events-path` table are no longer turned into conditions
 - A channel with no finite sample gets NaN fALFF instead of 0
+- A condition's CNR keeps a `BAD_` span starting before it, so the epochs it covers still drop
+- A recording whose only annotations are `BAD_` spans no longer stops the subject report
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 

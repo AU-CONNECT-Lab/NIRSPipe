@@ -277,6 +277,24 @@ def window_centers(times) -> "np.ndarray":
     return a.mean(axis=1) if a.ndim == 2 and a.shape[1] == 2 else a.ravel()
 
 
+def windows_touching(times, spans) -> "np.ndarray":
+    """Per window, whether it overlaps any span at all, as mne drops an epoch touching one.
+
+    ::
+
+      windows [0, 10], [10, 20], [20, 30], a span at 18-19 s  ->  [False, True, False]
+
+    ``times`` are the ``[start, end]`` pairs mne_nirs returns; bare centres count as
+    zero-width windows.
+    """
+    a = np.asarray(times, dtype=float)
+    start, stop = (a[:, 0], a[:, 1]) if a.ndim == 2 and a.shape[1] == 2 else (a.ravel(), a.ravel())
+    hit = np.zeros(len(start), dtype=bool)
+    for s0, s1 in spans:
+        hit |= (start < s1) & (stop > s0)
+    return hit
+
+
 def task_scope_windows(
     raw: mne.io.Raw, min_duration: float = 2 * SCREEN_WINDOW_S,
 ) -> "list[tuple[str, float, float]]":

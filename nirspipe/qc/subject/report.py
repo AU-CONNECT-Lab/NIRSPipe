@@ -1498,10 +1498,11 @@ def _section_condition_summary(
     by_condition = record.get("by_condition") or {}
     if len(by_condition) >= 2:
         with _guard("Per-condition channel quality", errors, subject):
+            # a condition with no counted window has no assessment to show
             conditions = [
                 (label, heatmap_args(_condition_channel_rows(
                     record, entry, sci_scores, set(entry.get("bad_channels") or ()))))
-                for label, entry in by_condition.items()]
+                for label, entry in by_condition.items() if entry.get("counted_windows") != 0]
             # the condition pages' own cutoffs, so a cell here matches the cell there
             cutoffs = resolve_cutoffs(config)
             # each condition's own assessment, for choosing conditions: not a rejection
@@ -2594,6 +2595,7 @@ def _write_condition_reports(
             "page_heading": f"{report_vars['page_heading']}  \u00b7  {label}",
             "page_title": f"{report_vars['page_title']}  \u00b7  {label}",
             "condition_label": label,
+            "condition_unassessed": entry.get("counted_windows") == 0,
             # what keeps this page's rating keys out of the run's; see the template's `_rk`
             "condition_slug": slug,
             "index_href": out_path.name,
