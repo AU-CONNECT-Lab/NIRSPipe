@@ -429,6 +429,15 @@ MOTION_SPLIT_COLUMNS = (
     ("motion_corrected_n_segments", "Corrected segments"),
 )
 
+# A share and the count it is a share of, printed in one cell as `12.9% (1098)` so the count
+# needs no row of its own. Templates read it as the global `count_beside`.
+COUNT_BESIDE = {
+    "spike_pct": "spike_count",
+    "gvtd_pct_above_thresh": "gvtd_num_above_thresh",
+    "spike_pct_frames": "spike_num_frames",
+    "motion_corrected_pct": "motion_corrected_num",
+}
+
 # The raw viewer's haemoglobin table, on its run page and its condition pages. The subject
 # report prints this metric among its own haemoglobin rows instead.
 HAEMO_SPLIT_COLUMNS = (
@@ -454,15 +463,23 @@ CONDITION_OD_SPLIT_COLUMNS = tuple((key, condition_label(key) or text)
                                    if key not in WHOLE_RUN_ONLY_COLUMNS)
 
 
-def _cell(key: str, scalars: dict, colour: bool) -> dict:
-    """One table cell, with the after value beside it where the row carries one."""
+def _cell(key: str, scalars: dict, colour: bool, count_key: "str | None" = None) -> dict:
+    """One table cell, with the after value beside it where the row carries one.
+
+    ``count_key`` prints that count after the value, either side: ``7.8% (34330)``.
+    """
     from nirspipe.qc.boilerplate.vocabulary import format_metric, metric_class
 
+    def shown(suffix: str) -> str:
+        text = format_metric(key, scalars.get(key + suffix))
+        count = scalars.get(count_key + suffix) if count_key else None
+        return text if count is None else f"{text} ({format_metric(count_key, count)})"
+
     before, after = scalars.get(key), scalars.get(f"{key}_post")
-    cell = {"value": format_metric(key, before),
+    cell = {"value": shown(""),
             "cls": metric_class(key, after if after is not None else before) if colour else ""}
     if after is not None:
-        cell["post"] = format_metric(key, after)
+        cell["post"] = shown("_post")
     return cell
 
 
@@ -487,6 +504,8 @@ def measured_columns(
 def split_table(
     channel_sets: list[tuple[str, Any, dict, bool]],
     columns: "Sequence[tuple[str, str]]" = OD_SPLIT_COLUMNS,
+    *,
+    fold_counts: bool = False,
 ) -> dict[str, Any]:
     """One recording measured over several channel sets, as a table ready to print.
 
@@ -498,10 +517,19 @@ def split_table(
         split_table([("Long", 40, {"sci_mean": 0.81}, True)], [("sci_mean", "Mean SCI")])
         -> columns: [{"key": "sci_mean", "label": "Mean SCI", ...}]
            rows:    [{"name": "Long", "n": 40, "cells": [{"value": "0.810", "cls": "qm-ok"}]}]
+
+    ``fold_counts`` prints each :data:`COUNT_BESIDE` count inside its share's cell and drops
+    the count's own column.
     """
     from nirspipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary, with_unit
 
     columns = measured_columns(columns, *(s for _, _, s, _ in channel_sets))
+    counted = {}
+    if fold_counts:
+        keys = {key for key, _ in columns}
+        counted = {share: count for share, count in COUNT_BESIDE.items()
+                   if share in keys and count in keys}
+        columns = tuple((key, label) for key, label in columns if key not in counted.values())
     return {
         "columns": [{"key": key, "label": with_unit(key, label), "tip": metric_summary(key),
                      "key_metric": is_key_metric(key)} for key, label in columns],
@@ -511,7 +539,7 @@ def split_table(
             # `post` is the same metric measured after a processing step, present only where
             # the caller merged one in under a `_post` suffix. The verdict colour follows the
             # after value: it is the state the data is left in.
-            "cells": [_cell(key, scalars, colour) for key, _ in columns],
+            "cells": [_cell(key, scalars, colour, counted.get(key)) for key, _ in columns],
         } for name, n_channels, scalars, colour in channel_sets],
     }
 

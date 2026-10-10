@@ -96,9 +96,9 @@ select#run-select {
   ("_TrialImage", "Trial image", "#TrialImage"),
   none,
   ("_Metrics", "Metrics", "#Metrics"),
+  ("_Channels", "Per-channel", "#Channels"),
   ("_ChannelSummary", "By channel", "#ChannelSummary"),
   ("_TrialQC", "By trial", "#TrialQC"),
-  ("_Channels", "Channels", "#Channels"),
   ("_Errors", "Errors", "#Errors"),
 ] %}
 {% set ns = namespace(modules=[]) %}
@@ -137,9 +137,9 @@ select#run-select {
 </div>
 
 {#- The page reads as a document, the way the subject report does: a step is a heading with
-    a disclosure triangle rather than a card, and the closing sections are plain h2s. The
-    lettering follows that report's, so a run inspected before the pipeline and after it is
-    read in one order. Section ids are the rating bar's anchors. -#}
+    a rule under it, laid out flat, and the results are two parts, the tables and then the
+    figures. The lettering follows that report's, so a run inspected before the pipeline and
+    after it is read in one order. Section ids are the rating bar's anchors. -#}
 
 <h2 id="Final">Summary</h2>
 <div class="summary-box">
@@ -163,8 +163,8 @@ select#run-select {
 </div>
 
 <!-- step a: where the channels are. First, because every panel below is read per channel and this is what says which is which. -->
-<details id="Layout" open>
-  <summary>a. Optode Layout</summary>
+<section id="Layout" class="step">
+  <h3 class="step-title">a. Optode Layout</h3>
   <div class="details-body">
     <div class="row row-layout">
       <div>
@@ -177,11 +177,11 @@ select#run-select {
       </div>
     </div>
   </div>
-</details>
+</section>
 
 <!-- step b: raw signal + the events it carries -->
-<details id="RawSignal" open>
-  <summary>b. Raw Signal</summary>
+<section id="RawSignal" class="step">
+  <h3 class="step-title">b. Raw Signal</h3>
   <div class="details-body">
     <div class="row row-main">
       <div>
@@ -206,12 +206,12 @@ select#run-select {
       </div>
     </div>
   </div>
-</details>
+</section>
 
 <!-- step b: concentration and spectrum, one channel at a time. Directly under the trace
      they are picked off, so a channel clicked above is read without scrolling. -->
-<details id="ChannelDetail" open>
-  <summary>c. HbO / HbR &amp; PSD per channel</summary>
+<section id="ChannelDetail" class="step">
+  <h3 class="step-title">c. HbO / HbR &amp; PSD per channel</h3>
   <div class="details-body">
     <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
     <select class="ch-select" id="ch-detail-select"
@@ -219,30 +219,30 @@ select#run-select {
     <div id="detail-placeholder">pick a channel to view HbO &amp; HbR</div>
     <div id="detail-plot" style="display:none"></div>
   </div>
-</details>
+</section>
 
 <!-- step c: the whole recording's spectrum. No picker: it is a mean across channels, and
      the per-channel version is the panel above. -->
-<details id="PSD" open>
-  <summary>d. Mean PSD across channels</summary>
+<section id="PSD" class="step">
+  <h3 class="step-title">d. Mean PSD across channels</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.psd') }}</p>
     <div id="psd-plot"></div>
   </div>
-</details>
+</section>
 
 <!-- step e: coupling and amplitude over time -->
-<details id="SciPsp" open>
-  <summary>e. Raw Signal Quality (SCI / PSP / CV)</summary>
+<section id="SciPsp" class="step">
+  <h3 class="step-title">e. Raw Signal Quality (SCI / PSP / CV)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
   </div>
-</details>
+</section>
 
 <!-- step f: movement -->
-<details id="Motion" open>
-  <summary>f. Motion (Carpet / GVTD)</summary>
+<section id="Motion" class="step">
+  <h3 class="step-title">f. Motion (Carpet / GVTD)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.motion') }}</p>
     <div id="carpet-gvtd-panel"></div>
@@ -254,38 +254,38 @@ select#run-select {
       <div id="motion-detail-plot"></div>
     </div>
   </div>
-</details>
+</section>
 
 <!-- step g: whether the concentration looks haemodynamic, either side of the correction -->
-<details id="HbCorr" open>
-  <summary>g. HbO–HbR Correlation</summary>
+<section id="HbCorr" class="step">
+  <h3 class="step-title">g. HbO–HbR Correlation</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.hbo_hbr_corr') }}</p>
     <p class="step-desc" id="hb-corr-post-note"></p>
     <div id="hb-corr-plot"></div>
   </div>
-</details>
+</section>
 
 <!-- step h: the design -->
-<details id="Events" open>
-  <summary>h. Event Timeline</summary>
+<section id="Events" class="step">
+  <h3 class="step-title">h. Event Timeline</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.events') }}</p>
     <div id="trigger-timeline-plot"></div>
   </div>
-</details>
+</section>
 
 <!-- step i: what the events did, averaged and trial by trial -->
-<details id="Epoch" open>
-  <summary>i. Epoch (grand mean)</summary>
+<section id="Epoch" class="step">
+  <h3 class="step-title">i. Epoch (grand mean)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.epoch') }}</p>
     <div id="epoch-mean-plot"></div>
   </div>
-</details>
+</section>
 
-<details id="TrialImage" open>
-  <summary>j. Trial image: single-channel trials</summary>
+<section id="TrialImage" class="step">
+  <h3 class="step-title">j. Trial image: single-channel trials</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
     <select class="ch-select" id="trialimg-select"
@@ -293,10 +293,12 @@ select#run-select {
     <iframe id="trialimg-frame" class="plotly-frame"
             style="width:100%;border:0;"></iframe>
   </div>
-</details>
+</section>
 
-<h2 id="Metrics">Quantitative Metrics</h2>
-<div class="qm-box">
+<h2 id="Metrics">Quality Metrics</h2>
+<section class="step">
+<h3 class="step-title">Run summary</h3>
+<div class="details-body">
   <p class="qm-note" id="sqm-scope"></p>
   <ul id="sqm-list" class="qm-list"></ul>
   <div id="sqm-split-wrap" style="display:none">
@@ -318,19 +320,11 @@ select#run-select {
   </div>
   <div id="bad-list"></div>
 </div>
+</section>
 
-<h2 id="ChannelSummary">Channel Quality Summary</h2>
-<p class="qm-note">{{ section_note('raw.channel_summary') }}</p>
-<div id="ch-summary-plot"></div>
-
-<h2 id="TrialQC" data-card="trial-qc-card" style="display:none">Per-trial Quality</h2>
-<div id="trial-qc-wrap" style="display:none">
-  <p class="qm-note" id="trial-qc-hint">{{ section_note('raw.trial_qc') }}</p>
-  <div id="trial-qc-plot"></div>
-</div>
-
-<h2 id="Channels">Per-channel Metrics</h2>
-<div id="ch-decisions-body">
+<section id="Channels" class="step">
+<h3 class="step-title">Per-channel table</h3>
+<div id="ch-decisions-body" class="details-body">
   <div id="ch-notes"></div>
   <p class="qm-note">{{ section_note('raw.channel_decisions') }}</p>
   <p class="qm-note" id="ch-decisions-hint"></p>
@@ -338,15 +332,37 @@ select#run-select {
   <div style="overflow-x:auto">
   <table id="ch-decisions-table" class="qm-table">
     <thead><tr>
-      {%- for _key, label in ch_columns %}<th>{{ label }}</th>{% endfor %}
+      {#- a column measured per wavelength prints both, named under its header -#}
+      {%- for key, label in ch_columns %}<th>{{ label }}
+        {%- if ch_wavelengths and key in wavelength_columns %}<span class="wl">{{ ch_wavelengths | join(' / ') }} nm</span>{% endif %}</th>{% endfor %}
       <th>Decision</th>
     </tr></thead>
     <tbody id="ch-decisions-tbody"></tbody>
   </table>
   </div>
 </div>
+</section>
 
-<h2 id="Errors" data-card="issues-card" style="display:none">Errors &amp; Warnings</h2>
+<h2 id="QualityFigures">Quality Figures</h2>
+
+<section id="ChannelSummary" class="step">
+<h3 class="step-title">By channel</h3>
+<div class="details-body">
+<p class="qm-note">{{ section_note('raw.channel_summary') }}</p>
+<div id="ch-summary-plot"></div>
+</div>
+</section>
+
+<section id="TrialQC" class="step" style="display:none">
+<h3 class="step-title">By trial</h3>
+<div id="trial-qc-wrap" style="display:none">
+  <p class="qm-note" id="trial-qc-hint">{{ section_note('raw.trial_qc') }}</p>
+  <div id="trial-qc-plot"></div>
+</div>
+</section>
+
+<div class="part-rule">Appendix: run record</div>
+<h2 id="Errors" style="display:none">Errors &amp; Warnings</h2>
 <div id="issues-body" style="display:none"></div>
 
 <script>
@@ -1105,6 +1121,7 @@ function _cdScheduleSave() {
 }
 
 </script>
+{% set appendix_opened = true %}
 {% include "_footer.html.j2" %}
 
 </body>

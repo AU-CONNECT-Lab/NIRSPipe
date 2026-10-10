@@ -25,8 +25,9 @@ from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_la
 from nirspipe.qc.figures.common.provenance_figure import write_provenance
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
-    channel_columns,
-    channel_rows, format_rows, heatmap_args, pair_rows, registration_note, save_channel_csv,
+    WAVELENGTH_COLUMNS, channel_columns,
+    channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, registration_note,
+    save_channel_csv,
     separation_blocks,
     separation_notes,
     split_table,
@@ -313,7 +314,7 @@ def _process_run(
         ("Long",  raw_all.get("n_long_channels"), raw_secs.get("raw_long") or {},  True),
         ("Short", raw_all.get("n_short_channels"), raw_secs.get("raw_short") or {}, False),
     ]
-    split = split_table(set_rows) if sqm_split else {}
+    split = split_table(set_rows, fold_counts=True) if sqm_split else {}
     # GVTD per channel set, as its own table for the reason MOTION_SPLIT_COLUMNS records.
     # Every set is in `raw`/`raw_long`/`raw_short` already, so this is a second reading of
     # what is on disk rather than a second measurement.
@@ -333,7 +334,8 @@ def _process_run(
         ("Short", raw_all.get("n_short_channels"),
          _motion_row("raw_short", "motion_short", "motion_post_short"), False),
     ]
-    motion_split = split_table(motion_rows, MOTION_SPLIT_COLUMNS) if sqm_split else {}
+    motion_split = (split_table(motion_rows, MOTION_SPLIT_COLUMNS, fold_counts=True)
+                    if sqm_split else {})
 
     # one row per set the record carries, so an unsplit montage still gets its All row
     def _haemo_row(suffix: str) -> dict:
@@ -633,8 +635,8 @@ def _process_run(
 
     # `channel_pairs or None` so a run whose Beer-Lambert failed still gets a table, built
     # from the pairs the intensity recording carries rather than from an empty list
-    pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None), sci_threshold,
-                             name_key="pair", psp_threshold=cutoffs["psp"])
+    pair_cells = format_rows(pair_rows(ch_rows, channel_pairs or None, by_wavelength=True),
+                             sci_threshold, name_key="pair", psp_threshold=cutoffs["psp"])
 
     # ── file: per-trial QC ─────────────────────────────────────────────────────
     # scored here rather than persisted: a trial is not a BIDS entity, so per-trial records
@@ -738,6 +740,7 @@ def _process_run(
         # per-wavelength numbers are in the CSV written next to the record.
         "channels": {
             "pairs":  pair_cells,
+            "wavelengths": pair_wavelengths(ch_rows),
             "blocks": separation_blocks(pair_cells, sep_bands),
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
             "notes":  [n for n in (registration_note(registration_offset(raw)),
@@ -1076,6 +1079,10 @@ def build_prep_raw_report(
                                        label, sci_threshold)
 
     run_labels = [r["label"] for r in runs]
+    # one header for every run the page switches between, so it names the wavelengths
+    # only when the runs agree on them
+    wavelengths = {tuple((d.get("channels") or {}).get("wavelengths") or ()) for d in static_data}
+    wavelengths.discard(())
 
     html = render(
         "raw_viewer.html",
@@ -1083,6 +1090,8 @@ def build_prep_raw_report(
         run_labels=run_labels,
         stem=output_path.stem,
         data_json=json.dumps(static_data),
+        ch_wavelengths=list(wavelengths.pop()) if len(wavelengths) == 1 else [],
+        wavelength_columns=WAVELENGTH_COLUMNS,
         **shell,
         **_CH_COLUMN_VARS,
     )

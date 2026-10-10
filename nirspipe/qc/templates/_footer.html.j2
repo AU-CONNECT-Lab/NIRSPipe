@@ -5,7 +5,9 @@
    skipped, so a report can carry three of the four and the page still reads straight.
 #}
 <section class="report-footer">
-<div class="part-rule">Appendix: run record</div>
+{#- a page that lists its own errors above the footer sets appendix_opened and draws
+    the label there instead -#}
+{% if not appendix_opened %}<div class="part-rule">Appendix: run record</div>{% endif %}
 
 {% if errors is defined %}
 <h2 id="Errors">Errors &amp; Warnings</h2>

@@ -482,9 +482,8 @@
     <tr class="qm-group"><td colspan="{{ ncol + 1 }}"><span class="qm-group-title{% if help %} ql{% endif %}"{% if help %} title="{{ help }}"{% endif %}>{{ title }}</span>
       {%- if note %}<sup>{{ note }}</sup>{% endif %}{% if tag %}<span class="qm-group-tag">{{ tag }}</span>{% endif %}</td></tr>
   {%- endmacro %}
-  {#- a share printed with its count beside it, ``12.9% (1098)``; the count's own row is dropped -#}
-  {%- set count_beside = {'spike_pct': 'spike_count', 'gvtd_pct_above_thresh': 'gvtd_num_above_thresh',
-                          'spike_pct_frames': 'spike_num_frames', 'motion_corrected_pct': 'motion_corrected_num'} %}
+  {#- a share printed with its count beside it, ``12.9% (1098)``; the count's own row is dropped.
+      `count_beside` is channel_table.COUNT_BESIDE, a template global -#}
   {%- macro with_count(key, d, sfx='') %}{{ mv(key, d.get(key ~ sfx)) }}
     {%- set c = d.get(count_beside[key] ~ sfx) if key in count_beside else none %}{% if c is not none %} ({{ mv(count_beside[key], c) }}){% endif %}
   {%- endmacro %}

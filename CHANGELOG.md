@@ -54,6 +54,8 @@ All notable changes to this project will be documented in this file.
 - Quality Metrics lists its two tables first, then its figures; the per-channel table says which stage its scores come from
 - The per-channel table's HbO–HbR corr prints before → after denoising where the record has the residual's value
 - The subject report's quality figures sit under their own Quality Figures heading; its nav and the raw viewer's name them By channel, By condition, By trial
+- The raw viewer's steps are flat headings and no longer fold; its results read Quality Metrics (tables) then Quality Figures
+- The raw viewer's set tables print each share with its count, and its per-channel table shows both wavelengths for SNR, CV and Spike
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero
