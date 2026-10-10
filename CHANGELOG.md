@@ -56,6 +56,7 @@ All notable changes to this project will be documented in this file.
 - The subject report's quality figures sit under their own Quality Figures heading; its nav and the raw viewer's name them By channel, By condition, By trial
 - The raw viewer's steps are flat headings and no longer fold; its results read Quality Metrics (tables) then Quality Figures
 - The raw viewer's set tables print each share with its count, and its per-channel table shows both wavelengths for SNR, CV and Spike
+- The dyad raw report's steps no longer fold; its channel table comes before the quality grid and shows both wavelengths for SNR, CV and Spike
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

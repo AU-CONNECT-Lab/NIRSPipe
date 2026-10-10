@@ -108,8 +108,8 @@
 <p class="step-desc">{{ section_note('hyper_raw.alignment') }}</p>
 
 {% if figure_paths.alignment_timeline %}
-<details id="Timeline" open>
-  <summary>The blocks, before and after alignment</summary>
+<section id="Timeline" class="step">
+  <h3 class="step-title">The blocks, before and after alignment</h3>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ figure_paths.alignment_timeline.src }}"
             title="conditions before and after alignment"
@@ -128,7 +128,7 @@
     </table>
     {% endif %}
   </div>
-</details>
+</section>
 {% endif %}
 
 <!-- ================================================== 3. shared usable time -->
@@ -136,8 +136,8 @@
 <p class="step-desc">{{ section_note('hyper_raw.usable') }}</p>
 
 {% if figure_paths.usable_time %}
-<details id="UsablePanel" open>
-  <summary>a. Which pairs, when, and why not</summary>
+<section id="UsablePanel" class="step">
+  <h3 class="step-title">a. Which pairs, when, and why not</h3>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ figure_paths.usable_time.src }}"
             title="usable channel pairs over the shared clock"
@@ -145,7 +145,7 @@
     <p class="qm-note">{{ section_note('hyper_raw.usable_panel') }}</p>
     <p class="fig-path">{{ figure_paths.usable_time.src }}</p>
   </div>
-</details>
+</section>
 {% endif %}
 
 <!-- ======================================================== 3. motion -->
@@ -153,8 +153,8 @@
 <h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
 <p class="step-desc">{{ section_note('hyper_raw.motion') }}</p>
 
-<details id="MotionPanel" open>
-  <summary>a. As it arrived</summary>
+<section id="MotionPanel" class="step">
+  <h3 class="step-title">a. As it arrived</h3>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ figure_paths.motion_before.src }}"
             title="motion per member over the shared clock, before correction"
@@ -162,11 +162,11 @@
     <p class="qm-note">{{ section_note('hyper_raw.motion_before') }}</p>
     <p class="fig-path">{{ figure_paths.motion_before.src }}</p>
   </div>
-</details>
+</section>
 
 {% if figure_paths.motion_after %}
-<details id="MotionAfter" open>
-  <summary>b. After motion correction</summary>
+<section id="MotionAfter" class="step">
+  <h3 class="step-title">b. After motion correction</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.motion_after') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.motion_after.src }}"
@@ -174,17 +174,16 @@
             style="height:{{ figure_paths.motion_after.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.motion_after.src }}</p>
   </div>
-</details>
+</section>
 {% endif %}
 
-<details id="MotionTogether" open>
-  <summary>{% if figure_paths.motion_after %}c{% else %}b{% endif %}. Simultaneous
-    movement</summary>
+<section id="MotionTogether" class="step">
+  <h3 class="step-title">{% if figure_paths.motion_after %}c{% else %}b{% endif %}. Simultaneous movement</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.motion_together') }}</p>
     <ul id="motion-list" class="qm-list"></ul>
   </div>
-</details>
+</section>
 {% endif %}
 
 <!-- ==================================================== 3b. where on the head -->
@@ -193,8 +192,8 @@
 <p class="step-desc">{{ section_note('hyper_raw.head') }}</p>
 
 {% if figure_paths.head_by_condition %}
-<details id="HeadByCondition" open>
-  <summary>a. Per block</summary>
+<section id="HeadByCondition" class="step">
+  <h3 class="step-title">a. Per block</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.head_by_condition') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_by_condition.src }}"
@@ -202,12 +201,12 @@
             style="height:{{ figure_paths.head_by_condition.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.head_by_condition.src }}</p>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if figure_paths.head_slider %}
-<details id="HeadSlider" open>
-  <summary>b. Over the recording <span class="hint">one head per member, with a slider</span></summary>
+<section id="HeadSlider" class="step">
+  <h3 class="step-title">b. Over the recording <span class="hint">one head per member, with a slider</span></h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.head_slider') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_slider.src }}"
@@ -215,7 +214,7 @@
             style="height:{{ figure_paths.head_slider.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.head_slider.src }}</p>
   </div>
-</details>
+</section>
 {% endif %}
 {% endif %}
 
@@ -223,8 +222,8 @@
 <h2 id="Quality">5 &middot; Are the two members comparable</h2>
 <p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
 
-<details id="Comparable" open>
-  <summary>a. Montage and rate</summary>
+<section id="Comparable" class="step">
+  <h3 class="step-title">a. Montage and rate</h3>
   <div class="details-body">
     <table class="qm-table qm-flat" id="compare-table">
       <thead><tr><th>Member</th><th>Sampling rate (Hz)</th><th>Aligned duration (s)</th>
@@ -233,45 +232,31 @@
     </table>
     <p class="qm-note" id="compare-verdict"></p>
   </div>
-</details>
+</section>
 
 {% if subject_metrics_rows %}
-<details id="MemberMetrics" open>
-  <summary>b. Per-member quality metrics</summary>
+<section id="MemberMetrics" class="step">
+  <h3 class="step-title">b. Per-member quality metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.member_metrics') }}</p>
     {{ subject_metrics(subject_metrics_rows) }}
   </div>
-</details>
+</section>
 {% endif %}
 
-<details id="GroupSQM" open>
-  <summary>c. Group-level quality metrics</summary>
+<section id="GroupSQM" class="step">
+  <h3 class="step-title">c. Group-level quality metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.group_sqm') }}</p>
     <ul id="sqm-list" class="qm-list"></ul>
   </div>
-</details>
+</section>
 
 <!-- ============================================================= 5. channels -->
 <h2 id="Channels">6 &middot; Channels</h2>
 
-{% if figure_paths.ch_summary %}
-<details id="ChannelSummary" open>
-  <summary>a. Quality summary across the dyad</summary>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.channel_summary') }}</p>
-    <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
-            title="channel quality summary across the group"
-            style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
-    <p class="fig-path">{{ figure_paths.ch_summary.src }}</p>
-  </div>
-</details>
-{% endif %}
-
-<details id="hyper-decisions-card" open>
-  <summary>{{ "b" if figure_paths.ch_summary else "a" }}. Channel decisions
-    <span class="hint" id="hyper-decisions-hint">per member</span></summary>
+<section id="hyper-decisions-card" class="step">
+  <h3 class="step-title">a. Channel decisions <span class="hint" id="hyper-decisions-hint">per member</span></h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
     <p class="step-desc" id="hyper-decisions-rate-line" style="display:none"></p>
@@ -286,8 +271,9 @@
           </tr>
           <tr>
             {%- for sid in subject_ids %}
-              {%- for _key, label in ch_columns[1:] %}
-            <th class="{{ 'sub-edge' if loop.first else '' }}">{{ label }}</th>
+              {%- for key, label in ch_columns[1:] %}
+            <th class="{{ 'sub-edge' if loop.first else '' }}">{{ label }}
+              {%- if ch_wavelengths and key in wavelength_columns %}<span class="wl">{{ ch_wavelengths | join(' / ') }} nm</span>{% endif %}</th>
               {%- endfor %}
             <th>Decision</th>
             {%- endfor %}
@@ -297,21 +283,33 @@
       </table>
     </div>
   </div>
-</details>
+</section>
+
+{% if figure_paths.ch_summary %}
+<section id="ChannelSummary" class="step">
+  <h3 class="step-title">b. Quality summary across the dyad</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.channel_summary') }}</p>
+    <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
+            title="channel quality summary across the group"
+            style="height:{{ figure_paths.ch_summary.h }}px"></iframe>
+    <p class="fig-path">{{ figure_paths.ch_summary.src }}</p>
+  </div>
+</section>
+{% endif %}
 
 <!-- ============================================================== 6. signals -->
 <h2 id="Signals">7 &middot; Per-channel signals</h2>
 
-<details id="PerChannel">
-  <summary>a. Both members on one set of axes
-    <span class="hint">signal overlay and PSD</span></summary>
+<section id="PerChannel" class="step">
+  <h3 class="step-title">a. Both members on one set of axes <span class="hint">signal overlay and PSD</span></h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.per_channel') }}</p>
     <select id="ch-select" class="ch-select"></select>
     <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
             style="height:600px"></iframe>
   </div>
-</details>
+</section>
 
 
 <script>

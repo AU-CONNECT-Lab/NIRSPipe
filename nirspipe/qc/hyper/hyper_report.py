@@ -21,7 +21,8 @@ from nirspipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
 )
 from nirspipe.qc.common.channel_table import (
-    channel_columns, channel_rows, format_rows, pair_rows, roi_overlap_note,
+    WAVELENGTH_COLUMNS, channel_columns, channel_rows, format_rows, pair_rows, pair_wavelengths,
+    roi_overlap_note,
 )
 from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from nirspipe.qc.boilerplate.notes import section_note
@@ -510,7 +511,8 @@ def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:
         sci_scores = (member.get("per_channel_all") or {}).get("sci_per_channel") or {}
         try:
             rows = pair_rows(channel_rows(record, sci_scores,
-                                          member.get("bad_channels") or []))
+                                          member.get("bad_channels") or []),
+                             by_wavelength=True)
             cutoffs = member.get("screen_cutoffs") or {}
             formatted = format_rows(rows, cutoffs.get("sci"), name_key="pair",
                                     psp_threshold=cutoffs.get("psp"))
@@ -525,6 +527,16 @@ def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:
              "by_sub": {sid: per_sub[sid][pair] for sid in subject_ids
                         if pair in per_sub[sid]}}
             for pair, sep in order]
+
+
+def decision_wavelengths(sqm_data: dict, subject_ids: list[str]) -> list[str]:
+    """The wavelengths the channel table's header names: the members', when they agree."""
+    found = {tuple(pair_wavelengths([{"name": ch} for ch in
+                                     ((sqm_data.get(sid) or {}).get("per_channel_all") or {})
+                                     .get("sci_per_channel") or {}]))
+             for sid in subject_ids}
+    found.discard(())
+    return list(found.pop()) if len(found) == 1 else []
 
 
 def build_hyper_report(
@@ -620,6 +632,8 @@ def build_hyper_report(
         figure_paths=meta["figure_paths"],
         ch_detail_template_json=json.dumps(meta["figure_paths"].get("ch_detail_template")),
         ch_columns=_CH_COLUMNS,
+        ch_wavelengths=decision_wavelengths(sqm_data, meta["subject_ids"]),
+        wavelength_columns=WAVELENGTH_COLUMNS,
         decision_rows_json=json.dumps(
             decision_rows(sqm_data, meta["subject_ids"]), default=str),
         blocks_json=json.dumps(meta.get("conditions") or {}),
