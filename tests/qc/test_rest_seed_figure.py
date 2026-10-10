@@ -91,6 +91,20 @@ def test_figure_grows_a_row_per_seed(haemo):
             > fc_seed_topo_figure(haemo, one).layout.height)
 
 
+def _row_px(fig) -> float:
+    """Pixel height of the first panel's plotting area."""
+    lay = fig.layout
+    return (lay.yaxis.domain[1] - lay.yaxis.domain[0]) * (lay.height - lay.margin.t - lay.margin.b)
+
+
+def test_a_head_keeps_its_size_however_many_seeds(haemo):
+    hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
+    one = fc_seed_topo_figure(haemo, compute_fc_seed(haemo, {"a": hbo[:2]}, "hbo"))
+    four = fc_seed_topo_figure(haemo, compute_fc_seed(
+        haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcd")}, "hbo"))
+    assert _row_px(four) == pytest.approx(_row_px(one), abs=1)
+
+
 def test_figure_grows_a_column_for_the_second_chromophore(haemo, seed_frames):
     hbo_only = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"]))
     both = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]))

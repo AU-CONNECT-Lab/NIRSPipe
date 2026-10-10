@@ -339,15 +339,25 @@ def _values_for(geo: dict, lookup, chromo: str) -> np.ndarray:
 
 
 # the gap between rows of heads, wide enough to hold a horizontal colour bar and its ticks
-_ROW_GAP = 0.14
+_ROW_GAP_PX = 66
 # tall enough that a head, which the grid anchors square, is still legible at report width
 _HEAD_PX = 250
+_MARGIN_T, _MARGIN_B = 62, 54
+
+
+# in pixels rather than as a share of the figure, so a head keeps its size however many rows
+def _grid_px(n_rows: int) -> int:
+    return n_rows * _HEAD_PX + (n_rows - 1) * _ROW_GAP_PX
+
+
+def _row_gap(n_rows: int) -> float:
+    return _ROW_GAP_PX / _grid_px(n_rows) if n_rows > 1 else 0.0
 
 
 def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict):
     """An empty grid of heads with the outline and skeleton already under each panel."""
     fig = make_subplots(rows=n_rows, cols=n_cols, subplot_titles=titles,
-                        horizontal_spacing=0.02, vertical_spacing=_ROW_GAP)
+                        horizontal_spacing=0.02, vertical_spacing=_row_gap(n_rows))
     for r in range(1, n_rows + 1):
         for c in range(1, n_cols + 1):
             head_ground(fig, geo, r, c)
@@ -358,8 +368,8 @@ def _finish_head_grid(fig, geo, n_rows, n_cols, title):
     """Square axes, the run's title, and room under the grid for the bars."""
     head_axes(fig, {"run": geo}, n_rows, n_cols)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=_HEAD_PX * n_rows + 90, plot_bgcolor="white",
-                      showlegend=False, margin=dict(l=40, r=40, t=62, b=54),
+    fig.update_layout(height=_grid_px(n_rows) + _MARGIN_T + _MARGIN_B, plot_bgcolor="white",
+                      showlegend=False, margin=dict(l=40, r=40, t=_MARGIN_T, b=_MARGIN_B),
                       title=dict(text=title, x=0.01, font=dict(size=13)))
     return fig
 
@@ -414,7 +424,8 @@ def fc_seed_topo_figure(
             # a bar per row would be the same bar drawn again
             head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
                        bar={"orientation": "h", "len": 0.28, "thickness": 9,
-                            "x": 0.46, "xanchor": "center", "y": -0.05, "yanchor": "top",
+                            "x": 0.46, "xanchor": "center", "y": -10 / _grid_px(n_rows),
+                            "yanchor": "top",
                             "tickfont": {"size": 9}, "title": {"side": "right"}}
                            if (i == 1 and j == n_cols) else False,
                        colorscale=CORRELATION_SCALE, dim=dim, blank_color=BLANK_COLOR)
@@ -449,10 +460,10 @@ def _row_colorbar(row: int, n_rows: int) -> dict:
     vertical bar at a cell's right edge floats in the gap between two heads. The row gap is
     what the head circle leaves free.
     """
-    cell = (1.0 - _ROW_GAP * (n_rows - 1)) / n_rows
+    cell, gap, nudge = _HEAD_PX / _grid_px(n_rows), _row_gap(n_rows), 6 / _grid_px(n_rows)
     return {"orientation": "h", "len": 0.3, "thickness": 9,
             "x": 0.5, "xanchor": "center",
-            "y": 1.0 - row * cell - (row - 1) * _ROW_GAP - 0.02, "yanchor": "top",
+            "y": 1.0 - row * cell - (row - 1) * gap - nudge, "yanchor": "top",
             # beside the bar, not above it: a title over a horizontal bar grows the block
             # upward and runs into the subplot title of the row below
             "tickfont": {"size": 9}, "title": {"side": "right"}}

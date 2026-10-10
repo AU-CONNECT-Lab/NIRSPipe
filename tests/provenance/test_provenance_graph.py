@@ -184,6 +184,8 @@ def test_mermaid_labels_each_edge_with_its_step(tmp_path):
     ("glm_residuals", {"noise_model": "ols", "short_channel": "none"}, "ols"),
     ("motion_correction", {"motion_correction": "tddr"}, "tddr"),
     ("glm_residuals", {"hrf_model": "glover", "noise_model": "ar1"}, "glover / ar1"),
+    ("glm_fit", {"hrf_model": "spm", "noise_model": "ols", "conditions": []}, "ols"),
+    ("design_matrix", {"hrf_model": "spm", "noise_model": "ols", "conditions": ["A"]}, "spm / ols"),
     ("bandpass", {}, ""),                        # the keys this step reads are absent
     ("od_conversion", {"dpf": [6.0]}, ""),       # step has no settings worth showing
 ])

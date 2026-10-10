@@ -151,7 +151,8 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         return "quantitative QC metrics"
 
     if step in ("glm_residuals", "glm_fit", "design_matrix"):
-        bits = [pick("hrf_model"), pick("noise_model")]
+        # an HRF with no conditions to convolve is a config default, not a setting the step used
+        bits = [None if params.get("conditions") == [] else pick("hrf_model"), pick("noise_model")]
         if (drift := pick("drift_model")) is not None:
             bits.append(f"{drift} drift")
         # the confounds regressed out, which in denoise mode are the whole of the step
