@@ -28,7 +28,8 @@ h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.25rem; }
 .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; align-items: start; }
 .summary-grid table { font-size: 0.88rem; border: none; }
 .summary-grid td, .summary-grid th { border: none; padding: 0.2rem 0.5rem 0.2rem 0; }
-.summary-grid th { background: none; width: 140px; color: var(--muted); font-weight: 500; }
+.summary-grid th { background: none; width: 140px; color: var(--muted); font-weight: 500; font-size: inherit; }
+.summary-grid tbody tr:hover > td { background: none; }
 
 /* the grey aside a section heading carries: what the panel below shows, and how to read it */
 .hint { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
@@ -102,7 +103,8 @@ details[open] > summary::before { transform: rotate(90deg); }
 .ql-dot { color: var(--accent); font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
 .qm-note { font-size: 0.78rem; color: var(--muted); margin: 0 0 0.55rem; }
 .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; color: var(--ink); }
-.ch-group { font-weight: 600; background: var(--surface-alt); }
+td.ch-group { font-weight: 600; color: var(--ink); padding-top: 0.6rem; border-bottom: 1px solid var(--rule); }
+tbody tr:hover > td.ch-group { background: none; }
 .qm-panel-title { margin-top: 0.9rem; }
 .qm-split td:first-child { white-space: nowrap; }
 .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
@@ -111,18 +113,9 @@ details[open] > summary::before { transform: rotate(90deg); }
 .qm-warn { color: var(--warn); }
 .qm-bad  { color: var(--bad); }
 .qm-table { font-size: 0.82rem; margin-top: 0.5rem; }
-/* ---- metric tables ----
-   No cell grid: a row is separated by a hairline and a value column by being right-aligned.
-   Full width, so the right edge lines up with every other block on the page. */
+/* ---- metric tables: the page's full width, so their right edge lines up with every other block ---- */
 .qm-table.qm-flat { width: 100%; font-size: 0.86rem; }
 .qm-table.qm-narrow { min-width: 22rem; }
-.qm-flat th, .qm-flat td { border: none; border-bottom: 1px solid var(--rule-soft);
-                           padding: 0.4rem 1.6rem 0.4rem 0;
-                           font-variant-numeric: tabular-nums; }
-.qm-flat th { background: none; color: var(--muted); font-weight: 600; font-size: 0.8rem;
-              vertical-align: bottom; border-bottom: 1px solid var(--faint); }
-.qm-flat th:last-child, .qm-flat td:last-child { padding-right: 0; }
-.qm-flat tbody tr:hover td { background: var(--surface-alt); }
 .qm-flat td.qv { white-space: nowrap; }
 
 /* ---- the run's metrics as one table: a metric per row, a channel set per column ---- */
@@ -131,7 +124,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 /* a value no channel set owns spans the set columns */
 .qm-unified td.span { text-align: center; }
 .qm-unified thead th { position: sticky; top: var(--qc-topbar-h, 0px); z-index: 1; background: var(--surface); }
-.qm-unified tr.qm-group td { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
+.qm-unified tr.qm-group td { padding-top: 0.6rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--rule); }
 .qm-unified tbody tr.qm-group:hover td { background: none; }
 .qm-group-title { font-weight: 600; color: var(--ink); }
 .qm-unified tr.qm-group sup { color: var(--accent); margin-left: 0.1rem; }
@@ -146,7 +139,7 @@ details[open] > summary::before { transform: rotate(90deg); }
    table and an ROI table start in the same place */
 .num-table col.idcol { width: 7rem; }
 /* a rule where one condition's columns end, without which a dozen of them read as one smear */
-.num-table th.grp, .num-table td.grp { border-left: 2px solid #b8c2cc; }
+.num-table th.grp, .num-table td.grp { border-left: 1px solid var(--faint); }
 .num-table .hdr-note { font-weight: 400; color: var(--muted); }
 
 .qm-table td.bad  { color: var(--bad); }
@@ -156,8 +149,8 @@ details[open] > summary::before { transform: rotate(90deg); }
 
 /* ---- GLM beta table ---- */
 .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
-.glm-beta-table th, .glm-beta-table td { border: 1px solid var(--rule-table); padding: 0.22rem 0.55rem; text-align: right; }
-.glm-beta-table th { background: var(--surface-head); text-align: center; }
+.glm-beta-table th, .glm-beta-table td { padding: 0.22rem 0.55rem; text-align: right; }
+.glm-beta-table th { text-align: center; }
 .glm-beta-table td:first-child, .glm-beta-table td:nth-child(2) { text-align: left; }
 .glm-beta-table td.pos { color: var(--bad); }
 .glm-beta-table td.neg { color: var(--ok); }

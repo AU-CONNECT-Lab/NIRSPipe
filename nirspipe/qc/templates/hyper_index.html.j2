@@ -43,13 +43,13 @@ tr.whole td.num { font-weight: 600; }
       {% if has_pairs %}<th>Pair</th>{% endif %}
       {% if has_sessions %}<th>Session</th>{% endif %}
       <th>Task</th>
-      <th>Span</th>
-      {% for c in chroma %}<th>WTC {{ chroma_labels[c] }}</th><th>WTC {{ chroma_labels[c] }} crossed</th>{% endfor %}
+      <th class="num">Span</th>
+      {% for c in chroma %}<th class="num">WTC {{ chroma_labels[c] }}</th><th class="num">WTC {{ chroma_labels[c] }} crossed</th>{% endfor %}
       {% if has_null %}
-      {% for c in chroma %}<th>past null {{ chroma_labels[c] }}</th><th>past null {{ chroma_labels[c] }} crossed</th>{% endfor %}
+      {% for c in chroma %}<th class="num">past null {{ chroma_labels[c] }}</th><th class="num">past null {{ chroma_labels[c] }} crossed</th>{% endfor %}
       {% endif %}
-      {% for c in chroma %}<th>outside COI {{ chroma_labels[c] }}</th>{% endfor %}
-      {% for c in chroma %}<th>ISC {{ chroma_labels[c] }}</th><th>ISC {{ chroma_labels[c] }} crossed</th>{% endfor %}
+      {% for c in chroma %}<th class="num">outside COI {{ chroma_labels[c] }}</th>{% endfor %}
+      {% for c in chroma %}<th class="num">ISC {{ chroma_labels[c] }}</th><th class="num">ISC {{ chroma_labels[c] }} crossed</th>{% endfor %}
     </tr>
   </thead>
   <tbody>

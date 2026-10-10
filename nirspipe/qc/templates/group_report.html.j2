@@ -34,17 +34,16 @@ table.group-table {
 /* no cell grid: a row is separated by a hairline and a column by being right-aligned, the way
    every other metric table on the document look reads */
 table.group-table th, table.group-table td {
-  border: 1px solid var(--rule-table);
   padding: 0.25rem 0.55rem; text-align: right; white-space: nowrap;
 }
 table.group-table th {
-  background: var(--surface-head); cursor: pointer; user-select: none;
-  position: sticky; top: 0; font-weight: 600; color: var(--ink); font-size: 0.75rem;
+  background: var(--surface); cursor: pointer; user-select: none;
+  position: sticky; top: 0; font-size: 0.75rem;
 }
 table.group-table th:first-child, table.group-table td:first-child {
   text-align: left; position: sticky; left: 0; background: var(--surface);
 }
-table.group-table th:first-child { z-index: 2; background: var(--surface-head); }
+table.group-table th:first-child { z-index: 2; }
 table.group-table tbody tr:hover td { background: var(--surface-alt); }
 table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-left: 0.3rem; }
 

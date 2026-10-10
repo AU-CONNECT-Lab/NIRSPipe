@@ -12,19 +12,19 @@
    grid are that sheet's and only what is specific to this page belongs here: the grids, the
    event table, and the rating chips. A rule here that document.css already has is a fork. */
 
-.hint { font-size: 0.78rem; color: #888; }
-.nav-meta { font-size: 0.78rem; color: #6c757d; }
+.hint { font-size: 0.78rem; color: var(--muted); }
+.nav-meta { font-size: 0.78rem; color: var(--faint); }
 
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
 select#run-select {
-  font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.2rem 0.4rem; background: #f8f9fa;
+  font-size: 0.82rem; border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.2rem 0.4rem; background: var(--surface); color: var(--ink);
 }
 
 /* grids. The panels that sit side by side stay side by side, unboxed, so the page reads
    as a document the way the subject report does. */
 .row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
-.panel-head { font-size: 0.9rem; font-weight: 600; color: #34495e; margin: 0 0 0.3rem; }
+.panel-head { font-size: 0.9rem; font-weight: 600; color: var(--ink); margin: 0 0 0.3rem; }
 .panel-head .hint { font-weight: 400; }
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
@@ -36,46 +36,44 @@ select#run-select {
 
 /* buttons */
 .btn {
-  padding: 0.25rem 0.6rem; border: 1px solid #dde3ea; border-radius: 4px;
-  background: #f8f9fa; cursor: pointer; font-size: 0.82rem; color: #2c3e50;
+  padding: 0.25rem 0.6rem; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); cursor: pointer; font-size: 0.82rem; color: var(--ink);
   transition: background 0.15s;
 }
-.btn:hover { background: #e9ecef; }
-.btn-primary { background: #3498db; color: #fff; border-color: #3498db; }
-.btn-primary:hover { background: #2176ae; }
-.btn-danger  { color: #c0392b; border-color: #e74c3c; }
-.btn-danger:hover  { background: #fdecea; }
-.btn-active  { background: #ebf5fb; border-color: #3498db; color: #2176ae; font-weight: 600; }
+.btn:hover { background: var(--surface-alt); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: #163d6b; }
+.btn-danger  { color: var(--bad); border-color: var(--bad); }
+.btn-danger:hover  { background: var(--bad-soft); }
+.btn-active  { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
 #mk-card { display: flex; flex-direction: column; overflow: hidden; }
 #mk-table-wrap { flex: 1; overflow-y: auto; }
-#mk-count { font-size: 0.75rem; color: #6c757d; }
+#mk-count { font-size: 0.75rem; color: var(--faint); }
 #marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
-#marker-table th, #marker-table td {
-  border: 1px solid #dde3ea; padding: 0.22rem 0.45rem; text-align: left;
-}
-#marker-table th { background: #f1f3f5; font-weight: 600; position: sticky; top: 0; }
-#marker-table tbody tr:hover { background: #f8f9fa; cursor: pointer; }
-#marker-table tbody tr.mk-selected { background: #ebf5fb; }
+#marker-table th, #marker-table td { padding: 0.22rem 0.45rem; }
+#marker-table th { background: var(--surface); position: sticky; top: 0; }
+#marker-table tbody tr { cursor: pointer; }
+#marker-table tbody tr.mk-selected > td { background: var(--accent-soft); }
 .mk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 
 /* detail panel placeholder */
 #detail-placeholder {
   display: flex; align-items: center; justify-content: center;
-  height: 120px; color: #adb5bd; font-size: 0.85rem; font-style: italic;
+  height: 120px; color: var(--faint); font-size: 0.85rem; font-style: italic;
 }
 
 /* bad channel list */
-#bad-list { font-size: 0.78rem; color: #c0392b; margin-top: 0.3rem; }
+#bad-list { font-size: 0.78rem; color: var(--bad); margin-top: 0.3rem; }
 
 /* channel decision chips */
 .cd-chip { cursor:pointer; padding:0.1rem 0.5rem; border-radius:3px; font-size:0.78rem;
            font-weight:600; display:inline-block; min-width:4.2rem; text-align:center; }
-.cd-chip.cd-unrated  { background:#e9ecef; color:#6c757d; }
-.cd-chip.cd-good     { background:#d4edda; color:#155724; }
-.cd-chip.cd-bad      { background:#f8d7da; color:#721c24; }
+.cd-chip.cd-unrated  { background:var(--surface-alt); color:var(--muted); }
+.cd-chip.cd-good     { background:var(--ok-soft); color:var(--ok); }
+.cd-chip.cd-bad      { background:var(--bad-soft); color:var(--bad); }
 /* under the second line nirspipe-rate was given, apart from the run's own red */
-.qm-table td.rate-low { outline:2px dashed #e67e22; outline-offset:-3px; }
+.qm-table td.rate-low { outline:2px dashed var(--warn); outline-offset:-3px; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
 </style>
 </head>

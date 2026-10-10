@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
+- Every QC report table drops its cell grid for hairline rows, numeric columns and their headers right-aligned
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

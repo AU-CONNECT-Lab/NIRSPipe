@@ -13,12 +13,11 @@
   --muted: #57606a;
   --faint: #8b949e;
   --accent: #1d4e89;
+  --accent-soft: #e8eef5;
   --rule: #e3e6ea;          /* section and step dividers */
   --rule-soft: #eff1f3;     /* hairline between rows */
-  --rule-table: #ddd;       /* table cell borders */
   --surface: #fff;
   --surface-alt: #f6f8fa;
-  --surface-head: #f0f3f6;  /* table header fill */
   --surface-code: #f6f8fa;
   --ok: #1a7f37;
   --ok-soft: #e9f5ec;
@@ -41,11 +40,15 @@ pre { background: var(--surface-code); border: 1px solid var(--rule-soft); borde
       padding: 0.75rem 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.55;
       white-space: pre-wrap; word-break: break-all; }
 
-/* ---- data ---- */
+/* ---- data: hairline rows, no cell grid ---- */
 
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
-th, td { border: 1px solid var(--rule-table); padding: 0.35rem 0.7rem; text-align: left; }
-th { background: var(--surface-head); font-weight: 600; }
+th, td { border: none; border-bottom: 1px solid var(--rule-soft); padding: 0.4rem 0.8rem;
+         text-align: left; font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 600; font-size: 0.8rem; vertical-align: bottom;
+     border-bottom: 1px solid var(--faint); }
+th:first-child, td:first-child { padding-left: 0; }
+tbody tr:hover > td { background: var(--surface-alt); }
 
 /* ---- figures ---- */
 

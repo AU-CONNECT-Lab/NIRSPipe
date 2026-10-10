@@ -6,7 +6,7 @@
 {% include "_index.css" %}
 tr.ch-clean td { color: var(--faint); }
 td.ch-bad { background: var(--bad-soft); color: var(--bad); font-weight: 600; text-align: center; }
-td.ch-ok  { color: var(--rule-table); text-align: center; }
+td.ch-ok  { color: var(--rule); text-align: center; }
 td.ch-n   { text-align: right; }
 .run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
 .run-links a { color: var(--faint); font-weight: 400; margin-right: 0.55rem; }
@@ -106,9 +106,9 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
     <tr>
       <th>Window</th>
       <th>Kind</th>
-      <th>Span</th>
-      <th>Channels passing</th>
-      {% for col in condition_columns %}<th>{{ col }}</th>{% endfor %}
+      <th class="num">Span</th>
+      <th class="num">Channels passing</th>
+      {% for col in condition_columns %}<th class="num">{{ col }}</th>{% endfor %}
     </tr>
   </thead>
   <tbody>
