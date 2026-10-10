@@ -102,3 +102,12 @@ def test_the_report_shows_excluded_time_only_with_spans(tmp_path, spans):
     if spans:
         assert "BAD_unselected" in run_page and "--keep-spans" in run_page
         assert re.search(r"<th>Kept</th><td>120\.0 of 160\.0 s outside every BAD_ span", cond_page)
+
+
+def test_an_output_skipped_under_min_time_is_noted_with_or_without_spans(tmp_path):
+    out, _, _ = _run(tmp_path, "--min-time", "100000", report=True)
+    run_page = next(p for p in out.rglob("*_report.html") if "_cond-" not in p.name
+                    and "desc-" not in p.name).read_text(encoding="utf-8")
+    assert 'id="Excluded"' not in run_page
+    assert re.search(r"FC was not computed: [\d.]+ s lie outside its BAD_ spans, under "
+                     r"--min-time 100000 s", run_page)

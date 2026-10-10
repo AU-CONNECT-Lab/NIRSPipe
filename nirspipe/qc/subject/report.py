@@ -1220,12 +1220,19 @@ def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
 
     Empty for a run without ``BAD_`` spans, so its report is the one it always was. The spans
     are desc-sci's, which every later stage carries unchanged; trials left per condition
-    come from a task GLM's fit sidecar.
+    come from a task GLM's fit sidecar. ``excluded_skipped`` is every output ``--min-time``
+    skipped, with its recorded reason, spans or none, for the run's notes.
     """
+    skipped = [section_note("excluded.skipped", output=item.get("output"),
+                            reason=item.get("reason"))
+               for suffix in ("desc-errts_nirs", "desc-errtsbroad_nirs", "desc-filtered_nirs",
+                              "desc-resampled_nirs")
+               for item in _sidecar_of(nirs_dir, sqm_label, subject, suffix).get(
+                   "skipped_outputs") or []]
     excluded = record.get("excluded") or {}
     if not excluded.get("n_spans"):
         return {"excluded": {}, "excluded_spans": [], "excluded_conditions": [],
-                "excluded_skipped": []}
+                "excluded_skipped": skipped}
     spans = _sidecar_of(nirs_dir, sqm_label, subject, "desc-sci_nirs").get("excluded_spans") or []
     glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
     events_left = glm.get("events_left") or {}
@@ -1246,12 +1253,6 @@ def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
             conditions.append({"label": label, "window": "", "kept_s": None,
                                "counted_windows": None,
                                "trials": f"{left['left']} of {left['total']}"})
-    skipped = [section_note("excluded.skipped", output=item.get("output"),
-                            reason=item.get("reason"))
-               for suffix in ("desc-errts_nirs", "desc-errtsbroad_nirs", "desc-filtered_nirs",
-                              "desc-resampled_nirs")
-               for item in _sidecar_of(nirs_dir, sqm_label, subject, suffix).get(
-                   "skipped_outputs") or []]
     return {
         "excluded": {**excluded,
                      "summary": section_note(
@@ -2063,6 +2064,8 @@ def build_subject_report(
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
     excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)
+    for line in excluded_vars["excluded_skipped"]:
+        _note(notes, subject, line)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=nirs_dir,
                                      sqm_label=sqm_label,
