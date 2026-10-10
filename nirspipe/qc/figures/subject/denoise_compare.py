@@ -33,18 +33,16 @@ class Panel(NamedTuple):
     unit: str = ""
 
 
-# key, panel title, whether a smaller value is the better one
+# key, panel title, whether a smaller value is the better one; HbO alone, the HbR side
+# of each being in the metrics table
 _DENOISE_QUALITY = [
     ("hbo_hbr_corr_mean", "HbO–HbR r", True),
     ("gcor_hbo", "GCOR HbO", True),
-    ("gcor_hbr", "GCOR HbR", True),
     ("resp_band_power_hbo", "resp power HbO, in band", True),
     ("cnr_hbo_mean", "CNR HbO", False),
-    ("cnr_hbr_mean", "CNR HbR", True),
 ]
 _DENOISE_FILTER_CHECK = [
     ("drift_band_power_hbo", "drift power HbO"),
-    ("cardiac_band_power_hbo", "cardiac power HbO"),
 ]
 
 
@@ -71,9 +69,9 @@ def _panel(key: str, title: str, values: list, lower_better, primary: bool = Tru
 def denoise_stage_panels(metrics: dict) -> "list[Panel]":
     """Panels for the haemoglobin chain, from :func:`comparable_stage_metrics` output.
 
-    Ordered quality first, then the share of variance still present, then the two band
-    powers that only say whether the filter ran. Those last are greyed: sitting entirely
-    outside the analysis passband, they fall by the filter's stopband attenuation whatever
+    Ordered quality first, then the share of variance still present, then the drift band
+    power that only says whether the filter ran. That last is greyed: sitting entirely
+    outside the analysis passband, it falls by the filter's stopband attenuation whatever
     the data did.
     """
     panels = [_panel(key, title, metrics["quality"][key], lower_better)

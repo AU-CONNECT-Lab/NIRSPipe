@@ -211,8 +211,8 @@ NOTES = {
         "On this page every value is this condition's, and the channel sets are the run's, "
         "since one montage has to serve every condition.",
     "metrics.stages":
-        "One panel per metric on the long channels, each on its own scale. Short channels are "
-        "left out because they serve as regressors.",
+        "One panel per metric on the long channels' HbO (HbO&ndash;HbR r uses both), each on "
+        "its own scale. Short channels are left out because they serve as regressors.",
     "metrics.stages_banded":
         "HbO&ndash;HbR, GCOR and CNR are recomputed in the analysis passband at every stage, so "
         "they will not match the per-stage values in the table above. Variance remaining is "
@@ -275,6 +275,9 @@ NOTES = {
     "metrics.no_drift":
         "Low-frequency drift is not among these: it grows with the span it is fitted over. The "
         "run's own page carries it.",
+    "metrics.per_channel_stage":
+        "Scores on the recording before any correction; HbO&ndash;HbR corr after "
+        "Beer-Lambert, before denoising.",
     "metrics.per_channel":
         "Screening counts the windows in which SCI and PSP both pass, so a channel can be BAD "
         "with a passing whole-run SCI. Channels rejected by hand also show as BAD, and a BAD "

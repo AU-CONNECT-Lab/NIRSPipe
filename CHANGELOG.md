@@ -46,6 +46,8 @@ All notable changes to this project will be documented in this file.
 - Seed and ALFF flat maps put HbO and HbR in rows; seeds run across, four to a row
 - The PSD figures draw only the first stage and the last, on long channels; a short channel's own page leaves out its residual
 - A channel's own PSD page overlays its stages, HbO and HbR side by side, the last stage dark
+- The denoising-stage panels draw HbO only and drop cardiac power: six panels in two rows
+- Quality Metrics lists its two tables first, then its figures; the per-channel table says which stage its scores come from
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

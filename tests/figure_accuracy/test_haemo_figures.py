@@ -124,16 +124,14 @@ def test_the_stage_columns_are_the_stages_in_order(stages):
         assert list(row) == ["desc-preproc", "desc-filtered", "desc-errts"]
 
 
-def test_regression_removes_the_shared_hbo_and_leaves_hbr_alone(stages):
-    # the systemic oscillation is in every HbO, short included; the HbR mark is long-only
-    hbo, hbr = stages["GCOR HbO"], stages["GCOR HbR"]
+def test_regression_removes_the_shared_hbo(stages):
+    # the systemic oscillation is in every HbO, short included
+    hbo = stages["GCOR HbO"]
     assert hbo["desc-errts"] < 0.6 * hbo["desc-filtered"]
-    assert hbr["desc-errts"] == pytest.approx(hbr["desc-filtered"], abs=0.05)
 
 
-def test_the_low_pass_removes_the_pulse(stages):
-    cardiac = stages["cardiac power HbO"]
-    assert cardiac["desc-filtered"] < 1e-3 * cardiac["desc-preproc"]
+def test_the_panels_are_hbo_only(stages):
+    assert not [name for name in stages if "HbR" in name and "HbO" not in name]
 
 
 def test_variance_remaining_starts_whole_and_falls(stages):

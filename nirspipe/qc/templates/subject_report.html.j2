@@ -457,7 +457,7 @@
 {% macro mv_pair(key, before, after) %}{% if after is not none %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% else %}{{ mv(key, before) }}{% endif %}{% endmacro %}
 
 <h2 id="Metrics">Quality Metrics</h2>
-{#- results in order of grain, not lettered: a-f are processing steps -#}
+{#- the two tables, then the figures; not lettered: a-f are processing steps -#}
 <section id="RunSummary" class="step">
 <h3 class="step-title">Run summary</h3>
 <div class="details-body">
@@ -658,6 +658,50 @@
 </div>
 </section>
 
+{% if channel_rows %}
+<!-- ------------------------------------------ per-channel table -->
+<section id="ChannelTable" class="step">
+<h3 class="step-title">Per-channel table ({{ channel_cells | length }} channel pairs)</h3>
+<div class="details-body">
+  {#- columns, values and cell classes all come pre-formatted from
+      nirspipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
+      same things left to right and print one number one way, and the SCI column is marked
+      against the run's own --sci-threshold rather than a copy of it -#}
+  {% macro ch_row(row) %}
+      <tr>
+        {%- for key, _label in channel_columns %}
+        <td class="{{ row.get(key ~ '_cls', '') }}">{{ row[key] }}</td>
+        {%- endfor %}
+      </tr>
+  {% endmacro %}
+  {#- the montage split, long first, grouped by nirspipe.qc.channel_table so this table
+      and the raw views block their channels the same way. An unsplit record comes back as
+      one block, which is what a montage of one kind looks like. -#}
+  {% set n_blocks = channel_blocks | length %}
+  <p class="qm-note">{{ section_note('metrics.per_channel_stage') }}
+    {%- if n_blocks > 1 %} {{ section_note('metrics.per_channel') }}{% endif %}</p>
+  <div style="overflow-x:auto;">
+    <table class="qm-table">
+      <thead>
+        <tr>
+          {#- a column measured per wavelength prints both, named under its header -#}
+          {%- for key, label in channel_columns %}<th>{{ label }}
+            {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}</th>{% endfor %}
+        </tr>
+      </thead>
+      {% if n_blocks > 1 %}
+      {% for title, rows in channel_blocks %}
+      <tbody>
+        <tr><td colspan="{{ channel_columns | length }}" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
+        {% for row in rows %}{{ ch_row(row) }}{% endfor %}
+      </tbody>
+      {% endfor %}
+      {% else %}
+      <tbody>
+        {% for row in channel_cells %}{{ ch_row(row) }}{% endfor %}
+      </tbody>
+      {% endif %}
+
 {% if stage_metrics_path %}
 <section id="Stages" class="step">
 <h3 class="step-title">By denoising stage</h3>
@@ -708,50 +752,6 @@
 </section>
 {% endif %}
 
-{% if channel_rows %}
-<!-- ------------------------------------------ per-channel table -->
-<section id="ChannelTable" class="step">
-<h3 class="step-title">Per-channel table ({{ channel_cells | length }} channel pairs)</h3>
-<div class="details-body">
-  {#- columns, values and cell classes all come pre-formatted from
-      nirspipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
-      same things left to right and print one number one way, and the SCI column is marked
-      against the run's own --sci-threshold rather than a copy of it -#}
-  {% macro ch_row(row) %}
-      <tr>
-        {%- for key, _label in channel_columns %}
-        <td class="{{ row.get(key ~ '_cls', '') }}">{{ row[key] }}</td>
-        {%- endfor %}
-      </tr>
-  {% endmacro %}
-  {#- the montage split, long first, grouped by nirspipe.qc.channel_table so this table
-      and the raw views block their channels the same way. An unsplit record comes back as
-      one block, which is what a montage of one kind looks like. -#}
-  {% set n_blocks = channel_blocks | length %}
-  {% if n_blocks > 1 %}
-  <p class="qm-note">{{ section_note('metrics.per_channel') }}</p>
-  {% endif %}
-  <div style="overflow-x:auto;">
-    <table class="qm-table">
-      <thead>
-        <tr>
-          {#- a column measured per wavelength prints both, named under its header -#}
-          {%- for key, label in channel_columns %}<th>{{ label }}
-            {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}</th>{% endfor %}
-        </tr>
-      </thead>
-      {% if n_blocks > 1 %}
-      {% for title, rows in channel_blocks %}
-      <tbody>
-        <tr><td colspan="{{ channel_columns | length }}" class="ch-group">{{ title }} ({{ rows | length }})</td></tr>
-        {% for row in rows %}{{ ch_row(row) }}{% endfor %}
-      </tbody>
-      {% endfor %}
-      {% else %}
-      <tbody>
-        {% for row in channel_cells %}{{ ch_row(row) }}{% endfor %}
-      </tbody>
-      {% endif %}
     </table>
   </div>
 </div>
