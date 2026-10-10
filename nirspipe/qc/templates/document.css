@@ -110,6 +110,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .ql-dot { color: var(--accent); font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
 .qm-note { font-size: 0.78rem; color: var(--muted); margin: 0 0 0.55rem; }
 .qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; color: var(--ink); }
+th .wl { display: block; font-weight: 400; color: var(--faint); font-size: 0.72rem; }
 td.ch-group { font-weight: 600; color: var(--ink); padding-top: 0.6rem; border-bottom: 1px solid var(--rule); }
 tbody tr:hover > td.ch-group { background: none; }
 .qm-split td:first-child { white-space: nowrap; }

@@ -713,7 +713,7 @@
 {% if channel_rows %}
 <!-- ------------------------------------------ per-channel table -->
 <section id="ChannelTable" class="step">
-<h3 class="step-title">Per-channel table</h3>
+<h3 class="step-title">Per-channel table ({{ channel_cells | length }} channel pairs)</h3>
 <div class="details-body">
   {#- columns, values and cell classes all come pre-formatted from
       nirspipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
@@ -737,7 +737,9 @@
     <table class="qm-table">
       <thead>
         <tr>
-          {%- for _key, label in channel_columns %}<th>{{ label }}</th>{% endfor %}
+          {#- a column measured per wavelength prints both, named under its header -#}
+          {%- for key, label in channel_columns %}<th>{{ label }}
+            {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}</th>{% endfor %}
         </tr>
       </thead>
       {% if n_blocks > 1 %}

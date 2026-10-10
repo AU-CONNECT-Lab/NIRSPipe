@@ -80,7 +80,7 @@ from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
-    channel_rows, format_rows, heatmap_args, measured_columns,
+    WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
     registration_note, roi_overlap_note, separation_blocks, separation_notes,
 )
 from nirspipe.qc.common.figure_io import (
@@ -1375,11 +1375,15 @@ def _section_sqm(
     # the raw rows stay for the quality grid, which wants the numbers; the
     # template gets them formatted, so the per-channel table prints the same widths and the
     # same SCI verdict as the raw viewer and the GUI
-    cells = format_rows(rows, sci_threshold, psp_threshold=psp_threshold)
+    # one row per pair, the wavelength-dependent columns printing both values
+    cells = format_rows(pair_rows(rows, by_wavelength=True), sci_threshold,
+                        name_key="pair", psp_threshold=psp_threshold)
     return {
         "sqm": sqm,
         "channel_rows": rows,
         "channel_cells": cells,
+        "channel_wavelengths": pair_wavelengths(rows),
+        "wavelength_columns": WAVELENGTH_COLUMNS,
         # the bands are stamped in `raw` only, which `sqm` was not filled from on a split run
         "channel_blocks": separation_blocks(cells, bands_from_record(sqm_all)),
         # the table groups by separation, so the block header says which side a row is on
@@ -2525,7 +2529,8 @@ def _write_condition_reports(
             cropped = remake_cropped(cond_name, span)
         rows = _condition_channel_rows(record, entry, sci_scores,
                                        set(report_vars.get("bad_channels") or ()))
-        cells = format_rows(rows, cutoffs["sci"], psp_threshold=cutoffs["psp"])
+        cells = format_rows(pair_rows(rows, by_wavelength=True), cutoffs["sci"],
+                            name_key="pair", psp_threshold=cutoffs["psp"])
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cond_name, cutoffs["sci"],
             psp_thresh=cutoffs["psp"], good_frac_thresh=cutoffs["good_frac"])
@@ -2572,6 +2577,7 @@ def _write_condition_reports(
             "sqm": scalars,
             "channel_rows": rows,
             "channel_cells": cells,
+            "channel_wavelengths": pair_wavelengths(rows),
             "channel_blocks": separation_blocks(cells, separation_bands(config)),
             # a condition has no whole-run SCI: that estimate has no windows to select from
             "channel_columns": channel_columns(("separation", "sci_whole")),

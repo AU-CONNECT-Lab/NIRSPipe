@@ -133,7 +133,22 @@ def channel_rows(
     return [row_of(ch) for ch in sci_scores]
 
 
-def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str, Any]]:
+# The per-channel columns measured on each wavelength on its own; the rest are a pair's
+# (SCI and PSP correlate the two wavelengths, HbO-HbR corr is after Beer-Lambert).
+WAVELENGTH_COLUMNS = ("snr", "cv", "spike")
+
+
+def pair_wavelengths(rows: list[dict]) -> list[str]:
+    """The wavelengths behind the rows, in the order :func:`pair_rows` keeps them.
+
+    ["S1_D1 850", "S1_D1 760"] -> ["760", "850"]
+    """
+    return sorted({str(r["name"]).rsplit(" ", 1)[1] for r in rows if " " in str(r["name"])},
+                  key=lambda w: (len(w), w))
+
+
+def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
+              by_wavelength: bool = False) -> list[dict[str, Any]]:
     """The same rows collapsed to one per source-detector pair.
 
     Raw intensity carries two channels per pair, one per wavelength, and SCI is a property
@@ -145,12 +160,19 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None) -> list[dict[str
     ``pairs`` fixes the order and the membership when the caller already has a pair list
     from the haemoglobin file; without it the pairs come out in the order they appear.
     A pair with no row is still returned, empty, so the caller's list stays intact.
+
+    ``by_wavelength`` keeps both values of each :data:`WAVELENGTH_COLUMNS` column as a
+    tuple in :func:`pair_wavelengths` order, ``snr: (23.7, 13.7)``, instead of the first.
     """
     by_pair: dict[str, list[dict]] = {}
     for row in rows:
         by_pair.setdefault(pair_of(row["name"]), []).append(row)
+    wavelengths = pair_wavelengths(rows) if by_wavelength else []
 
     def _first(group: list[dict], key: str):
+        if key in WAVELENGTH_COLUMNS and wavelengths:
+            by_wl = {str(r["name"]).rsplit(" ", 1)[-1]: r.get(key) for r in group}
+            return tuple(by_wl.get(w) for w in wavelengths)
         for row in group:
             if row.get(key) is not None:
                 return row[key]
@@ -573,7 +595,13 @@ def format_rows(
         }
         for column, metric in _COLUMN_METRIC.items():
             value = row.get(column)
-            formatted[column] = format_metric(metric, value)
+            # a pair's two wavelengths, from pair_rows(by_wavelength=True); none measured is one dash
+            if isinstance(value, tuple) and all(v is None for v in value):
+                value = None
+            if isinstance(value, tuple):
+                formatted[column] = " / ".join(format_metric(metric, v) for v in value)
+            else:
+                formatted[column] = format_metric(metric, value)
             formatted[f"{column}_cls"] = ""
         if (sci_threshold is not None and row.get("sci_win") is not None
                 and row["sci_win"] < sci_threshold):

@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - QC report footers open with an "Appendix: run record" label above Errors
 - The provenance table merges outputs with the same step description and settings into one row
 - Software versions print as a compact three-column table
+- The subject report's per-channel table has one row per channel pair, SNR, CV and Spike printing both wavelengths; the TSV stays per wavelength
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

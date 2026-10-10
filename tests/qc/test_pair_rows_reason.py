@@ -22,6 +22,18 @@ def test_the_lower_share_of_the_two_wavelengths_decides():
     assert pair_rows(rows)[0]["good_frac"] == 0.40
 
 
+def test_a_pair_row_can_keep_both_wavelengths_of_a_per_wavelength_column():
+    rows = [_row("S1_D1 850", 0.9, False) | {"snr": 13.7}, _row("S1_D1 760", 0.9, False) | {"snr": 23.7}]
+    row = pair_rows(rows, by_wavelength=True)[0]
+    assert row["snr"] == (23.7, 13.7), "760 first, whatever order the rows came in"
+    assert pair_rows(rows)[0]["snr"] == 13.7, "the default keeps the first value"
+    cell = format_rows([row], 0.8, name_key="pair")[0]
+    assert cell["snr"].count(" / ") == 1
+    empty = format_rows([row | {"spike": (None, None)}], 0.8, name_key="pair")[0]
+    alone = format_rows([row | {"spike": None}], 0.8, name_key="pair")[0]
+    assert empty["spike"] == alone["spike"], "nothing on either wavelength prints one dash"
+
+
 def test_a_rejected_channel_does_not_move_the_grand_mean():
     import numpy as np
 
