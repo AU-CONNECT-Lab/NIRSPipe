@@ -177,14 +177,14 @@ def test_no_whole_run_draw_is_collected(stub):
 def test_every_draw_reaches_the_hook(stub):
     seen = []
     _run(["sub-01G03", "sub-01G04"],
-         on_draw=lambda pid, label, pair, inner: seen.append(pid))
+         on_draw=lambda pid, label, pair, inner, excluded: seen.append(pid))
     assert seen == ["sub-01G03", "sub-01G04"]
 
 
 def test_the_hook_gets_the_condition_and_the_pair(stub):
     got = []
     _run(["sub-01G03"], labels=("early", "late"),
-         on_draw=lambda pid, label, pair, inner: got.append((label, sorted(pair))))
+         on_draw=lambda pid, label, pair, inner, excluded: got.append((label, sorted(pair))))
     assert got == [("early", sorted([TRUE[0], "sub-01G03"])),
                    ("late", sorted([TRUE[0], "sub-01G03"]))]
 
