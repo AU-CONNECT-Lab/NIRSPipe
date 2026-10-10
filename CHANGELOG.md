@@ -26,6 +26,11 @@ All notable changes to this project will be documented in this file.
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
 - Every QC report table drops its cell grid for hairline rows, numeric columns and their headers right-aligned
 - QC reports print no exponents: drift in µM, band power in µM²/Hz, GVTD in mOD/sample, unit in the label
+- The subject report's processing steps are flat headings and no longer fold
+- The subject report's results sit under one Quality Metrics heading: run summary, denoising stage, channel, condition, per-channel table, trial
+- The Channel Quality Summary prints its figure's file path like every other figure
+- The Haemoglobin group label says Long shows before → after denoising
+- A metric no channel set owns prints in the All column, leaving Long and Short blank
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

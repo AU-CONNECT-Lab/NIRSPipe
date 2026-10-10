@@ -456,8 +456,11 @@
 {#- one metric either side of a step, ``before -> after`` when the second side exists -#}
 {% macro mv_pair(key, before, after) %}{% if after is not none %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% else %}{{ mv(key, before) }}{% endif %}{% endmacro %}
 
-<h2 id="Metrics">Quantitative Metrics</h2>
-<div class="qm-box">
+<h2 id="Metrics">Quality Metrics</h2>
+{#- results in order of grain, not lettered: a-f are processing steps -#}
+<section id="RunSummary" class="step">
+<h3 class="step-title">Run summary</h3>
+<div class="details-body">
   {#- Everything that is per-metric is in the hover text, which comes from the registry; the
       notes here carry only what a single metric's tooltip cannot say. -#}
   <p class="qm-note">{{ section_note('metrics.intro') }}</p>
@@ -482,9 +485,9 @@
   {%- macro set_cells(key, all, long, short) -%}
     <td class="qv">{{ mv(key, all.get(key)) }}</td><td class="qv {{ metric_class(key, long.get(key)) }}">{{ mv(key, long.get(key)) }}</td><td class="qv">{{ mv(key, short.get(key)) }}</td>
   {%- endmacro %}
-  {#- a value no channel set owns: one cell across every value column -#}
+  {#- a value no channel set owns: in the first value column, the set columns left blank -#}
   {%- macro span_row(key, text, value, cls='') %}
-    <tr><td>{{ ql(key, text) }}</td><td class="qv {{ cls }}{% if ncol > 1 %} span{% endif %}" colspan="{{ ncol }}">{{ value }}</td></tr>
+    <tr><td>{{ ql(key, text) }}</td><td class="qv {{ cls }}">{{ value }}</td>{% for _ in range(ncol - 1) %}<td class="qv"></td>{% endfor %}</tr>
   {%- endmacro %}
   {#- a value measured on the long set alone, in its column -#}
   {%- macro long_row(key, text, value, cls='') %}
@@ -529,7 +532,7 @@
     {%- endif %}
 
     {#- ---- haemoglobin, before denoising, with the long set's denoised side beside it ---- -#}
-    {{ group_row('Haemoglobin', 'before denoising', 1) }}
+    {{ group_row('Haemoglobin', 'Long: before → after denoising' if split_hb else 'before → after denoising', 1) }}
     {#- the three metrics whose denoised side is stored under an ``_errts`` suffix -#}
     {%- set errts_pairs = ('hbo_hbr_corr_mean', 'cnr_hbo_mean', 'cnr_hbr_mean') %}
     {%- set has_cnr = (hb_all.get('cnr_hbo_mean') is not none or sqm.get('cnr_hbo_mean') is not none
@@ -647,8 +650,13 @@
       {%- endif %}</li>
   </ol>
 
-  {% if stage_metrics_path %}
-  <h3 class="qm-sub">What each denoising step did</h3>
+</div>
+</section>
+
+{% if stage_metrics_path %}
+<section id="Stages" class="step">
+<h3 class="step-title">By denoising stage</h3>
+<div class="details-body">
   <p class="qm-note">
     {{ section_note('metrics.stages') }}
     {% if stage_banded %}{{ section_note('metrics.stages_banded') }}{% else %}{{ section_note('metrics.stages_unbanded') }}{% endif %}
@@ -659,14 +667,47 @@
           title="Metrics by denoising stage"
           style="height:{{ stage_metrics_h }}px"></iframe>
   <p class="fig-path">{{ stage_metrics_path }}</p>
-  {% endif %}
-
 </div>
+</section>
+{% endif %}
+
+{% if channel_summary_path %}
+<!-- ===================================================== channel summary -->
+<section id="ChannelSummary" class="step">
+<h3 class="step-title">By channel</h3>
+<div class="details-body">
+<p class="qm-note">{{ section_note('channel_summary', sci="%.2f"|format(config.sci_threshold)) }}</p>
+<div style="overflow-x:auto;">
+  <iframe src="{{ channel_summary_path }}"
+          width="100%" height="{{ channel_summary_h + 20 }}px"
+          style="border:none;min-width:500px;display:block;"></iframe>
+</div>
+<p class="fig-path">{{ channel_summary_path }}</p>
+</div>
+</section>
+{% endif %}
+
+{% if condition_summary_path %}
+<!-- ==================================================== per-condition channel quality -->
+<section id="ConditionSummary" class="step">
+<h3 class="step-title">By condition</h3>
+<div class="details-body">
+<p class="qm-note">{{ section_note('condition_summary', sci="%.2f"|format(config.sci_threshold)) }}</p>
+<div style="overflow-x:auto;">
+  <iframe src="{{ condition_summary_path }}"
+          width="100%" height="{{ condition_summary_h + 20 }}px"
+          style="border:none;min-width:500px;display:block;"></iframe>
+</div>
+<p class="fig-path">{{ condition_summary_path }}</p>
+</div>
+</section>
+{% endif %}
 
 {% if channel_rows %}
-<!-- ------------------------------------------ per-channel, its own panel -->
-<h3 class="qm-sub qm-panel-title">Per-channel metrics</h3>
-<div class="qm-box">
+<!-- ------------------------------------------ per-channel table -->
+<section id="ChannelTable" class="step">
+<h3 class="step-title">Per-channel table</h3>
+<div class="details-body">
   {#- columns, values and cell classes all come pre-formatted from
       nirspipe.qc.channel_table, so this table, the raw viewer's and the GUI's list the
       same things left to right and print one number one way, and the SCI column is marked
@@ -707,40 +748,22 @@
     </table>
   </div>
 </div>
-{% endif %}
-
-{% if channel_summary_path %}
-<!-- ===================================================== channel summary -->
-<h2 id="ChannelSummary">Channel Quality Summary</h2>
-<p class="qm-note">{{ section_note('channel_summary', sci="%.2f"|format(config.sci_threshold)) }}</p>
-<div style="overflow-x:auto;">
-  <iframe src="{{ channel_summary_path }}"
-          width="100%" height="{{ channel_summary_h + 20 }}px"
-          style="border:none;min-width:500px;display:block;"></iframe>
-</div>
-{% endif %}
-
-{% if condition_summary_path %}
-<!-- ==================================================== per-condition channel quality -->
-<h2 id="ConditionSummary">Per-condition Channel Quality</h2>
-<p class="qm-note">{{ section_note('condition_summary', sci="%.2f"|format(config.sci_threshold)) }}</p>
-<div style="overflow-x:auto;">
-  <iframe src="{{ condition_summary_path }}"
-          width="100%" height="{{ condition_summary_h + 20 }}px"
-          style="border:none;min-width:500px;display:block;"></iframe>
-</div>
-<p class="fig-path">{{ condition_summary_path }}</p>
+</section>
 {% endif %}
 
 {% if trial_qc_path %}
 <!-- ==================================================== per-trial quality -->
-<h2 id="TrialQC">Per-trial Quality</h2>
+<section id="TrialQC" class="step">
+<h3 class="step-title">By trial</h3>
+<div class="details-body">
 <p class="qm-note">{{ section_note('trial_qc', window=trial_qc_window) }}</p>
 <div style="overflow-x:auto;">
   <iframe class="plotly-frame" src="{{ trial_qc_path }}" title="Per-trial quality"
           style="height:{{ trial_qc_h }}px;min-width:500px;"></iframe>
 </div>
 <p class="fig-path">{{ trial_qc_path }}</p>
+</div>
+</section>
 {% endif %}
 
 {% endblock %}
