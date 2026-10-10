@@ -135,6 +135,7 @@ from nirspipe.qc.subject.sqm_record import record_path as _sqm_record_path, enti
 from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import span_kind
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 from nirspipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_label, metric_summary, with_unit,
@@ -575,11 +576,13 @@ def _segments_in_window(segments: dict | None,
 
     ``window`` None is the run, which draws all of them. A condition draws the ones that
     touch its window, a span across the boundary included: it is a movement the condition
-    sat through whichever side it began on.
+    sat through whichever side it began on. ``BAD_unselected`` is left out: it is intact
+    data the user did not choose, not an artefact to zoom into.
     """
     return [
         (onset, dur)
-        for spans in (segments or {}).values()
+        for desc, spans in (segments or {}).items()
+        if span_kind(desc) == "corrupted"
         for onset, dur in spans
         if window is None or (onset < window[1] and onset + dur > window[0])
     ]

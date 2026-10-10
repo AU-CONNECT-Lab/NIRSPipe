@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 
 from nirspipe.utils import is_marker, pair_of
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans
 
 from nirspipe.qc.figures.common._brain_utils import mni_trans
 from nirspipe.qc.figures.common._utils import (
@@ -189,6 +190,31 @@ def build_ts_figure(
     return fig, marker_data, cond_colors_, band_shapes, float(times[0]), float(times[-1])
 
 
+class _NoKeptTime(Exception):
+    """A spectrum asked of a stretch that BAD_ spans cover whole."""
+
+
+def _kept_psd(raw: mne.io.BaseRaw, picks) -> "tuple[np.ndarray, np.ndarray] | None":
+    """Welch spectra of ``picks`` over the frames outside BAD_ spans, or None when there are none.
+
+    ``compute_psd`` leaves those frames out by mne's own rule and averages the good segments
+    weighted by length; on a recording without spans it is the plain Welch spectrum.
+    """
+    if raw.get_data(picks=[picks[0]], reject_by_annotation="omit", verbose=False).shape[1] == 0:
+        return None
+    spectrum = raw.compute_psd(picks=picks, exclude=(), n_fft=min(PSD_NFFT, raw.n_times),
+                               verbose=False)
+    return spectrum.get_data(), spectrum.freqs
+
+
+def _with_bad_spans(raw: mne.io.BaseRaw, onsets, durations, descriptions) -> mne.Annotations:
+    """Markers relative to the data start, plus the recording's own BAD_ spans, so an epoch under one drops."""
+    spans = bad_spans(raw)
+    return mne.Annotations(onset=[*onsets, *(s for s, _, _ in spans)],
+                           duration=[*durations, *(e - s for s, e, _ in spans)],
+                           description=[*descriptions, *(d for _, _, d in spans)])
+
+
 def build_channel_figure(
     raw_haemo: mne.io.Raw,
     markers: list[dict],
@@ -262,11 +288,12 @@ def build_channel_figure(
 
     psd_fig = None
     try:
-        from mne.time_frequency import psd_array_welch
-        raw_arr = raw_haemo.get_data(picks=[hbo_pick, hbr_pick])
+        # over the frames outside BAD_ spans, as the haemoglobin band metric is measured
+        spectrum = _kept_psd(raw_haemo, [hbo_pick, hbr_pick])
+        if spectrum is None:
+            raise _NoKeptTime
+        psds, freqs = spectrum
         sfreq = raw_haemo.info["sfreq"]
-        psds, freqs = psd_array_welch(raw_arr, sfreq,
-                                      n_fft=min(PSD_NFFT, raw_arr.shape[1]), verbose=False)
         psd_hbo, psd_hbr = psds[0], psds[1]
         fmax = min(2.0, sfreq / 2)
         mask = freqs <= fmax
@@ -279,6 +306,8 @@ def build_channel_figure(
             ],
             layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)),
         )
+    except _NoKeptTime:
+        logger.info("channel PSD for %s skipped: every frame lies in a BAD_ span", ch_pair)
     except Exception as exc:
         logger.warning("channel PSD failed for %s: %s", ch_pair, exc)
 
@@ -286,11 +315,9 @@ def build_channel_figure(
     if epoch and markers:
         try:
             # relative onsets: an absolute one lands a second first_time past the data
-            anns = mne.Annotations(
-                onset=[m["onset"] - t0 for m in markers],
-                duration=[m["duration"] for m in markers],
-                description=[m["description"] for m in markers],
-            )
+            anns = _with_bad_spans(raw_haemo, [m["onset"] - t0 for m in markers],
+                                   [m["duration"] for m in markers],
+                                   [m["description"] for m in markers])
             raw_copy = raw_haemo.copy().set_annotations(anns)
             events_mne, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
             if len(events_mne) > 0:
@@ -613,15 +640,16 @@ def build_psd_mean_figure(
     the screening result is the quality heatmap's and the per-channel table's job.
     """
     try:
-        from mne.time_frequency import psd_array_welch
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
         if len(picks) == 0:
             picks = list(range(len(raw.ch_names)))
         raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-        data = raw_od.get_data(picks=picks)
         sfreq = raw_od.info["sfreq"]
-        psds, freqs = psd_array_welch(data, sfreq,
-                                      n_fft=min(PSD_NFFT, data.shape[1]), verbose=False)
+        spectrum = _kept_psd(raw_od, picks)
+        if spectrum is None:
+            logger.info("OD spectrum skipped: every frame lies in a BAD_ span")
+            return None
+        psds, freqs = spectrum
         fmax = min(_PSD_FMAX, sfreq / 2)
         mask = freqs <= fmax
         freqs_masked = freqs[mask]
@@ -1190,11 +1218,9 @@ def _topo_layers(
     usable = [m for m in markers if not str(m["description"]).upper().startswith("BAD")]
     if usable:
         try:
-            anns = mne.Annotations(
-                onset=[m["onset"] for m in usable],
-                duration=[m["duration"] for m in usable],
-                description=[m["description"] for m in usable],
-            )
+            anns = _with_bad_spans(raw_haemo, [m["onset"] for m in usable],
+                                   [m["duration"] for m in usable],
+                                   [m["description"] for m in usable])
             raw_copy = raw_haemo.copy().set_annotations(anns)
             events, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
             if len(events) > 0:

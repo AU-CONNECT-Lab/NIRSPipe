@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file.
 - Dyad coherence and correlation leave out the union of both members' `BAD_` spans; every dyad table records each pairing's kept seconds
 - Dyad prewhitening fits each member's AR coefficients on its time outside `BAD_` spans
 - Both dyad nulls leave out the real pairing's excluded time; the re-paired null also leaves out its stand-in's corrupted spans
+- Channel and optical-density spectra in the subject report use only frames outside `BAD_` spans
+- The bad-segment zoom draws corrupted spans only, not `BAD_unselected`
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
@@ -53,6 +55,7 @@ All notable changes to this project will be documented in this file.
 - A condition's CNR keeps a `BAD_` span starting before it, so the epochs it covers still drop
 - A recording whose only annotations are `BAD_` spans no longer stops the subject report
 - A condition wholly inside `BAD_` spans keeps its denoising-stage panels, without the spectral ones, and shows n/a failing
+- The channel epoch panel and the evoked channel map leave out trials under a `BAD_` span
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 

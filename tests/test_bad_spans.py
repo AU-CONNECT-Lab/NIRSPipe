@@ -274,16 +274,12 @@ def _taps_under_a_bad_span():
     return raw
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D7: the channel epoch panel rebuilds annotations without BAD_ spans")
 def test_the_channel_epoch_panel_leaves_out_a_trial_under_a_bad_span():
     raw = _taps_under_a_bad_span()
     *_, epoch_fig = build_channel_figure(raw, extract_markers(raw), "S1_D1", max_ts_pts=4000)
     assert epoch_fig.layout.annotations[0].text == "tap (n=3)"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D7: the evoked topo layer rebuilds annotations without BAD_ spans")
 def test_the_evoked_topo_layer_leaves_out_a_trial_under_a_bad_span():
     raw = _taps_under_a_bad_span()
     layers = _topo_layers(raw, extract_markers(raw), [0, 1], 4000, -5.0, 25.0)
