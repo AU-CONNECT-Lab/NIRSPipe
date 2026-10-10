@@ -61,3 +61,17 @@ def test_errts_first_is_not_renamed_after_bandpass():
                      stages=[("desc-resampled", _haemo()), ("desc-errts", _haemo())])
     assert _titles(fig, 3)[1] == "desc-resampled"
     assert not _has_response(fig)
+
+
+def test_the_overlay_draws_one_line_per_stage_in_each_chromophore_column():
+    raw = _haemo(n_pairs=1)
+    fig = psd_figure(raw, l_freq=None, h_freq=None, stages=[("desc-errts", _haemo(n_pairs=1))],
+                     overlay=True)
+    lines = [(t.name, t.xaxis) for t in fig.data]
+    assert sorted(lines) == sorted([("desc-preproc", "x"), ("desc-errts", "x"),
+                                    ("desc-preproc", "x2"), ("desc-errts", "x2")])
+    assert [a.text for a in fig.layout.annotations[:2]] == ["HbO", "HbR"]
+    # the result is the dark line: the last stage takes the mean colour, not the light one
+    last = next(t for t in fig.data if t.name == "desc-errts" and t.xaxis == "x")
+    first = next(t for t in fig.data if t.name == "desc-preproc" and t.xaxis == "x")
+    assert last.line.color != first.line.color

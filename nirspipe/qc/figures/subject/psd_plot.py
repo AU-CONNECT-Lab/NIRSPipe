@@ -1,4 +1,4 @@
-"""PSD by pipeline stage: one row per stage, HbO and HbR in each, band annotations."""
+"""PSD by pipeline stage: one row per stage, or for one channel the stages overlaid; band annotations."""
 
 import logging
 
@@ -30,6 +30,9 @@ _RESPONSE_COLOR = "#7f8c8d"
 _RESPONSE_FLOOR = -90  # dB; below this the curve is numerical, not something to read
 
 _FIRST_LABEL = "Before bandpass"   # replaced by the stage name when no bandpass ran
+# the overlay's earlier stages, light so the last stage reads as the result
+_HBO_EARLY_COLOR = "#f1a99b"
+_HBR_EARLY_COLOR = "#9fc3e7"
 
 
 def _simulate_bandpass(
@@ -109,6 +112,7 @@ def psd_figure(
     resp: "tuple[float, float] | None" = None,
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     first_label: str = _FIRST_LABEL,
+    overlay: bool = False,
 ) -> go.Figure:
     """Each stage's spectrum in its own row, HbO and HbR together, with the filter drawn on it.
 
@@ -135,6 +139,9 @@ def psd_figure(
         title:              Figure title.
         stages:             Later stages as (label, raw); None simulates the bandpass.
         first_label:        Row title for ``raw_haemo``.
+        overlay:            HbO and HbR side by side with one line per stage instead of a
+                            row per stage, for a single channel whose rows would be compared
+                            across a gap. No faint lines and no response curve.
     """
     nyquist = raw_haemo.info["sfreq"] / 2
     if fmax > nyquist:
@@ -163,6 +170,9 @@ def psd_figure(
         edges = "  ".join(part for part in (f"HP {l_freq} Hz" if l_freq is not None else "",
                                             f"LP {h_freq} Hz" if h_freq is not None else "") if part)
         titles[filter_row - 1] = f"After bandpass ({edges})"
+    if overlay:
+        return _overlay_figure(all_stages, titles, fmax, l_freq, h_freq, filter_method,
+                               filter_order, title, cardiac, resp)
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True, vertical_spacing=0.09,
         subplot_titles=titles,
@@ -228,6 +238,53 @@ def psd_figure(
         title=dict(text=f"{title}<br><span style='font-size:11px;color:#777'>"
                         f"{filter_description(l_freq, h_freq, filter_method, filter_order)}</span>"),
         height=110 + 210 * n_rows,
+        margin=dict(l=70, r=30, t=95, b=50),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        legend=dict(font=dict(size=11), orientation="h",
+                    x=1, xanchor="right", y=1.0, yanchor="bottom"),
+    )
+    return fig
+
+
+def _overlay_figure(all_stages, titles, fmax, l_freq, h_freq, filter_method, filter_order,
+                    title, cardiac, resp) -> go.Figure:
+    """HbO | HbR, each stage one line: the last dark, the earlier ones light."""
+    fig = make_subplots(rows=1, cols=2, subplot_titles=["HbO", "HbR"], horizontal_spacing=0.08)
+    lo, hi = np.inf, -np.inf
+    last = len(all_stages) - 1
+    for k, ((_, raw), label) in enumerate(zip(all_stages, titles)):
+        for col, (ch_type, early, final) in enumerate(
+                (("hbo", _HBO_EARLY_COLOR, _HBO_MEAN_COLOR),
+                 ("hbr", _HBR_EARLY_COLOR, _HBR_MEAN_COLOR)), start=1):
+            result = _stage_psd(raw, fmax, ch_type)
+            if result is None:
+                continue
+            freqs, db = result
+            mean_db = db.mean(axis=0)
+            fig.add_trace(go.Scatter(
+                **line_xy(freqs, mean_db), mode="lines",
+                line=dict(width=1.8 if k == last else 1.4, color=final if k == last else early),
+                name=label, legendgroup=label, showlegend=(col == 1),
+                hovertemplate=f"{label}<br>%{{x:.3f}} Hz<br>%{{y:.1f}} dB<extra></extra>",
+            ), row=1, col=col)
+            lo, hi = min(lo, float(mean_db.min())), max(hi, float(mean_db.max()))
+
+    _add_band_shading(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=1, cols=2)
+    for cutoff in (l_freq, h_freq):
+        if cutoff is not None and cutoff <= fmax:
+            fig.add_vline(x=cutoff, line=dict(color="#555", width=1, dash="dash"),
+                          row="all", col="all")
+    if np.isfinite(lo):
+        pad = 0.04 * (hi - lo) or 1.0
+        fig.update_yaxes(range=[lo - pad, hi + pad])
+    fig.update_xaxes(gridcolor="#eeeeee", title_text="Frequency (Hz)")
+    fig.update_yaxes(gridcolor="#eeeeee")
+    fig.update_yaxes(title_text="Power (dB)", col=1)
+    fig.update_layout(
+        title=dict(text=f"{title}<br><span style='font-size:11px;color:#777'>"
+                        f"{filter_description(l_freq, h_freq, filter_method, filter_order)}</span>"),
+        height=370,
         margin=dict(l=70, r=30, t=95, b=50),
         plot_bgcolor="white",
         paper_bgcolor="white",

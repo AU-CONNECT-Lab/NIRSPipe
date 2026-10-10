@@ -554,7 +554,7 @@ def _section_psd_detail(
                 ][-1:]
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
                              title=f"PSD: {pair}", cardiac=cardiac, resp=resp,
-                             stages=stages_sub)
+                             stages=stages_sub, overlay=True)
             fname = fig_name("psddetail", channel=_pair_fname(pair))
             path, h = _save_plotly_html(fig, figures_dir / fname)
             saved.append({"pair": pair, "path": path, "h": h,

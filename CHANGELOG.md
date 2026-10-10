@@ -45,6 +45,7 @@ All notable changes to this project will be documented in this file.
 - The subject report's per-channel table has one row per channel pair, SNR, CV and Spike printing both wavelengths; the TSV stays per wavelength
 - Seed and ALFF flat maps put HbO and HbR in rows; seeds run across, four to a row
 - The PSD figures draw only the first stage and the last, on long channels; a short channel's own page leaves out its residual
+- A channel's own PSD page overlays its stages, HbO and HbR side by side, the last stage dark
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

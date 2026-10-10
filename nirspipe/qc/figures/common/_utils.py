@@ -204,7 +204,8 @@ BAND_COLORS = {
 }
 
 
-def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None) -> None:
+def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None,
+                     cols: int = 1) -> None:
     """Shade and label the physiological bands on a PSD figure.
 
     One definition so the multi-stage PSD panel and the per-channel PSD mark the same bands
@@ -216,9 +217,12 @@ def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None) -
         add_band_shading(fig, 2.0, physio_bands((0.7, 1.5), (0.2, 0.4)), 2)   # 2 subplots
 
     Bands starting past ``fmax`` are dropped rather than clamped: a stripe pinned to the
-    right edge would claim the band is in view when it is off the plot.
+    right edge would claim the band is in view when it is off the plot. ``cols`` shades a
+    grid of that many columns, row by row.
     """
-    targets = [{}] if rows is None else [{"row": row, "col": 1} for row in range(1, rows + 1)]
+    targets = [{}] if rows is None else [{"row": row, "col": col}
+                                         for row in range(1, rows + 1)
+                                         for col in range(1, cols + 1)]
     for name, x0, x1 in bands:
         if x0 > fmax:
             continue

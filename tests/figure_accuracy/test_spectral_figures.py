@@ -73,8 +73,10 @@ def test_each_pair_page_draws_its_own_pair(denoise_run):
         if pair.bad:
             continue
         fig = one_figure(denoise_run.figure("psddetail", chan=pair.name.replace("_", "")))
+        # the stages overlaid, HbO on the first axis; one line per stage
+        before = traces(fig, "Before bandpass", "x")[0]
+        after = traces(fig, "desc-errts", "x")[0]
         # before regression the shared systemic peak can outweigh a small pair's own
-        assert _peak(_channel_lines(fig, "x2")[0]) == pytest.approx(pair.hbo_freq, abs=0.005)
-        before = _db_at(_channel_lines(fig, "x")[0], SYSTEMIC_FREQ)
-        after = _db_at(_channel_lines(fig, "x2")[0], SYSTEMIC_FREQ)
+        assert _peak(after) == pytest.approx(pair.hbo_freq, abs=0.005)
+        before, after = _db_at(before, SYSTEMIC_FREQ), _db_at(after, SYSTEMIC_FREQ)
         assert before - after > 15
