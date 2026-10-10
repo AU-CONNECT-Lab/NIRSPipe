@@ -499,6 +499,7 @@
   {%- macro long_row(key, text, value, cls='') %}
     <tr><td>{{ ql(key, text) }}</td><td class="qv na">&mdash;</td><td class="qv {{ cls }}">{{ value }}</td><td class="qv na">&mdash;</td></tr>
   {%- endmacro %}
+  {%- macro pair_with_count(key, d) %}{{ with_count(key, d) }}{% if d.get(key ~ '_post') is not none %} &rarr; {{ with_count(key, d, '_post') }}{% endif %}{% endmacro %}
   {%- macro motion_cell(d, key, is_long) %}
     {%- set before = d.get(key) %}{% set after = d.get(key ~ '_post') -%}
     <td class="qv {{ metric_class(key, after if after is not none else before) if is_long }}">
@@ -598,11 +599,10 @@
     {%- for key, text in [('gvtd_filt_mean', 'GVTD mean %g-%g Hz'|format(*gvtd_band)),
                           ('gvtd_filt_p95', 'GVTD p95 %g-%g Hz'|format(*gvtd_band)),
                           ('gvtd_pct_above_thresh', 'GVTD % above threshold'),
-                          ('gvtd_num_above_thresh', 'GVTD frames above threshold'),
                           ('gvtd_thresh', 'GVTD threshold')]
           if not (condition_label and key == 'gvtd_thresh') %}
     {%- set after = sqm.get(key ~ '_post') %}
-    {{ span_row(key, text ~ after_note, mv_pair(key, sqm.get(key), after),
+    {{ span_row(key, text ~ after_note, pair_with_count(key, sqm),
                 metric_class(key, after if after is not none else sqm.get(key))) }}
     {%- endfor %}
     {%- endif %}
@@ -620,22 +620,20 @@
     {%- endfor %}
     {%- if not split_motion %}
     {%- for key, text in [('motion_corrected_pct', 'Motion corrected % (exp.)'),
-                          ('motion_corrected_num', 'Motion corrected frames'),
                           ('motion_corrected_n_segments', 'Motion corrected segments')]
           if sqm.get('motion_corrected_pct') is not none %}
-    {{ span_row(key, text, mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
+    {{ span_row(key, text, with_count(key, sqm), metric_class(key, sqm.get(key))) }}
     {%- endfor %}
-    {%- for key, text in [('spike_pct_frames', 'Spike % frames' ~ before_note),
-                          ('spike_num_frames', 'Spike frames' ~ before_note)] %}
-    {{ span_row(key, text, mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
-    {%- endfor %}
+    {{ span_row('spike_pct_frames', 'Spike % frames' ~ before_note, with_count('spike_pct_frames', sqm),
+                metric_class('spike_pct_frames', sqm.get('spike_pct_frames'))) }}
     {%- endif %}
-    {#- on a split montage the per-set spike counts are in the optical-density rows -#}
-    {%- if not sqm_split and not condition_label %}
-    {{ span_row('spike_count', 'Spike count', mv('spike_count', sqm.get('spike_count')), metric_class('spike_count', sqm.get('spike_count'))) }}
-    {%- endif %}
+    {#- on a split montage the per-set spike counts are in the optical-density rows; a
+        condition page has no count of its own, so its share prints alone -#}
+    {%- set spike_src = {'spike_pct': sqm.get('spike_pct')} if condition_label else sqm %}
     {%- if not sqm_split and sqm.get('spike_pct') is not none %}
-    {{ span_row('spike_pct', 'Spike % (exp.)', mv('spike_pct', sqm.get('spike_pct')), metric_class('spike_pct', sqm.get('spike_pct'))) }}
+    {{ span_row('spike_pct', 'Spike % (exp.)', with_count('spike_pct', spike_src), metric_class('spike_pct', sqm.get('spike_pct'))) }}
+    {%- elif not sqm_split and not condition_label %}
+    {{ span_row('spike_count', 'Spike count', mv('spike_count', sqm.get('spike_count')), metric_class('spike_count', sqm.get('spike_count'))) }}
     {%- endif %}
     </tbody>
   </table>

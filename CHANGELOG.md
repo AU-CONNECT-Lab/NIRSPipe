@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 - The Haemoglobin group label says Long shows before → after denoising
 - A metric no channel set owns prints in the All column, leaving Long and Short blank
 - The subject report's metric, channel and condition notes are shorter
-- The subject report's split metrics table prints each share with its count, `12.9% (1098)`, dropping the four count rows
+- The subject report's metrics table, split or single-column, prints each share with its count, `12.9% (1098)`, dropping the count rows
 - QC report footers open with an "Appendix: run record" label above Errors
 - The provenance table merges outputs with the same step description and settings into one row
 - Software versions print as a compact three-column table
