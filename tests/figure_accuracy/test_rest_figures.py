@@ -107,8 +107,9 @@ def test_each_seed_map_colours_a_channel_by_its_correlation_with_that_seed(rest_
     titles = [a["text"] for a in fig["layout"]["annotations"]]
     written = _table(rest_run, "chromo-hbo_seg-roinet_agg-seed_stat-pearson_relmat.tsv", "roi")
     for k, seed in enumerate(ROI_MAP):
-        axis = "x" if 2 * k == 0 else f"x{2 * k + 1}"
-        assert titles[2 * k] == f"{seed} - HbO"
+        # the HbO row comes first, a seed per column
+        axis = "x" if k == 0 else f"x{k + 1}"
+        assert titles[k] == f"{seed} - HbO"
         for trace in fig["data"]:
             colour = (trace.get("marker") or {}).get("color")
             if (trace.get("xaxis") or "x") != axis or isinstance(colour, str) or colour is None:

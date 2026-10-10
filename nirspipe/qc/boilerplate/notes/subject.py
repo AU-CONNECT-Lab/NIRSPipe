@@ -169,10 +169,11 @@ NOTES = {
         "from the denoised residual time series. Where the amplitude is; how much it was and "
         "which channels it correlated with are in the connectivity panel below.",
     "rest.alff_layout":
-        "One disc per channel at its source-detector midpoint. The amplitude row draws mALFF, "
-        "each channel over its own chromophore's mean, so HbO and HbR share one scale and the "
-        "measured molar value is on the hover; fALFF is already a share. Grey channels carry "
-        "no value, which is what a rejected one has. Short channels are not drawn.",
+        "One disc per channel at its source-detector midpoint, HbO on top and HbR below. The "
+        "amplitude column draws mALFF, each channel over its own chromophore's mean, so HbO "
+        "and HbR share one scale and the measured molar value is on the hover; fALFF is "
+        "already a share. Grey channels carry no value, which is what a rejected one has. "
+        "Short channels are not drawn.",
     "fc.channel_matrix":
         "Channel-by-channel Pearson r on top (HbO left, HbR right, one scale, one triangle "
         "each), on the signal the mode leaves: the confound residual in rest and denoise "

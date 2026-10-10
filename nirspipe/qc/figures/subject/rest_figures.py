@@ -354,14 +354,23 @@ def _row_gap(n_rows: int) -> float:
     return _ROW_GAP_PX / _grid_px(n_rows) if n_rows > 1 else 0.0
 
 
-def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict):
-    """An empty grid of heads with the outline and skeleton already under each panel."""
+_COL_GAP = 0.02
+
+
+def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict, empty=()):
+    """An empty grid of heads with the outline and skeleton under each panel but ``empty``."""
     fig = make_subplots(rows=n_rows, cols=n_cols, subplot_titles=titles,
-                        horizontal_spacing=0.02, vertical_spacing=_row_gap(n_rows))
+                        horizontal_spacing=_COL_GAP, vertical_spacing=_row_gap(n_rows))
     for r in range(1, n_rows + 1):
         for c in range(1, n_cols + 1):
-            head_ground(fig, geo, r, c)
+            if (r, c) not in empty:
+                head_ground(fig, geo, r, c)
     return fig
+
+
+def _col_centre(col: int, n_cols: int) -> float:
+    width = (1.0 - (n_cols - 1) * _COL_GAP) / n_cols
+    return (col - 1) * (width + _COL_GAP) + width / 2
 
 
 def _finish_head_grid(fig, geo, n_rows, n_cols, title):
@@ -372,6 +381,10 @@ def _finish_head_grid(fig, geo, n_rows, n_cols, title):
                       showlegend=False, margin=dict(l=40, r=40, t=_MARGIN_T, b=_MARGIN_B),
                       title=dict(text=title, x=0.01, font=dict(size=13)))
     return fig
+
+
+# seeds per row before the grid wraps: four heads still fit the report's width at full size
+_SEED_COLS = 4
 
 
 def fc_seed_topo_figure(
@@ -408,27 +421,37 @@ def fc_seed_topo_figure(
 
     rois = list(dict.fromkeys([r for frame, _ in panels for r in frame.index]))
     dim = {pair_of(ch) for ch in raw.info["bads"]}
-    n_rows, n_cols = len(rois), len(panels)
-    titles = [f"{roi} - {lab}" for roi in rois for _, lab in panels]
-    fig = _head_grid(n_rows, n_cols, titles, geo)
+    # a seed per column, a chromophore per row; past _SEED_COLS seeds the next ones wrap
+    # into another HbO row and HbR row, so a seed's two maps always sit one above the other
+    n_cols = min(len(rois), _SEED_COLS)
+    chunks = [rois[k:k + n_cols] for k in range(0, len(rois), n_cols)]
+    cells = {}
+    for k, chunk in enumerate(chunks):
+        for p, (frame, label) in enumerate(panels):
+            for c, roi in enumerate(chunk, start=1):
+                cells[(k * len(panels) + p + 1, c)] = (roi, frame, label)
+    n_rows = len(chunks) * len(panels)
+    grid = [(r, c) for r in range(1, n_rows + 1) for c in range(1, n_cols + 1)]
+    titles = [f"{cells[rc][0]} - {cells[rc][2]}" if rc in cells else "" for rc in grid]
+    fig = _head_grid(n_rows, n_cols, titles, geo, empty={rc for rc in grid if rc not in cells})
 
-    for i, roi in enumerate(rois, start=1):
-        for j, (frame, label) in enumerate(panels, start=1):
-            if roi not in frame.index:
-                continue
-            row = frame.loc[roi]
-            chromo = label.lower()
-            values = _values_for(geo, lambda ch, r=row: float(r[ch]) if ch in r.index
-                                 else np.nan, chromo)
-            # one bar for the whole figure: every panel is on the same fixed +-1 scale, so
-            # a bar per row would be the same bar drawn again
-            head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
-                       bar={"orientation": "h", "len": 0.28, "thickness": 9,
-                            "x": 0.46, "xanchor": "center", "y": -10 / _grid_px(n_rows),
-                            "yanchor": "top",
-                            "tickfont": {"size": 9}, "title": {"side": "right"}}
-                           if (i == 1 and j == n_cols) else False,
-                       colorscale=CORRELATION_SCALE, dim=dim, blank_color=BLANK_COLOR)
+    first = True
+    for (i, j), (roi, frame, label) in cells.items():
+        if roi not in frame.index:
+            continue
+        row = frame.loc[roi]
+        values = _values_for(geo, lambda ch, r=row: float(r[ch]) if ch in r.index
+                             else np.nan, label.lower())
+        # one bar for the whole figure: every panel is on the same fixed +-1 scale, so
+        # a bar per row would be the same bar drawn again
+        head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
+                   bar={"orientation": "h", "len": 0.28, "thickness": 9,
+                        "x": 0.46, "xanchor": "center", "y": -10 / _grid_px(n_rows),
+                        "yanchor": "top",
+                        "tickfont": {"size": 9}, "title": {"side": "right"}}
+                       if first else False,
+                   colorscale=CORRELATION_SCALE, dim=dim, blank_color=BLANK_COLOR)
+        first = False
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
 
@@ -453,19 +476,17 @@ def _alff_rows(alff_df: pd.DataFrame) -> "list[tuple[str, str, str | None]]":
     return out
 
 
-def _row_colorbar(row: int, n_rows: int) -> dict:
-    """Colorbar placement for one row of a head grid: horizontal, under the row it describes.
+def _col_colorbar(col: int, n_cols: int, n_rows: int) -> dict:
+    """Colorbar placement for one column of a head grid: horizontal, under the grid.
 
-    Not beside the row: the grid anchors each head square inside a much wider cell, so a
-    vertical bar at a cell's right edge floats in the gap between two heads. The row gap is
-    what the head circle leaves free.
+    Not beside the column: the grid anchors each head square inside a much wider cell, so a
+    vertical bar at a cell's edge floats in the gap between two heads.
     """
-    cell, gap, nudge = _HEAD_PX / _grid_px(n_rows), _row_gap(n_rows), 6 / _grid_px(n_rows)
     return {"orientation": "h", "len": 0.3, "thickness": 9,
-            "x": 0.5, "xanchor": "center",
-            "y": 1.0 - row * cell - (row - 1) * gap - nudge, "yanchor": "top",
+            "x": _col_centre(col, n_cols), "xanchor": "center",
+            "y": -10 / _grid_px(n_rows), "yanchor": "top",
             # beside the bar, not above it: a title over a horizontal bar grows the block
-            # upward and runs into the subplot title of the row below
+            # upward and runs into the subplot titles above
             "tickfont": {"size": 9}, "title": {"side": "right"}}
 
 
@@ -480,9 +501,10 @@ def alff_topo_figure(
     One disc per channel, at its source-detector midpoint, because the value is a property
     of a place rather than of a path.
 
-    Both rows are dimensionless, so a row's two chromophores share one scale and one bar and
-    can be read against each other. The rows keep their own: fALFF is a share of the whole
-    spectrum and mALFF a multiple of the chromophore's own mean.
+    A row per chromophore, a column per measure. Both measures are dimensionless, so a
+    column's two chromophores share one scale and one bar and can be read against each other.
+    The columns keep their own: fALFF is a share of the whole spectrum and mALFF a multiple
+    of the chromophore's own mean.
 
     A rejected channel is drawn grey rather than dropped, so the montage stays complete and
     the gap reads as a rejection, and its value is kept out of the scale. Grey alone, not
@@ -494,10 +516,10 @@ def alff_topo_figure(
         return None
 
     values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
-    cols = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
-            if any(ch.endswith(f" {chromo}") for ch in values)]
-    rows = _alff_rows(alff_df)
-    if not cols or not rows:
+    chromos = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
+               if any(ch.endswith(f" {chromo}") for ch in values)]
+    measures = _alff_rows(alff_df)
+    if not chromos or not measures:
         return None
     dim = {pair_of(ch) for ch in raw.info["bads"]}
     blank = [n in dim for n in geo["long"]["names"]]
@@ -512,22 +534,22 @@ def alff_topo_figure(
         vals[blank] = np.nan
         return vals
 
-    n_rows, n_cols = len(rows), len(cols)
-    titles = [f"{label} - {lab}" for _, label, _ in rows for _, lab in cols]
+    n_rows, n_cols = len(chromos), len(measures)
+    titles = [f"{label} - {lab}" for _, lab in chromos for _, label, _ in measures]
     fig = _head_grid(n_rows, n_cols, titles, geo)
 
-    for i, (measure, label, raw_key) in enumerate(rows, start=1):
-        by_col = [column(measure, chromo) for chromo, _ in cols]
+    for j, (measure, label, raw_key) in enumerate(measures, start=1):
+        by_row = [column(measure, chromo) for chromo, _ in chromos]
         # the scale comes from the channels that have a value: one rejected channel with a
         # runaway amplitude would flatten every real difference into one colour
-        good = np.concatenate([v[np.isfinite(v)] for v in by_col])
+        good = np.concatenate([v[np.isfinite(v)] for v in by_row])
         if not len(good):
             continue
-        for j, ((chromo, _lab), vals) in enumerate(zip(cols, by_col), start=1):
+        for i, ((chromo, _lab), vals) in enumerate(zip(chromos, by_row), start=1):
             measured = column(raw_key, chromo) if raw_key else None
             head_glyph(fig, geo, "long", vals, i, j, label,
                        float(good.min()), float(good.max()),
-                       bar=_row_colorbar(i, n_rows) if j == n_cols else False,
+                       bar=_col_colorbar(j, n_cols, n_rows) if i == n_rows else False,
                        colorscale=_ALFF_SCALE, blank_color=BLANK_COLOR,
                        fmt=".2f", mark="disc",
                        customdata=measured,

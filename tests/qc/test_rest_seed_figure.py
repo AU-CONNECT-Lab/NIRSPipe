@@ -81,14 +81,23 @@ def test_figure_is_a_plotly_figure(haemo, seed_frames):
     assert isinstance(fig, go.Figure) and len(fig.data)
 
 
-def test_figure_grows_a_row_per_seed(haemo):
+def test_figure_grows_a_column_per_seed(haemo):
     hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
     one = compute_fc_seed(haemo, {"left": hbo[:2]}, "hbo")
     two = compute_fc_seed(haemo, {"left": hbo[:2], "right": hbo[2:4]}, "hbo")
     assert _panel_titles(fc_seed_topo_figure(haemo, one)) == ["left - HbO"]
     assert _panel_titles(fc_seed_topo_figure(haemo, two)) == ["left - HbO", "right - HbO"]
     assert (fc_seed_topo_figure(haemo, two).layout.height
-            > fc_seed_topo_figure(haemo, one).layout.height)
+            == fc_seed_topo_figure(haemo, one).layout.height)
+
+
+def test_seeds_past_four_wrap_into_another_row(haemo):
+    hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
+    four = compute_fc_seed(haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcd")}, "hbo")
+    five = compute_fc_seed(haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcde")}, "hbo")
+    assert _panel_titles(fc_seed_topo_figure(haemo, five)) == [f"{k} - HbO" for k in "abcde"]
+    assert (fc_seed_topo_figure(haemo, five).layout.height
+            > fc_seed_topo_figure(haemo, four).layout.height)
 
 
 def _row_px(fig) -> float:
@@ -105,13 +114,13 @@ def test_a_head_keeps_its_size_however_many_seeds(haemo):
     assert _row_px(four) == pytest.approx(_row_px(one), abs=1)
 
 
-def test_figure_grows_a_column_for_the_second_chromophore(haemo, seed_frames):
+def test_figure_grows_a_row_for_the_second_chromophore(haemo, seed_frames):
     hbo_only = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"]))
     both = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]))
     assert all(t.endswith("HbO") for t in hbo_only)
-    assert len(both) == 2 * len(hbo_only)
-    # one row is one seed either way, so the second chromophore is a column and not a row
-    assert fc_seed_topo_figure(haemo, seed_frames["hbo"]).layout.height ==            fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]).layout.height
+    # the HbO row, then the HbR row under it, the seeds in the same order
+    assert both == hbo_only + [t.replace("HbO", "HbR") for t in hbo_only]
+    assert fc_seed_topo_figure(haemo, seed_frames["hbo"]).layout.height <            fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]).layout.height
 
 
 def test_one_colour_bar_for_the_whole_grid(haemo, seed_frames):

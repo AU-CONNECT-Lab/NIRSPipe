@@ -2562,6 +2562,7 @@ def _write_condition_reports(
 
         od_by_set = entry.get("od_by_set") or {}
         cond_motion_sets = entry.get("motion_by_set") or {}
+        has_short = bool((entry.get("scalars") or {}).get("n_short_channels"))
         # The GLM is already per condition and needs nothing rebuilt: one model is fitted
         # over the whole recording and each condition is a contrast of it, so this page
         # keeps its own activation figure out of the set the run rendered. The design
@@ -2587,8 +2588,10 @@ def _write_condition_reports(
             "hb_all": haemo_by_set.get("all") or {},
             "hb_long": haemo_by_set.get("long") or {},
             "hb_short": haemo_by_set.get("short") or {},
-            "sqm_split": bool(od_by_set.get("short")),
-            "hb_split": bool(haemo_by_set.get("short")),
+            # the raw viewer's test: a montage with no short channels can still carry a short
+            # set, so the set's presence alone would draw three columns
+            "sqm_split": has_short and bool(od_by_set.get("short")),
+            "hb_split": has_short and bool(haemo_by_set.get("short")),
             "motion_sets": cond_motion_sets,
             "motion_split": bool(cond_motion_sets.get("long")
                                  and cond_motion_sets.get("short")),

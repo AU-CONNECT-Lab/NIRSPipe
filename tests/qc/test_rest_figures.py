@@ -184,7 +184,7 @@ def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
     assert sum(len(t.x) for t in panel) == n_drawn
 
 
-def test_the_two_chromophores_of_a_row_share_one_bar(haemo, alff_df):
+def test_the_two_chromophores_of_a_column_share_one_bar(haemo, alff_df):
     """mALFF and fALFF are both dimensionless, so HbO and HbR can be read against each
     other; a bar per panel could compare nothing with anything."""
     fig = alff_topo_figure(haemo, alff_df)
@@ -193,15 +193,23 @@ def test_the_two_chromophores_of_a_row_share_one_bar(haemo, alff_df):
     assert {b.marker.colorbar.title.text for b in bars} == {"mALFF", "fALFF"}
 
 
-def test_the_row_scale_spans_both_chromophores(haemo, alff_df):
+def test_the_column_scale_spans_both_chromophores(haemo, alff_df):
     fig = alff_topo_figure(haemo, alff_df)
-    by_row = {}
+    by_col = {}
     for t in fig.data:
         if t.marker.colorscale is not None and t.marker.cmin is not None:
-            by_row.setdefault(t.yaxis, []).append((t.marker.cmin, t.marker.cmax))
-    # two panels a row, and both ends of the scale identical across them
-    for panels in by_row.values():
-        assert len(set(panels)) == 1
+            n = int(t.xaxis[1:] or 1)
+            # a 2 x 2 grid numbers its axes row by row, so odd axes are the first column
+            by_col.setdefault((n - 1) % 2, set()).add((t.yaxis, t.marker.cmin, t.marker.cmax))
+    # two panels a column, and both ends of the scale identical across them
+    for panels in by_col.values():
+        assert len({y for y, _, _ in panels}) == 2
+        assert len({(lo, hi) for _, lo, hi in panels}) == 1
+
+
+def test_a_row_is_one_chromophore(haemo, alff_df):
+    titles = [a.text for a in alff_topo_figure(haemo, alff_df).layout.annotations if a.text]
+    assert titles == ["mALFF - HbO", "fALFF - HbO", "mALFF - HbR", "fALFF - HbR"]
 
 
 def test_alff_stands_in_where_a_frame_carries_no_malff(haemo, alff_df):
