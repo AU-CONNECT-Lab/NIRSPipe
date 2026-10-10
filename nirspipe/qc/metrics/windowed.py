@@ -15,7 +15,9 @@ from nirspipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
 )
+from nirspipe.utils import is_marker
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans
 
 logger = get_logger("qc.metrics.windowed")
 
@@ -283,7 +285,8 @@ def task_scope_windows(
       "rest" at 20 s for 300 s, plus a 5 s trigger  ->  [("rest", 20.0, 320.0)]
 
     The annotation's own duration is the window, so a recording carrying only zero-length
-    or short triggers yields nothing here and the caller keeps whatever scope it had.
+    or short triggers yields nothing here and the caller keeps whatever scope it had. A
+    ``BAD_`` span is never a block, however long.
 
     Clamped to the recording, and on the data axis: a cropped Raw keeps its annotations on
     the original axis while its samples restart at zero.
@@ -293,6 +296,8 @@ def task_scope_windows(
     out = []
     for onset, dur, desc in zip(raw.annotations.onset, raw.annotations.duration,
                                 raw.annotations.description):
+        if not is_marker(desc):
+            continue
         start = float(onset) - origin
         stop = min(start + float(dur), end)
         if stop - start >= float(min_duration):
@@ -365,6 +370,49 @@ def _in_scope(centers, scope) -> "np.ndarray":
     return keep
 
 
+def _counted(centers, half_width: float, scope, spans) -> "np.ndarray":
+    """Which windows the screening counts: centre inside the scope, and touching no span.
+
+    ::
+
+      centres 5, 15, 25 (10 s windows), no scope, a span at 18-19 s  ->  [True, False, True]
+
+    A scope is decided on the centre, but a ``BAD_`` span drops every window it overlaps at
+    all, as mne drops an epoch that touches one.
+    """
+    centers = np.asarray(centers, dtype=float)
+    keep = _in_scope(centers, scope)
+    for start, stop in spans:
+        keep &= ~((centers - half_width < stop) & (centers + half_width > start))
+    return keep
+
+
+def _half_window(raw: mne.io.Raw, window_s: float) -> float:
+    sfreq = float(raw.info["sfreq"])
+    return int(np.ceil(window_s * sfreq)) / sfreq / 2
+
+
+def counted_screen_windows(
+    raw: mne.io.Raw, scope=None, window_s: float = SCREEN_WINDOW_S,
+) -> "tuple[np.ndarray, np.ndarray]":
+    """``(centres, counted)`` on the screening grid, before anything is measured.
+
+    ::
+
+      a 100 s recording at 10 Hz, BAD_ over 0-45 s  ->  centres 5..95, counted from 55 s on
+
+    The grid is mne-nirs' windowed SCI grid (``ceil`` samples per window, the last window
+    ending one sample early), so this agrees window for window with :func:`coupled_windows`.
+    """
+    sfreq = float(raw.info["sfreq"])
+    win = int(np.ceil(window_s * sfreq))
+    starts = np.arange(raw.n_times // win) * win
+    ends = np.minimum(starts + win, raw.n_times - 1)
+    centers = (starts + ends) / 2 / sfreq
+    spans = [(a, b) for a, b, _ in bad_spans(raw)]
+    return centers, _counted(centers, _half_window(raw, window_s), scope, spans)
+
+
 def good_window_fraction(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
@@ -387,7 +435,7 @@ def good_window_fraction(
 
     ``scope`` restricts the **denominator** to the windows whose centres fall inside those
     stretches, such as the blocks of a run without its lead-in and gaps. None counts the
-    whole recording.
+    whole recording. A window touching any ``BAD_`` span is left out under either.
 
     The scope masks one whole-record pass rather than cutting the recording and measuring
     each piece: SCI and PSP filter to the cardiac band, so a cut piece is filtered against
@@ -440,12 +488,13 @@ def coupled_windows(
     if mask is None:
         return out
 
-    keep = _in_scope(centers, scope)
+    spans = [(a, b) for a, b, _ in bad_spans(raw_od)]
+    keep = _counted(centers, _half_window(raw_od, window_s), scope, spans)
     if not keep.any():
-        logger.warning("the screening scope keeps none of the %d windows; screening nothing",
-                       len(centers))
+        logger.warning("the screening scope keeps none of the %d windows%s; screening nothing",
+                       len(centers), " once BAD_ spans are left out" if spans else "")
         return out
-    if scope:
+    if scope or spans:
         logger.info("channel screening counts %d of %d windows, %.0f%% of the recording",
                     int(keep.sum()), len(centers), 100 * keep.mean())
     frac = mask[:, keep].mean(axis=1)

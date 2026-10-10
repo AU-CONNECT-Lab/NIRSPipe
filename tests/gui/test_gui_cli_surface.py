@@ -33,6 +33,7 @@ from nirspipe.interface.cli_args import (
 # exist in the CLI, and must not also be emitted; both are asserted below.
 NOT_EXPOSED = {
     "--bad-channels": "a per-subject channel list or a table path, and the page has no file picker",
+    "--keep-spans": "a table path, and the page has no file picker",
     "--epoch-single-trial": "only meaningful when no condition repeats",
     "--gvtd-min-epoch-s": "housekeeping beside the threshold, which is the knob that moves the result",
     "--config": "the form is the config surface; a TOML overriding it would make the preview lie",

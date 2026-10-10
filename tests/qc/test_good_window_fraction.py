@@ -14,6 +14,7 @@ line by the stretch where the channel was fine, so a channel that is excellent f
 long run and dead for the other half passes on the average and fails on the count.
 """
 
+import mne
 import numpy as np
 import pytest
 
@@ -48,6 +49,10 @@ def stub_windows(monkeypatch):
 class _Raw:
     def __init__(self, names):
         self.ch_names = list(names)
+        # what the share reads besides the stubbed matrices: no BAD_ span on a 10 Hz run
+        self.annotations = mne.Annotations([], [], [])
+        self.info = {"sfreq": 10.0}
+        self.first_time, self.n_times = 0.0, 1000
 
 
 def _frac(sci, psp, sci_cut=0.8, psp_cut=0.1, scope=None):

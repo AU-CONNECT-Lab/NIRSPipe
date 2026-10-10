@@ -6,8 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `--keep-spans` takes a table of the stretches of each recording to use; the rest is marked `BAD_unselected`
+- Each derivative sidecar lists its `excluded_spans`, with kind and source
+
 ### Changed
 - **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run
+- Channel screening leaves out every window touching a `BAD_` span, and stops a run left with fewer than two windows
+- **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
+
+### Fixed
+- `--screen-scope task` no longer counts a long `BAD_` span as a task block
+- GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run
 
 ## [0.63.0] - 2026-10-09
 

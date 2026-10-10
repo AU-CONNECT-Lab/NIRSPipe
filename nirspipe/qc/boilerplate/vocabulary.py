@@ -828,6 +828,11 @@ RECORD_EXTRA_KEYS = {
     "gvtd_censor_thresh": "The cutoff on the band-passed GVTD that censoring used.",
     "gvtd_censor_n_spans": "How many separate spans were censored.",
     "gvtd_censor_n_epochs": "How many continuous stretches survived censoring.",
+    "total_s": "The recording's length in seconds.",
+    "kept_s": "Seconds of the recording outside every BAD_ span.",
+    "unselected_frac": "Share of the recording marked BAD_unselected, outside the stretches --keep-spans named; the data there is real and was not altered.",
+    "corrupted_frac": "Share of the recording under any other BAD_ span, BAD_gvtd or one the input carried, counted once where spans overlap.",
+    "n_spans": "How many BAD_ spans the run carries, of both kinds.",
 }
 # per-wavelength CV keys carry the device's own wavelengths, so they take a template
 RECORD_CV_BY_WAVELENGTH = "cv_mean over the {nm} nm channels only."
@@ -835,6 +840,7 @@ COHORT_SECTIONS = {
     **RECORD_SECTIONS,
     "censor": "From the GVTD censoring step.",
     "imu": "From the head-motion sensor, not the optical data.",
+    "excluded": "From the run's BAD_ spans: --keep-spans, --gvtd-censor and any the input carried.",
 }
 COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
 

@@ -45,7 +45,8 @@ def _toml_value(v: Any) -> str:
     if isinstance(v, list):
         if not v:
             return "[]"
-        return "[ " + ", ".join(_toml_scalar(i) for i in v) + " ]"
+        return "[ " + ", ".join(_toml_value(list(i)) if isinstance(i, (list, tuple))
+                                else _toml_scalar(i) for i in v) + " ]"
     return _toml_scalar(v)
 
 

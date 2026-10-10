@@ -233,6 +233,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
+    _refuse_bad_keep_span_rows(args.get("keep_spans"), layout)
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
 
@@ -520,37 +521,65 @@ _BAD_CHANNEL_KEYS = {"participant_id": ("subject", "sub-"), "session": ("session
                      "task": ("task", "task-"), "run": ("run", "run-")}
 
 
-def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
-    """The rows of a --bad-channels table, each label cell with its prefix taken off.
+def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...]) -> list[dict]:
+    """The rows of a per-recording table, each label cell with its prefix taken off.
 
-    A row ``sub-01 | ses-02 | | 1 | S1_D1`` comes back as
+    A ``--bad-channels`` row ``sub-01 | ses-02 | | 1 | S1_D1`` comes back as
     ``{"participant_id": "01", "session": "02", "task": "", "run": "1",
     "bad_channels": "S1_D1", "line": 2}``; a blank or absent label column means all.
     """
     from nirspipe.io.tables import read_table
 
     table = read_table(path, dtype=str).fillna("")
-    if "bad_channels" not in table.columns:
-        raise ValueError(f"--bad-channels table {path} needs a bad_channels column")
+    missing = [c for c in data_columns if c not in table.columns]
+    if missing:
+        raise ValueError(f"{flag} table {path} needs a {' and a '.join(missing)} column")
     # a misspelt label column would otherwise read as blank, i.e. every recording
-    unknown = set(table.columns) - set(_BAD_CHANNEL_KEYS) - {"bad_channels"}
+    unknown = set(table.columns) - set(_BAD_CHANNEL_KEYS) - set(data_columns)
     if unknown:
         raise ValueError(
-            f"--bad-channels table {path} has unknown columns {sorted(unknown)}; "
-            f"allowed: {', '.join([*_BAD_CHANNEL_KEYS, 'bad_channels'])}")
+            f"{flag} table {path} has unknown columns {sorted(unknown)}; "
+            f"allowed: {', '.join([*_BAD_CHANNEL_KEYS, *data_columns])}")
     rows = []
     for i, record in enumerate(table.to_dict("records")):
         line = i + 2  # the header is line 1
-        row: dict[str, Any] = {"bad_channels": record["bad_channels"], "line": line}
+        row: dict[str, Any] = {**{c: record[c] for c in data_columns}, "line": line}
         for column, (_, prefix) in _BAD_CHANNEL_KEYS.items():
             label = str(record.get(column, "")).strip().removeprefix(prefix)
             if label and not (label.isdigit() if column == "run" else label.isalnum()):
                 kind = "a run number" if column == "run" else "a BIDS label (letters and digits)"
                 raise ValueError(
-                    f"--bad-channels table {path} line {line}: {column} "
+                    f"{flag} table {path} line {line}: {column} "
                     f"{record.get(column, '')!r} is not {kind}")
             row[column] = label
         rows.append(row)
+    return rows
+
+
+def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
+    return _label_table_rows(path, "--bad-channels", ("bad_channels",))
+
+
+def _keep_span_rows(path: Path) -> list[dict[str, Any]]:
+    """The rows of a --keep-spans table, onset and duration read as seconds.
+
+    ``sub-01 | | rest | | 30 | 240`` comes back with ``"onset": 30.0, "duration": 240.0``.
+    """
+    rows = _label_table_rows(path, "--keep-spans", ("onset", "duration"))
+    for row in rows:
+        for column in ("onset", "duration"):
+            cell = row[column]
+            try:
+                row[column] = float(cell)
+            except ValueError:
+                row[column] = float("nan")
+            if not np.isfinite(row[column]) or (column == "duration" and row[column] <= 0):
+                raise ValueError(
+                    f"--keep-spans table {path} line {row['line']}: {column} {cell!r} is not "
+                    f"a {'positive ' if column == 'duration' else ''}number of seconds")
+        if row["onset"] < 0:
+            raise ValueError(f"--keep-spans table {path} line {row['line']}: onset "
+                             f"{row['onset']:g} s lies before the recording starts")
     return rows
 
 
@@ -605,6 +634,29 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
     return [c.strip() for c in ",".join(r["bad_channels"] for r in rows).split(",") if c.strip()]
 
 
+def _keep_spans_for(spec: str | None, subject: str,
+                    entities: dict | None = None) -> list[tuple[float, float]]:
+    """The --keep-spans stretches of one recording as ``(onset, duration)``; empty uses it whole.
+
+    Rows are selected as the --bad-channels table's are, so a row with only ``task-rest``
+    applies to every subject's rest recordings, and a recording gets every row that matches.
+    """
+    if not spec:
+        return []
+    return [(row["onset"], row["duration"]) for row in _keep_span_rows(Path(str(spec)))
+            if _bad_channel_row_matches(row, subject, entities)]
+
+
+def _refuse_unmatched_rows(rows: list[dict], flag: str, spec: str, recordings: list) -> None:
+    for row in rows:
+        if not any(_bad_channel_row_matches(row, ent["subject"], ent) for ent in recordings):
+            named = " ".join(f"{_BAD_CHANNEL_KEYS[c][1]}{row[c]}" for c in _BAD_CHANNEL_KEYS
+                             if row[c])
+            raise SystemExit(
+                f"[error] {flag} table {spec} line {row['line']} ({named}) matches no "
+                f"recording in the dataset.")
+
+
 def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
     """Stop before any subject runs when a --bad-channels table row names no recording."""
     if not spec or not Path(str(spec)).exists():
@@ -613,14 +665,38 @@ def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
         rows = _bad_channel_rows(Path(str(spec)))
     except ValueError as err:
         raise SystemExit(f"[error] {err}") from None
-    recordings = [f.get_entities() for f in layout.get(extension=".snirf")]
+    _refuse_unmatched_rows(rows, "--bad-channels", str(spec),
+                           [f.get_entities() for f in layout.get(extension=".snirf")])
+
+
+def _refuse_bad_keep_span_rows(spec: str | None, layout: Any) -> None:
+    """Stop before any subject runs on a --keep-spans row that matches no recording or
+    starts past the end of one it matches."""
+    if not spec:
+        return
+    path = Path(str(spec))
+    if not path.exists():
+        raise SystemExit(f"[error] --keep-spans table {spec} not found.")
+    try:
+        rows = _keep_span_rows(path)
+    except ValueError as err:
+        raise SystemExit(f"[error] {err}") from None
+    files = layout.get(extension=".snirf")
+    _refuse_unmatched_rows(rows, "--keep-spans", str(spec), [f.get_entities() for f in files])
+    lengths: dict[str, float] = {}
     for row in rows:
-        if not any(_bad_channel_row_matches(row, ent["subject"], ent) for ent in recordings):
-            named = " ".join(f"{_BAD_CHANNEL_KEYS[c][1]}{row[c]}" for c in _BAD_CHANNEL_KEYS
-                             if row[c])
-            raise SystemExit(
-                f"[error] --bad-channels table {spec} line {row['line']} ({named}) matches no "
-                f"recording in the dataset.")
+        for f in files:
+            ent = f.get_entities()
+            if not _bad_channel_row_matches(row, ent["subject"], ent):
+                continue
+            if f.path not in lengths:
+                raw = mne.io.read_raw_snirf(f.path, preload=False, verbose="error")
+                lengths[f.path] = raw.n_times / float(raw.info["sfreq"])
+            if row["onset"] >= lengths[f.path]:
+                raise SystemExit(
+                    f"[error] --keep-spans table {spec} line {row['line']}: onset "
+                    f"{row['onset']:g} s lies past the end of {Path(f.path).name} "
+                    f"({lengths[f.path]:g} s).")
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
@@ -638,6 +714,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
            if args.get("screen_scope") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
+        keep_spans=_keep_spans_for(args.get("keep_spans"), subject, entities),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],

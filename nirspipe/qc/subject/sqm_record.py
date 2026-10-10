@@ -96,7 +96,7 @@ _HAEMO_SECTIONS = tuple(
 
 SECTIONS = ("raw", "raw_long", "raw_short",
             "motion", "motion_long", "motion_short",
-            "motion_post", "motion_post_long", "motion_post_short", "windowed",
+            "motion_post", "motion_post_long", "motion_post_short", "windowed", "excluded",
             *_HAEMO_SECTIONS)
 
 # Sections only some runs have. Kept out of SECTIONS, which means "every run writes this" and
@@ -1115,6 +1115,11 @@ def compute_run_sections(
         censor = _sidecar(stages["sci"]).get("gvtd_censor")
         if censor:
             sections["censor"] = censor
+        excluded = _sidecar(stages["sci"]).get("excluded_time")
+        if excluded is None:
+            raise ValueError(f"{stages['sci'].name} records no excluded_time; this derivative "
+                             f"tree predates it, rerun nirspipe")
+        sections["excluded"] = excluded
 
     # the spans the report draws on the carpet, on the channel set it draws them for, so the
     # figure reads them back instead of running the same detection again. Pre-correction by

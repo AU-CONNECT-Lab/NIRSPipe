@@ -31,7 +31,10 @@ from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
+from nirspipe.utils.spans import (add_bad_spans, bad_spans, excluded_spans, excluded_time,
+                                  mark_unselected)
 
 logger = get_logger("pipeline.prep")
 
@@ -97,6 +100,7 @@ def mark_bad_channels(
     both applied inside a window; ``min_good_frac`` is the share of windows that has to clear
     both, and it is the line that rejects. None keeps the criterion's own default. ``screen_scope`` is
     "run" or "task" and decides which windows are counted; see :func:`resolve_screen_scope`.
+    Windows touching a ``BAD_`` span are never counted, and fewer than two left stops the run.
 
     Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
     coupled-window shares, the last two because the report and the quality record both want
@@ -106,6 +110,16 @@ def mark_bad_channels(
     require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)
+    if bad_spans(raw_od):
+        _, counted = counted_screen_windows(raw_od, scope)
+        if counted.sum() < 2:
+            name = raw_od.filenames[0].name if raw_od.filenames and raw_od.filenames[0] else "run"
+            raise StageError(
+                f"{name}: with its BAD_ spans left out"
+                f"{' and only the task blocks counted' if scope else ''}, channel screening "
+                f"has {int(counted.sum())} window(s) of {SCREEN_WINDOW_S:g} s to count and "
+                f"needs 2 ({excluded_time(raw_od)['kept_s']:.0f} s of the recording "
+                f"are outside every BAD_ span). Widen --keep-spans for this recording.")
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                               have={"sci": sci_scores}, cutoffs=cutoffs, scope=scope)
@@ -177,6 +191,8 @@ class PrepConfig:
     long_max_dist: float | None = None
     bad_channels: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
+    # (onset, duration) stretches on the recording's own axis; empty uses the whole recording
+    keep_spans: list[tuple[float, float]] = field(default_factory=list)
 
 def run_prep(
     raw: mne.io.Raw,
@@ -200,6 +216,10 @@ def run_prep(
     """
     entities_base = carry_entities(source_entities)
     ses = config.session
+
+    input_spans = bad_spans(raw)
+    if config.keep_spans:
+        raw = mark_unselected(raw.copy(), config.keep_spans)
 
     rec = Recorder()
     if source_path is not None:
@@ -227,6 +247,7 @@ def run_prep(
             "data": data_state(raw_step),
             # read back by read_snirf: SNIRF itself cannot carry the marks
             "bad_channels": list(raw_step.info["bads"]),
+            "excluded_spans": excluded_spans(raw_step, input_spans),
             **(extra_provenance or {}),
         })
         return rec.written(path, raw_step)
@@ -297,15 +318,7 @@ def run_prep(
         # BAD_ annotations, so the spans travel with the data instead of being cut out of
         # it: MNE's reject_by_annotation drops the epochs they overlap, and a continuous
         # analysis can pick the surviving stretches
-        if censor_spans:
-            # orig_time has to be the existing annotations': a fresh Annotations defaults
-            # to None, and mne refuses to concatenate two that disagree. It only refuses
-            # when the left side is non-empty, so without this a run with no events works
-            # and every task run raises.
-            raw_od.set_annotations(raw_od.annotations + mne.Annotations(
-                [o for o, _ in censor_spans], [d for _, d in censor_spans],
-                ["BAD_gvtd"] * len(censor_spans),
-                orig_time=raw_od.annotations.orig_time))
+        add_bad_spans(raw_od, censor_spans, "BAD_gvtd")
 
     # These go in the sidecar because the SQM record is assembled from disk after the run,
     # and they are the inputs to it that no output file carries. `good_frac_scores` is the
@@ -320,6 +333,7 @@ def run_prep(
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
         "good_frac_scores": {k: float(v) for k, v in good_frac_scores.items()},
         **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
+        "excluded_time": excluded_time(raw_od),
     }, extra_parameters={"screen_scope_counted": counted})
 
     # step 3: motion correction (spike/step artifact repair)
@@ -405,4 +419,5 @@ def _config_dict(config: PrepConfig) -> dict:
         "qc_window_s": config.qc_window_s,
         "bad_channels": config.bad_channels,
         "ignore": config.ignore,
+        "keep_spans": [list(span) for span in config.keep_spans],
     }

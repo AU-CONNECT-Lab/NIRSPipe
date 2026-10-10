@@ -112,6 +112,18 @@ def _build_parser() -> argparse.ArgumentParser:
                                "Naming either wavelength "
                                "of a pair marks both. Kept in the data, unioned with SCI-detected "
                                "bad channels.")
+    prep_opt.add_argument("--keep-spans", type=Path, metavar="TABLE",
+                          help="Table of the stretches of each recording to use: onset and "
+                               "duration columns in seconds on the recording's own time axis "
+                               "(the axis of its events.tsv), and optionally participant_id, "
+                               "session, task and run to limit a row to some recordings (blank "
+                               "or absent means all; a recording gets the union of its rows; a "
+                               "row matching no recording, or starting past a recording's end, "
+                               "stops the run). The rest of the recording is marked "
+                               "BAD_unselected: it is processed as usual but left out of "
+                               "channel screening. A recording no row matches is used whole. "
+                               "A row shared by several recordings assumes they started "
+                               "time-locked.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
                           help="Lower bound of cardiac band in Hz (required at participant level; "
                                "population-dependent). Adult resting ~0.7; children/infants higher "

@@ -336,8 +336,9 @@ def gvtd_censor_spans(
     Returns spans to mark, following :footcite:`Sherafati2020`, not data to replace: nothing
     here interpolates, zero-fills or averages over what it flags.
 
-    Two passes: every sample above the threshold is flagged, then every surviving stretch
-    shorter than ``min_epoch_s``.
+    Measured on the channels the screening kept: an artefact on a rejected channel censors
+    nothing. Two passes: every sample above the threshold is flagged, then every surviving
+    stretch shorter than ``min_epoch_s``.
 
     The rule is about every survivor, not only the islands between artifacts. On a 100 s
     recording with artifacts at 20-22 s and 26-28 s and ``min_epoch_s=30``, the 4 s island
@@ -361,7 +362,8 @@ def gvtd_censor_spans(
     .. footbibliography::
     """
     picks, picked_set = gvtd_channel_picks(raw_od, sep_bands, channel_set)
-    data = raw_od.get_data(picks=picks)
+    rejected = set(raw_od.info["bads"])
+    picks = [ch for ch in picks if ch not in rejected]
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])
     empty = {
@@ -370,6 +372,11 @@ def gvtd_censor_spans(
         "gvtd_censor_pct": None, "gvtd_censor_n_spans": None,
         "gvtd_censor_n_epochs": None, "gvtd_censor_retained_s": None,
     }
+    if not picks:
+        logger.warning("screening rejected every %s channel; nothing censored on GVTD",
+                       picked_set)
+        return [], empty
+    data = raw_od.get_data(picks=picks)
     gvtd = gvtd_timetrace(data, sfreq, *GVTD_MOTION_BAND)
     thresh = gvtd_threshold(gvtd, n_std)
     if thresh is None:

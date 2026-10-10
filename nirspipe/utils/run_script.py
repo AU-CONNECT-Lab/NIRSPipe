@@ -69,6 +69,7 @@ def _build_script_text(
     psp_threshold: float | None = None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",
+    keep_spans_table: str | None = None,
 ) -> str:
     dt_str = datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
@@ -87,10 +88,7 @@ def _build_script_text(
         'censor_spans, censor_metrics = gvtd_censor_spans(',
         '    raw_od, n_std=GVTD_N_STD, min_epoch_s=GVTD_MIN_EPOCH,',
         '    sep_bands=SEP_BANDS, channel_set=GVTD_CENSOR)',
-        'if censor_spans:',
-        '    raw_od.set_annotations(raw_od.annotations + mne.Annotations(',
-        '        [o for o, _ in censor_spans], [d for _, d in censor_spans],',
-        '        ["BAD_gvtd"] * len(censor_spans), orig_time=raw_od.annotations.orig_time))',
+        'add_bad_spans(raw_od, censor_spans, "BAD_gvtd")',
     ] if gvtd_censor else [])
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
@@ -123,6 +121,7 @@ def _build_script_text(
         'from nirspipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
         'from nirspipe.io.snirf import write_snirf',
         'from nirspipe.utils import is_optical_density',
+        'from nirspipe.utils.spans import add_bad_spans, bad_spans, excluded_spans, excluded_time',
         'from nirspipe.pipeline.prep_pipeline import (',
         '    intensity_to_od, mark_bad_channels, correct_motion, od_to_haemo,',
         '    _expand_bad_pairs,',
@@ -132,6 +131,9 @@ def _build_script_text(
         w('from nirspipe.qc.metrics import gvtd_censor_spans')
     if bad_channels_table:
         w('from nirspipe.cli.workflows import _bad_channels_for')
+    if keep_spans_table:
+        w('from nirspipe.cli.workflows import _keep_spans_for',
+          'from nirspipe.utils.spans import mark_unselected')
     if mode:
         w('from nirspipe.pipeline.denoise import bandpass_filter, resample')
     if mode in ("glm", "rest") or denoise_regress:
@@ -171,6 +173,8 @@ def _build_script_text(
     )
     if bad_channels_table:
         w(f'BAD_CHANNELS_TABLE = Path({_lit(bad_channels_table)})')
+    if keep_spans_table:
+        w(f'KEEP_SPANS_TABLE = Path({_lit(keep_spans_table)})')
     if gvtd_censor:
         w(
             f'GVTD_CENSOR    = {gvtd_censor!r}',
@@ -218,7 +222,7 @@ def _build_script_text(
         '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
         '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
-        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE,',
+        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [],',
         '}',
         '',
         '',
@@ -233,7 +237,8 @@ def _build_script_text(
         '        "parameters": {**PREP_PARAMS, "session": src.get("session")},',
         '        "data": data_state(raw_step),',
         '        # read back by read_snirf: SNIRF itself cannot carry the marks',
-        '        "bad_channels": list(raw_step.info["bads"]), **(extra or {})})',
+        '        "bad_channels": list(raw_step.info["bads"]),',
+        '        "excluded_spans": excluded_spans(raw_step, INPUT_SPANS), **(extra or {})})',
         '    return path',
     )
 
@@ -256,7 +261,15 @@ def _build_script_text(
         f'{i3}src = layout.parse_file_entities(str(snirf_path))',
         f'{i3}ses = src.get("session")',
         f'{i3}raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)',
+        f'{i3}INPUT_SPANS = bad_spans(raw)  # BAD_ spans the recording already carried',
     )
+    if keep_spans_table:
+        w(
+            f'{i3}# the --keep-spans rows that match this recording; the rest is BAD_unselected',
+            f'{i3}KEEP_SPANS = _keep_spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src)',
+            f'{i3}PREP_PARAMS["keep_spans"] = [list(span) for span in KEEP_SPANS]',
+            f'{i3}raw = mark_unselected(raw, KEEP_SPANS)',
+        )
     if bad_channels_table:
         w(
             f'{i3}# the --bad-channels rows that match this recording',
@@ -289,8 +302,9 @@ def _build_script_text(
         '    raw_od.info["bads"] = bad_chs',
         *_gvtd_lines,
         'save_step(raw_od, "sci", "sci_pruning", src,',
-        ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics})'
-         if gvtd_censor else '          extra={"bad_channels": bad_chs})'),
+        ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics,'
+         if gvtd_censor else '          extra={"bad_channels": bad_chs,'),
+        '                 "excluded_time": excluded_time(raw_od)})',
         '# QC (not run here): none of these steps measures anything. The quality record is',
         '#   assembled from the files they leave on disk, once both passes have finished',
         '#   (qc.sqm_record.build_sqm_records).',
@@ -446,6 +460,8 @@ def write_run_script(
     bad_channels = _bad_channels_for(bad_spec, subject)
     bad_channels_table = (_fwd(Path(str(bad_spec)).resolve())
                           if bad_spec and Path(str(bad_spec)).exists() else None)
+    keep_spec = args.get("keep_spans")
+    keep_spans_table = _fwd(Path(str(keep_spec)).resolve()) if keep_spec else None
 
     def _pick(key: str, default: Any) -> Any:
         v = args.get(key)
@@ -494,6 +510,7 @@ def write_run_script(
         gvtd_min_epoch_s=_pick("gvtd_min_epoch_s", 30.0),
         sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
         bad_channels_table=bad_channels_table,
+        keep_spans_table=keep_spans_table,
         psp_threshold=screening.psp_threshold,
         min_good_frac=screening.min_good_frac,
         screen_scope=screening.screen_scope,
