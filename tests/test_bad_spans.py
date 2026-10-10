@@ -21,7 +21,7 @@ from nirspipe.qc.common.figure_io import extract_markers
 from nirspipe.qc.common.windows import condition_windows
 from nirspipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_figure
 from nirspipe.qc.metrics import gvtd_censor_spans
-from nirspipe.qc.metrics._helpers import long_short_channels
+from nirspipe.qc.metrics._helpers import epochable_events, long_short_channels
 from nirspipe.qc.metrics.windowed import task_scope_windows
 from nirspipe.qc.subject.sqm_record import _condition_cnr
 from nirspipe.utils.lineage import lineage_of
@@ -79,13 +79,21 @@ def test_a_bad_span_reaching_into_a_condition_still_rejects_its_epochs():
 
 # ---- ALFF ----
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="D4: nansum over an all-NaN spectrum is 0, so fALFF reads 0.0")
 def test_an_all_nan_channel_has_no_falff():
     t = np.arange(int(SFREQ * 100)) / SFREQ
     data = np.vstack([np.sin(2 * np.pi * 0.05 * t), np.full(t.size, np.nan)])
     out = compute_alff(_hbo_raw(data), low_pass=0.08, high_pass=0.01)
     assert np.isnan(out["falff"].iloc[1])
+
+
+# ---- trials ----
+
+@pytest.mark.xfail(strict=True, raises=ValueError,
+                   reason="D11: mne.events_from_annotations raises when every annotation is BAD_")
+def test_a_run_marked_only_with_bad_spans_has_nothing_to_epoch():
+    raw = _hbo_raw(np.zeros(int(SFREQ * 100)), [10.0], [20.0], ["BAD_gvtd"])
+    events, _ = epochable_events(raw, -5.0, 25.0)
+    assert len(events) == 0
 
 
 # ---- condition windows ----

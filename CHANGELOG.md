@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Each derivative sidecar lists its `excluded_spans`, with kind and source
 - `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
 - The analysis page offers the fill method beside GVTD censoring
+- `--min-time` skips FC and ALFF for a run with less kept time; default 0, also on the analysis page
 
 ### Changed
 - **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The GLM and confound regressions fit only frames outside `BAD_` spans, on the full-length design with gap-aware AR whitening; the residual stays full length
 - A condition with no signal in kept frames is dropped and named; a fit with fewer than three kept frames per regressor is refused
 - The saved design matrix gains a `censored` column; GLM and residual sidecars record kept frames, excluded shares and events left per condition
+- FC uses only frames outside `BAD_` spans, and ALFF and fALFF a Lomb-Scargle spectrum of them; FC and ALFF sidecars record the kept seconds
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
 - QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
 - The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
@@ -27,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
 - GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run
 - `BAD_` rows in an `--events-path` table are no longer turned into conditions
+- A channel with no finite sample gets NaN fALFF instead of 0
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 

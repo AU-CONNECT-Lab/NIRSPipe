@@ -260,6 +260,11 @@ def _preprocessing():
                                    value="linear", clearable=False),
                       hint="Fills the spans before the bandpass; needs a post mode.",
                       id="an-censor-fill-wrap"),
+                field("Min kept time (s)",
+                      dbc.Input(id="an-min-time", type="number", step=1, min=0,
+                                placeholder="0 (off)"),
+                      hint="FC and ALFF are skipped when less time lies outside the spans.",
+                      id="an-min-time-wrap"),
             ),
          key="an-gvtd", open=False),
     )

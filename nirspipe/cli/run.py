@@ -290,6 +290,14 @@ def _build_parser() -> argparse.ArgumentParser:
                           "correlates its confound residual, or the bandpassed data itself "
                           "when no regression was asked for. Ignored by --mode rest, which "
                           "writes them anyway.")
+    glm.add_argument("--min-time", type=float,
+                     help="Seconds outside every BAD_ span (unselected or corrupted) a run "
+                          "needs before its FC and ALFF are computed, in every mode that "
+                          "writes them; default 0, off. A run under it gets no FC or ALFF "
+                          "file, and the sidecar of the residual they would have come from "
+                          "says why. The kept seconds are logged and written to every FC "
+                          "and ALFF sidecar either way. The GLM fit itself is not governed "
+                          "by it.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
     glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")

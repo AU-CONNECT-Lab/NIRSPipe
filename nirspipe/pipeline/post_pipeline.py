@@ -6,6 +6,7 @@ All steps within a mode are still individually controllable via PostConfig field
 """
 
 from __future__ import annotations
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -17,6 +18,7 @@ import pandas as pd
 
 from nirspipe.io.auxiliary import find_aux_table
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL, fill_corrupted
+from nirspipe.pipeline.glm_censored import kept_frames
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
@@ -84,6 +86,8 @@ class PostConfig:
     events_path:     str | None            = None
     contrast_def:    dict[str, Any] | None = None
     fc:              bool                  = False
+    # seconds outside every BAD_ span that FC and ALFF need; 0 computes them on any amount
+    min_time:        float                 = 0.0
 
     # separation bands, in metres; see PrepConfig
     short_max_dist: float | None = None
@@ -532,12 +536,16 @@ def _write_fc_derivatives(
     def _roi(extra: dict) -> dict:
         return {**extra, "segmentation": config.roi_map_name}
 
-    def _sidecar(path: Path, step: str, **params) -> None:
-        write_step_sidecar(path, step, src_bp, bads, **params)
-
     fc_hbo_df = fc_hbr_df = None
     fc_roi: dict[str, pd.DataFrame] = {}
     fc_seed: dict[str, pd.DataFrame] = {}
+
+    kept = _kept_time(raw_resid, config, "FC", rec)
+    if kept is None:
+        return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
+
+    def _sidecar(path: Path, step: str, **params) -> None:
+        write_step_sidecar(path, step, src_bp, bads, **params, **kept)
 
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
     # written and both reach the report.
@@ -627,7 +635,8 @@ def _write_rest_derivatives(
     entities = carry_entities(source_entities)
 
     alff_df = None
-    if raw_resid_bb is not None:
+    kept = _kept_time(raw_resid_bb, config, "ALFF", rec) if raw_resid_bb is not None else None
+    if kept is not None:
         # handed in rather than blanked afterwards: a channel fitted against a copy of
         # itself must also stay out of the mALFF/zALFF reference mean
         empty = sole_regressor_channels(raw_resid_bb, config.short_channel,
@@ -641,7 +650,7 @@ def _write_rest_derivatives(
         write_tsv(alff_df, alff_path)
         write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
                        list(raw_resid.info["bads"]),
-                       low_pass=config.low_pass, high_pass=config.high_pass)
+                       low_pass=config.low_pass, high_pass=config.high_pass, **kept)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
 
         if config.roi_map:
@@ -658,9 +667,9 @@ def _write_rest_derivatives(
                                list(raw_resid.info["bads"]),
                                low_pass=config.low_pass, high_pass=config.high_pass,
                                roi_channels={c: _roi_members(raw_resid_bb, config.roi_map, c)
-                                             for c in ("hbo", "hbr")})
+                                             for c in ("hbo", "hbr")}, **kept)
                 logger.info("sub-%s | alff_roi -> %s", config.subject, alff_roi_path)
-    else:
+    elif raw_resid_bb is None:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
     fc_hbo_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
@@ -701,6 +710,34 @@ def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subjec
         subject, out_path.name,
         ", ".join(f"{k} {was} -> {now}" for k, (was, now) in changed.items()),
     )
+
+
+def _kept_time(raw: mne.io.Raw, config: PostConfig, what: str, rec: Recorder) -> dict | None:
+    """``{kept_s, min_time}`` for the sidecars when ``what`` may be computed on ``raw``.
+
+    None when the time outside every ``BAD_`` span is under ``config.min_time`` or under the
+    three frames a correlation needs; the skip is logged and noted in the sidecar of the
+    file ``what`` would have been computed from, so its absence is never silent.
+    """
+    keep = kept_frames(raw)
+    kept_s = float(keep.sum() / raw.info["sfreq"])
+    total_s = float(len(keep) / raw.info["sfreq"])
+    if kept_s >= config.min_time and keep.sum() >= 3:
+        logger.info("sub-%s | %s on %.1f s kept of %.1f s", config.subject, what, kept_s, total_s)
+        return {"kept_s": kept_s, "min_time": config.min_time}
+    reason = (f"{kept_s:.1f} s lie outside its BAD_ spans, under --min-time {config.min_time:g} s"
+              if kept_s < config.min_time else
+              f"{int(keep.sum())} frames lie outside its BAD_ spans, under the 3 a correlation needs")
+    logger.warning("sub-%s | %s not computed: %s", config.subject, what, reason)
+    source = rec.path_of(raw)
+    # only a file this run wrote; the input belongs to prep
+    if source is not None and source in {e["path"] for e in rec.entries}:
+        sidecar_path = Path(source).with_suffix(".json")
+        sidecar = read_json(sidecar_path)
+        sidecar.setdefault("skipped_outputs", []).append(
+            {"output": what, "kept_s": kept_s, "min_time": config.min_time, "reason": reason})
+        sidecar_path.write_text(json.dumps(sidecar, indent=2))
+    return None
 
 
 def _known_spans(source_path: Path | None) -> list[dict]:

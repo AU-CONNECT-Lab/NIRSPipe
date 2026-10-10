@@ -5,10 +5,82 @@ import pandas as pd
 import mne
 from scipy import signal
 
+from nirspipe.pipeline.glm_censored import kept_frames
 from nirspipe.utils import fisher_r_to_z
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("post.restingstate")
+
+
+def lomb_scargle(data: np.ndarray, keep: np.ndarray, sfreq: float) -> tuple[np.ndarray, np.ndarray]:
+    r"""Lomb-Scargle power of each row from its kept samples, on the periodogram's own grid.
+
+    The classic periodogram with Scargle's time shift :math:`\tau`, over the kept sample
+    times :math:`t_j` of a series demeaned on them:
+
+    .. math::
+
+        P(\omega) = \frac{1}{N_k} \left[
+            \frac{\left(\sum_j y_j \cos \omega (t_j - \tau)\right)^2}{\sum_j \cos^2 \omega (t_j - \tau)}
+          + \frac{\left(\sum_j y_j \sin \omega (t_j - \tau)\right)^2}{\sum_j \sin^2 \omega (t_j - \tau)}
+        \right], \qquad
+        \tan 2\omega\tau = \frac{\sum_j \sin 2\omega t_j}{\sum_j \cos 2\omega t_j}
+
+    at the Fourier frequencies of the full length, :math:`N_k` the kept count. This is
+    ``scipy.signal.lombscargle(..., normalize=True)`` times the kept samples' variance, which
+    puts it on the scale of ``scipy.signal.periodogram(..., scaling="spectrum")``; with every
+    sample kept the two are equal.
+
+    Parameters
+    ----------
+    data : ndarray, shape (n_channels, n_times)
+        Full-length series; values at dropped samples are ignored.
+    keep : ndarray of bool, shape (n_times,)
+        False on dropped samples.
+    sfreq : float
+        Sampling rate in Hz.
+
+    Returns
+    -------
+    freqs : ndarray, shape (n_times // 2 + 1,)
+        ``np.fft.rfftfreq(n_times, 1 / sfreq)``, DC included.
+    power : ndarray, shape (n_channels, n_times // 2 + 1)
+        Power per frequency; the DC bin is 0, as after demeaning.
+
+    Notes
+    -----
+    The kept samples sit on a uniform grid, so every sum above is a DFT of the zero-filled
+    series or of the mask, and the 2ω sums are the mask's DFT at bin :math:`2k \bmod n`. The
+    result is exact, not the Press-Rybicki approximation: it matches scipy to about 1e-9.
+    At the Nyquist bin of an even length every :math:`\sin \omega t_j` is 0, so that term is
+    dropped rather than divided by zero.
+    """
+    n = data.shape[1]
+    n_kept = int(keep.sum())
+    k = np.arange(1, n // 2 + 1)
+    y = data[:, keep]
+    z = np.zeros_like(data, dtype=float)
+    z[:, keep] = y - y.mean(axis=1, keepdims=True)
+
+    spectrum = np.fft.fft(z, axis=1)[:, k]
+    mask_2w = np.fft.fft(keep.astype(float))[(2 * k) % n]
+    c2, s2 = mask_2w.real, -mask_2w.imag  # sums of cos 2wt and sin 2wt
+    two_w_tau = np.arctan2(s2, c2)
+    cos_t, sin_t = np.cos(two_w_tau / 2), np.sin(two_w_tau / 2)
+    yc_raw, ys_raw = spectrum.real, -spectrum.imag
+    yc = yc_raw * cos_t + ys_raw * sin_t
+    ys = ys_raw * cos_t - yc_raw * sin_t
+    cc = 0.5 * (n_kept + c2 * np.cos(two_w_tau) + s2 * np.sin(two_w_tau))
+    ss = n_kept - cc
+
+    # a sine term whose basis vanishes on every kept sample carries no power
+    tiny = 1e-9 * n_kept
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cos_term = np.where(cc > tiny, yc ** 2 / cc, 0.0)
+        sin_term = np.where(ss > tiny, ys ** 2 / ss, 0.0)
+    power = np.zeros((data.shape[0], n // 2 + 1))
+    power[:, 1:] = (cos_term + sin_term) / n_kept
+    return np.fft.rfftfreq(n, 1 / sfreq), power
 
 
 def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
@@ -34,6 +106,11 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
 
     Notes
     -----
+    With ``BAD_`` spans on the recording, :math:`P(f)` is the :func:`lomb_scargle` power of
+    the kept samples on the same frequency grid, so both sums run over the same bins as
+    without spans; the denominator still reaches Nyquist. A channel with no finite sample
+    gets NaN for both measures; a constant one keeps 0.
+
     All four measures are NaN on a rejected channel, and the ``bad`` column says which those
     are. The mALFF/zALFF reference mean and SD already exclude them, so the blanking only
     removes the values themselves.
@@ -53,17 +130,25 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
     """
     data = raw.get_data()  # (n_channels, n_times)
     fs = raw.info["sfreq"]
+    keep = kept_frames(raw)
+    censored = not keep.all()
 
     alff_vals  = np.zeros(len(raw.ch_names))
     falff_vals = np.zeros(len(raw.ch_names))
 
     for i, ch_data in enumerate(data):
-        if np.nanstd(ch_data) == 0:
+        if not np.isfinite(ch_data).any():
+            alff_vals[i] = falff_vals[i] = np.nan
+            continue
+        if np.nanstd(ch_data[keep] if censored else ch_data) == 0:
             continue
 
-        ch_demeaned = ch_data - np.nanmean(ch_data)
-
-        freqs, power = signal.periodogram(ch_demeaned, fs, scaling="spectrum")
+        if censored:
+            freqs, power = lomb_scargle(ch_data[np.newaxis], keep, fs)
+            power = power[0]
+        else:
+            ch_demeaned = ch_data - np.nanmean(ch_data)
+            freqs, power = signal.periodogram(ch_demeaned, fs, scaling="spectrum")
         power_sqrt   = np.sqrt(power)
 
         # high_pass is the lower bound, low_pass the upper; inclusive mask keeps both edge bins
@@ -171,7 +256,8 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
 
     over the channels of a single chromophore (``chromophore`` is "hbo" or "hbr"); HbO and HbR
     anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
-    is 1. Empty frame if the chromophore has < 2 channels.
+    is 1. Empty frame if the chromophore has < 2 channels. Only frames outside every ``BAD_``
+    span enter the correlation, here and in the ROI and seed products.
 
     A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
     same shape and the same channel order, so a group analysis can stack them however their
@@ -188,11 +274,17 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
     if len(picks) < 2:
         return pd.DataFrame()
-    fc = pd.DataFrame(np.corrcoef(raw.get_data(picks=picks)), index=picks, columns=picks)
+    fc = pd.DataFrame(np.corrcoef(_kept(raw, raw.get_data(picks=picks))), index=picks, columns=picks)
     bads = [c for c in picks if c in set(raw.info["bads"])]
     fc.loc[bads, :] = np.nan
     fc.loc[:, bads] = np.nan
     return fc
+
+
+def _kept(raw: mne.io.Raw, data: np.ndarray) -> np.ndarray:
+    """The columns of ``data`` outside every ``BAD_`` span; ``data`` itself when there are none."""
+    keep = kept_frames(raw)
+    return data if keep.all() else data[..., keep]
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
@@ -235,7 +327,7 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
         return pd.DataFrame()
     names = list(members)
     signals = [raw.get_data(picks=picks).mean(axis=0) for picks in members.values()]
-    fc = pd.DataFrame(np.corrcoef(np.vstack(signals)), index=names, columns=names)
+    fc = pd.DataFrame(np.corrcoef(_kept(raw, np.vstack(signals))), index=names, columns=names)
     labels = list(roi_map)
     return fc.reindex(index=labels, columns=labels)
 
@@ -314,12 +406,12 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     if not members or len(cols) < 2:
         return pd.DataFrame()
 
-    data = raw.get_data(picks=cols)
+    data = _kept(raw, raw.get_data(picks=cols))
     col_index = {c: i for i, c in enumerate(cols)}
     bad_cols = [col_index[c] for c in cols if c in set(raw.info["bads"])]
     rows = []
     for picks in members.values():
-        seed = raw.get_data(picks=picks).mean(axis=0)
+        seed = _kept(raw, raw.get_data(picks=picks).mean(axis=0))
         r = np.corrcoef(np.vstack([seed, data]))[0, 1:]   # row 0 is the seed against every column
         r[[col_index[c] for c in picks]] = np.nan
         r[bad_cols] = np.nan
