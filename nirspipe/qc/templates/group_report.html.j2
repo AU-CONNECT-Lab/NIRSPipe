@@ -1,10 +1,9 @@
 {% extends "_report_base.html.j2" %}
 
 {% block css %}
-/* The document look, the one every report wears: a section is a heading with a disclosure
-   triangle rather than a card, and the page is read top to bottom. document.css owns the
-   summary grid, the details and the metric tables; only the group report's own panels
-   belong here. */
+/* The document look, the one every report wears: a section is a heading with a rule under
+   it, laid out flat, and the page is read top to bottom. document.css owns the summary
+   grid, the steps and the metric tables; only the group report's own panels belong here. */
 
 .plot-frame { width: 100%; border: none; display: block; }
 
@@ -22,11 +21,13 @@
 .summary-grid table.headline td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--rule-soft); }
 .summary-grid table.headline td:first-child { color: var(--ink); font-weight: 600; }
 
-/* a panel with one row per run is as tall as the cohort is long; it scrolls in its own
-   box so the page does not grow with the cohort */
-.tall-frame { max-height: 700px; overflow: auto; margin-top: 0.5rem; }
+/* a panel with one row per run is as tall as the cohort is long and the page grows with it;
+   only a panel wider than the page scrolls, sideways */
+.tall-frame { overflow-x: auto; margin-top: 0.5rem; }
 
-#group-table-wrap { overflow: auto; max-height: 600px; margin-top: 0.5rem; }
+/* sideways only. A scroll box captures a sticky header, so the header scrolls away with the
+   page here and only the first column stays in view */
+#group-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
@@ -125,20 +126,22 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% endif %}
 
 {% if figure_paths.strip %}
-<details id="Overview" open>
-  <summary>Overview <span class="hint">one row per metric &bull; one dot per run at its robust z &bull; colour = channel set &bull; the band is |z| &lt; 2</span></summary>
+<section id="Overview" class="step">
+  <h3 class="step-title">Overview</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.overview') }}</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     <iframe class="plot-frame" src="{{ figure_paths.strip.src }}"
             style="height:{{ figure_paths.strip.h }}px"></iframe>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if box_panels %}
-<details id="Distributions" open>
-  <summary>Distributions <span class="hint">real values &bull; one chart per same-scale group &bull; colour = channel set &bull; click a point to open its report</span></summary>
+<section id="Distributions" class="step">
+  <h3 class="step-title">Distributions</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.distributions') }}</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     <div id="box-flow">
       {%- for p in box_panels %}
@@ -147,45 +150,49 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
       {%- endfor %}
     </div>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if figure_paths.conditions %}
-<details id="Conditions" open>
-  <summary>By condition <span class="hint">each run's windows collapsed into its own blocks &bull; one line per run &bull; the cohort median over them</span></summary>
+<section id="Conditions" class="step">
+  <h3 class="step-title">By condition</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.conditions') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.conditions.src }}"
             style="height:{{ figure_paths.conditions.h }}px"></iframe>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if figure_paths.conditionmatrix %}
-<details id="ConditionMatrix" open>
-  <summary>Run &times; condition <span class="hint">colour is the robust z inside that condition &bull; sorted worst first &bull; run names on the left edge</span></summary>
+<section id="ConditionMatrix" class="step">
+  <h3 class="step-title">Run &times; condition</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.condition_matrix') }}</p>
     <div class="tall-frame">
       <iframe src="{{ figure_paths.conditionmatrix.src }}"
               style="border:none;display:block;height:{{ figure_paths.conditionmatrix.h }}px;{% if figure_paths.conditionmatrix.w %}width:{{ figure_paths.conditionmatrix.w }}px{% else %}width:100%{% endif %}"></iframe>
     </div>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if figure_paths.windows %}
-<details id="Windowed" open>
-  <summary>Over time <span class="hint">rows are metrics, columns are channel sets &bull; every run pale, the cohort's interquartile band and median over them &bull; smoothed over {{ '%g'|format(smooth_s) }} s &bull; SCI here follows the QC window, while the table's <code>sci_win_mean</code> is pinned to {{ '%g'|format(sci_window_s) }} s and its <code>sci_mean</code> is the whole run</span></summary>
+<section id="Windowed" class="step">
+  <h3 class="step-title">Over time</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.windowed', smooth='%g'|format(smooth_s), sci_window='%g'|format(sci_window_s)) }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.windows.src }}"
             style="height:{{ figure_paths.windows.h }}px"></iframe>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if outliers is defined %}
-<details id="Outliers" open>
-  <summary>Outliers <span class="hint">runs whose mean |z| over every metric is past {{ score_threshold }} &bull; one test per run, not one per metric</span></summary>
+<section id="Outliers" class="step">
+  <h3 class="step-title">Outliers</h3>
   <div class="details-body" id="outlier-list">
+    <p class="step-desc">{{ section_note('group.outlier_rule', z=score_threshold) }}</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     {% if outliers %}
     <ul>
@@ -199,13 +206,14 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
     <p class="no-out">No outliers flagged.</p>
     {% endif %}
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if table_rows %}
-<details id="Table" open>
-  <summary>All metrics <span class="hint">every scalar the records carry, the check-only ones aside &bull; click a column header to sort &bull; first column sticky</span></summary>
+<section id="Table" class="step">
+  <h3 class="step-title">All metrics</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('group.table') }}</p>
     <div id="group-table-wrap">
       <table class="group-table" id="group-table">
         <thead><tr>
@@ -225,7 +233,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
       </table>
     </div>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% endblock %}

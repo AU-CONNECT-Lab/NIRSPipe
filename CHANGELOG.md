@@ -58,6 +58,7 @@ All notable changes to this project will be documented in this file.
 - The raw viewer's set tables print each share with its count, and its per-channel table shows both wavelengths for SNR, CV and Spike
 - The dyad raw report's steps no longer fold; its channel table comes before the quality grid and shows both wavelengths for SNR, CV and Spike
 - The dyad analysis report's coherence and synchrony panels no longer fold
+- The cohort pages no longer fold or scroll inside a box; a long table grows the page, and each heading's hint is a sentence under it
 
 ### Fixed
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

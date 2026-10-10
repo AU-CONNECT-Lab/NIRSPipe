@@ -14,7 +14,9 @@
 .summary-grid table.headline td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--rule-soft); }
 .summary-grid table.headline td:first-child { color: var(--ink); font-weight: 600; }
 
-#group-table-wrap { overflow: auto; max-height: 600px; margin-top: 0.5rem; }
+/* sideways only. A scroll box captures a sticky header, so the header scrolls away with the
+   page here and only the first column stays in view */
+#group-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
@@ -78,26 +80,22 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 </div>
 
 {% if figure_paths.usable_bars %}
-<details id="Usable" open>
-  <summary>Shared usable time
-    <span class="hint">one bar per dyad &bull; a cell is one channel pair in one window
-      &bull; usable means coupled in both members at the same moment</span></summary>
+<section id="Usable" class="step">
+  <h3 class="step-title">Shared usable time</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_group.usable') }}</p>
+    <p class="step-desc">{{ section_note('hyper_group.usable_read') }} {{ section_note('hyper_group.usable') }}</p>
     {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     <iframe class="plot-frame" src="{{ figure_paths.usable_bars.src }}"
             style="height:{{ figure_paths.usable_bars.h }}px"></iframe>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if figure_paths.pair_field %}
-<details id="Where" open>
-  <summary>Where the time went
-    <span class="hint">one dot per cell &bull; dark is usable, pale is lost &bull; pair
-      columns ordered worst first</span></summary>
+<section id="Where" class="step">
+  <h3 class="step-title">Where the time went</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_group.pair_field') }}</p>
+    <p class="step-desc">{{ section_note('hyper_group.pair_field_read') }} {{ section_note('hyper_group.pair_field') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.pair_field.src }}"
             style="height:{{ figure_paths.pair_field.h }}px"></iframe>
     {% if figure_paths.condition_dials %}
@@ -106,22 +104,21 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
             style="height:{{ figure_paths.condition_dials.h }}px"></iframe>
     {% endif %}
   </div>
-</details>
+</section>
 {% elif no_shared_pairs %}
-<details id="Where" open>
-  <summary>Where the time went: not available for this cohort</summary>
+<section id="Where" class="step">
+  <h3 class="step-title">Where the time went: not available for this cohort</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_group.no_shared_pairs') }}</p>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% if table_rows %}
-<details id="Table" open>
-  <summary>All dyads
-    <span class="hint">click a column header to sort &bull; first column sticky &bull;
-      the dyad name opens its own report</span></summary>
+<section id="Table" class="step">
+  <h3 class="step-title">All dyads</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_group.table') }}</p>
     <div id="group-table-wrap">
       <table class="group-table" id="group-table">
         <thead><tr>
@@ -141,7 +138,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
       </table>
     </div>
   </div>
-</details>
+</section>
 {% endif %}
 
 {% endblock %}

@@ -23,11 +23,10 @@ table.groupnull-table th { color: var(--muted); font-weight: 600; }
 </div>
 
 {% for s in sections %}
-<details id="{{ s.anchor }}" open>
-  <summary>{{ s.title }}
-    <span class="hint">whole brain over {{ s.pairings }} pairings &bull; marks read
-      {{ s.p_col }}</span></summary>
+<section id="{{ s.anchor }}" class="step">
+  <h3 class="step-title">{{ s.title }}</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('groupnull.section', pairings=s.pairings, p_col=s.p_col) }}</p>
     {% if s.figures.occasions %}
     <p class="qm-note">{{ section_note('groupnull.occasions') }}</p>
     <iframe class="plot-frame" src="{{ s.figures.occasions.src }}"
@@ -50,6 +49,6 @@ table.groupnull-table th { color: var(--muted); font-weight: 600; }
     {% endif %}
     <p class="fig-path"><a href="{{ s.byoccasion }}">{{ s.byoccasion }}</a>{% if s.cohort %} &bull; <a href="{{ s.cohort }}">{{ s.cohort }}</a>{% endif %}</p>
   </div>
-</details>
+</section>
 {% endfor %}
 {% endblock %}

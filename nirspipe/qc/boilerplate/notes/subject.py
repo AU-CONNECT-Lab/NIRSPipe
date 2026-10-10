@@ -366,4 +366,27 @@ NOTES = {
     "group.outliers_worst": "({runs} the furthest)",
     "group.no_outliers":
         "No run sits more than {z} robust SDs from the cohort median on the average metric.",
+    "group.overview":
+        "One row per metric and one dot per run at its robust z, coloured by channel set; the "
+        "band marks |z| below 2.",
+    "group.distributions":
+        "Real values, one chart per group of metrics on the same scale, coloured by channel "
+        "set. Click a point to open that run's report.",
+    "group.conditions":
+        "Each run's windows collapsed into its own blocks, one line per run, with the cohort "
+        "median over them.",
+    "group.condition_matrix":
+        "Colour is the robust z inside each condition. Runs are sorted worst first, their "
+        "names on the left edge.",
+    "group.windowed":
+        "Rows are metrics and columns channel sets: every run pale, with the cohort's "
+        "interquartile band and median over them, smoothed over {smooth} s. SCI here follows "
+        "the QC window, while the table's <code>sci_win_mean</code> is pinned to {sci_window} s "
+        "and its <code>sci_mean</code> covers the whole run.",
+    "group.outlier_rule":
+        "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
+        "metric.",
+    "group.table":
+        "Every scalar the records carry, the check-only ones aside. Click a column header to "
+        "sort; the first column stays in view.",
 }

@@ -256,6 +256,15 @@ NOTES = {
         "Only {n} dyads: the cohort median measures how far a dyad sits from the middle of "
         "its cohort, and this cohort has no middle to measure from. Read the panels as the "
         "dyads' own values side by side.",
+    "hyper_group.usable_read":
+        "One bar per dyad. A cell is one channel pair in one window, usable when it was "
+        "coupled in both members at the same moment.",
+    "hyper_group.pair_field_read":
+        "One dot per cell, dark usable and pale lost, with the pair columns ordered worst "
+        "first.",
+    "hyper_group.table":
+        "Click a column header to sort. The first column stays in view, and a dyad's name "
+        "opens its own report.",
     "hyper_group.usable":
         "The intersection, not the smaller of the two members: two members can each keep all "
         "but one pair and share one fewer than either, if the pair they each lose is a "
@@ -276,6 +285,7 @@ NOTES = {
         "page.",
 
     # ---- The cohort test page (nirspipe-hyper-groupnull) ----
+    "groupnull.section": "Whole brain over {pairings} pairings; the marks read {p_col}.",
     "groupnull.page":
         "Each section is one statistic, one null and one chromophore, read off the tables "
         "<code>nirspipe-hyper-groupnull</code> wrote beside this page. Marks read the "
