@@ -549,7 +549,9 @@ def _section_psd_detail(
                     (label, _unmarked(raw.copy().pick(present)))
                     for label, raw in psd_stages
                     if (present := [c for c in picks if c in raw.ch_names])
-                ]
+                    # a short channel is a regressor, and a retained one leaves a zero residual
+                    and not (pair in short_pairs and label == "desc-errts")
+                ][-1:]
             fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
                              title=f"PSD: {pair}", cardiac=cardiac, resp=resp,
                              stages=stages_sub)
@@ -788,21 +790,22 @@ def _section_haemo(
     if raw_errts is not None:
         stages.append(("desc-errts", raw_errts))
 
+    from nirspipe.qc.metrics import long_short_channels
+
+    def _long_only(raw: mne.io.Raw) -> mne.io.Raw:
+        """The stage measured where the verdict lives, or unchanged with nothing to drop.
+
+        Long channels only, so these panels answer the question the metrics table above
+        them answers. A retained short channel is also its own regressor, so its residual
+        is zero and would drag a mean over channels down by tens of dB.
+        """
+        names, _ = long_short_channels(raw, sep_bands)
+        if not names or len(names) == len(raw.ch_names):
+            return raw
+        return raw.copy().pick(names)
+
     if len(stages) > 1:
-        from nirspipe.qc.metrics import (
-            comparable_stage_metrics, long_short_channels,
-        )
-
-        def _long_only(raw: mne.io.Raw) -> mne.io.Raw:
-            """The stage measured where the verdict lives, or unchanged with nothing to drop.
-
-            Long channels only, so these panels answer the question the metrics table above
-            them answers.
-            """
-            names, _ = long_short_channels(raw, sep_bands)
-            if not names or len(names) == len(raw.ch_names):
-                return raw
-            return raw.copy().pick(names)
+        from nirspipe.qc.metrics import comparable_stage_metrics
 
         with _guard("Denoising stage metrics", errors, subject):
             design = _filter_design(stages)
@@ -833,11 +836,13 @@ def _section_haemo(
 
     if psd:
         with _guard("PSD figure", errors, subject):
+            # the first stage and the last, which is what the analysis reads
             fig_psd_custom = psd_figure(
-                raw_haemo_cut, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+                _long_only(raw_haemo_cut), l_freq=l_freq, h_freq=h_freq, fmax=2.0,
                 cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
                 resp=(config.resp_l_freq, config.resp_h_freq),
-                stages=psd_stages_cut)
+                stages=([(label, _long_only(raw)) for label, raw in psd_stages_cut[-1:]]
+                        if psd_stages_cut else None))
             psd_panel_path, psd_panel_h = _save_plotly_html(
                 fig_psd_custom, figures_dir / fig_name("psd"))
     return {
@@ -847,7 +852,8 @@ def _section_haemo(
         "stage_banded": stage_banded,
         "stage_no_kept": stage_no_kept,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
-        "psd_stage_labels": [label for label, _ in (psd_stages or [])],
+        # the figure draws the first stage and the last one only
+        "psd_stage_labels": [label for label, _ in (psd_stages or [])][-1:],
         # the caption names the same two bands `physio_bands` shades and the band scalars
         # integrate over, read off the config so it cannot name a band the run did not use
         "psd_cardiac_band": (config.cardiac_l_freq, config.cardiac_h_freq),

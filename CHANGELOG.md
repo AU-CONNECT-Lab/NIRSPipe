@@ -43,8 +43,10 @@ All notable changes to this project will be documented in this file.
 - Software versions print as a compact three-column table
 - The subject report's per-channel table has one row per channel pair, SNR, CV and Spike printing both wavelengths; the TSV stays per wavelength
 - Seed and ALFF flat maps put HbO and HbR in rows; seeds run across, four to a row
+- The PSD figures draw only the first stage and the last, on long channels; a short channel's own page leaves out its residual
 
 ### Fixed
+- The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero
 - A condition page of a montage without short channels prints its metrics in one column, as the run page does
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
 - GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run

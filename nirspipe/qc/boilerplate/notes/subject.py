@@ -104,19 +104,16 @@ NOTES = {
         "above the channel&rsquo;s run mean, light below it, and the higher-contrast "
         "stretch is the noisier one.",
     "psd.stages":
-        "One row per stage file on disk, HbO and HbR together in each. Coloured bands: "
-        "Mayer wave (~0.1&thinsp;Hz){bands}. Faint lines are the individual channels "
-        "behind each row&rsquo;s mean; dashed verticals mark the filter cutoffs.",
+        "Long channels, HbO and HbR in each row, with single channels faint behind the mean. "
+        "Shaded: Mayer wave (~0.1&thinsp;Hz){bands}. Dashed verticals mark the filter cutoffs.",
     "psd.band_resp": ", respiration ({lo}–{hi}&thinsp;Hz)",
     "psd.band_cardiac": ", cardiac ({lo}–{hi}&thinsp;Hz)",
-    "psd.stage_list": "Stages after <code>desc-preproc</code>: {stages}.",
+    "psd.stage_list":
+        "The top row is <code>desc-preproc</code>, before any filtering; the bottom row is "
+        "{stages}, the signal the analysis reads.",
     "psd.errts":
-        "<code>desc-errts</code> is the regression residual: confounds only in denoise and "
-        "rest, the task model as well in glm. Short-channel and aux regressors remove "
-        "in-band systemic power, so a dip at Mayer or respiration frequencies is expected; "
-        "where only a drift basis was regressed and a high-pass ran, this row should sit "
-        "on top of the one above. Where no high-pass ran, this row carries the whole "
-        "detrend.",
+        "<code>desc-errts</code> is the regression residual, so a dip at the Mayer or "
+        "respiration frequencies is the short-channel and aux regressors at work.",
     "psd.simulated":
         "No post-processing output was found for this run; when a passband was set, the "
         "second row is that bandpass simulated in memory rather than a file the pipeline "
@@ -129,7 +126,9 @@ NOTES = {
         "This cut holds fewer samples than the transform, so no spectrum is drawn here. The "
         "run's own page carries the spectrum, and the PSP row above is sliced to this "
         "condition.",
-    "psd_detail.picker": "Select a channel to compare its PSD across the stages.",
+    "psd_detail.picker":
+        "Select a channel. A short channel's page has no residual row: as a regressor, its "
+        "residual is zero.",
     "epoch.timeline":
         "Every event on one axis, one row per condition plus one for all of them. The "
         "averages below cannot show a condition that stopped being delivered partway "

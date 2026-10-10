@@ -1,10 +1,9 @@
-"""The PSD figures draw each stage on its own row, and the filter they draw is the filter that ran."""
+"""The PSD figures draw the first stage and the last on their own rows, long channels only."""
 
 import numpy as np
 import pytest
 
-from nirspipe.cli.run import mode_defaults
-from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, SYSTEMIC_FREQ
+from tests._fingerprint import CLI_ARGS, SYSTEMIC_FREQ
 from tests.figure_accuracy._payload import one_figure
 from tests.figure_accuracy._read import traces, xy
 
@@ -34,14 +33,14 @@ def psd(denoise_run):
 
 
 def test_each_row_says_which_stage_it_is(psd):
-    for axis, label in (("x", "Before bandpass"), ("x2", "After bandpass"), ("x3", "desc-errts")):
+    for axis, label in (("x", "Before bandpass"), ("x2", "desc-errts")):
         assert traces(psd, "HbO", axis)[0]["hovertemplate"].startswith(label)
 
 
-def test_the_rows_hold_the_kept_channels_and_not_the_rejected_one(denoise_run, psd):
+def test_the_rows_hold_the_kept_long_channels_and_not_the_rejected_one(denoise_run, psd):
     truth = denoise_run.truth
-    lines = _channel_lines(psd, "x3")
-    assert len(lines) == sum(not p.bad for p in truth.pairs)
+    lines = _channel_lines(psd, "x2")
+    assert len(lines) == sum(not p.bad for p in truth.long_pairs)
     found = set()
     for line in lines:
         peak = _peak(line)
@@ -51,23 +50,16 @@ def test_the_rows_hold_the_kept_channels_and_not_the_rejected_one(denoise_run, p
     assert found == {p.name for p in truth.long_pairs if not p.bad}
 
 
+def test_no_channel_on_the_residual_row_sits_at_the_numerical_floor(psd):
+    # a retained short channel is its own regressor; its zero residual would sink the mean
+    for line in _channel_lines(psd, "x2") + _channel_lines(psd, "x2", colour="#3498db"):
+        assert np.median(xy(line)[1]) > -250
+
+
 def test_the_systemic_peak_is_on_the_rows_before_regression_and_not_after(psd):
     before = _db_at(traces(psd, "HbO", "x")[0], SYSTEMIC_FREQ)
-    after = _db_at(traces(psd, "HbO", "x3")[0], SYSTEMIC_FREQ)
+    after = _db_at(traces(psd, "HbO", "x2")[0], SYSTEMIC_FREQ)
     assert before - after > 15
-
-
-def test_the_drawn_filter_response_is_the_attenuation_the_filter_produced(psd):
-    before, after = traces(psd, "HbO", "x")[0], traces(psd, "HbO", "x2")[0]
-    response = traces(psd, "Filter response")[0]
-    fx = xy(response)[0]
-    drawn = np.asarray(response["text"], dtype=float)
-    low_pass = mode_defaults("denoise")["low_pass"]
-    # deeper in the stopband the measured ratio stops at the Welch window's leakage floor
-    for freq, tolerance in ((0.3, 1.0), (0.9 * low_pass, 3.0), (low_pass, 3.0),
-                            (1.2 * low_pass, 3.0), (CARDIAC_FREQ, 10.0)):
-        measured = _db_at(after, freq) - _db_at(before, freq)
-        assert measured == pytest.approx(drawn[np.argmin(np.abs(fx - freq))], abs=tolerance), freq
 
 
 def test_the_bands_are_the_ones_the_run_was_given(psd):
@@ -82,7 +74,7 @@ def test_each_pair_page_draws_its_own_pair(denoise_run):
             continue
         fig = one_figure(denoise_run.figure("psddetail", chan=pair.name.replace("_", "")))
         # before regression the shared systemic peak can outweigh a small pair's own
-        assert _peak(_channel_lines(fig, "x3")[0]) == pytest.approx(pair.hbo_freq, abs=0.005)
-        before = _db_at(_channel_lines(fig, "x2")[0], SYSTEMIC_FREQ)
-        after = _db_at(_channel_lines(fig, "x3")[0], SYSTEMIC_FREQ)
+        assert _peak(_channel_lines(fig, "x2")[0]) == pytest.approx(pair.hbo_freq, abs=0.005)
+        before = _db_at(_channel_lines(fig, "x")[0], SYSTEMIC_FREQ)
+        after = _db_at(_channel_lines(fig, "x2")[0], SYSTEMIC_FREQ)
         assert before - after > 15
