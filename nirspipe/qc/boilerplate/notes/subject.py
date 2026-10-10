@@ -226,6 +226,9 @@ NOTES = {
     "metrics.stages_unbanded":
         "No passband was requested, so every panel is measured on each stage as stored and "
         "differences across a filtering step should be read with that in mind.",
+    "metrics.stages_no_kept_time":
+        "No frame of {stages} lies outside a BAD_ span, and a spectrum is taken over kept "
+        "frames only, so the respiration, cardiac and drift band panels are left out there.",
     "metrics.stages_greyed":
         "The greyed panels are not quality claims: they show what left the recording. "
         "Direction is marked only across the whole chain, never on a single step, since a step "

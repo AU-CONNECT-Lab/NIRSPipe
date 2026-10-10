@@ -16,7 +16,7 @@ import pandas as pd
 
 from nirspipe.exceptions import StageError
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans, span_kind
+from nirspipe.utils.spans import bad_spans, frames_under, span_kind
 
 logger = get_logger("pipeline.glm_censored")
 
@@ -26,11 +26,7 @@ MIN_FRAMES_PER_REGRESSOR = 3
 
 def kept_frames(raw: mne.io.BaseRaw) -> np.ndarray:
     """Per frame, whether it lies outside every ``BAD_`` span, of either kind."""
-    times = raw.times
-    keep = np.ones(len(times), dtype=bool)
-    for start, stop, _ in bad_spans(raw):
-        keep &= ~((times >= start) & (times < stop))
-    return keep
+    return ~frames_under(raw, bad_spans(raw))
 
 
 def ar_order(noise_model: str, sfreq: float) -> int:
@@ -227,11 +223,9 @@ def events_left(events: pd.DataFrame, spans) -> dict[str, dict[str, int]]:
 
 def censor_summary(raw: mne.io.BaseRaw, keep: np.ndarray) -> dict[str, Any]:
     """What left the fit, by frames: the share per kind, the span count, the kept frames."""
-    times = raw.times
     spans = bad_spans(raw)
-    by_kind = {kind: np.zeros(len(times), dtype=bool) for kind in ("unselected", "corrupted")}
-    for start, stop, desc in spans:
-        by_kind[span_kind(desc)] |= (times >= start) & (times < stop)
+    by_kind = {kind: frames_under(raw, [s for s in spans if span_kind(s[2]) == kind])
+               for kind in ("unselected", "corrupted")}
     return {
         "censored_frac": float(1 - keep.mean()),
         "censored_unselected_frac": float(by_kind["unselected"].mean()),

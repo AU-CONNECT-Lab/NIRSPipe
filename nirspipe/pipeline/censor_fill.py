@@ -13,7 +13,7 @@ from scipy.interpolate import CubicSpline
 from nirspipe.exceptions import StageError
 from nirspipe.utils.lineage import stamp
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans, span_kind
+from nirspipe.utils.spans import bad_spans, frames_under, span_kind
 
 logger = get_logger("pipeline.censor_fill")
 
@@ -32,12 +32,7 @@ def corrupted_mask(raw: mne.io.BaseRaw) -> np.ndarray:
 
       10 Hz, BAD_gvtd 1.0-1.3 s, BAD_unselected 0-0.5 s  ->  True at samples 10, 11, 12 only
     """
-    times = raw.times
-    gap = np.zeros(len(times), dtype=bool)
-    for start, stop, desc in bad_spans(raw):
-        if span_kind(desc) == "corrupted":
-            gap |= (times >= start) & (times < stop)
-    return gap
+    return frames_under(raw, [s for s in bad_spans(raw) if span_kind(s[2]) == "corrupted"])
 
 
 def _lomb_reconstruction(x: np.ndarray, keep: np.ndarray, sfreq: float) -> np.ndarray:

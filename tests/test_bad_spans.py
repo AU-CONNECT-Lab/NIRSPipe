@@ -14,6 +14,8 @@ from nirspipe.cli.workflows import run_participant_level
 from nirspipe.exceptions import AlignmentError
 from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.glm import run_glm_pipeline
+from nirspipe.pipeline.censor_fill import corrupted_mask
+from nirspipe.pipeline.glm_censored import censor_summary, kept_frames
 from nirspipe.pipeline.hyper.alignment import align_recordings, onset_residuals
 from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from nirspipe.pipeline.restingstate import compute_alff
@@ -22,6 +24,8 @@ from nirspipe.qc.common.windows import condition_windows
 from nirspipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_figure
 from nirspipe.qc.metrics import gvtd_censor_spans
 from nirspipe.qc.metrics._helpers import epochable_events, long_short_channels
+from nirspipe.qc.metrics.aggregate import comparable_stage_metrics
+from nirspipe.qc.metrics.haemo import _band_mean
 from nirspipe.qc.metrics.windowed import task_scope_windows
 from nirspipe.qc.subject.sqm_record import _condition_cnr
 from nirspipe.utils.lineage import lineage_of
@@ -90,6 +94,72 @@ def test_a_run_marked_only_with_bad_spans_has_nothing_to_epoch():
     raw = _hbo_raw(np.zeros(int(SFREQ * 100)), [10.0], [20.0], ["BAD_gvtd"])
     events, _ = epochable_events(raw, -5.0, 25.0)
     assert len(events) == 0
+
+
+# ---- report stage metrics ----
+
+def _noise_haemo(spans=()):
+    data = np.random.default_rng(0).standard_normal((2, int(SFREQ * 300))) * 1e-6
+    info = mne.create_info(["S1_D1 hbo", "S1_D1 hbr"], SFREQ, ["hbo", "hbr"])
+    raw = mne.io.RawArray(data, info, verbose="error")
+    raw.set_meas_date(datetime(2026, 1, 1, tzinfo=timezone.utc))
+    raw.set_annotations(mne.Annotations([s[0] for s in spans], [s[1] for s in spans],
+                                        ["BAD_unselected"] * len(spans)))
+    return raw
+
+
+def _stage_metrics(raw):
+    return comparable_stage_metrics([("a", raw), ("b", raw.copy())], 0.01, None,
+                                    0.7, 2.0, 0.1, 0.5)
+
+
+@pytest.mark.parametrize("onset", [0.0, 1e-12])      # a cropped cut lands a hair past 0
+def test_stage_metrics_of_a_cut_wholly_under_a_bad_span_leave_out_the_spectra(onset):
+    metrics = _stage_metrics(_noise_haemo([(onset, 300.0)]))
+    assert metrics["no_kept_time"] == ["a", "b"]
+    assert "resp_band_power_hbo" not in metrics["quality"]
+    assert not metrics["removed"]
+    assert "hbo_hbr_corr_mean" in metrics["quality"]
+
+
+def test_stage_spectra_without_a_span_are_unchanged():
+    raw = _noise_haemo()
+    metrics = _stage_metrics(raw)
+    assert metrics["no_kept_time"] == []
+    psd = raw.compute_psd(verbose=False)
+    freqs, hbo = psd.freqs, psd.get_data(picks="hbo")
+    assert metrics["quality"]["resp_band_power_hbo"][0] == _band_mean(freqs, hbo, 0.1, 0.5)
+    assert metrics["removed"]["drift_band_power_hbo"][0] == _band_mean(freqs, hbo, 0.0, 0.01)
+
+
+
+def _mne_kept(raw):
+    _, times = raw.get_data(reject_by_annotation="omit", return_times=True, verbose=False)
+    kept = np.zeros(raw.n_times, dtype=bool)
+    kept[np.round(times * raw.info["sfreq"]).astype(int)] = True
+    return kept
+
+
+def test_kept_frames_round_span_edges_as_mne_does():
+    raw = _hbo_raw(np.zeros(int(SFREQ * 100)), [20.04], [10.0], ["BAD_x"])
+    np.testing.assert_array_equal(kept_frames(raw), _mne_kept(raw))
+
+
+def test_every_span_mask_takes_mne_frames_on_a_cropped_odd_rate_recording():
+    sfreq = 4.975124378109454
+    info = mne.create_info(["S1_D1 hbo"], sfreq, "hbo")
+    raw = mne.io.RawArray(np.zeros((1, 5000)), info, verbose="error")
+    raw.set_meas_date(datetime(2026, 1, 1, tzinfo=timezone.utc))
+    raw.set_annotations(mne.Annotations([100.13, 300.0, 512.77], [50.31, 400.0, 33.33],
+                                        ["BAD_gvtd", "BAD_unselected", "BAD_gvtd"]))
+    for cut in (raw, raw.copy().crop(120.0, 900.0)):
+        kept = _mne_kept(cut)
+        np.testing.assert_array_equal(kept_frames(cut), kept)
+        corrupted = corrupted_mask(cut)
+        assert not (corrupted & kept).any()
+        summary = censor_summary(cut, kept_frames(cut))
+        assert summary["kept_frames"] == kept.sum()
+        assert summary["censored_corrupted_frac"] == corrupted.mean()
 
 
 # ---- condition windows ----

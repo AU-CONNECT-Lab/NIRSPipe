@@ -1,5 +1,7 @@
 """Per-condition shares and assessments leave out BAD_ windows; the dyad screening page too."""
 
+import re
+
 import numpy as np
 import pytest
 
@@ -82,6 +84,16 @@ def test_a_condition_wholly_inside_spans_is_kept_but_not_assessed(tmp_path):
 
     (page,) = out.rglob("*_cond-cb_report.html")
     assert "so it is not assessed" in page.read_text(encoding="utf-8")
+
+
+def test_an_unassessed_condition_claims_no_failing_count(tmp_path):
+    out, _ = _by_condition(tmp_path, 200, "--by-condition")
+    (page,) = out.rglob("*_cond-cb_report.html")
+    text = page.read_text(encoding="utf-8")
+    assert not re.search(r'class="badge-\w+">0/\d+ \(0%\)<', text)
+    assert re.search(r"Failing in this condition</th>\s*<td>n/a</td>", text)
+    (assessed,) = out.rglob("*_cond-ca_report.html")
+    assert re.search(r'class="badge-\w+">\d+/\d+ \(\d+%\)<', assessed.read_text(encoding="utf-8"))
 
 
 # ---- the dyad screening page ----

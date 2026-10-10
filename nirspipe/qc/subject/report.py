@@ -778,6 +778,7 @@ def _section_haemo(
     stage_metrics_path = None
     stage_metrics_h = 0
     stage_banded = False
+    stage_no_kept: "list[str]" = []
     stages = [("desc-preproc", raw_haemo)]
     stages += [(label, raw) for label, raw in (psd_stages or [])
                if label == "desc-filtered" and "hbo" in raw.get_channel_types()]
@@ -820,6 +821,7 @@ def _section_haemo(
             # the rows are band-limited either way; `banded` only reports whether that
             # function did it, and here it was done before the cut instead
             stage_banded = banded_here or bool(stage_metrics["banded"])
+            stage_no_kept = stage_metrics["no_kept_time"]
             fig = stage_metrics_figure(stage_metrics["labels"],
                                        denoise_stage_panels(stage_metrics))
             if fig is not None:
@@ -840,6 +842,7 @@ def _section_haemo(
         "hbo_hbr_h":      hbo_hbr_h,
         "stage_metrics_path": stage_metrics_path, "stage_metrics_h": stage_metrics_h,
         "stage_banded": stage_banded,
+        "stage_no_kept": stage_no_kept,
         "psd_panel_path": psd_panel_path, "psd_panel_h": psd_panel_h,
         "psd_stage_labels": [label for label, _ in (psd_stages or [])],
         # the caption names the same two bands `physio_bands` shades and the band scalars

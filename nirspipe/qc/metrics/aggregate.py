@@ -176,7 +176,8 @@ def comparable_stage_metrics(
     dict
         ``labels``, ``banded``, ``quality`` and ``removed`` ({key: value per stage}),
         ``variance_remaining``, the median share of the first stage's per-channel variance
-        still present at each stage, and ``hbo_hbr_corr_per_channel``, one dict per stage.
+        still present at each stage, ``hbo_hbr_corr_per_channel``, one dict per stage, and
+        ``no_kept_time``, the stages a ``BAD_`` span covers whole, which get no spectrum.
     """
     labels = [label for label, _ in stages]
     raws = [raw for _, raw in stages]
@@ -201,8 +202,12 @@ def comparable_stage_metrics(
     # is what the recording lost, so it belongs with the quality rows.
     resp_lo = max(resp_l_freq, l_freq) if l_freq else resp_l_freq
     resp_hi = min(resp_h_freq, h_freq) if h_freq else resp_h_freq
+    # compute_psd keeps only frames outside BAD_ spans, by mne's own edge rounding, so a
+    # stage those spans cover whole has no spectrum
+    kept = [r.get_data(picks=[0], reject_by_annotation="omit", verbose=False).shape[1] > 0
+            for r in raws]
     # one spectrum per stage, shared by the two bands read off it below
-    psds = ([r.compute_psd(verbose=False) for r in raws]
+    psds = ([r.compute_psd(verbose=False) if k else None for r, k in zip(raws, kept)]
             if resp_lo < resp_hi or l_freq else [])
     if resp_lo < resp_hi:
         in_band = [_band_power(p, "hbo", resp_lo, resp_hi) for p in psds]
@@ -214,7 +219,8 @@ def comparable_stage_metrics(
     # recording is
     removed: dict[str, list] = {}
     spectral = [_spectral_metrics(r, cardiac_l_freq, cardiac_h_freq,
-                                  resp_l_freq, resp_h_freq) for r in raws]
+                                  resp_l_freq, resp_h_freq) if k else {}
+                for r, k in zip(raws, kept)]
     cardiac = [s.get("cardiac_band_power_hbo") for s in spectral]
     if any(isinstance(v, (int, float)) for v in cardiac):
         removed["cardiac_band_power_hbo"] = cardiac
@@ -226,12 +232,13 @@ def comparable_stage_metrics(
     return {"labels": labels, "banded": banded, "quality": quality, "removed": removed,
             "variance_remaining": _variance_remaining(raws),
             "hbo_hbr_corr_per_channel": [h.get("hbo_hbr_corr_per_channel") or {}
-                                         for h in haemo]}
+                                         for h in haemo],
+            "no_kept_time": [label for label, k in zip(labels, kept) if not k]}
 
 
 def _band_power(psd, chroma: str, fmin: float, fmax: float) -> "float | None":
     """Mean PSD density in [fmin, fmax] of one stage's spectrum, as ``_spectral_metrics`` takes it."""
-    if chroma not in psd.get_channel_types():
+    if psd is None or chroma not in psd.get_channel_types():
         return None
     return _band_mean(psd.freqs, psd.get_data(picks=chroma), fmin, fmax)
 

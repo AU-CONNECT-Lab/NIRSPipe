@@ -62,6 +62,13 @@ details > summary::before {
 }
 details[open] > summary::before { transform: rotate(90deg); }
 .details-body { padding: 0.75rem 0 0; }
+
+/* ---- flat steps: the same heading and rule as a step above, without the fold ---- */
+.step { margin-bottom: 1.5rem; }
+.step-title {
+  font-size: 0.98rem; font-weight: 600; color: var(--ink); margin: 0;
+  padding: 0.3rem 0 0.35rem; border-bottom: 1px solid var(--rule-soft);
+}
 .step-desc { color: var(--muted); margin: 0 0 0.75rem; }
 .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
            margin-top: 0.5rem; }

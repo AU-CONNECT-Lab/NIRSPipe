@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import mne
+import numpy as np
 
 from nirspipe.utils.logging import get_logger
 
@@ -50,6 +51,23 @@ def bad_spans(raw: mne.io.BaseRaw) -> list[tuple[float, float, str]]:
         if stop > start:
             out.append((start, stop, str(desc)))
     return out
+
+
+def frames_under(raw: mne.io.BaseRaw, spans) -> np.ndarray:
+    """Per frame, whether it lies under any ``(start, stop, ...)`` span on the data axis.
+
+    ::
+
+      10 Hz, a span 2.04-3.04 s  ->  True at samples 20 to 29
+
+    Each edge is rounded to the nearest sample, as mne's ``reject_by_annotation`` rounds it,
+    so these frames are the ones epochs and spectra leave out.
+    """
+    sfreq = float(raw.info["sfreq"])
+    under = np.zeros(raw.n_times, dtype=bool)
+    for start, stop, *_ in spans:
+        under[max(int(np.round(start * sfreq)), 0):int(np.round(stop * sfreq))] = True
+    return under
 
 
 def merged(intervals) -> list[tuple[float, float]]:

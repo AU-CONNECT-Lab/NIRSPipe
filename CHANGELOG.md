@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - A channel with no finite sample gets NaN fALFF instead of 0
 - A condition's CNR keeps a `BAD_` span starting before it, so the epochs it covers still drop
 - A recording whose only annotations are `BAD_` spans no longer stops the subject report
+- A condition wholly inside `BAD_` spans keeps its denoising-stage panels, without the spectral ones, and shows n/a failing
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 
