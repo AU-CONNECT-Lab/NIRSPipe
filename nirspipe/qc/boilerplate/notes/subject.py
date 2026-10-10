@@ -196,11 +196,8 @@ NOTES = {
         "instead of being stretched to fill its own scale. One model over the whole recording, "
         "so every condition here rests on the same channel set. Select a condition.",
     "metrics.intro":
-        'Hover a metric for what it means, which way is good and what it was measured on. '
-        '<span class="ql-dot" aria-hidden="true">&#9679;</span> marks the ones that decide '
-        'whether the run is usable. A pair written <b>a &rarr; b</b> is one metric '
-        'measured either side of a processing step; a single number is a metric with no '
-        'second side on this page.',
+        "Hover a label for its definition. Bold labels are the ones that decide whether the run "
+        "is usable. Where a cell holds two values, they are before and after a processing step.",
     "metrics.long_only":
         "Long channels only: the channels outside both separation ranges are left out of "
         "these averages and listed in their own block of the per-channel table below.",
@@ -214,25 +211,20 @@ NOTES = {
         "On this page every value is this condition's, and the channel sets are the run's, "
         "since one montage has to serve every condition.",
     "metrics.stages":
-        "One panel per metric, each on its own scale, measured on the long channels alone: a "
-        "short channel is a regressor rather than a measurement, and an average over both "
-        "describes neither.",
+        "One panel per metric on the long channels, each on its own scale. Short channels are "
+        "left out because they serve as regressors.",
     "metrics.stages_banded":
-        "The HbO&ndash;HbR, GCOR and CNR panels are recomputed with the analysis passband "
-        "applied at every stage, so those columns measure the same thing; variance "
-        "remaining is measured as stored, so it falls across the bandpass by construction. "
-        "They will not match the per-stage values in the metrics table, which are measured "
-        "on each stage as stored.",
+        "HbO&ndash;HbR, GCOR and CNR are recomputed in the analysis passband at every stage, so "
+        "they will not match the per-stage values in the table above. Variance remaining is "
+        "measured as stored and drops across the bandpass by design.",
     "metrics.stages_unbanded":
-        "No passband was requested, so every panel is measured on each stage as stored and "
-        "differences across a filtering step should be read with that in mind.",
+        "No passband was requested, so every panel is measured on each stage as stored.",
     "metrics.stages_no_kept_time":
         "No frame of {stages} lies outside a BAD_ span, and a spectrum is taken over kept "
         "frames only, so the respiration, cardiac and drift band panels are left out there.",
     "metrics.stages_greyed":
-        "The greyed panels are not quality claims: they show what left the recording. "
-        "Direction is marked only across the whole chain, never on a single step, since a step "
-        "can move a metric for reasons that are not quality.",
+        "Grey panels show what left the recording, not quality, and direction is marked only "
+        "across the whole chain.",
     "metrics.motion_unsplit_long":
         "Optical density. GVTD, the spike counts and the correction footprint are measured on "
         "long channels only.",
@@ -252,21 +244,20 @@ NOTES = {
         "is the exception, being an average over the set, and is the one column two rows "
         "can be compared on.",
     "metrics.gvtd_sets_columns":
-        "Each channel set is measured on its own rather than regrouped: GVTD is an RMS across "
-        "the set&rsquo;s channels with its own cutoff, and a frame count asks how many of "
-        "<i>that set&rsquo;s</i> channels were flagged at once, a bar a smaller set clears "
-        "more easily. <b>The three values in a row do not compare.</b> Corrected per channel "
-        "is the exception, being an average over the set.",
+        "Each channel set is measured on its own, with its own GVTD cutoff and its own share of "
+        "flagged channels, so <b>the three values in a row do not compare.</b> Corrected per "
+        "channel is an average over the set.",
     "metrics.motion_arrow":
-        "An arrow is the value before&nbsp;&rarr;&nbsp;after motion correction.",
+        "Two values are before and after motion correction.",
     "metrics.gvtd_set_help":
         "Long is the set the verdict is read off and the only one coloured. Each set is its own "
         "measurement rather than a grouping of one, with its own GVTD cutoff and its own bar "
         "of {pct:g}% of the channels. Corrected per channel is the exception, an average over "
         "the set.",
     "metrics.motion_extra_split":
-        "A value spanning the three columns has no channel set: the motion sensor is not "
-        "optical data, and censoring names the set <code>--gvtd-censor</code> gave it.",
+        "A value in the All column with Long and Short blank belongs to no channel set: the "
+        "motion sensor is not optical data, and censoring uses its own set "
+        "(<code>--gvtd-censor</code>).",
     "metrics.motion_extra_long":
         "Counted on <b>long channels</b>: the frame rows count a timepoint when at least "
         "{pct:g}% of the set was flagged, while Spike count and Spike % count "
@@ -275,39 +266,29 @@ NOTES = {
         "Counted on every channel: the frame rows count a timepoint when at least {pct:g}% "
         "of the set was flagged, while Spike count and Spike % count channel-samples.",
     "metrics.haemo_timing_long":
-        "Measured after Beer-Lambert. An arrow in the Long column is that value "
-        "before&nbsp;&rarr;&nbsp;after denoising, on long channels; All and Short are before "
-        "denoising only. The regression rows are the exception: they straddle the confound "
-        "regression alone, so their before side is the bandpassed signal and differs from the "
-        "Global corr row above them.",
+        "In the Long column, two values are before and after denoising; All and Short show the "
+        "value before denoising. The regression rows cover the confound regression alone, so "
+        "their first value is the bandpassed signal and differs from the row above.",
     "metrics.haemo_timing_every":
-        "Measured after Beer-Lambert: what the denoising did, not what the recording "
-        "arrived as. The global correlations&rsquo; before side is the bandpassed signal "
-        "rather than the unfiltered one.",
+        "Measured after Beer-Lambert. The global correlations start from the bandpassed signal, "
+        "not the unfiltered one.",
     "metrics.no_drift":
         "Low-frequency drift is not among these: it grows with the span it is fitted over. The "
         "run's own page carries it.",
     "metrics.per_channel":
-        "Grouped by source-detector separation, every block screened by the same criteria, "
-        "so a short channel marked BAD should not be used as a regressor. Screening counts "
-        "the windows in which SCI and PSP both pass, so a row can be BAD with a passing "
-        "whole-run SCI; channels rejected by hand show as BAD too.",
+        "Screening counts the windows in which SCI and PSP both pass, so a channel can be BAD "
+        "with a passing whole-run SCI. Channels rejected by hand also show as BAD, and a BAD "
+        "short channel is left out of the regressors.",
     "channel_summary":
-        "Per-channel pass/fail, long channels then short ones. Green&nbsp;=&nbsp;pass, "
-        "red&nbsp;=&nbsp;fail, grey&nbsp;=&nbsp;missing data. Only Status rejects a "
-        "channel: it fails when the Coupled share, the windows in which SCI "
-        "(<code>--sci-threshold</code> {sci}) and PSP both pass, falls below "
-        "<code>--min-good-frac</code>, or when the channel was rejected by hand. The other "
-        "rows are reported, not enforced; every row is coloured against this run&rsquo;s "
-        "lines.",
+        "Green pass, red fail, grey missing. Only Status rejects a channel: it fails when the "
+        "share of windows where SCI (<code>--sci-threshold</code> {sci}) and PSP both pass is "
+        "below <code>--min-good-frac</code>, or when the channel was rejected by hand. The other "
+        "rows are for reference.",
     "condition_summary":
-        "Each condition page's channel grid, regrouped so one metric's conditions sit in "
-        "adjacent rows: a channel that fails in one condition only shows as a lone red cell "
-        "in its column. Same cells and cutoffs as the condition pages (<code>--sci-threshold"
-        "</code> {sci}), except the first block: <b>In condition</b> says whether each channel "
-        "passes on that condition's stretch alone, a channel rejected by hand failing "
-        "everywhere. It is a guide to choosing conditions and rejects nothing; Status on each "
-        "condition page is the run's.",
+        "The condition pages&rsquo; channel grids in one figure, one metric&rsquo;s conditions on "
+        "adjacent rows, same cutoffs (<code>--sci-threshold</code> {sci}). <b>In condition</b> "
+        "says whether a channel passes within that condition alone; a channel rejected by hand "
+        "fails everywhere. It rejects nothing, and Status on each condition page stays the run&rsquo;s.",
     "trial_qc":
         "Every trial window scored on its own, over {window}, on the intensity recording. "
         "Colour is relative within a row rather than a threshold: red marks the worse end of "

@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - The Channel Quality Summary prints its figure's file path like every other figure
 - The Haemoglobin group label says Long shows before → after denoising
 - A metric no channel set owns prints in the All column, leaving Long and Short blank
+- The subject report's metric, channel and condition notes are shorter
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
