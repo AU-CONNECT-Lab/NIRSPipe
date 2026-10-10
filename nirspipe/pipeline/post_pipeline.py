@@ -88,6 +88,8 @@ class PostConfig:
     fc:              bool                  = False
     # seconds outside every BAD_ span that FC and ALFF need; 0 computes them on any amount
     min_time:        float                 = 0.0
+    # a copy of the final residual with BAD_ frames set to each channel's kept mean
+    export_mean_filled: bool               = False
 
     # separation bands, in metres; see PrepConfig
     short_max_dist: float | None = None
@@ -488,10 +490,46 @@ def run_post(
                 raw_resid if raw_resid is not None else result,
                 config, output_dir, rec, source_entities=source_entities)
 
+    if config.export_mean_filled:
+        # the residual FC reads: the regression's, or the last stage when none ran
+        _write_mean_filled(raw_resid if raw_resid is not None else result, config, output_dir,
+                           rec, source_entities, known_spans)
+
     # GCOR around the confound regression is not measured here. Both of its stages are
     # written to disk and the SQM record measures each one per channel set, so the report
     # reads `filtered` -> `errts`.
     return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
+
+
+# what desc-meanfilled's sidecar says about the frames it altered
+MEAN_FILLED_DESCRIPTION = (
+    "The final residual with every frame inside a BAD_ span set to its channel's mean over "
+    "the frames outside them, annotations kept; for tools that read a continuous array and "
+    "ignore annotations. The filled frames are placeholders, not signal: do not compute ALFF, "
+    "fALFF or a GLM from this file.")
+
+
+def mean_filled(raw: mne.io.Raw) -> mne.io.Raw:
+    """A copy whose BAD_ frames hold each channel's mean over its kept frames, stamped ``meanfilled``.
+
+    ::
+
+      kept 1, 3 around a BAD_ frame  ->  1, 2, 3
+    """
+    keep = kept_frames(raw)
+    out = raw.copy().load_data()
+    if not keep.all():
+        out._data[:, ~keep] = out._data[:, keep].mean(axis=1, keepdims=True)
+    return stamp(out, stage="meanfilled", step="export_mean_filled", source=raw,
+                 mean_filled_s=round(float((~keep).sum() / raw.info["sfreq"]), 3))
+
+
+def _write_mean_filled(raw: mne.io.Raw, config: PostConfig, output_dir: Path, rec: Recorder,
+                       source_entities: "dict[str, str] | None",
+                       known_spans: "list[dict] | None") -> Path:
+    return _write_step_snirf(mean_filled(raw), config, output_dir, desc="meanfilled",
+                             rec=rec, source_entities=source_entities,
+                             known_spans=known_spans, description=MEAN_FILLED_DESCRIPTION)
 
 def _write_fc_derivatives(
     raw_resid: mne.io.Raw,
@@ -751,7 +789,7 @@ def _known_spans(source_path: Path | None) -> list[dict]:
     return sidecar["excluded_spans"]
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None) -> Path:
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None) -> Path:
     entities = carry_entities(source_entities)
     entities["desc"] = desc
     lin = lineage_of(haemo)
@@ -786,6 +824,7 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
     write_snirf(haemo, out_path)
     write_sidecar_json(out_path, {
+        **({"Description": description} if description else {}),
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
         "Sources": rec.sources_of(haemo),

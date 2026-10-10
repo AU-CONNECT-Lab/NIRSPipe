@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
 - The analysis page offers the fill method beside GVTD censoring
 - `--min-time` skips FC and ALFF for a run with less kept time; default 0, also on the analysis page
+- `--export-mean-filled` writes `desc-meanfilled`, the final residual with `BAD_` frames at each channel's kept mean; also on the analysis page
 
 ### Changed
 - **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run

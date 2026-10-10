@@ -265,6 +265,15 @@ def _preprocessing():
                                 placeholder="0 (off)"),
                       hint="FC and ALFF are skipped when less time lies outside the spans.",
                       id="an-min-time-wrap"),
+                html.Div(switches(dbc.Checklist(id="an-export-mean-filled",
+                                                options=[{"label": "Also write a mean-filled copy "
+                                                                   "(--export-mean-filled)",
+                                                          "value": "export"}],
+                                                value=[], switch=True),
+                                  hint="BAD_ frames at each channel's kept mean, for tools that "
+                                       "ignore annotations; not for ALFF or a GLM. Needs a "
+                                       "post mode."),
+                         id="an-export-mean-filled-wrap"),
             ),
          key="an-gvtd", open=False),
     )

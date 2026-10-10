@@ -25,7 +25,7 @@ _IDENTITY = frozenset({"sub", "ses", "task", "acq", "run", "group"})
 _DOMAIN = {
     "od": "od", "sci": "od", "motcorrected": "od",
     "preproc": "haemo", "filtered": "haemo", "resampled": "haemo",
-    "errts": "haemo", "errtsbroad": "haemo",
+    "errts": "haemo", "errtsbroad": "haemo", "meanfilled": "haemo",
 }
 
 

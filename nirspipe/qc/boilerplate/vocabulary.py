@@ -484,6 +484,7 @@ STEP_SUMMARY = {
     "glm_fit": "Per-channel model fit; rejected channels are flagged, not dropped.",
     "contrasts": "Contrast estimates derived from the fitted model.",
     "glm_residuals": "What the model left behind, once the fitted signal was removed.",
+    "export_mean_filled": "The final residual with every BAD_ frame set to its channel's kept mean, for tools that ignore annotations; not for ALFF or a GLM.",
     "glm_residuals_broadband": "The same confound regression on data that skipped the bandpass entirely, the drift model its only detrend, so fALFF keeps a full spectrum.",
     "alff": "Amplitude of low-frequency fluctuation, per channel.",
     "alff_roi": "Amplitude of low-frequency fluctuation averaged over each ROI's channels.",

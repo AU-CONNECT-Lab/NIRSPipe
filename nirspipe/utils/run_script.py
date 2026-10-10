@@ -72,6 +72,7 @@ def _build_script_text(
     screen_scope: str = "run",
     keep_spans_table: str | None = None,
     censor_fill: str = DEFAULT_CENSOR_FILL,
+    export_mean_filled: bool = False,
 ) -> str:
     dt_str = datetime.strptime(timestamp, RUN_TIMESTAMP_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
@@ -139,6 +140,8 @@ def _build_script_text(
     if mode:
         w('from nirspipe.pipeline.denoise import bandpass_filter, resample',
           'from nirspipe.pipeline.censor_fill import fill_corrupted')
+    if mode and export_mean_filled:
+        w('from nirspipe.pipeline.post_pipeline import MEAN_FILLED_DESCRIPTION, mean_filled')
     if mode in ("glm", "rest") or denoise_regress:
         w('from nirspipe.pipeline.glm import run_glm_pipeline')
     if mode == "rest" or denoise_regress:
@@ -427,6 +430,16 @@ def _build_script_text(
                 '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )
 
+        if export_mean_filled:
+            final = "raw_resid" if (denoise_regress or mode in ("glm", "rest")) else "result"
+            b(
+                '',
+                '# ----- block: export | the final residual, BAD_ frames at the channel kept mean -----',
+                f'_filled = mean_filled({final})',
+                'save_step(_filled, "meanfilled", "export_mean_filled", src,',
+                '          extra={"Description": MEAN_FILLED_DESCRIPTION})',
+            )
+
     for line in body:
         w(f'{i3}{line}' if line else '')
 
@@ -497,6 +510,7 @@ def write_run_script(
         filter_method=_pick("filter_method", DEFAULT_FILTER_METHOD),
         filter_order=_pick("filter_order", DEFAULT_FILTER_ORDER),
         censor_fill=_pick("censor_fill", DEFAULT_CENSOR_FILL),
+        export_mean_filled=bool(args.get("export_mean_filled")),
         resample_sfreq=args.get("resample_sfreq"),
         stim_dur=args.get("stim_dur"),
         hrf_model=_unwrap(args.get("hrf_model"), "spm"),

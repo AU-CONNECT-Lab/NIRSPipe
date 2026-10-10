@@ -230,6 +230,14 @@ def _build_parser() -> argparse.ArgumentParser:
                       help=f"Butterworth order, default {DEFAULT_FILTER_ORDER}, ignored by "
                            "--filter-method fir. Applied with filtfilt, so the effective rolloff "
                            "is twice this and the cutoff sits at -6 dB.")
+    post.add_argument("--export-mean-filled", action="store_true", default=None,
+                      help="Also write desc-meanfilled beside the final residual (desc-errts, "
+                           "or the last stage when no regression ran): the same data with "
+                           "every frame inside a BAD_ span set to its channel's mean over the "
+                           "frames outside them, annotations kept, for tools that read a "
+                           "continuous array and ignore annotations. Written whenever a mode "
+                           "runs, spans or none. Not for ALFF, fALFF or a GLM: the filled "
+                           "frames are placeholders.")
     post.add_argument("--censor-fill", choices=FILL_METHODS,
                       help=f"How corrupted BAD_ spans (every BAD_ span but BAD_unselected, "
                            f"such as BAD_gvtd) are filled before the bandpass, default "

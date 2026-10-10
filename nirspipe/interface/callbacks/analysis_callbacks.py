@@ -249,6 +249,8 @@ def _build_cli_args(opts: dict) -> list[str]:
         if (opts.get("gvtd_censor") not in (None, "off") and opts.get("min_time") is not None
                 and (mode == "rest" or opts.get("fc"))):
             args += ["--min-time", str(opts["min_time"])]
+        if opts.get("export_mean_filled"):
+            args += ["--export-mean-filled"]
         if opts.get("resample") is not None:
             args += ["--resample-sfreq", str(opts["resample"])]
         if opts.get("roi_mapping"):
@@ -312,6 +314,7 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-gvtd-n-std",        "value"),
     State("an-censor-fill",       "value"),
     State("an-min-time",          "value"),
+    State("an-export-mean-filled", "value"),
     State("an-motion-correction", "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
@@ -344,7 +347,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
                      short_max_dist, long_min_dist, long_max_dist,
                      epoch_tmin, epoch_tmax, epoch_chunk,
                      by_condition, gvtd_censor, gvtd_n_std, censor_fill, min_time,
-                     motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
+                     export_mean_filled, motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
                      hrf_model, noise_model, short_channel,
@@ -373,6 +376,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax, epoch_chunk=epoch_chunk,
         by_condition=bool(by_condition), gvtd_censor=gvtd_censor, gvtd_n_std=gvtd_n_std,
         censor_fill=censor_fill, min_time=min_time,
+        export_mean_filled=bool(export_mean_filled),
         motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
@@ -498,6 +502,7 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
     Output("an-gvtd-n-std-wrap",  "style"),
     Output("an-censor-fill-wrap", "style"),
     Output("an-min-time-wrap",    "style"),
+    Output("an-export-mean-filled-wrap", "style"),
     Output("an-drift-hp-wrap",    "style"),
     Output("an-drift-order-wrap", "style"),
     Input("an-gvtd-censor", "value"),
@@ -513,6 +518,7 @@ def hide_what_does_not_apply(censor, drift, mode, fc):
         _SHOWN if censor not in (None, "off") else _GONE,
         _SHOWN if censor not in (None, "off") and (mode == "rest" or (mode not in (None, "none") and fc))
         else _GONE,
+        _SHOWN if mode not in (None, "none") else _GONE,
         _SHOWN if drift == "cosine" else _GONE,
         _SHOWN if drift == "polynomial" else _GONE,
     )
