@@ -13,16 +13,16 @@
 
 .cd-chip{cursor:pointer;padding:.1rem .5rem;border-radius:3px;font-size:.78rem;
   font-weight:600;display:inline-block;min-width:4.2rem;text-align:center}
-.cd-chip.cd-unrated{background:#e9ecef;color:#6c757d}
-.cd-chip.cd-good{background:#d4edda;color:#155724}
-.cd-chip.cd-bad{background:#f8d7da;color:#721c24}
+.cd-chip.cd-unrated{background:var(--surface-head);color:var(--muted)}
+.cd-chip.cd-good{background:var(--ok-soft);color:var(--ok)}
+.cd-chip.cd-bad{background:var(--bad-soft);color:var(--bad)}
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 /* under the second line nirspipe-rate was given, apart from each member's own red */
-.cd-table td.rate-low{outline:2px dashed #e67e22;outline-offset:-3px}
+.cd-table td.rate-low{outline:2px dashed var(--warn);outline-offset:-3px}
 .cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
 /* one member's columns run into the next without it; a rule rather than a fill, so the
    cell colours the metrics carry are still the only colour in the table */
-.cd-table .sub-edge { border-left: 2px solid #d8dee5; }
+.cd-table .sub-edge { border-left: 2px solid var(--rule); }
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 

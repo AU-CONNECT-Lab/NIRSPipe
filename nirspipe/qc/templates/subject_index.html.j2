@@ -4,14 +4,14 @@
    all three are documents, not dashboards. Only what differs is here. #}
 {% block css %}
 {% include "_index.css" %}
-tr.ch-clean td { color: #b0bec5; }
-td.ch-bad { background: #fadbd8; color: #922b21; font-weight: 600; text-align: center; }
-td.ch-ok  { color: #cfd8dc; text-align: center; }
+tr.ch-clean td { color: var(--faint); }
+td.ch-bad { background: var(--bad-soft); color: var(--bad); font-weight: 600; text-align: center; }
+td.ch-ok  { color: var(--rule-table); text-align: center; }
 td.ch-n   { text-align: right; }
 .run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
-.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
+.run-links a { color: var(--faint); font-weight: 400; margin-right: 0.55rem; }
 /* the run the conditions were cut from reads as a heading for them, not as a sixth window */
-tr.cond-whole td { background: #f4f6f8; font-weight: 600; }
+tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
 {% endblock %}
 
 {# Navigation only: this page lists the runs rather than judging one, and a verdict belongs

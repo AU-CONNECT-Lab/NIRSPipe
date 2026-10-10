@@ -150,12 +150,11 @@ def subject_metric_rows(
       -> [{"key": "sci_win_mean", "label": "SCI (10 s windows)", "summary": "...",
            "key_metric": True, "cells": [{"text": "0.91", "cls": "qm-ok"}, ...]}]
 
-    Metric-major, which is not how the page prints it: :func:`subject_metric_tables` turns
-    it a quarter turn so a metric is a column, the arrangement the subject report's own
-    metrics section uses. Kept this way round here because the registry is read per metric.
+    Metric-major, the way the page prints it: a metric per row and a member per column, the
+    arrangement the subject report's own metrics section uses.
 
     No direction arrow. The subject report does not carry one either: which end is better is
-    the registry's and reaches the reader through the header's hover text, so a table cannot
+    the registry's and reaches the reader through the label's hover text, so a table cannot
     say one thing and a tooltip another.
     """
     rows = []
@@ -191,40 +190,30 @@ def subject_metric_tables(
     condition: bool = False,
     grid_window: "float | None" = None,
 ) -> list[dict]:
-    """One quality table per channel set.
+    """One block of the quality table per channel set.
 
     ::
 
-      -> [{"set": "Long",
-           "columns": [{"key", "label", "summary", "key_metric"}, ...],
-           "rows": [{"member": "sub-01", "cells": [{"text", "cls"}, ...]}, ...]}]
+      -> [{"set": "Long", "members": ["sub-01", "sub-02"],
+           "metrics": [{"key", "label", "summary", "key_metric",
+                        "cells": [{"text", "cls"}, ...]}, ...]}]
 
     ``by_set`` is ``{set_name: {subject_id: scalars}}``.
 
-    Three tables rather than three columns of one, because a set is a separate measurement
+    A block per set rather than a column per set, because a set is a separate measurement
     and not a grouping of the same one: GVTD is an RMS across the channels of its set, and
-    a long and a short retention rate are fractions of different montages. This is the
-    arrangement the subject report's own metrics section makes, so a reader moving between
-    a subject page and a dyad page reads one shape.
+    a long and a short retention rate are fractions of different montages. The columns are
+    the members, so the two numbers a dyad page is read for sit side by side.
 
     A montage with no short channel measures one set, and ``all`` and ``long`` are then the
-    same numbers printed twice; it gets a single unheaded table instead. That is also what
+    same numbers printed twice; it gets a single unheaded block instead. That is also what
     a caller with no split at all passes, under ``all``.
     """
     def _table(heading: str, data: dict) -> "dict | None":
         metrics = subject_metric_rows(data, subject_ids, sci_lines, condition, grid_window)
         if not metrics:
             return None
-        # a quarter turn: metric-major in, column-major out. One row per member is what the
-        # subject report's metrics section does with its channel sets, and the two pages are
-        # read against each other
-        return {
-            "set": heading,
-            "columns": [{k: m[k] for k in ("key", "label", "summary", "key_metric")}
-                        for m in metrics],
-            "rows": [{"member": sid, "cells": [m["cells"][i] for m in metrics]}
-                     for i, sid in enumerate(subject_ids)],
-        }
+        return {"set": heading, "members": list(subject_ids), "metrics": metrics}
 
     short = by_set.get("short") or {}
     if not any(short.values()):
@@ -232,6 +221,14 @@ def subject_metric_tables(
         return [one] if one else []
     return [t for t in (_table(heading, by_set.get(key) or {})
                         for key, heading in _CHANNEL_SETS) if t]
+
+
+def _members_only(table: dict, members: "list[str]") -> dict:
+    """One block of :func:`subject_metric_tables` cut down to the given members' columns."""
+    keep = [i for i, sid in enumerate(table["members"]) if sid in members]
+    return {**table,
+            "members": [table["members"][i] for i in keep],
+            "metrics": [{**m, "cells": [m["cells"][i] for i in keep]} for m in table["metrics"]]}
 
 
 def _record_window_matches(
@@ -1489,7 +1486,7 @@ def build_hyper_post_report(
         pair_ids = list(pair) if pair else subject_ids
         # a pairing page describes its own two members, not the whole group
         page_alignment = [r for r in alignment_rows if r["subject_id"] in pair_ids]
-        member_rows = [{**t, "rows": [r for r in t["rows"] if r["member"] in pair_ids]}
+        member_rows = [_members_only(t, pair_ids)
                        for t in (run_metric_rows if label is None
                                  else cond_metric_rows.get(label, []))]
         # One table per kind of pairing rather than one grid holding all three, so a table

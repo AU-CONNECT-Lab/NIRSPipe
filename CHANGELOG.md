@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - A condition with no signal in kept frames is dropped and named; a fit with fewer than three kept frames per regressor is refused
 - The saved design matrix gains a `censored` column; GLM and residual sidecars record kept frames, excluded shares and events left per condition
 - **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
+- QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
+- The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
 
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

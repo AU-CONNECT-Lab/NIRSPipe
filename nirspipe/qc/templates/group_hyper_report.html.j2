@@ -6,13 +6,13 @@
 .plot-frame { width: 100%; border: none; display: block; }
 
 .summary-grid table.headline th {
-  width: auto; color: #8a949e; font-size: 0.75rem; text-transform: uppercase;
-  letter-spacing: 0.04em; border-bottom: 1px solid #d8dee5;
+  width: auto; color: var(--muted); font-size: 0.8rem; font-weight: 600;
+  border-bottom: 1px solid var(--faint);
 }
 .summary-grid table.headline td:not(:first-child),
 .summary-grid table.headline th:not(:first-child) { text-align: right; }
-.summary-grid table.headline td { font-variant-numeric: tabular-nums; }
-.summary-grid table.headline td:first-child { color: #34495e; font-weight: 600; }
+.summary-grid table.headline td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--rule-soft); }
+.summary-grid table.headline td:first-child { color: var(--ink); font-weight: 600; }
 
 #group-table-wrap { overflow: auto; max-height: 600px; margin-top: 0.5rem; }
 table.group-table {
@@ -20,21 +20,19 @@ table.group-table {
   font-variant-numeric: tabular-nums;
 }
 table.group-table th, table.group-table td {
-  border: none; border-bottom: 1px solid #eef0f3;
+  border: 1px solid var(--rule-table);
   padding: 0.25rem 0.55rem; text-align: right; white-space: nowrap;
 }
 table.group-table th {
-  background: #fff; cursor: pointer; user-select: none;
-  position: sticky; top: 0; font-weight: 600; color: #8a949e;
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
-  border-bottom: 1px solid #d8dee5;
+  background: var(--surface-head); cursor: pointer; user-select: none;
+  position: sticky; top: 0; font-weight: 600; color: var(--ink); font-size: 0.75rem;
 }
 table.group-table th:first-child, table.group-table td:first-child {
-  text-align: left; position: sticky; left: 0; background: #fff;
+  text-align: left; position: sticky; left: 0; background: var(--surface);
 }
-table.group-table th:first-child { z-index: 2; }
-table.group-table tbody tr:hover td { background: #f5fbff; }
-table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left: 0.3rem; }
+table.group-table th:first-child { z-index: 2; background: var(--surface-head); }
+table.group-table tbody tr:hover td { background: var(--surface-alt); }
+table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-left: 0.3rem; }
 {% endblock %}
 
 {# Navigation only, as on the subject cohort page: a verdict on a dyad belongs on that

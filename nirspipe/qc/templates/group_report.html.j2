@@ -14,13 +14,13 @@
 /* the right-hand summary table reports three columns rather than a label and a value, so it
    does not want the label column the grid gives the left one */
 .summary-grid table.headline th {
-  width: auto; color: #8a949e; font-size: 0.75rem; text-transform: uppercase;
-  letter-spacing: 0.04em; border-bottom: 1px solid #d8dee5;
+  width: auto; color: var(--muted); font-size: 0.8rem; font-weight: 600;
+  border-bottom: 1px solid var(--faint);
 }
 .summary-grid table.headline td:not(:first-child),
 .summary-grid table.headline th:not(:first-child) { text-align: right; }
-.summary-grid table.headline td { font-variant-numeric: tabular-nums; }
-.summary-grid table.headline td:first-child { color: #34495e; font-weight: 600; }
+.summary-grid table.headline td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--rule-soft); }
+.summary-grid table.headline td:first-child { color: var(--ink); font-weight: 600; }
 
 /* a panel with one row per run is as tall as the cohort is long; it scrolls in its own
    box so the page does not grow with the cohort */
@@ -34,29 +34,27 @@ table.group-table {
 /* no cell grid: a row is separated by a hairline and a column by being right-aligned, the way
    every other metric table on the document look reads */
 table.group-table th, table.group-table td {
-  border: none; border-bottom: 1px solid #eef0f3;
+  border: 1px solid var(--rule-table);
   padding: 0.25rem 0.55rem; text-align: right; white-space: nowrap;
 }
 table.group-table th {
-  background: #fff; cursor: pointer; user-select: none;
-  position: sticky; top: 0; font-weight: 600; color: #8a949e;
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
-  border-bottom: 1px solid #d8dee5;
+  background: var(--surface-head); cursor: pointer; user-select: none;
+  position: sticky; top: 0; font-weight: 600; color: var(--ink); font-size: 0.75rem;
 }
 table.group-table th:first-child, table.group-table td:first-child {
-  text-align: left; position: sticky; left: 0; background: #fff;
+  text-align: left; position: sticky; left: 0; background: var(--surface);
 }
-table.group-table th:first-child { z-index: 2; }
-table.group-table tbody tr:hover td { background: #f5fbff; }
-table.group-table th .sort-ind { color: #ccd2d8; font-size: 0.7rem; margin-left: 0.3rem; }
+table.group-table th:first-child { z-index: 2; background: var(--surface-head); }
+table.group-table tbody tr:hover td { background: var(--surface-alt); }
+table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-left: 0.3rem; }
 
 #outlier-list ul { margin: 0; padding-left: 1.2rem; font-size: 0.85rem; }
-#outlier-list li { padding: 0.18rem 0; border-bottom: 1px solid #eef0f3; }
-#outlier-list li b { color: #c0392b; }
-#outlier-list .no-out { color: #27ae60; font-weight: 600; }
+#outlier-list li { padding: 0.18rem 0; border-bottom: 1px solid var(--rule-soft); }
+#outlier-list li b { color: var(--bad); }
+#outlier-list .no-out { color: var(--ok); font-weight: 600; }
 .outlier-metric {
-  display: inline-block; background: #fff3cd; color: #856404;
-  padding: 0.05rem 0.4rem; margin: 0 0.15rem; border-radius: 3px; font-size: 0.78rem;
+  display: inline-block; background: var(--warn-soft); color: var(--warn);
+  padding: 0.05rem 0.45rem; margin: 0 0.15rem; border-radius: 999px; font-size: 0.78rem;
 }
 {% endblock %}
 

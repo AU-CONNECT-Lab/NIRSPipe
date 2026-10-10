@@ -8,18 +8,18 @@
 {% block css %}
 .map-pick { display: flex; align-items: center; gap: 0.3rem; margin: 0.2rem 0 0.4rem; }
 .map-pick select {
-  font-size: 0.8rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.15rem 0.35rem; background: #fff; max-width: 220px;
+  font-size: 0.8rem; border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.15rem 0.35rem; background: var(--surface); max-width: 220px;
 }
 /* The two sides of a crossed pairing read left to right, so the separator has to say
    which member each selector belongs to rather than just sitting between them. */
-.map-pick .pick-x { font-size: 0.8rem; color: #868e96; }
+.map-pick .pick-x { font-size: 0.8rem; color: var(--faint); }
 /* Both chromophores are on the page at once, stacked, so nothing is behind a control and
    a reader cannot be comparing an HbO channel against an HbR region without noticing. */
-.chroma-stack + .chroma-stack { border-top: 1px solid #e9ecef; margin-top: 0.6rem;
+.chroma-stack + .chroma-stack { border-top: 1px solid var(--rule-soft); margin-top: 0.6rem;
                                 padding-top: 0.5rem; }
 .chroma-stack > .chroma-name {
-  display: inline-block; font-size: 0.8rem; font-weight: 600; color: #495057;
+  display: inline-block; font-size: 0.8rem; font-weight: 600; color: var(--muted);
   letter-spacing: 0.03em; margin: 0 0 0.1rem 0.1rem;
 }
 /* The channel map is a still drawn at 100% of a page that has no maximum width, so on a

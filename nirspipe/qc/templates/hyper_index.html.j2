@@ -6,10 +6,10 @@
 {% include "_index.css" %}
 /* the whole-run row is the average over every condition below it, so it reads as a
    heading for them rather than as one more window */
-tr.whole td { background: #f4f6f8; font-weight: 600; }
+tr.whole td { background: var(--surface-alt); font-weight: 600; }
 tr.whole td.num { font-weight: 600; }
 .run-links { display: block; margin-top: 0.15rem; font-size: 0.75rem; }
-.run-links a { color: #7f8c8d; font-weight: 400; margin-right: 0.55rem; }
+.run-links a { color: var(--faint); font-weight: 400; margin-right: 0.55rem; }
 {% endblock %}
 
 {# Navigation only: a verdict on a dyad belongs on its raw report, not on the list of its

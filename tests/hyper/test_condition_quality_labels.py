@@ -4,7 +4,7 @@ from nirspipe.qc.hyper.hyper_report import condition_subject_metrics, subject_me
 
 
 def _labels(tables):
-    return {c["key"]: c["label"] for table in tables for c in table["columns"]}
+    return {m["key"]: m["label"] for table in tables for m in table["metrics"]}
 
 
 def _entry(share):

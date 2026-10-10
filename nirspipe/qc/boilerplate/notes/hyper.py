@@ -89,9 +89,9 @@ NOTES = {
         "drift between devices at the same nominal rate is silent, and alignment cannot "
         "remove it.",
     "hyper_raw.member_metrics":
-        "Hover a column header for which end is better; the windowed SCI is coloured "
-        "against this run&rsquo;s threshold. One table: each member&rsquo;s long-channel values where "
-        "the montage has short channels, every channel where it has none.",
+        "Hover a metric for which end is better; the windowed SCI is coloured against this "
+        "run&rsquo;s threshold. A column per member: its long-channel values where the montage "
+        "has short channels, every channel where it has none.",
     "hyper_raw.group_sqm":
         "The dyad&rsquo;s own numbers rather than either member&rsquo;s: how many channel pairs "
         "survived in both, and the aligned span they share.",
@@ -214,17 +214,17 @@ NOTES = {
         "coherence is not. In the homologous table both average only the same-channel "
         "pairs.",
     "hyper_post.member_metrics":
-        "One table per channel set. Hover a column header for which end is better; the "
+        "A block per channel set and a column per member. Hover a metric for which end is better; the "
         "windowed SCI is coloured against each member&rsquo;s own <code>--sci-threshold</code>, "
         "read from the sidecar its screening wrote, and left uncoloured where none was recorded.",
     "hyper_post.member_metrics_sets":
-        "Each table is its own measurement, not a subset of the one above it: GVTD is an RMS "
+        "Each block is its own measurement, not a subset of the one above it: GVTD is an RMS "
         "across the channels of its set and a retention rate is a fraction of them. The "
         "coherence is computed on the long channels.",
     "hyper_post.member_metrics_condition":
         "Over this window only, read off each member&rsquo;s own record, so these are the "
-        "numbers that member&rsquo;s per-condition page prints. A blank row is one the record "
-        "has no per-condition value for. This reports, it does not re-decide: the channel set "
+        "numbers that member&rsquo;s per-condition page prints. A blank column is a member whose "
+        "record has no per-condition value. This reports, it does not re-decide: the channel set "
         "is the whole recording&rsquo;s, so a channel that came loose here is still in. "
         '<a href="{href}">Whole-run page</a>.',
     "hyper_post.condition_grid":
