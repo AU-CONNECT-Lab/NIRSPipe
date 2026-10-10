@@ -151,7 +151,7 @@ def test_the_index_rows_carry_the_links_and_the_marks(tmp_path):
         _run(tmp_path, task, gvtd=gvtd)
 
     rows = collect_runs(tmp_path)
-    gvtd_column = next(i for i, (head, _, _) in enumerate(_COLUMNS) if head == "GVTD p95")
+    gvtd_column = next(i for i, (head, _, _) in enumerate(_COLUMNS) if head.startswith("GVTD p95"))
     assert [row["metrics"][gvtd_column]["flagged"] for row in rows] == [False] * 4 + [True]
     assert all(link["text"] == "channels" for row in rows for link in row["links"])
 

@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
 - GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run
+- Seed and ALFF head maps keep their size however many rows they draw
+- Provenance settings no longer name an HRF for a regression with no conditions
 - `BAD_` rows in an `--events-path` table are no longer turned into conditions
 - A channel with no finite sample gets NaN fALFF instead of 0
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run

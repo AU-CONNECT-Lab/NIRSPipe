@@ -1,5 +1,4 @@
 """The bridge between the step names the pipeline records and the prose describing them.
-
 Two vocabularies exist and they sit at different granularities on purpose, so this maps
 rather than renames:
 
@@ -9,7 +8,6 @@ rather than renames:
   into bandpass / highpass / lowpass depending on which cutoff was given
 - ``glm_fit`` and ``glm_residuals`` are two files from one regression described in a single
   paragraph, a task GLM or a confound regression depending on the conditions they record
-
 Steps with no paragraph are not omissions: reading a file or recording quality metrics is
 bookkeeping, not method, and putting it in ``steps.toml`` would leak it into the Methods
 section. Those get a plain one-liner here instead.
@@ -17,6 +15,7 @@ section. Those get a plain one-liner here instead.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -42,7 +41,6 @@ _WTC_STEPS = ("hyper_wtc", "hyper_wtc_bycondition")
 _ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_roichan",
               "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
 
-
 # The cohort tables nirspipe-hyper-groupnull writes from either null's draws: one test.
 _GROUPNULL_STEPS = tuple(f"hyper_{null}_null_{table}" for null in ("repaired", "phase")
                          for table in ("by_cell", "by_occasion", "cohort"))
@@ -53,14 +51,12 @@ _PHASENULL_STEPS = ("hyper_wtc_phasenull", "hyper_wtc_bycondition_phasenull",
                     "hyper_wtc_bycondition_phasenull_draws", "hyper_wtc_roihom_phasenull",
                     "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_roichan_phasenull",
                     "hyper_wtc_bycondition_roichan_phasenull")
-
 # Every table the re-paired null writes, coherence and correlation, summary and draws: one
 # sentence says how its stand-ins were drawn. The level file carries too little to fill it.
 _PAIRNULL_STEPS = ("hyper_wtc_bycondition_pairnull", "hyper_wtc_bycondition_pairnull_draws",
                    "hyper_wtc_bycondition_roihom_pairnull",
                    "hyper_wtc_bycondition_roichan_pairnull", "hyper_isc_pairnull",
                    "hyper_isc_bycondition_pairnull", "hyper_isc_bycondition_pairnull_draws")
-
 
 def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     """Section of steps.toml describing this step, or None when it has no method prose."""
@@ -110,7 +106,6 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
         return "hyper_pairnull"
     return None
 
-
 def _series(items: Sequence[str]) -> str:
     """['a'] -> 'a';  ['a', 'b', 'c'] -> 'a, b and c'"""
     items = list(items)
@@ -118,10 +113,8 @@ def _series(items: Sequence[str]) -> str:
         return "".join(items)
     return ", ".join(items[:-1]) + " and " + items[-1]
 
-
 def _drift_phrase(params: dict[str, Any]) -> str | None:
     """The drift basis as prose, or None when the design carried none.
-
     Each model names only the parameter that model uses: a polynomial has no high-pass
     cutoff.
     """
@@ -132,7 +125,6 @@ def _drift_phrase(params: dict[str, Any]) -> str | None:
     if drift == "polynomial":
         return f"an order-{params.get('drift_order')} polynomial drift basis"
     return None
-
 
 def _filter_phrase(params: dict[str, Any]) -> str:
     """Name the filter that ran, from the recorded method rather than a fixed family."""
@@ -147,14 +139,12 @@ def _filter_phrase(params: dict[str, Any]) -> str:
     # stays true without naming a family the run may not have used
     return "a zero-phase filter"
 
-
 _P_CORRECTION_NAMES = {
     "fdr_bh": "the Benjamini–Hochberg false discovery rate",
     "fdr_by": "the Benjamini–Yekutieli false discovery rate",
     "holm": "the Holm–Bonferroni method",
     "bonferroni": "the Bonferroni correction",
 }
-
 
 def _groupnull_measure(params: dict[str, Any]) -> dict[str, str]:
     """What the cohort test averaged and which tail it read, from the recorded test."""
@@ -167,7 +157,6 @@ def _groupnull_measure(params: dict[str, Any]) -> dict[str, str]:
             "tail": "two-tailed",
             "two_sided": ", its p doubling the smaller of the two tails"}
 
-
 def _correction_phrase(value: Any) -> str:
     # a sidecar from before the setting was recorded gets no sentence rather than a guessed one
     if value is None:
@@ -176,7 +165,6 @@ def _correction_phrase(value: Any) -> str:
         return " P values were not corrected for multiple comparisons."
     return (f" P values were corrected by {_P_CORRECTION_NAMES[value]} within each "
             "condition, level and test.")
-
 
 def _noise_phrase(value: Any) -> str:
     """The noise model as prose, expanding the one spelling that names no order.
@@ -199,7 +187,6 @@ def _noise_phrase(value: Any) -> str:
         return "ordinary least squares without prewhitening"
     return "an unspecified noise model"
 
-
 _HRF_PHRASE = {
     "spm": "the SPM canonical haemodynamic response function",
     "spm + derivative":
@@ -214,11 +201,9 @@ _HRF_PHRASE = {
     "fir": "a finite impulse response (FIR) basis",
 }
 
-
 def _hrf_phrase(value: Any) -> str:
     value = str(value or "").strip().lower()
     return _HRF_PHRASE.get(value, f"the '{value}' haemodynamic response model")
-
 
 def _conditions_phrase(params: dict[str, Any]) -> str:
     """How the task regressors were built: boxcars and the HRF, or an FIR basis.
@@ -248,10 +233,8 @@ def _conditions_phrase(params: dict[str, Any]) -> str:
         return f"as boxcars of each event's own duration convolved with {_hrf_phrase(hrf)}"
     return f"with {_hrf_phrase(hrf)}"
 
-
 def _regressor_phrase(params: dict[str, Any]) -> str:
     """Name the nuisance columns a regression actually carried.
-
     {"short_channel": "mean", "drift_model": "cosine", "drift_high_pass": 0.01}
       -> "the mean of the retained short channels for each chromophore and a discrete
           cosine drift basis (high-pass cutoff: 0.01 Hz)"
@@ -265,11 +248,9 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     elif sc == "pca":
         parts.append("an orthogonal basis spanning the retained short channels "
                      "(HbO and HbR decomposed together)")
-
     aux = [str(name).removeprefix("aux_") for name in params.get("aux_regressors") or []]
     if aux:
         parts.append(f"the auxiliary signals {_series(aux)}")
-
     if (drift := _drift_phrase(params)) is not None:
         parts.append(drift)
 
@@ -277,9 +258,7 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     # neither flag was given, and the sentence stays true rather than naming absent columns
     return _series(parts) if parts else "only a constant term"
 
-
 _CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR"}
-
 
 def _screening_scope(params: dict[str, Any]) -> str:
     """Which windows the coupled share was counted over, as the run recorded it."""
@@ -290,7 +269,6 @@ def _screening_scope(params: dict[str, Any]) -> str:
         # asked for task blocks, and a tree this old does not say whether it found any
         return "the windows the screening counted"
     return "their windows"
-
 
 def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     """The screening sentence's numbers, its counting scope and any channels marked by hand."""
@@ -319,7 +297,6 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
                    if manual else ""),
     }
 
-
 def _dpf_phrase(dpf: Any) -> str:
     """'a differential pathlength factor (DPF) of 6', or one per wavelength when they differ."""
     values = list(dict.fromkeys(_num(d) for d in (dpf if isinstance(dpf, (list, tuple))
@@ -329,7 +306,6 @@ def _dpf_phrase(dpf: Any) -> str:
     # MNE pairs the factors with the wavelengths sorted ascending, whatever order they came in
     return (f"differential pathlength factors (DPF) of {_series(values)}, in ascending order "
             "of wavelength")
-
 
 def _condition_route(params: dict[str, Any]) -> str:
     """How the per-condition values were taken, or nothing for a run without conditions."""
@@ -345,7 +321,6 @@ def _condition_route(params: dict[str, Any]) -> str:
             f"with up to {_num(round(float(pad), 1))} s of recording on either side and averaged "
             "over the condition's span only.")
 
-
 def _monte_carlo(params: dict[str, Any]) -> str:
     """pycwt's red-noise level, as --wtc-significance drew it, or nothing."""
     if not params.get("wtc_mc_count"):
@@ -356,7 +331,6 @@ def _monte_carlo(params: dict[str, Any]) -> str:
             "autoregressive (red-noise) surrogates matching each channel's lag-1 "
             f"autocorrelation{f' (random seed {seed})' if seed is not None else ''}, and its "
             "95th percentile taken at each frequency.")
-
 
 def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The coherence sentence's band and the clauses only some runs need."""
@@ -379,7 +353,6 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
                  if params.get("bads_scope") == "subject" else ""),
     }
 
-
 def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
     """How many surrogates, over which pairs, and the seed that makes them repeatable."""
     seed = params.get("seed")
@@ -388,7 +361,6 @@ def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
         "n_iter": str(int(params.get("n_iter") or 0)),
         "seed": f" (random seed {seed})" if seed is not None else "",
     }
-
 
 def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
     """Who stood in, how many, and over what, as the re-paired null's sidecars record it."""
@@ -405,7 +377,6 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
                   else f"All {n} eligible stand-ins were used."),
         "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
     }
-
 
 def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The correlation's optional steps, in the order they ran: whitening, band limit, lag."""
@@ -432,7 +403,6 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
                     "independently, and was summarised by the mean and the 95th percentile of "
                     "the absolute correlation.")
     return {"options": options}
-
 
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """Fill a section's {slots} from a sidecar's parameters.
@@ -491,7 +461,6 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"stage": f"desc-{desc}" if desc else "input"}
     return {}
 
-
 def _num(value: Any) -> str:
     """A frequency as the Methods should print it: 0.004 not 0.004000000000000001."""
     if value is None:
@@ -501,9 +470,7 @@ def _num(value: Any) -> str:
     except (TypeError, ValueError):
         return str(value)
 
-
 # ---- steps with no method prose ----
-
 STEP_SUMMARY = {
     "load": "Read from disk; the pipeline stage comes from the filename.",
     "crop": "A stretch cut out of the recording; its window and margin are in the sidecar.",
@@ -544,10 +511,8 @@ STEP_SUMMARY = {
     "hyper_merge": "Every dyad's table of one kind, merged into one, the dyad and the task kept as columns.",
 }
 
-
 def step_summary(step: str | None) -> str:
     return STEP_SUMMARY.get(step or "", "")
-
 
 # ---- what each metric means ----
 
@@ -575,7 +540,6 @@ METRIC_SUMMARY = {
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of both means; a saturated channel with any residual noise is not counted here and inflates snr_mean.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
-
     # geometry
     "ch_dist_mean": "Average source-detector separation in metres. Descriptive, not a quality judgement.",
     "ch_dist_min": "Shortest source-detector separation in metres.",
@@ -601,7 +565,6 @@ METRIC_SUMMARY = {
     "resp_band_power_hbr": "The same for HbR.",
     "resp_band_frac_hbo": "Share of total HbO power that sits in the respiration band, 0 to 1.",
     "resp_band_frac_hbr": "The same for HbR.",
-
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
@@ -625,7 +588,6 @@ METRIC_SUMMARY = {
     "motion_corrected_num": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels were corrected abruptly at once. Experimental.",
     "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
     "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
-
     # motion, measured by the sensor rather than inferred from the optical data
     "gyro_speed_mean": "Descriptive: how fast the head turned on average, from the gyroscope (each axis minus its median, then the magnitude), in the unit the recording declares (gyro_speed_unit). Not optical, so it belongs to no channel set.",
     "gyro_speed_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
@@ -633,11 +595,9 @@ METRIC_SUMMARY = {
     "accel_jerk_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
     "gyro_speed_gvtd_rho": f"Spearman correlation, frame by frame, between the band-passed GVTD of the channel set a run is judged on and the gyroscope speed averaged over {AGREEMENT_HALF_WINDOW_S:g} s either side: how closely the optical motion index follows the sensor on this run. Recorded, not shown in the reports.",
     "accel_jerk_gvtd_rho": "The same against the accelerometer jerk.",
-
     # time
     "pct_data_retained": "Fraction of the recording not covered by BAD annotations; higher is more usable data. A share of duration rather than of channels, so it is one number for every channel set.",
 }
-
 # The few that decide whether a subject is usable at all. Everything else is context for
 # why. Three questions: are enough channels left, is enough time left, and is the signal
 # physiological. The report marks these so a reader knows where to look first.
@@ -650,7 +610,6 @@ KEY_METRICS = frozenset({
     "good_frac_mean",           # ... and stayed coupled, which is what rejects a channel
     "hbo_hbr_corr_mean",        # what came out looks like haemodynamics
 })
-
 
 # ---- which stage each number was measured on ----
 #
@@ -687,7 +646,6 @@ _STAGE_CONDITION_MOTION = (
     "On a condition page: the motion-corrected file's windows sliced to this condition, so a "
     "95th percentile is the mean of the windows' own and the threshold is that file's own."
 )
-
 _RAW_METRICS = (
     # good_frac_mean sits here and not with sci/psp, which it is built from: those two are
     # measured again on the corrected file, and the coupled-window count is taken once, at
@@ -728,10 +686,8 @@ METRIC_STAGE = {
     "hbo_hbr_corr_mean": _STAGE_BOTH_AND_RAW,
 }
 
-
 def metric_summary(metric: str, condition: bool = False) -> str:
     """What a metric is, which way is good, and what stage it was measured on.
-
     Returns '' for an undescribed metric, so the report renders a bare number rather than
     an empty tooltip. ``condition`` is a condition page, whose GVTD numbers come from one file.
     """
@@ -742,14 +698,11 @@ def metric_summary(metric: str, condition: bool = False) -> str:
              and metric in _RAW_AND_CORRECTED_METRICS else METRIC_STAGE.get(metric, ""))
     return f"{text} {stage}".rstrip()
 
-
 def is_key_metric(metric: str) -> bool:
     return metric in KEY_METRICS
 
-
 # ---- the tables a quality record keeps beside its JSON ----
 # Column descriptions for their sidecars, one whole sentence each.
-
 _RECORD_STAGES = {
     "raw": "The recording as it arrived, intensity and optical density, bad channels included.",
     "motion": "The motion-correction step, measured on the optical density either side of it, bad channels included.",
@@ -765,7 +718,6 @@ _RECORD_SETS = {"": "", "_long": " Long channels only.", "_short": " Short chann
 RECORD_SECTIONS = {f"{stage}{suffix}": text + phrase
                    for stage, text in _RECORD_STAGES.items()
                    for suffix, phrase in _RECORD_SETS.items()}
-
 RECORD_CHANNEL_METRICS = {
     "sci_per_channel": "Scalp coupling index over the whole run: the correlation of the two wavelengths in the cardiac band.",
     "sci_win_per_channel": f"The same correlation inside {SCI_WINDOW_S:g} s windows, averaged over the windows.",
@@ -789,7 +741,6 @@ RECORD_CHANNEL_COLUMNS = {
     "metric": "What was measured.",
     "value": "The measured value.",
 }
-
 _GVTD_FAMILIES = {
     "gvtd_per_window": "Unfiltered GVTD averaged within each window",
     "gvtd_p95_per_window": "The 95th percentile of unfiltered GVTD within each window",
@@ -811,7 +762,6 @@ RECORD_WINDOW_COLUMNS = {
     "accel_jerk_per_window": "Accelerometer jerk averaged within each window.",
     "accel_jerk_p95_per_window": "The 95th percentile of the accelerometer jerk within each window.",
 }
-
 # ---- the cohort table's sidecar ----
 # Record keys the cohort table carries that are counts or settings, not report metrics.
 RECORD_EXTRA_KEYS = {
@@ -844,7 +794,6 @@ COHORT_SECTIONS = {
 }
 COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
 
-
 def record_key_summary(key: str) -> str:
     """What one record key holds, or '' when nothing describes it."""
     if key in METRIC_SUMMARY:
@@ -854,14 +803,15 @@ def record_key_summary(key: str) -> str:
     wavelength = key.removeprefix("cv_mean_")
     return RECORD_CV_BY_WAVELENGTH.format(nm=wavelength) if wavelength.isdigit() else ""
 
-
 # ---- how a metric is printed ----
 #
 # One row per metric: the label a panel prints, the number format, and where the colouring
 # changes. It sits beside METRIC_SUMMARY so a label, its tooltip and its threshold are
 # defined once for the report templates, the viewer's JavaScript and the GUI.
 #
-# Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage.
+# Format is a Python format spec, plus "pct" for a 0-1 fraction written as a percentage,
+# "sig3" for three significant figures with no exponent, and a key of DISPLAY_UNITS for a
+# quantity stored in SI and printed in a unit that keeps it between about 0.1 and 1000.
 #
 # Direction and thresholds are separate facts and most metrics have only the first. The
 # direction is which end is the better one, which METRIC_SUMMARY states in prose
@@ -877,6 +827,12 @@ def record_key_summary(key: str) -> str:
 
 _HIGHER, _LOWER = "higher", "lower"
 
+# format key -> (factor from the stored SI value, unit printed beside the label)
+DISPLAY_UNITS = {
+    "uM":  (1e6, "µM"),
+    "uM2": (1e12, "µM²/Hz"),
+    "mOD": (1e3, "mOD/sample"),   # GVTD differences consecutive samples, so it is per sample
+}
 METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | None"]] = {
     # coupling
     "sci_mean":                ("Mean SCI (whole run)", ".3f", (0.75, 0.5), _HIGHER),
@@ -886,19 +842,17 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "psp_mean":                (f"Mean PSP ({PSP_WINDOW_S:g} s)", ".3f", None, _HIGHER),
     "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
-
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
     "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", None, _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
-    "mean_amp_mean":           ("Mean amplitude", ".3e", None, None),
+    "mean_amp_mean":           ("Mean amplitude", "sig3", None, None),
 
     # geometry
     "ch_dist_mean":            ("Mean separation (m)", ".3f", None, None),
     "ch_dist_min":             ("Min separation (m)", ".3f", None, None),
     "ch_dist_max":             ("Max separation (m)", ".3f", None, None),
-
     # haemoglobin
     "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", None, _LOWER),
     "cnr_hbo_mean":            ("CNR HbO", ".3f", None, _HIGHER),
@@ -906,29 +860,28 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "cnr_n_epochs":            ("CNR epochs", "d", None, None),
     "gcor_hbo":                ("Global corr HbO", ".3f", None, None),
     "gcor_hbr":                ("Global corr HbR", ".3f", None, None),
-    "lowfreq_drift_amplitude_hbo": ("Low-freq drift (HbO)", ".3e", None, _LOWER),
-    "lowfreq_drift_amplitude_hbr": ("Low-freq drift (HbR)", ".3e", None, _LOWER),
-
+    "lowfreq_drift_amplitude_hbo": ("Low-freq drift (HbO)", "uM", None, _LOWER),
+    "lowfreq_drift_amplitude_hbr": ("Low-freq drift (HbR)", "uM", None, _LOWER),
     # spectral
-    "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", ".3e", None, None),
-    "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", ".3e", None, None),
+    "cardiac_band_power_hbo":  ("Cardiac band power (HbO)", "uM2", None, None),
+    "cardiac_band_power_hbr":  ("Cardiac band power (HbR)", "uM2", None, None),
     # descriptive, not a quality reading: motion raises it, so it has no better end
     "cardiac_band_frac_hbo":   ("Cardiac band (HbO)", "pct", None, None),
     "cardiac_band_frac_hbr":   ("Cardiac band (HbR)", "pct", None, None),
-    "resp_band_power_hbo":     ("Resp band power (HbO)", ".3e", None, None),
-    "resp_band_power_hbr":     ("Resp band power (HbR)", ".3e", None, None),
+    "resp_band_power_hbo":     ("Resp band power (HbO)", "uM2", None, None),
+    "resp_band_power_hbr":     ("Resp band power (HbR)", "uM2", None, None),
     "resp_band_frac_hbo":      ("Resp band (HbO)", "pct", None, None),
     "resp_band_frac_hbr":      ("Resp band (HbR)", "pct", None, None),
 
     # motion and spikes
-    "gvtd_mean":               ("GVTD mean", ".3e", None, _LOWER),
-    "gvtd_p95":                ("GVTD p95", ".3e", None, _LOWER),
-    "gvtd_filt_mean":          (f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
-    "gvtd_filt_p95":           (f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", ".3e", None, _LOWER),
-    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3e", None, None),
-    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3e", None, None),
-    "gvtd_thresh":             ("GVTD threshold", ".3e", None, None),
-    "gvtd_thresh_applied":     ("GVTD threshold applied", ".3e", None, None),
+    "gvtd_mean":               ("GVTD mean", "mOD", None, _LOWER),
+    "gvtd_p95":                ("GVTD p95", "mOD", None, _LOWER),
+    "gvtd_filt_mean":          (f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", "mOD", None, _LOWER),
+    "gvtd_filt_p95":           (f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", "mOD", None, _LOWER),
+    "gvtd_vstd_mean":          ("GVTD mean (var-normalised)", ".3f", None, None),
+    "gvtd_vstd_p95":           ("GVTD p95 (var-normalised)", ".3f", None, None),
+    "gvtd_thresh":             ("GVTD threshold", "mOD", None, None),
+    "gvtd_thresh_applied":     ("GVTD threshold applied", "mOD", None, None),
     "gvtd_num_above_thresh":   ("GVTD frames above threshold", "d", None, _LOWER),
     "gvtd_pct_above_thresh":   ("GVTD % above threshold", "pct", None, _LOWER),
     "gvtd_censor_pct":         ("GVTD censored %", "pct", None, _LOWER),
@@ -943,17 +896,16 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "motion_corrected_n_segments": ("Motion corrected segments", "d", None, None),
 
     # motion from the sensor; descriptive, since how much a head moved is not a verdict on the data
-    "gyro_speed_mean":         ("Gyroscope speed mean", ".3g", None, None),
-    "gyro_speed_p95":          ("Gyroscope speed p95", ".3g", None, None),
-    "accel_jerk_mean":         ("Accelerometer jerk mean", ".3g", None, None),
-    "accel_jerk_p95":          ("Accelerometer jerk p95", ".3g", None, None),
+    "gyro_speed_mean":         ("Gyroscope speed mean", "sig3", None, None),
+    "gyro_speed_p95":          ("Gyroscope speed p95", "sig3", None, None),
+    "accel_jerk_mean":         ("Accelerometer jerk mean", "sig3", None, None),
+    "accel_jerk_p95":          ("Accelerometer jerk p95", "sig3", None, None),
 
     # time
     "pct_data_retained":       ("% data retained", "pct", (0.8, 0.6), _HIGHER),
 }
 
 MISSING_VALUE = "\u2014"
-
 
 # A condition has no verdict of its own: its share is what passes on its stretch, so it is
 # named for that wherever a condition is shown, never as a retention.
@@ -964,23 +916,18 @@ _CONDITION_SUMMARIES = {
     "channel_retention_rate": "Fraction of channels that pass on this condition's stretch alone, against the run's line; a channel rejected by hand or for non-finite samples fails every condition. A guide to choosing conditions that rejects nothing: the data were processed under the run's verdict. Higher is better.",
 }
 
-
 def condition_label(metric: str) -> "str | None":
     return _CONDITION_LABELS.get(metric)
-
 
 # A condition's windowed values are columns of the run's --window-length grid, not the fixed
 # screening window their whole-run labels name.
 _GRID_SLICED = {"sci_win_mean": SCI_WINDOW_S, "psp_mean": PSP_WINDOW_S,
                 "cv_mean": CV_WINDOW_S, "snr_mean": CV_WINDOW_S}
 
-
 def grid_window_label(label: str, metric: str, window_s: "float | None") -> str:
     """``label`` naming the grid a condition value was sliced from: ``window_s``, or
     "windowed" when the runs read together were measured on different grids.
-
     ::
-
       ("SCI (10 s)", "sci_win_mean", 12.0) -> "SCI (12 s)"
     """
     if metric not in _GRID_SLICED:
@@ -988,26 +935,53 @@ def grid_window_label(label: str, metric: str, window_s: "float | None") -> str:
     return label.replace(f"({_GRID_SLICED[metric]:g} s)",
                          f"({window_s:g} s)" if window_s else "(windowed)")
 
-
 def shared_window(windows) -> "float | None":
     """The one grid every run was measured on, or None when they differ or one is unknown."""
     found = {float(w) if w else None for w in windows}
     return found.pop() if len(found) == 1 else None
-
 
 def metric_label(metric: str, fallback: str | None = None, condition: bool = False) -> str:
     if condition and metric in _CONDITION_LABELS:
         return _CONDITION_LABELS[metric]
     spec = METRIC_DISPLAY.get(metric)
     if spec is not None:
-        return spec[0]
+        return with_unit(metric, spec[0])
     return metric if fallback is None else fallback
 
+def metric_unit(metric: str) -> str:
+    return DISPLAY_UNITS.get(metric_format(metric), (1.0, ""))[1]
+
+def display_value(metric: str, value: float) -> float:
+    """A stored value in the unit its label names, for a figure that plots it."""
+    return value * DISPLAY_UNITS.get(metric_format(metric), (1.0, ""))[0]
+
+def with_unit(metric: str, label: str) -> str:
+    """``label`` with the metric's display unit, folded into a trailing parenthesis.
+
+    with_unit("lowfreq_drift_amplitude_hbo", "Low-freq drift (HbO)") -> "Low-freq drift (HbO, µM)"
+    with_unit("gvtd_p95", "GVTD p95")                                -> "GVTD p95 (mOD/sample)"
+    with_unit("sci_mean", "Mean SCI")                                -> "Mean SCI"
+    """
+    unit = metric_unit(metric)
+    if not unit or unit in label:
+        return label
+    if label.endswith(")"):
+        return f"{label[:-1]}, {unit})"
+    return f"{label} ({unit})"
+
+def sig3(value: float) -> str:
+    """Three significant figures, never an exponent; thousands grouped above 1000.
+    sig3(0.000151) -> "0.000151"   sig3(13.59) -> "13.6"   sig3(574812) -> "575,000"
+    """
+    v = float(f"{float(value):.3g}")
+    if v == 0 or not math.isfinite(v):
+        return f"{v:g}"
+    decimals = 2 - math.floor(math.log10(abs(v)))
+    return f"{v:,.{decimals}f}" if decimals > 0 else f"{v:,.0f}"
 
 def metric_format(metric: str) -> str:
     spec = METRIC_DISPLAY.get(metric)
     return spec[1] if spec is not None else ".3f"
-
 
 def metric_direction(metric: str) -> "str | None":
     """"higher", "lower", or None for a metric with no better end.
@@ -1018,12 +992,10 @@ def metric_direction(metric: str) -> "str | None":
     spec = METRIC_DISPLAY.get(metric)
     return spec[3] if spec is not None else None
 
-
 def higher_is_better(metric: str) -> "bool | None":
     """The direction as a flag, for callers that scale a value within its own range."""
     direction = metric_direction(metric)
     return None if direction is None else direction == _HIGHER
-
 
 def format_metric(metric: str, value: Any, fmt: str | None = None) -> str:
     """One metric as a panel prints it, or an em dash when the run did not measure it.
@@ -1044,17 +1016,19 @@ def format_metric(metric: str, value: Any, fmt: str | None = None) -> str:
             return f"{float(value) * 100:.1f}%"
         if spec_fmt == "d":
             return f"{int(round(float(value)))}"
+        if spec_fmt == "sig3":
+            return sig3(value)
+        if spec_fmt in DISPLAY_UNITS:
+            return sig3(float(value) * DISPLAY_UNITS[spec_fmt][0])
         return format(float(value), spec_fmt)
     except (TypeError, ValueError):
         return str(value)
-
 
 def metric_class(metric: str, value: Any) -> str:
     """CSS class for a metric's value, or '' when the metric has no established cutoff.
 
     metric_class("sci_mean", 0.81)  -> "qm-ok"
     metric_class("psp_mean", 0.81)  -> ""        (no published threshold)
-
     The empty string is deliberate and is not a passing verdict: a metric nobody has a
     cutoff for prints in the default colour rather than being called good.
     """
@@ -1069,7 +1043,6 @@ def metric_class(metric: str, value: Any) -> str:
     if direction == _LOWER:
         return "qm-ok" if v < ok else "qm-warn" if v < warn else "qm-bad"
     return "qm-ok" if v >= ok else "qm-warn" if v >= warn else "qm-bad"
-
 
 def metric_rows(
     scalars: dict[str, Any],
@@ -1106,19 +1079,15 @@ def metric_rows(
         })
     return rows
 
-
 # ---- what a run actually did ----
-
 # Within one depth of the graph, the order sentences read in: a dyad's coherence and its
 # phase, its correlation, how both were grouped into regions, then its nulls; a run's
 # regression before ALFF and FC.
 _RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3,
          "hyper_pairnull": 4, "alff": 3, "fc": 4}
 
-
 def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
     """(steps.toml key, filled slots) for the method steps among ``nodes``, in data order.
-
     A step that ran more than once contributes one entry, the later files filling only what
     the earlier ones left out (a regression's fit table and its residual each carry part of
     the picture).
@@ -1131,19 +1100,16 @@ def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
         merged[key] = {**node.params, **merged.get(key, {})}
     return [(key, template_slots(key, params)) for key, params in merged.items()]
 
-
 def steps_from_sidecars(
     nirs_dir: Path, label: str | None = None,
 ) -> list[tuple[str, dict[str, str]]]:
     """Every method step the sidecars under ``nirs_dir`` record, ordered by graph depth.
-
     ``label`` is a run stem (``sub-01_task-rest``) and keeps another run's files out of the
     paragraph, the way :func:`~nirspipe.qc.common.provenance.scan` scopes its graph.
     """
     from nirspipe.qc.common.provenance import scan
 
     return _describe(scan(nirs_dir, label=label).values())
-
 
 def steps_from_lineage(path: "str | Path") -> "list[tuple[str, dict[str, str]]] | None":
     """The method steps behind one file, read up its chain of ``Sources``.
@@ -1152,13 +1118,11 @@ def steps_from_lineage(path: "str | Path") -> "list[tuple[str, dict[str, str]]] 
 
       .../sub-01_task-rest_desc-preproc_nirs.snirf
         -> od_conversion, sci_marking, motion_tddr, beer_lambert   (no filter, no regression)
-
     What a later stage did to the same recording is not in the chain, so a reader of an
     earlier stage is never described as having read the later one. None when the file's own
     record cannot be found, which is a moved tree or an input this package did not write.
     """
     from nirspipe.qc.common.provenance import _key, scan
-
     nodes = scan(Path(path).parent)
     start = _key(path)
     if start not in nodes or nodes[start].step is None:

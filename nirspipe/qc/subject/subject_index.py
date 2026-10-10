@@ -21,10 +21,12 @@ from __future__ import annotations
 import csv
 import json
 import statistics
+from functools import partial
 from pathlib import Path
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.boilerplate.vocabulary import format_metric, with_unit
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
@@ -52,7 +54,8 @@ logger = get_logger("qc.subject_index")
 _COLUMNS = (
     ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
     ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
-    ("GVTD p95",      ("raw_long_gvtd_p95", "raw_gvtd_p95"),                             "{:.2e}"),
+    (with_unit("gvtd_p95", "GVTD p95"), ("raw_long_gvtd_p95", "raw_gvtd_p95"),
+     partial(format_metric, "gvtd_p95")),
     # a fraction of the recording, not a percentage: `motion_corrected_pct` is the mean of
     # a per-sample boolean, so `{:.1f}%` would print it 100 times too small
     ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1%}"),
@@ -103,7 +106,8 @@ def _names(label: str) -> dict[str, str]:
 _COND_COLUMNS = (
     ("SCI (10 s)",      "sci_win_mean",            "{:.3f}"),
     ("SNR",             "snr_mean",                "{:.0f}"),
-    (f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz", "gvtd_filt_mean", "{:.2e}"),
+    (with_unit("gvtd_filt_mean", f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
+     "gvtd_filt_mean", partial(format_metric, "gvtd_filt_mean")),
     ("GVTD above thr.", "gvtd_pct_above_thresh",   "{:.1%}"),
     ("Spike frames",    "spike_pct_frames",        "{:.1%}"),
     ("Motion corr.",    "motion_corrected_pct",    "{:.1%}"),
@@ -285,11 +289,16 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     }
 
 
-def _metric_cell(flat: dict, keys: tuple, fmt: str) -> dict:
+# a spec string, or a callable for a column whose number carries a display unit
+def _formatted(fmt, value) -> str:
+    return fmt(value) if callable(fmt) else fmt.format(value)
+
+
+def _metric_cell(flat: dict, keys: tuple, fmt) -> dict:
     """One table cell, taking the first key the record actually carries."""
     for key in keys:
         if flat.get(key) is not None:
-            return {"value": fmt.format(flat[key]), "raw": flat[key], "flagged": False}
+            return {"value": _formatted(fmt, flat[key]), "raw": flat[key], "flagged": False}
     return {"value": "n/a", "raw": None, "flagged": False}
 
 
@@ -335,7 +344,7 @@ def _cond_row(name: str, kind: str, href: "str | None", span: str,
         "span": span,
         "kept": f"{kept[0]}/{kept[1]}" if kept else None,
         "metrics": [
-            {"value": fmt.format(values[key]), "raw": values[key], "flagged": False}
+            {"value": _formatted(fmt, values[key]), "raw": values[key], "flagged": False}
             if isinstance(values.get(key), (int, float))
             else {"value": "n/a", "raw": None, "flagged": False}
             for _head, key, fmt in _COND_COLUMNS

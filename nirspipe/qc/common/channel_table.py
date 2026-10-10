@@ -473,11 +473,11 @@ def split_table(
         -> columns: [{"key": "sci_mean", "label": "Mean SCI", ...}]
            rows:    [{"name": "Long", "n": 40, "cells": [{"value": "0.810", "cls": "qm-ok"}]}]
     """
-    from nirspipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary
+    from nirspipe.qc.boilerplate.vocabulary import is_key_metric, metric_summary, with_unit
 
     columns = measured_columns(columns, *(s for _, _, s, _ in channel_sets))
     return {
-        "columns": [{"key": key, "label": label, "tip": metric_summary(key),
+        "columns": [{"key": key, "label": with_unit(key, label), "tip": metric_summary(key),
                      "key_metric": is_key_metric(key)} for key, label in columns],
         "rows": [{
             "name": name,

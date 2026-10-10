@@ -447,7 +447,7 @@
     written here, where a header has room to say more than a registry default can. -#}
 {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
 {% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
-      title="{{ metric_summary(key, (condition_label|default('')) != '') }}">{{ text }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
+      title="{{ metric_summary(key, (condition_label|default('')) != '') }}">{{ with_unit(key, text) }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
 
 {% macro mv(key, v, fmt=none) %}{% if v is not none %}{{ format_metric(key, v, fmt) }}{% else %}<span class="na">n/a</span>{% endif %}{% endmacro %}
 

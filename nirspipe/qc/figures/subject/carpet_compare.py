@@ -12,6 +12,7 @@ from nirspipe.qc.figures.common.motion_panel import (
     carpet_coloraxis, carpet_z,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit
 from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
 _CARPET_ROW_PX = 190
@@ -83,12 +84,14 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
         if not picks:
             continue
         sfreq = float(od_b.info["sfreq"])
-        g = gvtd_timetrace(od_b.get_data(picks=picks), sfreq, *GVTD_MOTION_BAND)
+        g = display_value("gvtd_filt_mean",
+                          gvtd_timetrace(od_b.get_data(picks=picks), sfreq, *GVTD_MOTION_BAND))
         after = None
         if od_a is not None:
             have = [c for c in picks if c in od_a.ch_names]
             if len(have) == len(picks) and od_a.n_times == od_b.n_times:
-                after = gvtd_timetrace(od_a.get_data(picks=have), sfreq, *GVTD_MOTION_BAND)
+                after = display_value("gvtd_filt_mean",
+                                      gvtd_timetrace(od_a.get_data(picks=have), sfreq, *GVTD_MOTION_BAND))
         out.append((name, od_b.times[:len(g)], g, after))
     return out
 
@@ -180,10 +183,11 @@ def carpet_compare_figure(
             fig.add_trace(go.Scatter(
                 x=t_ds, y=y_ds, mode="lines", name=label, legendgroup=label,
                 showlegend=not legend_drawn, line=dict(color=colour, width=1.3),
-                hovertemplate=f"{name} {label}<br>t=%{{x:.1f}}s<br>%{{y:.2e}}<extra></extra>",
+                hovertemplate=f"{name} {label}<br>t=%{{x:.1f}}s<br>%{{y:.3g}}<extra></extra>",
             ), row=k, col=1)
         legend_drawn = legend_drawn or g_a is not None
-        fig.update_yaxes(title_text=f"{name} GVTD", title_font_size=10, row=k, col=1)
+        fig.update_yaxes(title_text=f"{name} GVTD ({metric_unit('gvtd_filt_mean')})", title_font_size=10,
+                         row=k, col=1)
 
     first_row = len(gvtd) + 1
     has_roi = False

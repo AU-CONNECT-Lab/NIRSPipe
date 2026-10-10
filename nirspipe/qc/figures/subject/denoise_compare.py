@@ -18,6 +18,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit, sig3, with_unit
+
 INK, SUBTLE, RULE = "#1f2933", "#8b95a1", "#e3e8ee"
 WORSE, BETTER, FLAT = "#b0413e", "#3f7d5a", "#c9d1d9"
 
@@ -46,12 +48,24 @@ _DENOISE_FILTER_CHECK = [
 ]
 
 
+# a removed-band power has no registry row of its own; it shares the band powers' unit
+_UNIT_LIKE = {"drift_band_power_hbo": "cardiac_band_power_hbo"}
+
+
 def _fmt(v, unit: str = "") -> str:
     if not isinstance(v, (int, float)) or v != v:
         return "—"
     if unit == "%":
         return f"{v:.1f}%"
-    return f"{v:.3f}" if abs(v) >= 1e-3 else f"{v:.1e}"
+    return sig3(v) if unit or abs(v) < 1e-3 else f"{v:.3f}"
+
+
+def _panel(key: str, title: str, values: list, lower_better, primary: bool = True) -> Panel:
+    """A panel in the unit the metrics table prints ``key`` in, the unit named in its title."""
+    like = _UNIT_LIKE.get(key, key)
+    unit = metric_unit(like)
+    shown = [display_value(like, v) if isinstance(v, (int, float)) else v for v in values]
+    return Panel(with_unit(like, title), shown, lower_better, primary, unit)
 
 
 def denoise_stage_panels(metrics: dict) -> "list[Panel]":
@@ -62,7 +76,7 @@ def denoise_stage_panels(metrics: dict) -> "list[Panel]":
     outside the analysis passband, they fall by the filter's stopband attenuation whatever
     the data did.
     """
-    panels = [Panel(title, metrics["quality"][key], lower_better)
+    panels = [_panel(key, title, metrics["quality"][key], lower_better)
               for key, title, lower_better in _DENOISE_QUALITY
               if key in metrics["quality"]]
     remaining = metrics.get("variance_remaining") or []
@@ -70,7 +84,7 @@ def denoise_stage_panels(metrics: dict) -> "list[Panel]":
         panels.append(Panel("variance remaining",
                             [None if v is None else v * 100 for v in remaining],
                             None, True, "%"))
-    panels += [Panel(title, metrics["removed"][key], None, False)
+    panels += [_panel(key, title, metrics["removed"][key], None, False)
                for key, title in _DENOISE_FILTER_CHECK if key in metrics["removed"]]
     return panels
 
@@ -102,7 +116,7 @@ def stage_metrics_figure(
             textposition="top center", textfont=dict(size=10, color=SUBTLE),
             line=dict(color=color, width=2), marker=dict(size=7, color=color),
             showlegend=False,
-            hovertemplate=f"{panel.title}<br>%{{x}}: %{{y:.4g}}<extra></extra>"),
+            hovertemplate=f"{panel.title}<br>%{{x}}: %{{text}}<extra></extra>"),
             row=row + 1, col=col + 1)
         present = [v for v in values if isinstance(v, (int, float))]
         if present:

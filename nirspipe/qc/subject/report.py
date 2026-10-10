@@ -137,7 +137,7 @@ from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 from nirspipe.qc.boilerplate.vocabulary import (
-    format_metric, is_key_metric, metric_class, metric_label, metric_summary,
+    format_metric, is_key_metric, metric_class, metric_label, metric_summary, with_unit,
 )
 from nirspipe.qc.common.record_views import condition_verdict_view
 from nirspipe.qc.common.windows import refuse_colliding_labels
@@ -2038,6 +2038,7 @@ def build_subject_report(
         format_metric=format_metric,
         metric_class=metric_class,
         metric_label=metric_label,
+        with_unit=with_unit,
         imu_stat_keys=IMU_STAT_KEYS,
         od_split_columns=measured_columns(
             OD_SPLIT_COLUMNS, sqm_vars["sqm_all"], sqm_vars["sqm_long"],

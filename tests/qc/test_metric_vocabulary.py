@@ -24,7 +24,9 @@ from nirspipe.qc.boilerplate.vocabulary import (
     format_metric,
     is_key_metric,
     metric_class,
+    metric_label,
     metric_summary,
+    sig3,
 )
 from nirspipe.qc.boilerplate.vocabulary import higher_is_better, metric_direction
 from nirspipe.qc.common.channel_table import (
@@ -214,6 +216,35 @@ def test_a_missing_value_prints_as_a_dash_not_as_a_verdict():
     for metric in ("sci_mean", "pct_data_retained", "spike_count", "gvtd_mean"):
         assert format_metric(metric, None) == "\u2014"
         assert metric_class(metric, None) == ""
+
+
+# a paper prints a quantity in a unit that keeps it readable, never as 1.36e-05
+@pytest.mark.parametrize("metric", sorted(METRIC_DISPLAY))
+def test_no_metric_prints_an_exponent(metric):
+    for value in (1.5e-16, 6.3e-5, 4.2e-3, 0.5, 13.6, 5.75e5):
+        assert "e" not in format_metric(metric, value).lower(), (metric, value)
+
+
+@pytest.mark.parametrize("metric, stored, shown, unit", [
+    ("lowfreq_drift_amplitude_hbo", 1.359e-5, "13.6", "µM"),
+    ("cardiac_band_power_hbr", 1.51e-16, "0.000151", "µM²/Hz"),
+    ("gvtd_filt_p95", 1.296e-2, "13.0", "mOD/sample"),
+])
+def test_an_si_quantity_prints_in_the_unit_its_label_names(metric, stored, shown, unit):
+    assert format_metric(metric, stored) == shown
+    assert unit in metric_label(metric)
+
+
+def test_a_label_with_a_parenthesis_takes_the_unit_inside_it():
+    assert metric_label("lowfreq_drift_amplitude_hbo") == "Low-freq drift (HbO, µM)"
+    assert metric_label("sci_mean") == "Mean SCI (whole run)"
+
+
+@pytest.mark.parametrize("value, shown", [
+    (0.000151, "0.000151"), (13.59, "13.6"), (9.996, "10.0"), (574812, "575,000"), (0.0, "0"),
+])
+def test_three_significant_figures_never_reach_an_exponent(value, shown):
+    assert sig3(value) == shown
 
 
 @pytest.mark.parametrize("metric", sorted(METRIC_DISPLAY))

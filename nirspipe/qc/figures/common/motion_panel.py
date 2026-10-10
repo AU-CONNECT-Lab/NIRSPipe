@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.signal import detrend
 
+from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit, sig3
 from nirspipe.qc.common.figure_io import fig_png_b64
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
@@ -29,6 +30,9 @@ logger = get_logger("qc.figures.motion_panel")
 _MAX_PTS = 4000
 
 _MOTION_BAND_LABEL = f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"
+# GVTD is drawn in the unit the metrics table prints it in, so the two read off one scale
+_GVTD_SCALE = display_value("gvtd_filt_mean", 1.0)
+_GVTD_UNIT = metric_unit("gvtd_filt_mean")
 
 _ZOOM_COLORS = ["#e74c3c", "#2980b9", "#27ae60"]
 
@@ -194,12 +198,12 @@ GVTD_STAT_SLOT = "gvtd-stat-"
 def _gvtd_row_label(name: str, n_ch: int) -> str:
     """Row title: the channel set large, its size and band small beside it.
 
-    ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.02-0.5 Hz``. GVTD is an RMS
+    ``_gvtd_row_label("long", 28)`` -> ``GVTD long   28 ch · 0.02-0.5 Hz · mOD/sample``. GVTD is an RMS
     across channels, so which channels went in changes every value on the row and the
     threshold with them.
     """
     return (f"<b>GVTD {name}</b>  <span style='font-size:9px;color:#8b95a1'>"
-            f"{n_ch} ch · {_MOTION_BAND_LABEL}</span>")
+            f"{n_ch} ch · {_MOTION_BAND_LABEL} · {_GVTD_UNIT}</span>")
 
 
 def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> float:
@@ -227,17 +231,17 @@ def gvtd_y_top(traces: "list[np.ndarray]", thresholds: "list[float | None]") -> 
 
 
 def _gvtd_stat_label(g: np.ndarray, thresh: "float | None", prefix: str = "") -> str:
-    """One line of run-level numbers for a GVTD row, e.g. ``max 1.9e-03 · … · 7.1% above``.
+    """One line of run-level numbers for a GVTD row, e.g. ``max 1.90 · … · 7.1% above``.
 
     ``thresh`` is dropped from a corrected row's line, since it is the uncorrected run's
     threshold.
     """
     if g.size == 0:
         return ""
-    parts = [f"max {g.max():.2e}", f"mean {g.mean():.2e}"]
+    parts = [f"max {sig3(g.max())}", f"mean {sig3(g.mean())}"]
     if thresh is not None:
         if not prefix:
-            parts.append(f"thresh {thresh:.2e}")
+            parts.append(f"thresh {sig3(thresh)}")
         parts.append(f"{float(np.mean(g > thresh)) * 100:.1f}% above")
     return (prefix + " · " if prefix else "") + " · ".join(parts)
 
@@ -493,15 +497,17 @@ def carpet_gvtd_figure(
         rows_slice = slice(start, start + len(names))
         start += len(names)
         gvtd_filt = gvtd_timetrace(od_data[rows_slice], sfreq, *GVTD_MOTION_BAND)
+        thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
+        gvtd_filt = gvtd_filt * _GVTD_SCALE
         t_ds, g_ds = _maxpool_xy(t_gvtd, gvtd_filt)
         after, after_ds = None, None
         if has_after:
-            after = gvtd_timetrace(od_after[rows_slice], sfreq, *GVTD_MOTION_BAND)
+            after = gvtd_timetrace(od_after[rows_slice], sfreq, *GVTD_MOTION_BAND) * _GVTD_SCALE
             after_ds = _maxpool_xy(t_gvtd, after)
         rows.append({
             "name": name, "n_ch": len(names), "gvtd": gvtd_filt, "after": after,
             "t_ds": t_ds, "g_ds": g_ds, "after_ds": after_ds,
-            "thresh": gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD),
+            "thresh": None if thresh is None else thresh * _GVTD_SCALE,
         })
 
     # carpet: every block's channels, both wavelengths, z-scored by the uncorrected side
@@ -580,7 +586,7 @@ def carpet_gvtd_figure(
             x=r["t_ds"], y=r["g_ds"], mode="lines",
             name="before" if has_after else "GVTD", legendgroup="before",
             showlegend=(i == 0), line=dict(color=_GVTD_LINE, width=_LW),
-            hovertemplate="t=%{x:.1f}s<br>before=%{y:.3e}<extra></extra>",
+            hovertemplate="t=%{x:.1f}s<br>before=%{y:.3g}<extra></extra>",
         ), row=row_i, col=1)
 
         if r["after_ds"] is not None:
@@ -589,7 +595,7 @@ def carpet_gvtd_figure(
                 x=t_post_ds, y=g_post_ds, mode="lines", name="after",
                 legendgroup="after", showlegend=(i == 0),
                 line=dict(color=_GVTD_AFTER, width=_LW),
-                hovertemplate="t=%{x:.1f}s<br>after=%{y:.3e}<extra></extra>",
+                hovertemplate="t=%{x:.1f}s<br>after=%{y:.3g}<extra></extra>",
             ), row=row_i, col=1)
 
         if r["thresh"] is not None:
@@ -780,6 +786,9 @@ def build_motion_detail_figure(
         raw_od_before.get_data(picks=gvtd_names) if gvtd_names else od_full,
         full_sfreq, *GVTD_MOTION_BAND)
     motion_thresh  = gvtd_threshold(gvtd_filt_full, n_std=GVTD_N_STD)
+    if motion_thresh is not None:
+        motion_thresh *= _GVTD_SCALE
+    gvtd_filt_full = gvtd_filt_full * _GVTD_SCALE
     t_gvtd, gvtd_filt = _maxpool_xy(t_full[1:], gvtd_filt_full, max_pts)
 
     # this channel's |dOD/dt| on full-res OD, through the derivative the spike marks come from
@@ -857,7 +866,7 @@ def build_motion_detail_figure(
         )
         fig.add_annotation(
             x=1, xref="x domain", y=motion_thresh, yref="y",
-            text=f"thresh={motion_thresh:.4f}", showarrow=False,
+            text=f"thresh={sig3(motion_thresh)}", showarrow=False,
             font=dict(size=8, color=_THRESH_RULE), xanchor="right", yanchor="bottom",
             row=gvtd_row, col=1,
         )
