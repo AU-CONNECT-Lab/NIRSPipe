@@ -5,69 +5,78 @@
 
 /* ---- base ---- */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px; line-height: 1.5; color: #2c3e50;
-  padding: 1.5rem 2rem 4rem;
+  font-family: var(--font);
+  font-size: 14px; line-height: 1.6; color: var(--ink); background: var(--surface);
+  padding: 0 2rem 4rem;
 }
-h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.25rem; }
 
 /* ---- header bar ---- */
 .page-header {
   display: flex; align-items: baseline; justify-content: space-between;
-  padding-bottom: 0.5rem; margin-bottom: 1.5rem;
+  margin-top: 1.5rem; padding-bottom: 1rem; margin-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule);
 }
-.page-header .subtitle { font-size: 0.85rem; color: #888; }
+.page-header .subtitle { font-size: 0.85rem; color: var(--faint); }
+.page-header a { color: var(--accent); text-decoration: none; }
 
 /* ---- summary ----
    No card. The h2 above it already marks where the section starts, and a filled panel around
    the one block every page opens with would be chrome the reader has to look past. */
 .summary-box { margin-bottom: 1.75rem; }
-.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; }
+/* start-aligned so the shorter table is not stretched to the taller one's height */
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2rem; align-items: start; }
 .summary-grid table { font-size: 0.88rem; border: none; }
 .summary-grid td, .summary-grid th { border: none; padding: 0.2rem 0.5rem 0.2rem 0; }
-.summary-grid th { background: none; width: 140px; color: #666; font-weight: 500; }
+.summary-grid th { background: none; width: 140px; color: var(--muted); font-weight: 500; }
 
 /* the grey aside a section heading carries: what the panel below shows, and how to read it */
-.hint { font-size: 0.78rem; color: #888; font-weight: 400; }
+.hint { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+.panel-note { font-size: 0.82rem; color: var(--muted); margin: 0 0 0.3rem; }
+.na { color: var(--faint); }
 
 /* ---- badges ---- */
-.badge-green  { color: #27ae60; font-weight: 700; }
-.badge-yellow { color: #e67e22; font-weight: 700; }
-.badge-red    { color: #c0392b; font-weight: 700; }
+.badge-green, .badge-yellow, .badge-red {
+  display: inline-block; font-size: 0.78rem; font-weight: 600; line-height: 1.5;
+  padding: 0 0.55rem; border-radius: 999px; font-variant-numeric: tabular-nums;
+}
+.badge-green  { color: var(--ok); background: var(--ok-soft); }
+.badge-yellow { color: var(--warn); background: var(--warn-soft); }
+.badge-red    { color: var(--bad); background: var(--bad-soft); }
 
 /* ---- collapsible steps ----
    A step is a heading with a disclosure triangle, not a card: the rule under the summary is
    what separates one step from the next, and the triangle is what says it folds. */
 details { border: none; margin-bottom: 1.5rem; }
 details > summary {
-  padding: 0.3rem 0 0.35rem; cursor: pointer; font-weight: 600;
-  background: none; border-bottom: 1px solid var(--rule); list-style: none;
+  padding: 0.3rem 0 0.35rem; cursor: pointer; font-weight: 600; font-size: 0.98rem;
+  background: none; border-bottom: 1px solid var(--rule-soft); list-style: none;
   display: flex; align-items: center; gap: 0.5rem;
   user-select: none;
 }
 details > summary:hover { color: var(--accent); }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before {
-  content: "▶"; font-size: 0.65rem; color: #9aa5b1; transition: transform 0.15s;
+  content: "▶"; font-size: 0.65rem; color: var(--faint); transition: transform 0.15s;
 }
 details[open] > summary::before { transform: rotate(90deg); }
 .details-body { padding: 0.75rem 0 0; }
-.step-desc { color: #555; margin: 0 0 0.75rem; }
+.step-desc { color: var(--muted); margin: 0 0 0.75rem; }
 .fig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
            margin-top: 0.5rem; }
 .fig-row.single { grid-template-columns: 1fr; }
 
 /* ---- SCI table ---- */
-.sci-table td.bad  { background: #fde8e8; color: #c0392b; }
-.sci-table td.good { background: #e8f8ee; color: #1e8449; }
+.sci-table td.bad  { background: var(--bad-soft); color: var(--bad); }
+.sci-table td.good { background: var(--ok-soft); color: var(--ok); }
 
 /* ---- plotly figures ---- */
 .plotly-fig { margin-top: 0.5rem; overflow: hidden; }
 
 /* ---- channel / detail selectors ---- */
 .ch-select {
-  font-size: 0.82rem; border: 1px solid #ced4da; border-radius: 4px;
-  padding: 0.2rem 0.5rem; background: #f8f9fa;
+  font-size: 0.82rem; border: 1px solid var(--rule); border-radius: 6px;
+  padding: 0.2rem 0.5rem; background: var(--surface); color: var(--ink);
   margin: 0.6rem 0 0.3rem; display: block;
 }
 
@@ -82,40 +91,54 @@ details[open] > summary::before { transform: rotate(90deg); }
 .qm-list { font-size: 0.88rem; column-count: 2; column-gap: 2.5rem;
            margin: 0; padding: 0; list-style: none; }
 .qm-list li { display: flex; justify-content: space-between; padding: 0.18rem 0;
-              border-bottom: 1px solid #eef0f3; break-inside: avoid; gap: 1rem; }
-.ql { color: #666; }
+              border-bottom: 1px solid var(--rule-soft); break-inside: avoid; gap: 1rem; }
+.ql { color: var(--ink); }
+.qm-list .ql { color: var(--muted); }
 .qm-list .ql, .qm-narrow .ql { white-space: nowrap; }
-/* dotted underline is the only cue that a native title tooltip is there */
-.ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted #b8c2cc; }
-.ql-key { color: #34495e; font-weight: 600; }
-.ql-dot { color: #2980b9; font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
-.qm-note { font-size: 0.78rem; color: #8a949e; margin: 0 0 0.55rem; }
-.qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; }
-.ch-group { font-weight: 600; background: #f2f4f6; }
+/* the tooltip's underline shows on hover only: a dotted rule under every label is noise */
+.ql[title]:not([title=""]) { cursor: help; border-bottom: 1px dotted transparent; }
+.ql[title]:not([title=""]):hover { border-bottom-color: var(--faint); }
+.ql-key { color: var(--ink); font-weight: 600; }
+.ql-dot { color: var(--accent); font-size: 0.62em; vertical-align: 0.35em; margin-left: 0.3rem; }
+.qm-note { font-size: 0.78rem; color: var(--muted); margin: 0 0 0.55rem; }
+.qm-sub { font-size: 0.9rem; font-weight: 600; margin: 1rem 0 0.3rem; color: var(--ink); }
+.ch-group { font-weight: 600; background: var(--surface-alt); }
 .qm-panel-title { margin-top: 0.9rem; }
 .qm-split td:first-child { white-space: nowrap; }
 .qm-split td:not(:first-child), .qm-split th:not(:first-child) { text-align: right; }
 .qm-list .qv { font-weight: 600; white-space: nowrap; }
-.qm-ok   { color: #27ae60; }
-.qm-warn { color: #e67e22; }
-.qm-bad  { color: #c0392b; }
+.qm-ok   { color: var(--ok); }
+.qm-warn { color: var(--warn); }
+.qm-bad  { color: var(--bad); }
 .qm-table { font-size: 0.82rem; margin-top: 0.5rem; }
-/* ---- metric tables ---- */
-/* tables default to the full page width, which stretches the columns to fill it: the label
-   column swallows the row and how far apart two values sit depends on how many there are.
-   Content width instead, so every table in the section has the same column spacing */
-.qm-table.qm-flat { width: auto; }
+/* ---- metric tables ----
+   No cell grid: a row is separated by a hairline and a value column by being right-aligned.
+   Full width, so the right edge lines up with every other block on the page. */
+.qm-table.qm-flat { width: 100%; font-size: 0.86rem; }
 .qm-table.qm-narrow { min-width: 22rem; }
-/* no cell grid on any of them. A row is separated by the hairline the metric lists used and
-   a value column by being right-aligned, neither of which needs a rule of its own */
-.qm-flat th, .qm-flat td { border: none; border-bottom: 1px solid #eef0f3;
-                           padding: 0.18rem 0.9rem 0.18rem 0;
-                           /* so a column of numbers lines up digit under digit */
+.qm-flat th, .qm-flat td { border: none; border-bottom: 1px solid var(--rule-soft);
+                           padding: 0.4rem 1.6rem 0.4rem 0;
                            font-variant-numeric: tabular-nums; }
-.qm-flat th { background: none; color: #8a949e; font-weight: 600; font-size: 0.75rem;
-              text-transform: uppercase; letter-spacing: 0.04em;
-              border-bottom: 1px solid #d8dee5; }
-.qm-flat td.qv { font-weight: 600; white-space: nowrap; }
+.qm-flat th { background: none; color: var(--muted); font-weight: 600; font-size: 0.8rem;
+              vertical-align: bottom; border-bottom: 1px solid var(--faint); }
+.qm-flat th:last-child, .qm-flat td:last-child { padding-right: 0; }
+.qm-flat tbody tr:hover td { background: var(--surface-alt); }
+.qm-flat td.qv { white-space: nowrap; }
+
+/* ---- the run's metrics as one table: a metric per row, a channel set per column ---- */
+.qm-unified col.lab { width: 34%; }
+.qm-unified th:not(:first-child), .qm-unified td:not(:first-child) { text-align: right; }
+/* a value no channel set owns spans the set columns */
+.qm-unified td.span { text-align: center; }
+.qm-unified thead th { position: sticky; top: var(--qc-topbar-h, 0px); z-index: 1; background: var(--surface); }
+.qm-unified tr.qm-group td { padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
+.qm-unified tbody tr.qm-group:hover td { background: none; }
+.qm-group-title { font-weight: 600; color: var(--ink); }
+.qm-unified tr.qm-group sup { color: var(--accent); margin-left: 0.1rem; }
+.qm-group-tag { font-size: 0.78rem; color: var(--muted); margin-left: 0.5rem; }
+.qm-footnotes { margin: 0.6rem 0 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--muted); }
+.qm-footnotes li { margin-bottom: 0.3rem; }
+
 /* ---- the dyad report's numbers tables ---- */
 /* one table per kind of pairing, each condition a group of columns beside the whole run's */
 .num-scroll { overflow-x: auto; }
@@ -124,20 +147,20 @@ details[open] > summary::before { transform: rotate(90deg); }
 .num-table col.idcol { width: 7rem; }
 /* a rule where one condition's columns end, without which a dozen of them read as one smear */
 .num-table th.grp, .num-table td.grp { border-left: 2px solid #b8c2cc; }
-.num-table .hdr-note { font-weight: 400; color: #8a949e; }
+.num-table .hdr-note { font-weight: 400; color: var(--muted); }
 
-.qm-table td.bad  { color: #c0392b; }
-.qm-table td.good { color: #27ae60; }
-.qm-table td.neg  { color: #27ae60; }
-.qm-table td.pos  { color: #c0392b; }
+.qm-table td.bad  { color: var(--bad); }
+.qm-table td.good { color: var(--ok); }
+.qm-table td.neg  { color: var(--ok); }
+.qm-table td.pos  { color: var(--bad); }
 
 /* ---- GLM beta table ---- */
 .glm-beta-table { font-size: 0.80rem; border-collapse: collapse; margin-top: 0.25rem; }
-.glm-beta-table th, .glm-beta-table td { border: 1px solid #ddd; padding: 0.22rem 0.55rem; text-align: right; }
-.glm-beta-table th { background: #f0f3f6; text-align: center; }
+.glm-beta-table th, .glm-beta-table td { border: 1px solid var(--rule-table); padding: 0.22rem 0.55rem; text-align: right; }
+.glm-beta-table th { background: var(--surface-head); text-align: center; }
 .glm-beta-table td:first-child, .glm-beta-table td:nth-child(2) { text-align: left; }
-.glm-beta-table td.pos { color: #c0392b; }
-.glm-beta-table td.neg { color: #27ae60; }
+.glm-beta-table td.pos { color: var(--bad); }
+.glm-beta-table td.neg { color: var(--ok); }
 .glm-beta-table td.chroma-hbo { color: #c0392b; font-weight: 600; }
 .glm-beta-table td.chroma-hbr { color: #2471a3; font-weight: 600; }
 

@@ -5,18 +5,18 @@
 
 /* the body uses it for the paragraph under a table too, where document.css only styles the
    one in the header band */
-.subtitle { color: #888; font-size: 0.85rem; }
+.subtitle { color: var(--faint); font-size: 0.85rem; }
 
 th, td { padding: 0.4rem 0.7rem; white-space: nowrap; }
-tbody tr:hover { background: #f8fafc; }
-td a { color: #2980b9; font-weight: 600; text-decoration: none; }
+tbody tr:hover { background: var(--surface-alt); }
+td a { color: var(--accent); font-weight: 600; text-decoration: none; }
 td a:hover { text-decoration: underline; }
-.muted { color: #95a5a6; }
+.muted { color: var(--faint); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .scroll { overflow-x: auto; }
 
 /* ---- Outliers ----
    A marked cell sits apart from the page's other rows on that metric; the asterisk carries
    it where the tint does not, in print and for a reader who cannot see the tint. */
-td.flag { background: #fdf0e3; font-weight: 600; color: #b9591a; }
-td.flag::after { content: " *"; color: #e08b3f; }
+td.flag { background: var(--warn-soft); font-weight: 600; color: var(--warn); }
+td.flag::after { content: " *"; color: var(--warn); }

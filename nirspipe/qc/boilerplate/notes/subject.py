@@ -202,12 +202,12 @@ NOTES = {
         "these averages and listed in their own block of the per-channel table below.",
     "metrics.set_help":
         "Long is the set the verdict is read off. Short is left uncoloured: a short "
-        "channel&rsquo;s coupling is high by construction, so that row answers whether the "
+        "channel&rsquo;s coupling is high by construction, so that column answers whether the "
         "regressors those channels feed are trustworthy rather than whether the run is "
         "usable. Rejection is per channel, against the screening criteria over the whole "
         "montage, and is not read off these averages.",
     "metrics.set_help_condition":
-        "On this page every column is this condition's, and the channel sets are the run's, "
+        "On this page every value is this condition's, and the channel sets are the run's, "
         "since one montage has to serve every condition.",
     "metrics.stages":
         "One panel per metric, each on its own scale, measured on the long channels alone: a "
@@ -226,8 +226,6 @@ NOTES = {
         "The greyed panels are not quality claims: they show what left the recording. "
         "Direction is marked only across the whole chain, never on a single step, since a step "
         "can move a metric for reasons that are not quality.",
-    "metrics.motion_split":
-        "Optical density. Each channel set is measured on its own, in the table below.",
     "metrics.motion_unsplit_long":
         "Optical density. GVTD, the spike counts and the correction footprint are measured on "
         "long channels only.",
@@ -246,16 +244,22 @@ NOTES = {
         "easily. <b>Read each row on its own, not down a column.</b> Corrected per channel "
         "is the exception, being an average over the set, and is the one column two rows "
         "can be compared on.",
+    "metrics.gvtd_sets_columns":
+        "Each channel set is measured on its own rather than regrouped: GVTD is an RMS across "
+        "the set&rsquo;s channels with its own cutoff, and a frame count asks how many of "
+        "<i>that set&rsquo;s</i> channels were flagged at once, a bar a smaller set clears "
+        "more easily. <b>The three values in a row do not compare.</b> Corrected per channel "
+        "is the exception, being an average over the set.",
+    "metrics.motion_arrow":
+        "An arrow is the value before&nbsp;&rarr;&nbsp;after motion correction.",
     "metrics.gvtd_set_help":
         "Long is the set the verdict is read off and the only one coloured. Each set is its own "
         "measurement rather than a grouping of one, with its own GVTD cutoff and its own bar "
         "of {pct:g}% of the channels. Corrected per channel is the exception, an average over "
         "the set.",
     "metrics.motion_extra_split":
-        "What the table above has no column for. <b>Spike count</b> is a sum over "
-        "channels, read against its set&rsquo;s channel count, and the per-set values are "
-        "in the optical-density table above; censoring names the set "
-        "<code>--gvtd-censor</code> gave it.",
+        "A value spanning the three columns has no channel set: the motion sensor is not "
+        "optical data, and censoring names the set <code>--gvtd-censor</code> gave it.",
     "metrics.motion_extra_long":
         "Counted on <b>long channels</b>: the frame rows count a timepoint when at least "
         "{pct:g}% of the set was flagged, while Spike count and Spike % count "
@@ -264,10 +268,11 @@ NOTES = {
         "Counted on every channel: the frame rows count a timepoint when at least {pct:g}% "
         "of the set was flagged, while Spike count and Spike % count channel-samples.",
     "metrics.haemo_timing_long":
-        "Measured after Beer-Lambert, on long channels: what the denoising did, not what the "
-        "recording arrived as, so each <b>before</b> value is that channel set's row in the "
-        "table above. The global correlations are the exception, their before side being the "
-        "bandpassed signal rather than the unfiltered one.",
+        "Measured after Beer-Lambert. An arrow in the Long column is that value "
+        "before&nbsp;&rarr;&nbsp;after denoising, on long channels; All and Short are before "
+        "denoising only. The regression rows are the exception: they straddle the confound "
+        "regression alone, so their before side is the bandpassed signal and differs from the "
+        "Global corr row above them.",
     "metrics.haemo_timing_every":
         "Measured after Beer-Lambert: what the denoising did, not what the recording "
         "arrived as. The global correlations&rsquo; before side is the bandpassed signal "

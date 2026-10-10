@@ -22,13 +22,12 @@
 {% if rating_save_endpoint %}
 #rating-static-banner {
   display: none;
-  background: #fff3cd;
-  color: #856404;
+  background: var(--warn-soft);
+  color: var(--warn);
   padding: 0.4rem 1rem;
   text-align: center;
   font-size: 0.82rem;
-  border-bottom: 1px solid #ffc107;
-  font-family: Arial, sans-serif;
+  border-bottom: 1px solid #e9d8a6;
 }
 body.rating-static-mode #rating-static-banner { display: block; }
 body.rating-static-mode #qc-container .qc-module {
@@ -44,10 +43,9 @@ body.rating-static-mode #qc-container .qc-module {
   z-index: 1000;
   display: flex;
   align-items: stretch;
-  background: #fff;
-  border-bottom: 2px solid #2980b9;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
   user-select: none;
 }
 #qc-bar-scroll {
@@ -57,7 +55,7 @@ body.rating-static-mode #qc-container .qc-module {
   scrollbar-width: thin;
 }
 #qc-bar-scroll::-webkit-scrollbar { height: 7px; }
-#qc-bar-scroll::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+#qc-bar-scroll::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
 
 /* two rows sharing one grid: nav cell and its pill always land in the same column */
 .qc-grid {
@@ -75,13 +73,12 @@ body.rating-static-mode #qc-container .qc-module {
 #qc-pinned {
   flex: 0 0 auto;
   min-width: 0;          /* .qc-grid's min-width:100% would claim the whole bar here */
-  border-left: 1px solid #dde3ea;
-  background: #fbfcfd;
+  border-left: 1px solid var(--rule);
 }
 .qc-sep {
   grid-row: 1 / span 2;
   width: 1px;
-  background: #dde3ea;
+  background: var(--rule);
   margin: 2px 7px;
 }
 .qc-nav-cell {
@@ -89,15 +86,15 @@ body.rating-static-mode #qc-container .qc-module {
   align-items: center;
   justify-content: center;
   padding: 0.2rem 0.55rem;
-  border-radius: 3px;
-  color: #2980b9;
-  font-size: 0.85rem;
-  font-weight: 600;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
 }
-.qc-nav-cell:hover { background: #eaf3fb; }
-.qc-nav-plain { color: #495057; cursor: default; }
+.qc-nav-cell:hover { background: var(--surface-alt); color: var(--ink); }
+.qc-nav-plain { color: var(--faint); cursor: default; }
 .qc-nav-plain:hover { background: none; }
 .qc-pad { min-height: 1.35rem; }
 .qc-module {
@@ -107,34 +104,41 @@ body.rating-static-mode #qc-container .qc-module {
   justify-self: center;  /* uniform pill, centred under a label of any width */
   width: 70px;
   min-height: 1.35rem;
-  border: 1.5px solid #ccd3da;
-  border-radius: 8px;
-  background: #f7f8fa;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface);
   cursor: pointer;
 }
 .qc-module .qc-icon {
   font-family: monospace;
   font-size: 15px;
   line-height: 1.1;
-  color: #8a939c;
+  color: var(--faint);
 }
-.qc-module.good  { background: #d4edda; border-color: #28a745; }
-.qc-module.bad   { background: #f8d7da; border-color: #dc3545; }
-.qc-module.other { background: #fff; border-color: #6c757d; }
-.qc-module.good  .qc-icon { color: #155724; }
-.qc-module.bad   .qc-icon { color: #721c24; }
-.qc-module.other .qc-icon { color: #343a40; }
-.qc-module.has-note { box-shadow: inset 0 -3px 0 #f0ad4e; }
+.qc-module.good  { background: var(--ok-soft); border-color: #a6d8b4; }
+.qc-module.bad   { background: var(--bad-soft); border-color: #f1aeb5; }
+.qc-module.other { background: var(--surface); border-color: var(--faint); }
+.qc-module.good  .qc-icon { color: var(--ok); }
+.qc-module.bad   .qc-icon { color: var(--bad); }
+.qc-module.other .qc-icon { color: var(--ink); }
+.qc-module.has-note { box-shadow: inset 0 -3px 0 #e3b341; }
 .qc-chip {
   grid-row: 1 / span 2;
   display: flex;
   align-items: center;
   padding: 0 0.6rem;
-  font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 0.82rem;
-  color: #495057;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--faint);
   white-space: nowrap;
 }
+
+/* ---- navigation only: one row, no pill row under it ---- */
+#qc-container.qc-one-row .qc-grid { grid-template-rows: auto; padding-top: 0; padding-bottom: 0; }
+#qc-container.qc-one-row .qc-nav-cell { padding: 0.75rem 0.6rem 0.7rem; }
+#qc-container.qc-one-row .qc-sep { grid-row: auto; margin: 0.9rem 0.45rem; }
+#qc-container.qc-one-row .qc-chip { grid-row: auto; }
+#qc-container.qc-one-row .qc-pad { display: none; }
 
 /* anchors land below the bar instead of under it */
 h1[id], h2[id], h3[id], details[id] {
@@ -170,7 +174,15 @@ h1[id], h2[id], h3[id], details[id] {
   {%- endfor %}
 {% endmacro %}
 
-<div id="qc-container">
+{#- a page where no entry takes a pill gets a single row rather than an empty second one -#}
+{%- set pills = namespace(any=false) %}
+{%- for group in nav_modules %}{% for e in group %}
+  {%- if not e.sep and (e.ratable is not defined or e.ratable) %}{% set pills.any = true %}{% endif %}
+{%- endfor %}{% endfor %}
+{%- for e in rating_pinned or [] %}
+  {%- if not e.sep and (e.ratable is not defined or e.ratable) %}{% set pills.any = true %}{% endif %}
+{%- endfor %}
+<div id="qc-container"{% if not pills.any %} class="qc-one-row"{% endif %}>
   <div id="qc-bar-scroll">
     <div class="qc-grid">
       {%- for group in nav_modules %}

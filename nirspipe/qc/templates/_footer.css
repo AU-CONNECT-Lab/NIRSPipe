@@ -4,7 +4,7 @@
    rather than once per sheet. Anything that has to differ (h2, tables, the footer's
    top margin) stays in the look, document.css. */
 
-.section-hint { font-size: 0.85rem; color: #666; }
+.section-hint { font-size: 0.88rem; color: var(--muted); }
 
 /* ---- notes, errors, missing figures ----
    Lists rather than boxes. A note is prose, and a filled box around prose reads as a widget
@@ -12,11 +12,11 @@
    the one of the three that has to be found by someone scanning the page. */
 
 .note-list { margin: 0.3rem 0 1.2rem; padding-left: 1.2rem; }
-.note-list li { color: #46596b; font-size: 0.85rem; margin-bottom: 0.2rem; }
+.note-list li { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.2rem; }
 .error-list { margin: 0.3rem 0 1.2rem; padding-left: 1.2rem;
               border-left: 2px solid var(--bad); }
-.error-list li { color: #c0392b; font-size: 0.85rem; margin-bottom: 0.2rem; }
-.no-errors { color: #27ae60; font-weight: 600; }
+.error-list li { color: var(--bad); font-size: 0.85rem; margin-bottom: 0.2rem; }
+.no-errors { color: var(--ok); font-weight: 500; }
 
 /* The provenance graph is only as wide as the chain is long and as tall as the run has
    parallel outputs, so it is the one figure in a report that can come out portrait. Drawn at
@@ -28,29 +28,34 @@ img.prov-graph { width: auto; max-width: 100%; max-height: 560px; margin: 0 auto
 
 .placeholder {
   border-left: 2px solid var(--rule); padding: 0.4rem 0 0.4rem 0.8rem;
-  color: #aaa; font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
+  color: var(--faint); font-style: italic; font-size: 0.85rem; margin-top: 0.5rem;
 }
+
+table.versions { max-width: 400px; }
 
 /* ---- methods tabs ---- */
-.tab-bar { display: flex; gap: 0; margin-bottom: -1px; }
-.tab-btn {
-  padding: 0.35rem 0.9rem; border: 1px solid #ccc; background: #f5f5f5;
-  cursor: pointer; font-size: 0.82rem; border-bottom: none;
-  border-radius: 4px 4px 0 0;
-}
-.tab-btn.active { background: #fff; font-weight: 600; color: #2980b9; }
-.tab-content { display: none; border: 1px solid #ccc; border-radius: 0 4px 4px 4px; }
+.tab-bar { display: flex; align-items: center; gap: 0.25rem; border-bottom: 1px solid var(--rule);
+           margin: 0.75rem 0 0; }
+.tab-btn { font: inherit; font-size: 0.84rem; color: var(--muted); background: none; border: none;
+           border-bottom: 2px solid transparent; padding: 0.45rem 0.8rem; margin-bottom: -1px;
+           cursor: pointer; }
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.tab-bar > .copy { margin-left: auto; }
+.copy { font: inherit; font-size: 0.75rem; color: var(--muted); background: var(--surface);
+        border: 1px solid var(--rule); border-radius: 5px; padding: 0.1rem 0.55rem; cursor: pointer; }
+.copy:hover { color: var(--ink); border-color: var(--faint); }
+.tab-content { display: none; padding-top: 1rem; }
 .tab-content.active { display: block; }
-.tab-content pre { border: none; border-radius: 0 4px 4px 4px; margin: 0; }
 
+/* the rendered tab framed like the three text tabs beside it */
 .boilerplate-html {
   font-family: "Bitstream Charter", Georgia, Times, serif;
-  background: #f8f9fa; padding: 1rem 1.25rem;
-  border-radius: 0 4px 4px 4px;
-  font-size: 0.9rem; line-height: 1.55;
+  background: var(--surface-code); border: 1px solid var(--rule-soft); border-radius: 6px;
+  padding: 1rem 1.25rem; font-size: 0.98rem; line-height: 1.7;
 }
-.boilerplate-para { margin: 0 0 0.6rem; }
-.boilerplate-cite { color: #555; }
-.boilerplate-refs-title { font-size: 0.95rem; margin: 0.8rem 0 0.3rem; }
-.boilerplate-refs { font-size: 0.82rem; padding-left: 1.3rem; }
-.boilerplate-refs li { margin-bottom: 0.3rem; }
+.boilerplate-para { margin: 0 0 0.8rem; }
+.boilerplate-cite { color: var(--muted); }
+.boilerplate-refs-title { font-size: 0.95rem; margin: 1rem 0 0.3rem; }
+.boilerplate-refs { font-size: 0.86rem; padding-left: 1.3rem; }
+.boilerplate-refs li { margin-bottom: 0.35rem; }

@@ -66,6 +66,7 @@
   <button class="tab-btn" onclick="showTab(event,'tab-plain')">Plain text</button>
   <button class="tab-btn" onclick="showTab(event,'tab-md')">Markdown</button>
   <button class="tab-btn" onclick="showTab(event,'tab-latex')">LaTeX</button>
+  <button type="button" class="copy" id="copy-methods">Copy</button>
 </div>
 <div id="tab-rendered" class="tab-content active"><div class="boilerplate-html">{{ methods.html }}</div></div>
 <div id="tab-plain"    class="tab-content"><pre>{{ methods.plain }}</pre></div>
@@ -79,12 +80,20 @@ function showTab(event, id) {
   document.getElementById(id).classList.add('active');
   event.target.classList.add('active');
 }
+document.getElementById('copy-methods').addEventListener('click', e => {
+  const button = e.currentTarget;
+  const text = document.querySelector('.tab-content.active').innerText.trim();
+  navigator.clipboard.writeText(text).then(() => {
+    button.textContent = 'Copied';
+    setTimeout(() => { button.textContent = 'Copy'; }, 1200);
+  });
+});
 </script>
 {% endif %}
 
 {% if versions %}
 <h2 id="Versions">Software Versions</h2>
-<table style="max-width:400px;">
+<table class="versions">
   <tr><th>Package</th><th>Version</th></tr>
   {% for pkg, ver in versions.items() %}
   <tr><td>{{ pkg }}</td><td>{{ ver }}</td></tr>
