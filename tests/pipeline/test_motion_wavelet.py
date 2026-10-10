@@ -264,7 +264,10 @@ def test_gui_does_not_offer_spline():
     src = (Path(nirspipe.__file__).parent / "interface" / "pages" / "analysis.py"
            ).read_text(encoding="utf-8")
     assert '"an-motion-correction"' in src
-    assert '"value": "spline"' not in src
+    # the motion-correction dropdown alone: the censor fill offers a spline of its own
+    dropdown = src[src.index('"an-motion-correction"'):]
+    dropdown = dropdown[:dropdown.index("clearable")]
+    assert '"value": "spline"' not in dropdown
 
 
 @requires_pywt
