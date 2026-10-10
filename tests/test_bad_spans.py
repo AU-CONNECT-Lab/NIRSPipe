@@ -20,6 +20,8 @@ from nirspipe.pipeline.restingstate import compute_alff
 from nirspipe.qc.common.figure_io import extract_markers
 from nirspipe.qc.common.windows import condition_windows
 from nirspipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_figure
+from nirspipe.qc.metrics import gvtd_censor_spans
+from nirspipe.qc.metrics._helpers import long_short_channels
 from nirspipe.qc.metrics.windowed import task_scope_windows
 from nirspipe.qc.subject.sqm_record import _condition_cnr
 from nirspipe.utils.lineage import lineage_of
@@ -168,6 +170,23 @@ def test_the_exported_script_screens_as_the_run_screened(tmp_path):
     call = script[script.index("mark_bad_channels(\n"):script.index("save_step(raw_od, \"sci\"")]
     for key in ("PSP_THRESHOLD", "MIN_GOOD_FRAC", "SCREEN_SCOPE"):
         assert f"={key}," in call
+
+
+# ---- GVTD censoring ----
+
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="D10: GVTD censoring counts channels the screening rejected")
+def test_a_rejected_channel_does_not_censor_the_run():
+    od = intensity_to_od(synth_raw("01", "rest", bad_pair=None, motion_onset=None))
+    long_names, _ = long_short_channels(od, None)
+    noisy = long_names[:2]
+    rows = [od.ch_names.index(c) for c in noisy]
+    for onset in (60, 140, 220):
+        start = int(onset * od.info["sfreq"])
+        od._data[rows, start:start + int(2 * od.info["sfreq"])] += 0.5
+    od.info["bads"] = noisy
+    without = gvtd_censor_spans(od.copy().drop_channels(noisy), n_std=10.0)[0]
+    assert gvtd_censor_spans(od, n_std=10.0)[0] == without
 
 
 # ---- evoked figures ----
