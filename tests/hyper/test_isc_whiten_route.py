@@ -117,7 +117,7 @@ def _draws(dyad, monkeypatch, windows, **kwargs):
 
 
 def test_a_re_paired_draw_hands_the_correlation_its_own_whitened_cuts(dyad, monkeypatch):
-    (_, _, pair, inner, white, isc_window), = _draws(
+    (_, _, pair, inner, white, isc_window, _), = _draws(
         dyad, monkeypatch, [("talk", 190.0, 370.0)], isc_whiten_s=WHITEN_S)
     # the coherence was not whitened, so its cut is the plain one
     whole = whiten_raws({"sub-01": dyad["sub-01"]}, WHITEN_S)["sub-01"]
@@ -130,7 +130,7 @@ def test_a_re_paired_draw_hands_the_correlation_its_own_whitened_cuts(dyad, monk
 
 
 def test_a_condition_at_the_record_start_is_correlated_past_the_transient(dyad, monkeypatch):
-    (_, _, pair, inner, _, isc_window), = _draws(
+    (_, _, pair, inner, _, isc_window, _), = _draws(
         dyad, monkeypatch, [("rest", 0.0, 180.0)], isc_whiten_s=WHITEN_S)
     assert inner[0] == pytest.approx(0.0)
     assert isc_window == pytest.approx((WHITEN_S, inner[1]))
@@ -141,7 +141,7 @@ def test_a_condition_at_the_record_start_is_correlated_past_the_transient(dyad, 
 
 
 def test_without_correlation_whitening_the_window_is_the_condition_s(dyad, monkeypatch):
-    (_, _, _, inner, _, isc_window), = _draws(dyad, monkeypatch, [("rest", 0.0, 180.0)])
+    (_, _, _, inner, _, isc_window, _), = _draws(dyad, monkeypatch, [("rest", 0.0, 180.0)])
     assert isc_window == inner
 
 

@@ -17,6 +17,7 @@ import pandas as pd
 
 from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans, merged
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path
 from nirspipe.pipeline.hyper._helpers import _chroma_tuple
@@ -275,6 +276,23 @@ def run_hyper_post(
     # pass serves both
     fig_chroma = chroma[0]
 
+    # the stretch a whole-run row describes, --tstart/--tend or the aligned recording
+    run_span = (analysis_window if analysis_window is not None else
+                (0.0, min(r.n_times / float(r.info["sfreq"]) for r in aligned_raws.values())))
+
+    def _kept_s(pair_key, t0: float, t1: float) -> float:
+        """Seconds of ``[t0, t1]`` outside the union of the pairing's two members' BAD_ spans."""
+        spans = merged((a, b) for sid in pair_key for a, b, _ in bad_spans(aligned_raws[sid]))
+        return round(t1 - t0 - sum(max(0.0, min(b, t1) - max(a, t0)) for a, b in spans), 3)
+
+    def _with_kept(df, t0: float, t1: float):
+        """``df`` with each row's pairing's kept seconds over ``[t0, t1]``, after any grouping."""
+        if df is None or df.empty:
+            return df
+        df = df.copy()
+        df["kept_s"] = [_kept_s(key, t0, t1) for key in zip(df["sub1"], df["sub2"])]
+        return df
+
     def _write_df_tsv(df, entities: dict, step: str, **extra) -> Path:
         """One long-format table, named by what distinguishes it from the others.
 
@@ -345,7 +363,8 @@ def run_hyper_post(
         # the cut's own clock starts at zero, so the condition sits `tstart - lo` into it
         part = window_result(res, tstart - lo, tstart - lo + (tstop - tstart))
         # back onto the aligned clock, the one its markers and the whole-run maps are on
-        return WTCResult(pairs=part.pairs, freqs=part.freqs, times=part.times + lo)
+        return WTCResult(pairs=part.pairs, freqs=part.freqs, times=part.times + lo,
+                         excluded=part.excluded)
 
     def _tag(df, ch_type: str):
         """The column saying which chromophore a row is, added after every aggregation.
@@ -625,14 +644,14 @@ def run_hyper_post(
         _load_roi_level(ch_type)
 
         chan_band_df = _band_means(wtc_result, "wtc", ch_type)
-        out["chan"] = chan_band_df
+        out["chan"] = _with_kept(chan_band_df, *run_span)
         if chan_band_df is not None and wtc_save_maps:
             _save_maps(wtc_result, ch_type)
 
-        out["phasescale"] = _phase_scale(wtc_result, "whole run", ch_type)
+        out["phasescale"] = _with_kept(_phase_scale(wtc_result, "whole run", ch_type), *run_span)
         out["result"] = wtc_result
-        out["roichan"] = _roi_band(chan_band_df, ch_type, "whole run")
-        out["roihom"] = _roi_hom_band(chan_band_df, ch_type, "whole run")
+        out["roichan"] = _with_kept(_roi_band(chan_band_df, ch_type, "whole run"), *run_span)
+        out["roihom"] = _with_kept(_roi_hom_band(chan_band_df, ch_type, "whole run"), *run_span)
 
         # ---- per condition ----
         # each task window read out of the whole-run pass, not recomputed; see `window_result`
@@ -657,25 +676,28 @@ def run_hyper_post(
 
             out["cond_wtc"][-1] = cond_wtc
 
-            cond_roi = _roi_band(cond_chan, ch_type, f"condition {label}")
+            cond_roi = _with_kept(_roi_band(cond_chan, ch_type, f"condition {label}"),
+                                  tstart, tstop)
             out["cond_bands"][-1] = {"chan": cond_chan, "roichan": cond_roi}
             if cond_roi is not None and not cond_roi.empty:
                 cond_roi = cond_roi.copy()
                 cond_roi.insert(0, "condition", label)
                 out["cond_roi"].append(_tag(cond_roi, ch_type))
 
-            cond_hom = _roi_hom_band(cond_chan, ch_type, f"condition {label}")
+            cond_hom = _with_kept(_roi_hom_band(cond_chan, ch_type, f"condition {label}"),
+                                  tstart, tstop)
             out["cond_bands"][-1]["roihom"] = cond_hom
             if cond_hom is not None and not cond_hom.empty:
                 cond_hom = cond_hom.copy()
                 cond_hom.insert(0, "condition", label)
                 out["cond_roihom"].append(_tag(cond_hom, ch_type))
 
-            cond_chan = cond_chan.copy()
+            cond_chan = _with_kept(cond_chan, tstart, tstop)
             cond_chan.insert(0, "condition", label)
             out["cond_chan"].append(_tag(cond_chan, ch_type))
 
-            cond_scale = _phase_scale(cond_wtc, f"condition {label}", ch_type)
+            cond_scale = _with_kept(_phase_scale(cond_wtc, f"condition {label}", ch_type),
+                                    tstart, tstop)
             if cond_scale is not None and not cond_scale.empty:
                 cond_scale.insert(0, "condition", label)
                 out["cond_phasescale"].append(_tag(cond_scale, ch_type))
@@ -693,6 +715,14 @@ def run_hyper_post(
                     "+".join(chroma), len(chroma))
 
     passes = {ch_type: _wtc_pass(ch_type) for ch_type in chroma}
+
+    # a condition the exclusions cover whole for a pairing keeps its rows, NaN, and says why
+    for label, tstart, tstop in cond_windows:
+        for pair_key in (pairings or []):
+            if _kept_s(pair_key, tstart, tstop) <= 0:
+                note(notes, scope, f"Condition {label}: every moment of it lies in a BAD_ span "
+                                   f"of {pair_key[0]} or {pair_key[1]}, so its coherence and "
+                                   "correlation are NaN.")
 
     # which level decided the cells every phase column below was averaged over, since the
     # column cannot say so itself and two runs of one dyad can differ only in this
@@ -859,7 +889,7 @@ def run_hyper_post(
             pairs_df.insert(0, "chromophore", ch_type)
             if label:
                 pairs_df.insert(0, "condition", label)
-            isc_pair_frames.append(pairs_df)
+            isc_pair_frames.append(_with_kept(pairs_df, *(window or run_span)))
             sources = paths_from(aligned_raws.values())
             # the cond- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own

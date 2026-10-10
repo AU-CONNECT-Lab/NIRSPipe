@@ -25,6 +25,7 @@ from nirspipe.pipeline.hyper.wtc import (
     _ChannelWavelet,
     _outside_coi,
     _wtc_over_pairs,
+    kept_columns,
     wtc_band_mean,
     window_result,
 )
@@ -170,6 +171,7 @@ def _accumulate_null_hist(hists: dict, result: "WTCResult", mask_coi: bool) -> N
             if wtc.shape[0] != len(freqs):
                 continue
             keep = _outside_coi(freqs, data["coi"]) if mask_coi else np.ones(wtc.shape, dtype=bool)
+            keep = keep & kept_columns(result, (sub1, sub2), wtc.shape[1])[None, :]
             if not keep.any():
                 continue
             # one bincount over the whole map rather than one per row: the row index is
@@ -409,11 +411,13 @@ def compute_wtc_pair_null(
     # the same only across draws that got the same pad
     caches: dict[tuple, dict[tuple[str, str], _ChannelWavelet]] = {}
     # a fifth element is the pair the coherence reads, whitened, where --wtc-whiten is on; a
-    # sixth is the correlation's window, past its own whitening transient
+    # sixth is the correlation's window, past its own whitening transient; a seventh each
+    # side's excluded samples, where the draw's own annotations do not say it all
     for partner_id, label, pair, inner, *extra in draws:
+        excluded = extra[2] if len(extra) > 2 else None
         # other metrics on the same re-paired pool ride on this draw rather than a second pass
         if on_draw is not None:
-            on_draw(partner_id, label, pair, extra[1] if len(extra) > 1 else inner)
+            on_draw(partner_id, label, pair, extra[1] if len(extra) > 1 else inner, excluded)
         wtc_pair = extra[0] if extra else pair
         signals = {sid: _long_signals(raw, ch_type, sep_bands)
                    for sid, raw in wtc_pair.items()}
@@ -422,9 +426,10 @@ def compute_wtc_pair_null(
         result = _wtc_over_pairs(
             wtc_pair, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales,
-            cache1=caches.setdefault(cache_key, {}), axis=axis)
+            cache1=caches.setdefault(cache_key, {}), axis=axis, excluded_samples=excluded)
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
-                           freqs=result.freqs, times=result.times)
+                           freqs=result.freqs, times=result.times,
+                           excluded={true_pair: mask for mask in result.excluded.values()})
         # The segment carries context either side of the condition, so the pad is dropped
         # here: the transform used it, the band mean must not. There is no whole-run draw to
         # collect, the two recordings being alignable one condition at a time or not at all.

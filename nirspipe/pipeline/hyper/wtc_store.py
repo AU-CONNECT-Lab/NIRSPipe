@@ -17,6 +17,7 @@ from nirspipe.pipeline.hyper.alignment import alignment_params
 from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 from nirspipe.pipeline.hyper.wtc import WTCResult, wtc_band_mean, wtc_grid_params
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans, merged
 from nirspipe.io.derivatives import bids_uris, read_json
 from nirspipe.io.naming import bids_label, derivative_path, parse_path
 from nirspipe.utils.lineage import paths_from
@@ -45,7 +46,8 @@ def save_wtc(result: WTCResult, path: Path) -> Path:
 
     The relative phase is stored beside each map when the pair carries one, so the arrows can
     be redrawn from a saved run. A pair stored without one gets a phase of None from
-    :func:`load_wtc`.
+    :func:`load_wtc`. A pairing's excluded columns are stored when it has any, so a re-band
+    leaves them out as the table beside it did.
     """
     arrays: dict[str, np.ndarray] = {
         "freqs": np.asarray(result.freqs, dtype=np.float32),
@@ -62,6 +64,8 @@ def save_wtc(result: WTCResult, path: Path) -> Path:
             if data.get("phase") is not None:
                 arrays[f"phase{_SEP}{key}"] = np.asarray(data["phase"], dtype=np.float32)
             n_pairs += 1
+    for (sub1, sub2), mask in result.excluded.items():
+        arrays[f"excluded{_SEP}{sub1}{_SEP}{sub2}"] = np.asarray(mask, dtype=bool)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(path, **arrays)
@@ -87,7 +91,9 @@ def load_wtc(path: Path) -> WTCResult:
                 "sig": None,
                 "phase": npz[phase_key] if phase_key in npz.files else None,
             }
-    return WTCResult(pairs=pairs, freqs=freqs, times=times)
+        excluded = {tuple(name.split(_SEP)[1:]): npz[name] for name in npz.files
+                    if name.startswith(f"excluded{_SEP}")}
+    return WTCResult(pairs=pairs, freqs=freqs, times=times, excluded=excluded)
 
 
 def save_null_levels(levels: dict, path: Path) -> Path:
@@ -150,10 +156,14 @@ def level_params(raws: dict, *, wtc_fmin: float, wtc_fmax: float, mask_coi: bool
     own recordings, and a level is used only when the two dicts agree. The band is not in
     it: a level is per frequency, and the band only chooses which frequencies are averaged.
     Nor is ``--tstart``/``--tend``: the phase-scrambled level is counted over the whole
-    record, and a re-paired one is checked condition by condition against its spans.
+    record, and a re-paired one is checked condition by condition against its spans. Each
+    member's ``BAD_`` spans are, since the level leaves their time out.
     """
     return {"wtc_fmin": wtc_fmin, "wtc_fmax": wtc_fmax, "mask_coi": bool(mask_coi),
             "wtc_whiten_s": float(whiten_s or 0.0),
+            "excluded_spans_s": {sid: [[round(a, 3), round(b, 3)]
+                                       for a, b in merged((s, e) for s, e, _ in bad_spans(raw))]
+                                 for sid, raw in raws.items()},
             **wtc_grid_params(raws), **alignment_params(raws)}
 
 
@@ -185,7 +195,7 @@ def level_mismatch(path: Path, expected: dict, raws: dict) -> "str | None":
 
 
 # every key level_params can write, so a key the writer recorded and this run lacks counts
-_LEVEL_KEYS = {"wtc_fmin", "wtc_fmax", "mask_coi", "wtc_whiten_s", "wtc_dj",
+_LEVEL_KEYS = {"wtc_fmin", "wtc_fmax", "mask_coi", "wtc_whiten_s", "excluded_spans_s", "wtc_dj",
                "wtc_time_step_s", "wtc_scale_smooth_dj0", "aligned", "align_step",
                "align_trigger", "align_offset_s", "aligned_duration_s"}
 

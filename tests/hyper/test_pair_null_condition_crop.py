@@ -5,6 +5,7 @@ duration tolerance lets a block run a millisecond past the end. Both reach `Raw.
 refuses outright rather than rounding, so a single stand-in would take a whole dyad down.
 """
 
+import mne
 import numpy as np
 import pytest
 
@@ -22,6 +23,7 @@ class _Raw:
 
     def __init__(self, duration=1600.0, sfreq=10.0):
         self.info = {"sfreq": sfreq}
+        self.first_time, self.annotations = 0.0, mne.Annotations([], [], [])
         self._set(duration)
 
     def _set(self, duration):

@@ -108,7 +108,8 @@ def roi_maps_from_channels(
             if data is not None and len(level) == len(result.freqs):
                 data.update(sig=level, sig_source="null")
 
-    return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times)
+    return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times,
+                     excluded=result.excluded)
 
 
 def roi_mean_of_channels(

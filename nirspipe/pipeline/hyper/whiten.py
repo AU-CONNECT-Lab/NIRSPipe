@@ -4,7 +4,9 @@ Off unless ``--wtc-whiten`` asks for it. The order is fixed in seconds and share
 channel of both members, rather than chosen per channel the way the correlation's is, so
 the two members of a pair are filtered to the same depth and carry transients of the same
 length. It is fitted on the whole aligned record, which every route then windows or crops,
-so the real table and both nulls see identically whitened signals.
+so the real table and both nulls see identically whitened signals. A member carrying
+``BAD_`` spans has its coefficients fitted on its own kept time only, and is still filtered
+as one continuous series.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from scipy.signal import lfilter
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.snirf import long_channel_picks
+from nirspipe.pipeline.glm_censored import gap_ar_coefficients, kept_frames
 from nirspipe.pipeline.hyper._helpers import _shared_sfreq
 from nirspipe.utils.logging import get_logger
 
@@ -42,13 +45,17 @@ def _yule_walker(acov: np.ndarray, order: int) -> "tuple[np.ndarray, float] | No
     return (coef, resid_var) if resid_var > 0 else None
 
 
-def ar_whiten_fixed(x: np.ndarray, order: int) -> "np.ndarray | None":
-    """Residuals of an order-``order`` Yule-Walker fit, the input's length, or None.
+def ar_whiten_fixed(x: np.ndarray, order: int,
+                    keep: "np.ndarray | None" = None) -> "np.ndarray | None":
+    """Residuals of an order-``order`` AR fit, the input's length, or None.
 
     ::
 
       a 3900 s trace at 10 Hz, order 100  ->  3900 s of residual, the first 10 s zeroed
 
+    Yule-Walker on the whole series; with ``keep`` False anywhere, least squares on the lag
+    windows lying wholly in kept time instead (the GLM's gap-aware estimator), the filter
+    still run over the whole series.
     The filter runs from the first sample, so the first ``order`` samples are a startup
     transient; they are set to zero rather than dropped, since dropping them would move every
     later sample off the shared clock.
@@ -56,14 +63,20 @@ def ar_whiten_fixed(x: np.ndarray, order: int) -> "np.ndarray | None":
     """
     if not np.isfinite(x).all() or x.size <= order:
         return None
-    centred = x - x.mean()
-    acov = autocov(centred, order)
-    if acov[0] <= 0:
-        return None
-    fit = _yule_walker(acov, order)
-    if fit is None:
-        return None
-    coef, _ = fit
+    if keep is not None and not keep.all():
+        centred = x - x[keep].mean()
+        if centred[keep].var() <= 0:
+            return None
+        coef = gap_ar_coefficients(centred, keep, order)
+    else:
+        centred = x - x.mean()
+        acov = autocov(centred, order)
+        if acov[0] <= 0:
+            return None
+        fit = _yule_walker(acov, order)
+        if fit is None:
+            return None
+        coef, _ = fit
     resid = lfilter(np.r_[1.0, -coef], [1.0], centred)
     resid[:order] = 0.0
     return resid
@@ -82,9 +95,10 @@ def whiten_raws(raws: dict, order_s: float, sep_bands=None) -> dict:
       {"sub-01": raw, "sub-02": raw}, 10.0  ->  the same two recordings, whitened at AR(100)
 
     Refuses a record shorter than four times the order, the floor the correlation's fit
-    uses, rather than lowering the order for it, since the order is shared. A channel that
-    cannot be fitted is marked bad on the copy, which drops it from the coherence the way a
-    rejected channel is dropped.
+    uses, rather than lowering the order for it, since the order is shared, and likewise a
+    member whose kept time holds too few lag windows. A channel that cannot be fitted is
+    marked bad on the copy, which drops it from the coherence the way a rejected channel is
+    dropped.
     """
     order = whiten_order(raws, order_s)
     if order < 1:
@@ -96,10 +110,18 @@ def whiten_raws(raws: dict, order_s: float, sep_bands=None) -> dict:
                 f"{sid} has {raw.n_times} samples, fewer than four times the AR({order}) that "
                 f"--wtc-whiten {order_s:g} asks for. Lower --wtc-whiten or turn it off.")
         copy = raw.copy().load_data()
+        # the member's own BAD_ frames, so one whitened copy serves every pairing it is in
+        keep = kept_frames(copy)
         failed = []
         for ch_type in ("hbo", "hbr"):
             for idx in long_channel_picks(copy, ch_type, sep_bands=sep_bands):
-                resid = ar_whiten_fixed(copy._data[idx], order)
+                try:
+                    resid = ar_whiten_fixed(copy._data[idx], order, keep)
+                except StageError as exc:
+                    raise StageError(
+                        f"{sid}: its time outside BAD_ spans holds too few stretches longer "
+                        f"than AR({order}) to fit the whitening; lower the whitening order "
+                        f"or keep longer stretches ({exc})") from exc
                 if resid is None:
                     failed.append(copy.ch_names[idx])
                 else:

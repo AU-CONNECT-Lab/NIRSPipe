@@ -29,6 +29,7 @@ from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
 from nirspipe.qc.common.windows import condition_windows, split_windows
+from nirspipe.utils.spans import bad_spans, frames_under, span_kind
 
 logger = logging.getLogger(__name__)
 
@@ -226,9 +227,10 @@ def _draw_condition_pairs(
     whiten_s: float = 0.0,
     sep_bands=None,
     isc_whiten_s: float = 0.0,
+    real_partner_raw=None,
 ):
     """Yield ``(partner_id, label, segments, the condition's place in them, whitened segments,
-    the correlation's place in them)``.
+    the correlation's place in them, each side's excluded samples)``.
 
     The segments are ``{fixed, partner}`` cuts of the two recordings as the correlation reads
     them, cut from whole-record ``--isc-whiten-s`` copies where that is on, and the whitened
@@ -242,6 +244,10 @@ def _draw_condition_pairs(
     Taking each side from its own marker makes every draw the same length as the condition it
     stands in for, so the whole-record duration does not matter and a stand-in shorter than
     the real dyad's recording is still usable.
+
+    The excluded samples are the real pairing's, its two members' ``BAD_`` spans on the fixed
+    side (``real_partner_raw`` is the real partner on the aligned clock), and the stand-in's
+    own corrupted spans on its side; a pairing excludes the union of the two.
     """
     from nirspipe.pipeline.hyper.group_io import load_group_haemo
     from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
@@ -339,8 +345,17 @@ def _draw_condition_pairs(
                                    pid: partner_white.copy().crop(*partner_cut)}))
             # each copy's first isc_whiten_s seconds are zeroed, in that copy's own time
             transient = max(0.0, isc_whiten_s - fixed_cut[0], isc_whiten_s - partner_cut[0])
+            fixed_seg, partner_seg = pair[fixed_id], pair[pid]
+            # the real partner's spans, moved from the aligned clock onto the fixed cut's
+            real = ([] if real_partner_raw is None else
+                    [(a - fixed_cut[0], b - fixed_cut[0]) for a, b, _ in bad_spans(real_partner_raw)])
+            excluded = {
+                fixed_id: frames_under(fixed_seg, bad_spans(fixed_seg) + real),
+                pid: frames_under(partner_seg, [s for s in bad_spans(partner_seg)
+                                                if span_kind(s[2]) == "corrupted"]),
+            }
             yield (pid, label, pair, (lead, lead + span), white,
-                   (max(lead, transient), lead + span))
+                   (max(lead, transient), lead + span), excluded)
 
 
 def _same_length(cuts: dict) -> dict:
@@ -505,8 +520,10 @@ def run_pair_null(
         """A callback that correlates each drawn pair, whole run and per condition."""
         from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
-        def _collect(partner_id: str, label: str, pair: dict, inner: tuple) -> None:
+        def _collect(partner_id: str, label: str, pair: dict, inner: tuple,
+                     excluded: "dict | None" = None) -> None:
             ids = [fixed_id, partner_id]
+            union = None if excluded is None else excluded[fixed_id] | excluded[partner_id]
             # the segment carries context either side of the condition so the coherence's
             # cone lands in the pad; the correlation reads the condition out of it, filtered
             # on the whole segment, which is the order `_isc_rows` documents
@@ -514,7 +531,8 @@ def run_pair_null(
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
                         pair, ids, ch_type, sep_bands, window=inner,
-                        max_lag_s=isc_max_lag_s, band=isc_band, cross=bool(cross))
+                        max_lag_s=isc_max_lag_s, band=isc_band, cross=bool(cross),
+                        excluded=union)
                 except Exception:
                     logger.debug("re-paired ISC failed against %s (%s)", partner_id, label)
                     continue
@@ -542,7 +560,7 @@ def run_pair_null(
             bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=n_max, refused=refused,
             window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
-            isc_whiten_s=isc_whiten_s)
+            isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[true_pair[1]])
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,

@@ -16,7 +16,7 @@ length and normalised. All of them read long channels only.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import combinations
 
 import mne
@@ -28,6 +28,7 @@ from scipy.signal import convolve2d
 from nirspipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
 from nirspipe.utils import fisher_r_to_z
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans, frames_under
 
 logger = get_logger("pipeline.wtc")
 
@@ -43,10 +44,13 @@ class WTCResult:
                                        "phase": ndarray(n_freqs, n_times)}
 
     freqs: ascending Hz.  times: decimated aligned time axis (seconds).
+    excluded: ``{(sub1, sub2): ndarray(n_times) of bool}``, the columns under either
+    member's ``BAD_`` spans, for a pairing that has any; averages leave those columns out.
     """
     pairs: dict
     freqs: np.ndarray
     times: np.ndarray
+    excluded: dict = field(default_factory=dict)
 
 
 # Morlet (w0 = 6) Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
@@ -444,6 +448,7 @@ def _wtc_over_pairs(
     limit_scales: bool = True,
     axis: "list[str] | None" = None,
     cache1: "dict[tuple[str, str], _ChannelWavelet] | None" = None,
+    excluded_samples: "dict[str, np.ndarray] | None" = None,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -477,6 +482,9 @@ def _wtc_over_pairs(
     None the first side is prepared once per label and dropped, which is what a single pass
     needs and what keeps a crossed run from holding a second montage of transforms.
 
+    ``excluded_samples`` is each subject's excluded samples, by default its own ``BAD_``
+    spans; a pairing excludes the union of its two members' at the map's columns.
+
     ``seed`` makes those levels reproducible. It seeds pycwt's Monte Carlo only;
     :func:`compute_wtc_phase_null` takes the same number for its own surrogate generator, so one
     value makes a whole run reproducible without the two sharing a stream.
@@ -492,8 +500,11 @@ def _wtc_over_pairs(
     step    = _decim_step(sfreq)
 
     result_pairs: dict = {}
+    result_excluded: dict = {}
     shared_freqs: np.ndarray | None = None
     shared_times: np.ndarray | None = None
+    if excluded_samples is None:
+        excluded_samples = {sid: frames_under(raw, bad_spans(raw)) for sid, raw in raws.items()}
 
     # one grid for the whole run, so a channel's transform can be reused across its pairings
     grid = None
@@ -577,14 +588,21 @@ def _wtc_over_pairs(
                 logger.info("%s-%s: %d of %d pairing(s) left blank, one side having no "
                             "usable channel there", sub1, sub2, n_blank, len(label_pairs))
             result_pairs[(sub1, sub2)] = pair_data
+            out1, out2 = excluded_samples[sub1], excluded_samples[sub2]
+            n = min(len(out1), len(out2))
+            union = (out1[:n] | out2[:n])[::step]
+            if union.any():
+                result_excluded[(sub1, sub2)] = union
     finally:
         if rng_state is not None:
             np.random.set_state(rng_state)
 
+    times = shared_times if shared_times is not None else np.array([])
     return WTCResult(
         pairs=result_pairs,
         freqs=shared_freqs if shared_freqs is not None else np.array([]),
-        times=shared_times if shared_times is not None else np.array([]),
+        times=times,
+        excluded={key: mask[:len(times)] for key, mask in result_excluded.items()},
     )
 
 
@@ -662,7 +680,14 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
         }
         for pair_key, labels in result.pairs.items()
     }
-    return WTCResult(pairs=pairs, freqs=result.freqs, times=times[keep])
+    return WTCResult(pairs=pairs, freqs=result.freqs, times=times[keep],
+                     excluded={key: mask[keep] for key, mask in result.excluded.items()})
+
+
+def kept_columns(result: WTCResult, pair_key, n_times: int) -> np.ndarray:
+    """Per map column, whether it lies outside the pairing's excluded time."""
+    mask = result.excluded.get(pair_key)
+    return np.ones(n_times, dtype=bool) if mask is None else ~np.asarray(mask, dtype=bool)
 
 
 def _circular_stats(angles: np.ndarray) -> tuple[float, float, int]:
@@ -758,9 +783,10 @@ def wtc_band_mean(
     more of a short segment than of a long one, so ``n_valid_frac`` is reported either way.
     ``--no-wtc-mask-coi`` averages the whole band.
 
-    ``n_valid_frac`` is the share of band cells that lie outside the cone of influence. **It is
-    reported whether or not the mask is applied**, so the share is visible as a quality number
-    even when every cell was averaged.
+    ``n_valid_frac`` is the share of band cells that lie outside the cone of influence and
+    outside the pairing's excluded time (``result.excluded``). **It is reported whether or not
+    the cone mask is applied**, so the share is visible as a quality number even when every
+    cell was averaged. Excluded columns leave the averages under either setting.
 
     ``coherence_z`` is the Fisher r-to-z of ``coherence`` (:math:`\operatorname{arctanh}`,
     clipped just below 1).
@@ -815,11 +841,14 @@ def wtc_band_mean(
                 continue
 
             wtc = wtc_raw = np.asarray(data["wtc"], dtype=float)[band]
+            kept = kept_columns(result, (sub1, sub2), wtc.shape[1])[None, :]
             outside_coi = _outside_coi(band_freqs, data["coi"])
             # measured whether or not it is applied, so the share stays a reportable number
-            n_valid_frac = float(outside_coi.mean()) if outside_coi.size else 0.0
+            valid_cells = outside_coi & kept
+            n_valid_frac = float(valid_cells.mean()) if valid_cells.size else 0.0
             if mask_coi:
                 wtc = np.where(outside_coi, wtc, np.nan)
+            wtc = np.where(kept, wtc, np.nan)
 
             valid = np.isfinite(wtc)
             coherence = float(wtc[valid].mean()) if valid.any() else float("nan")
@@ -829,7 +858,7 @@ def wtc_band_mean(
                 angle, spread, n_phase = float("nan"), float("nan"), 0
             else:
                 keep = _phase_cells(wtc_raw, outside_coi, _band_rows(data.get("sig"), band),
-                                    mask_coi)
+                                    mask_coi) & kept
                 angle, spread, n_phase = _circular_stats(
                     np.asarray(phase, dtype=float)[band][keep])
 
@@ -898,7 +927,8 @@ def wtc_phase_by_scale(
 
             wtc = np.asarray(data["wtc"], dtype=float)[band]
             outside_coi = _outside_coi(band_freqs, data["coi"])
-            keep = _phase_cells(wtc, outside_coi, _band_rows(data.get("sig"), band), mask_coi)
+            keep = (_phase_cells(wtc, outside_coi, _band_rows(data.get("sig"), band), mask_coi)
+                    & kept_columns(result, (sub1, sub2), wtc.shape[1])[None, :])
             phase = np.asarray(data["phase"], dtype=float)[band]
 
             for i, f in enumerate(band_freqs):

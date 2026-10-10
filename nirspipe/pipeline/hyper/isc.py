@@ -22,12 +22,23 @@ from nirspipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_a
 from nirspipe.pipeline.hyper.surrogate import phase_scramble
 from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans, frames_under
 
 logger = get_logger("pipeline.isc")
 
 
+def _masked_r(left: np.ndarray, right: np.ndarray, keep: "np.ndarray | None") -> np.ndarray:
+    """Pearson r of every row against every row, over the samples ``keep`` marks; NaN below two."""
+    if keep is not None:
+        left, right = left[:, keep], right[:, keep]
+        if left.shape[1] < 2:
+            return np.full((left.shape[0], right.shape[0]), np.nan)
+    return np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1], -1.0, 1.0)
+
+
 def _isc_from_rows(
     data1: np.ndarray, data2: np.ndarray, max_lag: int = 0,
+    keep: "np.ndarray | None" = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Pearson r of every row of ``data1`` against every row of ``data2``, and at what lag.
 
@@ -47,9 +58,15 @@ def _isc_from_rows(
 
     Each shift is correlated over its own overlap, so both sides are re-standardised per lag
     rather than once over the whole record.
+
+    ``keep`` marks the samples outside the pairing's excluded time; a pair of samples counts
+    only when both of its positions are kept, and fewer than two such pairs give NaN.
     """
     n = data1.shape[1]
     if max_lag <= 0:
+        if keep is not None:
+            isc_mat = _masked_r(data1, data2, keep)
+            return isc_mat, np.zeros_like(isc_mat)
         isc_mat = (_zscore_rows(data1) @ _zscore_rows(data2).T) / n
         np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
         return isc_mat, np.zeros_like(isc_mat)
@@ -58,13 +75,20 @@ def _isc_from_rows(
     for shift in range(-int(max_lag), int(max_lag) + 1):
         left  = data1[:, max(0, -shift): n - max(0, shift)]
         right = data2[:, max(0, shift): n - max(0, -shift)]
-        at_lag = np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1],
-                         -1.0, 1.0)
+        if keep is None:
+            at_lag = np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1],
+                             -1.0, 1.0)
+        else:
+            at_lag = _masked_r(left, right, keep[max(0, -shift): n - max(0, shift)]
+                               & keep[max(0, shift): n - max(0, -shift)])
         if best is None:
             best, best_lag = at_lag, np.full(at_lag.shape, float(shift))
             continue
         # NaN compares False, so a blank cell keeps the NaN it started with
         stronger = np.abs(at_lag) > np.abs(best)
+        if keep is not None:
+            # a shift whose kept overlap was too short for an r gives way to one that had enough
+            stronger |= np.isnan(best) & np.isfinite(at_lag)
         best = np.where(stronger, at_lag, best)
         best_lag = np.where(stronger, float(shift), best_lag)
     return best, np.where(np.isfinite(best), best_lag, np.nan)
@@ -78,20 +102,25 @@ def _isc_rows(
     window: "tuple[float, float] | None" = None,
     band: "tuple[float | None, float | None] | None" = None,
     skip_s: float = 0.0,
-) -> "tuple[np.ndarray, np.ndarray, list[str]] | tuple[None, None, None]":
+    excluded: "np.ndarray | None" = None,
+) -> "tuple[np.ndarray, np.ndarray, list[str], np.ndarray | None] | tuple[None, None, None, None]":
     """The two members' signals on one montage axis and one clock, ready to correlate.
 
     One row per axis label per member, NaN where that member has no usable channel
     there, cut to ``window`` if one was asked for. Nothing before ``skip_s`` is kept, which
     is where a whitened record carries its filter transient. Everything
     :func:`compute_isc` and :func:`compute_isc_pairs` disagree about happens after this.
+
+    The fourth value marks the samples outside the pairing's excluded time, the union of
+    both members' ``BAD_`` spans unless ``excluded`` gives the samples instead; None when
+    nothing is excluded.
     """
     if len(subject_ids) < 2:
-        return None, None, None
+        return None, None, None, None
     raw1 = aligned_raws.get(subject_ids[0])
     raw2 = aligned_raws.get(subject_ids[1])
     if raw1 is None or raw2 is None:
-        return None, None, None
+        return None, None, None, None
     # the same refusal WTC makes: at two rates sample i is not the same moment in both members
     _shared_sfreq({subject_ids[0]: raw1, subject_ids[1]: raw2})
 
@@ -105,10 +134,14 @@ def _isc_rows(
     ch_names = long_axis_over([raw1, raw2], ch_type, sep_bands)
     map1, map2 = _by_label(raw1), _by_label(raw2)
     if not ch_names:
-        return None, None, None
+        return None, None, None, None
 
     # alignment trims the pair to a common length, but nothing here depends on that having run
     n_times = min(raw1.n_times, raw2.n_times)
+    if excluded is None:
+        excluded = (frames_under(raw1, bad_spans(raw1))[:n_times]
+                    | frames_under(raw2, bad_spans(raw2))[:n_times])
+    keep = ~np.asarray(excluded, dtype=bool)[:n_times]
 
     def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
         """One row per axis label, NaN for a label this subject has no usable channel at."""
@@ -141,10 +174,17 @@ def _isc_rows(
             logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
                            "no correlation computed",
                            ch_type, window[0], window[1], max(0, last - first), n_times)
-            return None, None, None
-        data1, data2 = data1[:, first:last], data2[:, first:last]
+            return None, None, None, None
+        data1, data2, keep = data1[:, first:last], data2[:, first:last], keep[first:last]
 
-    return data1, data2, ch_names
+    if keep.all():
+        return data1, data2, ch_names, None
+    if keep.sum() < 2:
+        logger.warning("ISC (%s): every sample of %s lies in an excluded BAD_ span of %s or "
+                       "%s, so its correlations are NaN", ch_type,
+                       "the window" if window is not None else "the recording",
+                       *subject_ids[:2])
+    return data1, data2, ch_names, keep
 
 
 def compute_isc(
@@ -156,6 +196,7 @@ def compute_isc(
     max_lag_s: float = 0.0,
     band: "tuple[float | None, float | None] | None" = None,
     skip_s: float = 0.0,
+    excluded: "np.ndarray | None" = None,
 ) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
     """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
 
@@ -195,15 +236,18 @@ def compute_isc(
     order. Whitening shrinks r, so a whitened matrix and an unwhitened one are not
     comparable and the sidecar records which was written.
 
+    Samples under either member's ``BAD_`` spans are left out of every r; ``excluded``, the
+    excluded samples on the pair's clock, stands in for those spans when given.
+
     Args:
         ch_type: "hbo" or "hbr".
     """
-    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
-                                       window, band, skip_s)
+    data1, data2, ch_names, keep = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
+                                             window, band, skip_s, excluded)
     if ch_names is None:
         return None, None
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
-    return _isc_matrix(data1, data2, max_lag)[0], ch_names
+    return _isc_matrix(data1, data2, max_lag, keep)[0], ch_names
 
 
 def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
@@ -251,6 +295,7 @@ def compute_isc_pairs(
     cross: bool = True,
     on_draws: "Callable[[pd.DataFrame], None] | None" = None,
     skip_s: float = 0.0,
+    excluded: "np.ndarray | None" = None,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -259,8 +304,9 @@ def compute_isc_pairs(
       a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z
 
     The matrix is what the report draws; the frame is what a group analysis reads, and it is
-    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. Whitening and
-    ``skip_s`` are as in :func:`compute_isc`.
+    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. Whitening,
+    ``skip_s`` and the excluded samples are as in :func:`compute_isc`; each surrogate is
+    correlated over the same kept samples.
 
     ``n_null`` phase-scrambles the second member and recomputes; scrambling preserves each
     signal's own power spectrum and so its autocorrelation. It adds ``null_mean``,
@@ -277,13 +323,13 @@ def compute_isc_pairs(
     uncrossed coherence does: the matrix keeps its shape with every off-diagonal cell NaN,
     and the frame holds the diagonal's rows.
     """
-    data1, data2, ch_names = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
-                                       window, band, skip_s)
+    data1, data2, ch_names, keep = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
+                                             window, band, skip_s, excluded)
     if ch_names is None:
         return None, None, None, None
 
     max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
-    isc_mat, lags = _isc_matrix(data1, data2, max_lag)
+    isc_mat, lags = _isc_matrix(data1, data2, max_lag, keep)
     off = None if cross else ~np.eye(len(ch_names), dtype=bool)
     if off is not None:
         isc_mat[off] = np.nan
@@ -304,7 +350,7 @@ def compute_isc_pairs(
 
     null_level = None
     if n_null > 0:
-        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed)
+        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed, keep)
         if off is not None:
             draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
@@ -331,6 +377,7 @@ def _draw_rows(frame: pd.DataFrame, ch_names: list[str], draws: np.ndarray) -> p
 
 def _isc_null_draws(
     data1: np.ndarray, data2: np.ndarray, max_lag: int, n_iter: int, seed: int | None,
+    keep: "np.ndarray | None" = None,
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
@@ -345,7 +392,7 @@ def _isc_null_draws(
         surrogate = data2.copy()
         for row in np.flatnonzero(finite):
             surrogate[row] = phase_scramble(data2[row], rng)
-        draws[i] = _isc_matrix(data1, surrogate, max_lag)[0]
+        draws[i] = _isc_matrix(data1, surrogate, max_lag, keep)[0]
     return draws
 
 
@@ -388,9 +435,10 @@ def _add_isc_null_columns(
 
 def _isc_matrix(
     data1: np.ndarray, data2: np.ndarray, max_lag: int = 0,
+    keep: "np.ndarray | None" = None,
 ) -> "tuple[np.ndarray, np.ndarray]":
     """The r matrix and the lag each cell won at; a rejected channel's NaN row carries through."""
-    return _isc_from_rows(data1, data2, max_lag)
+    return _isc_from_rows(data1, data2, max_lag, keep)
 
 
 def roi_mean_of_isc(
