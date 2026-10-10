@@ -105,9 +105,9 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Motion correction method.")
     prep_opt.add_argument("--bad-channels",
                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', applied to "
-                               "every subject. Or a path to a table with participant_id and "
-                               "bad_channels columns, and optionally session, task and run to limit "
-                               "a row to some recordings (blank means all; a recording gets the "
+                               "every subject. Or a path to a table with a bad_channels column, and "
+                               "optionally participant_id, session, task and run to limit a row to "
+                               "some recordings (blank or absent means all; a recording gets the "
                                "union of its rows; a row matching no recording stops the run). "
                                "Naming either wavelength "
                                "of a pair marks both. Kept in the data, unioned with SCI-detected "

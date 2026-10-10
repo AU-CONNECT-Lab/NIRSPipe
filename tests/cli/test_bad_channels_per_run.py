@@ -43,3 +43,16 @@ def test_a_task_row_reaches_only_that_task_in_the_run_and_its_script(mini_bids, 
     for out_dir in (cli_out, script_out):
         assert {"S1_D1 760", "S1_D1 850"} <= set(_marked(out_dir, "rest"))
         assert "S1_D1 760" not in _marked(out_dir, "tapping")
+
+
+def test_a_table_without_participant_id_reaches_the_fingerprint_run(tmp_path):
+    from nirspipe.cli import run as run_cli
+    from tests._fingerprint import CLI_ARGS, make_fingerprint_dataset
+
+    bids, _ = make_fingerprint_dataset(tmp_path)
+    table = tmp_path / "bads.tsv"
+    table.write_text("task\tbad_channels\ntask-tapping\tS1_D1\n", encoding="utf-8")
+    run_cli.main([str(bids), str(tmp_path / "out"), "participant", *CLI_ARGS,
+                  "--bad-channels", str(table), "--no-report", "--skip-bids-validation"])
+
+    assert {"S1_D1 760", "S1_D1 850"} <= set(_marked(tmp_path / "out", "tapping"))

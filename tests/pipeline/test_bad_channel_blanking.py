@@ -196,8 +196,36 @@ def test_a_table_missing_its_columns_is_refused(tmp_path):
     table = tmp_path / "bads.tsv"
     table.write_text("subject\tchannels\nsub-01\tS1_D1\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="participant_id"):
+    with pytest.raises(ValueError, match="needs a bad_channels column"):
         _bad_channels_for(str(table), "01")
+
+
+def test_an_unknown_column_is_refused(tmp_path):
+    """A misspelt participant_id would otherwise read as blank and reach every subject."""
+    from nirspipe.cli.workflows import _bad_channels_for
+
+    table = tmp_path / "bads.tsv"
+    table.write_text("subject\tbad_channels\nsub-01\tS1_D1\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"unknown columns \['subject'\]"):
+        _bad_channels_for(str(table), "02")
+
+
+def test_a_row_without_a_participant_reaches_every_subject(tmp_path):
+    from nirspipe.cli.workflows import _bad_channels_for
+
+    no_column = tmp_path / "shared.tsv"
+    no_column.write_text("session\tbad_channels\nses-02\tS1_D1\n\tS2_D2\n", encoding="utf-8")
+    blank_cell = tmp_path / "mixed.tsv"
+    blank_cell.write_text("participant_id\tbad_channels\n\tS1_D1\nsub-02\tS4_D4\n",
+                          encoding="utf-8")
+    ses02 = {"subject": "07", "session": "02"}
+
+    assert _bad_channels_for(str(no_column), "07", ses02) == ["S1_D1", "S2_D2"]
+    assert _bad_channels_for(str(no_column), "07", {**ses02, "session": "01"}) == ["S2_D2"]
+    assert _bad_channels_for(str(no_column), "07") == ["S2_D2"]
+    assert _bad_channels_for(str(blank_cell), "01") == ["S1_D1"]
+    assert _bad_channels_for(str(blank_cell), "02") == ["S1_D1", "S4_D4"]
 
 
 def test_a_table_row_can_name_one_run(tmp_path):
@@ -239,6 +267,16 @@ def test_a_table_row_matching_no_recording_stops_the_run(mini_bids, tmp_path):
                      "01\ttapping\t\tS1_D1\n"
                      "02\ttapping\t2\tS1_D1\n", encoding="utf-8")
     with pytest.raises(SystemExit, match=r"line 3 \(sub-02 task-tapping run-2\) matches no"):
+        _refuse_unmatched_bad_channel_rows(str(table), get_layout(mini_bids))
+
+
+def test_a_row_without_a_participant_matching_no_recording_stops_the_run(mini_bids, tmp_path):
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
+
+    table = tmp_path / "bads.tsv"
+    table.write_text("task\tbad_channels\ntapping\tS1_D1\nmotor\tS1_D1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"line 3 \(task-motor\) matches no"):
         _refuse_unmatched_bad_channel_rows(str(table), get_layout(mini_bids))
 
 

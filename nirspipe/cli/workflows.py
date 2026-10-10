@@ -525,25 +525,26 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
 
     A row ``sub-01 | ses-02 | | 1 | S1_D1`` comes back as
     ``{"participant_id": "01", "session": "02", "task": "", "run": "1",
-    "bad_channels": "S1_D1", "line": 2}``; a blank or absent session, task or run means all.
+    "bad_channels": "S1_D1", "line": 2}``; a blank or absent label column means all.
     """
     from nirspipe.io.tables import read_table
 
     table = read_table(path, dtype=str).fillna("")
-    missing = {"participant_id", "bad_channels"} - set(table.columns)
-    if missing:
+    if "bad_channels" not in table.columns:
+        raise ValueError(f"--bad-channels table {path} needs a bad_channels column")
+    # a misspelt label column would otherwise read as blank, i.e. every recording
+    unknown = set(table.columns) - set(_BAD_CHANNEL_KEYS) - {"bad_channels"}
+    if unknown:
         raise ValueError(
-            f"--bad-channels table {path} needs columns participant_id and bad_channels; "
-            f"missing {sorted(missing)}"
-        )
+            f"--bad-channels table {path} has unknown columns {sorted(unknown)}; "
+            f"allowed: {', '.join([*_BAD_CHANNEL_KEYS, 'bad_channels'])}")
     rows = []
     for i, record in enumerate(table.to_dict("records")):
         line = i + 2  # the header is line 1
         row: dict[str, Any] = {"bad_channels": record["bad_channels"], "line": line}
         for column, (_, prefix) in _BAD_CHANNEL_KEYS.items():
             label = str(record.get(column, "")).strip().removeprefix(prefix)
-            if (label or column == "participant_id") and not (
-                    label.isdigit() if column == "run" else label.isalnum()):
+            if label and not (label.isdigit() if column == "run" else label.isalnum()):
                 kind = "a run number" if column == "run" else "a BIDS label (letters and digits)"
                 raise ValueError(
                     f"--bad-channels table {path} line {line}: {column} "
@@ -554,7 +555,7 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
 
 
 def _bad_channel_row_matches(row: dict[str, Any], subject: str, entities: dict | None) -> bool:
-    if row["participant_id"] != subject.removeprefix("sub-"):
+    if row["participant_id"] and row["participant_id"] != subject.removeprefix("sub-"):
         return False
     for column in ("session", "task", "run"):
         if not row[column]:
@@ -583,12 +584,14 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
         sub-01                        S1_D1,S2_D3
         sub-01          02       1    S4_D4
         sub-02                        S4_D4
+                        02            S5_D5
 
-    gives every recording of "sub-01" the first row and its ses-02 run-1 both rows. A
-    recording's list is the union of every row that matches it, and a blank session, task
-    or run matches all. ``entities`` are the recording's parsed BIDS entities; without them
-    only the rows that hold for every recording count. A subject the table does not list
-    has none. The prefixes are optional, so "01" and "sub-01" name the same subject.
+    gives every recording of "sub-01" the first row and its ses-02 run-1 both rows, and
+    every subject's ses-02 the last row. A recording's list is the union of every row that
+    matches it, and a blank or absent participant_id, session, task or run matches all.
+    ``entities`` are the recording's parsed BIDS entities; without them only the rows that
+    hold for every recording of the subject count. A subject no row matches has none. The
+    prefixes are optional, so "01" and "sub-01" name the same subject.
     """
     if not spec:
         return []
