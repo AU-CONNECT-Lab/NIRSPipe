@@ -392,9 +392,20 @@ def test_each_member_s_channel_selector_marks_only_its_own_rejection(groups, gro
 
 
 def _quality(page, heading):
-    rows = table_under(page, heading)
-    head = rows[0]
-    return {r[0]: dict(zip(head[1:], r[1:])) for r in rows[1:]}
+    """``{member: {metric label: cell}}`` for one channel-set block of the quality table.
+
+    The table is metric-major, a member per column, with a one-cell row heading each set.
+    """
+    rows = table_under(page, "Per-subject quality")
+    members = rows[0][1:]
+    out, inside = {m: {} for m in members}, False
+    for row in rows[1:]:
+        if len(row) == 1:
+            inside = row[0].startswith(heading)
+        elif inside:
+            for member, cell in zip(members, row[1:]):
+                out[member][row[0]] = cell
+    return out
 
 
 @pytest.mark.parametrize("scope", SCOPES)
