@@ -12,8 +12,10 @@ from nirspipe.pipeline.hyper import GroupEntry
 from nirspipe.pipeline.hyper.isc import _isc_from_rows, compute_isc_pairs
 from nirspipe.pipeline.hyper.surrogate import _accumulate_null_hist
 from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
-from nirspipe.pipeline.hyper.wtc import (WTCResult, _outside_coi, compute_wtc, window_result,
-                                         wtc_band_mean)
+from nirspipe.pipeline.hyper.wtc import (WTC_DJ, WTCResult, _morlet, _outside_coi,
+                                         _pair_from_prepared, _pairwise_wtc, _prepare_channel,
+                                         _scale_range, _trim_pair, _wavelet_grid, compute_wtc,
+                                         window_result, wtc_band_mean)
 from nirspipe.pipeline.hyper.wtc_store import load_wtc, save_wtc
 from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 from nirspipe.utils.spans import bad_spans, frames_under
@@ -123,6 +125,96 @@ def test_a_condition_wholly_excluded_is_nan():
     result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
     table = wtc_band_mean(window_result(result, 255.0, 295.0), *BAND)
     assert table["coherence"].isna().all() and (table["n_valid_frac"] == 0).all()
+
+
+# ---- a member with no power ----
+
+def _silent_dyad(fill: str):
+    """Both members filled over 100-300 s, flat or linear, as a censored span is."""
+    dyad = _dyad({sid: [(100.0, 200.0, "BAD_gvtd")] for sid in SUBS})
+    a, b = int(100.0 * SFREQ), int(300.0 * SFREQ)
+    for raw in dyad.values():
+        for row in raw._data:
+            row[a:b] = np.linspace(row[a - 1], row[b], b - a) if fill == "linear" else row[a - 1]
+    return dyad
+
+
+@pytest.mark.parametrize("significance", [False, True])
+@pytest.mark.parametrize("fill", ["flat", "linear"])
+def test_where_a_member_has_no_power_the_coherence_is_undefined(fill, significance):
+    result = compute_wtc(_silent_dyad(fill), fmin=0.02, fmax=0.2, significance=significance,
+                         seed=0, mc_count=5)
+    for labels in result.pairs.values():
+        for data in labels.values():
+            wtc = np.asarray(data["wtc"], float)
+            assert not np.isinf(wtc).any()
+            assert np.nanmin(wtc) >= 0.0 and np.nanmax(wtc) <= 1.0 + 1e-9
+
+
+@pytest.mark.parametrize("fill", ["flat", "linear"])
+def test_a_silent_stretch_blanks_only_its_own_columns(fill):
+    result = compute_wtc(_silent_dyad(fill), fmin=0.02, fmax=0.2)
+    (pair_key, labels), = result.pairs.items()
+    kept = ~result.excluded[pair_key]
+    for data in labels.values():
+        assert np.isfinite(np.asarray(data["wtc"], float)[:, kept]).all()
+
+
+def test_without_a_silent_stretch_both_routes_return_pycwts_ratio_bit_for_bit():
+    pycwt = pytest.importorskip("pycwt")
+    dyad = _dyad()
+    step = int(SFREQ)
+    x, y = (dyad[sid].get_data(picks=[0])[0] for sid in SUBS)
+    dt, fmin, fmax = 1 / SFREQ, 0.02, 0.2
+    s0, J = _scale_range(dt, WTC_DJ, fmin, fmax, len(x))
+    plain = pycwt.wct(x, y, dt=dt, dj=WTC_DJ, sig=False, normalize=True, wavelet=_morlet(),
+                      s0=s0, J=J, cache=False)
+    expected = _trim_pair(*plain[:4], len(x), step, fmin, fmax)
+
+    grid = _wavelet_grid(dt, len(x), fmin, fmax, limit_scales=True)
+    p1, p2 = _prepare_channel(x, dt, grid), _prepare_channel(y, dt, grid)
+    fast = _trim_pair(*_pair_from_prepared(p1, p2, dt, grid), p1.coi, p1.freqs, len(x), step,
+                      fmin, fmax)
+    slow = _pairwise_wtc(x, y, dt, step, fmin, fmax, cache=False)
+    for got in (fast, slow):
+        for a, b in zip(expected, got):
+            if a is None:
+                assert b is None
+            else:
+                assert np.array_equal(a, b)
+
+
+def test_the_null_histogram_skips_an_undefined_cell():
+    result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
+    (pair_key, labels), = result.pairs.items()
+    kept = ~result.excluded[pair_key]
+    expected = {}
+    for label, data in labels.items():
+        cells = _outside_coi(result.freqs, data["coi"]) & kept[None, :]
+        (r1, c1), (r2, c2) = np.argwhere(cells)[:2]
+        data["wtc"] = np.array(data["wtc"], float)
+        data["wtc"][r1, c1], data["wtc"][r2, c2] = np.nan, np.inf
+        expected[label] = cells.sum() - 2
+    hists: dict = {}
+    _accumulate_null_hist(hists, result, mask_coi=True)
+    for label, n in expected.items():
+        assert hists[(*pair_key, label)].sum() == n
+
+
+def test_an_undefined_cell_is_neither_valid_nor_a_phase_cell():
+    result = compute_wtc(_dyad(), fmin=0.02, fmax=0.2)
+    before = wtc_band_mean(result, *BAND).set_index("label")
+    band = np.flatnonzero((result.freqs >= BAND[0]) & (result.freqs <= BAND[1]))
+    middle = len(result.times) // 2
+    for labels in result.pairs.values():
+        for data in labels.values():
+            data["wtc"] = np.array(data["wtc"], float)
+            data["wtc"][band, middle] = np.nan
+    after = wtc_band_mean(result, *BAND).set_index("label")
+    n_cells = len(band) * len(result.times)
+    assert (after["phase_n"] == before["phase_n"] - len(band)).all()
+    np.testing.assert_allclose(after["n_valid_frac"],
+                               before["n_valid_frac"] - len(band) / n_cells, rtol=1e-12)
 
 
 # ---- the correlation ----
@@ -250,6 +342,53 @@ def test_a_re_paired_draw_excludes_the_real_union_and_the_stand_ins_corrupted_ti
     partner = np.flatnonzero(excluded[pid]) / SFREQ + pair[pid].first_time
     assert ((partner >= 150) & (partner < 160)).all()                 # its unselected time is not
     assert excluded[pid].sum() == pytest.approx(10 * SFREQ, abs=1)
+
+
+def _re_paired_isc_shares(tmp_path, monkeypatch, real_spans, stand_in_spans) -> dict:
+    """One re-paired null against one stand-in: each condition's ISC ``n_valid_frac`` values."""
+    from nirspipe.pipeline import hyper
+    from nirspipe.pipeline.hyper import group_io, group_quality
+    from nirspipe.pipeline.hyper.pair_null import run_pair_null
+
+    real = _dyad(real_spans)
+    stand_in = _dyad(stand_in_spans)["sub-02"]
+    group = [GroupEntry("G1", s, "tap") for s in SUBS]
+    others = [GroupEntry("G2", s, "tap") for s in ("sub-03", "sub-04")]
+    build_hyper_post_report(
+        group_id="G1", task="tap", group=group, aligned_raws=real,
+        offsets={s: 0.0 for s in SUBS}, output_dir=tmp_path, wtc_fmin=0.02, wtc_fmax=0.2,
+        wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1], wtc_chroma=("hbo",),
+        wtc_by_condition=True, no_report=True, desc="preproc", bads_scope="run")
+    monkeypatch.setattr(group_io, "load_group_haemo", lambda out, entries, desc="preproc": {
+        e.subject_id: (real.get(e.subject_id) or stand_in).copy() for e in entries})
+    monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
+    monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
+    monkeypatch.setattr(hyper, "align_recordings",
+                        lambda raws, task: (raws, {s: 0.0 for s in raws}))
+    run_pair_null("G1", "tap", group, {("G1", "tap", None): group, ("G2", "tap", None): others},
+                  tmp_path, tmp_path, chroma=("hbo",))
+
+    tables = [p for p in tmp_path.rglob("*_relmat.tsv") if "null-pair" in p.name
+              and "stat-isc" in p.name and "cond-all" in p.name]
+    assert len(tables) == 2                                            # the summary and the draws
+    shares: dict = {}
+    for path in tables:
+        df = pd.read_csv(path, sep="\t")
+        for cond, values in df.groupby("condition")["n_valid_frac"]:
+            shares.setdefault(cond, set()).update(values.round(6))
+    return shares
+
+
+def test_the_re_paired_correlation_records_the_share_of_the_window_it_kept(tmp_path, monkeypatch):
+    # real: sub-01 loses 30 s of rest, its partner 50 s of talk; the stand-in 10 s of its rest
+    shares = _re_paired_isc_shares(tmp_path, monkeypatch, SPANS,
+                                   {"sub-02": [(60.0, 10.0, "BAD_gvtd")]})
+    assert shares == {"rest": {round(140 / 180, 6)}, "talk": {round(130 / 180, 6)}}
+
+
+def test_without_a_span_the_re_paired_correlation_keeps_every_sample(tmp_path, monkeypatch):
+    assert _re_paired_isc_shares(tmp_path, monkeypatch, None, None) == {"rest": {1.0},
+                                                                        "talk": {1.0}}
 
 
 # ---- the dyad report ----

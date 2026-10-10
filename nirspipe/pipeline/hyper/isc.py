@@ -138,10 +138,7 @@ def _isc_rows(
 
     # alignment trims the pair to a common length, but nothing here depends on that having run
     n_times = min(raw1.n_times, raw2.n_times)
-    if excluded is None:
-        excluded = (frames_under(raw1, bad_spans(raw1))[:n_times]
-                    | frames_under(raw2, bad_spans(raw2))[:n_times])
-    keep = ~np.asarray(excluded, dtype=bool)[:n_times]
+    keep = _kept_samples(raw1, raw2, n_times, excluded)
 
     def _rows(raw: mne.io.Raw, by_label: dict[str, int], who: str) -> np.ndarray:
         """One row per axis label, NaN for a label this subject has no usable channel at."""
@@ -167,8 +164,7 @@ def _isc_rows(
     if window is not None or skip_s:
         sfreq = float(raw1.info["sfreq"])
         window = window if window is not None else (0.0, n_times / sfreq)
-        first = max(0, int(round(float(window[0]) * sfreq)), int(np.ceil(skip_s * sfreq)))
-        last  = min(n_times, int(round(float(window[1]) * sfreq)))
+        first, last = _window_samples(window, skip_s, sfreq, n_times)
         # two samples is the least a correlation can be computed from at all
         if last - first < 2:
             logger.warning("ISC (%s): window %.1f-%.1f s holds %d sample(s) of %d, "
@@ -185,6 +181,31 @@ def _isc_rows(
                        "the window" if window is not None else "the recording",
                        *subject_ids[:2])
     return data1, data2, ch_names, keep
+
+
+def _kept_samples(raw1: mne.io.Raw, raw2: mne.io.Raw, n_times: int,
+                  excluded: "np.ndarray | None") -> np.ndarray:
+    """Samples outside the pairing's excluded time: ``excluded``, else both members' BAD_ spans."""
+    if excluded is None:
+        excluded = (frames_under(raw1, bad_spans(raw1))[:n_times]
+                    | frames_under(raw2, bad_spans(raw2))[:n_times])
+    return ~np.asarray(excluded, dtype=bool)[:n_times]
+
+
+def _window_samples(window: "tuple[float, float]", skip_s: float, sfreq: float,
+                    n_times: int) -> tuple[int, int]:
+    """The first and one-past-last sample of ``window``, none before ``skip_s``."""
+    first = max(0, int(round(float(window[0]) * sfreq)), int(np.ceil(skip_s * sfreq)))
+    return first, min(n_times, int(round(float(window[1]) * sfreq)))
+
+
+def _kept_share(aligned_raws: dict[str, mne.io.Raw], subject_ids: list[str],
+                window: "tuple[float, float]", excluded: "np.ndarray | None" = None) -> float:
+    """Share of ``window``'s samples a correlation reads, those outside the excluded time."""
+    raw1, raw2 = (aligned_raws[sid] for sid in subject_ids[:2])
+    n_times = min(raw1.n_times, raw2.n_times)
+    first, last = _window_samples(window, 0.0, float(raw1.info["sfreq"]), n_times)
+    return float(_kept_samples(raw1, raw2, n_times, excluded)[first:last].mean())
 
 
 def compute_isc(

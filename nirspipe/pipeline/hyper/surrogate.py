@@ -172,13 +172,15 @@ def _accumulate_null_hist(hists: dict, result: "WTCResult", mask_coi: bool) -> N
                 continue
             keep = _outside_coi(freqs, data["coi"]) if mask_coi else np.ones(wtc.shape, dtype=bool)
             keep = keep & kept_columns(result, (sub1, sub2), wtc.shape[1])[None, :]
+            # an undefined cell is no draw, and cast to a bin it would land in bin 0
+            keep = keep & np.isfinite(wtc)
             if not keep.any():
                 continue
             # one bincount over the whole map rather than one per row: the row index is
             # folded into the bin index, so the flat counts reshape straight back
-            col = np.clip((wtc * _NULL_HIST_BINS).astype(np.int64), 0, _NULL_HIST_BINS - 1)
+            col = np.clip((wtc[keep] * _NULL_HIST_BINS).astype(np.int64), 0, _NULL_HIST_BINS - 1)
             row = np.broadcast_to(np.arange(wtc.shape[0])[:, None], wtc.shape)
-            flat = row[keep] * _NULL_HIST_BINS + col[keep]
+            flat = row[keep] * _NULL_HIST_BINS + col
             counts = np.bincount(flat, minlength=wtc.shape[0] * _NULL_HIST_BINS)
             key = (sub1, sub2, label)
             if key not in hists:

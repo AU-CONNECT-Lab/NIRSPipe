@@ -75,6 +75,8 @@ All notable changes to this project will be documented in this file.
 - The channel epoch panel and the evoked channel map leave out trials under a `BAD_` span
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
+- Dyad coherence is NaN where a member has no power, as inside a long filled span, instead of inf or above 1
+- The re-paired ISC null's `n_valid_frac` is the share of each window it correlated, no longer always 1.0
 
 ## [0.63.0] - 2026-10-09
 

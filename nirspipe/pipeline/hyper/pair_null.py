@@ -518,7 +518,7 @@ def run_pair_null(
 
     def _isc_collector(ch_type: str):
         """A callback that correlates each drawn pair, whole run and per condition."""
-        from nirspipe.pipeline.hyper.isc import compute_isc_pairs
+        from nirspipe.pipeline.hyper.isc import _kept_share, compute_isc_pairs
 
         def _collect(partner_id: str, label: str, pair: dict, inner: tuple,
                      excluded: "dict | None" = None) -> None:
@@ -543,7 +543,8 @@ def run_pair_null(
                 pairs = pairs.rename(columns={"r": "coherence"})
                 pairs["sub1"], pairs["sub2"] = true_pair
                 pairs.insert(0, "chromophore", ch_type)
-                pairs["n_valid_frac"] = 1.0
+                # the share of the window correlated, as the coherence's is of the cells kept
+                pairs["n_valid_frac"] = _kept_share(pair, ids, inner, union)
                 pairs.insert(1, "condition", label)
                 isc_cond_frames.append(pairs)
                 # one row per draw as well as the summary, so the correlation can be read

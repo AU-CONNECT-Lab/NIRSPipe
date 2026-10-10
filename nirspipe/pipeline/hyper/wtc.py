@@ -72,6 +72,10 @@ _SCALE_SMOOTH_DJ0 = 0.6
 # band with the same neighbours it would have had.
 _SCALE_MARGIN = 12
 
+# Smoothed power below this share of the channel's largest at that scale is FFT round-off:
+# the coherence there is undefined and set to NaN, which a long filled span produces.
+_POWER_FLOOR = 1e-10
+
 
 def _scale_window(dj: float) -> np.ndarray:
     """The scale-direction boxcar, ``_SCALE_SMOOTH_DJ0 / dj`` grid steps wide, summing to 1.
@@ -237,6 +241,7 @@ class _ChannelWavelet:
     S: np.ndarray
     coi: np.ndarray
     freqs: np.ndarray
+    no_power: np.ndarray
 
 
 def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
@@ -303,7 +308,12 @@ def _prepare_channel(sig: np.ndarray, dt: float, grid: _WaveletGrid) -> _Channel
     if not np.array_equal(sj, grid.sj):
         raise ValueError("wavelet scales differ from the run's grid")
     S = grid.mother.smooth(np.abs(W) ** 2 / grid.scales, dt, WTC_DJ, sj)
-    return _ChannelWavelet(W=W, S=S, coi=coi, freqs=freqs)
+    return _ChannelWavelet(W=W, S=S, coi=coi, freqs=freqs, no_power=_no_power(S))
+
+
+def _no_power(S: np.ndarray) -> np.ndarray:
+    """Cells whose smoothed power is round-off, per scale row."""
+    return S < _POWER_FLOOR * S.max(axis=1, keepdims=True)
 
 
 def _pair_from_prepared(p1: _ChannelWavelet, p2: _ChannelWavelet, dt: float,
@@ -318,7 +328,10 @@ def _pair_from_prepared(p1: _ChannelWavelet, p2: _ChannelWavelet, dt: float,
     # in place, and after the phase: the cross spectrum is the largest array a pairing holds
     W12 /= grid.scales
     S12 = grid.mother.smooth(W12, dt, WTC_DJ, grid.sj)
-    return np.abs(S12) ** 2 / (p1.S * p2.S), phase
+    with np.errstate(divide="ignore", invalid="ignore"):
+        WCT = np.abs(S12) ** 2 / (p1.S * p2.S)
+    WCT[p1.no_power | p2.no_power] = np.nan
+    return WCT, phase
 
 
 def _trim_pair(
@@ -422,6 +435,10 @@ def _pairwise_wtc(
         sig1, sig2, dt=dt, dj=dj, sig=significance, normalize=True,
         wavelet=_morlet(), **kwargs,
     )
+    # pycwt keeps its auto spectra to itself, so the floor is read off the same grid here
+    grid = _wavelet_grid(dt, len(sig1), fmin, fmax, limit_scales)
+    no_power = _prepare_channel(sig1, dt, grid).no_power | _prepare_channel(sig2, dt, grid).no_power
+    WCT[no_power] = np.nan
     return _trim_pair(WCT, aWCT, coi, freqs, len(sig1), step, fmin, fmax,
                       signif if significance else None)
 
@@ -743,7 +760,7 @@ def _band_rows(sig, band: np.ndarray) -> "np.ndarray | None":
 def _phase_cells(
     wtc: np.ndarray, outside_coi: np.ndarray, sig: "np.ndarray | None", mask_coi: bool,
 ) -> np.ndarray:
-    """Which band cells a phase angle may be averaged over: outside the cone, above the level.
+    """Band cells a phase angle may be averaged over: defined, outside the cone, above the level.
 
     The relative phase of two uncorrelated series is a uniformly random direction, so a mean
     taken over cells that are not coupled measures the shape of the map rather than a lead.
@@ -751,7 +768,7 @@ def _phase_cells(
     the band rows; without one only the cone is required and the caller reads ``phase_n`` to
     see how weak the mask was.
     """
-    keep = outside_coi if mask_coi else np.ones(wtc.shape, dtype=bool)
+    keep = (outside_coi if mask_coi else np.ones(wtc.shape, dtype=bool)) & np.isfinite(wtc)
     if sig is not None and np.asarray(sig).shape[:1] == wtc.shape[:1]:
         keep = keep & (wtc >= np.asarray(sig, dtype=float)[:, None])
     return keep
@@ -784,9 +801,10 @@ def wtc_band_mean(
     ``--no-wtc-mask-coi`` averages the whole band.
 
     ``n_valid_frac`` is the share of band cells that lie outside the cone of influence and
-    outside the pairing's excluded time (``result.excluded``). **It is reported whether or not
-    the cone mask is applied**, so the share is visible as a quality number even when every
-    cell was averaged. Excluded columns leave the averages under either setting.
+    outside the pairing's excluded time (``result.excluded``), and are defined (a member with
+    no power leaves a cell NaN). **It is reported whether or not the cone mask is applied**,
+    so the share is visible as a quality number even when every cell was averaged. Excluded
+    columns leave the averages under either setting.
 
     ``coherence_z`` is the Fisher r-to-z of ``coherence`` (:math:`\operatorname{arctanh}`,
     clipped just below 1).
@@ -844,7 +862,7 @@ def wtc_band_mean(
             kept = kept_columns(result, (sub1, sub2), wtc.shape[1])[None, :]
             outside_coi = _outside_coi(band_freqs, data["coi"])
             # measured whether or not it is applied, so the share stays a reportable number
-            valid_cells = outside_coi & kept
+            valid_cells = outside_coi & kept & np.isfinite(wtc_raw)
             n_valid_frac = float(valid_cells.mean()) if valid_cells.size else 0.0
             if mask_coi:
                 wtc = np.where(outside_coi, wtc, np.nan)
