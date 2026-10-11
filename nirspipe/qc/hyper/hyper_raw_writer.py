@@ -107,6 +107,7 @@ def _process_hyper_raw_group(
     sep_bands=None,
     errors: list | None = None,
     notes: list | None = None,
+    roi_map: "dict | None" = None,
 ) -> dict:
     """Compute hyper raw figures, save each as a standalone HTML, write SQM JSON.
 
@@ -186,7 +187,8 @@ def _process_hyper_raw_group(
     motion, motion_scalars = {}, {}
     with guard("Motion panel", errors, label):
         motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands,
-                               imu=imu, full_raws=full_raws, full_after=full_after)
+                               imu=imu, full_raws=full_raws, full_after=full_after,
+                               roi_map=roi_map)
     if not motion:
         note(notes, label, "no optical density for the members: the motion panels "
                            "are empty")

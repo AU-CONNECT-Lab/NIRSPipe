@@ -53,6 +53,9 @@ NOTES = {
         "The amber strip marks spans where <em>every</em> member was spiking at once; a "
         "member spiking alone shows in its own trace. The grey carpets are each "
         "member&rsquo;s per-channel optical density, z-scored as in the subject report.",
+    "hyper_raw.motion_roi":
+        "On each carpet the long rows are grouped by ROI, coloured by the outer strip and "
+        "named in the legend.",
     "hyper_raw.motion_after":
         "The same rows after motion correction. Both figures divide by the "
         "<em>uncorrected</em> median and z-score the carpets by the uncorrected mean and SD, "

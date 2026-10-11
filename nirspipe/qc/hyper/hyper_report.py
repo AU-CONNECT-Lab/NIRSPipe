@@ -558,6 +558,7 @@ def build_hyper_report(
     cardiac_l_freq: float | None = None,
     cardiac_h_freq: float | None = None,
     sep_bands=None,
+    roi_map: "dict | None" = None,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
@@ -571,7 +572,7 @@ def build_hyper_report(
         full_raws=full_raws, full_after=full_after,
         session=session, sci_threshold=sci_threshold,
         cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-        sep_bands=sep_bands, errors=errors, notes=notes,
+        sep_bands=sep_bands, errors=errors, notes=notes, roi_map=roi_map,
     )
 
     # no Methods on the raw pass: it screens the recordings, which a paper does not report
@@ -604,6 +605,7 @@ def build_hyper_report(
         subject_ids=meta["subject_ids"],
         sci_lines_text=sci_lines_text(member_sci_lines(sqm_data, meta["subject_ids"])),
         alignment_json=json.dumps(meta["alignment"]),
+        roi_strip=bool(roi_map),
         onset_residuals=meta.get("onset_residuals") or [],
         onset_tol_s=meta.get("onset_tol_s") or 0.0,
         onset_tol_samples=_TRIGGER_JITTER_SAMPLES,

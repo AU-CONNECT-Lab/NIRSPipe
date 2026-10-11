@@ -170,6 +170,7 @@ def cmd_hyper_raw(
     long_max_dist: float | None,
     skip_bids_validation: bool,
     derivatives_dir: Path | None = None,
+    roi_mapping: Path | None = None,
     participant_label: list[str] | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
@@ -234,6 +235,7 @@ def cmd_hyper_raw(
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: the motion panel shows the recordings before "
               "correction only.", file=sys.stderr)
+    roi_map = _shared.load_roi_mapping(roi_mapping)
 
     def _process(gid, task, ses, members):
         raws_cw = load_group_raw_bids(bids_dir, members)
@@ -294,6 +296,7 @@ def cmd_hyper_raw(
             sci_threshold=sci_threshold,
             cardiac_l_freq=cardiac_l_freq,
             cardiac_h_freq=cardiac_h_freq,
+            roi_map=roi_map,
         )
 
     _run_groups(groups, _process)
@@ -451,6 +454,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="The nirspipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "
                          "there; without it, only the recordings before correction.")
+    hr.add_argument("--roi-mapping", type=Path, default=None,
+                    help="JSON file mapping ROI labels to lists of channel names. Groups each "
+                         "member's motion carpet rows by ROI. Optional.")
     hr.set_defaults(func=cmd_hyper_raw)
 
     gr = sub.add_parser(

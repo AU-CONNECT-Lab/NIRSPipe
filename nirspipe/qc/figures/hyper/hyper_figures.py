@@ -28,7 +28,8 @@ from nirspipe.qc.figures.common.head_map import (
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common.motion_panel import (
-    _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
+    _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _roi_order, _span_polygons, add_carpet,
+    add_roi_legend, add_roi_strip, carpet_coloraxis, roi_colours,
 )
 from nirspipe.qc.figures.subject.raw_figures import _kept_psd
 from nirspipe.qc.metrics import (
@@ -377,6 +378,7 @@ def motion_series(
     imu: "dict[str, dict[str, ImuTrace]] | None" = None,
     full_raws: "dict[str, mne.io.Raw] | None" = None,
     full_after: "dict[str, mne.io.Raw] | None" = None,
+    roi_map: "dict | None" = None,
 ) -> dict:
     """Everything the two motion figures draw, measured once off the aligned recordings.
 
@@ -388,7 +390,11 @@ def motion_series(
           "spikes_both": {"before": [(412.0, 3.1), ...]},
           "carpets": {"before": [("sub-01", z, t, labels, spans)]},
           "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04},
-          "imu": {"gyro": {...}}}
+          "imu": {"gyro": {...}},
+          "roi": {"sub-01": [("PFC", 0, 11), ...]}, "roi_colours": {"PFC": "#8da3c0", ...}}
+
+    ``roi_map`` groups each member's canonical carpet rows by ROI, as on the member's own
+    carpet; ``roi`` holds the groups for the strip, empty without a map.
 
     ``imu`` is ``{sid: {sensor: ImuTrace}}`` already on the shared clock, from
     :func:`~nirspipe.pipeline.hyper.alignment.align_imu_like`; see :func:`_imu_rows`.
@@ -422,6 +428,7 @@ def motion_series(
     carpets: dict[str, list] = {"before": []}
     spikes: dict[str, dict[str, np.ndarray]] = {"before": {}}
     divisors: dict[tuple, float] = {}
+    roi_groups: dict[str, list] = {}
     sets: list[str] = []
     t = None
 
@@ -441,6 +448,10 @@ def motion_series(
         blocks = [(name, [c for c in names if c in od.ch_names])
                   for name, names in gvtd_channel_blocks(raw, sep_bands)]
         blocks = [(name, names) for name, names in blocks if names]
+        if blocks:
+            # GVTD is an RMS across a block's channels, so the order is the carpet's alone
+            order, roi_groups[sid] = _roi_order(blocks[0][1], roi_map)
+            blocks[0] = (blocks[0][0], [blocks[0][1][i] for i in order])
         ordered = [c for _, names in blocks for c in names]
         od_data = od.get_data(picks=ordered)
         after_data = _matched_after(after_od, ordered, od_data.shape, sfreq, sid)
@@ -540,7 +551,8 @@ def motion_series(
 
     return {"subject_ids": have, "t": t, "sets": sets, "stages": stages,
             "series": series, "spikes_both": spikes_both, "carpets": carpets,
-            "y_tops": y_tops, "divisors": divisors, "imu": _imu_rows(imu, have, t)}
+            "y_tops": y_tops, "divisors": divisors, "imu": _imu_rows(imu, have, t),
+            "roi": roi_groups, "roi_colours": roi_colours(roi_map) if roi_map else {}}
 
 
 def _imu_rows(imu, subject_ids: list[str], t: np.ndarray) -> dict:
@@ -731,9 +743,15 @@ def build_motion_panel(
         _margin_label(fig, ri, f"<b>GVTD {name}</b>")
         ri += 1
 
+    drawn_rois: set = set()
     for sid, z, t_carpet, labels, spans in carpets:
         add_carpet(fig, ri, z, t_carpet, labels, spans)
+        groups = motion["roi"].get(sid) or []
+        if len(groups) > 1:
+            add_roi_strip(fig, ri, groups, len(labels), motion["roi_colours"])
+            drawn_rois.update(label for label, _, _ in groups)
         ri += 1
+    add_roi_legend(fig, drawn_rois, motion["roi_colours"])
 
     for a, b in (conditions or {}).values():
         for edge in (a, b):

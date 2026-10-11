@@ -161,7 +161,8 @@
     <iframe class="plotly-frame" src="{{ figure_paths.motion_before.src }}"
             title="motion per member over the shared clock, before correction"
             style="height:{{ figure_paths.motion_before.h }}px"></iframe>
-    <p class="qm-note">{{ section_note('hyper_raw.motion_before') }}</p>
+    <p class="qm-note">{{ section_note('hyper_raw.motion_before') }}
+      {%- if roi_strip %} {{ section_note('hyper_raw.motion_roi') }}{% endif %}</p>
     <p class="fig-path">{{ figure_paths.motion_before.src }}</p>
     {% if figure_paths.motion_after %}
     <h3>After motion correction</h3>

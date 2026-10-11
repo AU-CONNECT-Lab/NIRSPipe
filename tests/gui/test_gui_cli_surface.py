@@ -677,6 +677,8 @@ RAW_QC_NOT_EXPOSED = {
         "--skip-bids-validation", "--no-skip-bids-validation",
         # the page reads its dyads out of the group CSV, as for --task-label
         "--participant-label", "--participant_label",
+        # a file path, and the page has no file picker
+        "--roi-mapping",
     },
 }
 
