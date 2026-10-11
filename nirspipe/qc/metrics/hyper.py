@@ -6,6 +6,8 @@ number: ``motion_series`` builds carpet z-scores, ``head_geometry`` projects opt
 
 from __future__ import annotations
 
+import warnings
+
 import mne
 import numpy as np
 
@@ -261,6 +263,14 @@ def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
     return np.where(stack.all(axis=0), 2, np.where(stack.any(axis=0), 1, 0))
 
 
+def _channel_mean(m: np.ndarray) -> np.ndarray:
+    """The mean over the channels with a value in each window, NaN only where none has one."""
+    with warnings.catch_warnings():
+        # a window every channel is undefined in stays NaN, which is what the line should show
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.nanmean(m, axis=0)
+
+
 def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     """One member's long-channel means per window, on the dyad's clock.
 
@@ -276,6 +286,9 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
 
     ``per_pair_sci`` keeps every pair separately, short ones included, because the head
     figures colour one marker per channel and draw both separations.
+
+    A channel undefined in a window (an intensity pinned at the device's ceiling has no
+    pulse to correlate) is left out of that window's mean rather than voiding it.
     """
     sw = (sqm_data.get(sid) or {}).get("screen_windows") or {}
     order = list(sw.get("channel_order") or [])
@@ -288,8 +301,8 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     for key in ("sci", "psp", "cv"):
         m = sw.get(key)
         if m is not None and rows:
-            out[key] = _take_windows(np.asarray(m, dtype=float)[rows], idx,
-                                     np.nan).mean(axis=0)
+            out[key] = _channel_mean(_take_windows(np.asarray(m, dtype=float)[rows], idx,
+                                                   np.nan))
     gvtd = sw.get("gvtd")
     if gvtd is not None and len(gvtd) == len(sw["centers"]):
         out["gvtd"] = _take_windows(np.asarray(gvtd, dtype=float), idx, np.nan)
@@ -302,7 +315,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
             by_pair.setdefault(pair_of(name), []).append(i)
         # a pair is one SCI, stored once per wavelength; the mean over its rows is that
         # number and not an average of two different ones
-        out["per_pair_sci"] = {pair: sci_m[idx].mean(axis=0)
+        out["per_pair_sci"] = {pair: _channel_mean(sci_m[idx])
                                for pair, idx in by_pair.items()}
     return out
 

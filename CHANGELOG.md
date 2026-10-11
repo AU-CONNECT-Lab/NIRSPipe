@@ -59,8 +59,11 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report's steps no longer fold; its channel table comes before the quality grid and shows both wavelengths for SNR, CV and Spike
 - The dyad analysis report's coherence and synchrony panels no longer fold
 - The cohort pages no longer fold or scroll inside a box; a long table grows the page, and each heading's hint is a sentence under it
+- The dyad raw report shows per-channel signals as section 2 and its channel table as a row per member, a pair's members one above the other
+- Dyad motion panels draw the members in the usable-time panel's blue and orange; dyad head maps draw a channel with no value white
 
 ### Fixed
+- A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero
 - A condition page of a montage without short channels prints its metrics in one column, as the run page does
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block

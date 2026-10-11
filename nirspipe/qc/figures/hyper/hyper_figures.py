@@ -320,7 +320,8 @@ def build_usable_time(
 # The motion panel is two figures, before and after correction, on the same rows and axes.
 
 # Colour is the member, and nothing else: the channel set is the row, before/after the figure.
-_MEMBER_COLOURS = ["#4c72b0", "#c44e52", "#55a868", "#8172b3"]
+# The members' colours are the usable-time panel's (_LEAD_COLOURS), never a red and blue pair,
+# which this report reads as HbO and HbR.
 # The shared floor under both traces; grey, since it belongs to the pair and not to either.
 _TOGETHER_FILL = "rgba(120,120,130,0.30)"
 _SPIKE_BOTH = "rgba(245,158,11,0.9)"
@@ -713,7 +714,7 @@ def build_motion_panel(
             fig.add_trace(go.Scatter(
                 x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
                 showlegend=sid not in shown, opacity=0.9,
-                line=dict(color=_MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)],
+                line=dict(color=_LEAD_COLOURS[sids.index(sid) % len(_LEAD_COLOURS)],
                           width=1.5),
                 hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
                               "%{y:.2f}x its own median<extra></extra>",
@@ -767,7 +768,7 @@ def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list
         fig.add_trace(go.Scatter(
             x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
             showlegend=sid not in shown, opacity=0.9,
-            line=dict(color=_MEMBER_COLOURS[sids.index(sid) % len(_MEMBER_COLOURS)],
+            line=dict(color=_LEAD_COLOURS[sids.index(sid) % len(_LEAD_COLOURS)],
                       width=1.5),
             hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
                           "%{y:.2f}x its own median<extra></extra>",
@@ -812,6 +813,33 @@ def _pair_values(geo, scope, by_pair: dict, reduce_fn) -> "np.ndarray":
                      for name in geo[scope]["names"]])
 
 
+# a channel with no value there, e.g. an intensity pinned at the device's ceiling, which has
+# no pulse to correlate; white rather than Plotly's default black for a missing colour
+_NO_VALUE = "#ffffff"
+
+
+def _blank_twin(fig, i: int, sid: str, row: int, col: int) -> int:
+    """A white copy of marker trace ``i`` for the markers with no value; returns its index.
+
+    The slider swaps one colour array per frame, so the markers with no value cannot be a
+    trace of their own: both traces keep every marker and :func:`_split_sizes` hides each
+    marker in the trace it does not belong to.
+    """
+    src = fig.data[i]
+    fig.add_trace(go.Scatter(
+        x=src.x, y=src.y, mode="markers", text=src.text, showlegend=False,
+        marker=dict(color=_NO_VALUE, symbol=src.marker.symbol, line=dict(width=0)),
+        hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>no value<extra></extra>",
+    ), row=row, col=col)
+    return len(fig.data) - 1
+
+
+def _split_sizes(values: np.ndarray, size: float) -> "tuple[np.ndarray, np.ndarray]":
+    """Marker sizes for a coloured trace and its white twin, so each marker shows in one."""
+    finite = np.isfinite(values)
+    return np.where(finite, size, 0.0), np.where(finite, 0.0, size)
+
+
 def build_head_by_condition(
     geo_by_sub: dict,
     subject_ids: list[str],
@@ -845,7 +873,7 @@ def build_head_by_condition(
                 vals = _pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
                 _head_glyph(fig, geo, scope, vals, ri, ci, "Coupled<br>windows", 0.0, 1.0,
                             bar=(ri == 1 and ci == len(names) and scope == "long"),
-                            colorscale=_HEAD_SCALE, sid=sid)
+                            colorscale=_HEAD_SCALE, sid=sid, blank_color=_NO_VALUE)
     _head_axes(fig, geo_by_sub, len(subject_ids), len(names), row_labels=subject_ids)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     # a head per member per block, so the grid is as wide as the blocks and only as tall as
@@ -917,19 +945,29 @@ def build_head_slider(
             i = _head_glyph(fig, geo, scope, vals, 1, ci, f"SCI<br>({SCREEN_WINDOW_S:g} s)", cmin, cmax,
                             bar=(ci == len(subject_ids) and scope == "long"),
                             colorscale=_HEAD_SCALE, sid=sid)
-            drawn.append((sid, scope, i))
+            j = _blank_twin(fig, i, sid, 1, ci)
+            size = float(fig.data[i].marker.size)
+            shown, blank = _split_sizes(np.repeat(vals, geo[scope]["per_pair"]), size)
+            fig.data[i].marker.size, fig.data[j].marker.size = shown, blank
+            drawn.append((sid, scope, i, j, size))
     if not drawn:
         return None
 
+    def frame_data(k: int) -> list:
+        data = []
+        for sid, scope, _i, _j, size in drawn:
+            values = np.repeat(_pair_values(geo_by_sub[sid], scope,
+                                            series_by_sub[sid]["per_pair_sci"],
+                                            lambda v, kk=k: v[kk]),
+                               geo_by_sub[sid][scope]["per_pair"])
+            shown, blank = _split_sizes(values, size)
+            data += [go.Scatter(marker=dict(color=values.astype(np.float32), size=shown)),
+                     go.Scatter(marker=dict(size=blank))]
+        return data
+
     fig.frames = [
-        go.Frame(name=f"{t[k]:.0f}",
-                 data=[go.Scatter(marker=dict(color=np.repeat(
-                     _pair_values(geo_by_sub[sid], scope,
-                                  series_by_sub[sid]["per_pair_sci"],
-                                  lambda v, kk=k: v[kk]),
-                     geo_by_sub[sid][scope]["per_pair"]).astype(np.float32)))
-                       for sid, scope, _i in drawn],
-                 traces=[i for _s, _sc, i in drawn],
+        go.Frame(name=f"{t[k]:.0f}", data=frame_data(k),
+                 traces=[x for _s, _sc, i, j, _z in drawn for x in (i, j)],
                  layout=dict(title=caption(k)))
         for k in frames_at
     ]

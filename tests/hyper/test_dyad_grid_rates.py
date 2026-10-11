@@ -46,3 +46,15 @@ def test_a_member_whose_windows_drift_is_matched_by_time():
 def test_members_with_no_window_in_common_have_no_grid():
     sqm = {"A": _member(5.0 + 10.0 * np.arange(5)), "B": _member(500.0 + 10.0 * np.arange(5))}
     assert coupled_grid(sqm, ["A", "B"], {}) is None
+
+
+def test_a_saturated_channel_leaves_the_member_line_drawn():
+    # an intensity pinned at the ceiling has no SCI in a window; the mean is over the rest
+    centers = 5.0 + 10.0 * np.arange(6)
+    b = _member(centers)
+    b["screen_windows"]["sci"][:2, :] = np.nan
+    sqm = {"A": _member(centers), "B": b}
+    grid = coupled_grid(sqm, ["A", "B"], {})
+    series = member_series(sqm, "B", grid)
+    assert np.array_equal(series["sci"], np.arange(6.0))
+    assert np.all(np.isnan(series["per_pair_sci"]["S1_D1"]))

@@ -19,10 +19,12 @@
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 /* under the second line nirspipe-rate was given, apart from each member's own red */
 .cd-table td.rate-low{outline:2px dashed var(--warn);outline-offset:-3px}
-.cd-table td:not(:first-child), .cd-table th:not(:first-child) { text-align: center; }
-/* one member's columns run into the next without it; a rule rather than a fill, so the
-   cell colours the metrics carry are still the only colour in the table */
-.cd-table .sub-edge { border-left: 2px solid var(--rule); }
+.cd-table td:nth-child(n+3), .cd-table th:nth-child(n+3) { text-align: center; }
+/* a pair's members sit one above the other; the rule above its first row is what groups
+   them, so the cell colours the metrics carry are still the only colour in the table */
+.cd-table tr.pair-start > td { border-top: 1px solid var(--rule); }
+.cd-table td.pair-name { vertical-align: top; font-weight: 600; }
+.cd-table td.member { color: var(--muted); }
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
@@ -131,8 +133,21 @@
 </section>
 {% endif %}
 
+<!-- ============================================================ per-channel signals -->
+<h2 id="Signals">2 &middot; Per-channel signals</h2>
+
+<section id="PerChannel" class="step">
+  <h3 class="step-title">a. Both members on one set of axes <span class="hint">signal overlay and PSD</span></h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.per_channel') }}</p>
+    <select id="ch-select" class="ch-select"></select>
+    <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
+            style="height:600px"></iframe>
+  </div>
+</section>
+
 <!-- ================================================== 3. shared usable time -->
-<h2 id="Usable">2 &middot; Shared usable time</h2>
+<h2 id="Usable">3 &middot; Shared usable time</h2>
 <p class="step-desc">{{ section_note('hyper_raw.usable') }}</p>
 
 {% if figure_paths.usable_time %}
@@ -150,7 +165,7 @@
 
 <!-- ======================================================== 3. motion -->
 {% if figure_paths.motion_before %}
-<h2 id="Motion">3 &middot; Motion, and whether they moved together</h2>
+<h2 id="Motion">4 &middot; Motion, and whether they moved together</h2>
 <p class="step-desc">{{ section_note('hyper_raw.motion') }}</p>
 
 <section id="MotionPanel" class="step">
@@ -188,7 +203,7 @@
 
 <!-- ==================================================== 3b. where on the head -->
 {% if figure_paths.head_by_condition or figure_paths.head_slider %}
-<h2 id="Head">4 &middot; Where on the head</h2>
+<h2 id="Head">5 &middot; Where on the head</h2>
 <p class="step-desc">{{ section_note('hyper_raw.head') }}</p>
 
 {% if figure_paths.head_by_condition %}
@@ -219,7 +234,7 @@
 {% endif %}
 
 <!-- ================================================== 1. are they comparable -->
-<h2 id="Quality">5 &middot; Are the two members comparable</h2>
+<h2 id="Quality">6 &middot; Are the two members comparable</h2>
 <p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
 
 <section id="Comparable" class="step">
@@ -253,7 +268,7 @@
 </section>
 
 <!-- ============================================================= 5. channels -->
-<h2 id="Channels">6 &middot; Channels</h2>
+<h2 id="Channels">7 &middot; Channels</h2>
 
 <section id="hyper-decisions-card" class="step">
   <h3 class="step-title">a. Channel decisions <span class="hint" id="hyper-decisions-hint">per member</span></h3>
@@ -264,19 +279,12 @@
       <table class="qm-table cd-table" id="hyper-decisions-table">
         <thead>
           <tr>
-            <th rowspan="2">{{ ch_columns[0][1] }}</th>
-            {%- for sid in subject_ids %}
-            <th colspan="{{ ch_columns|length }}" class="sub-edge">{{ sid }}</th>
-            {%- endfor %}
-          </tr>
-          <tr>
-            {%- for sid in subject_ids %}
-              {%- for key, label in ch_columns[1:] %}
-            <th class="{{ 'sub-edge' if loop.first else '' }}">{{ label }}
+            <th>{{ ch_columns[0][1] }}</th><th>Member</th>
+            {%- for key, label in ch_columns[1:] %}
+            <th>{{ label }}
               {%- if ch_wavelengths and key in wavelength_columns %}<span class="wl">{{ ch_wavelengths | join(' / ') }} nm</span>{% endif %}</th>
-              {%- endfor %}
-            <th>Decision</th>
             {%- endfor %}
+            <th>Decision</th>
           </tr>
         </thead>
         <tbody id="hyper-decisions-tbody"></tbody>
@@ -298,18 +306,6 @@
 </section>
 {% endif %}
 
-<!-- ============================================================== 6. signals -->
-<h2 id="Signals">7 &middot; Per-channel signals</h2>
-
-<section id="PerChannel" class="step">
-  <h3 class="step-title">a. Both members on one set of axes <span class="hint">signal overlay and PSD</span></h3>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.per_channel') }}</p>
-    <select id="ch-select" class="ch-select"></select>
-    <iframe id="ch-detail-iframe" class="plotly-frame" title="per-channel detail"
-            style="height:600px"></iframe>
-  </div>
-</section>
 
 
 <script>
@@ -570,7 +566,7 @@ function _set(id, text, cls) {
     if (!tbody) return;
     tbody.innerHTML = "";
     var metrics = _CH_COLUMNS.slice(1);                 // the name column heads the row
-    var nCols = 1 + subjects.length * (metrics.length + 1);
+    var nCols = 2 + metrics.length + 1;                 // pair, member, metrics, decision
     if (!_DECISION_ROWS.length) {
       tbody.innerHTML = "<tr><td colspan='" + nCols + "' style='color:#adb5bd;"
         + "font-style:italic;text-align:center'>No channels</td></tr>";
@@ -595,22 +591,32 @@ function _set(id, text, cls) {
         head.appendChild(th);
         tbody.appendChild(head);
       }
+      // a row per member, the pair's name once beside its first: a pair's two recordings
+      // are read one above the other rather than across a double-width row
       block[1].forEach(function(row) {
-        var tr = document.createElement("tr");
-        var tdName = document.createElement("td");
-        tdName.textContent = row.pair;
-        tr.appendChild(tdName);
-
         subjects.forEach(function(sid, si) {
+          var tr = document.createElement("tr");
+          if (si === 0) {
+            tr.className = "pair-start";
+            var tdName = document.createElement("td");
+            tdName.className = "pair-name";
+            tdName.rowSpan = subjects.length;
+            tdName.textContent = row.pair;
+            tr.appendChild(tdName);
+          }
           var cells = row.by_sub[sid] || {};
-          // each member's own verdict tints its own cells: the row holds two recordings
+          // each member's own verdict tints its own row
           var tint = cells.is_bad ? "#fff8f8" : "";
+          var tdSid = document.createElement("td");
+          tdSid.className = "member";
+          tdSid.textContent = sid;
+          tdSid.style.background = tint;
+          tr.appendChild(tdSid);
           metrics.forEach(function(col) {
             var td = document.createElement("td");
             td.textContent = cells[col[0]] != null ? cells[col[0]] : "—";
             var cls = cells[col[0] + "_cls"];
             if (cls) td.className = cls;
-            if (col === metrics[0]) td.classList.add("sub-edge");
             if (col[0] === "sci_win" && _rateSciLine != null && cells.sci_win_value != null
                 && cells.sci_win_value < _rateSciLine) td.classList.add("rate-low");
             td.style.background = tint;
@@ -619,8 +625,8 @@ function _set(id, text, cls) {
           var chip = chipCell(sid, row.pair);
           chip.style.background = tint;
           tr.appendChild(chip);
+          tbody.appendChild(tr);
         });
-        tbody.appendChild(tr);
       });
     });
   }
