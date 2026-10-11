@@ -15,6 +15,10 @@ from nirspipe import __version__
 # a run's id, made when it starts and read back wherever its time is printed
 RUN_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
+# PrepConfig fields a table or the recording's channels.tsv sets per recording; each prep
+# sidecar records them, while the record is written before any recording is read
+_PER_RECORDING = ("keep_spans", "keep_spans_from", "bad_spans", "channels_tsv_bads")
+
 
 def _fwd(p: Any) -> str | None:
     """Forward-slash-normalized string of a path, or None if falsy."""
@@ -123,7 +127,7 @@ def write_run_record(
     Sections:
       [environment]: software versions + system info
       [execution]:   invocation: the verbatim command, paths, selection filters
-      [prep]:        preprocessing parameters as resolved, from PrepConfig
+      [prep]:        preprocessing parameters as resolved, from PrepConfig, bar per-recording ones
       [post]:        postprocessing parameters as resolved, from PostConfig (only with --mode)
       [post_sources]: which layer set each [post] value: cli, config, mode or default
 
@@ -163,7 +167,13 @@ def write_run_record(
     ]
 
     if prep_config is not None:
-        sections.append(_section("prep", _config_section(prep_config)))
+        left_out = set(_PER_RECORDING)
+        # a --bad-channels table resolves per recording too, where a plain list does not
+        spec = args.get("bad_channels")
+        if spec and Path(str(spec)).exists():
+            left_out.add("bad_channels")
+        prep = {k: v for k, v in _config_section(prep_config).items() if k not in left_out}
+        sections.append(_section("prep", prep))
 
     mode = args.get("mode")
     if mode is not None and post_config is not None:
