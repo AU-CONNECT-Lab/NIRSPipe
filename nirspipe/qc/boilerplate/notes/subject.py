@@ -251,13 +251,6 @@ NOTES = {
         "measured on the corrected file, the spike counts on the uncorrected one, and the "
         "correction footprint from the difference between the two. The run&rsquo;s own "
         "page has the before&nbsp;&rarr;&nbsp;after pair.",
-    "metrics.gvtd_sets":
-        "Each set is measured on its own here rather than regrouped: GVTD is an RMS across "
-        "channels with its own cutoff per set, and a frame count asks how many of "
-        "<i>these</i> channels were flagged at once, a bar a smaller set clears more "
-        "easily. <b>Read each row on its own, not down a column.</b> Corrected per channel "
-        "is the exception, being an average over the set, and is the one column two rows "
-        "can be compared on.",
     "metrics.gvtd_sets_columns":
         "Each channel set is measured on its own, with its own GVTD cutoff and its own share of "
         "flagged channels, so <b>the three values in a row do not compare.</b> Corrected per "

@@ -601,6 +601,7 @@ def condition_payloads(
     save_stack=None,
     remake_hbo_hbr_corr=None,
     sep_bands=None,
+    has_spans: bool = False,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -641,6 +642,10 @@ def condition_payloads(
     the view is, that its rejected channels are the run's while the header counts the ones
     failing on this condition's windows alone, and that the columns with no windowed series
     behind them are absent rather than zero.
+
+    ``has_spans`` says the recording carries ``BAD_`` spans; each summary then states the
+    condition's kept seconds, as the subject report's condition pages do. A condition with
+    no counted window, which only spans leave, is marked ``unassessed``.
     """
     from nirspipe.qc.boilerplate.vocabulary import metric_rows
     from nirspipe.qc.common.channel_table import (
@@ -716,6 +721,14 @@ def condition_payloads(
                             else "badge-yellow" if bad_rate < 30 else "badge-red"),
             "scope": section_note("raw.condition_scope", label=label, t0=t0, t1=t1),
         }
+        # added only where they apply, so a run without spans carries the payload it did
+        if entry.get("counted_windows") == 0:
+            d["summary"]["unassessed"] = True
+            d["summary"]["scope"] += " " + section_note("summary.condition_not_assessed")
+        if has_spans and entry.get("kept_s") is not None:
+            d["summary"]["kept"] = section_note(
+                "summary.condition_kept", kept=f"{entry['kept_s']:.1f}",
+                window=f"{float(t1) - float(t0):.1f}", windows=entry.get("counted_windows"))
         # the flat list keeps only what neither table covers, so a number is printed once.
         # Derived from the two column lists rather than written out again: a column added to
         # either table leaves the list on its own.

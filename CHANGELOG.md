@@ -80,6 +80,7 @@ All notable changes to this project will be documented in this file.
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
 - Dyad coherence is NaN where a member has no power, as inside a long filled span, instead of inf or above 1
 - The re-paired ISC null's `n_valid_frac` is the share of each window it correlated, no longer always 1.0
+- The raw viewer's condition pages state their kept seconds when the input has `BAD_` spans, and show n/a for an unassessed condition
 
 ## [0.63.0] - 2026-10-09
 

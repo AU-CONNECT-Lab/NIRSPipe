@@ -25,7 +25,7 @@ from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_la
 from nirspipe.qc.figures.common.provenance_figure import write_provenance
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
-    WAVELENGTH_COLUMNS, channel_columns,
+    WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
     channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, registration_note,
     save_channel_csv,
     separation_blocks,
@@ -43,6 +43,7 @@ from nirspipe.qc.common.report_shell import (
 )
 from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.vocabulary import metric_rows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
@@ -85,6 +86,9 @@ _VIEW_SCALAR_KEYS = (
     "spike_count", "spike_pct", "spike_pct_frames", "spike_num_frames",
     *IMU_STAT_KEYS,
 )
+
+# the loose metrics that belong with motion rather than with the optical density
+_MOTION_LOOSE = frozenset({key for key, _ in MOTION_SPLIT_COLUMNS} | set(IMU_STAT_KEYS))
 
 # ---- Channel decisions table ----
 # Its columns, like every other view's, come from channel_table. It draws the decision chip
@@ -696,6 +700,9 @@ def _process_run(
 
     n_total = len(sci_scores)
     bad_rate = 100 * len(bad_channels) / n_total if n_total else 0.0
+    loose_rows = metric_rows({**view_scalars, **imu_sec},
+                             _VIEW_MONTAGE_KEYS if sqm_split else _VIEW_SCALAR_KEYS,
+                             skip_missing=True)
     return {
         # what the page opens with. Per run, because a viewer holding several switches
         # between them and the rejected count is the first thing that differs.
@@ -727,10 +734,16 @@ def _process_run(
         # print these and carry no copy of the cutoffs. The panels read the record's own
         # channel-set sections, and the record on disk is where the raw numbers live.
         "sqm": {
-            "rows": metric_rows(
-                {**view_scalars, **imu_sec},
-                _VIEW_MONTAGE_KEYS if sqm_split else _VIEW_SCALAR_KEYS,
-                skip_missing=True),
+            "rows": loose_rows,
+            # one table, as the subject report prints it: a metric per row, a set per column
+            "table": metric_set_table(
+                [("All", len(sci_scores)), ("Long", raw_all.get("n_long_channels")),
+                 ("Short", raw_all.get("n_short_channels"))] if sqm_split
+                else [("All", len(sci_scores))],
+                [("Optical density", split,
+                  [r for r in loose_rows if r["key"] not in _MOTION_LOOSE]),
+                 ("Motion", motion_split, [r for r in loose_rows if r["key"] in _MOTION_LOOSE]),
+                 ("Haemoglobin", haemo_split, [])]),
             "split":        split,
             "motion_split": motion_split,
             "haemo_split":  haemo_split,
@@ -774,6 +787,7 @@ def _process_run(
                                               {pair_of(c) for c in bad_channels}),
         "trial_images_by_condition": trial_img_by_cond,
         "sep_bands":     sep_bands,
+        "has_spans":     bool(bad_spans(raw)),
         "sqm_path":      sqm_path,
         "fig_dir":       fig_dir,
         "sci_scores":    sci_scores,
@@ -932,6 +946,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
         sep_bands=ctx.get("sep_bands"),
+        has_spans=bool(ctx.get("has_spans")),
     )
     if not views:
         return

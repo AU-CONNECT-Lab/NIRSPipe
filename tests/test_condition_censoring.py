@@ -1,5 +1,6 @@
 """Per-condition shares and assessments leave out BAD_ windows; the dyad screening page too."""
 
+import json
 import re
 
 import numpy as np
@@ -112,6 +113,49 @@ def test_the_dyad_screening_page_leaves_out_an_input_span(tmp_path):
 
     assert decoupled in rejected([])
     assert decoupled not in rejected([(280.0, 120.0)])
+
+
+# ---- the raw viewer's condition pages ----
+
+def _raw_condition_summaries(tmp_path, spans) -> dict:
+    """`prep-raw --by-condition` on the fingerprint with ``spans`` in its input file."""
+    from nirspipe.cli import qc as qc_cli
+    from tests._synth import _write_dataset_root, _write_subject
+
+    bids = tmp_path / "bids"
+    _write_dataset_root(bids, ["01"])
+    raw, _ = fingerprint_raw("01", "tapping", blocks=True)
+    add_bad_spans(raw, spans, "BAD_artifact")
+    _write_subject(bids, "01", "tapping", raw)
+    out = tmp_path / "out"
+    qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01", "--dpf", "6",
+                 "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
+                 "--sci-threshold", str(SCI_CUTOFF), "--by-condition", "--skip-bids-validation"])
+    summaries = {}
+    for page in out.rglob("*_cond-*_desc-raw_report.html"):
+        text = page.read_text(encoding="utf-8")
+        start = text.index("_STATIC_DATA = ") + len("_STATIC_DATA = ")
+        (view,), _ = json.JSONDecoder().raw_decode(text, start)
+        summaries[view["condition_label"]] = {**view["summary"], "_page": text}
+    return summaries
+
+
+def test_a_raw_condition_page_states_its_kept_time_and_an_unassessed_one_claims_no_count(
+        tmp_path):
+    # the span covers all of cb (210-370 s) and none of ca (30-190 s)
+    summaries = _raw_condition_summaries(tmp_path, [(200.0, 200.0)])
+    ca, cb = summaries["ca"], summaries["cb"]
+    assert cb["unassessed"] is True and "unassessed" not in ca
+    assert "so it is not assessed" in cb["scope"] and "not assessed" not in ca["scope"]
+    assert ca["kept"].startswith("160.0 of 160.0 s outside every BAD_ span")
+    assert cb["kept"] == "0.0 of 160.0 s outside every BAD_ span; 0 screening windows counted"
+    assert 'id="sum-kept"' in cb["_page"]
+
+
+def test_without_a_span_a_raw_condition_page_carries_what_it_did(tmp_path):
+    for summary in _raw_condition_summaries(tmp_path, []).values():
+        assert "kept" not in summary and "unassessed" not in summary
+        assert "not assessed" not in summary["scope"]
 
 
 def test_without_a_span_touching_it_a_condition_is_unchanged_bit_for_bit():

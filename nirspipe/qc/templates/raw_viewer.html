@@ -146,6 +146,7 @@ select#run-select {
   <div class="summary-grid">
     <table>
       <tr><th>Run</th><td id="sum-run"></td></tr>
+      <tr><th>Duration</th><td id="sum-duration"></td></tr>
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
@@ -153,6 +154,7 @@ select#run-select {
     </table>
     <table>
       <tr><th>{{ bad_heading | default('Bad channels') }}</th><td id="sum-bad"></td></tr>
+      <tr id="sum-kept-row" hidden><th>Kept</th><td id="sum-kept"></td></tr>
       <tr><th>SCI threshold</th><td id="sum-sci"></td></tr>
       <tr><th>Coupled windows</th><td id="sum-frac"></td></tr>
       <tr><th>DPF</th><td id="sum-dpf"></td></tr>
@@ -300,23 +302,13 @@ select#run-select {
 <h3 class="step-title">Run summary</h3>
 <div class="details-body">
   <p class="qm-note" id="sqm-scope"></p>
-  <ul id="sqm-list" class="qm-list"></ul>
-  <div id="sqm-split-wrap" style="display:none">
-    <h3 class="qm-sub">Original recording: optical density</h3>
-    <p class="qm-note">{{ section_note('raw.sets') }}</p>
-    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="sqm-split-table"></table></div>
-  </div>
-  <div id="motion-split-wrap" style="display:none">
-    <h3 class="qm-sub">Motion and spikes</h3>
-    <p class="qm-note">{{ section_note('metrics.gvtd_sets') }}</p>
-    <p class="qm-note" id="motion-post-note"></p>
-    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="motion-split-table"></table></div>
-  </div>
-  <div id="haemo-split-wrap" style="display:none">
-    <h3 class="qm-sub">Haemoglobin</h3>
-    <p class="qm-note">{{ section_note('raw.haemo_sets') }}</p>
-    <p class="qm-note" id="haemo-post-note"></p>
-    <div style="overflow-x:auto"><table class="qm-table qm-flat" id="haemo-split-table"></table></div>
+  <table class="qm-table qm-flat qm-unified" id="sqm-table"></table>
+  {#- a note per group, under the table as the subject report keeps its own; the per-set
+      halves only where there are sets to read apart -#}
+  <div id="sqm-notes">
+    <p class="qm-note" data-group="Optical density"><b>Optical density.</b> <span class="fn-sets">{{ section_note('raw.sets') }}</span></p>
+    <p class="qm-note" data-group="Motion"><b>Motion.</b> <span class="fn-sets">{{ section_note('metrics.gvtd_sets_columns') }} </span><span id="motion-post-note"></span></p>
+    <p class="qm-note" data-group="Haemoglobin"><b>Haemoglobin.</b> <span class="fn-sets">{{ section_note('raw.haemo_sets') }} </span><span id="haemo-post-note"></span></p>
   </div>
   <div id="bad-list"></div>
 </div>
@@ -809,10 +801,14 @@ function loadSummary() {
     if (el) el.innerHTML = html;
   }
   put("sum-run", _esc(d.run || ""));
-  put("sum-bad", d.n_total
+  // an unassessed condition counted no window, so a count of failing channels would be 0
+  put("sum-bad", d.unassessed ? "n/a" : d.n_total
       ? "<span class='" + (d.badge_class || "") + "'>" + d.n_bad + "/" + d.n_total
         + " (" + Math.round(d.bad_rate || 0) + "%)</span>"
       : "&mdash;");
+  put("sum-kept", _esc(d.kept || ""));
+  var keptRow = document.getElementById("sum-kept-row");
+  if (keptRow) keptRow.hidden = !d.kept;
   put("sum-sci", d.sci_threshold === undefined ? "&mdash;" : _esc(d.sci_threshold));
   put("sum-frac", d.good_frac === undefined ? "&mdash;"
                   : Math.round(d.good_frac * 100) + "% of windows");
@@ -832,20 +828,12 @@ function loadSqm() {
 // subject report reads too, so the two views of one recording cannot disagree about whether
 // a channel set passed.
 function renderSqm(d) {
-  function li(label, value, c, tip) {
-    return "<li><span class='ql'" + (tip ? " title='" + _esc(tip) + "'" : "") + ">"
-         + _esc(label) + "</span>"
-         + "<span class='qv" + (c ? " " + c : "") + "'>" + _esc(value) + "</span></li>";
-  }
-  var html = (d.rows || []).map(function(r) {
-    return li(r.label, r.value, r.cls, r.tip);
-  }).join("");
   var tsDiv = document.getElementById("ts-plot");
-  if (tsDiv && tsDiv.layout && tsDiv.layout.xaxis && tsDiv.layout.xaxis.range) {
-    var r = tsDiv.layout.xaxis.range;
-    html += li("Duration", (r[1] - r[0]).toFixed(0) + " s", "", "");
+  var dur = document.getElementById("sum-duration");
+  if (dur) {
+    var range = tsDiv && tsDiv.layout && tsDiv.layout.xaxis && tsDiv.layout.xaxis.range;
+    dur.textContent = range ? (range[1] - range[0]).toFixed(0) + " s" : "—";
   }
-  document.getElementById("sqm-list").innerHTML = html;
 
   // three cases, because "every channel" means two different things: a montage with no
   // short channels to separate, and a page whose separation is in the tables below. Saying
@@ -859,9 +847,7 @@ function renderSqm(d) {
   } else {
     scope.textContent = {{ section_note('raw.scope_every') | tojson }};
   }
-  renderSqmSplit(d.split || {},        "sqm-split-wrap",    "sqm-split-table");
-  renderSqmSplit(d.motion_split || {}, "motion-split-wrap", "motion-split-table");
-  renderSqmSplit(d.haemo_split || {},  "haemo-split-wrap",  "haemo-split-table");
+  renderSqmTable(d.table || {});
   var corrected = _correctionMethod();
   var mp = document.getElementById("motion-post-note");
   if (mp) {
@@ -875,33 +861,51 @@ function renderSqm(d) {
       ? {{ section_note('raw.haemo_post', method='{method}') | tojson }}.replace("{method}", _esc(corrected))
       : "";
   }
+  // a group's note shows when its group is in the table and the note has something to say
+  var split = ((d.table || {}).sets || []).length > 1;
+  var groups = ((d.table || {}).groups || []).map(function(g) { return g.title; });
+  document.querySelectorAll("#sqm-notes > p").forEach(function(p) {
+    p.querySelectorAll(".fn-sets").forEach(function(el) { el.style.display = split ? "" : "none"; });
+    var post = p.querySelector("[id$='-post-note']");
+    var says = split || (post && post.textContent.trim());
+    p.style.display = (groups.indexOf(p.dataset.group) >= 0 && says) ? "" : "none";
+  });
 }
 
-// one renderer for every table: they are the same shape, built by channel_table.split_table
-function renderSqmSplit(split, wrapId, tableId) {
-  var wrap  = document.getElementById(wrapId);
-  var table = document.getElementById(tableId);
-  if (!split.rows || !split.rows.length) { wrap.style.display = "none"; return; }
-  wrap.style.display = "";
-  var head = "<thead><tr><th>Channel set</th><th>Channels</th>"
-           + split.columns.map(function(c) {
-               return "<th title='" + _esc(c.tip) + "'>" + _esc(c.label)
-                    + (c.key_metric ? " &#9679;" : "") + "</th>";
-             }).join("")
+// One table, a metric per row and a channel set per column, the subject report's shape;
+// built by channel_table.metric_set_table, so nothing is formatted or coloured here.
+function renderSqmTable(t) {
+  var table = document.getElementById("sqm-table");
+  var sets = t.sets || [], groups = t.groups || [];
+  if (!groups.length) { table.innerHTML = ""; return; }
+  var split = sets.length > 1;
+  var head = "<colgroup><col class='lab'>" + sets.map(function() { return "<col>"; }).join("")
+           + "</colgroup><thead><tr><th>Metric</th>"
+           + (split ? sets.map(function(s) { return "<th>" + _esc(s) + "</th>"; }).join("")
+                    : "<th>Value</th>")
            + "</tr></thead>";
-  var body = "<tbody>" + split.rows.map(function(r) {
-    return "<tr><td>" + _esc(r.name) + "</td><td>"
-         + _esc(r.n === null || r.n === undefined ? "—" : r.n) + "</td>"
-         + r.cells.map(function(c) {
-             // before -> after where the row carries both; the colour is already the
-             // after's, that being the state the data is left in
-             var v = c.post === undefined ? _esc(c.value)
-                   : _esc(c.value) + " &rarr; " + _esc(c.post);
-             return "<td class='" + (c.cls || "") + "'>" + v + "</td>";
-           }).join("")
-         + "</tr>";
-  }).join("") + "</tbody>";
-  table.innerHTML = head + body;
+  var body = "<tbody>";
+  groups.forEach(function(g, gi) {
+    body += "<tr class='qm-group'><td colspan='" + (sets.length + 1) + "'>"
+          + "<span class='qm-group-title'>" + _esc(g.title) + "</span></td></tr>";
+    if (gi === 0 && split) {
+      body += "<tr><td>Channels</td>" + (t.counts || []).map(function(n) {
+        return "<td class='qv'>" + (n === null || n === undefined ? "—" : _esc(n)) + "</td>";
+      }).join("") + "</tr>";
+    }
+    g.rows.forEach(function(r) {
+      var label = "<span class='ql" + (r.key_metric ? " ql-key" : "") + "' title='"
+                + _esc(r.tip || "") + "'>" + _esc(r.label)
+                + (r.key_metric ? "<span class='ql-dot' aria-hidden='true'>&#9679;</span>" : "")
+                + "</span>";
+      body += "<tr><td>" + label + "</td>" + r.cells.map(function(c) {
+        // before -> after where the cell carries both; the colour is already the after's
+        var v = c.post === undefined ? _esc(c.value) : _esc(c.value) + " &rarr; " + _esc(c.post);
+        return "<td class='qv " + (c.cls || "") + "'>" + v + "</td>";
+      }).join("") + "</tr>";
+    });
+  });
+  table.innerHTML = head + body + "</tbody>";
 }
 
 // ─── marker table ─────────────────────────────────────────────────────────────

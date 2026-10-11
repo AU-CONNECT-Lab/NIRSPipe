@@ -544,6 +544,48 @@ def split_table(
     }
 
 
+def metric_set_table(
+    sets: "list[tuple[str, Any]]",
+    groups: "list[tuple[str, dict, list[dict]]]",
+) -> dict[str, Any]:
+    """A run's metrics as one table: a metric per row, a channel set per column.
+
+    ``sets`` is ``[(name, n_channels), ...]`` in column order. ``groups`` is
+    ``[(title, split, loose), ...]``: ``split`` a :func:`split_table` result (empty when the
+    montage did not split), ``loose`` rows from ``metric_rows`` that belong to no channel set,
+    printed in the first column with the others blank. A share and its count among the loose
+    rows print in one cell, as :func:`split_table` folds them::
+
+        metric_set_table([("All", 52), ("Long", 44)],
+                         [("Optical density", split, [{"key": "cp_mean", ...}])])
+        -> {"sets": ["All", "Long"], "counts": [52, 44],
+            "groups": [{"title": "Optical density",
+                        "rows": [{"label": "Mean SCI (10 s)", "cells": [{...}, {...}]}, ...]}]}
+    """
+    names = [name for name, _ in sets]
+    blank = {"value": "", "cls": ""}
+    out = []
+    for title, split, loose in groups:
+        rows = []
+        by_set = {r["name"]: r["cells"] for r in (split or {}).get("rows") or []}
+        for j, col in enumerate((split or {}).get("columns") or []):
+            rows.append({"label": col["label"], "tip": col["tip"], "key_metric": col["key_metric"],
+                         "cells": [by_set[n][j] if n in by_set else {"value": "—", "cls": ""}
+                                   for n in names]})
+        by_key = {r["key"]: r for r in loose}
+        for r in loose:
+            if r["key"] in COUNT_BESIDE.values() and any(
+                    share in by_key and count == r["key"] for share, count in COUNT_BESIDE.items()):
+                continue
+            count = by_key.get(COUNT_BESIDE.get(r["key"], ""))
+            value = r["value"] if count is None else f"{r['value']} ({count['value']})"
+            rows.append({"label": r["label"], "tip": r["tip"], "key_metric": r["key_metric"],
+                         "cells": [{"value": value, "cls": r["cls"]}] + [blank] * (len(names) - 1)})
+        if rows:
+            out.append({"title": title, "rows": rows})
+    return {"sets": names, "counts": [n for _, n in sets], "groups": out}
+
+
 def _failed_criteria(row: dict, cutoffs: dict[str, float]) -> list[str]:
     """Which screening criteria this row's own scores fail, or ["manual"].
 
