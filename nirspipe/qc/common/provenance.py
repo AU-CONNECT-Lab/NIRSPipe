@@ -106,7 +106,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
     sci_pruning  + {sci_threshold: 0.75}            -> "SCI 0.75 + PSP 0.1, coupled ≥ 0.75"
     unknown step, or the keys are absent            -> ""
 
-    Sidecars carry the whole config, so each step names only the keys that describe it.
+    A post sidecar also carries its file's filter state, so each step names only the keys that describe it.
     """
     def pick(*keys: str) -> Any:
         for k in keys:

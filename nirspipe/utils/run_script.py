@@ -129,6 +129,7 @@ def _build_script_text(
         '                                     nirs_required_fields, write_sidecar_json)',
         'from nirspipe.io.snirf import write_snirf',
         'from nirspipe.utils import is_optical_density',
+        'from nirspipe.utils.lineage import lineage_of',
         'from nirspipe.utils.spans import add_bad_spans, bad_spans, excluded_spans, excluded_time',
         'from nirspipe.pipeline.prep_pipeline import (',
         '    intensity_to_od, mark_bad_channels, correct_motion, od_to_haemo,',
@@ -184,6 +185,7 @@ def _build_script_text(
         f'CARDIAC_H_FREQ = {cardiac_h_freq!r}',
         f'RESP_L_FREQ    = {resp_l_freq!r}',
         f'RESP_H_FREQ    = {resp_h_freq!r}',
+        f'QC_WINDOW_S    = {qc_window_s!r}',
         f'BAD_CHANNELS   = {bad_channels!r}',
         f'IGNORE         = {ignore!r}',
     )
@@ -208,7 +210,11 @@ def _build_script_text(
         w('', '# ---- post parameters ----', f'HIGH_PASS      = {high_pass!r}',
           f'LOW_PASS       = {low_pass!r}', f'CENSOR_FILL    = {censor_fill!r}',
           f'FILTER_METHOD  = {filter_method!r}',
-          f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}')
+          f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}',
+          '# the filter state each post file carries; from desc-resampled on, the rate too',
+          'POST_PARAMS = {"high_pass": HIGH_PASS, "low_pass": LOW_PASS, "filter_method": FILTER_METHOD,',
+          '               "filter_order": FILTER_ORDER if FILTER_METHOD == "iir" else None,',
+          '               "censor_fill": CENSOR_FILL}')
     # every mode that fits a regression honours --noise-model, so the constant cannot live
     # in the glm branch: the script would report a model the run did not use
     if mode in ("glm", "rest") or denoise_regress:
@@ -237,19 +243,20 @@ def _build_script_text(
     # ---- sidecar params + save helper ----
     w(
         '',
+        '# what desc-sci records; each other prep stage records only its own setting',
         'PREP_PARAMS = {',
-        '    "subject": SUBJECT, "session": None, "dpf": DPF,',
-        '    "motion_correction": MOTION_METHOD, "sci_threshold": SCI_THRESHOLD,',
+        '    "sci_threshold": SCI_THRESHOLD,',
         '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
         '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
+        '    "resp_l_freq": RESP_L_FREQ, "resp_h_freq": RESP_H_FREQ, "qc_window_s": QC_WINDOW_S,',
         '    "bad_channels": BAD_CHANNELS, "channels_tsv_bads": [], "ignore": IGNORE,',
         '    "keep_spans": [],',
         '    "keep_spans_from": None, "bad_spans": [],',
         '}',
         '',
         '',
-        'def save_step(raw_step, desc, step, src, extra=None):',
+        'def save_step(raw_step, desc, step, src, extra=None, params=None):',
         '    # src: the entities of the recording, so each run keeps its task, run and session',
         '    path = build_output_path(',
         '        output_dir=OUTPUT_DIR, subject=SUBJECT,',
@@ -258,7 +265,7 @@ def _build_script_text(
         '    write_snirf(raw_step, path)',
         '    write_sidecar_json(path, {**nirs_required_fields(raw_step, SOURCE_METADATA),',
         '        "pipeline_version": __version__, "step": step,',
-        '        "parameters": {**PREP_PARAMS, "session": src.get("session")},',
+        '        "parameters": params or {},',
         '        "data": data_state(raw_step),',
         '        # read back by read_snirf: SNIRF itself cannot carry the marks',
         '        "bad_channels": list(raw_step.info["bads"]),',
@@ -351,7 +358,7 @@ def _build_script_text(
            '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, CHANNELS_TSV_BADS)))',
            '    raw_od.info["bads"] = bad_chs'] if channel_status else []),
         *_gvtd_lines,
-        'save_step(raw_od, "sci", "sci_pruning", src,',
+        'save_step(raw_od, "sci", "sci_pruning", src, params=PREP_PARAMS,',
         ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics,'
          if gvtd_censor else '          extra={"bad_channels": bad_chs,'),
         '                 "excluded_time": excluded_time(raw_od)})',
@@ -361,11 +368,12 @@ def _build_script_text(
         '',
         '# ===== block: motion | MOTION_METHOD artifact correction =====',
         'raw_od = correct_motion(raw_od, method=MOTION_METHOD)',
-        'save_step(raw_od, "motcorrected", "motion_correction", src)',
+        'save_step(raw_od, "motcorrected", "motion_correction", src,',
+        '          params={"motion_correction": MOTION_METHOD})',
         '',
         '# ===== block: beer_lambert | OD -> HbO/HbR (Beer-Lambert, dpf=DPF) =====',
         'raw_haemo = od_to_haemo(raw_od, dpf=DPF)',
-        'preproc_path = save_step(raw_haemo, "preproc", "beer_lambert", src)',
+        'preproc_path = save_step(raw_haemo, "preproc", "beer_lambert", src, params={"dpf": DPF})',
         '# QC (not run here): the `preproc`, `motion` and `motion_post` sections are read',
         '#   back from desc-preproc, desc-sci and desc-motcorrected.',
         '',
@@ -377,7 +385,7 @@ def _build_script_text(
         '    write_sidecar_json(aux_path, {',
         '        "pipeline_version": __version__, "step": "aux_extract",',
         '        "Sources": [Path(snirf_path).as_posix()],',
-        '        "parameters": {**PREP_PARAMS, "session": ses}, **_aux[1]})',
+        '        "parameters": {}, **_aux[1]})',
     )
 
     if mode:
@@ -393,7 +401,7 @@ def _build_script_text(
                 '                         method=FILTER_METHOD, order=FILTER_ORDER)',
             )
             if mode in ("denoise", "glm"):
-                b('save_step(result, "filtered", "bandpass", src)')
+                b('save_step(result, "filtered", "bandpass", src, params=POST_PARAMS)')
 
         if resample_sfreq is not None:
             b(
@@ -402,7 +410,8 @@ def _build_script_text(
                 'result = resample(result, RESAMPLE_SFREQ)',
             )
             if mode in ("denoise", "glm"):
-                b('save_step(result, "resampled", "resample", src)')
+                b('save_step(result, "resampled", "resample", src,',
+                  '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ})')
 
         if denoise_regress:
             b(
@@ -418,7 +427,9 @@ def _build_script_text(
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", src)',
+                'save_step(raw_resid, "errts", "glm_residuals", src,',
+                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
+                '                  **lineage_of(raw_resid).params})',
             )
 
         if mode == "denoise":
@@ -447,7 +458,9 @@ def _build_script_text(
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", src)',
+                'save_step(raw_resid, "errts", "glm_residuals", src,',
+                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
+                '                  **lineage_of(raw_resid).params})',
             )
             if fc:
                 b('# Derivatives (not run here): FC, ROI-FC and the seed maps are written by'
@@ -468,7 +481,9 @@ def _build_script_text(
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
-                'save_step(raw_resid, "errts", "glm_residuals", src)',
+                'save_step(raw_resid, "errts", "glm_residuals", src,',
+                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
+                '                  **lineage_of(raw_resid).params})',
                 '# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
                 '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )
@@ -480,7 +495,8 @@ def _build_script_text(
                 '# ----- block: export | the final residual, BAD_ frames at the channel kept mean -----',
                 f'_filled = mean_filled({final})',
                 'save_step(_filled, "meanfilled", "export_mean_filled", src,',
-                '          extra={"Description": MEAN_FILLED_DESCRIPTION})',
+                '          extra={"Description": MEAN_FILLED_DESCRIPTION},',
+                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ})',
             )
 
     for line in body:

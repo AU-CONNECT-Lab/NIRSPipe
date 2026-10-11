@@ -171,8 +171,10 @@ def test_a_run_measured_from_a_marker_through_the_cli_and_its_script(tmp_path):
     sidecar = json.loads(od.read_text(encoding="utf-8"))
     assert [(s["onset"], s["duration"], s["source"]) for s in sidecar["excluded_spans"]] == [
         (0.0, 200.0, "--keep-spans"), (300.0, 100.0, "--keep-spans")]
-    assert sidecar["parameters"]["keep_spans"] == [[200.0, 100.0]]
-    assert sidecar["parameters"]["keep_spans_from"] == "cb"
+    (sci,) = out.rglob("*desc-sci_nirs.json")
+    params = json.loads(sci.read_text(encoding="utf-8"))["parameters"]
+    assert params["keep_spans"] == [[200.0, 100.0]]
+    assert params["keep_spans_from"] == "cb"
 
     script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
     script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
@@ -212,4 +214,4 @@ def test_a_recording_no_row_names_comes_out_bit_identical(mini_bids, tmp_path):
         sidecar = lambda root: json.loads((root / rel).with_suffix(".json").read_text(encoding="utf-8"))  # noqa: E731
         assert sidecar(plain)["excluded_spans"] == sidecar(tabled)["excluded_spans"] == []
         assert sidecar(plain)["parameters"] == sidecar(tabled)["parameters"]
-        assert sidecar(tabled)["parameters"]["keep_spans_from"] is None
+        assert sidecar(tabled)["parameters"].get("keep_spans_from") is None

@@ -27,10 +27,11 @@ All notable changes to this project will be documented in this file.
 - `hyper-raw --roi-mapping` groups each member's long motion carpet rows by ROI under the coloured strip
 - `prep-raw --roi-mapping` groups the raw viewer's long motion carpet rows by ROI under the coloured strip
 - Navigation labels abbreviate long headings, the full heading on hover; the raw viewer's bar names the subject, not the file
+- Each stage's sidecar records only the settings that stage used and the filter state its file carries; the run record keeps the full configuration
 
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
-- Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; each prep sidecar holds them
+- Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; the `desc-sci` sidecar holds them
 - The denoised carpet's long and short GVTD row titles no longer overlap; each row is named inside its panel, as on the motion carpet
 - Derivative `_nirs.json` sidecars carry the BIDS REQUIRED fields (`TaskName`, `SamplingFrequency`, channel and optode counts); post and crop refuse stages written without them
 

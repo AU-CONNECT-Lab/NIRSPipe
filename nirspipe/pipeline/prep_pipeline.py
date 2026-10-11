@@ -261,7 +261,8 @@ def run_prep(
             "pipeline_version": __version__,
             "step": lin.step,
             "Sources": rec.sources_of(raw_step),
-            "parameters": {**_config_dict(config), **(extra_parameters or {})},
+            # the settings this step used; the run record holds the whole configuration
+            "parameters": extra_parameters or {},
             "data": data_state(raw_step),
             # read back by read_snirf: SNIRF itself cannot carry the marks
             "bad_channels": list(raw_step.info["bads"]),
@@ -364,6 +365,7 @@ def run_prep(
         **({"gvtd_censor": censor_metrics} if censor_metrics else {}),
         "excluded_time": excluded_time(raw_od),
     }, extra_parameters={
+        **_screening_parameters(config),
         "screen_scope_counted": counted,
         # what the Methods sentence on GVTD censoring is written from
         **({"gvtd_censor": config.gvtd_censor,
@@ -378,12 +380,13 @@ def run_prep(
     # both read the correction's two sides from there
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     tpca = (lineage_of(raw_od).params or {}).get("tpca")
-    _save(raw_od, "motcorrected", extra_provenance={"tpca": tpca} if tpca else None)
+    _save(raw_od, "motcorrected", extra_provenance={"tpca": tpca} if tpca else None,
+          extra_parameters={"motion_correction": config.motion_correction})
 
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
     raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
-    preproc_path = _save(raw_haemo, "preproc")
+    preproc_path = _save(raw_haemo, "preproc", extra_parameters={"dpf": config.dpf})
 
     # step 5: the aux channels, if the recording has any. They never enter an mne object, so
     # this is the only chance to carry them forward: the derivative snirfs do not hold them.
@@ -433,18 +436,15 @@ def _save_aux_table(source_path: Path | None, preproc_path: Path, config: PrepCo
         "pipeline_version": __version__,
         "step": "aux_extract",
         "Sources": [Path(source_path).as_posix()],
-        "parameters": _config_dict(config),
+        "parameters": {},
         **facts,
     })
     return out_path
 
 
-def _config_dict(config: PrepConfig) -> dict:
+def _screening_parameters(config: PrepConfig) -> dict:
+    """What desc-sci records: screening settings, span and bad-channel inputs, the SQM band and window."""
     return {
-        "subject": config.subject,
-        "session": config.session,
-        "dpf": config.dpf,
-        "motion_correction": config.motion_correction,
         "sci_threshold": config.sci_threshold,
         "psp_threshold": config.psp_threshold,
         "min_good_frac": config.min_good_frac,
@@ -456,6 +456,7 @@ def _config_dict(config: PrepConfig) -> dict:
         "qc_window_s": config.qc_window_s,
         "bad_channels": config.bad_channels,
         "channels_tsv_bads": config.channels_tsv_bads,
+        # read by no step, but it tells an empty channels_tsv_bads from a skipped status column
         "ignore": config.ignore,
         "keep_spans": [list(span) for span in config.keep_spans],
         "keep_spans_from": config.keep_spans_from,

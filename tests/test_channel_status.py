@@ -123,8 +123,9 @@ def test_ignoring_the_column_comes_out_bit_identical_to_no_column(runs):
         assert a.info["bads"] == b.info["bads"], rel
         assert a.annotations.description.tolist() == b.annotations.description.tolist()
         pa, pb = _sidecar(plain[rel])["parameters"], _sidecar(ignored[rel])["parameters"]
-        assert pa["channels_tsv_bads"] == pb["channels_tsv_bads"] == []
-        assert pb.pop("ignore") == ["channel-status"] and pa.pop("ignore") == []
+        if "desc-sci" in rel.name:
+            assert pa["channels_tsv_bads"] == pb["channels_tsv_bads"] == []
+            assert pb.pop("ignore") == ["channel-status"] and pa.pop("ignore") == []
         assert pa == pb, rel
 
 

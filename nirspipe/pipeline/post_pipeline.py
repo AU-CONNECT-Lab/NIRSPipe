@@ -746,7 +746,7 @@ def _warn_if_replacing_another_analysis(out_path: Path, parameters: dict, subjec
         return
     old = read_json(sidecar).get("parameters") or {}
     changed = {k: (old.get(k), parameters.get(k))
-               for k in _ANALYSIS_KEYS if k in old and old.get(k) != parameters.get(k)}
+               for k in _ANALYSIS_KEYS if k in old and k in parameters and old[k] != parameters[k]}
     if not changed:
         return
     logger.warning(
@@ -797,6 +797,10 @@ def _known_spans(source_path: Path | None) -> list[dict]:
     return sidecar["excluded_spans"]
 
 
+# the bandpass and resample stamps' names for high_pass, low_pass and resample_sfreq
+_RESTATED = ("l_freq", "h_freq", "sfreq")
+
+
 def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None) -> Path:
     entities = carry_entities(source_entities)
     entities["desc"] = desc
@@ -820,13 +824,14 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "low_pass": config.low_pass,
         "filter_method": config.filter_method,
         "filter_order": config.filter_order if config.filter_method == "iir" else None,
-        "resample_sfreq": config.resample_sfreq,
         "censor_fill": config.censor_fill,
+        # state from desc-resampled on; desc-filtered comes before the resampling
+        **({} if desc == "filtered" else {"resample_sfreq": config.resample_sfreq}),
         # which channels the run treated as short, so a reader of a derivatives tree can
         # reproduce the split. Without it neither the short-channel regressors nor the
         # blanking of a channel fitted against itself can be recovered from the file.
-        **bands_to_record(separation_bands(config)),
-        **(lin.params if lin else {}),
+        **({} if desc in ("filtered", "resampled") else bands_to_record(separation_bands(config))),
+        **{k: v for k, v in (lin.params if lin else {}).items() if k not in _RESTATED},
     }
     # before the write, while the previous run's sidecar is still the one on disk
     _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
