@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
 - Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; each prep sidecar holds them
+- The denoised carpet's long and short GVTD row titles no longer overlap; each row is named inside its panel, as on the motion carpet
 
 ## [0.65.0] - 2026-10-10
 
