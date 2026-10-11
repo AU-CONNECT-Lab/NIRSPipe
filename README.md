@@ -95,9 +95,7 @@ Subject / session / task selection:
   --bids-filter-file FILE      JSON file with extra pybids query filters.
 
 Preprocessing:
-  --motion-correction          {tddr,wavelet,spline,none}   [default: tddr]
-                               tddr and wavelet are implemented; spline is withheld and is
-                               refused at the start of the run.
+  --motion-correction          {tddr,wavelet,tpca,spline,none}   [default: tddr]
   --bad-channels               S-D labels ("S1_D1,S2_D3") or a table with participant_id +
                                bad_channels columns. Either wavelength marks the pair.
                                Unioned with the screening's bads.
@@ -341,7 +339,7 @@ nirspipe-qc prep-raw BIDS_DIR OUTPUT_DIR --participant-label LABEL [LABEL ...]
                   [--window-length FLOAT]                        [default: 10.0]
                   [--epoch-qc] [--epoch-tmin/--epoch-tmax FLOAT]
                   [--by-condition]
-                  [--motion-correction {tddr,wavelet,spline,none}]  [default: none]
+                  [--motion-correction {tddr,wavelet,tpca,spline,none}]  [default: none]
                   [--short-max-dist/--long-min-dist/--long-max-dist MM]
                   [--skip-bids-validation]
 

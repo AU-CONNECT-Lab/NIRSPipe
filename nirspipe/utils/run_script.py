@@ -425,7 +425,8 @@ def _build_script_text(
                 '                         method=FILTER_METHOD, order=FILTER_ORDER)',
             )
             if mode in ("denoise", "glm"):
-                b('save_step(result, "filtered", "bandpass", src, params=POST_PARAMS)')
+                b('save_step(result, "filtered", "bandpass", src,',
+                  '          params=post_params(result, "filtered"))')
 
         if resample_sfreq is not None:
             b(
@@ -435,7 +436,7 @@ def _build_script_text(
             )
             if mode in ("denoise", "glm"):
                 b('save_step(result, "resampled", "resample", src,',
-                  '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ})')
+                  '          params=post_params(result, "resampled"))')
 
         if denoise_regress:
             b(
@@ -445,15 +446,14 @@ def _build_script_text(
                 '    result,',
                 '    stim_dur=None, hrf_model="spm", noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
-                '    fir_delays=None, short_channel=SHORT_CHANNEL,',
+                '    fir_delays=None, short_channel=SHORT_CHANNEL, sep_bands=SEP_BANDS,',
                 *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
                 'save_step(raw_resid, "errts", "glm_residuals", src,',
-                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
-                '                  **lineage_of(raw_resid).params})',
+                '          params=post_params(raw_resid, "errts"))',
             )
 
         if mode == "denoise":
@@ -476,15 +476,15 @@ def _build_script_text(
                 '    result,',
                 '    stim_dur=STIM_DUR, hrf_model=HRF_MODEL, noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
-                '    fir_delays=FIR_DELAYS, short_channel=SHORT_CHANNEL, events_path=EVENTS_PATH,',
+                '    fir_delays=FIR_DELAYS, short_channel=SHORT_CHANNEL, sep_bands=SEP_BANDS,',
+                '    events_path=EVENTS_PATH,',
                 *_aux_lines,
                 ('    contrast_def=_contrast_def,' if contrast_file else '    contrast_def=None,'),
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
                 'save_step(raw_resid, "errts", "glm_residuals", src,',
-                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
-                '                  **lineage_of(raw_resid).params})',
+                '          params=post_params(raw_resid, "errts"))',
             )
             if fc:
                 b('# Derivatives (not run here): FC, ROI-FC and the seed maps are written by'
@@ -499,15 +499,14 @@ def _build_script_text(
                 '    result,',
                 '    stim_dur=None, hrf_model="spm", noise_model=NOISE_MODEL,',
                 '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
-                '    fir_delays=None, short_channel=SHORT_CHANNEL,',
+                '    fir_delays=None, short_channel=SHORT_CHANNEL, sep_bands=SEP_BANDS,',
                 *_aux_lines,
                 '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
                 '    output_dir=str(OUTPUT_DIR / f"sub-{SUBJECT}" / (f"ses-{ses}" if ses else "") / "nirs"),',
                 '    source_path=str(preproc_path),',
                 ')',
                 'save_step(raw_resid, "errts", "glm_residuals", src,',
-                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ,',
-                '                  **lineage_of(raw_resid).params})',
+                '          params=post_params(raw_resid, "errts"))',
                 '# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
                 '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )
@@ -520,7 +519,7 @@ def _build_script_text(
                 f'_filled = mean_filled({final})',
                 'save_step(_filled, "meanfilled", "export_mean_filled", src,',
                 '          extra={"Description": MEAN_FILLED_DESCRIPTION},',
-                '          params={**POST_PARAMS, "resample_sfreq": RESAMPLE_SFREQ})',
+                '          params=post_params(_filled, "meanfilled"))',
             )
 
     for line in body:
@@ -614,7 +613,7 @@ def write_run_script(
         gvtd_censor=_unwrap(args.get("gvtd_censor")),
         gvtd_censor_n_std=_pick("gvtd_censor_n_std", 10.0),
         gvtd_min_epoch_s=_pick("gvtd_min_epoch_s", 30.0),
-        sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
+        sep_bands=resolved_separation_bands(args),
         bad_channels_table=bad_channels_table,
         keep_spans_table=keep_spans_table,
         keep_spans_from=args.get("keep_spans_from") if keep_spans_table else None,
