@@ -1170,8 +1170,8 @@ def _cd_btn(pair: str, state: str) -> dbc.Button:
 
 # the same columns the subject report and the raw viewer print, in the same order: the
 # decision chip is added beside them here, and the HbO-HbR correlation is a haemoglobin
-# measurement this intensity view has no stage for
-_CH_COLUMNS = channel_columns(("corr", "separation"))
+# measurement this intensity view has no stage for. The saturated share is not on this page.
+_CH_COLUMNS = channel_columns(("corr", "saturated", "separation"))
 _CELL_COLOR = {"bad": "#c0392b", "good": "#27ae60", "neg": "#27ae60", "pos": "#c0392b"}
 _TH_STYLE = {"padding": "4px 8px", "fontWeight": "600", "fontSize": "0.8rem",
              "borderBottom": "2px solid #dde3ea", "background": "#f8f9fa"}

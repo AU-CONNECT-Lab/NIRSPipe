@@ -59,7 +59,7 @@ from nirspipe.qc.metrics.screening import (  # noqa: F401
 from nirspipe.qc.metrics.coupling import (  # noqa: F401
     PSP_WINDOW_S, SCI_WINDOW_S, compute_sci_scores, compute_psp_scores, _sci_metrics,
     _sci_win_metrics,
-    channel_cv, channel_snr, _intensity_metrics,
+    channel_cv, channel_snr, _intensity_metrics, _saturation_metrics, saturated_share,
     _channel_distance_metrics, _psp_metrics, _cardiac_power_metrics,
 )
 from nirspipe.qc.metrics.motion import (  # noqa: F401

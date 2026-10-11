@@ -13,8 +13,10 @@ def test_a_screened_out_pair_names_the_coupled_window_criterion():
             _row("S2_D2 760", 0.95, False), _row("S2_D2 850", 0.95, False)]
     cells = {c["name"]: c for c in format_rows(pair_rows(rows), 0.8, name_key="pair",
                                                 psp_threshold=0.1)}
-    assert "coupled windows" in cells["S1_D1"]["status"]
-    assert "coupled windows" not in cells["S2_D2"]["status"]
+    # the usual reason is stated once in each table's note, so Status prints it bare
+    assert cells["S1_D1"]["status"] == "BAD"
+    assert "coupled windows" in cells["S1_D1"]["reason"]
+    assert cells["S2_D2"]["status"] == "OK" and not cells["S2_D2"]["reason"]
 
 
 def test_the_lower_share_of_the_two_wavelengths_decides():

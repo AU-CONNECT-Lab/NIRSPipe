@@ -82,6 +82,7 @@ _SUBJECT_METRICS = [
     "psp_mean",
     "cv_mean",
     "snr_mean",
+    "n_saturated_channels",
     "gvtd_filt_p95",
     "motion_corrected_pct",
     "spike_pct_frames",

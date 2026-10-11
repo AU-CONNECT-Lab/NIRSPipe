@@ -288,6 +288,53 @@ def _intensity_metrics(raw_intensity: mne.io.Raw,
     }
 
 
+def saturated_share(data: np.ndarray, ceiling: float) -> np.ndarray:
+    """Per channel, the share of samples held at ``ceiling`` for two samples or more in a row.
+
+    ::
+
+      a channel pinned at the ceiling for 30 of 100 samples, in one stretch  ->  0.30
+      a channel touching the ceiling at one sample                            ->  0.0
+
+    A detector that receives more light than it can record writes its limit, the same value
+    sample after sample, so the recording's highest intensity repeated is a clipped stretch.
+    A lone sample at that value is where the signal peaked, which is why a stretch needs two.
+    ``data`` is ``(n_channels, n_times)``.
+    """
+    if data.shape[1] == 0:
+        return np.zeros(data.shape[0])
+    at = data >= ceiling
+    held = np.zeros_like(at)
+    held[:, 1:] |= at[:, 1:] & at[:, :-1]
+    held[:, :-1] |= at[:, :-1] & at[:, 1:]
+    return held.mean(axis=1)
+
+
+@_safe_metrics("Saturation", (
+    "saturated_pct", "n_saturated_channels", "saturated_per_channel",
+))
+def _saturation_metrics(raw_intensity: mne.io.Raw,
+                        ceiling: "float | None" = None) -> dict[str, Any]:
+    """Each channel's saturated share, the set's share of channel-samples, and its channels hit.
+
+    ``ceiling`` is the whole recording's highest intensity, handed in when ``raw_intensity``
+    is one channel set or one stretch of it: a part with no clipped channel would otherwise
+    take its own maximum for the device's limit. None takes the maximum of what is given.
+    """
+    data = raw_intensity.get_data()
+    names = raw_intensity.ch_names
+    if not names:
+        return {}
+    if ceiling is None:
+        ceiling = float(np.nanmax(data))
+    share = saturated_share(data, ceiling)
+    return {
+        "saturated_pct": float(share.mean()),
+        "n_saturated_channels": int((share > 0).sum()),
+        "saturated_per_channel": {ch: float(share[i]) for i, ch in enumerate(names)},
+    }
+
+
 @_safe_metrics("Channel distance", (
     "ch_dist_mean", "ch_dist_min", "ch_dist_max", "ch_dist_per_channel",
 ))

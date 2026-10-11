@@ -96,7 +96,9 @@ NOTES = {
         "A row per channel pair, each member&rsquo;s columns side by side under its name, "
         "long and short channels in separate tables. A member&rsquo;s columns are tinted red "
         "where that member rejected the pair: BAD is too few coupled windows, BAD (manual) "
-        "by hand. Click a decision to cycle it through unset, good and bad; it saves to each "
+        "by hand. Saturated % is the share of samples held at the detector&rsquo;s ceiling; "
+        "those stretches carry no pulse, so they fail coupling. Click a decision to cycle it "
+        "through unset, good and bad; it saves to each "
         "member&rsquo;s JSON when the page is served by <code>nirspipe-rate hyper</code>.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "

@@ -65,6 +65,7 @@ import numpy as np
 from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
 from nirspipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
+from nirspipe.utils import is_optical_density
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, is_bad_span
 from nirspipe import __version__
@@ -283,10 +284,12 @@ def _short_section(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     good_frac_scores: "dict[str, float] | None" = None,
+    ceiling: "float | None" = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
-    Coupling (SCI, PSP, the coupled-window share) and amplitude (SNR, CV) transfer to short
+    Coupling (SCI, PSP, the coupled-window share), amplitude (SNR, CV) and saturation,
+    against the whole recording's ``ceiling``, transfer to short
     channels, and so does the whole spike family: the mask is a per-channel MAD test, and the
     frame counts over it ask how many of *these* channels spiked at once, which the windowed
     half stores per set (``spike_spans_short_s``). ``spike_count`` is a sum over
@@ -305,7 +308,7 @@ def _short_section(
     the number is read against a line.
     """
     from nirspipe.qc.metrics import (
-        _intensity_metrics, _motion_metrics, _psp_metrics, _sci_metrics,
+        _intensity_metrics, _motion_metrics, _psp_metrics, _saturation_metrics, _sci_metrics,
         _sci_win_metrics, _spike_metrics,
     )
     from nirspipe.qc.metrics.coupling import _good_frac_metrics
@@ -324,6 +327,9 @@ def _short_section(
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
+    # a ceiling is a detector's, so optical density input has none to be held at
+    if not is_optical_density(raw_short):
+        record.update(_saturation_metrics(raw_short, ceiling))
     record.update(_motion_metrics(raw_short))
     spike = _spike_metrics(raw_short)
     record.update({k: v for k, v in spike.items()
@@ -439,10 +445,13 @@ def raw_sections(
     sections: dict[str, Any] = {}
     per_channel: dict[str, Any] = {}
     section = _section_writer(sections, per_channel)
+    # the device's limit is the whole recording's, so a set with no clipped channel is not
+    # measured against its own maximum
+    ceiling = float(np.nanmax(raw_intensity.get_data()))
 
     section("raw", lambda: compute_raw_sqm(
         raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
-        good_frac_scores))
+        good_frac_scores, ceiling=ceiling))
 
     sep_bands = sep_bands if sep_bands is not None else separation_bands()
     long_names, short_names = long_short_channels(raw_intensity, sep_bands)
@@ -462,14 +471,15 @@ def raw_sections(
             long_frac = {k: v for k, v in (good_frac_scores or {}).items()
                          if k in set(long_names)}
             return compute_raw_sqm(
-                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq, long_frac)
+                raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq, long_frac,
+                ceiling=ceiling)
         section("raw_long", long_section)
     if short_names and not set(short_names) <= rejected:
         # already returns the (scalars, nested) split, so it bypasses `section`
         try:
             sections["raw_short"], per_channel["raw_short"] = _short_section(
                 raw_intensity, short_names, sci_scores, bad_channels,
-                cardiac_l_freq, cardiac_h_freq, good_frac_scores)
+                cardiac_l_freq, cardiac_h_freq, good_frac_scores, ceiling)
         except Exception:
             logger.warning("raw_short: section failed", exc_info=True)
     return sections, per_channel

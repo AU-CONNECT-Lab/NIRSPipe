@@ -629,6 +629,8 @@ METRIC_SUMMARY = {
     "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of both means; a saturated channel with any residual noise is not counted here and inflates snr_mean.",
     "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
+    "n_saturated_channels": "How many channels sit at the detector's ceiling for at least two samples in a row, the recording's highest intensity repeated; zero is what you want. Those stretches carry no pulse, so they fail coupling.",
+    "saturated_pct": "Share of channel-samples held at the detector's ceiling, the recording's highest intensity repeated over two samples or more.",
     # geometry
     "ch_dist_mean": "Average source-detector separation in metres. Descriptive, not a quality judgement.",
     "ch_dist_min": "Shortest source-detector separation in metres.",
@@ -742,6 +744,7 @@ _RAW_METRICS = (
     "good_frac_mean",
     "channel_retention_rate", "cp_mean", "n_flat_channels",
     "cv_mean", "snr_mean", "snr_pass_rate", "mean_amp_mean",
+    "n_saturated_channels", "saturated_pct",
     "ch_dist_mean", "ch_dist_min", "ch_dist_max",
 )
 # the OD-domain families, measured again on the corrected file so the pair subtracts
@@ -817,6 +820,7 @@ RECORD_CHANNEL_METRICS = {
     "cv_per_channel": f"Standard deviation over mean of the raw intensity inside {CV_WINDOW_S:g} s windows, averaged over the windows.",
     "snr_per_channel": "Mean over standard deviation, the reciprocal of the channel's CV.",
     "mean_amp_per_channel": "Mean raw intensity reaching the detector.",
+    "saturated_per_channel": "Share of samples held at the recording's highest intensity for two samples or more, the detector's ceiling.",
     "spike_pct_per_channel": "Fraction of samples flagged as sudden jumps on the motion-band-filtered derivative. Experimental.",
     "temporal_derivative_variance": "Variance of the unfiltered sample-to-sample change in optical density.",
     "motion_corrected_frac_per_channel": "Fraction of samples where the correction changed the signal abruptly, its frame-to-frame change exceeding the channel's own noise. Experimental.",
@@ -937,6 +941,8 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", "sig3", None, None),
+    "n_saturated_channels":    ("Saturated channels", "d", None, _LOWER),
+    "saturated_pct":           ("Saturated share", "pct", None, _LOWER),
 
     # geometry
     "ch_dist_mean":            ("Mean separation (m)", ".3f", None, None),

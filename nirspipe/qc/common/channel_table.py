@@ -127,6 +127,7 @@ def channel_rows(
             "snr":        value_of("snr_per_channel"),
             "cv":         value_of("cv_per_channel"),
             "spike":      value_of("spike_pct_per_channel"),
+            "saturated":  value_of("saturated_per_channel"),
             "corr":       corr_pc.get(pair_of(ch)),
             "corr_post":  corr_post_pc.get(pair_of(ch)),
             "is_bad":     ch in bad,
@@ -138,7 +139,7 @@ def channel_rows(
 
 # The per-channel columns measured on each wavelength on its own; the rest are a pair's
 # (SCI and PSP correlate the two wavelengths, HbO-HbR corr is after Beer-Lambert).
-WAVELENGTH_COLUMNS = ("snr", "cv", "spike")
+WAVELENGTH_COLUMNS = ("snr", "cv", "spike", "saturated")
 
 
 def pair_wavelengths(rows: list[dict]) -> list[str]:
@@ -193,6 +194,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
             "snr":        _first(group, "snr"),
             "cv":         _first(group, "cv"),
             "spike":      _first(group, "spike"),
+            "saturated":  _first(group, "saturated"),
             "corr":       _first(group, "corr"),
             "corr_post":  _first(group, "corr_post"),
             # the share a pair is rejected on, so its Status can name the criterion
@@ -342,6 +344,7 @@ _COLUMN_METRIC = {
     "snr":   "snr_mean",
     "cv":    "cv_mean",
     "spike": "spike_pct",
+    "saturated": "saturated_pct",
     "corr":  "hbo_hbr_corr_mean",
 }
 
@@ -363,6 +366,7 @@ CHANNEL_COLUMNS = (
     ("snr",        f"SNR ({CV_WINDOW_S:g} s)"),
     ("cv",         f"CV ({CV_WINDOW_S:g} s)"),
     ("spike",      "Spike % (exp.)"),
+    ("saturated",  "Saturated %"),
     ("corr",       "HbO–HbR corr"),
     ("separation", "Separation"),
 )
@@ -399,6 +403,7 @@ OD_SPLIT_COLUMNS = (
     ("snr_mean",               f"Mean SNR ({CV_WINDOW_S:g} s)"),
     ("cv_mean",                f"Mean CV ({CV_WINDOW_S:g} s)"),
     ("mean_amp_mean",          "Mean amplitude"),
+    ("n_saturated_channels",   "Saturated channels"),
     ("spike_pct",              "Spike share"),
     # a sum over the set's channels, so it is read against the row's channel count rather
     # than against another row
@@ -449,7 +454,7 @@ HAEMO_SPLIT_COLUMNS = (
 # of the whole run's histogram by definition, so a condition is counted against the run's
 # line. Shared so the subject report's condition pages and the raw viewer's drop the same.
 WHOLE_RUN_ONLY_COLUMNS = frozenset({
-    "mean_amp_mean", "spike_pct", "spike_count", "gvtd_thresh",
+    "mean_amp_mean", "n_saturated_channels", "spike_pct", "spike_count", "gvtd_thresh",
     "motion_corrected_frac_mean",
     # one estimate over the whole recording, with no windowed series to take a condition's
     # columns out of. The 10 s estimate beside it is the one a condition can have

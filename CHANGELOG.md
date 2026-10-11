@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Per-channel tables print each wavelength's share of samples held at the detector's ceiling; run summaries count saturated channels
+
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
 

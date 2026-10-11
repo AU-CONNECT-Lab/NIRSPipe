@@ -36,9 +36,10 @@ UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
                # the whole-run SCI is one correlation over the recording, with no windows
                "sci_per_channel",
                "hbo_hbr_corr_per_channel", "cnr_per_channel",
-               # the spike mask is per sample, but only its whole-run share per channel is
-               # stored, so there is nothing on disk to count over one condition's window
-               "spike_pct_per_channel",
+               # the spike and saturation masks are per sample, but only their whole-run
+               # shares per channel are stored, so there is nothing on disk to count over one
+               # condition's window
+               "spike_pct_per_channel", "saturated_per_channel",
                # both vary over the recording and neither has a windowed series stored
                "mean_amp_per_channel", "motion_corrected_frac_per_channel")
 

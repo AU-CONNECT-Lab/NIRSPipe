@@ -111,7 +111,8 @@ def trial_sqm(raw, t0: float, t1: float,
     bad, _ = screen_channels(scores, cutoffs)
     try:
         return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq,
-                               scores.get("good_frac"))
+                               scores.get("good_frac"),
+                               ceiling=float(np.nanmax(raw.get_data())))
     except Exception as exc:
         logger.warning("trial SQM failed: %s", exc)
         return {}

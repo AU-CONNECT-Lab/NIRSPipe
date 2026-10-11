@@ -13,7 +13,7 @@ import numpy as np
 
 from nirspipe.qc.metrics.coupling import (
     _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics,
-    _intensity_metrics, _psp_metrics, _sci_metrics, _sci_win_metrics,
+    _intensity_metrics, _psp_metrics, _saturation_metrics, _sci_metrics, _sci_win_metrics,
 )
 from nirspipe.qc.metrics.gvtd import _motion_metrics
 from nirspipe.qc.metrics.haemo import (
@@ -36,6 +36,7 @@ def compute_raw_sqm(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     good_frac_scores: dict[str, float] | None = None,
+    ceiling: float | None = None,
 ) -> dict[str, Any]:
     """Metrics computable from raw intensity data (no haemo required).
 
@@ -52,6 +53,10 @@ def compute_raw_sqm(
     good_frac_scores : dict[str, float] or None, optional
         Per-channel share of coupled windows, as the screening already counted it. None
         stores no such entry rather than paying for a second windowed pass.
+    ceiling : float or None, optional
+        The whole recording's highest intensity, which the saturated share is counted
+        against. Pass it when ``raw_intensity`` is one channel set or one stretch of the
+        recording; None takes the maximum of ``raw_intensity`` itself.
 
     Returns
     -------
@@ -88,9 +93,11 @@ def compute_raw_sqm(
             "gvtd_vstd_mean": None, "gvtd_vstd_p95": None,
             "gvtd_thresh": None, "gvtd_num_above_thresh": None,
             "gvtd_pct_above_thresh": None,
+            "saturated_pct": None, "n_saturated_channels": None, "saturated_per_channel": {},
         })
     else:
         record.update(_intensity_metrics(raw_intensity))
+        record.update(_saturation_metrics(raw_intensity, ceiling))
         record.update(_spike_metrics(raw_intensity))
         record.update(_motion_metrics(raw_intensity))
     return record

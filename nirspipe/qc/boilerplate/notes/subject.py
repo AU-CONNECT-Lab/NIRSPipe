@@ -270,7 +270,9 @@ NOTES = {
     "metrics.per_channel":
         "BAD means too few windows in which SCI and PSP both pass (<code>--min-good-frac</code>), "
         "so a channel can be BAD with a passing whole-run SCI; BAD (manual) was rejected by hand. "
-        "A BAD short channel is left out of the regressors.",
+        "A BAD short channel is left out of the regressors. Saturated % is the share of samples "
+        "held at the detector&rsquo;s ceiling; those stretches carry no pulse, so they fail "
+        "coupling.",
     "channel_summary":
         "Green pass, red fail, grey missing. Only Status rejects a channel: it fails when the "
         "share of windows where SCI (<code>--sci-threshold</code> {sci}) and PSP both pass is "
