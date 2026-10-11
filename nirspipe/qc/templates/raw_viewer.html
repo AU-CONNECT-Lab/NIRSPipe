@@ -28,7 +28,7 @@ select#run-select {
 .panel-head .hint { font-weight: 400; }
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
-.row-layout  { grid-template-columns: minmax(0, 640px); }
+.row-layout  { grid-template-columns: 1fr 2fr; align-items: start; }
 .row-psd-ep  { grid-template-columns: 1fr; }
 @media (max-width: 900px) {
   .row-main, .row-layout { grid-template-columns: 1fr; }
@@ -175,6 +175,13 @@ select#run-select {
         <p class="panel-head">2D top-down, head-projected</p>
         <div id="layout-2d-plot"></div>
       </div>
+      {#- the subject report's figure, so a run reads the same before the pipeline and after -#}
+      <div id="brain-views-block" style="display:none">
+        <p class="panel-head">Channel quality: 3D &amp; optode map</p>
+        <img id="brain-views-img" class="responsive" alt="Brain views and optode map" />
+        <p class="qm-note" id="brain-views-note"></p>
+        <p class="fig-path" id="brain-views-path"></p>
+      </div>
     </div>
   </div>
 </section>
@@ -238,13 +245,6 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
-    {#- the subject report's figure, so a run reads the same before the pipeline and after -#}
-    <div id="brain-views-block" style="display:none">
-      <h3 class="qm-sub">Channel quality: 3D &amp; optode map</h3>
-      <p class="qm-note" id="brain-views-note"></p>
-      <img id="brain-views-img" class="responsive" alt="Brain views and optode map" />
-      <p class="fig-path" id="brain-views-path"></p>
-    </div>
   </div>
 </section>
 
@@ -617,7 +617,9 @@ function selectChannel(pair) {
 function loadLayout() {
   function _render(d) {
     if (d.layout_2d_figure) {
-      Plotly.newPlot("layout-2d-plot", d.layout_2d_figure.data, d.layout_2d_figure.layout,
+      // a third of the row, so the head is drawn square in it rather than at the GUI's height
+      Plotly.newPlot("layout-2d-plot", d.layout_2d_figure.data,
+                     Object.assign({}, d.layout_2d_figure.layout, { height: 440 }),
                      { responsive: true, displayModeBar: false });
       document.getElementById("layout-2d-plot").on("plotly_click", function(evt) {
         var pt = evt.points[0];

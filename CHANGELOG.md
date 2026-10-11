@@ -78,6 +78,7 @@ All notable changes to this project will be documented in this file.
 - The raw viewer draws the subject report's 3D and optode-map quality figure in place of its 3D channel plot, condition pages their own
 - The dyad raw report's channel table sets the two members side by side, long and short channels in separate tables, without whole-run SCI
 - The dyad raw report's simultaneous-movement numbers become a table under the motion figures instead of their own section
+- The dyad channel table names wavelengths beside each header label, so each header row is one line
 
 ### Fixed
 - Accelerometer channels spelled `acc-x` are recognised, so the motion panels and IMU summaries include them

@@ -24,6 +24,9 @@
    groups them, so the cell colours the metrics carry are still the only colour in the table */
 .cd-table .pair-name { text-align: left; font-weight: 600; }
 .cd-table .member-start { border-left: 1px solid var(--rule); }
+/* one header line per row: the wavelengths beside the label, the table wider rather than taller */
+.cd-table th { white-space: nowrap; }
+.cd-table th .wl { display: inline; margin-left: 0.3rem; }
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
