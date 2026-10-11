@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-10-11
+
 ### Added
 - `nirspipe-prep keep-spans` writes a `--keep-spans` table from named conditions, one row per occurrence; also on the Batch Prep page
 - `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
@@ -35,6 +37,7 @@ All notable changes to this project will be documented in this file.
 - Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; the `desc-sci` sidecar holds them
 - The denoised carpet's long and short GVTD row titles no longer overlap; each row is named inside its panel, as on the motion carpet
 - Derivative `_nirs.json` sidecars carry the BIDS REQUIRED fields (`TaskName`, `SamplingFrequency`, channel and optode counts); post and crop refuse stages written without them
+- The exported run script regresses on the run's separation bands, writes `dataset_description.json`, and records the same sidecar parameters as the run
 
 ## [0.65.0] - 2026-10-10
 
