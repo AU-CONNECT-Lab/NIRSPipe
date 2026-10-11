@@ -36,3 +36,9 @@ def test_the_table_prints_the_share_of_channels_good_in_every_member(groups):
     table = _table(groups)
     for group in GROUPS:
         assert table[_label(group)]["Good in both"] != "—", group
+
+
+def test_the_table_keeps_its_header_in_view(groups):
+    # its scroll box captures position: sticky, so the page copies the header and binds it
+    html = (groups.hyper / "desc-groups_report.html").read_text(encoding="utf-8")
+    assert "function stickyHead(table)" in html and "stickyHead(table);" in html

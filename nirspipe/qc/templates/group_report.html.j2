@@ -25,8 +25,8 @@
    only a panel wider than the page scrolls, sideways */
 .tall-frame { overflow-x: auto; margin-top: 0.5rem; }
 
-/* sideways only. A scroll box captures a sticky header, so the header scrolls away with the
-   page here and only the first column stays in view */
+/* sideways only. A scroll box captures a sticky header, so _sticky_head.html.j2 keeps a
+   copy of it under the top bar */
 #group-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
@@ -239,6 +239,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% endblock %}
 
 {% block scripts %}
+{% include "_sticky_head.html.j2" %}
 <script>
 (function() {
   var table = document.getElementById("group-table");
@@ -274,6 +275,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
         th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
       });
     });
+    stickyHead(table);
   }
 
   // iframe auto-resize listener (same protocol as figure_io.py)

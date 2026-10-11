@@ -164,6 +164,12 @@ def test_the_metrics_table_is_the_cohort_table(groups, cohort):
                 assert float(text) == pytest.approx(want, rel=1e-3, abs=1e-9), (r[0], column)
 
 
+def test_the_metrics_table_keeps_its_header_in_view(groups):
+    # its scroll box captures position: sticky, so the page copies the header and binds it
+    html = (groups.deriv / "desc-subjects_report.html").read_text(encoding="utf-8")
+    assert "function stickyHead(table)" in html and "stickyHead(table);" in html
+
+
 # ---- the windowed grid: every run pale, the outliers in colour ----
 
 _GRID_ROWS = {"SCI (windowed)": "sci", "CV (windowed)": "cv"}

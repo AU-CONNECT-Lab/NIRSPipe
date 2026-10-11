@@ -14,8 +14,8 @@
 .summary-grid table.headline td { font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--rule-soft); }
 .summary-grid table.headline td:first-child { color: var(--ink); font-weight: 600; }
 
-/* sideways only. A scroll box captures a sticky header, so the header scrolls away with the
-   page here and only the first column stays in view */
+/* sideways only. A scroll box captures a sticky header, so _sticky_head.html.j2 keeps a
+   copy of it under the top bar */
 #group-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
 table.group-table {
   width: 100%; border-collapse: collapse; font-size: 0.78rem;
@@ -144,6 +144,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% endblock %}
 
 {% block scripts %}
+{% include "_sticky_head.html.j2" %}
 <script>
 (function() {
   var table = document.getElementById("group-table");
@@ -177,6 +178,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
         th.querySelector(".sort-ind").textContent = direction ? "▲" : "▼";
       });
     });
+    stickyHead(table);
   }
   window.addEventListener("message", function(e) {
     if (!e.data || e.data.type !== "iframe-resize") return;

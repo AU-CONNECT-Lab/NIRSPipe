@@ -1,0 +1,55 @@
+<script>
+// A table that scrolls sideways in its own box loses position: sticky to that box, so its
+// header is copied into a fixed strip under the top bar while the real one is off screen.
+function stickyHead(table) {
+  if (!table) return;
+  var wrap = table.parentElement;
+  var head = table.querySelector("thead");
+  var strip = document.createElement("div");
+  strip.style.cssText = "position:fixed; overflow:hidden; z-index:999; display:none;"
+    + " background:var(--surface);";
+  var copy = document.createElement("table");
+  copy.className = table.className;
+  copy.style.tableLayout = "fixed";
+  copy.appendChild(head.cloneNode(true));
+  strip.appendChild(copy);
+  wrap.parentNode.insertBefore(strip, wrap);
+
+  var real = head.querySelectorAll("th");
+  var shown = copy.querySelectorAll("th");
+  function marks() {
+    for (var i = 0; i < real.length; i++) shown[i].innerHTML = real[i].innerHTML;
+  }
+  // a click on the copy sorts the real table, then the copy takes its arrows
+  shown.forEach(function(th, i) {
+    th.addEventListener("click", function() { real[i].click(); marks(); });
+  });
+
+  function widths() {
+    copy.style.width = table.getBoundingClientRect().width + "px";
+    for (var i = 0; i < real.length; i++) {
+      shown[i].style.boxSizing = "border-box";
+      shown[i].style.width = real[i].getBoundingClientRect().width + "px";
+    }
+  }
+  function place() {
+    var css = getComputedStyle(document.documentElement).getPropertyValue("--qc-topbar-h");
+    var top = parseFloat(css) || 0;
+    var box = table.getBoundingClientRect();
+    var on = box.top < top && box.bottom > top + head.getBoundingClientRect().height;
+    if (on && strip.style.display === "none") { widths(); marks(); }
+    strip.style.display = on ? "" : "none";
+    if (!on) return;
+    var frame = wrap.getBoundingClientRect();
+    strip.style.top = top + "px";
+    strip.style.left = frame.left + "px";
+    strip.style.width = wrap.clientWidth + "px";
+    // the strip scrolls with the box, so the copy's first cell stays put as the real one does
+    strip.scrollLeft = wrap.scrollLeft;
+  }
+  window.addEventListener("scroll", place, { passive: true });
+  wrap.addEventListener("scroll", place, { passive: true });
+  window.addEventListener("resize", function() { widths(); place(); });
+  place();
+}
+</script>

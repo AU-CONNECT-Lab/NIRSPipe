@@ -70,6 +70,7 @@ All notable changes to this project will be documented in this file.
 - The subject and dyad index pages' notes are shorter
 - The cohort pages' notes are shorter
 - The raw viewer's condition pages print both wavelengths for SNR, CV and Spike, as the run page does
+- The cohort pages' big tables keep their header under the top bar while scrolling down
 
 ### Fixed
 - A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
