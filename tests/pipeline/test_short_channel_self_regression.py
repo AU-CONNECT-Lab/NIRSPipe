@@ -86,3 +86,38 @@ def test_the_warning_names_the_channel_and_says_what_is_blanked(caplog):
         _short_channel_regressors(raw, "mean")
     said = caplog.text
     assert "S1_D1 hbo" in said and "ALFF and FC are left blank" in said
+
+
+def test_pca_names_every_good_short_channel_however_many_survive():
+    raw = _haemo([8.0, 8.5, 30.0])
+    assert sole_regressor_channels(raw, "pca") == ["S1_D1 hbo", "S2_D2 hbo",
+                                                   "S1_D1 hbr", "S2_D2 hbr"]
+
+
+def test_each_channel_pca_names_is_left_with_no_residual():
+    raw = _haemo([8.0, 8.5, 30.0])
+    basis = _short_channel_regressors(raw, "pca")
+    design = np.column_stack([np.ones(raw.n_times), *basis.values()])
+    for name in sole_regressor_channels(raw, "pca"):
+        y = raw.get_data(picks=[name])[0]
+        resid = y - design @ np.linalg.lstsq(design, y, rcond=None)[0]
+        assert np.linalg.norm(resid) < 1e-10 * np.linalg.norm(y), name
+    long = raw.get_data(picks=["S3_D3 hbo"])[0]
+    resid = long - design @ np.linalg.lstsq(design, long, rcond=None)[0]
+    assert np.linalg.norm(resid) > 0.5 * np.linalg.norm(long)
+
+
+def test_the_pca_warning_names_every_channel_once(caplog):
+    raw = _haemo([8.0, 8.5, 30.0])
+    with caplog.at_level("WARNING"):
+        _short_channel_regressors(raw, "pca")
+    warned = [r.getMessage() for r in caplog.records if "left blank" in r.getMessage()]
+    assert len(warned) == 1
+    assert all(ch in warned[0] for ch in ("S1_D1 hbo", "S2_D2 hbo", "S1_D1 hbr", "S2_D2 hbr"))
+
+
+@pytest.mark.parametrize("strategy", ["mean", "pca"])
+def test_a_chromophore_with_no_good_short_channel_builds_no_regressor_and_names_nothing(strategy):
+    raw = _haemo([8.0, 30.0], bads=["S1_D1 hbr"])
+    assert _short_channel_regressors(raw, strategy) == {}
+    assert sole_regressor_channels(raw, strategy) == []

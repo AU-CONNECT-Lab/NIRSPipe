@@ -635,6 +635,8 @@ def _write_fc_derivatives(
             # seed map: one side averaged, so it is a third product rather than a view of the
             # two above. Cells for a seed's own channels are NaN, not zero.
             fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
+            for ch in (c for c in empty if c in fc_seed_df.columns):
+                fc_seed_df[ch] = np.nan
             if not fc_seed_df.empty:
                 fcseed_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "pearson")
                 write_tsv(fc_seed_df, fcseed_path, index=True, index_label="roi")

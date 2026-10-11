@@ -90,11 +90,19 @@ def _short_channel_regressors(
                        "no short-channel regressor; its record and its methods text say so. "
                        "The run is not comparable with the subjects that got one.")
         return {}
-    for lone in sole_regressor_channels(haemo, strategy, sep_bands):
+    empty = sole_regressor_channels(haemo, strategy, sep_bands)
+    if strategy == "pca" and empty:
         logger.warning(
-            "%s is the only short channel of its chromophore that passed screening, so the "
-            "regressor built from it is that channel; its own residual is therefore empty "
-            "and its ALFF and FC are left blank. Every other channel is unaffected.", lone)
+            "the pca regressor keeps every short-channel component, so it spans each good "
+            "short channel and their own residuals are empty: %s. Their ALFF and FC are "
+            "left blank; the long channels are unaffected.", ", ".join(empty))
+    else:
+        for lone in empty:
+            logger.warning(
+                "%s is the only short channel of its chromophore that passed screening, so "
+                "the regressor built from it is that channel; its own residual is therefore "
+                "empty and its ALFF and FC are left blank. Every other channel is "
+                "unaffected.", lone)
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
     n_dropped = len(short.ch_names) - len(hbo_data) - len(hbr_data)
@@ -114,8 +122,9 @@ def sole_regressor_channels(
 ) -> list[str]:
     """Short channels that would be regressed out of themselves, leaving nothing.
 
-    ``[] `` for a montage with several good short channels a chromophore, ``["S5_D6 hbo"]``
-    for one whose only surviving short channel is that one.
+    ``mean``: ``[]`` for a montage with several good short channels a chromophore,
+    ``["S5_D6 hbo"]`` for one whose only surviving short channel is that one.
+    ``pca``: every good short channel of both chromophores.
 
     The ``mean`` regressor is the mean of the good short channels of a chromophore. Where
     one of them survives screening, that mean **is** that channel, sample for sample, and
@@ -124,8 +133,11 @@ def sole_regressor_channels(
     two or more the residual is the channel minus their mean, which is a real if small
     quantity, so the line is at one and not at some share.
 
-    ``pca`` spans the short channels rather than averaging them, and a single channel's
-    basis is again that channel, so it falls the same way.
+    ``pca`` keeps every component, so its basis spans each good short channel and all of
+    them are fitted against themselves, however many survive.
+
+    A chromophore with no good short channel builds no regressor at all, so nothing is
+    named then.
     """
     if not strategy:
         return []
@@ -135,12 +147,13 @@ def sole_regressor_channels(
     if not short_names:
         return []
     short = haemo.copy().pick(short_names)
-    lone = []
-    for chromo in ("hbo", "hbr"):
-        picks = mne.pick_types(short.info, fnirs=chromo, exclude="bads")
-        if len(picks) == 1:
-            lone.append(short.ch_names[picks[0]])
-    return lone
+    good = [[short.ch_names[i] for i in mne.pick_types(short.info, fnirs=chromo, exclude="bads")]
+            for chromo in ("hbo", "hbr")]
+    if not all(good):
+        return []
+    if strategy == "pca":
+        return [ch for names in good for ch in names]
+    return [names[0] for names in good if len(names) == 1]
 
 
 def _short_channel_basis(data: np.ndarray) -> dict[str, np.ndarray]:
