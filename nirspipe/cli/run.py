@@ -64,7 +64,7 @@ def _noise_model(value: str) -> str:
 
 
 _SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
-_IGNORE_CHOICES        = ["events", "bids-validation"]
+_IGNORE_CHOICES        = ["events", "bids-validation", "channel-status"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
 # here cannot reach the parser without also declaring what it needs
 _LEVEL_REQUIRES = {
@@ -334,7 +334,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     esc = p.add_argument_group("escape hatches")
     esc.add_argument("--ignore", nargs="+", action="extend", choices=_IGNORE_CHOICES,
-                     help="Processing aspects to skip.")
+                     help="Processing aspects to skip. 'channel-status': do not mark bad "
+                          "the channels each run's BIDS channels.tsv marks bad in its status "
+                          "column, which are otherwise unioned with --bad-channels.")
     esc.add_argument("--skip-bids-validation", "--skip_bids_validation", "--skip_bids_validator",
                      dest="skip_bids_validation", action="store_true",
                      help="Do not check the input with bids-validator. Files BIDS does not "

@@ -191,6 +191,8 @@ class PrepConfig:
     long_min_dist: float | None = None
     long_max_dist: float | None = None
     bad_channels: list[str] = field(default_factory=list)
+    # the channels the run's BIDS channels.tsv marks bad in its status column
+    channels_tsv_bads: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
     # (onset, duration) stretches on the recording's own axis; empty uses the whole recording
     keep_spans: list[tuple[float, float]] = field(default_factory=list)
@@ -295,10 +297,21 @@ def run_prep(
         else:
             logger.info("sub-%s | manual bad channels: %s", config.subject, manual)
         forced += manual
+    if config.channels_tsv_bads:
+        listed = _expand_bad_pairs(raw_od, config.channels_tsv_bads)
+        unmatched = sorted({pair_of(c) for c in config.channels_tsv_bads}
+                           - {pair_of(c) for c in listed})
+        if unmatched:
+            logger.warning("sub-%s | channels.tsv marks bad channels the recording does not "
+                           "have: %s", config.subject, unmatched)
+        if listed:
+            logger.info("sub-%s | bad channels from channels.tsv: %s", config.subject, listed)
+        forced += listed
     if forced:
         bad_chs = sorted(set(bad_chs) | set(forced))
         if len(bad_chs) == len(sci_scores):
             why = [w for w, on in (("--bad-channels", config.bad_channels),
+                                   ("channels.tsv", config.channels_tsv_bads),
                                    ("non-finite samples", non_finite)) if on]
             raise StageError(
                 f"{' and '.join(why)} leave{'' if len(why) > 1 else 's'} no usable channel: "
@@ -436,6 +449,7 @@ def _config_dict(config: PrepConfig) -> dict:
         "resp_h_freq": config.resp_h_freq,
         "qc_window_s": config.qc_window_s,
         "bad_channels": config.bad_channels,
+        "channels_tsv_bads": config.channels_tsv_bads,
         "ignore": config.ignore,
         "keep_spans": [list(span) for span in config.keep_spans],
         "keep_spans_from": config.keep_spans_from,

@@ -18,7 +18,8 @@ import numpy as np
 
 from nirspipe.cli import _shared
 from nirspipe.cli.run import mode_defaults
-from nirspipe.io.bids import bids_label, get_layout, get_nirs_files, validate_bids
+from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
+                              validate_bids)
 from nirspipe.io.naming import report_name, roi_map_name
 from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
@@ -349,7 +350,10 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 # without it the outputs of a session tree lose their ses- level
                                 prep_config = _make_prep_config(
                                     subject, src_entities.get("session") or session, args,
-                                    entities=src_entities)
+                                    entities=src_entities,
+                                    channels_tsv_bads=(
+                                        [] if "channel-status" in (args.get("ignore") or [])
+                                        else channel_status_bads(layout, snirf_path)))
                                 logger.info("processing: %s", snirf_path)
                                 try:
                                     raw = read_snirf(snirf_path)
@@ -728,7 +732,8 @@ def _refuse_bad_keep_span_rows(spec: str | None, layout: Any,
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
-                      entities: dict | None = None) -> "PrepConfig":
+                      entities: dict | None = None,
+                      channels_tsv_bads: list[str] | None = None) -> "PrepConfig":
     marker = args.get("keep_spans_from")
     keep_spans = _keep_spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
     return PrepConfig(
@@ -744,6 +749,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
            if args.get("screen_scope") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
+        channels_tsv_bads=channels_tsv_bads or [],
         keep_spans=keep_spans,
         # a recording no row names is used whole, so no marker applies to it
         keep_spans_from=marker if keep_spans else None,

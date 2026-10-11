@@ -9,6 +9,7 @@ from pathlib import Path
 
 from bids import BIDSLayout
 
+from nirspipe.io.tables import read_table
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("io.bids")
@@ -173,6 +174,27 @@ def get_nirs_files(
         kwargs.update(extra)
 
     return [Path(f.path) for f in layout.get(**kwargs)]
+
+
+def channel_status_bads(layout: BIDSLayout, nirs_path: Path) -> list[str]:
+    """The channels a recording's ``channels.tsv`` marks ``bad`` in its status column.
+
+    ::
+
+      "S1_D2 760" bad, "S2_D1 760" good, "S2_D2 850" BAD  ->  ["S1_D2 760", "S2_D2 850"]
+
+    The nearest ``channels.tsv``, inheritance included; none, or one without a status
+    column, gives none. Case is ignored, as mne-bids ignores it.
+    """
+    path = layout.get_nearest(str(nirs_path), suffix="channels", extension=".tsv",
+                              ignore_strict_entities=["extension", "suffix"])
+    if path is None:
+        return []
+    table = read_table(path, dtype=str).fillna("")
+    if not {"name", "status"} <= set(table.columns):
+        return []
+    return [name for name, status in zip(table["name"], table["status"])
+            if status.strip().lower() == "bad"]
 
 
 def bids_label(subject: str, entities: dict) -> str:

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
 
 ### Changed
+- Channels a run's BIDS `channels.tsv` marks `bad` are rejected with `--bad-channels`; `--ignore channel-status` turns this off
 - Cohort pages list the median and range table under Quality Metrics, not Summary; the subject cohort's Overview drops the repeated small-cohort caveat
 
 ### Fixed

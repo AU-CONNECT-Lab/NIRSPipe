@@ -80,6 +80,8 @@ def _build_script_text(
     # mirrors post_pipeline._has_confounds: denoise regresses only when asked to
     denoise_regress = mode == "denoise" and (
         bool(short_channel) or bool(aux) or drift_model not in (None, "none"))
+    # each run's channels.tsv bad channels join the forced ones, as the CLI's do
+    channel_status = "channel-status" not in (ignore or [])
     # the aux table sits beside the stage on disk; the script resolves it the way run_post does
     _aux_lines = ([
         '    aux_path=find_aux_table(preproc_path), aux_channels=AUX_CHANNELS,',
@@ -122,7 +124,7 @@ def _build_script_text(
         '',
         'from nirspipe import __version__',
         'from nirspipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
-        'from nirspipe.io.bids import get_layout, get_nirs_files',
+        'from nirspipe.io.bids import channel_status_bads, get_layout, get_nirs_files',
         'from nirspipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
         'from nirspipe.io.snirf import write_snirf',
         'from nirspipe.utils import is_optical_density',
@@ -240,7 +242,8 @@ def _build_script_text(
         '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
         '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
-        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [],',
+        '    "bad_channels": BAD_CHANNELS, "channels_tsv_bads": [], "ignore": IGNORE,',
+        '    "keep_spans": [],',
         '    "keep_spans_from": None, "bad_spans": [],',
         '}',
         '',
@@ -311,6 +314,12 @@ def _build_script_text(
             f'{i3}BAD_CHANNELS = _bad_channels_for(str(BAD_CHANNELS_TABLE), SUBJECT, src)',
             f'{i3}PREP_PARAMS["bad_channels"] = BAD_CHANNELS',
         )
+    if channel_status:
+        w(
+            f'{i3}# the channels this run\'s channels.tsv marks bad (off with --ignore channel-status)',
+            f'{i3}CHANNELS_TSV_BADS = channel_status_bads(layout, snirf_path)',
+            f'{i3}PREP_PARAMS["channels_tsv_bads"] = CHANNELS_TSV_BADS',
+        )
 
     # ---- per-file processing body (built unindented, then indented into the loop) ----
     body: list[str] = []
@@ -335,6 +344,9 @@ def _build_script_text(
         'if BAD_CHANNELS:  # merge manual --bad-channels, both wavelengths of each pair',
         '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, BAD_CHANNELS)))',
         '    raw_od.info["bads"] = bad_chs',
+        *(['if CHANNELS_TSV_BADS:  # and those channels.tsv marks bad',
+           '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, CHANNELS_TSV_BADS)))',
+           '    raw_od.info["bads"] = bad_chs'] if channel_status else []),
         *_gvtd_lines,
         'save_step(raw_od, "sci", "sci_pruning", src,',
         ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics,'
