@@ -1,9 +1,6 @@
 """The GLM and the confound regressions leave every BAD_ frame out of the fit, nothing else."""
 
 import json
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -13,7 +10,6 @@ import pytest
 
 from nirspipe.cli import run as run_cli
 from nirspipe.exceptions import StageError
-from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.glm import run_glm_pipeline
 from nirspipe.pipeline.glm_censored import (ar_order, events_left, fit_channel,
                                             gap_ar_coefficients, kept_frames)
@@ -163,11 +159,11 @@ def test_the_saved_design_flags_the_rows_it_left_out(tmp_path):
 
 # ---- the whole run ----
 
-def test_a_glm_run_with_kept_stretches_through_the_cli_and_its_script(tmp_path):
+def test_a_glm_run_with_kept_stretches_through_the_cli(tmp_path):
     bids, _ = make_fingerprint_dataset(tmp_path)
     table = tmp_path / "keep.tsv"
     table.write_text("onset\tduration\n0\t200\n", encoding="utf-8")
-    out, script_out = tmp_path / "out", tmp_path / "script"
+    out = tmp_path / "out"
     run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--mode", "glm",
                   "--stim-dur", f"{EVENT_DURATION:g}", "--drift-model", "polynomial",
                   "--noise-model", "ar1", "--keep-spans", str(table),
@@ -176,12 +172,3 @@ def test_a_glm_run_with_kept_stretches_through_the_cli_and_its_script(tmp_path):
     params = json.loads(errts.read_text(encoding="utf-8"))["parameters"]
     assert params["censored_unselected_frac"] == pytest.approx(0.5)
     assert [v["left"] for v in params["events_left"].values()] == [3]
-
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_errts,) = script_out.rglob("*desc-errts_nirs.snirf")
-    np.testing.assert_array_equal(read_snirf(script_errts).get_data(),
-                                  read_snirf(errts.with_suffix(".snirf")).get_data())

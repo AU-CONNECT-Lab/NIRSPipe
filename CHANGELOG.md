@@ -12,9 +12,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
 
-### Fixed
-- The exported run script's sidecars equal the run's: `Sources`, the screening scores, the OD passthrough step, and no invented `drift_high_pass`
-- The exported run script zeroes non-finite samples and forces their pair bad, as the run does
+### Removed
+- The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only
 
 ## [0.66.0] - 2026-10-11
 

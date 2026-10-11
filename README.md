@@ -200,7 +200,7 @@ Escape hatches:
   --allow-cropped-input        Run on a `nirspipe-prep crop` tree, otherwise refused. Motion
                                correction and the bandpass then each see one segment. Prefer
                                preprocessing the uncut recording and cropping the result.
-  --dry-run                    Write each subject's run record and script, then stop.
+  --dry-run                    Write each subject's run record, then stop.
 
 Other:
   --verbose
@@ -435,8 +435,7 @@ derivatives/nirspipe/
     │   └── ...
     ├── logs/
     │   ├── sub-01.log
-    │   ├── sub-01.toml                             # run record (env + params)
-    │   └── sub-01_script.py                        # reproduction script
+    │   └── sub-01.toml                             # run record (env + params)
     └── nirs/                                       # every data file has a .json sidecar
         ├── sub-01_task-<t>_desc-od_nirs.snirf              # prep 1: optical density
         ├── sub-01_task-<t>_desc-sci_nirs.snirf             # prep 2: channel screening
@@ -562,7 +561,7 @@ nirspipe/
     boilerplate/  Methods text and references
   interface/    Dash GUI (analysis, batch prep, data prep, hyper align, hyper analysis,
                 qc, recon)
-  utils/        logging, run_record, job_db, lineage, run_script, snirf_prep, net
+  utils/        logging, run_record, job_db, lineage, snirf_prep, net
   exceptions.py AlignmentError, GroupCSVError, MissingDerivativesError, StageError, ...
 ```
 

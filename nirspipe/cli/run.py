@@ -347,7 +347,8 @@ def _build_parser() -> argparse.ArgumentParser:
                           "correction and the bandpass each see one segment, which moves "
                           "both. Preprocess the uncut recording and crop the result instead "
                           "(`nirspipe-prep crop --input-desc`).")
-    esc.add_argument("--dry-run", action="store_true", help="Write pipeline script without executing.")
+    esc.add_argument("--dry-run", action="store_true",
+                     help="Write each subject's run record, then stop without processing.")
     esc.add_argument("--verbose", action="store_true")
     return p
 

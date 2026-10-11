@@ -2,9 +2,6 @@
 
 import json
 import logging
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -139,10 +136,10 @@ def test_a_recording_no_row_names_comes_out_bit_identical(mini_bids, tmp_path):
         assert sidecar(plain)["parameters"] == sidecar(tabled)["parameters"]
 
 
-def test_a_run_with_bad_spans_through_the_cli_and_its_script(tmp_path):
+def test_a_run_with_bad_spans_through_the_cli(tmp_path):
     bids, truth = make_fingerprint_dataset(tmp_path, blocks=True)
     table = _table(tmp_path, "task\tonset\tduration\ntask-tapping\t285\t90\n")
-    out, script_out = tmp_path / "out", tmp_path / "script"
+    out = tmp_path / "out"
     run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--min-good-frac", "0.85",
                   "--bad-spans", str(table), "--no-report", "--skip-bids-validation"])
 
@@ -158,17 +155,8 @@ def test_a_run_with_bad_spans_through_the_cli_and_its_script(tmp_path):
     excluded = read_record(record)["excluded"]
     assert excluded["kept_s"] == 310.0
     assert excluded["corrupted_frac"] == pytest.approx(0.225)
-
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_sci,) = script_out.rglob("*desc-sci_nirs.snirf")
     (cli_sci,) = out.rglob("*desc-sci_nirs.snirf")
-    for path in (script_sci, cli_sci):
-        assert bad_spans(read_snirf(path)) == [(285.0, 375.0, MANUAL)]
-    assert read_snirf(script_sci).info["bads"] == read_snirf(cli_sci).info["bads"]
+    assert bad_spans(read_snirf(cli_sci)) == [(285.0, 375.0, MANUAL)]
 
 
 # ---- the report ----

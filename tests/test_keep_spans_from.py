@@ -2,10 +2,7 @@
 
 import json
 import logging
-import re
 import shutil
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -160,10 +157,10 @@ def test_the_marker_needs_the_table(tmp_path, capsys):
 
 # ---- the whole run ----
 
-def test_a_run_measured_from_a_marker_through_the_cli_and_its_script(tmp_path):
+def test_a_run_measured_from_a_marker_through_the_cli(tmp_path):
     bids, _ = make_fingerprint_dataset(tmp_path, blocks=True)   # "cb" from 210 s
     table = _table(tmp_path, "task\tonset\tduration\ntapping\t-10\t100\n")
-    out, script_out = tmp_path / "out", tmp_path / "script"
+    out = tmp_path / "out"
     run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--keep-spans", str(table),
                   "--keep-spans-from", "cb", "--no-report", "--skip-bids-validation"])
 
@@ -175,20 +172,9 @@ def test_a_run_measured_from_a_marker_through_the_cli_and_its_script(tmp_path):
     params = json.loads(sci.read_text(encoding="utf-8"))["parameters"]
     assert params["keep_spans"] == [[200.0, 100.0]]
     assert params["keep_spans_from"] == "cb"
-
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_sci,) = script_out.rglob("*desc-sci_nirs.snirf")
     (cli_sci,) = out.rglob("*desc-sci_nirs.snirf")
-    for path in (script_sci, cli_sci):
-        assert bad_spans(read_snirf(path)) == [(0.0, 200.0, UNSELECTED),
-                                               (300.0, 400.0, UNSELECTED)]
-    script_params = json.loads(script_sci.with_suffix(".json").read_text(encoding="utf-8"))
-    assert script_params["parameters"]["keep_spans"] == [[200.0, 100.0]]
-    assert script_params["parameters"]["keep_spans_from"] == "cb"
+    assert bad_spans(read_snirf(cli_sci)) == [(0.0, 200.0, UNSELECTED),
+                                              (300.0, 400.0, UNSELECTED)]
 
 
 SYNTH_ARGS = ("--dpf", "6", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",

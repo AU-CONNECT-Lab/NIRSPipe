@@ -1,8 +1,6 @@
 """A --bad-channels row limited to one task marks that task's recording and no other."""
 
 import json
-import re
-import subprocess
 import sys
 
 from nirspipe.cli.workflows import run_participant_level
@@ -13,11 +11,11 @@ def _marked(out_dir, task):
     return sorted(json.loads(sidecar.read_text(encoding="utf-8"))["bad_channels"])
 
 
-def test_a_task_row_reaches_only_that_task_in_the_run_and_its_script(mini_bids, tmp_path):
+def test_a_task_row_reaches_only_that_task(mini_bids, tmp_path):
     table = tmp_path / "bads.tsv"
     table.write_text("participant_id\ttask\tbad_channels\nsub-01\ttask-rest\tS1_D1\n",
                      encoding="utf-8")
-    cli_out, script_out = tmp_path / "cli", tmp_path / "script"
+    cli_out = tmp_path / "cli"
     args = dict(
         analysis_level="participant", session_label=None, task_label=None,
         bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
@@ -33,16 +31,8 @@ def test_a_task_row_reaches_only_that_task_in_the_run_and_its_script(mini_bids, 
     finally:
         sys.argv = original
 
-    script = (cli_out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    script_path = tmp_path / "script.py"
-    script_path.write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(script_path)], check=True, cwd=tmp_path)
-
-    for out_dir in (cli_out, script_out):
-        assert {"S1_D1 760", "S1_D1 850"} <= set(_marked(out_dir, "rest"))
-        assert "S1_D1 760" not in _marked(out_dir, "tapping")
+    assert {"S1_D1 760", "S1_D1 850"} <= set(_marked(cli_out, "rest"))
+    assert "S1_D1 760" not in _marked(cli_out, "tapping")
 
 
 def test_a_table_without_participant_id_reaches_the_fingerprint_run(tmp_path):

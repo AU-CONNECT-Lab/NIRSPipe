@@ -31,10 +31,8 @@ def dry_out(mini_bids, tmp_path_factory):
     return out_dir
 
 
-def test_the_script_and_the_record_are_written(dry_out):
-    logs = dry_out / "sub-01" / "logs"
-    assert (logs / "sub-01_script.py").exists()
-    assert list(logs.glob("sub-01*.toml"))
+def test_the_record_is_written(dry_out):
+    assert list((dry_out / "sub-01" / "logs").glob("sub-01*.toml"))
 
 
 def test_nothing_is_processed(dry_out):

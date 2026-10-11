@@ -1,10 +1,7 @@
 """Each stage's sidecar records the settings that stage used, plus the state its file carries."""
 
 import json
-import re
 import shutil
-import subprocess
-import sys
 
 import pytest
 
@@ -90,22 +87,6 @@ def test_the_values_are_the_settings_the_run_was_given(run):
     assert (sci["cardiac_l_freq"], sci["resp_h_freq"]) == (0.8, 0.45)
     assert _params(files, "motcorrected") == {"motion_correction": "tddr"}
     assert _params(files, "resampled")["resample_sfreq"] == 5.0
-
-
-# ---- the exported script splits them the same way ----
-
-def test_the_exported_script_writes_the_same_split(run, tmp_path):
-    _, out, files = run
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({(tmp_path / 'script').as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    written = {p.name.split("_desc-")[1].split("_")[0]: p
-               for p in (tmp_path / "script").rglob("*_desc-*_nirs.snirf")}
-    assert sorted(written) == sorted(files)
-    for stage, path in written.items():
-        assert _sidecar(path)["parameters"] == _params(files, stage), stage
 
 
 # ---- every reader answers the same off the old layout ----

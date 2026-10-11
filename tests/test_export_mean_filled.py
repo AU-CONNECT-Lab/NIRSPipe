@@ -1,9 +1,6 @@
 """--export-mean-filled: the final residual with BAD_ frames at each channel's kept mean, annotations kept."""
 
 import json
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -86,17 +83,3 @@ def test_without_a_span_it_is_still_written_and_equals_the_residual(tmp_path):
     files = _run(_dataset(tmp_path, span=False), tmp_path / "out")
     np.testing.assert_array_equal(read_snirf(files["meanfilled"]).get_data(),
                                   read_snirf(files["errts"]).get_data())
-
-
-def test_the_exported_script_writes_the_same_file(tmp_path):
-    bids = _dataset(tmp_path)
-    out, script_out = tmp_path / "out", tmp_path / "script"
-    files = _run(bids, out)
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_filled,) = script_out.rglob("*desc-meanfilled_nirs.snirf")
-    np.testing.assert_array_equal(read_snirf(script_filled).get_data(),
-                                  read_snirf(files["meanfilled"]).get_data())

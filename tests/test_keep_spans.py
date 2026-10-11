@@ -2,9 +2,6 @@
 
 import json
 import logging
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -196,10 +193,10 @@ def test_a_stretch_covering_the_whole_recording_changes_nothing(tmp_path):
         assert sidecar(path)["excluded_spans"] == sidecar(covered[desc])["excluded_spans"]
 
 
-def test_a_run_with_keep_spans_through_the_cli_and_its_script(tmp_path):
+def test_a_run_with_keep_spans_through_the_cli(tmp_path):
     bids, truth = make_fingerprint_dataset(tmp_path, blocks=True)
     table = _table(tmp_path, "task\tonset\tduration\ntask-tapping\t0\t280\n")
-    out, script_out = tmp_path / "out", tmp_path / "script"
+    out = tmp_path / "out"
     run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--min-good-frac", "0.85",
                   "--keep-spans", str(table), "--no-report", "--skip-bids-validation"])
 
@@ -214,14 +211,5 @@ def test_a_run_with_keep_spans_through_the_cli_and_its_script(tmp_path):
     excluded = read_record(record)["excluded"]
     assert excluded["kept_s"] == 280.0
     assert excluded["unselected_frac"] == pytest.approx(0.3)
-
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_sci,) = script_out.rglob("*desc-sci_nirs.snirf")
     (cli_sci,) = out.rglob("*desc-sci_nirs.snirf")
-    for path in (script_sci, cli_sci):
-        assert bad_spans(read_snirf(path)) == [(280.0, 400.0, UNSELECTED)]
-    assert read_snirf(script_sci).info["bads"] == read_snirf(cli_sci).info["bads"]
+    assert bad_spans(read_snirf(cli_sci)) == [(280.0, 400.0, UNSELECTED)]

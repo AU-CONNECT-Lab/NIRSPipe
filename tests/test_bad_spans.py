@@ -1,8 +1,5 @@
 """`BAD_` spans are censoring marks, never conditions or task time, and no stage may lose them."""
 
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -10,9 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nirspipe.cli.workflows import run_participant_level
 from nirspipe.exceptions import AlignmentError
-from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.glm import run_glm_pipeline
 from nirspipe.pipeline.censor_fill import corrupted_mask
 from nirspipe.pipeline.glm_censored import censor_summary, kept_frames
@@ -29,7 +24,6 @@ from nirspipe.qc.metrics.haemo import _band_mean
 from nirspipe.qc.metrics.windowed import task_scope_windows
 from nirspipe.qc.subject.sqm_record import _condition_cnr
 from nirspipe.utils.lineage import lineage_of
-from nirspipe.utils.run_script import write_run_script
 
 from tests._synth import synth_raw
 
@@ -185,61 +179,6 @@ def test_a_join_has_no_row_in_the_dyad_onset_table():
     raws = {"sub-01": _joined(["rest", "task"]), "sub-02": _joined(["rest", "task"])}
     rows = onset_residuals(raws, ["sub-01", "sub-02"])
     assert [r["condition"] for r in rows] == ["rest", "task"]
-
-
-# ---- exported run script ----
-
-def _gvtd_spans(out_dir):
-    (path,) = out_dir.rglob("*desc-sci*_nirs.snirf")
-    ann = read_snirf(path).annotations
-    return [(round(o, 3), round(d, 3)) for o, d, desc
-            in zip(ann.onset, ann.duration, ann.description) if desc == "BAD_gvtd"]
-
-
-def test_the_exported_script_censors_what_the_run_censored(mini_bids, tmp_path):
-    cli_out, script_out = tmp_path / "cli", tmp_path / "script"
-    args = dict(
-        analysis_level="participant", session_label=None, task_label=["tapping"],
-        bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
-        ignore=None, n_jobs=1, no_report=True, mode=None,
-        dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr",
-        cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5,
-        # a line low enough that the synthetic run has a few short spans to lose
-        gvtd_censor="long", gvtd_censor_n_std=5.0, gvtd_min_epoch_s=30.0,
-        bids_dir=mini_bids, output_dir=cli_out, participant_label=["01"])
-    original = sys.argv
-    sys.argv = ["nirspipe", str(mini_bids), str(cli_out), "participant"]
-    try:
-        run_participant_level(args)
-    finally:
-        sys.argv = original
-
-    script = (cli_out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    script_path = tmp_path / "script.py"
-    script_path.write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(script_path)], check=True, cwd=tmp_path)
-
-    run_spans = _gvtd_spans(cli_out)
-    assert run_spans
-    assert _gvtd_spans(script_out) == run_spans
-
-
-def test_the_exported_script_screens_as_the_run_screened(tmp_path):
-    # the synthetic channels are bimodal, so no setting of these moves the rejected set and
-    # only the script text can show whether they reach the call
-    args = {"bids_dir": str(tmp_path), "dpf": [6.0], "sci_threshold": 0.8,
-            "motion_correction": "tddr", "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5,
-            "resp_l_freq": 0.2, "resp_h_freq": 0.5,
-            "psp_threshold": 0.05, "min_good_frac": 0.6, "screen_scope": "task"}
-    write_run_script(args, "01", "20261009_120000", tmp_path)
-    script = (tmp_path / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    for constant in ("PSP_THRESHOLD  = 0.05", "MIN_GOOD_FRAC  = 0.6", "SCREEN_SCOPE   = 'task'"):
-        assert constant in script
-    call = script[script.index("mark_bad_channels(\n"):script.index("save_step(raw_od, \"sci\"")]
-    for key in ("PSP_THRESHOLD", "MIN_GOOD_FRAC", "SCREEN_SCOPE"):
-        assert f"={key}," in call
 
 
 # ---- GVTD censoring ----

@@ -1,9 +1,6 @@
 """Each run's BIDS channels.tsv status column: its bad channels join the rejected set unless ignored."""
 
 import json
-import re
-import subprocess
-import sys
 
 import numpy as np
 import pytest
@@ -127,19 +124,3 @@ def test_ignoring_the_column_comes_out_bit_identical_to_no_column(runs):
             assert pa["channels_tsv_bads"] == pb["channels_tsv_bads"] == []
             assert pb.pop("ignore") == ["channel-status"] and pa.pop("ignore") == []
         assert pa == pb, rel
-
-
-def test_the_script_rejects_the_same_channels(runs, tmp_path):
-    out = runs
-    script = (out["listed"] / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script_out = tmp_path / "script"
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    for desc in ("sci", "preproc"):
-        (cli,) = out["listed"].rglob(f"*task-tapping_desc-{desc}_nirs.snirf")
-        (scripted,) = script_out.rglob(f"*task-tapping_desc-{desc}_nirs.snirf")
-        assert read_snirf(scripted).info["bads"] == read_snirf(cli).info["bads"], desc
-    (sci,) = script_out.rglob("*task-tapping_desc-sci_nirs.snirf")
-    assert _sidecar(sci)["parameters"]["channels_tsv_bads"] == [LISTED, "S9_D9 760"]

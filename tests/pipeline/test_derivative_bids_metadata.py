@@ -1,10 +1,7 @@
 """Every derivative _nirs.json carries the REQUIRED fields of the raw sidecar it came from."""
 
 import json
-import re
 import shutil
-import subprocess
-import sys
 
 import pytest
 
@@ -80,19 +77,6 @@ def test_resampling_changes_the_rate_and_nothing_else(run):
     raw_side, files, _ = run
     assert _sidecar(files["preproc"])["SamplingFrequency"] == raw_side["SamplingFrequency"]
     assert _sidecar(files["resampled"])["SamplingFrequency"] == 5.0
-
-
-def test_the_exported_script_writes_them_too(run, tmp_path):
-    raw_side, _, out = run
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({(tmp_path / 'script').as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    written = sorted((tmp_path / "script").rglob("*_desc-*_nirs.snirf"))
-    assert written
-    for path in written:
-        _assert_describes(_sidecar(path), path, raw_side)
 
 
 def test_a_cut_of_a_stage_carries_them(run, tmp_path):

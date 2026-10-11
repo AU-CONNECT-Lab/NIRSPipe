@@ -2,9 +2,6 @@
 
 import json
 import logging
-import re
-import subprocess
-import sys
 from datetime import datetime, timezone
 
 import mne
@@ -146,17 +143,3 @@ def test_the_bandpass_sees_the_fill_and_preproc_keeps_the_measured_data(tmp_path
     assert sidecar["excluded_spans"] == [{"onset": 150.0, "duration": 6.0,
                                           "description": "BAD_motion", "kind": "corrupted",
                                           "source": "input file"}]
-
-
-def test_the_exported_script_fills_as_the_run_filled(tmp_path):
-    bids = _dataset(tmp_path)
-    out, script_out = tmp_path / "out", tmp_path / "script"
-    files = _run(bids, out, "--censor-fill", "lomb")
-    script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
-    script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({script_out.as_posix()!r})",
-                    script, count=1, flags=re.M)
-    (tmp_path / "script.py").write_text(script, encoding="utf-8")
-    subprocess.run([sys.executable, str(tmp_path / "script.py")], check=True, cwd=tmp_path)
-    (script_filtered,) = script_out.rglob("*desc-filtered_nirs.snirf")
-    np.testing.assert_array_equal(read_snirf(script_filtered).get_data(),
-                                  read_snirf(files["filtered"]).get_data())

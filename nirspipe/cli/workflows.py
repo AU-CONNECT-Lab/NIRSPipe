@@ -32,7 +32,6 @@ from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils import job_db as _jdb
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
-from nirspipe.utils.run_script import write_run_script
 from nirspipe.utils.spans import bad_spans, marker_onset
 from nirspipe import __version__
 
@@ -144,7 +143,7 @@ def _resolve_post_settings(args: dict[str, Any],
             sources[field] = "default"
     sources["roi_map_name"] = "cli" if args.get("roi_mapping") else "default"
 
-    # one resolved set for every reader, the run script and the database included
+    # one resolved set for every reader, the database included
     for arg in [*setting_args.values(), "contrast_file"]:
         if args.get(arg) is None and layered.get(arg) is not None:
             args[arg] = layered[arg]
@@ -251,7 +250,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         logger.debug("loaded post config: %s", args["config"])
 
     # folded into args before anything reads them: prep stamps the separation bands, and the
-    # run script, the database and the report read the cutoffs straight off args
+    # database and the report read the cutoffs straight off args
     toml, post_sources = _resolve_post_settings(args, config_toml)
     cfg_high_pass = args.get("high_pass")
     cfg_low_pass  = args.get("low_pass")
@@ -302,14 +301,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                  if args.get("mode") else None),
                     post_sources=post_sources,
                 )
-                write_run_script(args, subject, sub_timestamp, output_dir, sub_dir=sub_dir)
 
-                # The record and the script are the whole point of a dry run, and both are on
-                # disk by here. Stopping before log_run_start keeps the database free of runs
-                # that never happened.
+                # The record is the whole point of a dry run, and it is on disk by here.
+                # Stopping before log_run_start keeps the database free of runs that never
+                # happened.
                 if args.get("dry_run"):
-                    logger.info("sub-%s | dry run: wrote the record and the script, processed "
-                                "nothing", subject)
+                    logger.info("sub-%s | dry run: wrote the record, processed nothing", subject)
                     return
 
                 _jdb.log_run_start(
@@ -502,7 +499,7 @@ def _isolate(subject: str, failed: list[str]):
     """Record a subject's failure instead of raising it, so the rest of the batch still runs.
 
     The inner ``try`` around the pipeline itself already does this for anything the stages
-    raise; this covers the run record, the run script and the database call that sit outside
+    raise; this covers the run record and the database call that sit outside
     it, which would otherwise end the batch. A subject that failed inside is not listed twice.
     """
     try:
