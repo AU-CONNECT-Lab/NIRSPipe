@@ -90,6 +90,21 @@ _VIEW_SCALAR_KEYS = (
 # the loose metrics that belong with motion rather than with the optical density
 _MOTION_LOOSE = frozenset({key for key, _ in MOTION_SPLIT_COLUMNS} | set(IMU_STAT_KEYS))
 
+def _sqm_table(sqm: dict, n_all: int) -> dict:
+    """The page's metrics as one table, from the set tables and loose rows its payload carries.
+
+    One builder for the run page and the condition pages, whose payloads have the same
+    ``sqm`` shape; a page with no split gets one column.
+    """
+    split = sqm.get("split") or {}
+    loose = sqm.get("rows") or []
+    return metric_set_table(
+        [(r["name"], r["n"]) for r in split.get("rows") or []] or [("All", n_all)],
+        [("Optical density", split, [r for r in loose if r["key"] not in _MOTION_LOOSE]),
+         ("Motion", sqm.get("motion_split") or {}, [r for r in loose if r["key"] in _MOTION_LOOSE]),
+         ("Haemoglobin", sqm.get("haemo_split") or {}, [])])
+
+
 # ---- Channel decisions table ----
 # Its columns, like every other view's, come from channel_table. It draws the decision chip
 # itself, that being the one column that is not a measurement. The keys go over as JSON
@@ -736,14 +751,9 @@ def _process_run(
         "sqm": {
             "rows": loose_rows,
             # one table, as the subject report prints it: a metric per row, a set per column
-            "table": metric_set_table(
-                [("All", len(sci_scores)), ("Long", raw_all.get("n_long_channels")),
-                 ("Short", raw_all.get("n_short_channels"))] if sqm_split
-                else [("All", len(sci_scores))],
-                [("Optical density", split,
-                  [r for r in loose_rows if r["key"] not in _MOTION_LOOSE]),
-                 ("Motion", motion_split, [r for r in loose_rows if r["key"] in _MOTION_LOOSE]),
-                 ("Haemoglobin", haemo_split, [])]),
+            "table": _sqm_table({"rows": loose_rows, "split": split,
+                                 "motion_split": motion_split, "haemo_split": haemo_split},
+                                n_total),
             "split":        split,
             "motion_split": motion_split,
             "haemo_split":  haemo_split,
@@ -993,6 +1003,9 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         written.add(slug)
         out = output_path.with_name(condition_page_name(run_label, label, desc="raw"))
         view_label = f"{run_label}_cond-{slug}"
+        # the run page's one table, built here from the condition's own set tables
+        view.setdefault("sqm", {})["table"] = _sqm_table(view.get("sqm") or {},
+                                                         len(ctx["sci_scores"]))
         html = render(
             "raw_viewer.html",
             run_labels_json=json.dumps([view_label]),

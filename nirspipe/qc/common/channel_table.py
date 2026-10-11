@@ -19,7 +19,7 @@ import pandas as pd
 
 from nirspipe.io.tables import write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
-from nirspipe.qc.boilerplate.vocabulary import condition_label
+from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.utils import pair_of, roi_overlaps
@@ -553,8 +553,9 @@ def metric_set_table(
     ``sets`` is ``[(name, n_channels), ...]`` in column order. ``groups`` is
     ``[(title, split, loose), ...]``: ``split`` a :func:`split_table` result (empty when the
     montage did not split), ``loose`` rows from ``metric_rows`` that belong to no channel set,
-    printed in the first column with the others blank. A share and its count among the loose
-    rows print in one cell, as :func:`split_table` folds them::
+    printed in the first column with the others blank. A share and its count print in one
+    cell, ``7.8% (34330)``, whether they arrive as two loose rows or as two columns of a split
+    that was not folded::
 
         metric_set_table([("All", 52), ("Long", 44)],
                          [("Optical density", split, [{"key": "cp_mean", ...}])])
@@ -568,10 +569,28 @@ def metric_set_table(
     for title, split, loose in groups:
         rows = []
         by_set = {r["name"]: r["cells"] for r in (split or {}).get("rows") or []}
-        for j, col in enumerate((split or {}).get("columns") or []):
+        columns = (split or {}).get("columns") or []
+        where = {col["key"]: j for j, col in enumerate(columns)}
+        counted = {where[c] for share, c in COUNT_BESIDE.items() if share in where and c in where}
+
+        def cell(name: str, j: int, key: str) -> dict:
+            if name not in by_set:
+                return {"value": MISSING_VALUE, "cls": ""}
+            got = dict(by_set[name][j])
+            c = where.get(COUNT_BESIDE.get(key, ""))
+            # a count with nothing measured adds nothing, so a missing pair prints one dash
+            if c is not None and by_set[name][c]["value"] != MISSING_VALUE:
+                count = by_set[name][c]
+                got["value"] = f"{got['value']} ({count['value']})"
+                if "post" in got and "post" in count:
+                    got["post"] = f"{got['post']} ({count['post']})"
+            return got
+
+        for j, col in enumerate(columns):
+            if j in counted:
+                continue
             rows.append({"label": col["label"], "tip": col["tip"], "key_metric": col["key_metric"],
-                         "cells": [by_set[n][j] if n in by_set else {"value": "—", "cls": ""}
-                                   for n in names]})
+                         "cells": [cell(n, j, col["key"]) for n in names]})
         by_key = {r["key"]: r for r in loose}
         for r in loose:
             if r["key"] in COUNT_BESIDE.values() and any(

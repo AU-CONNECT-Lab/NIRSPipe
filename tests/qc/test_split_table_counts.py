@@ -29,3 +29,16 @@ def test_a_count_without_its_share_is_left_alone():
 def test_every_pair_names_a_share_and_a_count_the_tables_print():
     printed = {key for key, _ in MOTION_SPLIT_COLUMNS} | {"spike_pct", "spike_count"}
     assert set(COUNT_BESIDE) | set(COUNT_BESIDE.values()) <= printed
+
+
+def test_one_table_folds_an_unfolded_split_and_leaves_an_empty_pair_one_dash():
+    from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE
+    from nirspipe.qc.common.channel_table import metric_set_table
+
+    split = split_table([("All", 26, {}, False), ("Long", 22, _LONG, True)], MOTION_SPLIT_COLUMNS)
+    table = metric_set_table([("All", 26), ("Long", 22)], [("Motion", split, [])])
+    rows = table["groups"][0]["rows"]
+    assert len(rows) == 1, "the count's own row is gone"
+    all_cell, long_cell = rows[0]["cells"]
+    assert long_cell["value"].endswith("(2158)") and long_cell["post"].endswith("(42)")
+    assert all_cell["value"] == MISSING_VALUE
