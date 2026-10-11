@@ -139,8 +139,8 @@ class Recorder:
     def _nearest(self) -> str | None:
         """Most recent file this run knows about.
 
-        Not every stage reaches disk: rest mode filters in memory and never writes
-        desc-filtered, so an output whose source stage has no file still needs an
+        Not every stage reaches disk: the censor fill's `filled` stage is never
+        written, so an output whose source stage has no file still needs an
         ancestor to point at. Stage paths are inserted in pipeline order, so the
         last one is the nearest persisted ancestor.
         """
