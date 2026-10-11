@@ -372,7 +372,8 @@ def run_prep(
     # no copy kept: desc-sci on disk is this same object, and the report and the record
     # both read the correction's two sides from there
     raw_od = correct_motion(raw_od, method=config.motion_correction)
-    _save(raw_od, "motcorrected")
+    tpca = (lineage_of(raw_od).params or {}).get("tpca")
+    _save(raw_od, "motcorrected", extra_provenance={"tpca": tpca} if tpca else None)
 
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)

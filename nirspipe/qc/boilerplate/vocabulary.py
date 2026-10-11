@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
+from nirspipe.pipeline import motion
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
 from nirspipe.qc.metrics.imu import AGREEMENT_HALF_WINDOW_S
@@ -471,9 +471,14 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """
     if key == "sci_marking":
         return _screening_slots(params)
+    # motion: constants of the package rather than of the run, so they are read here
     if key == "motion_wavelet":
-        # constants of the package rather than of the run, so they are read here
-        return {"wavelet": WAVELET, "iqr_factor": f"{WAVELET_IQR_FACTOR:g}"}
+        return {"wavelet": motion.WAVELET, "iqr_factor": f"{motion.WAVELET_IQR_FACTOR:g}",
+                "lowest_scale": f"{motion.WAVELET_LOWEST_SCALE}"}
+    if key == "motion_tpca":
+        return {"t_motion": f"{motion.TPCA_T_MOTION:g}", "std_thresh": f"{motion.TPCA_STD_THRESH:g}",
+                "amp_thresh": f"{motion.TPCA_AMP_THRESH:g}", "t_mask": f"{motion.TPCA_T_MASK:g}",
+                "n_sv": f"{motion.TPCA_N_SV:g}", "max_iter": f"{motion.TPCA_MAX_ITER}"}
     if key == "beer_lambert":
         return {"dpf": _dpf_phrase(params.get("dpf"))}
     if key == "bandpass":

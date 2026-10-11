@@ -46,6 +46,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("sci_pruning", {}, "sci_marking"),                         # other name, same thing
     ("motion_correction", {"motion_correction": "tddr"}, "motion_tddr"),
     ("motion_correction", {"motion_correction": "wavelet"}, "motion_wavelet"),
+    ("motion_correction", {"motion_correction": "tpca"}, "motion_tpca"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
     ("motion_correction", {}, None),
     ("bandpass", {"high_pass": 0.01, "low_pass": 0.5}, "bandpass"),
@@ -534,10 +535,22 @@ def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expect
 
 
 def test_the_wavelet_sentence_states_the_package_design():
-    from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR
+    from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR, WAVELET_LOWEST_SCALE
 
     line = step_sentence("motion_correction", {"motion_correction": "wavelet"})
     assert f"({WAVELET})" in line and f"{WAVELET_IQR_FACTOR:g} interquartile ranges" in line
+    assert f"N minus {WAVELET_LOWEST_SCALE} levels" in line and "but the coarsest" in line
+
+
+def test_the_tpca_sentence_states_the_package_design():
+    from nirspipe.pipeline import motion
+
+    line = step_sentence("motion_correction", {"motion_correction": "tpca"})
+    assert "{" not in line
+    for value in (f"{motion.TPCA_T_MOTION:g} s", f"{motion.TPCA_STD_THRESH:g} standard",
+                  f"{motion.TPCA_T_MASK:g} s either side", f"less than {motion.TPCA_N_SV:g}",
+                  f"{motion.TPCA_MAX_ITER} passes"):
+        assert value in line, value
 
 
 def test_bad_channels_are_described_as_marked_and_a_glm_says_it_fitted_them():

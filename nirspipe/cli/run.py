@@ -19,7 +19,7 @@ from nirspipe.pipeline.denoise import (
     FILTER_METHODS,
 )
 
-_MOTION_CHOICES        = ["tddr", "wavelet", "none"]
+_MOTION_CHOICES        = ["tddr", "wavelet", "tpca", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
 _PRESETS_DIR           = Path(__file__).resolve().parent.parent / "data" / "presets"
 

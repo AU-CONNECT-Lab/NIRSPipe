@@ -48,8 +48,12 @@ plain = "Motion artifacts in the OD were corrected with temporal derivative dist
 citations = ["Fishburn2019"]
 
 [motion_wavelet]
-plain = "Motion artifacts in the OD were corrected with wavelet filtering {citations}: each channel was decomposed with a stationary wavelet transform ({wavelet}), and detail coefficients more than {iqr_factor} interquartile ranges beyond the quartiles of their level were set to zero."
+plain = "Motion artifacts in the OD were corrected with wavelet filtering {citations}: each channel, zero-padded to 2^N samples, was decomposed into N minus {lowest_scale} levels with a shift-invariant discrete wavelet transform ({wavelet}), and at every level but the coarsest, detail coefficients more than {iqr_factor} interquartile ranges beyond the quartiles of their level and phase were set to zero."
 citations = ["Molavi2012"]
+
+[motion_tpca]
+plain = "Motion artifacts in the OD were corrected with targeted principal component analysis {citations}: samples where any channel not marked bad changed within {t_motion} s by more than {std_thresh} standard deviations of its first difference, or by more than {amp_thresh} in OD, were marked as motion together with {t_mask} s either side, and the leading principal components of the marked samples across those channels, carrying less than {n_sv} of their variance between them, were removed. Detection and removal were repeated, removing the first pass's number of components each time, until no motion was marked or {max_iter} passes had run."
+citations = ["Yucel2014"]
 
 [beer_lambert]
 plain = "Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law {citations}, using {dpf}."

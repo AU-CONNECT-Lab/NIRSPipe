@@ -9,8 +9,10 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `nirspipe-prep keep-spans` writes a `--keep-spans` table from named conditions, one row per occurrence; also on the Batch Prep page
 - `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
+- `--motion-correction tpca`, targeted PCA (Yücel 2014); the motion-corrected sidecar records each pass's removed components
 
 ### Changed
+- Wavelet motion correction follows the published procedure exactly: one fence per phase, coarsest level left alone, padding clipped
 - Channels a run's BIDS `channels.tsv` marks `bad` are rejected with `--bad-channels`; `--ignore channel-status` turns this off
 - `nirspipe-qc prep-raw` and `hyper-raw` reject the channels `channels.tsv` marks `bad`, as the pipeline does; `--ignore channel-status` turns this off
 - Cohort pages list the median and range table under Quality Metrics, not Summary; the subject cohort's Overview drops the repeated small-cohort caveat
