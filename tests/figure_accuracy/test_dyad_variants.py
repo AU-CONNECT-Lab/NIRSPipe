@@ -100,7 +100,7 @@ def test_the_roi_maps_carry_their_own_level_when_a_null_ran(dyad_variants):
         assert "phase-scrambled null" in path.read_text(encoding="utf-8"), path.name
     html = g.page("G01").read_text(encoding="utf-8")
     note = re.search(r'id="WTCRoi".*?<p class="step-desc">(.*?)</p>', html, re.S).group(1)
-    assert "its own null" in note and "as above, and arrows where the averaged map" in note
+    assert "its own null" in note and "arrows mark where the averaged map" in note.lower()
 
 
 def test_an_roi_level_is_the_averaged_maps_own_not_its_channels(dyad_variants):
@@ -131,7 +131,7 @@ def test_an_uncrossed_null_gives_a_crossed_run_s_roi_maps_no_level(dyad_variants
         assert _drawn_level(path) is None, path.name
     html = g.page("G01").read_text(encoding="utf-8")
     note = re.search(r'id="WTCRoi".*?<p class="step-desc">(.*?)</p>', html, re.S).group(1)
-    assert "reaches 0.5, no null having been drawn" in note, note
+    assert "reaches 0.5, since no null was drawn" in note, note
 
 
 # ---- --no-channel-cross ----

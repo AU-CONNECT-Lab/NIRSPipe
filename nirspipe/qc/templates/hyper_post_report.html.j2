@@ -89,7 +89,7 @@
           <td>{{ "%.3f"|format(wtc_fmin) }}&ndash;{{ "%.3f"|format(wtc_fmax) }}&thinsp;Hz</td></tr>
       <tr><th>Band mean over</th>
           <td>{{ "%.3f"|format(wtc_band_fmin) }}&ndash;{{ "%.3f"|format(wtc_band_fmax) }}&thinsp;Hz
-            {%- if window_cycles %} &bull; {{ "%.0f"|format(window_cycles) }} cycles of the slowest
+            {%- if window_cycles %}, {{ "%.0f"|format(window_cycles) }} cycles of the slowest
             band frequency{% endif %}</td></tr>
       <tr><th>Chromophores</th><td>{{ wtc_chroma_labels | join(' + ') }}</td></tr>
       <tr><th>Arrow threshold</th><td>{{ arrow_rule }}</td></tr>

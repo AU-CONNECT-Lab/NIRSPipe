@@ -491,7 +491,7 @@ function _set(id, text, cls) {
       if (!s[stage]) return;
       Object.keys(s[stage]).forEach(function(key) {
         // "together" is the mean of the pointwise minimum: high only where both were high
-        var label = set + " " + stage + " · " +
+        var label = set + " " + stage + ", " +
                     (key === "together" ? "both at once" : key);
         html += li(label, s[stage][key].toFixed(2) + "x");
       });
@@ -500,14 +500,14 @@ function _set(id, text, cls) {
       // what the correction took off the simultaneous movement; a negative value means it
       // put some back, which is worth looking at rather than rounding away
       var cls = s.reduction >= 0.3 ? "qm-ok" : s.reduction > 0 ? "qm-warn" : "qm-bad";
-      html += li(set + " · simultaneous movement removed",
+      html += li(set + ", simultaneous movement removed",
                  (s.reduction * 100).toFixed(0) + "%", cls);
     }
   });
   // counted on the canonical channel set alone, so it sits outside the per-set block
   var spans = m.spike_spans_both || {};
   Object.keys(spans).forEach(function(stage) {
-    html += li(stage + " · spans both were spiking", spans[stage]);
+    html += li(stage + ", spans both were spiking", spans[stage]);
   });
   html += li("unit", unit);
   el.innerHTML = html;
@@ -551,13 +551,13 @@ function _set(id, text, cls) {
       _isStatic = false;
       _hyperDecisions = data || {};
       var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "per subject";
+      if (hint) hint.textContent = "per member";
       buildTable();
     })
     .catch(function() {
       _isStatic = true;
       var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "read-only · launch via nirspipe-rate hyper to save decisions";
+      if (hint) hint.textContent = "per member, read-only: launch via nirspipe-rate hyper to save decisions";
       buildTable();
     });
 

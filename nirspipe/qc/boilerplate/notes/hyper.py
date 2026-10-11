@@ -5,257 +5,231 @@ from __future__ import annotations
 NOTES = {
     # ---- Both dyad reports ----
     "hyper.clocks":
-        "Offset at which each recording was cropped, at its first shared trigger (zero "
-        "under <code>--no-align</code>, where recordings are only trimmed to the "
-        "shortest). A dyad window is on the aligned clock and a member&rsquo;s own record "
-        "is on its own, and the offsets are what convert between them.",
+        "Each recording was cropped at its first shared trigger, by the offset shown (zero "
+        "under <code>--no-align</code>, which only trims to the shortest). Dyad windows are "
+        "on the aligned clock and each member&rsquo;s record on its own; the offset converts "
+        "between them.",
 
     # ---- Raw dyad report ----
     "hyper_raw.scope":
-        "This page is the raw pass: every channel is screened on the recording as "
-        "acquired, and the dyad numbers below are taken over the long channels. It is what "
-        "says whether the recording is worth preprocessing. Whether the two members are in "
-        "sync is not asked here: that is the analysis, run on the preprocessed signal.",
+        "The raw pass: every channel is screened on the recording as acquired, and the dyad "
+        "numbers are taken over the long channels. It says whether the recording is worth "
+        "preprocessing; synchrony between the members is the analysis, run on the "
+        "preprocessed signal.",
     "hyper_raw.scope_post_link":
         'That is on the <a href="{href}">post report</a>.',
     "hyper_raw.blocks_verdict":
-        "Times are on the shared clock, after the crop. A block that does not line up "
-        "between the members&rsquo; rows of the timeline in section 1 below is a trigger "
-        "that landed late in one member, or two clocks drifting apart.",
+        "Times are on the shared clock, after the crop. A block whose rows do not line up in "
+        "the section 1 timeline is a trigger that landed late in one member, or two clocks "
+        "drifting apart.",
     "hyper_raw.alignment":
-        "Alignment crops each recording at the first shared trigger, which removes a "
-        "constant offset and nothing else (under <code>--no-align</code> the recordings "
-        "are only trimmed to the shortest). What it cannot remove is a trigger that landed "
-        "late in one member, or two device clocks drifting apart at the same nominal rate. "
-        "Both show up as a block that does not line up below.",
+        "Cropping at the first shared trigger removes a constant offset and nothing else "
+        "(<code>--no-align</code> only trims to the shortest). A trigger that landed late in "
+        "one member, or two device clocks drifting apart at the same nominal rate, stays and "
+        "shows as a block that does not line up below.",
     "hyper_raw.alignment_timeline":
-        "One row per member. The top pair is what was recorded; the bottom pair is what every "
-        "later panel reads. The last row is what alignment left between the members, too "
-        "small for the bars to show.",
+        "One row per member: the top pair as recorded, the bottom pair as every later panel "
+        "reads it. The last row is what alignment left between the members, too small to see "
+        "in the bars.",
     "hyper_raw.onset_residuals":
-        "Each block's onset on the shared clock minus {ref}&rsquo;s copy of it. A difference "
-        "beyond {tol}&nbsp;s ({n} samples) is a trigger that landed late in one member or two "
-        "clocks drifting apart.",
+        "Each block&rsquo;s onset on the shared clock minus {ref}&rsquo;s. A difference "
+        "beyond {tol}&nbsp;s ({n} samples) is a trigger that landed late in one member, or "
+        "two clocks drifting apart.",
     "hyper_raw.usable":
-        "A channel is usable by the dyad only while it is coupled in <em>both</em> members at "
-        "the same moment, so the dyad&rsquo;s usable time is the intersection of the two and "
-        "not the smaller of them: two members can each keep all but one pair and share one "
-        "fewer than either, if the pair they each lose is a different one.",
+        "A channel is usable by the dyad only while it is coupled in <em>both</em> members "
+        "at once. Usable time is the intersection, not the smaller of the two: if each "
+        "member loses a different pair, they share one fewer than either keeps.",
     "hyper_raw.usable_panel":
-        "The series over the carpet are each member&rsquo;s long-channel means of SCI and "
-        "PSP, the two metrics the mask is made of, so a dip in either is the reason for "
-        "the hole under it; CV is drawn as well but takes no part in the mask. Horizontal "
-        "dotted rules are the screening lines and vertical ones are block edges.",
+        "Above the carpet are each member&rsquo;s long-channel mean SCI and PSP, the two "
+        "metrics the mask is built from, so a dip explains the hole under it. CV is drawn "
+        "but takes no part in the mask. Dotted horizontal rules are the screening lines, "
+        "vertical ones block edges.",
     "hyper_raw.motion":
-        "SCI and PSP measure coupling rather than movement, so the carpet above can show a "
-        "pair decoupled without saying whether the member moved. Each trace is that "
-        "member&rsquo;s GVTD divided by its own median, so 1.0 is that member&rsquo;s "
-        "usual level. GVTD is in each recording&rsquo;s own units, so the traces say when "
-        "each member moved, not who moved more. The grey floor under the two traces is "
-        "their pointwise minimum, which is high only where both are high: simultaneous "
-        "movement.",
+        "SCI and PSP measure coupling, not movement. Each trace is a member&rsquo;s GVTD "
+        "over its own median, so 1.0 is that member&rsquo;s usual level, and the traces say "
+        "when each moved, not who moved more. The grey floor is the pointwise minimum of the "
+        "two, high only where both moved at once.",
     "hyper_raw.motion_before":
-        "The amber strip marks the spans where <em>every</em> member was spiking at once. "
-        "A member spiking alone shows in that member&rsquo;s own trace, and on the "
-        "usable-time carpet above only where it also broke SCI or PSP. The grey carpets "
-        "are each member&rsquo;s per-channel optical density, z-scored the way the subject "
-        "report draws it.",
+        "The amber strip marks spans where <em>every</em> member was spiking at once; a "
+        "member spiking alone shows in its own trace. The grey carpets are each "
+        "member&rsquo;s per-channel optical density, z-scored as in the subject report.",
     "hyper_raw.motion_after":
-        "The same rows on the same axes, off each member&rsquo;s motion-corrected derivative. "
-        "Both figures divide by the <em>uncorrected</em> median and both carpets are z-scored "
-        "by the <em>uncorrected</em> mean and SD, so a fall here is movement removed rather "
-        "than the yardstick following the data.",
+        "The same rows after motion correction. Both figures divide by the "
+        "<em>uncorrected</em> median and z-score the carpets by the uncorrected mean and SD, "
+        "so a drop here is movement removed, not a moved yardstick.",
     "hyper_raw.motion_together":
-        "A member moving alone shows in that member&rsquo;s own trace above. <b>Both "
-        "moving at once is the dyad&rsquo;s problem</b>: it raises any synchrony measure "
-        "taken on the pair, and a shifted or scrambled copy of one member does not remove "
-        "it. This is what any synchrony measured on the pair has to be read against.",
+        "A member moving alone shows in its own trace above. <b>Both moving at once</b> "
+        "raises any synchrony measured on the pair, and shifting or scrambling one member "
+        "does not remove it.",
     "hyper_raw.head":
-        "The same screening, member by member and on the montage: panel a as each "
-        "block&rsquo;s share of coupled windows, panel b as each window&rsquo;s SCI. A "
-        "long channel is a bar of discs along its source-detector path, a short one a "
-        "single larger disc in a grey ring; both share one colour scale, so the short "
-        "channels read as a contamination check rather than a second map.",
+        "The same screening on the montage, member by member: panel a shows each "
+        "block&rsquo;s share of coupled windows, panel b each window&rsquo;s SCI. A long "
+        "channel is a bar of discs along its path, a short one a larger disc in a grey ring, "
+        "both on one colour scale. White is a channel with no value.",
     "hyper_raw.head_by_condition":
-        "Colour is the share of that block&rsquo;s windows in which the channel was coupled, "
+        "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
         "in that member.",
     "hyper_raw.head_slider":
-        "Colour is that window&rsquo;s SCI. The block the slider sits in is named above the "
-        "heads and moves with it.",
+        "Colour is the window&rsquo;s SCI. The block the slider sits in is named above the "
+        "heads.",
     "hyper_raw.comparable":
         "Everything downstream matches channels by S-D label and assumes one clock. An "
-        "unmatched label is silent in every later panel, where it becomes a blank row. A "
-        "nominal sampling-rate mismatch is refused by every inter-brain measure; a clock "
-        "drift between devices at the same nominal rate is silent, and alignment cannot "
-        "remove it.",
+        "unmatched label becomes a blank row without warning. Different nominal sampling "
+        "rates are refused by every inter-brain measure; drift between devices at the same "
+        "nominal rate passes silently, and alignment cannot remove it.",
     "hyper_raw.member_metrics":
-        "Hover a metric for which end is better; the windowed SCI is coloured against this "
-        "run&rsquo;s threshold. A column per member: its long-channel values where the montage "
-        "has short channels, every channel where it has none.",
+        "A column per member: long channels where the montage has short ones, every channel "
+        "otherwise. Hover a metric for which end is better; windowed SCI is coloured against "
+        "this run&rsquo;s threshold.",
     "hyper_raw.group_sqm":
-        "The dyad&rsquo;s own numbers rather than either member&rsquo;s: how many channel pairs "
-        "survived in both, and the aligned span they share.",
+        "The dyad&rsquo;s own numbers: how many channel pairs survived in both members, and "
+        "the aligned span they share.",
     "hyper_raw.channel_summary":
-        "Green = kept by every member, yellow = mixed, red = kept by none.",
+        "Green is kept by every member, yellow mixed, red kept by none.",
     "hyper_raw.channel_decisions":
-        "One row per source-detector pair, both members side by side, with the columns the "
-        "subject report prints and each member&rsquo;s decision at the end of its own "
-        "block. A member&rsquo;s cells are tinted red where that member rejected the pair, "
-        "and its Status cell names the criterion. Click a "
-        "chip to cycle: &mdash; &rarr; good &rarr; bad. Saves to each member&rsquo;s JSON, "
-        "and is only active when the page is served by <code>nirspipe-rate hyper</code>.",
+        "A row per member, a pair&rsquo;s members one above the other, with the subject "
+        "report&rsquo;s columns. A member&rsquo;s row is tinted red where that member "
+        "rejected the pair, and Status names the criterion. Click a decision to cycle it "
+        "through unset, good and bad; it saves to each member&rsquo;s JSON when the page is "
+        "served by <code>nirspipe-rate hyper</code>.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
-        "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was screened "
-        "at, and the outline changes no verdict.",
+        "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was "
+        "screened at; the outline changes no verdict.",
     "hyper_raw.per_channel":
-        "The one view an individual report cannot give: two members on the same axes.",
+        "Both members on the same axes, the one view a single-member report cannot give.",
 
     # ---- Post dyad report ----
     "hyper_post.scope_condition":
-        "Every coherence panel below is this window read out of the whole-run transform, "
-        "so it carries the recording&rsquo;s cone of influence rather than two edges of "
-        "its own (under <code>--wtc-cond-transform</code> the window has a padded "
-        "transform of its own instead). The correlation panels are computed on the cut "
-        "window.",
+        "The coherence panels read this window out of the whole-run transform, so it has the "
+        "recording&rsquo;s cone of influence rather than edges of its own "
+        "(<code>--wtc-cond-transform</code> gives it a padded transform instead). The "
+        "correlation panels use the cut window.",
     "hyper_post.scope_restricted":
-        "Restricted to {window} by <code>--tstart</code>/<code>--tend</code>, taken out of the "
-        "transform of the whole recording. The coherence is averaged across every condition "
-        "inside that window.",
+        "Restricted to {window} by <code>--tstart</code>/<code>--tend</code>, read out of "
+        "the whole recording&rsquo;s transform and averaged across every condition inside it.",
     "hyper_post.scope_whole":
-        "The coherence over the whole recording, averaged across every condition in it. The "
-        "per-condition pages are the ones to read for a block design.",
+        "Coherence over the whole recording, averaged across every condition. For a block "
+        "design, read the per-condition pages.",
     "hyper_post.too_short":
         "This window holds only {cycles} cycles of <code>--wtc-band-fmin</code>, the slowest "
-        "frequency being averaged. A coherence there is a statement about a phase relationship "
-        "this window has seen about that many times, so the low-frequency end of every number "
-        "below rests on very few independent looks at it. Raise <code>--wtc-band-fmin</code>, "
-        "or read that end as indicative. Nothing is masked or dropped on account of this.",
+        "frequency averaged, so the low-frequency end of every number below rests on very "
+        "few independent looks. Raise <code>--wtc-band-fmin</code> or read that end as "
+        "indicative; nothing is masked or dropped for it.",
     "hyper_post.roi_grouping":
-        "The channel-to-region mapping from <code>--roi-mapping</code>, which is what the "
-        "per-ROI panels below are averaged over.",
+        "The channel-to-region mapping from <code>--roi-mapping</code>, which the per-ROI "
+        "panels below average over.",
     "hyper_post.chromophores":
-        "The maps below show {stacked}, stacked and labelled, and the matrices put the "
-        "chromophores side by side on one colour scale; the tables carry {listed} in a "
-        "<code>chromophore</code> column, and the correlation panels always show both. "
-        "<b>HbO and HbR are two parallel passes, never mixed and never averaged.</b> Read "
-        "them as a consistency check rather than two results: HbR is less contaminated by "
-        "scalp and systemic circulation, so a coupling in HbO but not in HbR is a caution "
-        "flag, read as present or absent rather than compared by value.",
+        "The maps show {stacked}, stacked; the matrices put the chromophores side by side on "
+        "one colour scale; the tables carry {listed} in a <code>chromophore</code> column; "
+        "the correlation panels always show both. <b>HbO and HbR are parallel passes, never "
+        "mixed or averaged.</b> Read them as a consistency check: HbR is less affected by "
+        "scalp and systemic circulation, so coupling in HbO but not in HbR is a caution "
+        "flag, read as present or absent rather than by value.",
     "hyper_post.wtc_channel":
-        "Morlet wavelet. Arrows are relative phase, right in phase and up {lead} leading. "
-        "The washed-out band above the white dash (low frequencies are at the top) is the "
-        "cone of influence, where the record&rsquo;s edges reach.",
+        "Morlet wavelet. Arrows are relative phase: right is in phase, up is {lead} leading. "
+        "The washed-out band above the white dash (low frequencies at the top) is the cone "
+        "of influence, where the record&rsquo;s edges reach.",
     "hyper_post.selector_order":
         "The left selector is {left} and the right {right}, the order the map title reads in.",
     "hyper_post.wtc_roi":
-        "The member channels&rsquo; maps averaged cell by cell, bad channels excluded; cone "
-        "as above, and arrows where the averaged coherence reaches {arrow_min}, no null having "
-        "been drawn for these maps. <b>These ones are live</b>: hover for the time, frequency "
-        "and coherence under the pointer, and drag to zoom. The per-channel maps above are "
-        "stills.",
+        "The member channels&rsquo; maps averaged cell by cell, bad channels left out; cone "
+        "as above. Arrows mark where the averaged coherence reaches {arrow_min}, since no "
+        "null was drawn for these maps. Unlike the stills above, these are live: hover for "
+        "time, frequency and coherence, and drag to zoom.",
     "hyper_post.wtc_roi_null":
-        "The member channels&rsquo; maps averaged cell by cell, bad channels excluded; cone "
-        "as above, and arrows where the averaged map clears its own null: the phase-scrambled "
-        "surrogate maps averaged the same way, at the 95th percentile of each frequency. "
-        "<b>These ones are live</b>: hover for the time, frequency and coherence under the "
-        "pointer, and drag to zoom. The per-channel maps above are stills.",
+        "The member channels&rsquo; maps averaged cell by cell, bad channels left out; cone "
+        "as above. Arrows mark where the averaged map clears its own null: the "
+        "phase-scrambled surrogates averaged the same way, at each frequency&rsquo;s 95th "
+        "percentile. Unlike the stills above, these are live: hover for time, frequency and "
+        "coherence, and drag to zoom.",
     "hyper_post.wtc_roi_matrix":
         "Band mean per ROI pair, the cone of influence excluded by default: one number per "
-        "map the selectors above reach, and the rows of the "
-        "<code>agg-roi_stat-wtc_relmat.tsv</code> table.",
+        "map the selectors above reach, as in <code>agg-roi_stat-wtc_relmat.tsv</code>.",
     "hyper_post.wtc_roi_matrix_chroma":
-        "{sides} right, on one colour scale: reading them side by side is the consistency "
-        "check the two chromophores are run for.",
+        "{sides} right, on one colour scale, so the two can be checked against each other.",
     "hyper_post.wtc_roi_matrix_live":
-        "Live, so hover names the pairing and prints its value.",
+        "Hover a cell for its pairing and value.",
     "hyper_post.wtc_chan_matrix":
-        "Band mean per channel pair, row = {row} and column = {col}: one number per map "
-        "the selectors above reach, and the rows of the <code>stat-wtc_relmat.tsv</code> "
-        "table. There is no within-brain cell anywhere in it. Hover a cell to see which "
-        "pairing it is.",
+        "Band mean per channel pair, rows {row} and columns {col}: one number per map the "
+        "selectors above reach, as in <code>stat-wtc_relmat.tsv</code>. No cell lies within "
+        "one brain. Hover a cell for its pairing.",
     "hyper_post.isc_window":
-        "Pearson r between the two members' time courses, every site of one against every site "
-        "of the other, over this window only, z-scored inside it. The channel panels pair "
-        "their matrix with a connectogram ({arc_rule}); the ROI matrix has no null to rank "
-        "pairings by and draws none.",
+        "Pearson r between the members&rsquo; time courses, every site of one against every "
+        "site of the other, over this window only and z-scored inside it. The channel panels "
+        "pair each matrix with a connectogram ({arc_rule}); the ROI matrix has no null to "
+        "rank pairings by, so it draws none.",
     "hyper_post.isc_run":
-        "Pearson r between the two members&rsquo; time courses, every site of one against "
-        "every site of the other, over the whole recording, or over the "
-        "<code>--tstart</code>/<code>--tend</code> window when one was given. The channel "
-        "panels pair their matrix with a connectogram ({arc_rule}); the ROI matrix has no "
-        "null to rank pairings by and draws none.",
+        "Pearson r between the members&rsquo; time courses, every site of one against every "
+        "site of the other, over the whole recording or the "
+        "<code>--tstart</code>/<code>--tend</code> window. The channel panels pair each "
+        "matrix with a connectogram ({arc_rule}); the ROI matrix has no null to rank "
+        "pairings by, so it draws none.",
     "hyper_post.isc_roi_matrix":
-        "The channel correlations averaged in Fisher z inside each ROI pair, so this rests "
-        "on the same channels the ROI coherence above does. Row = {row} and column = "
-        "{col}, diagonal = the homologous region.",
+        "Channel correlations averaged in Fisher z inside each ROI pair, on the same "
+        "channels as the ROI coherence above. Rows {row}, columns {col}; the diagonal is the "
+        "homologous region.",
     "hyper_post.isc_roi_matrix_chroma":
         "{sides} right, on one colour scale.",
     "hyper_post.hover_pairing":
-        "Hover a cell to see which pairing it is.",
+        "Hover a cell for its pairing.",
     "hyper_post.numbers_window":
-        "Every value the panels above were drawn from, one row per pairing over this window.",
+        "Every value the panels above were drawn from, one row per pairing, over this window.",
     "hyper_post.numbers_run":
         "Every value the panels above were drawn from, one row per pairing, each condition "
-        "beside the whole run, which is the comparison no single panel above can show.",
+        "beside the whole run, a comparison no panel shows.",
     "hyper_post.numbers":
-        "Rounded here only: the <code>stat-wtc_relmat.tsv</code>, "
-        "<code>agg-roi_stat-wtc_relmat.tsv</code> and <code>stat-isc_relmat.tsv</code> "
-        "tables under the group&rsquo;s <code>nirs/</code> carry the same numbers at full "
-        "precision. <b>% outside COI</b> beside a column group is the share of that "
-        "window&rsquo;s band cells clear of the record&rsquo;s edges, the one thing behind "
-        "a WTC mean no figure here shows. It is one number per window, set by where the "
-        "window sits in the recording and by the band rather than by the channels: a "
-        "coherence resting on a third of its cells is not the same measurement as one that "
-        "kept all of them.",
+        "Rounded here; <code>stat-wtc_relmat.tsv</code>, "
+        "<code>agg-roi_stat-wtc_relmat.tsv</code> and <code>stat-isc_relmat.tsv</code> under "
+        "the group&rsquo;s <code>nirs/</code> hold full precision. <b>% outside COI</b> is "
+        "the share of the window&rsquo;s band cells clear of the record&rsquo;s edges. It is "
+        "one number per window, set by where the window sits and by the band, not by the "
+        "channels; a coherence resting on a third of its cells is not the same measurement "
+        "as one that kept them all.",
     "hyper_post.roi_value":
-        "An ROI value averages channel values rather than analysing an averaged signal: "
-        "the WTC as a plain mean, the ISC in Fisher z, a correlation being signed where a "
-        "coherence is not. In the homologous table both average only the same-channel "
-        "pairs.",
+        "An ROI value averages channel values, not an averaged signal: the WTC as a plain "
+        "mean, the ISC in Fisher z, since a correlation is signed. In the homologous table "
+        "both average only the same-channel pairs.",
     "hyper_post.member_metrics":
-        "A block per channel set and a column per member. Hover a metric for which end is better; the "
-        "windowed SCI is coloured against each member&rsquo;s own <code>--sci-threshold</code>, "
-        "read from the sidecar its screening wrote, and left uncoloured where none was recorded.",
+        "A block per channel set, a column per member. Hover a metric for which end is "
+        "better. Windowed SCI is coloured against each member&rsquo;s own "
+        "<code>--sci-threshold</code> from its screening sidecar, and left uncoloured where "
+        "none was recorded.",
     "hyper_post.member_metrics_sets":
-        "Each block is its own measurement, not a subset of the one above it: GVTD is an RMS "
-        "across the channels of its set and a retention rate is a fraction of them. The "
-        "coherence is computed on the long channels.",
+        "Each block is its own measurement, not a subset of the one above: GVTD is an RMS "
+        "over its set&rsquo;s channels and a retention rate a share of them. The coherence "
+        "uses the long channels.",
     "hyper_post.member_metrics_condition":
-        "Over this window only, read off each member&rsquo;s own record, so these are the "
-        "numbers that member&rsquo;s per-condition page prints. A blank column is a member whose "
-        "record has no per-condition value. This reports, it does not re-decide: the channel set "
-        "is the whole recording&rsquo;s, so a channel that came loose here is still in. "
-        '<a href="{href}">Whole-run page</a>.',
+        'This window only, from each member&rsquo;s own record, as that member&rsquo;s '
+        'condition page prints it; a blank column has no per-condition value. Nothing is '
+        'decided again: the channel set is the whole recording&rsquo;s, so a channel that '
+        'came loose here is still in. <a href="{href}">Whole-run page</a>.',
     "hyper_post.condition_grid":
-        "Each member&rsquo;s channel pairs over this window, read off that member&rsquo;s "
-        "own record. <b>Run</b> is the member&rsquo;s whole-run screening, the set every "
-        "coherence on this page was computed on, so <i>rejected</i> is always the run&rsquo;s "
-        "verdict. <b>In condition</b> says whether a pair passes on this window&rsquo;s stretch "
-        "alone, against that member&rsquo;s own recorded line, a pair rejected by hand failing "
-        "everywhere. It is a guide to choosing conditions and rejects nothing. Hover a cell "
-        "for its coupled-window share.",
+        "Each member&rsquo;s channel pairs over this window, from its own record. <b>Run</b> "
+        "is the member&rsquo;s whole-run screening, the set every coherence here used, so "
+        "<i>rejected</i> is always the run&rsquo;s verdict. <b>In condition</b> says whether "
+        "a pair passes on this window alone, against that member&rsquo;s own line; a pair "
+        "rejected by hand fails everywhere. It rejects nothing. Hover a cell for its "
+        "coupled-window share.",
     "hyper_post.condition_summary":
-        "Every condition page&rsquo;s channel grid in one figure, a column per channel pair, so "
-        "a pair that fails in one condition only shows as a lone red cell in its column. "
-        "<b>Run</b> is each member&rsquo;s whole-run screening, the set every coherence was "
-        "computed on. Each condition row says whether a pair passes on that condition&rsquo;s "
-        "stretch alone, against that member&rsquo;s own recorded line, a pair rejected by hand "
-        "failing everywhere. It is a guide to choosing conditions and rejects nothing.",
+        "Every condition page&rsquo;s channel grid in one figure, a column per channel pair, "
+        "so a pair failing in one condition shows as a lone red cell. <b>Run</b> is each "
+        "member&rsquo;s whole-run screening, the set every coherence used. Each condition "
+        "row says whether a pair passes on that condition alone, against that member&rsquo;s "
+        "own line; a pair rejected by hand fails everywhere. It rejects nothing.",
     "hyper_post.member_metrics_missing":
-        'No member&rsquo;s record holds this window (no <code>by_condition</code> section, '
-        'a split window from <code>--wtc-window-s</code>, or bounds that do not match), so '
-        'there are no per-condition numbers for it. The whole recording&rsquo;s are on the '
-        '<a href="{href}">whole-run page</a>.',
+        'No member&rsquo;s record holds this window (no <code>by_condition</code> section, a '
+        'split window from <code>--wtc-window-s</code>, or bounds that do not match), so it '
+        'has no per-condition numbers. The whole recording&rsquo;s are on the <a '
+        'href="{href}">whole-run page</a>.',
 
     # ---- Cohort hyperscanning report ----
     "hyper_group.row_order":
-        "Every panel keeps one row order, the dyads sorted by their shared usable time, so a "
-        "dyad is read across the page rather than looked up in each panel.",
+        "Every panel keeps one row order, the dyads sorted by shared usable time, so a dyad "
+        "reads across the page.",
     "hyper_group.small_cohort":
-        "Only {n} dyads: the cohort median measures how far a dyad sits from the middle of "
-        "its cohort, and this cohort has no middle to measure from. Read the panels as the "
-        "dyads' own values side by side.",
+        "Only {n} dyads. The cohort median measures distance from the cohort's middle, which "
+        "so few dyads do not have; read the panels as the dyads' own values side by side.",
     "hyper_group.usable_read":
         "One bar per dyad. A cell is one channel pair in one window, usable when it was "
         "coupled in both members at the same moment.",
@@ -266,19 +240,18 @@ NOTES = {
         "Click a column header to sort. The first column stays in view, and a dyad's name "
         "opens its own report.",
     "hyper_group.usable":
-        "The intersection, not the smaller of the two members: two members can each keep all "
-        "but one pair and share one fewer than either, if the pair they each lose is a "
-        "different one. The middle band is an asymmetric loss, one cap or one electrode, and "
-        "the right band a shared one, both members out at the same moment. Two dyads with the "
-        "same usable share and different middles are two different problems.",
+        "The intersection, not the smaller of the two members: if each loses a different "
+        "pair, they share one fewer than either keeps. The middle band is a one-sided loss "
+        "(one cap or one optode), the right band a shared one, both members out at once. Two "
+        "dyads with the same usable share and different middles have different problems.",
     "hyper_group.pair_field":
-        "A column pale down the whole cohort is the cap or the optode rather than the dyad, "
-        "which is the one finding no single dyad page can carry.",
+        "A column pale down the whole cohort points at the cap or the optode rather than the "
+        "dyad, which no single dyad page can show.",
     "hyper_group.condition_dials":
-        "The same share cut by condition on the left, comparable across dyads in a way absolute "
-        "seconds are not; on the right the {n} dyads that lost the most, a ring per condition "
-        "with the dyad's overall share innermost. The field says which dyads are worth "
-        "opening, the dials what happened inside them.",
+        "Left, the same share by condition, which compares across dyads where seconds do "
+        "not. Right, the {n} dyads that lost the most, a ring per condition with the overall "
+        "share innermost. The field says which dyads to open, the dials what happened in "
+        "them.",
     "hyper_group.no_shared_pairs":
         "No channel pair has a usable share in every dyad (a dyad without a usable-time "
         "table has none), so a column of this panel would not be the same pair down the "
@@ -287,51 +260,47 @@ NOTES = {
     # ---- The cohort test page (nirspipe-hyper-groupnull) ----
     "groupnull.section": "Whole brain over {pairings} pairings; the marks read {p_col}.",
     "groupnull.page":
-        "Each section is one statistic, one null and one chromophore, read off the tables "
+        "Each section is one statistic, one null and one chromophore, from the tables "
         "<code>nirspipe-hyper-groupnull</code> wrote beside this page. Marks read the "
         "<b>paired</b> test: each occasion against the mean of its own null draws, so its "
-        "spread is between occasions, which is the unit the left panels draw. The "
-        "<b>resample</b> test ranks the cohort mean inside a null redrawn from each "
-        "occasion&rsquo;s draws, so its spread is within occasions; both are in each "
-        "section&rsquo;s table.",
+        "spread is between occasions, the unit the left panels draw. The <b>resample</b> "
+        "test ranks the cohort mean in a null redrawn from each occasion&rsquo;s draws, so "
+        "its spread is within occasions. Both are in each section&rsquo;s table.",
     "groupnull.occasions":
-        "One row per condition over the whole brain. Left, each occasion&rsquo;s real value "
+        "A row per condition over the whole brain. Left, each occasion&rsquo;s real value "
         "against the mean of its own null draws, hollow where it is not above; right, the "
-        "same pairs side by side with the two means and their 95% intervals. The caption is "
-        "the paired test, absent where fewer than three occasions leave no spread to "
-        "estimate.",
+        "same pairs side by side with both means and their 95% intervals. The caption is the "
+        "paired test, absent with fewer than three occasions.",
     "groupnull.regions":
         "Each region&rsquo;s lift, the real mean minus the null mean, on a scale centred on "
         "zero. A dot marks the ones whose paired test is below {alpha} ({p_col}).",
 
     # ---- A dyad's window index ----
     "hyper_index.columns":
-        "<b>WTC</b>: the mean band coherence over the same-channel pairs, and under "
-        "<b>crossed</b> over every pairing, a dash where the run was not crossed. "
-        "<b>outside COI</b>: the share of band cells clear of the recording&rsquo;s edges, "
-        "smaller for a window near either end. <b>ISC</b>: the mean correlation in Fisher z, "
-        "same-channel and crossed the same way, computed on the cut window and z-scored "
-        "inside it. Open a window for its maps, matrices and phase arrows.",
+        "<b>WTC</b>: mean band coherence over the same-channel pairs, and under "
+        "<b>crossed</b> over every pairing (a dash if the run was not crossed). <b>outside "
+        "COI</b>: the share of band cells clear of the recording&rsquo;s edges, smaller near "
+        "either end. <b>ISC</b>: mean correlation in Fisher z, same-channel and crossed "
+        "alike, on the cut window z-scored inside it. Open a window for its maps, matrices "
+        "and phase arrows.",
     "hyper_index.past_null":
-        "<b>past null</b> counts the same-channel pairs, and under <b>crossed</b> every "
-        "pairing the null was drawn for, whose coherence beat the {pct}th percentile of their "
-        "own surrogate draws, out of those measured. Read it "
-        "before the coherence: a coherence on its own has no line to clear, and a short "
-        "window&rsquo;s mean scatters more than a long one&rsquo;s, while a rank inside a "
-        "null drawn for that window is readable on its own.",
+        "<b>past null</b> counts the pairs (same-channel, or under <b>crossed</b> every "
+        "pairing with a null) whose coherence beat the {pct}th percentile of their own "
+        "surrogate draws, out of those measured. Read it before the coherence: a coherence "
+        "has no line to clear and a short window&rsquo;s mean scatters more, while a rank "
+        "inside that window&rsquo;s own null reads on its own.",
     "hyper_index.outlier":
-        "A marked cell sits at least {z} robust SDs (1.4826 &times; MAD) from the median "
-        "of this dyad&rsquo;s rows on that chromophore. It says the window differs from "
-        "its neighbours, not that it failed.",
+        "A marked cell sits at least {z} robust SDs (1.4826 &times; MAD) from this "
+        "dyad&rsquo;s median on that chromophore. It means the window differs from the "
+        "others, not that it failed.",
     "hyper_index.whole_run":
-        "The whole-run row averages across every condition under it, so for a block design "
-        "it is a summary and not a result. The rows below it are windows read out of the "
-        "whole-run wavelet transform (unless <code>--wtc-cond-transform</code> was given), "
-        "which keeps a short condition from being inflated by edges of its own; a tree "
-        "whose conditions were cropped to separate files before the analysis shows them as "
-        "separate tasks instead, each with a whole-run row of its own.",
+        "The whole-run row averages every condition, so for a block design it is a summary, "
+        "not a result. The rows below are windows read out of the whole-run transform "
+        "(unless <code>--wtc-cond-transform</code> was given), so a short condition is not "
+        "inflated by edges of its own. Conditions cropped to separate files before the "
+        "analysis show as separate tasks, each with its own whole-run row.",
     "hyper_index.rebuilt":
-        "This page is assembled from the tables under <code>nirs/</code> each time the dyad is "
-        "analysed, so it lists whatever is on disk rather than what one command produced. The "
-        "command below is the one that last rebuilt it.",
+        "Rebuilt from the tables under <code>nirs/</code> each time the dyad is analysed, so "
+        "it lists what is on disk, not what one command produced. The command below rebuilt "
+        "it last.",
 }

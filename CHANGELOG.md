@@ -63,6 +63,12 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report shows per-channel signals as section 2 and its channel table as a row per member, a pair's members one above the other
 - Dyad motion panels draw the members in the usable-time panel's blue and orange; dyad head maps draw a channel with no value white
 - The raw viewer and its condition pages print their metrics as one table, a metric per row and a channel set per column; with --by-condition the run page draws every condition's grid
+- The raw viewer's notes are shorter; its layout and signal hints are sentences under their headings
+- The dyad raw report's notes are shorter, and its channel-table note describes the row-per-member layout
+- The dyad analysis report's notes are shorter
+- The subject report's processing-step and analysis notes are shorter
+- The subject and dyad index pages' notes are shorter
+- The cohort pages' notes are shorter
 
 ### Fixed
 - A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
