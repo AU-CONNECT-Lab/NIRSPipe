@@ -391,6 +391,39 @@ def test_without_a_span_the_re_paired_correlation_keeps_every_sample(tmp_path, m
                                                                         "talk": {1.0}}
 
 
+# ---- the dyad raw page's spectrum ----
+
+def _spectra(dyad) -> dict:
+    from nirspipe.qc.figures.hyper.hyper_figures import build_psd
+    fig = build_psd(dyad, "S1_D1", list(SUBS))
+    return {trace.name: np.asarray(trace.y) for trace in fig.data}
+
+
+def test_the_dyad_raw_spectrum_reads_only_frames_outside_bad_spans():
+    quiet, loud = _spectra(_dyad(SPANS)), _spectra(_dyad(SPANS, garbage=1.0))
+    assert quiet.keys() == loud.keys() == set(SUBS)
+    for sid in SUBS:
+        np.testing.assert_array_equal(loud[sid], quiet[sid])
+
+
+def test_a_member_under_spans_end_to_end_gets_no_dyad_raw_spectrum():
+    assert set(_spectra(_dyad({"sub-01": [(0.0, DURATION, "BAD_gvtd")]}))) == {"sub-02"}
+
+
+def test_without_a_span_the_dyad_raw_spectrum_is_the_plain_welch():
+    import mne
+    from nirspipe.qc.figures.common._utils import PSD_NFFT
+
+    dyad = _dyad()
+    got = _spectra(dyad)
+    for sid in SUBS:
+        raw = dyad[sid]
+        data = raw.get_data(picks=[raw.ch_names.index("S1_D1 hbo")])
+        psds, freqs = mne.time_frequency.psd_array_welch(
+            data, raw.info["sfreq"], n_fft=min(PSD_NFFT, data.shape[1]), verbose=False)
+        np.testing.assert_array_equal(got[sid], psds[0][freqs <= min(2.0, SFREQ / 2)])
+
+
 # ---- the dyad report ----
 
 def test_excluded_columns_are_washed_out_and_carry_no_arrow():

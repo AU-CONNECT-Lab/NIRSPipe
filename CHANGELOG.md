@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - Dyad prewhitening fits each member's AR coefficients on its time outside `BAD_` spans
 - Both dyad nulls leave out the real pairing's excluded time; the re-paired null also leaves out its stand-in's corrupted spans
 - Channel and optical-density spectra in the subject report use only frames outside `BAD_` spans
+- The dyad raw report's per-channel spectrum uses only frames outside each member's `BAD_` spans
 - The bad-segment zoom draws corrupted spans only, not `BAD_unselected`
 - Methods describe unselected time, GVTD censoring, the fill, and what each regression, FC, ALFF and dyad measure leaves out
 - desc-sci records the GVTD censoring settings; FC and ALFF sidecars list their `excluded_spans`

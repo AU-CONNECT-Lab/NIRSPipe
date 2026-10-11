@@ -15,7 +15,7 @@ from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     _ch_kept_by_member, dyad_status, sci_of,
 )
-from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, PSD_NFFT,
+from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
                                           minmax_xy, physio_bands, timeline_axes,
@@ -30,6 +30,7 @@ from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common.motion_panel import (
     _IMU_ROWS, carpet_z, _maxpool_xy, _px_rows, _span_polygons, add_carpet, carpet_coloraxis,
 )
+from nirspipe.qc.figures.subject.raw_figures import _kept_psd
 from nirspipe.qc.metrics import (
     GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
 )
@@ -1217,11 +1218,12 @@ def build_psd(
         raw = aligned_raws.get(sid)
         if raw is None or hbo_name not in raw.ch_names:
             continue
-        pick = raw.ch_names.index(hbo_name)
-        arr = raw.get_data(picks=[pick])
+        # the subject report's route: frames under a BAD_ span stay out of the spectrum
+        spectrum = _kept_psd(raw, [raw.ch_names.index(hbo_name)])
+        if spectrum is None:
+            continue
+        psds, freqs = spectrum
         sfreq = raw.info["sfreq"]
-        psds, freqs = mne.time_frequency.psd_array_welch(
-            arr, sfreq, n_fft=min(PSD_NFFT, arr.shape[1]), verbose=False)
         psd = psds[0]
         fmax = min(2.0, float(sfreq / 2))
         mask = freqs <= fmax
