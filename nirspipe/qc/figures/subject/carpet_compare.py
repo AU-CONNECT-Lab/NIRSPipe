@@ -9,7 +9,7 @@ from nirspipe.utils import pair_of
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
-    carpet_coloraxis, carpet_z,
+    add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z, roi_colours,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit
@@ -190,14 +190,16 @@ def carpet_compare_figure(
                          row=k, col=1)
 
     first_row = len(gvtd) + 1
-    has_roi = False
+    colours = roi_colours(roi_map) if roi_map else {}
+    drawn_rois: set = set()
     for i, (_, raw, blocks) in enumerate(rows):
         row = first_row + i
-        zs, labels, spans, roi_ticks = [], [], [], []
+        zs, labels, spans, strip = [], [], [], []
         for chromo, ordered, d, groups in blocks:
             z, t_ds, _ = carpet_z(d, raw.times, z_threshold)
             spans.append((chromo, len(labels), len(labels) + len(ordered) - 1))
-            roi_ticks += [(label, len(labels) + (i0 + i1) / 2) for label, i0, i1 in groups]                 if len(groups) > 1 else []
+            if len(groups) > 1:
+                strip += [(label, len(labels) + i0, len(labels) + i1) for label, i0, i1 in groups]
             labels += ordered
             zs.append(z)
         keep = _cut(t_ds, xlim)
@@ -209,17 +211,15 @@ def carpet_compare_figure(
         ), row=row, col=1)
         fig.update_yaxes(showticklabels=False, autorange="reversed", row=row, col=1)
         _chromo_marks(fig, row, spans, len(labels))
-        if roi_ticks:
-            has_roi = True
-            fig.update_yaxes(showticklabels=True, tickmode="array",
-                             tickvals=[v for _, v in roi_ticks],
-                             ticktext=[l for l, _ in roi_ticks],
-                             tickfont=dict(size=9), ticks="", row=row, col=1)
+        if strip:
+            add_roi_strip(fig, row, strip, len(labels), colours)
+            drawn_rois.update(label for label, _, _ in strip)
+    add_roi_legend(fig, drawn_rois, colours)
 
     fig.update_layout(
         coloraxis=carpet_coloraxis(z_threshold, y=0.42),
         height=total_px, plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=90 if has_roi else 60, r=30, t=60, b=50),
+        margin=dict(l=60, r=30, t=60, b=50),
         legend=dict(orientation="h", x=1, xanchor="right", y=1.02, yanchor="bottom",
                     font=dict(size=11)),
     )

@@ -228,6 +228,7 @@
       <h3>Carpet after denoising</h3>
       <p class="step-desc">
         {{- section_note('carpet.after_named', stage=carpet_stage_labels[0]) }}
+        {%- if carpet_roi %} {{ section_note('carpet.roi_strip') }}{% endif %}
         {{ section_note('carpet.after') }}
         {%- if mode == 'glm' %} {{ section_note('carpet.glm') }}{% endif %}
         {%- if condition_label %} {{ section_note('carpet.condition') }}{% endif %}</p>

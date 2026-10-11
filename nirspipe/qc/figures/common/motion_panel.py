@@ -421,6 +421,43 @@ def _carpet_band_marks(fig, row: int, spans: list, n_rows: int) -> None:
                           line=dict(color="white", width=2), row=row, col=1)
 
 
+# ---- ROI strip ----
+# muted, close in lightness, none of them the HbO red or HbR blue beside the strip
+_ROI_COLOURS = ("#8da3c0", "#c4a27c", "#93b38c", "#b393ab", "#c2b67e", "#86b3b0", "#a9a9a9")
+_ROI_UNASSIGNED = "#e3e6e9"
+_ROI_STRIP_X = (-0.026, -0.016)
+_ROI_GAP = 0.002
+
+
+def roi_colours(roi_map: dict) -> dict:
+    """{ROI label: colour}, keyed by the whole map so a ROI keeps its colour on every carpet."""
+    colours = {label: _ROI_COLOURS[i % len(_ROI_COLOURS)]
+               for i, label in enumerate(sorted(str(k) for k in roi_map))}
+    colours["unassigned"] = _ROI_UNASSIGNED
+    return colours
+
+
+def add_roi_strip(fig, row: int, groups: list, n_rows: int, colours: dict) -> None:
+    """A colour per ROI down the carpet's left edge, outside the channel-set bar.
+
+    ``groups`` is ``[(label, first row, last row), ...]`` counted over the whole stacked image.
+    """
+    for label, i0, i1 in groups:
+        fig.add_shape(type="rect", xref="x domain", yref="y domain",
+                      x0=_ROI_STRIP_X[0], x1=_ROI_STRIP_X[1],
+                      y0=1.0 - (i1 + 1) / n_rows + _ROI_GAP, y1=1.0 - i0 / n_rows - _ROI_GAP,
+                      fillcolor=colours[label], line=dict(width=0), row=row, col=1)
+
+
+def add_roi_legend(fig, drawn: set, colours: dict) -> None:
+    """A square per drawn ROI in the figure's legend, in the map's order."""
+    for label, colour in colours.items():
+        if label in drawn:
+            fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=label,
+                                     marker=dict(symbol="square", size=11, color=colour),
+                                     hoverinfo="skip"))
+
+
 def carpet_gvtd_figure(
     raw: mne.io.Raw,
     ch_names: list[str],

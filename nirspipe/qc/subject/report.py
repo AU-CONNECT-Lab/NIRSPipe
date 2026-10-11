@@ -905,7 +905,8 @@ def _section_stage_carpets(
             path, h = _save_plotly_html(fig, figures_dir / fig_name("carpetstage"))
             panels.append({"label": "", "path": path, "h": h})
     return {"carpet_panels": panels,
-            "carpet_stage_labels": [lab for lab, _ in stages]}
+            "carpet_stage_labels": [lab for lab, _ in stages],
+            "carpet_roi": bool(roi_map)}
 
 
 def _section_epoch_preview(

@@ -89,7 +89,10 @@ NOTES = {
         "the confounds. A weaker anticorrelation there can mean the model explained part of "
         "the response, not that the data got worse, so judge the run on the before stage.",
     "carpet.after_named":
-        "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR.",
+        "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR, marked "
+        "by the red and blue bar.",
+    "carpet.roi_strip":
+        "The strip outside it colours the rows by ROI, named in the legend.",
     "carpet.after":
         "Above it, a GVTD row per channel set before and after motion correction, on the "
         "same time axis, so a dark or light column can be read against the movement at that "

@@ -31,12 +31,16 @@ def _carpets(fig) -> list:
     return [t for t in fig.data if t.type == "heatmap"]
 
 
-def _tick_labels(fig) -> tuple:
-    """Tick text off whichever axis carries it; the carpet is not always the first row."""
-    for key in dir(fig.layout):
-        if key.startswith("yaxis") and getattr(fig.layout, key).ticktext:
-            return tuple(getattr(fig.layout, key).ticktext)
-    return ()
+def _legend_rois(fig) -> dict:
+    """{ROI: colour} off the legend's squares."""
+    return {t.name: t.marker.color for t in fig.data
+            if t.type == "scatter" and t.marker.symbol == "square"}
+
+
+def _strip(fig) -> list:
+    """(colour, y0, y1) of each ROI strip rectangle, top first."""
+    rects = [sh for sh in fig.layout.shapes if sh.type == "rect" and sh.x1 < -0.015]
+    return sorted(((sh.fillcolor, sh.y0, sh.y1) for sh in rects), key=lambda r: -r[2])
 
 
 def test_one_block_per_stage():
@@ -70,10 +74,35 @@ def test_channels_missing_from_a_later_stage_are_dropped_everywhere():
 
 def test_roi_map_in_hbo_names_also_orders_the_hbr_carpet():
     """One map serves both chromophores: it is matched on the S-D base as well as the name."""
-    roi_map = {"L": ["S1_D1 hbo", "S1_D2 hbo"], "R": ["S1_D3 hbo", "S1_D4 hbo"]}
-    fig = carpet_compare_figure([("desc-preproc", _raw()), ("desc-errts", _raw())],
-                                "hbr", roi_map=roi_map)
-    assert _tick_labels(fig) == ("L", "R")
+    roi_map = {"R": ["S1_D3 hbo", "S1_D4 hbo"], "L": ["S1_D1 hbo", "S1_D2 hbo"]}
+    fig = carpet_compare_figure([("desc-errts", _raw())], "hbr", roi_map=roi_map)
+    legend = _legend_rois(fig)
+    assert list(legend) == ["L", "R"]
+    # each block of carpet rows painted in its ROI's legend colour, no tick text left
+    assert [colour for colour, _, _ in _strip(fig)] == [legend["L"], legend["R"]]
+    assert not any(getattr(fig.layout, k).ticktext for k in dir(fig.layout)
+                   if k.startswith("yaxis"))
+
+
+def test_the_strip_spans_both_chromophore_blocks_and_names_the_unassigned():
+    roi_map = {"L": ["S1_D1 hbo", "S1_D2 hbo"], "R": ["S1_D3 hbo"]}
+    fig = carpet_compare_figure([("desc-errts", _raw())], roi_map=roi_map)
+    strip = _strip(fig)
+    legend = _legend_rois(fig)
+    assert list(legend) == ["L", "R", "unassigned"]
+    # 8 rows: L L R u over L L R u, so a strip block of 2, 1, 1 rows twice
+    assert [c for c, _, _ in strip] == [legend[k] for k in ("L", "R", "unassigned")] * 2
+    assert [round(y1 - y0, 3) for _, y0, y1 in strip] == [0.246, 0.121, 0.121] * 2
+
+
+def test_a_roi_keeps_its_colour_on_a_carpet_that_lacks_another():
+    """Colours come from the whole map, so the motion and denoised carpets agree."""
+    roi_map = {"A": ["S1_D4 hbo"], "B": ["S1_D1 hbo", "S1_D2 hbo"], "C": ["S1_D3 hbo"]}
+    full = _legend_rois(carpet_compare_figure([("desc-errts", _raw())], "hbo", roi_map=roi_map))
+    lacking = _legend_rois(carpet_compare_figure([("desc-errts", _raw(drop=1))], "hbo",
+                                                 roi_map=roi_map))
+    assert list(full) == ["A", "B", "C"] and list(lacking) == ["B", "C"]
+    assert lacking == {k: full[k] for k in ("B", "C")}
 
 
 def test_cut_narrows_the_view_without_rescaling_it():
