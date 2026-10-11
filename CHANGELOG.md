@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- The exported run script's sidecars equal the run's: `Sources`, the screening scores, the OD passthrough step, and no invented `drift_high_pass`
+
 ## [0.66.0] - 2026-10-11
 
 ### Added

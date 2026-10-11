@@ -51,19 +51,13 @@ def test_every_stage_holds_the_same_data(both):
         assert np.array_equal(a.get_data(), b.get_data(), equal_nan=True), stage
 
 
-def test_every_sidecar_records_the_same_parameters(both):
-    cli, script = map(_stages, both)
-    for stage, path in cli.items():
-        params = [json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))["parameters"]
-                  for p in (path, script[stage])]
-        assert params[1] == params[0], stage
-
-
-def test_every_file_both_wrote_names_the_same_sources(both):
+def test_every_sidecar_the_script_wrote_matches_the_run(both):
+    # the run also writes the quality record, which the script leaves to QC
     out, script = both
-    shared = [p.relative_to(script) for p in script.rglob("*.json") if (out / p.relative_to(script)).exists()]
-    assert any("errts" in p.name for p in shared)
-    for rel in shared:
-        sources = [json.loads((root / rel).read_text(encoding="utf-8")).get("Sources")
-                   for root in (out, script)]
-        assert sources[1] == sources[0], rel
+    written = [p.relative_to(script) for p in script.rglob("*.json")]
+    assert any("errts" in p.name for p in written) and any("design" in p.name for p in written)
+    for rel in written:
+        cli, ours = (json.loads((root / rel).read_text(encoding="utf-8")) for root in (out, script))
+        for side in (cli, ours):
+            side.pop("timestamp", None)
+        assert ours == cli, rel
