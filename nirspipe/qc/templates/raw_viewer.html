@@ -169,9 +169,10 @@ select#run-select {
 <section id="Layout" class="step">
   <h3 class="step-title">a. Optode Layout</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('raw.layout') }}</p>
     <div class="row row-layout">
       <div>
-        <p class="panel-head">2D top-down <span class="hint">head-projected &bull; red square = source &bull; blue dot = detector &bull; channel colour = SCI &bull; click = highlight</span></p>
+        <p class="panel-head">2D top-down, head-projected</p>
         <div id="layout-2d-plot"></div>
       </div>
       <div>
@@ -186,9 +187,10 @@ select#run-select {
 <section id="RawSignal" class="step">
   <h3 class="step-title">b. Raw Signal</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('raw.signal') }}</p>
     <div class="row row-main">
       <div>
-        <p class="panel-head">Raw signal <span class="hint">blue = short channel &bull; orange = long &bull; click trace = select channel &bull; double-click = reset</span></p>
+        <p class="panel-head">Raw signal</p>
         <div id="ts-plot"></div>
       </div>
       <div id="mk-card">
@@ -1029,7 +1031,7 @@ fetch("/load_channel_decisions")
   .catch(function() {
     _isStaticCD = true;
     var h = document.getElementById("ch-decisions-hint");
-    if (h) h.textContent = "read-only · launch via nirspipe-rate raw to save decisions";
+    if (h) h.textContent = "Read-only: launch via nirspipe-rate raw to save decisions.";
     buildChDecisionsTable();
   });
 
