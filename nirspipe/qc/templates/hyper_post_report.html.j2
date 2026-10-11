@@ -124,7 +124,8 @@
 
 {#- the chromophore note: about every panel in this section rather than about any one of
     them, so it opens the section instead of standing as a panel of its own -#}
-<p class="step-desc">{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above "), listed=wtc_chroma_labels | join(" and ")) }}</p>
+<p class="step-desc">{% if wtc_chroma_labels | length > 1 %}{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above "), listed=wtc_chroma_labels | join(" and ")) }}
+  {%- else %}{{ section_note('hyper_post.chromophore_one', chroma=wtc_chroma_labels[0], flag=wtc_chroma_labels[0] | lower) }}{% endif %}</p>
 
 <section id="WTCChannel" class="step">
   <h3 class="step-title">Per channel</h3>

@@ -277,6 +277,24 @@ def test_the_roi_isc_matrix_is_one_figure_for_both_chromophores(pages):
         assert parse_path(Path(src).name).get("chromophore") is None, (page.name, src)
 
 
+def test_the_chromophore_note_says_what_was_run(pages, dyad, tmp_path):
+    """One chromophore has nothing to stack or set side by side."""
+    from nirspipe.qc.boilerplate.notes import section_note
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
+
+    assert "The maps show HbO above HbR, stacked" in pages[0].read_text(encoding="utf-8")
+    path = build_hyper_post_report(
+        group_id="G1", task="tap",
+        group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
+        aligned_raws=dyad, offsets={"sub-01": 0.0, "sub-02": 0.0}, output_dir=tmp_path,
+        wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
+        wtc_chroma=("hbo",),
+    )
+    html = path.read_text(encoding="utf-8")
+    assert section_note("hyper_post.chromophore_one", chroma="HbO", flag="hbo") in html
+    assert "The maps show" not in html
+
+
 def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
     """The window slug reaches the filename, as it does for the coherence panels."""
     seen = {}

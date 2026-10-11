@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
+
 ## [0.65.0] - 2026-10-10
 
 ### Added

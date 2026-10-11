@@ -130,6 +130,10 @@ NOTES = {
         "mixed or averaged.</b> Read them as a consistency check: HbR is less affected by "
         "scalp and systemic circulation, so coupling in HbO but not in HbR is a caution "
         "flag, read as present or absent rather than by value.",
+    "hyper_post.chromophore_one":
+        "Only {chroma} was run (<code>--wtc-chroma {flag}</code>): the maps, matrices and "
+        "tables carry it alone, and the correlation panels still show both. "
+        "<code>--wtc-chroma both</code> adds the other chromophore as a consistency check.",
     "hyper_post.wtc_channel":
         "Morlet wavelet. Arrows are relative phase: right is in phase, up is {lead} leading. "
         "The washed-out band above the white dash (low frequencies at the top) is the cone "
