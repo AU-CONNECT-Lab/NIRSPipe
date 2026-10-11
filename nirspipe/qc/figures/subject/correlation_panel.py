@@ -58,6 +58,7 @@ _AFTER_LABEL_GLM = "after GLM (task removed)"
 # the page the figure is opened on.
 _CELL_PX = 22
 _HEAT_MIN_PX, _HEAT_MAX_PX = 520, 1100
+_H_SPACING = 0.06
 _DUMBBELL_PX = 300
 _V_SPACING_PX = 130
 
@@ -268,7 +269,6 @@ def hbo_hbr_correlation_figure(
 
     n_ch = len(order)
     n_hbo = sum(1 for n in order if n.endswith("hbo"))
-    cols = 2 if two_stage else 1
 
     heat_px = float(np.clip(n_ch * _CELL_PX, _HEAT_MIN_PX, _HEAT_MAX_PX))
     height = heat_px + _V_SPACING_PX + _DUMBBELL_PX
@@ -277,17 +277,29 @@ def hbo_hbr_correlation_figure(
                    _DUMBBELL_PX / (heat_px + _DUMBBELL_PX)]
     v_spacing = _V_SPACING_PX / height
 
-    fig = make_subplots(
-        rows=2, cols=cols, row_heights=row_heights, vertical_spacing=v_spacing,
-        horizontal_spacing=0.06,
-        specs=[[{}, {}], [{"colspan": 2}, None]] if two_stage else [[{}], [{}]],
-        subplot_titles=(before_label, after_label) if two_stage else (),
-    )
+    if two_stage:
+        fig = make_subplots(
+            rows=2, cols=2, row_heights=row_heights, vertical_spacing=v_spacing,
+            horizontal_spacing=_H_SPACING, specs=[[{}, {}], [{"colspan": 2}, None]],
+            subplot_titles=(before_label, after_label),
+        )
+        heat_cols = (1, 2)
+    else:
+        # one matrix at a two-stage column's width, centred, rather than as wide as the page
+        share = (1 - _H_SPACING) / 2
+        fig = make_subplots(
+            rows=2, cols=3, row_heights=row_heights, vertical_spacing=v_spacing,
+            horizontal_spacing=0, column_widths=[(1 - share) / 2, share, (1 - share) / 2],
+            specs=[[None, {}, None], [{"colspan": 3}, None, None]],
+        )
+        heat_cols = (2,)
 
-    for col, corr in ((1, corr_b), (2, corr_a))[:cols]:
-        _add_heatmap(fig, corr, order, col, show_scale=(col == cols),
+    for col, corr in zip(heat_cols, (corr_b, corr_a)):
+        _add_heatmap(fig, corr, order, col, show_scale=(col == heat_cols[-1]),
                      heat_px=heat_px)
         _add_dividers(fig, groups, order, n_hbo, col)
+    if not two_stage:
+        fig.update_traces(colorbar_x=(1 + share) / 2 + 0.01, selector=dict(type="heatmap"))
 
     dumbbell_row = 2
     ranked = {k: ("rejected" if k in bad_pairs else g) for k, g in groups.items()}
@@ -297,13 +309,13 @@ def hbo_hbr_correlation_figure(
 
     # every channel keeps its label, readable by zooming; the size keeps a few dozen legible
     tick_fs = int(np.clip(480 / max(n_ch, 1), 5, 10))
-    for col in range(1, cols + 1):
-        x_axis = "x" if col == 1 else "x2"
+    for i, col in enumerate(heat_cols):
+        x_axis = "x" if i == 0 else "x2"
         fig.update_xaxes(showgrid=False, zeroline=False, tickangle=45,
                          constrain="domain", tickfont=dict(size=tick_fs), row=1, col=col)
         fig.update_yaxes(showgrid=False, zeroline=False, autorange="reversed",
                          scaleanchor=x_axis, constrain="domain",
-                         constraintoward="top", showticklabels=(col == 1),
+                         constraintoward="top", showticklabels=(i == 0),
                          tickfont=dict(size=tick_fs), row=1, col=col)
 
     if xs is not None:

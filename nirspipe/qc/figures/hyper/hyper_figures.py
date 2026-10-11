@@ -22,7 +22,7 @@ from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from nirspipe.qc.figures.common.head_map import (
-    head_axes as _head_axes, head_ground as _head_ground,
+    BLANK_COLOR, head_axes as _head_axes, head_ground as _head_ground,
     head_glyph as _head_glyph,
 )
 from nirspipe.io.auxiliary import ImuTrace
@@ -815,12 +815,12 @@ def _pair_values(geo, scope, by_pair: dict, reduce_fn) -> "np.ndarray":
 
 
 # a channel with no value there, e.g. an intensity pinned at the device's ceiling, which has
-# no pulse to correlate; white rather than Plotly's default black for a missing colour
-_NO_VALUE = "#ffffff"
+# no pulse to correlate; the subject maps' light grey rather than Plotly's default black
+_NO_VALUE = BLANK_COLOR
 
 
 def _blank_twin(fig, i: int, sid: str, row: int, col: int) -> int:
-    """A white copy of marker trace ``i`` for the markers with no value; returns its index.
+    """A grey copy of marker trace ``i`` for the markers with no value; returns its index.
 
     The slider swaps one colour array per frame, so the markers with no value cannot be a
     trace of their own: both traces keep every marker and :func:`_split_sizes` hides each
@@ -836,7 +836,7 @@ def _blank_twin(fig, i: int, sid: str, row: int, col: int) -> int:
 
 
 def _split_sizes(values: np.ndarray, size: float) -> "tuple[np.ndarray, np.ndarray]":
-    """Marker sizes for a coloured trace and its white twin, so each marker shows in one."""
+    """Marker sizes for a coloured trace and its grey twin, so each marker shows in one."""
     finite = np.isfinite(values)
     return np.where(finite, size, 0.0), np.where(finite, 0.0, size)
 

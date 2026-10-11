@@ -71,8 +71,12 @@ All notable changes to this project will be documented in this file.
 - The cohort pages' notes are shorter
 - The raw viewer's condition pages print both wavelengths for SNR, CV and Spike, as the run page does
 - The cohort pages' big tables keep their header under the top bar while scrolling down
+- Per-channel Status prints BAD alone for the coupled-window rule, which each table's note states once; BAD (manual) for a hand rejection
+- A one-stage HbO–HbR panel draws its matrix at a two-stage column's width, centred, instead of page-wide
+- Dyad head maps draw a channel with no value in the subject maps' light grey
 
 ### Fixed
+- Accelerometer channels spelled `acc-x` are recognised, so the motion panels and IMU summaries include them
 - A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero
 - A condition page of a montage without short channels prints its metrics in one column, as the run page does

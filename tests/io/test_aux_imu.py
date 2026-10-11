@@ -46,6 +46,12 @@ def test_each_sensor_is_there_only_if_the_recording_has_it():
     assert imu_traces({"TEMP_1": t}, {"TEMP_1": t}) == {}
 
 
+def test_the_short_vendor_spelling_names_the_accelerometer_too():
+    t = np.arange(0.0, 1.0, 0.1)
+    names = ["acc-x", "acc-y", "acc-z", "gyro-x"]
+    assert set(imu_traces({n: t for n in names}, {n: t for n in names})) == {"gyro", "accel"}
+
+
 def test_the_table_reads_the_same_as_the_snirf_dicts():
     t = np.arange(0.0, 5.0, 0.01)
     rng = np.random.default_rng(0)

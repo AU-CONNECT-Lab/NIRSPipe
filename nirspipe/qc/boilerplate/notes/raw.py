@@ -110,8 +110,8 @@ NOTES = {
     "raw.channel_decisions":
         "One row per source-detector pair, since a decision and SCI belong to the pair. SNR, "
         "CV and Spike print both wavelengths. HbO–HbR corr is before motion correction. "
-        "Red rows were rejected by screening and Status names the "
-        "criterion. Click a decision to cycle it through unset, good and bad; it saves "
+        "Red rows were rejected: BAD is too few coupled windows, BAD (manual) by hand. "
+        "Click a decision to cycle it through unset, good and bad; it saves "
         "automatically.",
     "raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "

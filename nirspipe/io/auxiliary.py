@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from pathlib import Path
 from typing import NamedTuple
 
@@ -159,9 +160,10 @@ def resample_to_grid(t_src: np.ndarray, x: np.ndarray, t_dst: np.ndarray) -> np.
 
 # ---- motion ----
 
-# aux channel names carry no type field, so a sensor is recognised by name
-GYRO_TOKEN = "gyro"
-ACCEL_TOKEN = "accel"
+# aux channel names carry no type field, so a sensor is recognised by name; patterns, since
+# vendors spell the accelerometer both ACCEL_X_1 and acc-x
+GYRO_TOKEN = r"gyro"
+ACCEL_TOKEN = r"(?<![a-z])acc"
 
 # vendor spellings of the two units, as an axis prints them; anything else passes through
 _UNIT_SPELLINGS = {"o/s": "°/s", "deg/s": "°/s", "m/s^2": "m/s²", "m/s2": "m/s²"}
@@ -176,13 +178,13 @@ class ImuTrace(NamedTuple):
 
 def _axes(token: str, times: dict[str, np.ndarray], values: dict[str, np.ndarray],
           units: dict[str, str] | None):
-    """Every axis whose name holds ``token``, on the first one's time base, and their unit.
+    """Every axis whose name matches ``token``, on the first one's time base, and their unit.
 
     An axis on its own time base is interpolated onto the first one's; that is upsampling
     or a near-equal rate, so nothing is folded. The unit is the axes' shared one as the
     vendor spells it, or "" when they disagree or none is recorded.
     """
-    names = [n for n in values if token in n.lower()]
+    names = [n for n in values if re.search(token, n.lower())]
     if not names:
         return None
     t = times[names[0]]

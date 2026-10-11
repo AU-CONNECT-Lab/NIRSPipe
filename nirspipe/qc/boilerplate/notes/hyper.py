@@ -65,7 +65,7 @@ NOTES = {
         "The same screening on the montage, member by member: panel a shows each "
         "block&rsquo;s share of coupled windows, panel b each window&rsquo;s SCI. A long "
         "channel is a bar of discs along its path, a short one a larger disc in a grey ring, "
-        "both on one colour scale. White is a channel with no value.",
+        "both on one colour scale. Light grey is a channel with no value.",
     "hyper_raw.head_by_condition":
         "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
         "in that member.",
@@ -89,9 +89,9 @@ NOTES = {
     "hyper_raw.channel_decisions":
         "A row per member, a pair&rsquo;s members one above the other, with the subject "
         "report&rsquo;s columns. A member&rsquo;s row is tinted red where that member "
-        "rejected the pair, and Status names the criterion. Click a decision to cycle it "
-        "through unset, good and bad; it saves to each member&rsquo;s JSON when the page is "
-        "served by <code>nirspipe-rate hyper</code>.",
+        "rejected the pair: BAD is too few coupled windows, BAD (manual) by hand. Click a "
+        "decision to cycle it through unset, good and bad; it saves to each member&rsquo;s "
+        "JSON when the page is served by <code>nirspipe-rate hyper</code>.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
         "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was "

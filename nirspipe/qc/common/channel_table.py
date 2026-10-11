@@ -665,20 +665,23 @@ def format_rows(
     ``sci_threshold`` None means no line was recorded, and the SCI cell stays uncoloured.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
-    Status names the criterion a rejected channel failed. Screening is a union, so a channel
-    can be BAD with a passing SCI cell; without the reason printed beside it that reads as a
-    contradiction rather than as a PSP failure.
+    Status is ``BAD`` for a channel rejected on its coupled-window share, the reason every
+    table's note states once, and ``BAD (manual)`` for one rejected by hand. ``reason`` keeps
+    the full list for the channel TSV.
     """
     from nirspipe.qc.boilerplate.vocabulary import format_metric
-    from nirspipe.qc.metrics import resolve_cutoffs
+    from nirspipe.qc.metrics import CRITERIA, resolve_cutoffs
 
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
+    coupled = next(c.label for c in CRITERIA if c.name == "good_frac")
     out = []
     for row in rows:
         why = _failed_criteria(row, cutoffs) if row["is_bad"] else []
+        # the coupled-window rule is the usual reason and the notes name it once
+        shown = [w for w in why if w != coupled]
         formatted: dict[str, Any] = {
             "name":       row.get(name_key),
-            "status":     ("BAD (" + "/".join(why) + ")" if why
+            "status":     ("BAD (" + "/".join(shown) + ")" if shown
                            else "BAD" if row["is_bad"] else "OK"),
             "status_cls": "bad" if row["is_bad"] else "good",
             "reason":     "/".join(why),

@@ -626,8 +626,19 @@ def test_a_rejected_channel_in_neither_range_prints_why_it_went():
     out = {r["name"]: r for r in format_rows(rows, 0.8)}
 
     assert out["O 760"]["reason"] == "coupled windows"
-    assert out["O 760"]["status"] == "BAD (coupled windows)"
+    # the usual reason is stated once in the note, not on every row
+    assert out["O 760"]["status"] == "BAD"
     assert out["L 760"]["status"] == "OK"
+
+
+def test_a_channel_rejected_by_hand_says_so():
+    from nirspipe.qc.common.channel_table import channel_rows, format_rows
+
+    sci = {"L 760": 0.90, "S 760": 0.99, "O 760": 0.30}
+    rows = channel_rows(_split_record(), sci, ["L 760"])
+    out = {r["name"]: r for r in format_rows(rows, 0.8)}
+
+    assert out["L 760"]["status"] == "BAD (manual)"
 
 
 def test_orphans_are_counted_by_pair_and_advised_only_between_the_ranges():
