@@ -331,7 +331,7 @@
 <section id="ConditionChannels" class="step">
   <h3 class="step-title">{{ "By channel" if condition_label else "By condition" }}</h3>
   <div class="details-body">
-    <p class="qm-note">{{ section_note('hyper_post.condition_grid' if condition_label else 'hyper_post.condition_summary') }}</p>
+    <p class="qm-note">{% if condition_label %}{{ section_note('hyper_post.condition_grid') }}{% else %}{{ section_note('hyper_post.condition_summary') }}{% endif %}</p>
     <div style="overflow-x:auto;">
       <iframe class="plotly-frame" src="{{ condition_grid.wtc }}"
               title="channel status per member{{ ' in this condition' if condition_label }}"

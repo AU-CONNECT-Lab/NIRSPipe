@@ -81,6 +81,7 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report's simultaneous-movement numbers become a table under the motion figures instead of their own section
 - The dyad channel table names wavelengths beside each header label, so each header row is one line
 - The dyad raw report reads like the subject report: unlettered Recording steps, then Quality Metrics tables, then the channel grid
+- The dyad analysis report drops step letters, ends with Quality Metrics and Quality Figures, and moves clocks and ROI grouping to the appendix
 
 ### Fixed
 - Accelerometer channels spelled `acc-x` are recognised, so the motion panels and IMU summaries include them
