@@ -1,4 +1,4 @@
-"""The dyad raw report draws the provenance graph its footer table describes; the raw viewer has none."""
+"""Neither raw page carries a Provenance section; the post report draws the dyad's chain."""
 
 import json
 
@@ -29,7 +29,7 @@ def test_the_viewer_carries_no_provenance_section(tmp_path):
 
 # ---- the dyad raw report ----
 
-def test_the_dyad_raw_report_shows_the_graph_not_the_placeholder(tmp_path, monkeypatch):
+def test_the_dyad_raw_report_carries_no_provenance_section(tmp_path, monkeypatch):
     data_dir = group_data_dir(tmp_path, "G1")
     _sidecar(data_dir, "group-G1_task-hold_desc-od_nirs")
     meta = {"subject_ids": ["01", "02"], "label": "group-G1_task-hold", "sqm_dir": data_dir,
@@ -42,7 +42,7 @@ def test_the_dyad_raw_report_shows_the_graph_not_the_placeholder(tmp_path, monke
     assert path == group_report_dir(tmp_path, "G1") / report_name("group-G1_task-hold",
                                                                     desc="raw")
     html = path.read_text(encoding="utf-8")
-    assert 'class="prov-graph"' in html
+    assert 'id="Provenance"' not in html and 'href="#Provenance"' not in html
+    assert 'class="prov-graph"' not in html
     assert section_note("footer.provenance_not_rendered") not in html
-    pngs = list((path.parent / "figures").glob("*provenance*.png"))
-    assert len(pngs) == 1 and f"figures/{pngs[0].name}" in html
+    assert not list((path.parent / "figures").glob("*provenance*"))

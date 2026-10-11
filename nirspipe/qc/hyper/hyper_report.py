@@ -586,17 +586,6 @@ def build_hyper_report(
     post = output_path.with_name(report_name(label))
     post_href = post.name if post.exists() else None
 
-    # after the writer's passes, so every sidecar the scan reads is on disk; the same name
-    # `nirspipe-qc provenance` gives it, so re-running that refreshes the image this page links
-    provenance_path = None
-    with guard("Provenance diagram", errors, meta["label"]):
-        scope = label
-        # a group folder holds every task's sidecars, so the graph is cut to this run's
-        for written in write_provenance(meta["sqm_dir"], output_path.parent / "figures",
-                                        figure_namer(scope), title=scope, label=scope):
-            if written.suffix == ".png":
-                provenance_path = f"figures/{written.name}"
-
     html = render(
         "hyper_report.html.j2",
         **page_vars(
@@ -608,11 +597,8 @@ def build_hyper_report(
                       ("subjects", ", ".join(meta["subject_ids"]))],
             nav_note=f"SCI thr: {sci_lines_text(member_sci_lines(sqm_data, meta['subject_ids']))}",
         ),
-        **footer_vars(
-            scope=meta["label"], errors=errors, notes=notes,
-            nirs_dir=meta["sqm_dir"], provenance_path=provenance_path,
-            versions=versions,
-        ),
+        # no Provenance either: the post report draws the dyad's chain
+        **footer_vars(scope=meta["label"], errors=errors, notes=notes, versions=versions),
         group_id=group_id,
         task=task,
         subject_ids=meta["subject_ids"],

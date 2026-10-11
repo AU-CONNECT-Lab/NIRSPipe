@@ -1,4 +1,4 @@
-"""A dyad's provenance diagram draws that task's chain only, on its pages and from `nirspipe-qc provenance`."""
+"""A dyad's provenance diagram draws that task's chain only, on its post pages and from `nirspipe-qc provenance`."""
 
 import pytest
 
@@ -18,7 +18,7 @@ def _only_its_own(text, own, others):
 
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
-    """One dyad, two tasks, through hyper-raw and nirspipe-hyper; the raw pages' graphs kept."""
+    """One dyad, two tasks, through hyper-raw and nirspipe-hyper."""
     from nirspipe.cli import hyper as hyper_cli
     from nirspipe.cli import qc as qc_cli
     from nirspipe.cli import run as run_cli
@@ -32,18 +32,17 @@ def tree(tmp_path_factory):
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
     qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
                  "--skip-bids-validation", "--no-align", *PHYS])
-    # the post page writes its graph under the same name, so the raw page's is read first
-    raw = {task: _mmd(figures, f"group-G01_task-{task}") for task in TASKS}
+    # the raw page draws none, so every graph on disk is the post page's
+    assert not list(figures.glob("*_desc-provenance_*"))
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                     "--no-align", "--wtc-fmin", "0.02"])
     post = {task: _mmd(figures, f"group-G01_task-{task}") for task in TASKS}
-    return {"hyper": hyper, "figures": figures, "raw": raw, "post": post}
+    return {"hyper": hyper, "figures": figures, "post": post}
 
 
-@pytest.mark.parametrize("page", ["raw", "post"])
 @pytest.mark.parametrize("task", TASKS)
-def test_a_dyad_page_s_provenance_holds_its_own_task_only(tree, page, task):
-    text = tree[page][task]
+def test_a_dyad_page_s_provenance_holds_its_own_task_only(tree, task):
+    text = tree["post"][task]
     assert _only_its_own(text, f"task_{task}", [f"task_{t}" for t in TASKS if t != task]), text
 
 

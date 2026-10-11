@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Dyad ISC runs only the chromophores `--wtc-chroma` names, as the coherence does; an HbO-only run no longer writes HbR correlations
 - The provenance graph wraps a tall column into a grid and shows at a fixed text size without the height cap
 - Matrix figures draw only the sites that have a value, with no grey ground; the tables on disk keep every site
+- The dyad raw report drops its Provenance section; the dyad analysis report keeps the graph
 
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
