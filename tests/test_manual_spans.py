@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from nirspipe.cli import run as run_cli
-from nirspipe.cli.workflows import _keep_spans_for, _refuse_bad_keep_span_rows
+from nirspipe.cli.workflows import _spans_for, _refuse_bad_span_rows
 from nirspipe.io.bids import get_layout
 from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.censor_fill import corrupted_mask
@@ -78,21 +78,21 @@ def test_the_table_reads_and_refuses_as_the_keep_spans_table_does(mini_bids, tmp
                             "\ttask-rest\t10\t5\n"
                             "sub-01\trest\t200\t50\n")
     rest = {"subject": "01", "task": "rest"}
-    assert _keep_spans_for(str(path), "01", rest, flag="--bad-spans") == [(10.0, 5.0),
-                                                                          (200.0, 50.0)]
+    assert _spans_for(str(path), "01", rest, flag="--bad-spans") == [(10.0, 5.0),
+                                                                     (200.0, 50.0)]
     with pytest.raises(ValueError, match=r"--bad-spans table .* line 2: duration '0'"):
-        _keep_spans_for(str(_table(tmp_path, "onset\tduration\n5\t0\n")), "01", rest,
-                        flag="--bad-spans")
+        _spans_for(str(_table(tmp_path, "onset\tduration\n5\t0\n")), "01", rest,
+                   flag="--bad-spans")
     layout = get_layout(mini_bids)
     with pytest.raises(SystemExit, match=r"--bad-spans table .* line 2 \(task-motor\) matches "
                                          r"no recording"):
-        _refuse_bad_keep_span_rows(str(_table(tmp_path, "task\tonset\tduration\nmotor\t0\t10\n")),
-                                   layout, flag="--bad-spans")
+        _refuse_bad_span_rows(str(_table(tmp_path, "task\tonset\tduration\nmotor\t0\t10\n")),
+                              layout, flag="--bad-spans")
     with pytest.raises(SystemExit, match=r"--bad-spans table .* line 2: onset 100000 s lies "
                                          r"past the end of"):
-        _refuse_bad_keep_span_rows(str(_table(tmp_path, "task\tonset\tduration\n"
-                                              "tapping\t100000\t10\n")),
-                                   layout, flag="--bad-spans")
+        _refuse_bad_span_rows(str(_table(tmp_path, "task\tonset\tduration\n"
+                                         "tapping\t100000\t10\n")),
+                              layout, flag="--bad-spans")
 
 
 # ---- screening ----

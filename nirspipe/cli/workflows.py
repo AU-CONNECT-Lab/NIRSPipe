@@ -239,8 +239,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
-    _refuse_bad_keep_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
-    _refuse_bad_keep_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
+    _refuse_bad_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
+    _refuse_bad_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
 
@@ -570,8 +570,8 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
     return _label_table_rows(path, "--bad-channels", ("bad_channels",))
 
 
-def _keep_span_rows(path: Path, flag: str = "--keep-spans",
-                    relative: bool = False) -> list[dict[str, Any]]:
+def _span_rows(path: Path, flag: str = "--keep-spans",
+               relative: bool = False) -> list[dict[str, Any]]:
     """The rows of a --keep-spans or --bad-spans table, onset and duration read as seconds.
 
     ``sub-01 | | rest | | 30 | 240`` comes back with ``"onset": 30.0, "duration": 240.0``.
@@ -646,9 +646,9 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
     return [c.strip() for c in ",".join(r["bad_channels"] for r in rows).split(",") if c.strip()]
 
 
-def _keep_spans_for(spec: str | None, subject: str, entities: dict | None = None,
-                    flag: str = "--keep-spans",
-                    relative: bool = False) -> list[tuple[float, float]]:
+def _spans_for(spec: str | None, subject: str, entities: dict | None = None,
+               flag: str = "--keep-spans",
+               relative: bool = False) -> list[tuple[float, float]]:
     """The stretches a --keep-spans or --bad-spans table gives one recording, as ``(onset, duration)``.
 
     Rows are selected as the --bad-channels table's are, so a row with only ``task-rest``
@@ -658,7 +658,7 @@ def _keep_spans_for(spec: str | None, subject: str, entities: dict | None = None
     if not spec:
         return []
     return [(row["onset"], row["duration"])
-            for row in _keep_span_rows(Path(str(spec)), flag, relative)
+            for row in _span_rows(Path(str(spec)), flag, relative)
             if _bad_channel_row_matches(row, subject, entities)]
 
 
@@ -684,8 +684,8 @@ def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
                            [f.get_entities() for f in layout.get(extension=".snirf")])
 
 
-def _refuse_bad_keep_span_rows(spec: str | None, layout: Any,
-                               flag: str = "--keep-spans", marker: str | None = None) -> None:
+def _refuse_bad_span_rows(spec: str | None, layout: Any,
+                          flag: str = "--keep-spans", marker: str | None = None) -> None:
     """Stop before any subject runs on a --keep-spans or --bad-spans row that matches no
     recording or starts outside one it matches, or on a matched recording without ``marker``."""
     if not spec:
@@ -694,7 +694,7 @@ def _refuse_bad_keep_span_rows(spec: str | None, layout: Any,
     if not path.exists():
         raise SystemExit(f"[error] {flag} table {spec} not found.")
     try:
-        rows = _keep_span_rows(path, flag, relative=marker is not None)
+        rows = _span_rows(path, flag, relative=marker is not None)
     except ValueError as err:
         raise SystemExit(f"[error] {err}") from None
     files = layout.get(extension=".snirf")
@@ -735,7 +735,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
                       entities: dict | None = None,
                       channels_tsv_bads: list[str] | None = None) -> "PrepConfig":
     marker = args.get("keep_spans_from")
-    keep_spans = _keep_spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
+    keep_spans = _spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
     return PrepConfig(
         subject=subject,
         session=session,
@@ -753,7 +753,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         keep_spans=keep_spans,
         # a recording no row names is used whole, so no marker applies to it
         keep_spans_from=marker if keep_spans else None,
-        bad_spans=_keep_spans_for(args.get("bad_spans"), subject, entities, flag="--bad-spans"),
+        bad_spans=_spans_for(args.get("bad_spans"), subject, entities, flag="--bad-spans"),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],

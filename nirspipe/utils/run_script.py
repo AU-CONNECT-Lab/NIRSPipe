@@ -139,7 +139,7 @@ def _build_script_text(
     if bad_channels_table:
         w('from nirspipe.cli.workflows import _bad_channels_for')
     if keep_spans_table or bad_spans_table:
-        w('from nirspipe.cli.workflows import _keep_spans_for')
+        w('from nirspipe.cli.workflows import _spans_for')
     if keep_spans_table:
         w('from nirspipe.utils.spans import mark_unselected')
     if keep_spans_from:
@@ -288,7 +288,7 @@ def _build_script_text(
     if keep_spans_table:
         w(
             f'{i3}# the --keep-spans rows that match this recording; the rest is BAD_unselected',
-            f'{i3}KEEP_SPANS = _keep_spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src'
+            f'{i3}KEEP_SPANS = _spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src'
             + (', relative=True)' if keep_spans_from else ')'),
         )
         if keep_spans_from:
@@ -304,7 +304,7 @@ def _build_script_text(
     if bad_spans_table:
         w(
             f'{i3}# the --bad-spans rows that match this recording, marked BAD_manual',
-            f'{i3}BAD_SPANS = _keep_spans_for(str(BAD_SPANS_TABLE), SUBJECT, src, flag="--bad-spans")',
+            f'{i3}BAD_SPANS = _spans_for(str(BAD_SPANS_TABLE), SUBJECT, src, flag="--bad-spans")',
             f'{i3}PREP_PARAMS["bad_spans"] = [list(span) for span in BAD_SPANS]',
             f'{i3}raw = mark_manual(raw, BAD_SPANS)',
         )

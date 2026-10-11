@@ -14,7 +14,7 @@ import pytest
 
 from nirspipe.cli import prep as prep_cli
 from nirspipe.cli import run as run_cli
-from nirspipe.cli.workflows import _keep_span_rows, _keep_spans_for, _refuse_bad_keep_span_rows
+from nirspipe.cli.workflows import _span_rows, _spans_for, _refuse_bad_span_rows
 from nirspipe.io.bids import get_layout
 from nirspipe.io.snirf import read_snirf
 from nirspipe.utils.spans import UNSELECTED, bad_spans, marker_onset, measured_from
@@ -60,17 +60,17 @@ def test_the_helper_writes_one_row_per_occurrence_and_the_table_reads_back(block
     assert out.read_text(encoding="utf-8").splitlines()[0].split("\t") == [
         "participant_id", "task", "onset", "duration"]
     got = [(r["participant_id"], r["session"], r["task"], r["run"], r["onset"], r["duration"])
-           for r in _keep_span_rows(out)]
+           for r in _span_rows(out)]
     assert got == [(sub, "", "mixed", "", onset, 150.0)
                    for sub in ("01", "02") for onset in (20.0, 190.0)]
-    assert _keep_spans_for(str(out), "02", {"subject": "02", "task": "mixed"}) == [
+    assert _spans_for(str(out), "02", {"subject": "02", "task": "mixed"}) == [
         (20.0, 150.0), (190.0, 150.0)]
 
 
 def test_duration_sets_every_occurrence(blocked, tmp_path):
     out = tmp_path / "keep.tsv"
     _helper(blocked, out, "--task-label", "mixed", "--conditions", "talk", "--duration", "60")
-    assert [(r["onset"], r["duration"]) for r in _keep_span_rows(out)] == [(20.0, 60.0)] * 2
+    assert [(r["onset"], r["duration"]) for r in _span_rows(out)] == [(20.0, 60.0)] * 2
 
 
 def test_a_recording_without_any_named_condition_stops_the_helper(blocked, tmp_path, capsys):
@@ -96,8 +96,8 @@ def test_a_zero_length_occurrence_needs_a_duration(tmp_path, capsys):
     assert "condition 'start' at 5 s has no duration; give --duration" in capsys.readouterr().err
     assert not out.exists()
     prep_cli.main([*argv, "--duration", "100"])
-    assert [(r["onset"], r["duration"]) for r in _keep_span_rows(out)] == [(5.0, 100.0),
-                                                                           (250.0, 100.0)]
+    assert [(r["onset"], r["duration"]) for r in _span_rows(out)] == [(5.0, 100.0),
+                                                                      (250.0, 100.0)]
 
 
 def test_two_recordings_the_table_cannot_tell_apart_are_warned_about(tmp_path, caplog):
@@ -127,16 +127,16 @@ def test_stretches_are_measured_from_the_first_marker():
 
 def test_a_negative_onset_is_read_only_when_measured_from_a_marker(tmp_path):
     path = _table(tmp_path, "onset\tduration\n-10\t70\n")
-    assert _keep_spans_for(str(path), "01", relative=True) == [(-10.0, 70.0)]
+    assert _spans_for(str(path), "01", relative=True) == [(-10.0, 70.0)]
     with pytest.raises(ValueError, match="onset -10 s lies before the recording starts"):
-        _keep_spans_for(str(path), "01")
+        _spans_for(str(path), "01")
 
 
 def test_the_check_before_any_subject_runs(blocked, tmp_path):
     layout = get_layout(blocked)
 
     def check(text):
-        _refuse_bad_keep_span_rows(str(_table(tmp_path, text)), layout, marker="talk")
+        _refuse_bad_span_rows(str(_table(tmp_path, text)), layout, marker="talk")
 
     check("task\tonset\tduration\nmixed\t-10\t100\n")
     with pytest.raises(SystemExit, match=r"marker 'talk' is not among the annotations of "

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from nirspipe.cli import run as run_cli
-from nirspipe.cli.workflows import _keep_spans_for, _refuse_bad_keep_span_rows
+from nirspipe.cli.workflows import _spans_for, _refuse_bad_span_rows
 from nirspipe.exceptions import StageError
 from nirspipe.io.bids import get_layout
 from nirspipe.io.snirf import read_snirf
@@ -97,7 +97,7 @@ def test_the_record_counts_each_instant_once():
 ])
 def test_a_malformed_row_is_refused(tmp_path, text, message):
     with pytest.raises(ValueError, match=message):
-        _keep_spans_for(str(_table(tmp_path, text)), "01", {"subject": "01"})
+        _spans_for(str(_table(tmp_path, text)), "01", {"subject": "01"})
 
 
 def test_rows_select_recordings_as_the_bad_channel_table_does(tmp_path):
@@ -106,22 +106,22 @@ def test_rows_select_recordings_as_the_bad_channel_table_does(tmp_path):
                             "sub-01\trest\t200\t50\n"
                             "02\t\t10\t20\n")
     rest = {"subject": "01", "task": "rest"}
-    assert _keep_spans_for(str(path), "01", rest) == [(0.0, 100.0), (200.0, 50.0)]
-    assert _keep_spans_for(str(path), "03", {**rest, "subject": "03"}) == [(0.0, 100.0)]
-    assert _keep_spans_for(str(path), "01", {**rest, "task": "tapping"}) == []
-    assert _keep_spans_for(None, "01", rest) == []
+    assert _spans_for(str(path), "01", rest) == [(0.0, 100.0), (200.0, 50.0)]
+    assert _spans_for(str(path), "03", {**rest, "subject": "03"}) == [(0.0, 100.0)]
+    assert _spans_for(str(path), "01", {**rest, "task": "tapping"}) == []
+    assert _spans_for(None, "01", rest) == []
 
 
 def test_a_row_starting_past_a_recording_or_matching_none_stops_the_run(mini_bids, tmp_path):
     layout = get_layout(mini_bids)
     with pytest.raises(SystemExit, match=r"line 3: onset 100000 s lies past the end of"):
-        _refuse_bad_keep_span_rows(str(_table(tmp_path, "task\tonset\tduration\nrest\t0\t10\n"
-                                              "tapping\t100000\t10\n")), layout)
+        _refuse_bad_span_rows(str(_table(tmp_path, "task\tonset\tduration\nrest\t0\t10\n"
+                                         "tapping\t100000\t10\n")), layout)
     with pytest.raises(SystemExit, match=r"line 2 \(task-motor\) matches no recording"):
-        _refuse_bad_keep_span_rows(str(_table(tmp_path, "task\tonset\tduration\n"
-                                              "motor\t0\t10\n")), layout)
+        _refuse_bad_span_rows(str(_table(tmp_path, "task\tonset\tduration\n"
+                                         "motor\t0\t10\n")), layout)
     with pytest.raises(SystemExit, match="not found"):
-        _refuse_bad_keep_span_rows(str(tmp_path / "missing.tsv"), layout)
+        _refuse_bad_span_rows(str(tmp_path / "missing.tsv"), layout)
 
 
 # ---- screening ----
