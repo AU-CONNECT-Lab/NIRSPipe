@@ -183,6 +183,7 @@ def _process_run(
     min_good_frac: float | None = None,
     screen_scope: str = "run",
     motion_correction: str | None = None,
+    roi_map: "dict | None" = None,
 ) -> "tuple[dict, dict]":
     """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
 
@@ -463,13 +464,17 @@ def _process_run(
                                                    "short": [tuple(sp) for sp in
                                                              windowed.get("spike_spans_short_s") or []] or None},
                                    raw_after=carpet_after,
-                                   channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu)
+                                   channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu,
+                                   roi_map=roi_map)
         fname = fig_name("carpet")
         # not written per condition: its GVTD filter, z-scale and colour scale are run-wide,
         # so one file is narrowed by URL fragment
         h     = _save_figure_html(fig, fig_dir / fname,
                                   views=_carpet_views(fig, view_windows))
         figure_paths["carpet"] = {"src": f"figures/{fname}", "h": h}
+        if roi_map:
+            # the set whose rows the ROI strip groups, named by the note under the heading
+            figure_paths["carpet"]["roi_set"] = gvtd_set
         carpet_inline = {"figure": fig.to_dict()}
 
     # ── file: SCI / PSP ────────────────────────────────────────────────────────
@@ -1126,6 +1131,7 @@ def build_prep_raw_report(
     sep_bands=None,
     by_condition: bool = False,
     motion_correction: str | None = None,
+    roi_map: "dict | None" = None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
@@ -1153,7 +1159,7 @@ def build_prep_raw_report(
             d, ctx = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                                   dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
                                   psp_threshold, sep_bands, min_good_frac, screen_scope,
-                                  motion_correction)
+                                  motion_correction, roi_map=roi_map)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         if ctx.get("remake_brain"):

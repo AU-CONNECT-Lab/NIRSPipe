@@ -666,6 +666,8 @@ RAW_QC_NOT_EXPOSED = {
         # channels.tsv is read by default, as the pipeline reads it; the off switch only
         # matters when checking a run that passed it, which the page cannot know
         "--ignore",
+        # a file path, and the page has no file picker
+        "--roi-mapping",
     },
     "hyper-raw": {
         "--psp-threshold", "--min-good-frac", "--screen-scope",

@@ -240,7 +240,7 @@ select#run-select {
 <section id="Motion" class="step">
   <h3 class="step-title">Motion</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('raw.motion') }}</p>
+    <p class="step-desc">{{ section_note('raw.motion') }} <span id="motion-roi-note"></span></p>
     <div id="carpet-gvtd-panel"></div>
 
     <div id="motion-detail-block" style="display:none">
@@ -611,6 +611,12 @@ function loadCarpetGvtd() {
   if (!panel) return;
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).carpet;
   _showSection("Motion", !!(p && p.src));
+  var roiNote = document.getElementById("motion-roi-note");
+  if (roiNote) {
+    roiNote.innerHTML = (p && p.roi_set)
+      ? {{ section_note('motion.roi_strip', gvtd_set='{set}') | tojson }}.replace("{set}", _esc(p.roi_set))
+      : "";
+  }
   if (p && p.src) {
     // the panel, not an iframe of its own: _setIframeSrc builds the iframe inside what it
     // is given, and handing it an <iframe> put a second one inside the first, where a

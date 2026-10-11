@@ -36,6 +36,7 @@ def cmd_prep_raw(
     long_max_dist: float | None,
     skip_bids_validation: bool,
     ignore: list[str] | None = None,
+    roi_mapping: Path | None = None,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
@@ -57,6 +58,7 @@ def cmd_prep_raw(
     if (epoch_tmin is None) != (epoch_tmax is None):
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
         raise SystemExit(1)
+    roi_map = _shared.load_roi_mapping(roi_mapping)
 
     layout = get_layout(bids_dir)
     sessions = session_label or [None]
@@ -114,7 +116,7 @@ def cmd_prep_raw(
                                       window_s=window_length, epoch_qc=epoch_qc,
                                       epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                                       sep_bands=sep_bands, by_condition=by_condition,
-                                      motion_correction=motion_correction)
+                                      motion_correction=motion_correction, roi_map=roi_map)
                 print(f"  -> {html_path}")
             except Exception as exc:
                 logger.exception("Raw report generation failed for %s", html_path.name)
@@ -449,6 +451,9 @@ def _build_parser() -> argparse.ArgumentParser:
                          "counts or GVTD series.")
     _shared.add_skip_bids_validation(pr)
     _add_ignore(pr)
+    pr.add_argument("--roi-mapping", type=Path, default=None,
+                    help="JSON file mapping ROI labels to lists of channel names. Groups the "
+                         "motion carpet's rows by ROI. Optional.")
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",

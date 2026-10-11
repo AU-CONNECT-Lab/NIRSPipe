@@ -185,9 +185,10 @@ def groups(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def raw_viewer_run(tmp_path_factory) -> Run:
-    """The task recording through nirspipe-qc prep-raw, with motion correction and per-trial scoring."""
+    """The task recording through nirspipe-qc prep-raw, with motion correction, trial scoring and the ROI map."""
     root = tmp_path_factory.mktemp("fingerprint_raw")
-    done = run_capturing(root, ["--participant-label", "01", "--epoch-qc"], (), raw_viewer=True)
+    done = run_capturing(root, ["--participant-label", "01", "--epoch-qc",
+                                "--roi-mapping", _roi_file(root)], (), raw_viewer=True)
     return Run(root / "out", done["truth"])
 
 
