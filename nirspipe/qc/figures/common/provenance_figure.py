@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from nirspipe.qc.common.provenance import Node, scan, simplify, to_mermaid
@@ -29,9 +30,14 @@ _STATE_TEXT = "#9CA3AF"
 # Box shape and spacing follow the interface stylesheet, scaled up for three text lines:
 # there the node is 140x44 px with 80 px between ranks and 35 px between rows.
 _BOX_W, _BOX_H = 2.8, 1.10
-_X_GAP, _Y_GAP = 4.4, 1.95
+_X_GAP, _Y_GAP = 3.9, 1.95
 _PAD_X, _PAD_Y = 0.55, 0.55
 _SCALE = 0.52          # inches per data unit
+# A graph taller than it is wide wraps each long column into a grid of this many rows
+_MAX_ROWS = 5
+_SUB_GAP = 3.4         # between the sub-columns of a wrapped column
+# drawn at this resolution and shown at half of it (srcset 2x in _footer.html.j2)
+_DPI = 220
 
 
 def _fit(text: str, base: float, max_chars: int) -> float:
@@ -43,12 +49,45 @@ def _fit(text: str, base: float, max_chars: int) -> float:
     return base if longest <= max_chars else base * max_chars / longest
 
 
+def _layout(columns: dict[int, list[Node]]) -> tuple[dict, list[list[str]]]:
+    """Each node's (x, y), and the columns that wrapped, as lists of keys.
+
+    ::
+
+      3 inputs into 20 outputs (taller than wide)  ->  the 20 in a grid of 4 x 5
+      a nine-step chain (wider than tall)          ->  one row, as before
+
+    Only a tall graph wraps: a wrapped column adds width, which a wide graph already
+    squeezed to the page cannot spare.
+    """
+    width = max(columns) * _X_GAP + _BOX_W
+    height = (max(len(c) for c in columns.values()) - 1) * _Y_GAP + _BOX_H
+    pos: dict[str, tuple[float, float]] = {}
+    blocks: list[list[str]] = []
+    x = 0.0
+    for depth in sorted(columns):
+        column = columns[depth]
+        k = math.ceil(len(column) / _MAX_ROWS) if height > width else 1
+        rows = math.ceil(len(column) / k)
+        for i, node in enumerate(column):
+            # a row at a time, so a short last row sits at the left like text; centred
+            # vertically so the trunk of the graph stays level
+            row, j = divmod(i, k)
+            pos[node.key] = (x + j * _SUB_GAP, ((rows - 1) / 2 - row) * _Y_GAP)
+        if k > 1:
+            blocks.append([n.key for n in column])
+        x += _X_GAP + (k - 1) * _SUB_GAP
+    return pos, blocks
+
+
 def provenance_figure(nodes: dict[str, Node], title: str | None = None):
     """Layered left-to-right DAG of the run's outputs. Returns a matplotlib Figure.
 
     Nodes are placed by depth (longest path from a root), so an arrow never points
     backwards. Each box shows the output name, the step and settings that produced it,
-    and the shape of the data at that point.
+    and the shape of the data at that point. A wrapped column (see :func:`_layout`) whose
+    outputs share one set of parents takes one arrow per parent, into a bar down its left
+    edge, rather than one into every box.
     """
     import matplotlib
     matplotlib.use("Agg")
@@ -59,21 +98,21 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         return None
 
     columns: dict[int, list[Node]] = {}
-    for node in sorted(nodes.values(), key=lambda n: (n.depth, n.label)):
+    # a QC record goes last in its column: it draws no edge and joins no bundle
+    for node in sorted(nodes.values(), key=lambda n: (n.depth, n.checkpoint, n.label)):
         columns.setdefault(node.depth, []).append(node)
 
-    pos: dict[str, tuple[float, float]] = {}
-    for depth, column in columns.items():
-        # centre each column vertically so the trunk of the graph stays level
-        offset = (len(column) - 1) / 2
-        for i, node in enumerate(column):
-            pos[node.key] = (depth * _X_GAP, (offset - i) * _Y_GAP)
+    pos, blocks = _layout(columns)
+    in_block = {key: i for i, block in enumerate(blocks) for key in block}
 
-    span_x = (max(columns)) * _X_GAP + _BOX_W + 2 * _PAD_X
-    span_y = (max(len(c) for c in columns.values()) - 1) * _Y_GAP + _BOX_H + 2 * _PAD_Y
+    xs = [p[0] for p in pos.values()]
+    ys = [p[1] for p in pos.values()]
+    span_x = max(xs) - min(xs) + _BOX_W + 2 * _PAD_X
+    span_y = max(ys) - min(ys) + _BOX_H + 2 * _PAD_Y
     fig, ax = plt.subplots(figsize=(span_x * _SCALE, span_y * _SCALE + 0.35))
     ax.set_facecolor(_CANVAS)
 
+    bundled: set = set()
     for node in nodes.values():
         # a QC record names every stage it measured, so drawing its edges lays the whole
         # chain over itself. It keeps its depth, and its second line says what it measured
@@ -82,12 +121,26 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         x, y = pos[node.key]
         # the edge takes the colour of the node it feeds, as the interface stylesheet does
         colour = _COLORS.get(node.domain, _COLORS["derivative"])
+        block = in_block.get(node.key)
+        fed = ([k for k in blocks[block] if not nodes[k].checkpoint]
+               if block is not None else [])
+        shared = bool(fed) and len({tuple(sorted(nodes[k].sources)) for k in fed}) == 1
         for src in node.sources:
             if src not in pos:
                 continue
             sx, sy = pos[src]
+            end = (x - _BOX_W / 2, y)
+            if shared:
+                if (src, block) in bundled:
+                    continue
+                bundled.add((src, block))
+                bar_x = min(pos[k][0] for k in fed) - _BOX_W / 2 - 0.35
+                top = max(pos[k][1] for k in fed) + _BOX_H / 2
+                bottom = min(pos[k][1] for k in fed) - _BOX_H / 2
+                ax.plot([bar_x, bar_x], [bottom, top], color=colour, lw=2.0, zorder=1)
+                end = (bar_x, min(max(sy, bottom), top))
             ax.annotate(
-                "", xy=(x - _BOX_W / 2, y), xytext=(sx + _BOX_W / 2, sy),
+                "", xy=end, xytext=(sx + _BOX_W / 2, sy),
                 arrowprops=dict(arrowstyle="-|>", color=colour, lw=1.5,
                                 mutation_scale=11, shrinkA=0, shrinkB=0),
             )
@@ -121,8 +174,6 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
                     fontsize=_fit(note, 6.0, 28),
                     color=_MISSING if node.missing else _STATE_TEXT, zorder=3)
 
-    xs = [p[0] for p in pos.values()]
-    ys = [p[1] for p in pos.values()]
     ax.set_xlim(min(xs) - _BOX_W / 2 - _PAD_X, max(xs) + _BOX_W / 2 + _PAD_X)
     ax.set_ylim(min(ys) - _BOX_H / 2 - _PAD_Y, max(ys) + _BOX_H / 2 + _PAD_Y)
     ax.set_aspect("equal")
@@ -171,7 +222,7 @@ def write_provenance(
     fig = provenance_figure(nodes, title=title)
     if fig is not None:
         png = out_dir / fig_name("provenance", extension=".png")
-        fig.savefig(png, dpi=300, bbox_inches="tight")
+        fig.savefig(png, dpi=_DPI, bbox_inches="tight")
         import matplotlib.pyplot as plt
         plt.close(fig)
         written.append(png)

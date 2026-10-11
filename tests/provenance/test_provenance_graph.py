@@ -418,6 +418,48 @@ def test_write_provenance_writes_png_and_mermaid(tmp_path):
     assert all(p.exists() and p.stat().st_size > 0 for p in written)
 
 
+# ---- the layout ----
+
+def _boxes(fig) -> dict:
+    """Each box's bold label and the (x, y) it is written at."""
+    return {t.get_text(): t.get_position() for t in fig.axes[0].texts
+            if t.get_text() and t.get_fontweight() == "bold"}
+
+
+def _arrows(fig) -> int:
+    from matplotlib.text import Annotation
+    return sum(isinstance(t, Annotation) for t in fig.axes[0].texts)
+
+
+def test_a_tall_fan_wraps_into_a_grid_fed_by_one_arrow_per_parent():
+    from nirspipe.qc.common.provenance import Node
+    from nirspipe.qc.figures.common.provenance_figure import provenance_figure
+
+    nodes = {k: Node(k, k) for k in ("a", "b")}
+    nodes.update({f"out{i:02d}": Node(f"out{i:02d}", f"out{i:02d}", sources=["a", "b"],
+                                      depth=1) for i in range(20)})
+    fig = provenance_figure(nodes)
+
+    out_x = [round(x, 6) for name, (x, _) in _boxes(fig).items() if name.startswith("out")]
+    assert len(set(out_x)) == 4 and all(out_x.count(x) == 5 for x in set(out_x))
+    assert _arrows(fig) == 2
+
+
+def test_a_long_chain_stays_one_row():
+    from nirspipe.qc.common.provenance import Node
+    from nirspipe.qc.figures.common.provenance_figure import provenance_figure
+
+    nodes = {f"s{d}": Node(f"s{d}", f"s{d}", sources=[f"s{d - 1}"] if d else [], depth=d)
+             for d in range(9)}
+    nodes.update({f"out{i}": Node(f"out{i}", f"out{i}", sources=["s8"], depth=9)
+                  for i in range(8)})
+    fig = provenance_figure(nodes)
+
+    assert len({round(x, 6) for name, (x, _) in _boxes(fig).items()
+                if name.startswith("out")}) == 1
+    assert _arrows(fig) == 8 + 8
+
+
 # ---- a sidecar that outlived its file ----
 
 def test_a_sidecar_whose_file_is_gone_is_marked_missing(tmp_path):
