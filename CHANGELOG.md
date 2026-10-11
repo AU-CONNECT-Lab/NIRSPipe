@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; each prep sidecar holds them
 - The denoised carpet's long and short GVTD row titles no longer overlap; each row is named inside its panel, as on the motion carpet
 - Derivative `_nirs.json` sidecars carry the BIDS REQUIRED fields (`TaskName`, `SamplingFrequency`, channel and optode counts); post and crop refuse stages written without them
+- Derivative `_nirs.json` sidecars carry the BIDS REQUIRED fields (`TaskName`, `SamplingFrequency`, channel and optode counts); post and crop refuse stages written without them
 
 ## [0.65.0] - 2026-10-10
 
