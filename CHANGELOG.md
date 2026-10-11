@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
 - Both dyad reports print member metrics with each channel set over its members' columns; the dyad raw report counts pairs and motion per set
+- The subject cohort report charts saturated share and saturated channels in their own panels after mean amplitude
 
 ### Fixed
 - Under `--short-channel pca`, short channels are blank in FC and seed FC and left out of ALFF; rest-mode mALFF/zALFF values change

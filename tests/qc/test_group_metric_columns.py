@@ -53,3 +53,12 @@ def test_the_condition_panels_draw_the_motion_band_gvtd():
     drawn = {round(float(v), 6) for tr in fig.data if tr.y is not None for v in tr.y
              if v is not None and np.isfinite(v)}
     assert drawn and 1.0 not in drawn
+
+
+def test_saturation_gets_its_own_charts_one_scale_each():
+    groups, _ = group_metrics(["raw_saturated_pct", "raw_long_saturated_pct",
+                               "raw_n_saturated_channels", "excluded_total_s"])
+    charts = dict(groups)
+    assert charts["Saturated share (0-1)"] == ["raw_saturated_pct", "raw_long_saturated_pct"]
+    assert charts["Saturated channels"] == ["raw_n_saturated_channels"]
+    assert charts["Other"] == ["excluded_total_s"]

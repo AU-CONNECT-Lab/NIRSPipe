@@ -25,6 +25,8 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),
     ("Intensity SNR", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
+    ("Saturated share (0-1)", ["saturated_pct"]),
+    ("Saturated channels", ["n_saturated_channels"]),
     ("GVTD amplitude",
      ["gvtd_filt_mean", "gvtd_filt_p95",
       "gvtd_thresh", "gvtd_thresh_applied", "gvtd_censor_thresh"]),
