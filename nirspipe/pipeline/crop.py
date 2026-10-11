@@ -15,8 +15,8 @@ import mne
 from nirspipe import __version__
 from nirspipe.io.auxiliary import write_aux_window
 from nirspipe.io.derivatives import (bids_uris, data_state, dataset_root_of, entity_of,
-                                       read_json, write_dataset_description,
-                                       write_sidecar_json)
+                                       nirs_required_fields, read_json, require_nirs_fields,
+                                       write_dataset_description, write_sidecar_json)
 from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.utils.logging import get_logger
@@ -98,9 +98,10 @@ def _write_crop_sidecar(out_snirf: Path, raw_seg, source_path: Path,
     there. They cannot be derived from each other, since a segment at the start of a recording
     gets no left margin however much was asked for.
     """
-    src = source_path.with_suffix(".json")
-    parameters = read_json(src).get("parameters") or {}
+    source = read_json(source_path.with_suffix(".json"))
+    parameters = source.get("parameters") or {}
     write_sidecar_json(out_snirf, {
+        **nirs_required_fields(raw_seg, source),
         "pipeline_version": __version__,
         "step": "crop",
         "Sources": [source_path.as_posix()],
@@ -207,6 +208,8 @@ def _crop_raw(
     derivative: bool = False,
     margin_s: float = 0.0,
 ) -> list[Path]:
+    if derivative:
+        require_nirs_fields(snirf_path)
     duration = float(raw.times[-1])
     margin_s = max(0.0, float(margin_s))
 

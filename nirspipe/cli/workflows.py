@@ -357,7 +357,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 logger.info("processing: %s", snirf_path)
                                 try:
                                     raw = read_snirf(snirf_path)
-                                    result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path)
+                                    result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path,
+                                                      source_metadata=layout.get_metadata(str(snirf_path)))
                                     logger.info("finished prep: %s", snirf_path.name)
                                     prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
                                 except Exception:

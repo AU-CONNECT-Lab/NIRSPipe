@@ -125,7 +125,8 @@ def _build_script_text(
         'from nirspipe import __version__',
         'from nirspipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
         'from nirspipe.io.bids import channel_status_bads, get_layout, get_nirs_files',
-        'from nirspipe.io.derivatives import build_output_path, carry_entities, data_state, write_sidecar_json',
+        'from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,',
+        '                                     nirs_required_fields, write_sidecar_json)',
         'from nirspipe.io.snirf import write_snirf',
         'from nirspipe.utils import is_optical_density',
         'from nirspipe.utils.spans import add_bad_spans, bad_spans, excluded_spans, excluded_time',
@@ -255,7 +256,8 @@ def _build_script_text(
         '        entities={**carry_entities(src), "desc": desc},',
         '        suffix="nirs", extension=".snirf", session=src.get("session"))',
         '    write_snirf(raw_step, path)',
-        '    write_sidecar_json(path, {"pipeline_version": __version__, "step": step,',
+        '    write_sidecar_json(path, {**nirs_required_fields(raw_step, SOURCE_METADATA),',
+        '        "pipeline_version": __version__, "step": step,',
         '        "parameters": {**PREP_PARAMS, "session": src.get("session")},',
         '        "data": data_state(raw_step),',
         '        # read back by read_snirf: SNIRF itself cannot carry the marks',
@@ -282,6 +284,7 @@ def _build_script_text(
         # the file's own session: the loop variable is only the --session-label filter
         f'{i3}src = layout.parse_file_entities(str(snirf_path))',
         f'{i3}ses = src.get("session")',
+        f'{i3}SOURCE_METADATA = layout.get_metadata(str(snirf_path))  # its sidecar, inherited',
         f'{i3}raw = mne.io.read_raw_snirf(str(snirf_path), preload=True)',
         f'{i3}INPUT_SPANS = bad_spans(raw)  # BAD_ spans the recording already carried',
     )

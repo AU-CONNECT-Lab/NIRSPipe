@@ -36,6 +36,7 @@ from nirspipe.utils.logging import get_logger
 from nirspipe import __version__
 from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
+    nirs_required_fields, require_nirs_fields,
 )
 from nirspipe.io.snirf import write_snirf
 from nirspipe.utils.spans import excluded_spans
@@ -295,6 +296,8 @@ def run_post(
         f"ses-{config.session}" if config.session else "") / "nirs"
 
     known_spans = _known_spans(source_path)
+    if source_path is not None:
+        require_nirs_fields(source_path)
     if config.censor_fill == "spline":
         logger.warning("sub-%s | --censor-fill spline: a cubic spline across a shared gap may "
                        "inflate coherence when both members of a pair miss the same stretch",
@@ -828,11 +831,13 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     # before the write, while the previous run's sidecar is still the one on disk
     _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
     write_snirf(haemo, out_path)
+    sources = rec.sources_of(haemo)
     write_sidecar_json(out_path, {
         **({"Description": description} if description else {}),
+        **nirs_required_fields(haemo, read_json(Path(sources[0]).with_suffix(".json")) if sources else {}),
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
-        "Sources": rec.sources_of(haemo),
+        "Sources": sources,
         "parameters": parameters,
         "data": data_state(haemo),
         # read back by read_snirf: SNIRF itself cannot carry the marks

@@ -140,6 +140,36 @@ def data_state(raw: Any) -> dict[str, Any]:
     }
 
 
+# REQUIRED in a raw _nirs.json and true of every derivative; the other two are measured
+CARRIED_NIRS_FIELDS = ("TaskName", "NIRSSourceOptodeCount", "NIRSDetectorOptodeCount")
+
+
+def nirs_required_fields(raw: Any, source: dict[str, Any]) -> dict[str, Any]:
+    """The REQUIRED ``_nirs.json`` fields a derivative carries from its source's sidecar.
+
+    ::
+
+      source {"TaskName": "rest", "NIRSSourceOptodeCount": 8, ...}, raw at 5 Hz with 40 channels
+        -> {"TaskName": "rest", "NIRSSourceOptodeCount": 8, "NIRSDetectorOptodeCount": 8,
+            "SamplingFrequency": 5.0, "NIRSChannelCount": 40}
+
+    A field the source lacks stays absent. The aux-channel counts are left out: no
+    derivative SNIRF holds those channels.
+    """
+    return {**{k: source[k] for k in CARRIED_NIRS_FIELDS if k in source},
+            "SamplingFrequency": float(raw.info["sfreq"]),
+            "NIRSChannelCount": len(raw.ch_names)}
+
+
+def require_nirs_fields(source_path: Path) -> dict[str, Any]:
+    """A stage's sidecar, refused when written before sidecars carried the ``_nirs.json`` fields."""
+    sidecar = read_json(Path(source_path).with_suffix(".json"))
+    if "SamplingFrequency" not in sidecar:
+        raise StageError(f"{Path(source_path).name} records no SamplingFrequency; this "
+                         f"derivative tree predates the BIDS _nirs.json fields, rerun nirspipe")
+    return sidecar
+
+
 def write_sidecar_json(out_path: Path, provenance: dict[str, Any]) -> None:
     """Write a JSON sidecar next to out_path (same name, .json extension).
 
