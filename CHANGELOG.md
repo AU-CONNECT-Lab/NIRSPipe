@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
+
 ### Fixed
 - The exported run script's sidecars equal the run's: `Sources`, the screening scores, the OD passthrough step, and no invented `drift_high_pass`
 

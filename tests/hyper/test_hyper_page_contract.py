@@ -513,6 +513,21 @@ def test_the_coi_share_is_stated_once_per_scope_rather_than_as_a_column(pages):
         assert all(n.endswith("% outside COI") for n in notes), (page.name, notes)
 
 
+def test_the_channel_table_is_the_one_folded_and_its_tables_are_linked(pages):
+    """A row per channel pairing runs to hundreds; folded, its full-precision files stay one
+    click away, and only the files this run wrote are offered."""
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        folded = re.findall(r'<details class="num-fold">\s*<summary class="qm-sub">([^(<]+) \(',
+                            html)
+        assert [f.strip() for f in folded] == ["Channel pairs"], page.name
+        links = re.findall(r'<a href="([^"]+_relmat\.tsv)">', html)
+        names = {Path(link).name.split("task-tap_")[-1] for link in links}
+        assert names == {"stat-wtc_relmat.tsv", "cond-all_stat-wtc_relmat.tsv",
+                         "stat-isc_relmat.tsv"}, (page.name, names)
+        assert all((page.parent / link).is_file() for link in links), page.name
+
+
 def test_the_roi_rows_carry_an_isc_of_their_own(pages):
     """The ISC matrix is grouped by region too, so the ROI block prints values rather than
     dashes under the ISC columns."""

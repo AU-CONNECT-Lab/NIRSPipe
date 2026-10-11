@@ -264,7 +264,16 @@
     filled. -#}
 <div class="qm-box">
   {% for table in number_tables %}
+  {%- if table.fold %}
+  {%- if number_files %}
+  <p class="qm-note">{{ section_note('hyper_post.numbers_files') }}
+    {%- for href in number_files %}<br><a href="{{ href }}"><code>{{ href }}</code></a>{% endfor %}</p>
+  {%- endif %}
+  <details class="num-fold">
+  <summary class="qm-sub">{{ table.kind }} ({{ table.rows | length }})</summary>
+  {%- else %}
   <p class="qm-sub">{{ table.kind }} ({{ table.rows | length }})</p>
+  {%- endif %}
   <div class="num-scroll">
     <table class="qm-table num-table">
       {#- the two label columns to one width across the tables, which auto layout gives
@@ -298,6 +307,9 @@
       </tbody>
     </table>
   </div>
+  {%- if table.fold %}
+  </details>
+  {%- endif %}
   {% endfor %}
   <p class="qm-note">{{ section_note('hyper_post.roi_value') }}</p>
 </div>

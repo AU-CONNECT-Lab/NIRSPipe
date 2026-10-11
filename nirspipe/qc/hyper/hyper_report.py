@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections import defaultdict
 from itertools import combinations
@@ -12,7 +13,9 @@ import mne
 import numpy as np
 
 from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
-from nirspipe.io.derivatives import group_data_dir, group_label, group_report_dir
+from nirspipe.io.derivatives import (
+    group_data_dir, group_label, group_output_path, group_report_dir,
+)
 from nirspipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from nirspipe.pipeline.hyper.wtc_null import write_wtc_null
 from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
@@ -1309,6 +1312,14 @@ def build_hyper_post_report(
     roi_rows     = result.roi_rows
     passes       = result.passes
     roi_levels   = result.roi_levels
+    # the long tables the channel numbers below are rounded from, only those this run wrote
+    written = set((result.tables or {}).values())
+    channel_tables = [p for p in (
+        group_output_path(output_dir, group_id, {"task": task, **entities}, "relmat", ".tsv",
+                          session=session)
+        for entities in ({"statistic": "wtc"}, {"condition": "all", "statistic": "wtc"},
+                         {"statistic": "isc"}))
+        if p in written]
 
     # One ROI map file per pairing, carrying the run and a view per window, rather than one
     # file per window. Only where a window really is a slice of the run's own transform:
@@ -1529,7 +1540,8 @@ def build_hyper_post_report(
                     per_scope.append((heading, table))
             merged = _merge_scopes(kind, axis, per_scope)
             if merged:
-                number_tables.append(merged)
+                # a row per channel pairing runs to hundreds of rows, so it is the one folded
+                number_tables.append({**merged, "fold": key == "chan"})
 
         out_path = _page_path(label, pair)
         heading = scope
@@ -1595,6 +1607,8 @@ def build_hyper_post_report(
             wtc_roi_matrix=roi_matrix,
             wtc_chan_matrix=chan_matrix,
             number_tables=number_tables,
+            number_files=[os.path.relpath(p, out_path.parent).replace(os.sep, "/")
+                          for p in channel_tables],
             # a second selector on each map panel, which an uncrossed run has no pairings
             # for: it holds the diagonal alone
             chan_crossed=wtc_channel_cross,

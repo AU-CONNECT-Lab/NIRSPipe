@@ -189,10 +189,13 @@ NOTES = {
     "hyper_post.numbers_run":
         "Every value the panels above were drawn from, one row per pairing, each condition "
         "beside the whole run, a comparison no panel shows.",
+    "hyper_post.numbers_files":
+        "The channel table is folded. Every pairing at full precision, every condition "
+        "included:",
     "hyper_post.numbers":
-        "Rounded here; <code>stat-wtc_relmat.tsv</code>, "
-        "<code>agg-roi_stat-wtc_relmat.tsv</code> and <code>stat-isc_relmat.tsv</code> under "
-        "the group&rsquo;s <code>nirs/</code> hold full precision. <b>% outside COI</b> is "
+        "Rounded here; the tables under the group&rsquo;s <code>nirs/</code> hold full "
+        "precision, the channel ones linked above the folded table and "
+        "<code>agg-roi_stat-wtc_relmat.tsv</code> for the ROI rows. <b>% outside COI</b> is "
         "the share of the window&rsquo;s band cells clear of the record&rsquo;s edges. It is "
         "one number per window, set by where the window sits and by the band, not by the "
         "channels; a coherence resting on a third of its cells is not the same measurement "

@@ -112,7 +112,7 @@ class _Tables(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         cls = dict(attrs).get("class") or ""
-        if tag in ("h2", "h3") or (tag == "p" and "qm-sub" in cls):
+        if tag in ("h2", "h3") or (tag in ("p", "summary") and "qm-sub" in cls):
             self._in_heading, self._heading = True, ""
         elif tag == "table":
             self._rows = []
@@ -122,7 +122,7 @@ class _Tables(HTMLParser):
             self._cell = []
 
     def handle_endtag(self, tag):
-        if tag in ("h2", "h3", "p") and self._in_heading:
+        if tag in ("h2", "h3", "p", "summary") and self._in_heading:
             self._in_heading = False
         elif tag in ("td", "th") and self._cell is not None:
             self._rows[-1].append(" ".join("".join(self._cell).split()))
