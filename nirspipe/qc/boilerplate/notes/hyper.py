@@ -122,7 +122,7 @@ NOTES = {
         "indicative; nothing is masked or dropped for it.",
     "hyper_post.roi_grouping":
         "The channel-to-region mapping from <code>--roi-mapping</code>, which the per-ROI "
-        "panels below average over.",
+        "panels average over.",
     "hyper_post.chromophores":
         "The maps show {stacked}, stacked; the matrices put the chromophores side by side on "
         "one colour scale; the tables carry {listed} in a <code>chromophore</code> column; "

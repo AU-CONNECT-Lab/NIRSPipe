@@ -93,9 +93,7 @@
   <pre>{{ run_command }}</pre>
 </div>
 
-{#- The recording's steps, then the results as the subject report keeps them: the tables
-    under Quality Metrics, the grid under Quality Figures. Section ids are the rating bar's
-    anchors. -#}
+{#- steps, then Quality Metrics (tables) and Quality Figures, as in the subject report -#}
 <h2>Recording</h2>
 
 <!-- ------------------------------------------------------------ alignment -->
@@ -110,8 +108,7 @@
     <p class="qm-note">{{ section_note('hyper_raw.alignment_timeline') }}</p>
     <p class="fig-path">{{ figure_paths.alignment_timeline.src }}</p>
     {% endif %}
-    {#- the bookkeeping the timeline draws: the offset each member was cropped by, and where
-        each block landed on the shared clock -#}
+    {#- the bookkeeping the timeline draws -#}
     <h3>The two clocks</h3>
     <p class="qm-note">{{ section_note('hyper.clocks') }}</p>
     <div class="summary-grid">

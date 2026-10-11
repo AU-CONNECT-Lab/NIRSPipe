@@ -40,12 +40,12 @@
    reader signs off on, so its bar carries no pills. The raw dyad report is where a dyad is
    judged. #}
 {% set nav_modules = [nav_bar([
-  ("Alignment", "Alignment"),
   ("Coherence", "Coherence"),
   ("ISC", "ISC"),
-  ("Numbers", "Numbers"),
-  ("Quality", "Quality"),
-  ("ConditionChannels", "Channels"),
+  ("Numbers", "All Values"),
+  ("Quality", "Quality Metrics"),
+  ("ConditionChannels", "By channel" if condition_label else "By condition"),
+  ("Alignment", "Clocks and ROIs"),
 ], rated=false, siblings=nav_links or [], index=index_href or "",
    index_label="← All windows")] %}
 {% set nav_chip = "group-" ~ group_id %}
@@ -115,35 +115,6 @@
   <div class="too-short">{{ section_note('hyper_post.too_short', cycles="%.1f"|format(window_cycles)) }}</div>
   {% endif %}
 
-  {#- Both of these are what the rest of the page is read against rather than findings of
-      their own: the clocks convert a dyad window to a member's own record, and the ROI map
-      says what every per-ROI panel below was averaged over. The raw dyad report carries its
-      clocks the same way. -#}
-  <div class="summary-grid" style="margin-top:1.1rem;">
-    <div id="Alignment">
-      <h3 style="margin:0 0 0.3rem;">The two clocks</h3>
-      <p class="qm-note">{{ section_note('hyper.clocks') }}</p>
-      <table class="qm-table qm-flat" id="align-table">
-        <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-        <tbody id="align-tbody"></tbody>
-      </table>
-    </div>
-    {% if roi_rows %}
-    <div id="ROI">
-      <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
-      <p class="qm-note">{{ section_note('hyper_post.roi_grouping') }}</p>
-      <table class="qm-table qm-flat" id="roi-table">
-        <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
-        <tbody>
-        {% for row in roi_rows %}
-          <tr><td><b>{{ row.roi }}</b></td><td>{{ row.channels | join(", ") }}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-  </div>
-
   <h3 style="margin-top:1rem;">Run command</h3>
   <pre>{{ run_command }}</pre>
 </div>
@@ -156,7 +127,7 @@
 <p class="step-desc">{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above "), listed=wtc_chroma_labels | join(" and ")) }}</p>
 
 <section id="WTCChannel" class="step">
-  <h3 class="step-title">a. Per channel</h3>
+  <h3 class="step-title">Per channel</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.wtc_channel', lead=subject_ids[0]) }}
       {%- if chan_crossed %} {{ section_note('hyper_post.selector_order', left=subject_ids[0], right=subject_ids[1]) }}{% endif %}</p>
@@ -179,7 +150,7 @@
 
 {% if roi_rows %}
 <section id="WTCRoi" class="step">
-  <h3 class="step-title">b. Per ROI</h3>
+  <h3 class="step-title">Per ROI</h3>
   <div class="details-body">
     <p class="step-desc">{% if roi_null_level %}{{ section_note('hyper_post.wtc_roi_null') }}{% else %}{{ section_note('hyper_post.wtc_roi', arrow_min='%g'|format(arrow_min)) }}{% endif %}
       {%- if roi_crossed %} {{ section_note('hyper_post.selector_order', left=subject_ids[0], right=subject_ids[1]) }}{% endif %}</p>
@@ -203,7 +174,7 @@
 
 {% if wtc_roi_matrix.wtc %}
 <section id="wtc-roi-matrix-card" class="step">
-  <h3 class="step-title">c. ROI &times; ROI</h3>
+  <h3 class="step-title">ROI &times; ROI</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.wtc_roi_matrix') }}
       {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.wtc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.wtc_roi_matrix_live') }}</p>
@@ -218,7 +189,7 @@
 
 {% if wtc_chan_matrix.wtc %}
 <section id="wtc-chan-matrix-card" class="step">
-  <h3 class="step-title">{{ "d" if roi_rows else "b" }}. Channel &times; channel</h3>
+  <h3 class="step-title">Channel &times; channel</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.wtc_chan_matrix', row=subject_ids[0], col=subject_ids[1]) }}</p>
     <iframe class="plotly-frame" src="{{ wtc_chan_matrix.wtc }}"
@@ -242,7 +213,7 @@
 
 {% if isc_roi_matrix.wtc %}
 <section id="ISCRoiMatrix" class="step">
-  <h3 class="step-title">a. ROI &times; ROI</h3>
+  <h3 class="step-title">ROI &times; ROI</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.isc_roi_matrix', row=subject_ids[0], col=subject_ids[1]) }}
       {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.isc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.hover_pairing') }}</p>
@@ -256,7 +227,7 @@
 
 {% if isc_panel_hbo.wtc %}
 <section id="ISCHbo" class="step">
-  <h3 class="step-title">{{ "b" if isc_roi_matrix.wtc else "a" }}. HbO</h3>
+  <h3 class="step-title">HbO</h3>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ isc_panel_hbo.wtc }}"
             title="inter-brain synchrony, HBO"
@@ -268,7 +239,7 @@
 
 {% if isc_panel_hbr.wtc %}
 <section id="ISCHbr" class="step">
-  <h3 class="step-title">{{ "c" if isc_roi_matrix.wtc else "b" }}. HbR</h3>
+  <h3 class="step-title">HbR</h3>
   <div class="details-body">
     <iframe class="plotly-frame" src="{{ isc_panel_hbr.wtc }}"
             title="inter-brain synchrony, HBR"
@@ -281,7 +252,7 @@
 
 <!-- ============================================================== numbers -->
 {% if number_tables %}
-<h2 id="Numbers">The numbers</h2>
+<h2 id="Numbers">All Values</h2>
 <p class="step-desc">
   {%- if condition_label %}{{ section_note('hyper_post.numbers_window') }}
   {%- else %}{{ section_note('hyper_post.numbers_run') }}{% endif %}
@@ -331,40 +302,73 @@
 </div>
 {% endif %}
 
-<!-- ================================================== per-subject quality -->
+<!-- ====================================================== quality metrics -->
+{% if subject_metrics_rows or condition_label %}
+<h2 id="Quality">Quality Metrics</h2>
+<section id="MemberMetrics" class="step">
 {% if subject_metrics_rows %}
-<h2 id="Quality">Per-subject quality</h2>
-<div class="qm-box">
-  <p class="step-desc">{{ section_note('hyper_post.member_metrics') }}</p>
-  {{ subject_metrics(subject_metrics_rows) }}
-  <p class="qm-note">{{ section_note('hyper_post.member_metrics_sets') }}</p>
-  {% if condition_label %}
-  <p class="qm-note">{{ section_note('hyper_post.member_metrics_condition', href=run_href) }}</p>
-  {% endif %}
-</div>
-{% elif condition_label %}
-<h2 id="Quality">Per-subject quality: not available for this window</h2>
-<div class="qm-box">
-  <p class="qm-note">{{ section_note('hyper_post.member_metrics_missing', href=run_href) }}</p>
-</div>
+  <h3 class="step-title">Member metrics</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_post.member_metrics') }}</p>
+    {{ subject_metrics(subject_metrics_rows) }}
+    <p class="qm-note">{{ section_note('hyper_post.member_metrics_sets') }}</p>
+    {% if condition_label %}
+    <p class="qm-note">{{ section_note('hyper_post.member_metrics_condition', href=run_href) }}</p>
+    {% endif %}
+  </div>
+{% else %}
+  <h3 class="step-title">Member metrics: not available for this window</h3>
+  <div class="details-body">
+    <p class="qm-note">{{ section_note('hyper_post.member_metrics_missing', href=run_href) }}</p>
+  </div>
+{% endif %}
+</section>
 {% endif %}
 
 {% if condition_grid.wtc %}
-<!-- ================================================ per-condition channel quality -->
-{% if condition_label %}
-<h2 id="ConditionChannels">Channels in this condition</h2>
-<p class="qm-note">{{ section_note('hyper_post.condition_grid') }}</p>
-{% else %}
-<h2 id="ConditionChannels">Per-condition channel quality</h2>
-<p class="qm-note">{{ section_note('hyper_post.condition_summary') }}</p>
+<!-- ====================================================== quality figures -->
+<h2 id="QualityFigures">Quality Figures</h2>
+<section id="ConditionChannels" class="step">
+  <h3 class="step-title">{{ "By channel" if condition_label else "By condition" }}</h3>
+  <div class="details-body">
+    <p class="qm-note">{{ section_note('hyper_post.condition_grid' if condition_label else 'hyper_post.condition_summary') }}</p>
+    <div style="overflow-x:auto;">
+      <iframe class="plotly-frame" src="{{ condition_grid.wtc }}"
+              title="channel status per member{{ ' in this condition' if condition_label }}"
+              style="height:{{ condition_grid.h or 300 }}px;min-width:500px"></iframe>
+    </div>
+    <p class="fig-path">{{ condition_grid.wtc }}</p>
+  </div>
+</section>
 {% endif %}
-<div style="overflow-x:auto;">
-  <iframe class="plotly-frame" src="{{ condition_grid.wtc }}"
-          title="channel status per member{{ ' in this condition' if condition_label }}"
-          style="height:{{ condition_grid.h or 300 }}px;min-width:500px"></iframe>
+
+{#- reference, not findings; drawn before the script that fills the clocks table -#}
+<div class="part-rule">Appendix: run record</div>
+<h2 id="Alignment">Clocks and ROIs</h2>
+<div class="summary-grid">
+  <div>
+    <h3 style="margin:0 0 0.3rem;">The two clocks</h3>
+    <p class="qm-note">{{ section_note('hyper.clocks') }}</p>
+    <table class="qm-table qm-flat" id="align-table">
+      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+      <tbody id="align-tbody"></tbody>
+    </table>
+  </div>
+  {% if roi_rows %}
+  <div id="ROI">
+    <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
+    <p class="qm-note">{{ section_note('hyper_post.roi_grouping') }}</p>
+    <table class="qm-table qm-flat" id="roi-table">
+      <thead><tr><th>ROI</th><th>Channels</th></tr></thead>
+      <tbody>
+      {% for row in roi_rows %}
+        <tr><td><b>{{ row.roi }}</b></td><td>{{ row.channels | join(", ") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 </div>
-<p class="fig-path">{{ condition_grid.wtc }}</p>
-{% endif %}
 
 <script>
 var _CHROMA       = {{ wtc_chroma_json | safe }};
@@ -486,3 +490,5 @@ window.addEventListener("DOMContentLoaded", function() {
 </script>
 
 {% endblock %}
+
+{% block footer %}{% set appendix_opened = true %}{% include "_footer.html.j2" %}{% endblock %}

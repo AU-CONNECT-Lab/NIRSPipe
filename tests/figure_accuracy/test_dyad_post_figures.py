@@ -396,7 +396,7 @@ def _quality(page, heading):
 
     The table is metric-major, a member per column, with a one-cell row heading each set.
     """
-    rows = table_under(page, "Per-subject quality")
+    rows = table_under(page, "Member metrics")
     members = rows[0][1:]
     out, inside = {m: {} for m in members}, False
     for row in rows[1:]:
