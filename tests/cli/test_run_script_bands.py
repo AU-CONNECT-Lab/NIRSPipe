@@ -36,24 +36,34 @@ def both(tmp_path_factory):
                     script, count=1, flags=re.M)
     (root / "script.py").write_text(script, encoding="utf-8")
     subprocess.run([sys.executable, str(root / "script.py")], check=True, cwd=root)
-    return _stages(out), _stages(root / "script")
+    return out, root / "script"
 
 
 def test_the_script_writes_every_stage_the_run_wrote(both):
-    cli, script = both
+    cli, script = map(_stages, both)
     assert sorted(script) == sorted(cli)
 
 
 def test_every_stage_holds_the_same_data(both):
-    cli, script = both
+    cli, script = map(_stages, both)
     for stage, path in cli.items():
         a, b = read_snirf(path), read_snirf(script[stage])
         assert np.array_equal(a.get_data(), b.get_data(), equal_nan=True), stage
 
 
 def test_every_sidecar_records_the_same_parameters(both):
-    cli, script = both
+    cli, script = map(_stages, both)
     for stage, path in cli.items():
         params = [json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))["parameters"]
                   for p in (path, script[stage])]
         assert params[1] == params[0], stage
+
+
+def test_every_file_both_wrote_names_the_same_sources(both):
+    out, script = both
+    shared = [p.relative_to(script) for p in script.rglob("*.json") if (out / p.relative_to(script)).exists()]
+    assert any("errts" in p.name for p in shared)
+    for rel in shared:
+        sources = [json.loads((root / rel).read_text(encoding="utf-8")).get("Sources")
+                   for root in (out, script)]
+        assert sources[1] == sources[0], rel
