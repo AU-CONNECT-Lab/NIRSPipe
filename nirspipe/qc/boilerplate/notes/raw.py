@@ -81,15 +81,15 @@ NOTES = {
         "channel; averaging the two together lifts SCI, PSP and SNR and can make a poorly "
         "coupled recording read as a good one.",
     "raw.scope_split":
-        "Measured over <b>every channel</b>. The three channel sets are in the tables below; "
-        "the verdict is read off the long ones.",
+        "A value in the All column alone is measured over <b>every channel</b>. The verdict "
+        "is read off the Long column.",
     "raw.scope_every":
         "Measured on the long channels where separations are known, on every channel where "
         "they are not; no channel was identified as short.",
     "raw.sets":
         "The same recording measured over three channel sets. <b>Long</b> is the set the "
         "verdict is read off; <b>Short</b> is left uncoloured, a short channel's coupling "
-        "being high by construction, so that row answers whether the regressors those "
+        "being high by construction, so that column answers whether the regressors those "
         "channels feed are trustworthy rather than whether the run is usable.",
     "raw.motion_post":
         "Each cell is <b>before &rarr; after {method}</b>. GVTD counts use the uncorrected "
@@ -98,7 +98,11 @@ NOTES = {
     "raw.haemo_sets":
         "Mean HbO–HbR correlation over each channel set, on the unfiltered concentration with "
         "rejected channels included. Uncoloured: no line on it has a source. A short channel "
-        "has no cortical anticorrelation, so its row is not read against the long one.",
+        "has no cortical anticorrelation, so its column is not read against the long one.",
+    "raw.condition_summary":
+        "The condition pages' channel grids in one figure, one metric's conditions on adjacent "
+        "rows, with the condition pages' cutoffs. <b>In condition</b> says whether a channel "
+        "passes within that condition alone; it rejects nothing.",
     "raw.haemo_post":
         "Each cell is <b>before &rarr; after {method}</b>.",
     "raw.channel_summary":

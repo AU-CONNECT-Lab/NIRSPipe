@@ -98,6 +98,7 @@ select#run-select {
   ("_Metrics", "Metrics", "#Metrics"),
   ("_Channels", "Per-channel", "#Channels"),
   ("_ChannelSummary", "By channel", "#ChannelSummary"),
+  ("_ConditionSummary", "By condition", "#ConditionSummary"),
   ("_TrialQC", "By trial", "#TrialQC"),
   ("_Errors", "Errors", "#Errors"),
 ] %}
@@ -345,6 +346,14 @@ select#run-select {
 </div>
 </section>
 
+<section id="ConditionSummary" class="step" style="display:none">
+<h3 class="step-title">By condition</h3>
+<div class="details-body">
+<p class="qm-note">{{ section_note('raw.condition_summary') }}</p>
+<div id="cond-summary-plot"></div>
+</div>
+</section>
+
 <section id="TrialQC" class="step" style="display:none">
 <h3 class="step-title">By trial</h3>
 <div id="trial-qc-wrap" style="display:none">
@@ -469,6 +478,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSciPsp();
   loadSqm();
   loadChannelSummary();
+  loadConditionSummary();
   loadTrialQc();
   loadEpochMean();
   loadTrialImages();
@@ -754,6 +764,13 @@ function loadChannelSummary() {
   if (p && p.src) _setIframeSrc("ch-summary-plot", p.src, p.h || 500);
 }
 
+// ─── Per-condition channel quality (with --by-condition and two conditions) ───
+function loadConditionSummary() {
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).cond_summary;
+  _showSection("ConditionSummary", !!(p && p.src));
+  if (p && p.src) _setIframeSrc("cond-summary-plot", p.src, p.h || 500);
+}
+
 // ─── Per-trial QC (absent unless --epoch-qc was asked for) ────────────────────
 function loadTrialQc() {
   var card = document.getElementById("TrialQC");
@@ -977,7 +994,7 @@ function switchRun(idx) {
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
-    loadSciPsp(); loadSqm(); loadChannelSummary();
+    loadSciPsp(); loadSqm(); loadChannelSummary(); loadConditionSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();
     if (window.qcShowGroup) window.qcShowGroup(_run_idx);

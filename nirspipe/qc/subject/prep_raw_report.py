@@ -881,6 +881,37 @@ def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, sep_bands, bui
     return remake
 
 
+def _condition_summary(ctx: dict, payload: dict, run_label: str) -> None:
+    """Every condition's channel grid on the run page, regrouped by metric.
+
+    The subject report's figure, from the conditions the record carries; a condition with no
+    counted window has no assessment and is left out. Adds ``cond_summary`` to the run's
+    ``figure_paths`` when there are two conditions to compare.
+    """
+    from nirspipe.qc.figures import condition_quality_heatmap
+    from nirspipe.qc.subject.condition_views import slice_record, with_condition_corr
+
+    record = read_record(Path(ctx["sqm_path"]))
+    by_condition = record.get("by_condition") or {}
+    conditions = [
+        (label, heatmap_args(channel_rows(
+            with_condition_corr(slice_record(record, entry.get("per_channel") or {}),
+                                (entry.get("per_channel") or {}).get("hbo_hbr_corr_per_channel"),
+                                section="rawhaemo"),
+            ctx["sci_scores"], set(entry.get("bad_channels") or ()))))
+        for label, entry in by_condition.items() if entry.get("counted_windows") != 0]
+    cutoffs = ctx["cutoffs"]
+    fig = condition_quality_heatmap(conditions, sci_thresh=cutoffs["sci"],
+                                    psp_thresh=cutoffs["psp"],
+                                    good_frac_thresh=cutoffs["good_frac"],
+                                    status_label="In condition", status_words=("pass", "fail"))
+    if fig is None:
+        return
+    fname = figure_namer(run_label, prefix="raw")("condsummary", suffix="qc")
+    h = _save_figure_html(fig, Path(ctx["fig_dir"]) / fname)
+    payload.setdefault("figure_paths", {})["cond_summary"] = {"src": f"figures/{fname}", "h": h}
+
+
 def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_label: str,
                            sci_threshold: float) -> None:
     """One report file per condition, beside the run's own, read out of the quality record.
@@ -1092,6 +1123,8 @@ def build_prep_raw_report(
             with guard("Per-condition views", run_errors, label):
                 _write_condition_views({**ctx, "shell": shell}, d, output_path,
                                        label, sci_threshold)
+            with guard("Per-condition channel quality", run_errors, label):
+                _condition_summary(ctx, d, label)
 
     run_labels = [r["label"] for r in runs]
     # one header for every run the page switches between, so it names the wavelengths

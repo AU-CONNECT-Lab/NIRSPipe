@@ -201,3 +201,13 @@ def test_a_condition_page_names_its_channel_share_for_its_stretch(raw_condition_
     split = _page(raw_condition_run, block)["sqm"]["split"]
     labels = [column["label"] for column in split["columns"]]
     assert "Passing in condition" in labels and "Channel retention" not in labels
+
+
+def test_the_run_page_draws_every_condition_s_grid_in_one_figure(raw_condition_run):
+    page = raw_condition_run.out / "sub-01" / "sub-01_task-main_desc-raw_report.html"
+    html = page.read_text(encoding="utf-8")
+    data = _decode(json.loads(re.search(r"var _STATIC_DATA = (\[.*?\]);\n", html, re.S).group(1))[0])
+    src = data["figure_paths"]["cond_summary"]["src"]
+    fig = one_figure(page.parent / src)
+    labels = set(fig["layout"]["yaxis"]["ticktext"])
+    assert set(BLOCKS) <= labels, labels
