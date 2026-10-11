@@ -71,6 +71,7 @@ def _build_script_text(
     min_good_frac: float | None = None,
     screen_scope: str = "run",
     keep_spans_table: str | None = None,
+    keep_spans_from: str | None = None,
     bad_spans_table: str | None = None,
     censor_fill: str = DEFAULT_CENSOR_FILL,
     export_mean_filled: bool = False,
@@ -139,6 +140,8 @@ def _build_script_text(
         w('from nirspipe.cli.workflows import _keep_spans_for')
     if keep_spans_table:
         w('from nirspipe.utils.spans import mark_unselected')
+    if keep_spans_from:
+        w('from nirspipe.utils.spans import measured_from')
     if bad_spans_table:
         w('from nirspipe.utils.spans import mark_manual')
     if mode:
@@ -185,6 +188,8 @@ def _build_script_text(
         w(f'BAD_CHANNELS_TABLE = Path({_lit(bad_channels_table)})')
     if keep_spans_table:
         w(f'KEEP_SPANS_TABLE = Path({_lit(keep_spans_table)})')
+    if keep_spans_from:
+        w(f'KEEP_SPANS_FROM  = {keep_spans_from!r}')
     if bad_spans_table:
         w(f'BAD_SPANS_TABLE = Path({_lit(bad_spans_table)})')
     if gvtd_censor:
@@ -235,7 +240,8 @@ def _build_script_text(
         '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
         '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
-        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [], "bad_spans": [],',
+        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [],',
+        '    "keep_spans_from": None, "bad_spans": [],',
         '}',
         '',
         '',
@@ -279,7 +285,16 @@ def _build_script_text(
     if keep_spans_table:
         w(
             f'{i3}# the --keep-spans rows that match this recording; the rest is BAD_unselected',
-            f'{i3}KEEP_SPANS = _keep_spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src)',
+            f'{i3}KEEP_SPANS = _keep_spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src'
+            + (', relative=True)' if keep_spans_from else ')'),
+        )
+        if keep_spans_from:
+            w(
+                f'{i3}# measured from the first KEEP_SPANS_FROM marker, onto the data axis',
+                f'{i3}KEEP_SPANS = measured_from(raw, KEEP_SPANS, KEEP_SPANS_FROM)',
+                f'{i3}PREP_PARAMS["keep_spans_from"] = KEEP_SPANS_FROM if KEEP_SPANS else None',
+            )
+        w(
             f'{i3}PREP_PARAMS["keep_spans"] = [list(span) for span in KEEP_SPANS]',
             f'{i3}raw = mark_unselected(raw, KEEP_SPANS)',
         )
@@ -547,6 +562,7 @@ def write_run_script(
         sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
         bad_channels_table=bad_channels_table,
         keep_spans_table=keep_spans_table,
+        keep_spans_from=args.get("keep_spans_from") if keep_spans_table else None,
         bad_spans_table=bad_spans_table,
         psp_threshold=screening.psp_threshold,
         min_good_frac=screening.min_good_frac,

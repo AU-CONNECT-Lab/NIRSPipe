@@ -157,8 +157,8 @@ def missing(command: str, opts: dict) -> str | None:
 
 # ---- nirspipe-prep ----
 
-# the three batch operations, named as the page's radio names them
-_PREP_OPERATIONS = ("markers", "crop", "hyper_align")
+# the four batch operations, named as the page's radio names them
+_PREP_OPERATIONS = ("markers", "crop", "keep_spans", "hyper_align")
 
 
 def _selection(opts: dict) -> list[str]:
@@ -191,6 +191,14 @@ def build_prep_args(operation: str, opts: dict) -> list[str]:
                 args += ["--rename", *pairs]
         return args
 
+    if operation == "keep_spans":
+        args = ["nirspipe-prep", "keep-spans", bids, opts.get("keep_spans_path"),
+                *_selection(opts)]
+        names = opts.get("conditions") or []
+        if names:
+            args += ["--conditions", *names]
+        return args + _num("--duration", opts.get("keep_duration"))
+
     args = ["nirspipe-prep", "crop", bids, deriv, *_selection(opts)]
     if opts.get("crop_mode") == "multi":
         args += _text("--segments-path", opts.get("segments_path"))
@@ -222,6 +230,9 @@ def missing_prep(operation: str, opts: dict) -> str | None:
         if marker_op == "rename" and not (opts.get("rename") or []):
             return "Add at least one rename pair."
         return None
+
+    if operation == "keep_spans":
+        return None if opts.get("conditions") else "Enter at least one condition name."
 
     if opts.get("crop_mode") == "multi":
         return None if opts.get("segments") else "Add at least one segment."

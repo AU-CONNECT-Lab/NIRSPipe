@@ -145,6 +145,39 @@ def mark_manual(raw: mne.io.BaseRaw, spans) -> mne.io.BaseRaw:
     return raw
 
 
+def marker_onset(raw: mne.io.BaseRaw, marker: str) -> float:
+    """Where the first annotation named ``marker`` starts, on the data axis.
+
+    ::
+
+      "start" at 12.4 s and at 300 s  ->  12.4
+
+    The rule of crop's ``--align trigger``, except a missing marker is refused.
+    """
+    onsets = [float(o) - float(raw.first_time)
+              for o, d in zip(raw.annotations.onset, raw.annotations.description)
+              if str(d) == marker]
+    if not onsets:
+        raise ValueError(f"--keep-spans-from marker {marker!r} is not among the recording's "
+                         f"annotations")
+    return min(onsets)
+
+
+def measured_from(raw: mne.io.BaseRaw, spans, marker: str) -> list[tuple[float, float]]:
+    """``(onset, duration)`` stretches measured from ``marker``, moved onto the data axis.
+
+    ::
+
+      "start" at 12.4 s, [(-10, 70)]  ->  [(2.4, 70)]
+
+    No stretches need no marker.
+    """
+    if not spans:
+        return []
+    origin = marker_onset(raw, marker)
+    return [(origin + float(onset), float(duration)) for onset, duration in spans]
+
+
 def _on_recording(spans, end: float, flag: str) -> list[tuple[float, float]]:
     """``(onset, duration)`` rows as merged ``(start, stop)``, each end clipped to ``end``."""
     stretches = []

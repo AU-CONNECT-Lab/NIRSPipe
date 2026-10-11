@@ -106,6 +106,7 @@ def manage_subjects(detect_clicks, select_all_clicks, clear_clicks, bids_dir, cu
     Output("bp-run-filter-card","style"),
     Output("bp-markers-panel",  "style"),
     Output("bp-crop-panel",     "style"),
+    Output("bp-keep-panel",     "style"),
     Output("bp-hyper-panel",    "style"),
     Input("bp-operation", "value"),
 )
@@ -115,9 +116,10 @@ def toggle_operation(op):
     return (
         hide if is_hyper else show,
         hide if is_hyper else show,
-        show if op == "markers"   else hide,
-        show if op == "crop"      else hide,
-        show if is_hyper          else hide,
+        show if op == "markers"    else hide,
+        show if op == "crop"       else hide,
+        show if op == "keep_spans" else hide,
+        show if is_hyper           else hide,
     )
 
 
@@ -210,12 +212,18 @@ def delete_crop_segment(cell, rows):
 # the segments table has to reach the CLI as a file, and the derivatives tree is where the
 # record of what was cut belongs
 _SEGMENTS_TSV = "batch-crop-segments.tsv"
+# what nirspipe-prep keep-spans writes, beside it
+_KEEP_SPANS_TSV = "keep-spans.tsv"
 
 
 def _rename_pairs(rows) -> list[str]:
     return [f"{r.get('from_name')}:{r.get('to_name')}"
             for r in (rows or [])
             if r.get("from_name") and r.get("to_name")]
+
+
+def _condition_names(text) -> list[str]:
+    return [name.strip() for name in str(text or "").split(",") if name.strip()]
 
 
 def _write_segments(deriv_dir: str, rows) -> str:
@@ -247,6 +255,8 @@ def _write_segments(deriv_dir: str, rows) -> str:
     State("bp-crop-tmax",   "value"),
     State("bp-crop-seg-table", "virtualRowData"),
     State("bp-crop-combine", "value"),
+    State("bp-keep-conditions", "value"),
+    State("bp-keep-duration", "value"),
     State("bp-group-csv",   "value"),
     State("bp-n-jobs",      "value"),
     State("bp-shell-select", "value"),
@@ -257,6 +267,7 @@ def generate_command(
     bids_dir, deriv_dir, ses, task, run,
     operation, marker_op, shift_val, duration_val, rename_rows,
     crop_mode, crop_tmin, crop_tmax, seg_rows, combine_val,
+    keep_conditions, keep_duration,
     group_csv, n_jobs, shell,
 ):
     subjects = []
@@ -270,6 +281,7 @@ def generate_command(
         "rename": _rename_pairs(rename_rows),
         "crop_mode": crop_mode, "crop_tmin": crop_tmin, "crop_tmax": crop_tmax,
         "segments": seg_rows, "combine": bool(combine_val),
+        "conditions": _condition_names(keep_conditions), "keep_duration": keep_duration,
         "group_csv": group_csv,
     }
 
@@ -279,6 +291,8 @@ def generate_command(
 
     if operation == "crop" and crop_mode == "multi":
         opts["segments_path"] = _write_segments(deriv_dir, seg_rows)
+    if operation == "keep_spans":
+        opts["keep_spans_path"] = str(Path(deriv_dir) / _KEEP_SPANS_TSV)
 
     argv = build_prep_args(operation, opts)
     return preview_text(argv, shell), {"argv": argv}

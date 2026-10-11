@@ -1,4 +1,4 @@
-"""Page: Batch data preparation: marker editing and crop across multiple subjects."""
+"""Page: Batch data preparation: marker editing, crop and keep-spans tables across multiple subjects."""
 
 from __future__ import annotations
 
@@ -77,6 +77,7 @@ def _operation():
             id="bp-operation",
             options=[{"label": "Edit markers", "value": "markers"},
                      {"label": "Crop", "value": "crop"},
+                     {"label": "Keep-spans table", "value": "keep_spans"},
                      {"label": "Hyperscanning align", "value": "hyper_align"}],
             value="markers", inline=True, className="mb-3",
         ),
@@ -129,6 +130,20 @@ def _operation():
                 dbc.Button("+ Add pair", id="bp-rename-add-btn", size="sm",
                            color="outline-secondary", className="mt-2"),
             ]),
+        ]),
+
+        html.Div(id="bp-keep-panel", style=_HIDDEN, children=[
+            params(
+                field("Conditions",
+                      dbc.Input(id="bp-keep-conditions", type="text",
+                                placeholder="e.g. rest, task"),
+                      span=PATH,
+                      hint="Annotation names, separated by commas. One row per occurrence,"
+                           " written to the derivatives directory as keep-spans.tsv for"
+                           " nirspipe --keep-spans."),
+                field("Duration (s)", dbc.Input(id="bp-keep-duration", type="number"),
+                      hint="every occurrence's length; needed when a marker has none"),
+            ),
         ]),
 
         html.Div(id="bp-crop-panel", style=_HIDDEN, children=[

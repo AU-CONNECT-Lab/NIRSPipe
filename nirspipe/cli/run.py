@@ -130,7 +130,15 @@ def _build_parser() -> argparse.ArgumentParser:
                                "channel screening and of the GLM and confound regression fits. "
                                "A recording no row matches is used whole. "
                                "A row shared by several recordings assumes they started "
-                               "time-locked.")
+                               "time-locked, unless --keep-spans-from is given.")
+    prep_opt.add_argument("--keep-spans-from", metavar="MARKER",
+                          help="Measure each --keep-spans onset from the first annotation "
+                               "named MARKER in the recording instead of from its start, so "
+                               "one row serves recordings that did not start time-locked. An "
+                               "onset may then be negative, before the marker. A recording a "
+                               "row matches that lacks the marker, or a stretch starting "
+                               "outside a recording, stops the run. --bad-spans stays on the "
+                               "recording's own axis.")
     prep_opt.add_argument("--bad-spans", type=Path, metavar="TABLE",
                           help="Table of stretches of each recording known to be corrupted "
                                "(motion, a loose optode): onset and duration columns in seconds "
@@ -349,6 +357,12 @@ def _check_epoch_window(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _check_keep_spans_from(args: argparse.Namespace) -> None:
+    if args.keep_spans_from is not None and args.keep_spans is None:
+        print("Error: --keep-spans-from needs --keep-spans.", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
     _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "nirspipe")
@@ -375,6 +389,7 @@ def main(argv: list[str] | None = None) -> None:
     # checked before the workflow import: a bad command line should not first pay for mne
     _require(args, *_LEVEL_REQUIRES[level])
     _check_epoch_window(args)
+    _check_keep_spans_from(args)
     _check_dirs(args)
 
     from nirspipe.cli.workflows import run_group_level, run_participant_level

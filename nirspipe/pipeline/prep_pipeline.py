@@ -13,7 +13,7 @@ motion correction lives in pipeline/motion.py.
 
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import mne
@@ -34,7 +34,7 @@ from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scor
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
 from nirspipe.utils.spans import (add_bad_spans, bad_spans, excluded_spans, excluded_time,
-                                  mark_manual, mark_unselected)
+                                  mark_manual, mark_unselected, measured_from)
 
 logger = get_logger("pipeline.prep")
 
@@ -194,6 +194,8 @@ class PrepConfig:
     ignore: list[str] = field(default_factory=list)
     # (onset, duration) stretches on the recording's own axis; empty uses the whole recording
     keep_spans: list[tuple[float, float]] = field(default_factory=list)
+    # the marker keep_spans are measured from instead, or None
+    keep_spans_from: str | None = None
     # (onset, duration) stretches the user marked corrupted, on the same axis
     bad_spans: list[tuple[float, float]] = field(default_factory=list)
 
@@ -221,6 +223,10 @@ def run_prep(
     ses = config.session
 
     input_spans = bad_spans(raw)
+    if config.keep_spans_from:
+        # onto the recording's own axis, the one every sidecar records them on
+        config = replace(config, keep_spans=measured_from(raw, config.keep_spans,
+                                                          config.keep_spans_from))
     if config.keep_spans:
         raw = mark_unselected(raw.copy(), config.keep_spans)
     if config.bad_spans:
@@ -432,5 +438,6 @@ def _config_dict(config: PrepConfig) -> dict:
         "bad_channels": config.bad_channels,
         "ignore": config.ignore,
         "keep_spans": [list(span) for span in config.keep_spans],
+        "keep_spans_from": config.keep_spans_from,
         "bad_spans": [list(span) for span in config.bad_spans],
     }

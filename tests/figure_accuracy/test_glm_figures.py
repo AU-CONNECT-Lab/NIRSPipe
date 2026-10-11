@@ -25,6 +25,8 @@ def test_the_design_time_series_draws_the_conditions_and_nothing_else(glm_run):
 def test_the_heatmap_draws_the_whole_design_written_to_disk(glm_run):
     drawn = glm_run.captured["design_matrix_heatmap"][0][0]
     on_disk = pd.read_csv(glm_run.table("_design.tsv"), sep="\t")
+    # bookkeeping for the frames left out of the fit, never drawn; this run has none
+    assert (on_disk.pop("censored") == 0).all()
     assert list(drawn.columns) == list(on_disk.columns)
     np.testing.assert_allclose(drawn.to_numpy(float), on_disk.to_numpy(float), rtol=1e-5, atol=1e-9)
 

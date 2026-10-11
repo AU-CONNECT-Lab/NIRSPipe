@@ -32,7 +32,7 @@ from nirspipe.utils import job_db as _jdb
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
 from nirspipe.utils.run_script import write_run_script
-from nirspipe.utils.spans import bad_spans
+from nirspipe.utils.spans import bad_spans, marker_onset
 from nirspipe import __version__
 
 logger = get_logger("cli.workflows")
@@ -238,7 +238,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
-    _refuse_bad_keep_span_rows(args.get("keep_spans"), layout)
+    _refuse_bad_keep_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
     _refuse_bad_keep_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
@@ -566,10 +566,12 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
     return _label_table_rows(path, "--bad-channels", ("bad_channels",))
 
 
-def _keep_span_rows(path: Path, flag: str = "--keep-spans") -> list[dict[str, Any]]:
+def _keep_span_rows(path: Path, flag: str = "--keep-spans",
+                    relative: bool = False) -> list[dict[str, Any]]:
     """The rows of a --keep-spans or --bad-spans table, onset and duration read as seconds.
 
     ``sub-01 | | rest | | 30 | 240`` comes back with ``"onset": 30.0, "duration": 240.0``.
+    A ``relative`` onset is measured from a marker and may be negative.
     """
     rows = _label_table_rows(path, flag, ("onset", "duration"))
     for row in rows:
@@ -583,7 +585,7 @@ def _keep_span_rows(path: Path, flag: str = "--keep-spans") -> list[dict[str, An
                 raise ValueError(
                     f"{flag} table {path} line {row['line']}: {column} {cell!r} is not "
                     f"a {'positive ' if column == 'duration' else ''}number of seconds")
-        if row["onset"] < 0:
+        if row["onset"] < 0 and not relative:
             raise ValueError(f"{flag} table {path} line {row['line']}: onset "
                              f"{row['onset']:g} s lies before the recording starts")
     return rows
@@ -641,7 +643,8 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
 
 
 def _keep_spans_for(spec: str | None, subject: str, entities: dict | None = None,
-                    flag: str = "--keep-spans") -> list[tuple[float, float]]:
+                    flag: str = "--keep-spans",
+                    relative: bool = False) -> list[tuple[float, float]]:
     """The stretches a --keep-spans or --bad-spans table gives one recording, as ``(onset, duration)``.
 
     Rows are selected as the --bad-channels table's are, so a row with only ``task-rest``
@@ -650,7 +653,8 @@ def _keep_spans_for(spec: str | None, subject: str, entities: dict | None = None
     """
     if not spec:
         return []
-    return [(row["onset"], row["duration"]) for row in _keep_span_rows(Path(str(spec)), flag)
+    return [(row["onset"], row["duration"])
+            for row in _keep_span_rows(Path(str(spec)), flag, relative)
             if _bad_channel_row_matches(row, subject, entities)]
 
 
@@ -677,38 +681,56 @@ def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
 
 
 def _refuse_bad_keep_span_rows(spec: str | None, layout: Any,
-                               flag: str = "--keep-spans") -> None:
+                               flag: str = "--keep-spans", marker: str | None = None) -> None:
     """Stop before any subject runs on a --keep-spans or --bad-spans row that matches no
-    recording or starts past the end of one it matches."""
+    recording or starts outside one it matches, or on a matched recording without ``marker``."""
     if not spec:
         return
     path = Path(str(spec))
     if not path.exists():
         raise SystemExit(f"[error] {flag} table {spec} not found.")
     try:
-        rows = _keep_span_rows(path, flag)
+        rows = _keep_span_rows(path, flag, relative=marker is not None)
     except ValueError as err:
         raise SystemExit(f"[error] {err}") from None
     files = layout.get(extension=".snirf")
     _refuse_unmatched_rows(rows, flag, str(spec), [f.get_entities() for f in files])
-    lengths: dict[str, float] = {}
+    # file -> (length, the marker's onset or 0), both in seconds on its data axis
+    headers: dict[str, tuple[float, float]] = {}
     for row in rows:
         for f in files:
             ent = f.get_entities()
             if not _bad_channel_row_matches(row, ent["subject"], ent):
                 continue
-            if f.path not in lengths:
+            if f.path not in headers:
                 raw = mne.io.read_raw_snirf(f.path, preload=False, verbose="error")
-                lengths[f.path] = raw.n_times / float(raw.info["sfreq"])
-            if row["onset"] >= lengths[f.path]:
+                try:
+                    origin = marker_onset(raw, marker) if marker else 0.0
+                except ValueError:
+                    raise SystemExit(
+                        f"[error] --keep-spans-from marker {marker!r} is not among the "
+                        f"annotations of {Path(f.path).name}, which {flag} table {spec} "
+                        f"line {row['line']} names.") from None
+                headers[f.path] = (raw.n_times / float(raw.info["sfreq"]), origin)
+            length, origin = headers[f.path]
+            onset = origin + row["onset"]
+            measured = f" (from {marker!r} at {origin:g} s)" if marker else ""
+            if onset >= length:
                 raise SystemExit(
                     f"[error] {flag} table {spec} line {row['line']}: onset "
-                    f"{row['onset']:g} s lies past the end of {Path(f.path).name} "
-                    f"({lengths[f.path]:g} s).")
+                    f"{row['onset']:g} s{measured} lies past the end of {Path(f.path).name} "
+                    f"({length:g} s).")
+            if onset < 0:
+                raise SystemExit(
+                    f"[error] {flag} table {spec} line {row['line']}: onset "
+                    f"{row['onset']:g} s{measured} lies before the start of "
+                    f"{Path(f.path).name}.")
 
 
 def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
                       entities: dict | None = None) -> "PrepConfig":
+    marker = args.get("keep_spans_from")
+    keep_spans = _keep_spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
     return PrepConfig(
         subject=subject,
         session=session,
@@ -722,7 +744,9 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
            if args.get("screen_scope") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
-        keep_spans=_keep_spans_for(args.get("keep_spans"), subject, entities),
+        keep_spans=keep_spans,
+        # a recording no row names is used whole, so no marker applies to it
+        keep_spans_from=marker if keep_spans else None,
         bad_spans=_keep_spans_for(args.get("bad_spans"), subject, entities, flag="--bad-spans"),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],

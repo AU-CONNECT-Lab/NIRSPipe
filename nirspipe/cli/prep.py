@@ -235,6 +235,41 @@ def cmd_markers_apply(
     _report(_run_parallel(_apply_one, participant_label, n_jobs))
 
 
+def cmd_keep_spans(
+    bids_dir: Path, out_tsv: Path, participant_label: list[str],
+    session_label: str | None, task_label: str | None, run_label: str | None,
+    conditions: list[str], duration: float | None, n_jobs: int, skip_bids_validation: bool,
+) -> None:
+    """Write a --keep-spans table holding every occurrence of the named conditions."""
+    if duration is not None and duration <= 0:
+        print("[error] --duration must be a positive number of seconds.", file=sys.stderr)
+        raise SystemExit(1)
+    if not skip_bids_validation:
+        from nirspipe.io.bids import validate_bids
+        validate_bids(bids_dir)
+    import pandas as pd
+
+    from nirspipe.io.tables import write_tsv
+    from nirspipe.pipeline.keep_spans import condition_spans
+
+    rows: dict[str, list[dict]] = {}
+
+    def _spans_one(sub):
+        rows[sub] = condition_spans(
+            bids_dir, sub, conditions, duration=duration,
+            ses=session_label, task=task_label, run=run_label, validate=True,
+        )
+        return f"{len(rows[sub])} span(s)"
+
+    # nothing is written unless every subject's rows were found
+    _report(_run_parallel(_spans_one, participant_label, n_jobs))
+    table = pd.DataFrame([row for sub in participant_label for row in rows[sub]])
+    labels = [c for c in ("participant_id", "session", "task", "run") if c in table.columns]
+    out_tsv.parent.mkdir(parents=True, exist_ok=True)
+    write_tsv(table[[*labels, "onset", "duration"]].fillna(""), out_tsv)
+    print(f"wrote {len(table)} row(s) to {out_tsv}")
+
+
 def _add_selection(sp) -> None:
     sp.add_argument("--participant-label", "--participant_label", nargs="+",
                     action="extend", required=True, type=_shared.BidsLabel,
@@ -252,7 +287,8 @@ def _add_selection(sp) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-prep",
-        description="fNIRS data preparation: cropping, alignment and marker editing.",
+        description="fNIRS data preparation: cropping, alignment, marker editing and "
+                    "--keep-spans tables.",
     )
     p.add_argument("--version", action="version", version=f"nirspipe-prep {__version__}")
     sub = p.add_subparsers(required=True)
@@ -323,6 +359,24 @@ def _build_parser() -> argparse.ArgumentParser:
     app.add_argument("--rename", nargs="+", action="extend", default=None,
                      help="Rename marker: 'old:new'. Repeatable.")
     app.set_defaults(func=cmd_markers_apply)
+
+    keep = sub.add_parser("keep-spans", help="Write a --keep-spans table from condition names.")
+    keep.add_argument("bids_dir", type=Path, help="BIDS dataset root.")
+    keep.add_argument("out_tsv", type=Path,
+                      help="The table to write, for nirspipe --keep-spans: one row per "
+                           "occurrence of each condition, onsets in seconds on each "
+                           "recording's own time axis.")
+    _add_selection(keep)
+    keep.add_argument("--conditions", nargs="+", action="extend", required=True,
+                      metavar="NAME",
+                      help="Annotation names whose occurrences to keep, as the recording's "
+                           "markers name them. A selected recording holding none of them "
+                           "stops the command.")
+    keep.add_argument("--duration", type=float, default=None, metavar="SEC",
+                      help="Give every occurrence this length instead of its own, as "
+                           "edit-markers --set-duration does. Without it a zero-length "
+                           "occurrence stops the command.")
+    keep.set_defaults(func=cmd_keep_spans)
     return p
 
 

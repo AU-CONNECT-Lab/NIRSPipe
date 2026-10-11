@@ -34,6 +34,7 @@ from nirspipe.interface.cli_args import (
 NOT_EXPOSED = {
     "--bad-channels": "a per-subject channel list or a table path, and the page has no file picker",
     "--keep-spans": "a table path, and the page has no file picker",
+    "--keep-spans-from": "only meaningful with --keep-spans, which the page does not offer",
     "--bad-spans": "a table path, and the page has no file picker",
     "--epoch-single-trial": "only meaningful when no condition repeats",
     "--gvtd-min-epoch-s": "housekeeping beside the threshold, which is the knob that moves the result",
@@ -531,6 +532,7 @@ PREP_NOT_EXPOSED = {
         "--skip-bids-validation", "--no-skip-bids-validation",
     },
     "align": {"--skip-bids-validation", "--no-skip-bids-validation"},
+    "keep-spans": {"--skip-bids-validation", "--no-skip-bids-validation"},
     "edit-markers": {
         # an edited events TSV applied to every subject, and the page has no file picker.
         # Its three radio options are the edits that need no file
@@ -545,6 +547,7 @@ _PREP_FULL_OPTS = dict(
     shift=-2.5, set_duration=30.0, rename=["old:new"],
     crop_tmin=10.0, crop_tmax=600.0,
     segments_path="/deriv/batch-crop-segments.tsv", combine=True,
+    conditions=["talk", "listen"], keep_duration=60.0, keep_spans_path="/deriv/keep-spans.tsv",
     group_csv="/groups.csv",
 )
 
@@ -555,11 +558,13 @@ _PREP_CASES = [
     ("markers", {"marker_op": "rename"}),
     ("crop", {"crop_mode": "single"}),
     ("crop", {"crop_mode": "multi"}),
+    ("keep_spans", {}),
     ("hyper_align", {}),
 ]
 
 # the page's operation names, and the nirspipe-prep subcommand each one drives
-_PREP_SUBCOMMAND = {"markers": "edit-markers", "crop": "crop", "hyper_align": "align"}
+_PREP_SUBCOMMAND = {"markers": "edit-markers", "crop": "crop", "keep_spans": "keep-spans",
+                    "hyper_align": "align"}
 
 
 def _build_prep_parser():

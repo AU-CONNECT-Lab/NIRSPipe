@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `nirspipe-prep keep-spans` writes a `--keep-spans` table from named conditions, one row per occurrence; also on the Batch Prep page
+- `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
+
 ### Changed
 - Cohort pages list the median and range table under Quality Metrics, not Summary; the subject cohort's Overview drops the repeated small-cohort caveat
 
