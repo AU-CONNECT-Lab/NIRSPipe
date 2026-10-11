@@ -17,6 +17,7 @@ from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit, sig3
 from nirspipe.qc.common.figure_io import fig_png_b64
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.qc.figures.common._utils import LONG_COLOR, SHORT_COLOR, UNCLASSIFIED_COLOR
+from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL, _hex_to_rgba
 from nirspipe.qc.figures.common._utils import minmax_xy
 from nirspipe.qc.figures.common._utils import line_xy as _line_xy
 from nirspipe.qc.metrics import (
@@ -24,6 +25,7 @@ from nirspipe.qc.metrics import (
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import span_kind
 
 logger = get_logger("qc.figures.motion_panel")
 
@@ -886,12 +888,8 @@ def build_motion_detail_figure(
     ), row=od_row, col=1)
 
     if segments:
-        seg_fills = [
-            "rgba(231,76,60,0.12)", "rgba(243,156,18,0.12)",
-            "rgba(155,89,182,0.12)", "rgba(26,188,156,0.12)",
-        ]
-        for k, (label, spans) in enumerate(segments.items()):
-            fill = seg_fills[k % len(seg_fills)]
+        for label, spans in segments.items():
+            fill = _hex_to_rgba(SPAN_KIND_COLOR[span_kind(label)], 0.12)
             for j, (onset, dur) in enumerate(spans):
                 ann = dict(annotation_text=label, annotation_position="top left",
                            annotation_font_size=7) if j == 0 else {}
@@ -902,6 +900,14 @@ def build_motion_detail_figure(
                         row=row, col=1,
                         **(ann if row == gvtd_row else {}),
                     )
+        # a vrect has no legend entry of its own, so each kind present gets a swatch
+        for kind in ("unselected", "corrupted"):
+            if any(span_kind(label) == kind for label in segments):
+                fig.add_trace(go.Scatter(
+                    x=[None], y=[None], mode="markers", name=SPAN_KIND_LABEL[kind],
+                    marker=dict(symbol="square", size=10,
+                                color=_hex_to_rgba(SPAN_KIND_COLOR[kind], 0.35)),
+                ), row=od_row, col=1)
 
     if has_strip:
         fig.update_yaxes(title_text="corrected", title_font_size=7, range=[0, 1],

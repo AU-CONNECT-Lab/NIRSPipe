@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - Channel and optical-density spectra in the subject report use only frames outside `BAD_` spans
 - The dyad raw report's per-channel spectrum uses only frames outside each member's `BAD_` spans
 - The bad-segment zoom draws corrupted spans only, not `BAD_unselected`
+- The motion panel and design matrix draw `BAD_unselected` grey and every other `BAD_` span red, with a legend by kind
 - Methods describe unselected time, GVTD censoring, the fill, and what each regression, FC, ALFF and dyad measure leaves out
 - desc-sci records the GVTD censoring settings; FC and ALFF sidecars list their `excluded_spans`
 - Dyad WTC maps wash out excluded columns and draw no arrows there; scope headers lead with the kept seconds
@@ -84,6 +85,7 @@ All notable changes to this project will be documented in this file.
 - The dyad analysis report drops step letters, ends with Quality Metrics and Quality Figures, and moves clocks and ROI grouping to the appendix
 
 ### Fixed
+- The subject report's motion panel, bad-segment zoom and design-matrix shading show the spans `--keep-spans` and `--bad-spans` add
 - Accelerometer channels spelled `acc-x` are recognised, so the motion panels and IMU summaries include them
 - A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero

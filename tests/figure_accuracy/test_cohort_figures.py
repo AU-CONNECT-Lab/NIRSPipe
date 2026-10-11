@@ -170,6 +170,24 @@ def test_the_metrics_table_keeps_its_header_in_view(groups):
     assert "function stickyHead(table)" in html and "stickyHead(table);" in html
 
 
+_HEADLINE = ("sci_win_mean", "psp_mean", "snr_mean", "cv_mean", "channel_retention_rate",
+             "gvtd_pct_above_thresh")
+
+
+def test_the_summary_names_each_metric_and_prints_it_as_the_reports_do(groups, cohort):
+    from nirspipe.qc.boilerplate.vocabulary import format_metric, metric_label
+
+    rows = next(rows for _, rows in html_tables(groups.deriv / "desc-subjects_report.html")
+                if rows and rows[0] == ["Metric", "Median", "Range"])
+    want = []
+    for metric in _HEADLINE:
+        values = cohort[f"raw_{metric}"].dropna().to_numpy(float)
+        low, high = format_metric(metric, values.min()), format_metric(metric, values.max())
+        want.append([metric_label(metric), format_metric(metric, float(np.median(values))),
+                     f"{low} to {high}"])
+    assert rows[1:] == want
+
+
 # ---- the windowed grid: every run pale, the outliers in colour ----
 
 _GRID_ROWS = {"SCI (windowed)": "sci", "CV (windowed)": "cv"}

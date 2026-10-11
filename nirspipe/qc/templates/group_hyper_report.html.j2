@@ -84,7 +84,6 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
   <h3 class="step-title">Shared usable time</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_group.usable_read') }} {{ section_note('hyper_group.usable') }}</p>
-    {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
     <iframe class="plot-frame" src="{{ figure_paths.usable_bars.src }}"
             style="height:{{ figure_paths.usable_bars.h }}px"></iframe>
   </div>

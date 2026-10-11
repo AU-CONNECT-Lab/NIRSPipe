@@ -12,7 +12,7 @@ import pandas as pd
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import (
-    COHORT_ID_COLUMN, COHORT_SECTIONS, metric_label, record_key_summary,
+    COHORT_ID_COLUMN, COHORT_SECTIONS, format_metric, metric_label, record_key_summary,
 )
 from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.common.figure_io import _save_figure_html
@@ -225,7 +225,7 @@ def _headline_rows(df: pd.DataFrame) -> list[dict]:
 
     ::
 
-        raw_sci_mean   median 0.95   0.94 - 0.96
+        Mean SCI (10 s)   0.950   0.940 to 0.960
 
     No verdict colour. What counts as a passing SCI is a per-run setting the group table
     does not carry, so the summary reports the spread and leaves the call to the reader.
@@ -247,9 +247,10 @@ def _headline_rows(df: pd.DataFrame) -> list[dict]:
         if not finite.size:
             continue
         rows.append({
-            "label": col,
-            "median": f"{np.median(finite):.4g}",
-            "range": f"{finite.min():.4g} to {finite.max():.4g}",
+            "label": metric_label(metric),
+            "median": format_metric(metric, float(np.median(finite))),
+            "range": f"{format_metric(metric, finite.min())} to "
+                     f"{format_metric(metric, finite.max())}",
         })
     return rows
 

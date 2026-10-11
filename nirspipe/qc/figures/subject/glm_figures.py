@@ -19,6 +19,7 @@ from plotly.subplots import make_subplots
 from PIL import Image as _PILImage
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.patches import Patch
 
 from nirspipe.qc.common.figure_io import fig_png_b64
 from nirspipe.utils.logging import get_logger
@@ -28,6 +29,8 @@ from nirspipe.qc.figures.common._surface_overlay import (
     activation_rgba, smoothing_matrix, vertex_normals,
 )
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL
+from nirspipe.utils.spans import span_kind
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -638,7 +641,8 @@ def design_matrix_static_figure(
 ) -> str:
     """design matrix: stacked time-series rows, one per condition + sum row.
 
-    Returns base64-encoded PNG. Censored spans are shaded gray when *segments* is given.
+    Returns base64-encoded PNG. *segments*, ``{description: [(onset, duration)]}``, are shaded
+    by kind: ``BAD_unselected`` grey, every other ``BAD_`` span red.
     """
     times = design_matrix.index.values.astype(float)
     regressors = design_matrix[conditions].values
@@ -664,10 +668,10 @@ def design_matrix_static_figure(
     def _shade(ax):
         if not segments:
             return
-        for spans in segments.values():
+        for desc, spans in segments.items():
             for onset, duration in spans:
                 ax.axvspan(onset, onset + duration,
-                           color="gray", alpha=0.18, linewidth=0)
+                           color=SPAN_KIND_COLOR[span_kind(desc)], alpha=0.18, linewidth=0)
 
     axes[0].plot(times, reg_sum_norm, color="#333333", linewidth=1.0)
     axes[0].set_ylabel("regressor sum", fontsize=7, labelpad=2)
@@ -690,6 +694,11 @@ def design_matrix_static_figure(
 
     axes[-1].set_xlabel("Time (s)", fontsize=8)
     fig.suptitle(title, fontsize=10)
+    if segments:
+        kinds = [k for k in ("unselected", "corrupted") if any(span_kind(d) == k for d in segments)]
+        fig.legend(handles=[Patch(color=SPAN_KIND_COLOR[k], alpha=0.18, label=SPAN_KIND_LABEL[k])
+                            for k in kinds],
+                   loc="upper right", fontsize=7, frameon=False, ncol=len(kinds))
     plt.tight_layout()
 
     return fig_png_b64(fig)

@@ -32,6 +32,7 @@ from nirspipe.utils import job_db as _jdb
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
 from nirspipe.utils.run_script import write_run_script
+from nirspipe.utils.spans import bad_spans
 from nirspipe import __version__
 
 logger = get_logger("cli.workflows")
@@ -751,17 +752,11 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
     bad_bases = {pair_of(bc) for bc in last_result.bad_channels}
     good_mask = np.array([pair_of(n) not in bad_bases for n in hbo_names])
 
+    # off the processed data rather than the input, which lacks the spans prep added
+    # (--keep-spans, --bad-spans, --gvtd-censor); on the data axis the figures draw
     bad_annots: dict = {}
-    for annot in last_raw.annotations:
-        desc = annot["description"]
-        if desc.upper().startswith("BAD"):
-            bad_annots.setdefault(desc, []).append(
-                (float(annot["onset"]), float(annot["duration"]))
-            )
-    # censoring annotates the optical density, which last_raw is upstream of, so the spans
-    # come off the result rather than out of the input
-    if last_result.censor_spans:
-        bad_annots["BAD_gvtd"] = [tuple(span) for span in last_result.censor_spans]
+    for start, stop, desc in bad_spans(last_result.raw_haemo):
+        bad_annots.setdefault(desc, []).append((start, stop - start))
 
     return build_subject_report(
         subject=subject,

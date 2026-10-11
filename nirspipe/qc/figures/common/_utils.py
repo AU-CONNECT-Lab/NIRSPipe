@@ -27,6 +27,10 @@ SHORT_COLOR = "#78b1f2"
 # channels the long and short ranges both leave out; see channel_table._neither_range_title
 UNCLASSIFIED_COLOR = "#95a5a6"
 
+# BAD_ spans by kind, so intact time left out reads apart from corrupted time
+SPAN_KIND_COLOR = {"unselected": "#7f7f7f", "corrupted": "#e74c3c"}
+SPAN_KIND_LABEL = {"unselected": "BAD_unselected (intact)", "corrupted": "corrupted BAD_ span"}
+
 # Tick and axis text, set explicitly so the CLI and the interface render it the same colour.
 AXIS_TEXT_COLOR = "#2a3f5f"
 

@@ -173,7 +173,6 @@ def test_a_run_with_bad_spans_through_the_cli_and_its_script(tmp_path):
 
 # ---- the report ----
 
-@pytest.mark.xfail(strict=True, reason="D15: the report's spans are the input's and GVTD's only")
 def test_the_report_is_handed_the_spans_the_run_added(tmp_path, monkeypatch):
     from nirspipe.qc.subject import report
 
@@ -183,6 +182,15 @@ def test_the_report_is_handed_the_spans_the_run_added(tmp_path, monkeypatch):
     bids, _ = make_fingerprint_dataset(tmp_path, blocks=True)
     keep = _table(tmp_path, "onset\tduration\n0\t360\n", "keep.tsv")
     bad = _table(tmp_path, "onset\tduration\n100\t20\n")
-    run_cli.main([str(bids), str(tmp_path / "out"), "participant", *CLI_ARGS,
-                  "--keep-spans", str(keep), "--bad-spans", str(bad), "--skip-bids-validation"])
-    assert set(seen["segments"] or {}) >= {UNSELECTED, MANUAL}
+    out = tmp_path / "out"
+    run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--keep-spans", str(keep),
+                  "--bad-spans", str(bad), "--gvtd-censor", "long", "--skip-bids-validation"])
+
+    segments = seen["segments"]
+    assert segments["BAD_unselected"] == [(360.0, 40.0)]
+    assert segments["BAD_manual"] == [(100.0, 20.0)]
+    (sci,) = out.rglob("*desc-sci_nirs.json")
+    gvtd = [(s["onset"], s["duration"])
+            for s in json.loads(sci.read_text(encoding="utf-8"))["excluded_spans"]
+            if s["description"] == "BAD_gvtd"]
+    assert gvtd and segments["BAD_gvtd"] == gvtd
