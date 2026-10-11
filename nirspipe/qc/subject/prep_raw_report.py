@@ -1012,6 +1012,8 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
             run_labels=[view_label],
             stem=out.stem,
             data_json=json.dumps([view]),
+            ch_wavelengths=list((payload.get("channels") or {}).get("wavelengths") or []),
+            wavelength_columns=WAVELENGTH_COLUMNS,
             **ctx["shell"],
             **_COND_CH_COLUMN_VARS,
             bad_heading=section_note("summary.condition_failing"),

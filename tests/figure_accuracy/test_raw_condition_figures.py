@@ -148,6 +148,21 @@ def test_the_table_prints_the_condition_s_own_correlation(raw_condition_run, con
 
 
 @pytest.mark.parametrize("block", BLOCKS)
+def test_the_table_prints_both_wavelengths_of_the_condition(raw_condition_run, block):
+    page = raw_condition_run.out / "sub-01" / f"sub-01_task-main_cond-{block}_desc-raw_report.html"
+    assert '<span class="wl">760 / 850 nm</span>' in page.read_text(encoding="utf-8")
+    record = read_record(raw_condition_run.nirs / "sub-01_task-main_desc-sqmraw_qc.json")
+    snr = record["by_condition"][block]["per_channel"]["snr_per_channel"]
+    rows = [r for _, rows in _page(raw_condition_run, block)["channels"]["blocks"] for r in rows]
+    printed = [r for r in rows if r["snr"] not in (None, "", "—")]
+    assert printed
+    for row in printed:
+        got = [float(v) for v in row["snr"].split(" / ")]
+        want = [snr[f"{row['name']} {wl}"] for wl in (760, 850)]
+        assert got == pytest.approx(want, rel=0.01), row["name"]
+
+
+@pytest.mark.parametrize("block", BLOCKS)
 def test_each_trial_image_is_its_channel_s_trials_in_the_condition(raw_condition_run, epochs_by_block, block):
     epochs = epochs_by_block[block]
     for pair in raw_condition_run.truth.long_pairs:

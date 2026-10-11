@@ -109,9 +109,8 @@ NOTES = {
         "threshold.",
     "raw.channel_decisions":
         "One row per source-detector pair, since a decision and SCI belong to the pair. SNR, "
-        "CV and Spike show both wavelengths where the header names them and the first "
-        "otherwise; <code>_desc-rawchannel_qc.tsv</code> has both. HbO–HbR corr is before "
-        "motion correction. Red rows were rejected by screening and Status names the "
+        "CV and Spike print both wavelengths. HbO–HbR corr is before motion correction. "
+        "Red rows were rejected by screening and Status names the "
         "criterion. Click a decision to cycle it through unset, good and bad; it saves "
         "automatically.",
     "raw.rate_sci_line":

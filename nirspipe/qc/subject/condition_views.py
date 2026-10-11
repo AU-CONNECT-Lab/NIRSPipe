@@ -676,8 +676,8 @@ def condition_payloads(
             with_condition_corr(slice_record(record, sliced),
                                 sliced.get("hbo_hbr_corr_per_channel"), section="rawhaemo"),
             sci_scores, bad_channels)
-        pair_cells = format_rows(pair_rows(rows, channel_pairs or None), sci_threshold,
-                                 name_key="pair", psp_threshold=cutoffs["psp"])
+        pair_cells = format_rows(pair_rows(rows, channel_pairs or None, by_wavelength=True),
+                                 sci_threshold, name_key="pair", psp_threshold=cutoffs["psp"])
         # split on the montage, not on whether a Short entry exists: one is returned for
         # every montage, all None where there are no short channels
         has_short = bool(scalars.get("n_short_channels"))
