@@ -59,13 +59,13 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% set _sections = [("Overview", "Overview"), ("Distributions", "Distributions")] %}
 {% if conditions %}
   {% set _ = _sections.append(("Conditions", "By condition")) %}
-  {% set _ = _sections.append(("ConditionMatrix", "Run × cond.")) %}
+  {% set _ = _sections.append(("ConditionMatrix", "Run × condition")) %}
 {% endif %}
 {% set _ = _sections.append(("Windowed", "Over time")) %}
 {% set _ = _sections.append(("Outliers", "Outliers")) %}
 {% set _ = _sections.append(("Metrics", "Quality Metrics")) %}
 {% set nav_modules = [nav_bar(_sections, rated=false, summary="#Summary",
-                              closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
+                              closing=[("Errors", "Errors & Warnings"), ("Versions", "Software Versions")])] %}
 {% set nav_chip = title %}
 
 {% block header %}

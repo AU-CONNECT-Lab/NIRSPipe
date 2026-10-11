@@ -36,11 +36,11 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {# Navigation only, as on the subject cohort page: a verdict on a dyad belongs on that
    dyad's own raw report. #}
 {% set nav_modules = [nav_bar([
-  ("Usable", "Usable time"),
-  ("Where", "Where"),
+  ("Usable", "Shared usable time"),
+  ("Where", "Where the time went"),
   ("Metrics", "Quality Metrics"),
 ], rated=false, summary="#Summary",
-   closing=[("Errors", "Errors"), ("Versions", "Versions")])] %}
+   closing=[("Errors", "Errors & Warnings"), ("Versions", "Software Versions")])] %}
 {% set nav_chip = "cohort" %}
 
 {% block header %}

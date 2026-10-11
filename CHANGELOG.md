@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Channels a run's BIDS `channels.tsv` marks `bad` are rejected with `--bad-channels`; `--ignore channel-status` turns this off
 - Cohort pages list the median and range table under Quality Metrics, not Summary; the subject cohort's Overview drops the repeated small-cohort caveat
+- Every report's navigation reads as the headings it jumps to, and no page links to a section it lacks
 
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run

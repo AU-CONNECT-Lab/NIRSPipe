@@ -83,23 +83,23 @@ select#run-select {
    a subject's runs do not share a key; an id is what a saved rating is filed under, so
    respelling one orphans the ratings already on disk. #}
 {% set _sections = [
-  ("_Layout", "Layout", "#Layout"),
-  ("_Raw_Signal", "Raw", "#RawSignal"),
-  ("_ChannelDetail", "HbO/HbR", "#ChannelDetail"),
-  ("_PSD", "PSD", "#PSD"),
-  ("_SCI_PSP", "SCI/PSP", "#SciPsp"),
+  ("_Layout", "Optode Layout", "#Layout"),
+  ("_Raw_Signal", "Raw Signal", "#RawSignal"),
+  ("_ChannelDetail", "Per-channel Signals", "#ChannelDetail"),
+  ("_PSD", "Mean PSD", "#PSD"),
+  ("_SCI_PSP", "Signal Quality", "#SciPsp"),
   ("_Motion", "Motion", "#Motion"),
-  ("_HbCorr", "HbO–HbR r", "#HbCorr"),
-  ("_Events", "Events", "#Events"),
-  ("_Epoch", "Epoch", "#Epoch"),
-  ("_TrialImage", "Trial image", "#TrialImage"),
+  ("_HbCorr", "HbO–HbR Correlation", "#HbCorr"),
+  ("_Events", "Event Timeline", "#Events"),
+  ("_Epoch", "Epoch Preview", "#Epoch"),
+  ("_TrialImage", "Trial Image", "#TrialImage"),
   none,
-  ("_Metrics", "Metrics", "#Metrics"),
-  ("_Channels", "Per-channel", "#Channels"),
+  ("_Metrics", "Quality Metrics", "#Metrics"),
+  ("_Channels", "Per-channel table", "#Channels"),
   ("_ChannelSummary", "By channel", "#ChannelSummary"),
   ("_ConditionSummary", "By condition", "#ConditionSummary"),
   ("_TrialQC", "By trial", "#TrialQC"),
-  ("_Errors", "Errors", "#Errors"),
+  ("_Errors", "Errors & Warnings", "#Errors"),
 ] %}
 {% set ns = namespace(modules=[]) %}
 {% for label in run_labels %}
@@ -110,7 +110,7 @@ select#run-select {
   {%- endfor %}
   {#- the closing sections are the page's, not the run's, so each group carries its own
       copy: the bar shows one group at a time and they would otherwise vanish with it -#}
-  {%- set _ = ns.modules.append(nav_bar(_run, group=loop.index0,
+  {%- set _ = ns.modules.append(nav_bar(_run, group=loop.index0, closing=(),
                                         index=index_href or "")) %}
 {% endfor %}
 {% set nav_modules = ns.modules %}
@@ -207,7 +207,7 @@ select#run-select {
 <!-- concentration and spectrum, one channel at a time. Directly under the trace
      they are picked off, so a channel clicked above is read without scrolling. -->
 <section id="ChannelDetail" class="step">
-  <h3 class="step-title">HbO / HbR &amp; PSD per channel</h3>
+  <h3 class="step-title">Per-channel Signals</h3>
   <div class="details-body">
     <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
     <select class="ch-select" id="ch-detail-select"
@@ -220,7 +220,7 @@ select#run-select {
 <!-- the whole recording's spectrum. No picker: it is a mean across channels, and
      the per-channel version is the panel above. -->
 <section id="PSD" class="step">
-  <h3 class="step-title">Mean PSD across channels</h3>
+  <h3 class="step-title">Mean PSD</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.psd') }}</p>
     <div id="psd-plot"></div>
@@ -229,7 +229,7 @@ select#run-select {
 
 <!-- coupling and amplitude over time -->
 <section id="SciPsp" class="step">
-  <h3 class="step-title">Raw Signal Quality (SCI / PSP / CV)</h3>
+  <h3 class="step-title">Signal Quality</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
@@ -238,7 +238,7 @@ select#run-select {
 
 <!-- movement -->
 <section id="Motion" class="step">
-  <h3 class="step-title">Motion (Carpet / GVTD)</h3>
+  <h3 class="step-title">Motion</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.motion') }}</p>
     <div id="carpet-gvtd-panel"></div>
@@ -273,7 +273,7 @@ select#run-select {
 
 <!-- what the events did, averaged and trial by trial -->
 <section id="Epoch" class="step">
-  <h3 class="step-title">Epoch (grand mean)</h3>
+  <h3 class="step-title">Epoch Preview</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.epoch') }}</p>
     <div id="epoch-mean-plot"></div>
@@ -281,7 +281,7 @@ select#run-select {
 </section>
 
 <section id="TrialImage" class="step">
-  <h3 class="step-title">Trial image: single-channel trials</h3>
+  <h3 class="step-title">Trial Image</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
     <select class="ch-select" id="trialimg-select"

@@ -21,19 +21,19 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
 {% if condition_groups %}
   {% set _ = _sections.append(("Conditions", "Conditions")) %}
   {% if condition_figures.profile %}
-    {% set _ = _sections.append(("Profile", "Profile")) %}
+    {% set _ = _sections.append(("Profile", "Condition profile")) %}
   {% endif %}
   {% if condition_figures.per_run | selectattr('channels') | list %}
-    {% set _ = _sections.append(("ChannelCondition", "Ch. × cond.")) %}
+    {% set _ = _sections.append(("ChannelCondition", "Channel × condition")) %}
   {% endif %}
   {% if condition_figures.per_run | selectattr('timeline') | list %}
-    {% set _ = _sections.append(("Timeline", "Over time")) %}
+    {% set _ = _sections.append(("Timeline", "Metrics over time")) %}
   {% endif %}
 {% endif %}
-{% if channels %}{% set _ = _sections.append(("Rejections", "Rejections")) %}{% endif %}
+{% if channels %}{% set _ = _sections.append(("Rejections", "Channel rejections")) %}{% endif %}
 {% set _ = _sections.append(("Rebuilt", "Rebuilt by")) %}
 {% set nav_modules = [nav_bar(_sections, rated=false, summary="",
-                              closing=[("Versions", "Versions")])] %}
+                              closing=[("Versions", "Software Versions")])] %}
 {% set nav_chip = "sub-" ~ subject %}
 
 {% block header %}
