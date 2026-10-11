@@ -1,12 +1,15 @@
-"""Every report's navigation reads the same as the heading each entry jumps to."""
+"""Every report's navigation names the heading each entry jumps to, or that heading's declared short form."""
 
 import html as html_lib
 import re
 from pathlib import Path
 
-_LINK = re.compile(r'<a class="qc-nav-cell" href="#([^"]+)"[^>]*>(.*?)</a>', re.S)
+from nirspipe.qc.common.report_shell import NAV_SHORT
+
+_LINK = re.compile(r'<a class="qc-nav-cell" href="#([^"]+)"([^>]*)>(.*?)</a>', re.S)
 _HEADING = re.compile(r"<(h[23])\b[^>]*>(.*?)</\1>", re.S)
 _HINT = re.compile(r'<span class="hint".*?</span>', re.S)
+_TITLE = re.compile(r'\stitle="([^"]*)"')
 
 
 def _text(fragment: str) -> str:
@@ -14,24 +17,24 @@ def _text(fragment: str) -> str:
 
 
 def mismatches(page: Path) -> list:
-    """``[(label, heading)]`` for every in-page entry whose target's heading reads otherwise.
-
-    The target is the element carrying the id; its heading is its own text when it is one,
-    and otherwise the first h2 or h3 inside it.
-    """
+    """``[(label, heading)]`` for each entry naming neither its heading nor its short form with the heading on hover."""
     html = page.read_text(encoding="utf-8")
     out = []
-    for target, label in _LINK.findall(html):
+    for target, attrs, label in _LINK.findall(html):
         if label == "FINAL":
             continue                 # the run's verdict cell, not a section
-        found =re.search(rf'\sid="{re.escape(target)}"', html)
+        found = re.search(rf'\sid="{re.escape(target)}"', html)
         if not found:
             out.append((_text(label), None))
             continue
+        # the element carrying the id: its own text when it is a heading, else its first h2 or h3
         start = html.rfind("<", 0, found.start())
-        heading = _HEADING.search(html, start)
-        if _text(heading.group(2)) != _text(label):
-            out.append((_text(label), _text(heading.group(2))))
+        heading = _text(_HEADING.search(html, start).group(2))
+        title = _TITLE.search(attrs)
+        short = (_text(label) == NAV_SHORT.get(heading)
+                 and title is not None and html_lib.unescape(title.group(1)) == heading)
+        if _text(label) != heading and not short:
+            out.append((_text(label), heading))
     return out
 
 

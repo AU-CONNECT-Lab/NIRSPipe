@@ -177,6 +177,32 @@ def page_vars(
 # carries none of them and passes its own.
 CLOSING_SECTIONS = (("Provenance", "Provenance"), ("Methods", "Methods"))
 
+# what the bar shows for a long heading; the heading keeps its name, shown on hover
+NAV_SHORT = {
+    "Signal Quality": "Quality",
+    "Motion Correction": "Motion",
+    "Epoch Preview": "Epochs",
+    "ALFF / fALFF": "ALFF",
+    "Functional Connectivity": "FC",
+    "Quality Metrics": "Metrics",
+    "Errors & Warnings": "Errors",
+    "Software Versions": "Versions",
+    "Optode Layout": "Layout",
+    "Per-channel Signals": "Per channel",
+    "Mean PSD": "PSD",
+    "HbO–HbR Correlation": "HbO–HbR",
+    "Event Timeline": "Events",
+    "Per-channel table": "Channel table",
+    "Wavelet Transform Coherence": "WTC",
+    "Inter-brain Synchrony": "ISC",
+}
+
+
+def _nav_name(heading: str) -> dict:
+    """The cell text for a section's heading, plus the heading itself where it is shortened."""
+    short = NAV_SHORT.get(heading)
+    return {"name": short, "heading": heading} if short else {"name": heading}
+
 
 def nav_bar(
     sections,
@@ -221,11 +247,11 @@ def nav_bar(
             bar.extend(entries)
 
     extend([{"sep": True} if section is None else
-            {"id": section[0] + (key if rated else ""), "name": section[1],
+            {"id": section[0] + (key if rated else ""), **_nav_name(section[1]),
              "href": section[2] if len(section) > 2 else "#" + section[0],
              "ratable": rated}
             for section in sections])
-    extend([{"id": sid, "name": name, "href": "#" + sid, "ratable": False}
+    extend([{"id": sid, **_nav_name(name), "href": "#" + sid, "ratable": False}
             for sid, name in closing])
     extend([{"id": f"page{i}", "name": link["label"],
              "href": False if link.get("current") else link["href"], "ratable": False}

@@ -1108,6 +1108,8 @@ def _shell_vars(runs: list[dict], output_path: Path, sci_threshold: float) -> di
             nav_note=f"SCI thr: {sci_threshold:.2f}",
         ),
         **footer_vars(scope=output_path.stem, versions=versions),
+        # the bar's identity chip, named as the subject report's
+        "subject": runs[0]["subject_id"] if runs else "",
         # the subject index is rebuilt by the same command, so the bar can always point at it
         "index_href": (report_name(f"sub-{runs[0]['subject_id']}", desc="index")
                        if runs else ""),

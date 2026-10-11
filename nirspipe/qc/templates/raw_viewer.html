@@ -114,7 +114,7 @@ select#run-select {
                                         index=index_href or "")) %}
 {% endfor %}
 {% set nav_modules = ns.modules %}
-{% set nav_chip = stem %}
+{% set nav_chip = "sub-" ~ subject %}
 {% set rating_subject = stem %}
 {% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": "#Final"}] %}
 {% set rating_save_endpoint = "/save_raw_ratings" %}

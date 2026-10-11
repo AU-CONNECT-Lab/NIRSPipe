@@ -269,6 +269,18 @@ def test_nav_bar_wraps_the_sections_in_the_shared_skeleton():
     assert [e["ratable"] for e in bar if "name" in e].count(True) == 2
 
 
+def test_a_long_heading_shows_its_short_form_and_keeps_the_heading_for_hover(env):
+    bar = nav_bar([("Metrics", "Quality Metrics"), ("Motion", "Motion")],
+                  closing=[("Errors", "Errors & Warnings")])
+    cells = {e["id"]: e for e in bar if "name" in e}
+    assert (cells["Metrics"]["name"], cells["Metrics"]["heading"]) == ("Metrics", "Quality Metrics")
+    assert (cells["Errors"]["name"], cells["Errors"]["heading"]) == ("Errors", "Errors & Warnings")
+    assert "heading" not in cells["Motion"]
+    html = env.get_template("_topbar.html.j2").render(nav_modules=[bar])
+    assert '<a class="qc-nav-cell" href="#Errors" title="Errors &amp; Warnings">Errors</a>' in html
+    assert '<a class="qc-nav-cell" href="#Motion">Motion</a>' in html
+
+
 def test_a_key_reaches_only_the_ids_a_verdict_is_filed_under():
     # the anchor is the section's, the id the run's: a subject's runs share the headings
     # and must not share the verdict

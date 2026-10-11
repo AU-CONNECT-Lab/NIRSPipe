@@ -157,13 +157,14 @@ h1[id], h2[id], h3[id], details[id], section[id] {
 {% macro qc_cells(entries) %}
   {%- for e in entries %}
     {%- set g = (' data-qc-group="' ~ e.group ~ '"') if e.group is defined else '' %}
+    {%- set t = (' title="' ~ (e.heading | e) ~ '"') if e.heading else '' %}
     {%- if e.sep %}
   <span class="qc-sep"{{ g }}></span>
     {%- else %}
     {%- if e.href is defined and not e.href %}
-  <span class="qc-nav-cell qc-nav-plain"{{ g }}>{{ e.name }}</span>
+  <span class="qc-nav-cell qc-nav-plain"{{ g }}{{ t }}>{{ e.name }}</span>
     {%- else %}
-  <a class="qc-nav-cell" href="{{ e.href | default('#' ~ e.id) }}"{{ g }}>{{ e.name }}</a>
+  <a class="qc-nav-cell" href="{{ e.href | default('#' ~ e.id) }}"{{ g }}{{ t }}>{{ e.name }}</a>
     {%- endif %}
       {%- if e.ratable is not defined or e.ratable %}
   <div class="qc-module" data-mod-id="{{ e.id }}"{{ g }} title="click to rate &nbsp;+ &#8594; &#8722; &#8594; ? &nbsp;&bull;&nbsp; ctrl+click to comment"><span class="qc-icon">&#9723;</span></div>
