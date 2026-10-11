@@ -663,6 +663,9 @@ RAW_QC_NOT_EXPOSED = {
         # because nothing it draws is motion-corrected
         "--motion-correction",
         "--skip-bids-validation", "--no-skip-bids-validation",
+        # channels.tsv is read by default, as the pipeline reads it; the off switch only
+        # matters when checking a run that passed it, which the page cannot know
+        "--ignore",
     },
     "hyper-raw": {
         "--psp-threshold", "--min-good-frac", "--screen-scope",
@@ -679,6 +682,7 @@ RAW_QC_NOT_EXPOSED = {
         "--participant-label", "--participant_label",
         # a file path, and the page has no file picker
         "--roi-mapping",
+        "--ignore",
     },
 }
 

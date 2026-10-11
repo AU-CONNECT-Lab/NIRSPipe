@@ -35,6 +35,7 @@ def cmd_prep_raw(
     short_max_dist: float | None, long_min_dist: float | None,
     long_max_dist: float | None,
     skip_bids_validation: bool,
+    ignore: list[str] | None = None,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
@@ -49,7 +50,7 @@ def cmd_prep_raw(
         "long_max_dist": long_max_dist,
     })))
 
-    from nirspipe.io.bids import bids_label, get_layout, get_nirs_files
+    from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
     from nirspipe.io.derivatives import subject_report_dir
     from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
 
@@ -85,6 +86,8 @@ def cmd_prep_raw(
                         "events_path": str(events_p) if events_p.exists() else None,
                         "session":     actual_ses,
                         "task":        actual_task,
+                        "channels_tsv_bads": ([] if "channel-status" in (ignore or [])
+                                              else channel_status_bads(layout, snirf_p)),
                     }
                     all_runs.append(run_dict)
                     groups[(actual_ses, actual_task)].append(run_dict)
@@ -172,6 +175,7 @@ def cmd_hyper_raw(
     derivatives_dir: Path | None = None,
     roi_mapping: Path | None = None,
     participant_label: list[str] | None = None,
+    ignore: list[str] | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-hyper")
@@ -219,6 +223,7 @@ def cmd_hyper_raw(
         trim_to_shortest,
     )
     from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
+    from nirspipe.io.bids import channel_status_bads, get_layout
     from nirspipe.qc.hyper.hyper_report import build_hyper_report
     from nirspipe.utils.lineage import path_from
 
@@ -237,14 +242,20 @@ def cmd_hyper_raw(
               "correction only.", file=sys.stderr)
     roi_map = _shared.load_roi_mapping(roi_mapping)
 
+    # each member's channels.tsv, read off the BIDS tree its recording came from
+    layout = None if "channel-status" in (ignore or []) else get_layout(bids_dir)
+
     def _process(gid, task, ses, members):
         raws_cw = load_group_raw_bids(bids_dir, members)
+        tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
+                     for sid, raw in raws_cw.items()} if layout is not None else {})
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
                                          psp_threshold=psp_threshold,
                                          min_good_frac=min_good_frac,
                                          screen_scope=screen_scope,
-                                         sep_bands=sep_bands, session=ses)
+                                         sep_bands=sep_bands, session=ses,
+                                         channels_tsv_bads=tsv_bads)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -379,6 +390,13 @@ def _add_dpf_and_cardiac(parser) -> None:
                         help="Upper bound of cardiac band in Hz (required; population-dependent).")
 
 
+def _add_ignore(parser) -> None:
+    parser.add_argument("--ignore", nargs="+", action="extend", choices=["channel-status"],
+                        help="Aspects to skip. 'channel-status': do not mark bad the channels each "
+                             "recording's BIDS channels.tsv marks bad in its status column. "
+                             "Pass it here when the nirspipe run being checked passed it.")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-qc",
@@ -430,6 +448,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Default none, which reports it uncorrected, with no corrected-stage "
                          "counts or GVTD series.")
     _shared.add_skip_bids_validation(pr)
+    _add_ignore(pr)
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",
@@ -450,6 +469,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "CSV has one, else its session. A group-CSV row without either is "
                          "read once per listed session.")
     _shared.add_skip_bids_validation(hr)
+    _add_ignore(hr)
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The nirspipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "

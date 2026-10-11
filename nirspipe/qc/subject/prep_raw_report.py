@@ -13,6 +13,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
 from nirspipe.io.derivatives import bids_uris
 from nirspipe.io.naming import report_name
+from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
 from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
@@ -231,6 +232,16 @@ def _process_run(
                                      scope=scope)
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
+    # the recording's BIDS channels.tsv rejections, joined as the pipeline joins them
+    tsv_names = run.get("channels_tsv_bads") or []
+    tsv_bads = _expand_bad_pairs(raw, tsv_names)
+    missing = sorted({pair_of(c) for c in tsv_names} - {pair_of(c) for c in tsv_bads})
+    if missing:
+        logger.warning("%s | channels.tsv marks bad channels the recording does not have: %s",
+                       label, missing)
+    if tsv_bads:
+        logger.info("%s | bad channels from channels.tsv: %s", label, tsv_bads)
+    bad_channels |= set(tsv_bads)
 
     # The one preprocessing step this report runs, for the motion panels' before and after.
     # Nothing is written back; the corrected copy lives for the length of this function.
@@ -767,7 +778,11 @@ def _process_run(
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
             "notes":  [n for n in (registration_note(registration_offset(raw)),
                                    *separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
-                                                     orphan_mm=separation_orphans(raw, sep_bands)))
+                                                     orphan_mm=separation_orphans(raw, sep_bands)),
+                                   section_note(
+                                       "raw.channels_tsv",
+                                       pairs=", ".join(sorted({pair_of(c) for c in tsv_bads})))
+                                   if tsv_bads else "")
                        if n],
         },
         "channel_pairs": channel_pairs,

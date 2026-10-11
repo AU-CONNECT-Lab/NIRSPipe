@@ -126,6 +126,7 @@ def compute_group_sqm_raw(
     min_good_frac: float | None = None,
     screen_scope: str = "run",
     session: "str | None" = None,
+    channels_tsv_bads: "dict[str, list[str]] | None" = None,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
 
@@ -217,6 +218,17 @@ def compute_group_sqm_raw(
                                       scope=resolve_screen_scope(raw, screen_scope))
             bad_channels, _ = screen_channels(screen, cutoffs)
 
+        # the member's BIDS channels.tsv rejections, joined as the pipeline joins them
+        tsv_names = (channels_tsv_bads or {}).get(entry.subject_id) or []
+        tsv_bads = _expand_bad_pairs(raw, tsv_names)
+        missing = sorted({pair_of(c) for c in tsv_names} - {pair_of(c) for c in tsv_bads})
+        if missing:
+            logger.warning("%s: channels.tsv marks bad channels the recording does not have: %s",
+                           entry.subject_id, missing)
+        if tsv_bads:
+            logger.info("%s: bad channels from channels.tsv: %s", entry.subject_id, tsv_bads)
+            bad_channels = [*bad_channels, *(c for c in tsv_bads if c not in bad_channels)]
+
         try:
             sections, _per_channel = raw_sections(
                 raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands,
@@ -266,13 +278,18 @@ def compute_group_sqm_raw(
 
     sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
 
+    # the members whose channels.tsv rejected something, named in both sidecars
+    listed = {sid: names for sid, names in (channels_tsv_bads or {}).items() if names}
+    tsv_params = {"channels_tsv_bads": listed} if listed else {}
+
     scalar_path = group_output_path(output_dir, gid, {"task": task, "desc": "subject"},
                                     "qc", ".tsv", session=session)
     write_tsv(pd.DataFrame(scalar_rows), scalar_path)
     _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],
-                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
+                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+                   **tsv_params)
 
     # not `_channels.tsv`: that name is BIDS's own channel description, and this holds
     # one row per subject and channel of cross-subject quality
@@ -282,7 +299,8 @@ def compute_group_sqm_raw(
     _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
                    sci_threshold=sci_threshold,
                    psp_threshold=cutoffs["psp"],
-                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq)
+                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+                   **tsv_params)
 
     return sqm_data
 

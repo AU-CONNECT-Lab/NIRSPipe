@@ -8,6 +8,8 @@ NOTES = {
         "Screened on every channel; the metrics below are read off the long channels.",
     "raw.screened_every":
         "Screened on every channel; no channel was identified as short.",
+    "raw.channels_tsv":
+        "Marked bad by the recording's BIDS channels.tsv, whatever the screening found: {pairs}.",
     "raw.condition_scope":
         "Condition “{label}” only, {t0:.0f} to {t1:.0f} s.",
     "raw.condition_sliced":
