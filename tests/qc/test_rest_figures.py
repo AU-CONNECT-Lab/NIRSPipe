@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.colors as pc
 import pytest
 
-from nirspipe.qc.figures.common.matrix_map import BLANK_CELL, CORRELATION_SCALE
+from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 from nirspipe.qc.figures.subject.rest_figures import (
     alff_topo_figure, fc_roi_matrix_figure, rest_channel_panel,
 )
@@ -136,6 +136,34 @@ def test_both_matrices_use_the_report_s_one_correlation_scale():
         heat = next(t for t in fig.data if t.type == "heatmap")
         assert [c for _, c in heat.colorscale] ==                [c for _, c in pc.get_colorscale(CORRELATION_SCALE)]
         assert (heat.zmin, heat.zmax) == (-1.0, 1.0)
+
+
+# ---- only the measured part is drawn ----
+
+def _without(frame, label):
+    out = frame.copy()
+    out.loc[label, :] = np.nan
+    out.loc[:, label] = np.nan
+    out.loc[label, label] = 1.0
+    return out
+
+
+def test_an_roi_with_no_value_leaves_the_roi_matrix():
+    fig = fc_roi_matrix_figure({"hbo": _without(_roi_frame(["PFC", "TPJ", "M1"]), "TPJ")})
+    heat = next(t for t in fig.data if t.type == "heatmap")
+    assert list(heat.x) == list(heat.y) == ["PFC", "M1"]
+    assert not any(s.fillcolor for s in fig.layout.shapes)
+
+
+def test_a_channel_with_no_correlation_leaves_every_row_of_the_panel():
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    alff = pd.DataFrame({"channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
+                         "alff": np.arange(6.0), "falff": np.arange(6.0) / 10})
+    fig = rest_channel_panel(_without(_fc_frame(pairs, "hbo"), "S1_D2 hbo"), None, alff)
+    heat = next(t for t in fig.data if t.type == "heatmap")
+    strip = next(ax for name, ax in fig.layout.to_plotly_json().items()
+                 if name.startswith("xaxis") and ax.get("ticktext"))
+    assert list(heat.x) == list(strip["ticktext"]) == ["S1_D1", "S2_D1"]
 
 
 # ---- ALFF on the layout ----

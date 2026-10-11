@@ -170,8 +170,8 @@ NOTES = {
         "Channel-by-channel Pearson r on top, HbO left and HbR right on one scale, on the "
         "signal the mode leaves: the confound residual in rest and denoise (the bandpassed "
         "data if denoise ran no regression), the task residual in glm. In rest mode each "
-        "channel&rsquo;s ALFF and fALFF sit below in the same order. A rejected channel is a "
-        "grey L in the matrix and an open ring below the range in the strips.",
+        "channel&rsquo;s ALFF and fALFF sit below in the same order. A channel with no "
+        "correlation, as a rejected one has, is left off the matrix and the strips.",
     "fc.roi_matrix":
         "The same correlation between ROI-averaged signals, on the same scale. Channels are "
         "averaged before correlating, so this is not the mean of the cells above. Needs "

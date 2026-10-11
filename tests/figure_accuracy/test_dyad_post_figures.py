@@ -302,17 +302,17 @@ def test_the_isc_panel_is_the_isc_table(groups, group, scope):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_the_isc_panel_blanks_each_member_s_own_rejection_on_its_own_axis(groups, group):
+def test_the_isc_panel_leaves_each_member_s_own_rejection_off_its_own_axis(groups, group):
     for a, b in _pairings(groups, group):
         fig = one_figure(groups.figure(
             group, f"{_slug(groups, group, (a, b))}chromo-hbo_desc-iscpanel_nirs.html"))
         heat = next(t for t in fig["data"] if t["type"] == "heatmap")
         z = np.asarray(heat["z"], float)
         rows, cols = list(heat["y"]), list(heat["x"])
-        blank_rows = {rows[i] for i in range(len(rows)) if np.isnan(z[i]).all()}
-        blank_cols = {cols[j] for j in range(len(cols)) if np.isnan(z[:, j]).all()}
-        assert blank_rows == {_rejected(groups, a)}, (a, b)
-        assert blank_cols == {_rejected(groups, b)}, (a, b)
+        assert _rejected(groups, a) not in rows and _rejected(groups, a) in cols, (a, b)
+        assert _rejected(groups, b) not in cols and _rejected(groups, b) in rows, (a, b)
+        # what is left is measured: no row or column of the drawn matrix is empty
+        assert np.isfinite(z).any(axis=1).all() and np.isfinite(z).any(axis=0).all(), (a, b)
 
 
 @pytest.mark.parametrize("group", GROUPS)

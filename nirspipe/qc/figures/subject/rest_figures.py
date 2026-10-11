@@ -29,7 +29,7 @@ from nirspipe.qc.figures.common.head_map import (
     BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
 )
 from nirspipe.qc.figures.common.matrix_map import (
-    CORRELATION_SCALE, cell_values, matrix_ground,
+    CORRELATION_SCALE, cell_values, kept_axes,
 )
 
 logger = get_logger("qc.figures.rest")
@@ -97,7 +97,6 @@ def _panel_matrix(fig, frame, order, chromo, col, show_bar):
     np.fill_diagonal(mat, np.nan)
     # Lower triangle only, as the HbO-HbR correlation panel draws it: the matrix is symmetric
     mat[np.triu_indices(len(order), k=1)] = np.nan
-    matrix_ground(fig, len(order), len(order), 1, col, triangle=True)
     fig.add_trace(go.Heatmap(
         z=mat.astype(np.float32), x=order, y=order, zmin=-1.0, zmax=1.0,
         colorscale=CORRELATION_SCALE, showscale=show_bar,
@@ -194,7 +193,8 @@ def rest_channel_panel(
     as blocks, not pixel for pixel.
 
     ``alff_df`` may be None, which is a run that computed no amplitude, and the panel is then
-    the matrices alone. None overall when there is no FC to draw.
+    the matrices alone. None overall when there is no FC to draw. A channel with no
+    correlation in either matrix is left off every row (:func:`kept_axes`).
     """
     frames = {c: f for c, f in (("hbo", fc_df), ("hbr", fc_hbr_df))
               if f is not None and not f.empty}
@@ -202,6 +202,14 @@ def rest_channel_panel(
         return None
 
     pairs = sorted({pair_of(c) for f in frames.values() for c in f.columns})
+    measured = []
+    for chromo, frame in frames.items():
+        names = [f"{p} {chromo}" for p in pairs]
+        mat = np.array(frame.reindex(index=names, columns=names).to_numpy(dtype=float),
+                       copy=True)
+        np.fill_diagonal(mat, np.nan)
+        measured.append(kept_axes([mat])[0])
+    pairs = [p for p, kept in zip(pairs, np.any(measured, axis=0)) if kept]
     order, xs, spans = _pair_blocks(pairs, raw, sep_bands)
     if not order:
         return None
@@ -271,7 +279,8 @@ def fc_roi_matrix_figure(
     scale as the channel matrices in :func:`rest_channel_panel`, so the ROI view and the
     channel view can be read against each other. A handful of ROIs means every label fits, so
     unlike those this one labels and prints every cell. The diagonal is blanked: an ROI's
-    correlation with itself is 1 by construction and says nothing.
+    correlation with itself is 1 by construction and says nothing. An ROI with no value is
+    left off both axes (:func:`kept_axes`).
     """
     panels = []
     for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
@@ -280,9 +289,14 @@ def fc_roi_matrix_figure(
             continue
         mat = frame.to_numpy(dtype=float).copy()
         np.fill_diagonal(mat, np.nan)
+        keep = kept_axes([mat])[0]
+        if not keep.any():
+            continue
+        mat = mat[np.ix_(keep, keep)]
         # symmetric, as the channel matrices are, so the same half is drawn
         mat[np.triu_indices(len(mat), k=1)] = np.nan
-        panels.append((frame.index.tolist(), mat, f"ROI FC - {label}"))
+        panels.append(([n for n, k in zip(frame.index.tolist(), keep) if k], mat,
+                       f"ROI FC - {label}"))
     if not panels:
         return None
 
@@ -291,7 +305,6 @@ def fc_roi_matrix_figure(
     fig = make_subplots(rows=1, cols=len(panels), horizontal_spacing=0.14,
                         subplot_titles=[lab for _, _, lab in panels])
     for col, (names, mat, _label) in enumerate(panels, start=1):
-        matrix_ground(fig, len(names), len(names), 1, col, triangle=True)
         fig.add_trace(go.Heatmap(
             z=mat.astype(np.float32), x=names, y=names, zmin=-1.0, zmax=1.0,
             colorscale=CORRELATION_SCALE, showscale=(col == len(panels)),

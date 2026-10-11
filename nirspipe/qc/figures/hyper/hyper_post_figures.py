@@ -552,11 +552,11 @@ def flat_colorbar(fig, mappable, ax, label: str, **kwargs):
 # rather than a red and a blue, which on these pages mean HbO and HbR.
 NODE_COLORS = ("#8e44ad", "#27ae60")
 
-# The scales, the blank cell and the printed cell value are the report's, not this figure's;
+# The scales, the kept axes and the printed cell value are the report's, not this figure's;
 # see figures.common.matrix_map for which quantity takes which and why
 from nirspipe.qc.figures.common.matrix_map import (  # noqa: E402
     COHERENCE_SCALE, CORRELATION_SCALE, cell_values as _cell_values,
-    matrix_ground, scale_color as _arc_color,
+    kept_axes, scale_color as _arc_color,
 )
 # The circle itself is the report's, not this figure's: one subject's channels against each
 # other and two members' against each other are the same picture on different matrices
@@ -577,7 +577,7 @@ _COLORBAR = {"thickness": 13, "len": 0.72, "x": 1.0, "y": 0.46}
 
 def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vmax,
                   value_label, row, col, colorbar=None):
-    """One cross-brain matrix into a subplot: the blank ground, the cells, their values.
+    """One cross-brain matrix into a subplot: the cells and their values.
 
     ``colorbar`` is the bar's layout for the one panel that carries it; every other panel
     passes None and draws none, which is what puts several panels of a figure on one scale.
@@ -585,8 +585,6 @@ def _matrix_panel(fig, z, row_labels, col_labels, subject_ids, *, cmap, vmin, vm
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
 
-    # a blank cell here is a site one member lost
-    matrix_ground(fig, len(row_labels), len(col_labels), row, col)
     fig.add_trace(go.Heatmap(
         z=z, x=list(col_labels), y=list(row_labels), colorscale=cmap,
         zmin=vmin, zmax=vmax, showscale=colorbar is not None, colorbar=colorbar or {},
@@ -605,11 +603,12 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
     chord runs from a node on the left semicircle to one on the right, because the matrix is
     one brain against the other and has no within-brain cell to draw.
     """
-    n = len(row_labels)
-    ang = np.deg2rad(ring_angles([n, n], gap=_CIRCLE_GAP))
+    n, n2 = len(row_labels), len(col_labels)
+    ang = np.deg2rad(ring_angles([n, n2], gap=_CIRCLE_GAP))
     xy = np.stack([np.cos(ang), np.sin(ang)], axis=1)
     # the nodes are evenly spaced, so any two neighbours inside one member give the pitch
-    step = float(ang[1] - ang[0]) if n > 1 else np.deg2rad(20.0)
+    step = (float(ang[1] - ang[0]) if n > 1 else
+            float(ang[n + 1] - ang[n]) if n2 > 1 else np.deg2rad(20.0))
 
     # ---- one thick arc per node, and its label outside it ----
     sub1 = subject_ids[0] if subject_ids else "Sub1"
@@ -623,7 +622,7 @@ def _circle_traces(fig, z, row_labels, col_labels, subject_ids, *,
         radial_label(fig, ang[k], 1.06, name, row, col)
 
     # ---- the chords, weakest first so the strong ones are not drawn under them ----
-    pairs = [(i, j) for i in range(n) for j in range(n) if keep[i, j]]
+    pairs = [(i, j) for i in range(n) for j in range(n2) if keep[i, j]]
     pairs.sort(key=lambda ij: abs(z[ij]))
     for i, j in pairs:
         value = float(z[i, j])
@@ -699,9 +698,10 @@ def _cross_matrix_figure(
       [("HbO", 14 x 14), ("HbR", 14 x 14)] -> [ HbO heatmap | HbR heatmap ], one colorbar
 
     Shared by the coherence matrices and the ROI ISC one, which differ only in scale and
-    wording. Rows are the first member's sites and columns the second's, so the diagonal is
-    the homologous pairing and no cell is within-brain. Each panel's subtitle carries its
-    own grand mean.
+    wording. Rows are the first member's sites and columns the second's, so no cell is
+    within-brain. A site with no value in any panel is left off its axis (:func:`kept_axes`),
+    so where one member lost a site the homologous pairings step off the diagonal. Each
+    panel's subtitle carries its own grand mean.
 
     ``panels`` is ``[(display name, matrix), ...]``, already filtered to the ones worth
     drawing. The last panel carries the colorbar and the rest draw none, which is what puts
@@ -709,6 +709,9 @@ def _cross_matrix_figure(
     """
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"
+    rows, cols = kept_axes([z for _, z in panels])
+    row_labels = [lab for lab, kept in zip(labels, rows) if kept]
+    col_labels = [lab for lab, kept in zip(labels, cols) if kept]
 
     fig = make_subplots(
         rows=1, cols=len(panels), horizontal_spacing=0.06,
@@ -717,7 +720,7 @@ def _cross_matrix_figure(
     )
 
     for i, (_, z) in enumerate(panels, start=1):
-        _matrix_panel(fig, z, labels, labels, subject_ids,
+        _matrix_panel(fig, z[np.ix_(rows, cols)], row_labels, col_labels, subject_ids,
                       cmap=cmap, vmin=vmin, vmax=vmax, value_label=value_label,
                       row=1, col=i,
                       colorbar=(_COLORBAR | {"title": value_label}
@@ -726,13 +729,13 @@ def _cross_matrix_figure(
         # a cell on every side and leaves a white margin around the grid. A cell spans half a
         # step either side of its index, so these two are the grid's own extent.
         fig.update_xaxes(title_text=f"{sub2} {kind}".strip(), side="bottom", tickangle=-90,
-                         range=[-0.5, len(labels) - 0.5], showgrid=False, zeroline=False,
+                         range=[-0.5, len(col_labels) - 0.5], showgrid=False, zeroline=False,
                          constrain="domain", row=1, col=i)
         # the first row at the top, which is how the table it stands for is read. The y title
         # goes on the left panel alone: both rows are the same member and printing it twice
         # reads as two different axes
         fig.update_yaxes(title_text=(f"{sub1} {kind}".strip() if i == 1 else ""),
-                         range=[len(labels) - 0.5, -0.5], showgrid=False, zeroline=False,
+                         range=[len(row_labels) - 0.5, -0.5], showgrid=False, zeroline=False,
                          scaleanchor=f"x{'' if i == 1 else i}", constrain="domain",
                          row=1, col=i)
 
@@ -772,17 +775,17 @@ def build_cross_panel(
 
       an n x n of ISC values -> [ matrix with every cell printed | connectogram ]
 
-    **The matrix is the record**: every cell carries its value, blanks included, so a pairing
-    can be looked up. **The circle is the shape**: the chords say which sites the strong
-    pairings actually land on.
+    **The matrix is the record**: every cell drawn carries its value, so a pairing can be
+    looked up. **The circle is the shape**: the chords say which sites the strong pairings
+    actually land on. A site with no value is left off both (:func:`kept_axes`).
 
     The coherence matrices are not drawn by this: :func:`build_wtc_cross_matrix` spends both
     halves of its width on the HbO and HbR heatmaps instead.
 
-    Both rows and columns are the *montage*, row for the first member and column for the
-    second, so cell (i, j) is one member's site i against the other's site j and the diagonal
-    is the homologous pairing. There is no within-brain cell anywhere in it, which is why
-    every chord on the circle crosses the middle.
+    Rows are the first member's sites and columns the second's, so cell (i, j) is one
+    member's site i against the other's site j, and the diagonal is the homologous pairing
+    while neither member lost a site. There is no within-brain cell anywhere in it, which is
+    why every chord on the circle crosses the middle.
 
     Live rather than a still, so hovering a chord or a cell says which pairing it is and what
     it is worth.
@@ -796,6 +799,14 @@ def build_cross_panel(
     z = np.asarray(z, dtype=float)
     if z.size == 0 or not len(row_labels):
         return None
+    rows, cols = kept_axes([z])
+    if not rows.any():
+        return None
+    z = z[np.ix_(rows, cols)]
+    row_labels = [lab for lab, kept in zip(row_labels, rows) if kept]
+    col_labels = [lab for lab, kept in zip(col_labels, cols) if kept]
+    if arc_level is not None:
+        arc_level = np.asarray(arc_level, dtype=float)[np.ix_(rows, cols)]
 
     sub1 = subject_ids[0] if subject_ids else "Sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "Sub2"
@@ -869,8 +880,7 @@ def build_wtc_cross_matrix(
     ``band_dfs`` maps a display name to that chromophore's band-mean frame. A frame that is
     None, carries no ``label2`` column, or has no finite cell is left out rather than drawn
     empty, so a run of one chromophore gets one panel. ``labels`` is the montage rather than
-    whatever the frames happen to carry, so a dyad that lost a channel still gets a matrix of
-    the same shape as one that did not, and the blanks say which sites went.
+    whatever the frames happen to carry; the figure leaves off any site with no value.
     """
     sub1 = subject_ids[0] if subject_ids else "sub1"
     sub2 = subject_ids[1] if len(subject_ids) > 1 else "sub2"

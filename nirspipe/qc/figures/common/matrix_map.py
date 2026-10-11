@@ -1,8 +1,8 @@
 """The conventions every matrix panel in the reports is drawn with.
 
-Which colour scale a quantity takes, what a cell with no value looks like, and how a cell's
-number is printed on top of it. One copy, so a red cell cannot mean +1 in one panel and -1
-in the next.
+Which colour scale a quantity takes, which rows and columns a matrix keeps, and how a
+cell's number is printed on top of it. One copy, so a red cell cannot mean +1 in one panel
+and -1 in the next.
 
 Layout stays with each figure: a lower-triangle channel matrix with separation dividers, a
 pair of square per-chromophore matrices and a cross-brain grid are different pictures. What
@@ -19,10 +19,6 @@ import plotly.graph_objects as go
 CORRELATION_SCALE = "RdBu_r"
 COHERENCE_SCALE = "viridis"
 
-# A cell no value was computed for: grey, off both scales and clear of their near-white ends.
-BLANK_CELL = "#d5d5d5"
-
-
 def scale_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
     """The colour a scale gives one value, as ``rgb(r,g,b)``.
 
@@ -37,29 +33,18 @@ def scale_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
     return sample_colorscale(cmap, [float(np.clip(t, 0.0, 1.0))])[0]
 
 
-def matrix_ground(fig, n_rows: int, n_cols: int, row: int, col: int,
-                  color: str = BLANK_CELL, triangle: bool = False) -> None:
-    """The blank field a matrix is painted over, so an absent cell is grey and not the page.
+def kept_axes(mats) -> tuple[np.ndarray, np.ndarray]:
+    """Which rows and which columns hold a finite value in any of ``mats``.
 
-    Painted under the heatmap rather than left to show the panel through. No gap between
-    cells, since a border in that colour would draw a missing cell where there is none.
+    ::
 
-    ``triangle`` grounds the lower half alone, for a symmetric matrix drawn as a triangle: a
-    full square would ground the half that was masked on purpose and it would read as a
-    montage of missing cells.
+      [[0.4, nan], [nan, nan]]  ->  rows [True, False], columns [True, False]
+
+    A figure draws only these: a site no value was computed for is left off the axis rather
+    than drawn as an empty row. The tables on disk keep every site.
     """
-    if not triangle:
-        fig.add_shape(type="rect", x0=-0.5, x1=n_cols - 0.5, y0=-0.5, y1=n_rows - 0.5,
-                      fillcolor=color, line=dict(width=0), layer="below", row=row, col=col)
-        return
-    # the staircase the kept cells make, as one closed path
-    steps = []
-    for i in range(n_rows):
-        steps.append(f"L{i + 0.5},{i - 0.5}")
-        steps.append(f"L{i + 0.5},{i + 0.5}")
-    fig.add_shape(type="path", layer="below", row=row, col=col,
-                  path=f"M-0.5,-0.5 {' '.join(steps)} L-0.5,{n_rows - 0.5} Z",
-                  fillcolor=color, line=dict(width=0))
+    finite = np.any([np.isfinite(np.asarray(m, dtype=float)) for m in mats], axis=0)
+    return finite.any(axis=1), finite.any(axis=0)
 
 
 def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,

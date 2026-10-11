@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The optode flat map beside the brain views uses MNE's topomap projection and head outline, as the head maps do
 - Dyad ISC runs only the chromophores `--wtc-chroma` names, as the coherence does; an HbO-only run no longer writes HbR correlations
 - The provenance graph wraps a tall column into a grid and shows at a fixed text size without the height cap
+- Matrix figures draw only the sites that have a value, with no grey ground; the tables on disk keep every site
 
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
