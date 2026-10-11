@@ -33,6 +33,13 @@ def _fname(pair):
     return pair.replace("_", "")
 
 
+def test_the_run_page_draws_the_subject_report_s_brain_figure(raw_viewer_run, page):
+    href = page[1]["figure_paths"]["brain_views"]["src"]
+    assert href.endswith("_desc-rawbrainviews_nirs.png")
+    assert (raw_viewer_run.out / "sub-01" / href).stat().st_size > 0
+    assert "layout_3d_figure" not in page[1]["layout"]
+
+
 # ---- inline figures ----
 
 def test_each_raw_signal_row_is_the_channel_it_is_labelled(raw_viewer_run, page):

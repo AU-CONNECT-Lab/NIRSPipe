@@ -602,6 +602,7 @@ def condition_payloads(
     remake_hbo_hbr_corr=None,
     sep_bands=None,
     has_spans: bool = False,
+    remake_brain=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -616,7 +617,8 @@ def condition_payloads(
 
     - **rewritten for the condition**: the SCI/PSP panel and the channel-quality grid. Both
       are handed their data and derive nothing from a recording, so a real slice is correct
-      and ``save_figure`` writes each under a name carrying the condition's slug.
+      and ``save_figure`` writes each under a name carrying the condition's slug. The brain
+      figure too, through ``remake_brain``, graded by the condition's own SCI.
     - **addressed at the condition's window**: the carpet, the per-channel detail and the
       per-channel motion figure. Each
       derives something run-wide from what it is handed, a filtered GVTD, a per-channel
@@ -793,6 +795,11 @@ def condition_payloads(
             paths.pop("psd", None)
             if psd_fig is not None:
                 paths["psd"] = save_figure("psd", slug, psd_fig)
+            paths.pop("brain_views", None)
+            brain = (remake_brain(slug, sliced.get("sci_win_per_channel") or {})
+                     if remake_brain else None)
+            if brain:
+                paths["brain_views"] = brain
             hb_fig = (remake_hbo_hbr_corr(float(t0), float(t1))
                       if remake_hbo_hbr_corr else None)
             if hb_fig is not None:

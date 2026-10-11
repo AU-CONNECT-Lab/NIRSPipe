@@ -22,7 +22,6 @@ from nirspipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
-from nirspipe.qc.figures.common.provenance_figure import write_provenance
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
@@ -795,6 +794,10 @@ def _process_run(
         "remake_hbo_hbr_corr": _hbo_hbr_maker(raw_haemo, raw_haemo_post, sep_bands,
                                               motion_correction,
                                               {pair_of(c) for c in bad_channels}),
+        # drawn by the page writer, not here: the GUI shares this function and shows no copy
+        "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
+                                      sci_threshold=cutoffs["sci"]),
+        "sci_win_scores": (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
         "trial_images_by_condition": trial_img_by_cond,
         "sep_bands":     sep_bands,
         "has_spans":     bool(bad_spans(raw)),
@@ -839,6 +842,33 @@ def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method, bad_pairs):
         after = None if haemo_post is None else haemo_post.copy().crop(tmin=lo, tmax=hi)
         return _hbo_hbr_figure(haemo.copy().crop(tmin=lo, tmax=hi), after, sep_bands, method,
                                bad_pairs)
+
+    return remake
+
+
+def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
+                 sci_threshold: float):
+    """``(namer, SCI per channel, errors) -> href`` of the subject report's brain figure.
+
+    The haemoglobin file's HbO channels place the channels, rejected ones included, as the
+    pipeline places them for its own copy. A condition page hands in its own SCI and a namer
+    carrying its slug; the rejections stay the run's.
+    """
+    if raw_haemo is None:
+        return None
+    # a pyvista render, kept out of module import like the report it comes from
+    from nirspipe.qc.subject.report import _section_brain
+
+    picks = mne.pick_types(raw_haemo.info, fnirs="hbo", exclude=[])
+    names = [raw_haemo.ch_names[i] for i in picks]
+    coords = np.array([raw_haemo.info["chs"][i]["loc"][:3] for i in picks])
+    bad_pairs = {pair_of(c) for c in bad_channels}
+    good = np.array([pair_of(n) not in bad_pairs for n in names])
+
+    def remake(namer, sci: dict, errors: list) -> "str | None":
+        return _section_brain(sci, sorted(bad_channels), coords, good, raw, label, errors,
+                              fig_dir, namer, ch_names_brain=names,
+                              sci_threshold=sci_threshold)["brain_views_path"]
 
     return remake
 
@@ -969,6 +999,15 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         h = _save_figure_html(fig, fig_dir / fname, extra_js=extra_js)
         return {"src": f"figures/{fname}", "h": h}
 
+    remake_brain = ctx.get("remake_brain")
+    brain_errors: "dict[str, list]" = {}
+
+    def save_brain(slug: str, sci: dict) -> "dict | None":
+        """One condition's brain figure, graded by its own SCI over the run's rejections."""
+        href = remake_brain(figure_namer(run_label, slug, prefix="raw"), sci,
+                            brain_errors.setdefault(slug, []))
+        return {"src": href} if href else None
+
     def save_stack(panel: str, slug: str, name: str, figs) -> "dict | None":
         """The same, for a panel whose file holds several figures of one channel."""
         fname = figure_namer(run_label, slug, prefix="raw")(
@@ -984,6 +1023,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         trial_rows=ctx.get("trial_rows"), save_figure=save_figure,
         remake_psd=ctx.get("remake_psd"), remake_epoch=ctx.get("remake_epoch"),
         remake_hbo_hbr_corr=ctx.get("remake_hbo_hbr_corr"),
+        remake_brain=save_brain if remake_brain else None,
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
         sep_bands=ctx.get("sep_bands"),
@@ -1001,6 +1041,8 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
                            "earlier one; no page for it", run_label, label, slug)
             continue
         written.add(slug)
+        if brain_errors.get(slug):
+            view["errors"] = list(view.get("errors") or []) + collapse_messages(brain_errors[slug])
         out = output_path.with_name(condition_page_name(run_label, label, desc="raw"))
         view_label = f"{run_label}_cond-{slug}"
         # the run page's one table, built here from the condition's own set tables
@@ -1022,36 +1064,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         logger.info("condition %s \u2192 %s", label, out.name)
 
 
-def _nirs_dir(runs: list[dict], sub_dir: Path) -> Path:
-    session = runs[0].get("session") if runs else None
-    return sub_dir / (f"ses-{session}" if session else "") / "nirs"
-
-
-def _page_provenance(runs: list[dict], output_path: Path, sub_dir: Path) -> "str | None":
-    """The page's provenance graph, drawn over the same ``nirs/`` its table reads.
-
-    Only the label differs from the pipeline report's graph: one page holds every run of a
-    task, so the graph is the page's rather than one run's, exactly as the table is.
-    """
-    if not runs:
-        return None
-    run = runs[0]
-    name = "_".join([f"sub-{run['subject_id']}"]
-                    + [f"{key}-{run[field]}" for key, field in (("ses", "session"),
-                                                               ("task", "task"))
-                       if run.get(field)])
-    href = None
-    # the viewer prints no errors block of its own, so a failure lands in the log only
-    with guard("Provenance diagram", [], output_path.stem):
-        for written in write_provenance(_nirs_dir(runs, sub_dir), sub_dir / "figures",
-                                        figure_namer(name, prefix="raw"), title=name):
-            if written.suffix == ".png":
-                href = f"figures/{written.name}"
-    return href
-
-
-def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
-                sci_threshold: float, provenance_path: "str | None" = None) -> dict:
+def _shell_vars(runs: list[dict], output_path: Path, sci_threshold: float) -> dict:
     """The head, nav bar and four closing sections every QC report shares.
 
     The raw viewer is the one report that cannot extend ``_report_base.html.j2``, being a
@@ -1059,11 +1072,10 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
     includes the same footer partial instead. The errors block is deliberately left out:
     those are per run here and the viewer renders them itself.
 
-    No Methods: this is a quality view of the recording, and what it screened is in the
-    pipeline report's Methods. The provenance table is read from the sidecars in ``nirs/``.
+    No Methods and no Provenance: this is a quality view of the recording, its lineage is the
+    one input and the record, and the record's sidecar lists that source.
     """
     session = runs[0].get("session") if runs else None
-    nirs_dir = _nirs_dir(runs, sub_dir)
     versions = collect_software_versions()
     meta = [("runs", str(len(runs)))]
     if session:
@@ -1075,10 +1087,7 @@ def _shell_vars(runs: list[dict], output_path: Path, sub_dir: Path,
             nav_meta=meta,
             nav_note=f"SCI thr: {sci_threshold:.2f}",
         ),
-        **footer_vars(
-            scope=output_path.stem, nirs_dir=nirs_dir, provenance_path=provenance_path,
-            versions=versions,
-        ),
+        **footer_vars(scope=output_path.stem, versions=versions),
         # the subject index is rebuilt by the same command, so the bar can always point at it
         "index_href": (report_name(f"sub-{runs[0]['subject_id']}", desc="index")
                        if runs else ""),
@@ -1114,8 +1123,7 @@ def build_prep_raw_report(
     # rather than a sibling tree, and sub-<id>/ can be moved or copied whole
     sub_dir     = output_path.parent
     static_data = []
-    shell       = _shell_vars(runs, output_path, sub_dir, sci_threshold,
-                              _page_provenance(runs, output_path, sub_dir))
+    shell       = _shell_vars(runs, output_path, sci_threshold)
 
     for i, run in enumerate(runs):
         label = run["label"]
@@ -1133,6 +1141,15 @@ def build_prep_raw_report(
                                   motion_correction)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
+        if ctx.get("remake_brain"):
+            brain_errors: list[str] = []
+            href = ctx["remake_brain"](figure_namer(label, prefix="raw"),
+                                       ctx["sci_win_scores"], brain_errors)
+            if href:
+                d["figure_paths"]["brain_views"] = {"src": href}
+            d["errors"] = list(d.get("errors") or []) + collapse_messages(brain_errors)
+        # the GUI's alone: the page shows the subject report's brain figure instead
+        (d.get("layout") or {}).pop("layout_3d_figure", None)
         static_data.append(d)
         if by_condition and ctx:
             with guard("Per-condition views", run_errors, label):

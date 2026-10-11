@@ -58,9 +58,12 @@ NOTES = {
         "<em>uncorrected</em> median and z-score the carpets by the uncorrected mean and SD, "
         "so a drop here is movement removed, not a moved yardstick.",
     "hyper_raw.motion_together":
-        "A member moving alone shows in its own trace above. <b>Both moving at once</b> "
-        "raises any synchrony measured on the pair, and shifting or scrambling one member "
-        "does not remove it.",
+        "The two figures in numbers, each before &rarr; after motion correction. A "
+        "member&rsquo;s row is its mean GVTD over its own median. <b>Both at once</b> is the "
+        "mean of the two traces&rsquo; pointwise minimum, high only where both moved "
+        "together; the row under it is how much the correction lowered it, and the last row "
+        "counts the amber strip&rsquo;s spans. Both moving at once raises any synchrony "
+        "measured on the pair, and shifting or scrambling one member does not remove it.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: panel a shows each "
         "block&rsquo;s share of coupled windows, panel b each window&rsquo;s SCI. A long "
@@ -87,11 +90,11 @@ NOTES = {
     "hyper_raw.channel_summary":
         "Green is kept by every member, yellow mixed, red kept by none.",
     "hyper_raw.channel_decisions":
-        "A row per member, a pair&rsquo;s members one above the other, with the subject "
-        "report&rsquo;s columns. A member&rsquo;s row is tinted red where that member "
-        "rejected the pair: BAD is too few coupled windows, BAD (manual) by hand. Click a "
-        "decision to cycle it through unset, good and bad; it saves to each member&rsquo;s "
-        "JSON when the page is served by <code>nirspipe-rate hyper</code>.",
+        "A row per channel pair, each member&rsquo;s columns side by side under its name, "
+        "long and short channels in separate tables. A member&rsquo;s columns are tinted red "
+        "where that member rejected the pair: BAD is too few coupled windows, BAD (manual) "
+        "by hand. Click a decision to cycle it through unset, good and bad; it saves to each "
+        "member&rsquo;s JSON when the page is served by <code>nirspipe-rate hyper</code>.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
         "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was "

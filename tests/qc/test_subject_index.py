@@ -181,7 +181,7 @@ def _write_raw_condition_pages(monkeypatch, sub_dir, run_label, report_stem, con
     out = sub_dir / report_name(report_stem, desc="raw")
     ctx = {"sqm_path": record, "fig_dir": sub_dir / "figures", "sci_scores": {},
            "bad_channels": set(), "channel_pairs": [], "series": {}, "cutoffs": {},
-           "shell": prr._shell_vars([], out, sub_dir, 0.8)}
+           "shell": prr._shell_vars([], out, 0.8)}
     prr._write_condition_views(ctx, {}, out, run_label, 0.8)
 
 

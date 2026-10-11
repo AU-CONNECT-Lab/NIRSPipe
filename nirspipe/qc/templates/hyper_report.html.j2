@@ -19,12 +19,11 @@
 .cd-chip.cd-disabled{opacity:.45;pointer-events:none;cursor:not-allowed}
 /* under the second line nirspipe-rate was given, apart from each member's own red */
 .cd-table td.rate-low{outline:2px dashed var(--warn);outline-offset:-3px}
-.cd-table td:nth-child(n+3), .cd-table th:nth-child(n+3) { text-align: center; }
-/* a pair's members sit one above the other; the rule above its first row is what groups
-   them, so the cell colours the metrics carry are still the only colour in the table */
-.cd-table tr.pair-start > td { border-top: 1px solid var(--rule); }
-.cd-table td.pair-name { vertical-align: top; font-weight: 600; }
-.cd-table td.member { color: var(--muted); }
+.cd-table td, .cd-table th { text-align: center; }
+/* each member's columns sit side by side under its name; the rule before each block is what
+   groups them, so the cell colours the metrics carry are still the only colour in the table */
+.cd-table .pair-name { text-align: left; font-weight: 600; }
+.cd-table .member-start { border-left: 1px solid var(--rule); }
 .cd-table .cd-cell { padding-left: 0.4rem; padding-right: 0.4rem; }
 {% endblock %}
 
@@ -192,13 +191,11 @@
 </section>
 {% endif %}
 
-<section id="MotionTogether" class="step">
-  <h3 class="step-title">{% if figure_paths.motion_after %}c{% else %}b{% endif %}. Simultaneous movement</h3>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.motion_together') }}</p>
-    <ul id="motion-list" class="qm-list"></ul>
-  </div>
-</section>
+{#- the two figures' numbers, under them rather than as a step of their own -#}
+<div class="details-body" id="motion-summary">
+  <table class="qm-table qm-flat qm-unified" id="motion-table"></table>
+  <p class="qm-note">{{ section_note('hyper_raw.motion_together') }}</p>
+</div>
 {% endif %}
 
 <!-- ==================================================== 3b. where on the head -->
@@ -275,21 +272,7 @@
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
     <p class="step-desc" id="hyper-decisions-rate-line" style="display:none"></p>
-    <div style="overflow-x:auto">
-      <table class="qm-table cd-table" id="hyper-decisions-table">
-        <thead>
-          <tr>
-            <th>{{ ch_columns[0][1] }}</th><th>Member</th>
-            {%- for key, label in ch_columns[1:] %}
-            <th>{{ label }}
-              {%- if ch_wavelengths and key in wavelength_columns %}<span class="wl">{{ ch_wavelengths | join(' / ') }} nm</span>{% endif %}</th>
-            {%- endfor %}
-            <th>Decision</th>
-          </tr>
-        </thead>
-        <tbody id="hyper-decisions-tbody"></tbody>
-      </table>
-    </div>
+    <div id="hyper-decisions-tables"></div>
   </div>
 </section>
 
@@ -333,6 +316,8 @@ window._CH_PAIRS        = _CH_PAIRS;
 window._HYPER_SUBJECTS  = {{ subject_ids | tojson }};
 window._DECISION_ROWS   = {{ decision_rows_json | safe }};
 window._CH_COLUMNS      = {{ ch_columns | tojson }};
+window._CH_WAVELENGTHS  = {{ ch_wavelengths | tojson }};
+window._WAVELENGTH_COLUMNS = {{ wavelength_columns | list | tojson }};
 
 function _pairFname(pair) {
   return pair.replace(/[^a-zA-Z0-9]/g, "");
@@ -467,50 +452,56 @@ function _set(id, text, cls) {
   }
 })();
 
-// ── motion, and whether the two moved together ───────────────────────────────
+// ── motion: the two figures' numbers in one table, a channel set per column ─────
 (function() {
   var m = _SQM.motion || {};
-  var el = document.getElementById("motion-list");
-  if (!el) return;
+  var table = document.getElementById("motion-table");
+  if (!table) return;
+  // a channel set holds one number per member at each stage; the span count holds one number
   var sets = Object.keys(m).filter(function(k) {
-    return m[k] && typeof m[k] === "object" && m[k].before;
+    return m[k] && typeof m[k].before === "object";
   });
   if (!sets.length) {
-    el.innerHTML = "<li><span class='ql'>no motion trace on either member</span></li>";
+    document.getElementById("motion-summary").style.display = "none";
     return;
   }
-  function li(label, value, cls) {
-    return "<li><span class='ql'>" + label + "</span>" +
-           "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
+  function stages(before, after, digits) {
+    if (before == null) return "—";
+    var b = digits == null ? String(before) : before.toFixed(digits);
+    if (after == null) return b;
+    return b + " → " + (digits == null ? String(after) : after.toFixed(digits));
   }
-  var unit = m.unit || "x its own before-median";
-  var html = "";
-  sets.forEach(function(set) {
-    var s = m[set];
-    ["before", "after"].forEach(function(stage) {
-      if (!s[stage]) return;
-      Object.keys(s[stage]).forEach(function(key) {
-        // "together" is the mean of the pointwise minimum: high only where both were high
-        var label = set + " " + stage + ", " +
-                    (key === "together" ? "both at once" : key);
-        html += li(label, s[stage][key].toFixed(2) + "x");
-      });
-    });
-    if (s.reduction != null) {
-      // what the correction took off the simultaneous movement; a negative value means it
-      // put some back, which is worth looking at rather than rounding away
-      var cls = s.reduction >= 0.3 ? "qm-ok" : s.reduction > 0 ? "qm-warn" : "qm-bad";
-      html += li(set + ", simultaneous movement removed",
-                 (s.reduction * 100).toFixed(0) + "%", cls);
-    }
+  function row(label, cells) {
+    return "<tr><td><span class='ql'>" + label + "</span></td>" + cells.map(function(c) {
+      return "<td class='qv" + (c[1] ? " " + c[1] : "") + "'>" + c[0] + "</td>";
+    }).join("") + "</tr>";
+  }
+  var html = "<thead><tr><th>Metric</th>" + sets.map(function(k) {
+    return "<th>" + k.charAt(0).toUpperCase() + k.slice(1) + "</th>";
+  }).join("") + "</tr></thead><tbody>";
+  // "together" is the mean of the pointwise minimum: high only where both were high
+  var keys = Object.keys(m[sets[0]].before).filter(function(k) { return k !== "together"; });
+  keys.concat(["together"]).forEach(function(key) {
+    var label = key === "together" ? "Both at once" : key + ", mean GVTD over own median";
+    html += row(label, sets.map(function(set) {
+      return [stages(m[set].before[key], (m[set].after || {})[key], 2), ""];
+    }));
   });
-  // counted on the canonical channel set alone, so it sits outside the per-set block
+  if (sets.some(function(set) { return m[set].reduction != null; })) {
+    // a negative value means the correction put some back, worth seeing rather than rounding
+    html += row("Simultaneous movement removed", sets.map(function(set) {
+      var r = m[set].reduction;
+      if (r == null) return ["—", ""];
+      return [(r * 100).toFixed(0) + "%", r >= 0.3 ? "qm-ok" : r > 0 ? "qm-warn" : "qm-bad"];
+    }));
+  }
+  // counted on the canonical channel set alone, so it sits in the first column only
   var spans = m.spike_spans_both || {};
-  Object.keys(spans).forEach(function(stage) {
-    html += li(stage + ", spans both were spiking", spans[stage]);
-  });
-  html += li("unit", unit);
-  el.innerHTML = html;
+  if (spans.before != null) {
+    html += row("Spans where both spiked", [[stages(spans.before, spans.after), ""]]
+      .concat(sets.slice(1).map(function() { return ["", ""]; })));
+  }
+  table.innerHTML = html + "</tbody>";
 })();
 
 </script>
@@ -528,6 +519,8 @@ function _set(id, text, cls) {
   // a renderer that formatted its own numbers would drift from the report beside it
   var _DECISION_ROWS = window._DECISION_ROWS || {};
   var _CH_COLUMNS    = window._CH_COLUMNS || [];
+  var _CH_WAVELENGTHS = window._CH_WAVELENGTHS || [];
+  var _WAVELENGTH_COLUMNS = window._WAVELENGTH_COLUMNS || [];
 
   // a second SCI line, only when nirspipe-rate hyper was given --sci-threshold
   fetch("/rate_config")
@@ -561,74 +554,102 @@ function _set(id, text, cls) {
       buildTable();
     });
 
+  // a table per separation group, each member's columns side by side under its name, so a
+  // pair is compared across one row; long first, then short, as the subject report orders them
   function buildTable() {
-    var tbody = document.getElementById("hyper-decisions-tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
+    var host = document.getElementById("hyper-decisions-tables");
+    if (!host) return;
+    host.innerHTML = "";
     var metrics = _CH_COLUMNS.slice(1);                 // the name column heads the row
-    var nCols = 2 + metrics.length + 1;                 // pair, member, metrics, decision
     if (!_DECISION_ROWS.length) {
-      tbody.innerHTML = "<tr><td colspan='" + nCols + "' style='color:#adb5bd;"
-        + "font-style:italic;text-align:center'>No channels</td></tr>";
+      host.innerHTML = "<p class='step-desc'>No channels.</p>";
       return;
     }
-    // long first, then short, the split and the titles the subject report uses; a montage
-    // of one kind gets no group rows at all
     var blocks = [["Long channels", []], ["Short channels", []], ["Unclassified", []]];
     _DECISION_ROWS.forEach(function(row) {
       var i = row.separation === "short" ? 1 : (row.separation === "unclassified" ? 2 : 0);
       blocks[i][1].push(row);
     });
     blocks = blocks.filter(function(b) { return b[1].length; });
-
     blocks.forEach(function(block) {
       if (blocks.length > 1) {
-        var head = document.createElement("tr");
-        var th = document.createElement("td");
-        th.className = "ch-group";
-        th.colSpan = nCols;
-        th.textContent = block[0] + " (" + block[1].length + ")";
-        head.appendChild(th);
-        tbody.appendChild(head);
+        var title = document.createElement("h4");
+        title.className = "qm-sub";
+        title.textContent = block[0] + " (" + block[1].length + ")";
+        host.appendChild(title);
       }
-      // a row per member, the pair's name once beside its first: a pair's two recordings
-      // are read one above the other rather than across a double-width row
-      block[1].forEach(function(row) {
-        subjects.forEach(function(sid, si) {
-          var tr = document.createElement("tr");
-          if (si === 0) {
-            tr.className = "pair-start";
-            var tdName = document.createElement("td");
-            tdName.className = "pair-name";
-            tdName.rowSpan = subjects.length;
-            tdName.textContent = row.pair;
-            tr.appendChild(tdName);
-          }
-          var cells = row.by_sub[sid] || {};
-          // each member's own verdict tints its own row
-          var tint = cells.is_bad ? "#fff8f8" : "";
-          var tdSid = document.createElement("td");
-          tdSid.className = "member";
-          tdSid.textContent = sid;
-          tdSid.style.background = tint;
-          tr.appendChild(tdSid);
-          metrics.forEach(function(col) {
-            var td = document.createElement("td");
-            td.textContent = cells[col[0]] != null ? cells[col[0]] : "—";
-            var cls = cells[col[0] + "_cls"];
-            if (cls) td.className = cls;
-            if (col[0] === "sci_win" && _rateSciLine != null && cells.sci_win_value != null
-                && cells.sci_win_value < _rateSciLine) td.classList.add("rate-low");
-            td.style.background = tint;
-            tr.appendChild(td);
-          });
-          var chip = chipCell(sid, row.pair);
-          chip.style.background = tint;
-          tr.appendChild(chip);
-          tbody.appendChild(tr);
-        });
+      var table = document.createElement("table");
+      table.className = "qm-table cd-table";
+      table.appendChild(headRows(metrics));
+      var tbody = document.createElement("tbody");
+      block[1].forEach(function(row) { tbody.appendChild(pairRow(row, metrics)); });
+      table.appendChild(tbody);
+      var wrap = document.createElement("div");
+      wrap.style.overflowX = "auto";
+      wrap.appendChild(table);
+      host.appendChild(wrap);
+    });
+  }
+
+  function headRows(metrics) {
+    var thead = document.createElement("thead");
+    var top = document.createElement("tr");
+    var sub = document.createElement("tr");
+    var name = document.createElement("th");
+    name.rowSpan = 2;
+    name.className = "pair-name";
+    name.textContent = _CH_COLUMNS[0][1];
+    top.appendChild(name);
+    subjects.forEach(function(sid) {
+      var th = document.createElement("th");
+      th.colSpan = metrics.length + 1;
+      th.className = "member-start";
+      th.textContent = sid;
+      top.appendChild(th);
+      metrics.concat([["decision", "Decision"]]).forEach(function(col, j) {
+        var h = document.createElement("th");
+        if (j === 0) h.className = "member-start";
+        h.textContent = col[1];
+        if (_CH_WAVELENGTHS.length && _WAVELENGTH_COLUMNS.indexOf(col[0]) >= 0) {
+          var wl = document.createElement("span");
+          wl.className = "wl";
+          wl.textContent = _CH_WAVELENGTHS.join(" / ") + " nm";
+          h.appendChild(wl);
+        }
+        sub.appendChild(h);
       });
     });
+    thead.appendChild(top);
+    thead.appendChild(sub);
+    return thead;
+  }
+
+  function pairRow(row, metrics) {
+    var tr = document.createElement("tr");
+    var tdName = document.createElement("td");
+    tdName.className = "pair-name";
+    tdName.textContent = row.pair;
+    tr.appendChild(tdName);
+    subjects.forEach(function(sid) {
+      var cells = row.by_sub[sid] || {};
+      // each member's own verdict tints its own columns
+      var tint = cells.is_bad ? "#fff8f8" : "";
+      metrics.forEach(function(col, j) {
+        var td = document.createElement("td");
+        td.textContent = cells[col[0]] != null ? cells[col[0]] : "—";
+        var cls = cells[col[0] + "_cls"];
+        if (cls) td.className = cls;
+        if (j === 0) td.classList.add("member-start");
+        if (col[0] === "sci_win" && _rateSciLine != null && cells.sci_win_value != null
+            && cells.sci_win_value < _rateSciLine) td.classList.add("rate-low");
+        td.style.background = tint;
+        tr.appendChild(td);
+      });
+      var chip = chipCell(sid, row.pair);
+      chip.style.background = tint;
+      tr.appendChild(chip);
+    });
+    return tr;
   }
 
   function chipCell(sid, pair) {

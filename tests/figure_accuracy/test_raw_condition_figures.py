@@ -163,6 +163,14 @@ def test_the_table_prints_both_wavelengths_of_the_condition(raw_condition_run, b
 
 
 @pytest.mark.parametrize("block", BLOCKS)
+def test_each_page_draws_its_own_brain_figure(raw_condition_run, block):
+    # graded by the condition's own SCI, so the file is the condition's, never the run's
+    href = _page(raw_condition_run, block)["figure_paths"]["brain_views"]["src"]
+    assert f"_cond-{block}_" in href and href.endswith("_desc-rawbrainviews_nirs.png")
+    assert (raw_condition_run.out / "sub-01" / href).stat().st_size > 0
+
+
+@pytest.mark.parametrize("block", BLOCKS)
 def test_each_trial_image_is_its_channel_s_trials_in_the_condition(raw_condition_run, epochs_by_block, block):
     epochs = epochs_by_block[block]
     for pair in raw_condition_run.truth.long_pairs:

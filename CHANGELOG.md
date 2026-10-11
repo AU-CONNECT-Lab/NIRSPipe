@@ -74,6 +74,10 @@ All notable changes to this project will be documented in this file.
 - Per-channel Status prints BAD alone for the coupled-window rule, which each table's note states once; BAD (manual) for a hand rejection
 - A one-stage HbO–HbR panel draws its matrix at a two-stage column's width, centred, instead of page-wide
 - Dyad head maps draw a channel with no value in the subject maps' light grey
+- The raw viewer no longer shows a Provenance section
+- The raw viewer draws the subject report's 3D and optode-map quality figure in place of its 3D channel plot, condition pages their own
+- The dyad raw report's channel table sets the two members side by side, long and short channels in separate tables, without whole-run SCI
+- The dyad raw report's simultaneous-movement numbers become a table under the motion figures instead of their own section
 
 ### Fixed
 - Accelerometer channels spelled `acc-x` are recognised, so the motion panels and IMU summaries include them

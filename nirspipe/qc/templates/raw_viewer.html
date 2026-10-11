@@ -28,7 +28,7 @@ select#run-select {
 .panel-head .hint { font-weight: 400; }
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
-.row-layout  { grid-template-columns: 1fr 2fr; }
+.row-layout  { grid-template-columns: minmax(0, 640px); }
 .row-psd-ep  { grid-template-columns: 1fr; }
 @media (max-width: 900px) {
   .row-main, .row-layout { grid-template-columns: 1fr; }
@@ -175,10 +175,6 @@ select#run-select {
         <p class="panel-head">2D top-down, head-projected</p>
         <div id="layout-2d-plot"></div>
       </div>
-      <div>
-        <p class="panel-head">Channel positions (3D, fsaverage)</p>
-        <div id="layout-3d-plot"></div>
-      </div>
     </div>
   </div>
 </section>
@@ -242,6 +238,13 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
+    {#- the subject report's figure, so a run reads the same before the pipeline and after -#}
+    <div id="brain-views-block" style="display:none">
+      <h3 class="qm-sub">Channel quality: 3D &amp; optode map</h3>
+      <p class="qm-note" id="brain-views-note"></p>
+      <img id="brain-views-img" class="responsive" alt="Brain views and optode map" />
+      <p class="fig-path" id="brain-views-path"></p>
+    </div>
   </div>
 </section>
 
@@ -478,6 +481,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadMotionDetail();
   loadHbCorr();
   loadSciPsp();
+  loadBrainViews();
   loadSqm();
   loadChannelSummary();
   loadConditionSummary();
@@ -607,7 +611,6 @@ function selectChannel(pair) {
   if (tmpl) _setIframeSrc("detail-plot", tmpl.replace("{pair}", _pairFname(pair)), 900);
 
   highlightOptode2D(pair);
-  highlightOptode3D(pair);
 }
 
 // ─── layout ───────────────────────────────────────────────────────────────────
@@ -624,19 +627,6 @@ function loadLayout() {
       });
       document.getElementById("layout-2d-plot").on("plotly_doubleclick", function() {
         toggleBadFromOptode();
-      });
-    }
-    if (d.layout_3d_figure) {
-      Plotly.newPlot("layout-3d-plot", d.layout_3d_figure.data, d.layout_3d_figure.layout,
-                     { responsive: true });
-      document.getElementById("layout-3d-plot").on("plotly_click", function(evt) {
-        var pt = evt.points[0];
-        if (!pt) return;
-        var tr = document.getElementById("layout-3d-plot").data[pt.curveNumber];
-        if (tr.type !== "scatter3d" || !tr.customdata) return;
-        var ch = Array.isArray(pt.customdata) ? pt.customdata[0] : pt.customdata;
-        if (!ch) return;
-        selectChannel(chPair(ch)); highlightTrace(ch);
       });
     }
   }
@@ -659,23 +649,6 @@ function highlightOptode2D(pair) {
   Plotly.restyle("layout-2d-plot", {
     "marker.size": [sizes], "marker.opacity": [opacities], "marker.line.width": [lineWidths],
   }, [1]);
-}
-
-function highlightOptode3D(pair) {
-  var div = document.getElementById("layout-3d-plot");
-  if (!div || !div.data) return;
-  var hlIdx = div.data.findIndex(function(t) { return t.name === "_hl"; });
-  var chIdx = div.data.findIndex(function(t) { return t.customdata && t.customdata.length > 0; });
-  if (hlIdx < 0 || chIdx < 0) return;
-  var tr = div.data[chIdx];
-  for (var p = 0; p < (tr.customdata || []).length; p++) {
-    if (chPair(tr.customdata[p]) === pair) {
-      setTimeout(function() {
-        Plotly.restyle("layout-3d-plot", { x:[[tr.x[p]]], y:[[tr.y[p]]], z:[[tr.z[p]]] }, [hlIdx]);
-      }, 0);
-      return;
-    }
-  }
 }
 
 function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
@@ -750,6 +723,20 @@ function loadSciPsp() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
   _showSection("SciPsp", !!(p && p.src));
   if (p && p.src) _setIframeSrc("sci-psp-plot", p.src, p.h || 400);
+}
+
+// ─── brain views ──────────────────────────────────────────────────────────────
+function loadBrainViews() {
+  var d = _STATIC_DATA[_run_idx] || {};
+  var p = (d.figure_paths || {}).brain_views;
+  var block = document.getElementById("brain-views-block");
+  if (!block) return;
+  block.style.display = (p && p.src) ? "" : "none";
+  if (!(p && p.src)) return;
+  document.getElementById("brain-views-img").src = p.src;
+  document.getElementById("brain-views-path").textContent = p.src;
+  document.getElementById("brain-views-note").innerHTML = {{ section_note('quality.brain_views') | tojson }}
+    + (d.condition_label ? " " + {{ section_note('quality.brain_views_condition') | tojson }} : "");
 }
 
 // ─── PSD (mean) ───────────────────────────────────────────────────────────────
@@ -996,7 +983,7 @@ function switchRun(idx) {
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
-    loadSciPsp(); loadSqm(); loadChannelSummary(); loadConditionSummary();
+    loadSciPsp(); loadBrainViews(); loadSqm(); loadChannelSummary(); loadConditionSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();
     if (window.qcShowGroup) window.qcShowGroup(_run_idx);

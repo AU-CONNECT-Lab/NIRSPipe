@@ -1,4 +1,4 @@
-"""Both raw reports draw the provenance graph their footer table describes, and link it."""
+"""The dyad raw report draws the provenance graph its footer table describes; the raw viewer has none."""
 
 import json
 
@@ -6,7 +6,7 @@ from nirspipe.io.derivatives import group_data_dir, group_report_dir
 from nirspipe.io.naming import report_name
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.hyper import hyper_report
-from nirspipe.qc.subject.prep_raw_report import _page_provenance, _shell_vars
+from nirspipe.qc.subject.prep_raw_report import _shell_vars
 
 
 def _sidecar(directory, name):
@@ -20,23 +20,11 @@ _RUNS = [{"subject_id": "01", "session": None, "task": "hold"}]
 
 # ---- the subject raw viewer ----
 
-def test_the_viewer_draws_the_graph_beside_its_figures(tmp_path):
+def test_the_viewer_carries_no_provenance_section(tmp_path):
+    # its lineage is one input and the record, which the record's sidecar already lists
     _sidecar(tmp_path / "nirs", "sub-01_task-hold_desc-od_nirs")
-    href = _page_provenance(_RUNS, tmp_path / "x_report.html", tmp_path)
-    assert href and href.startswith("figures/") and href.endswith(".png")
-    assert (tmp_path / href).exists()
-
-
-def test_the_viewer_footer_links_the_graph_it_drew(tmp_path):
-    _sidecar(tmp_path / "nirs", "sub-01_task-hold_desc-od_nirs")
-    out = tmp_path / "x_report.html"
-    shell = _shell_vars(_RUNS, out, tmp_path, 0.8, _page_provenance(_RUNS, out, tmp_path))
-    assert shell["provenance_rows"]
-    assert shell["provenance_path"]
-
-
-def test_a_tree_without_sidecars_draws_nothing(tmp_path):
-    assert _page_provenance(_RUNS, tmp_path / "x_report.html", tmp_path) is None
+    shell = _shell_vars(_RUNS, tmp_path / "x_report.html", 0.8)
+    assert "provenance_rows" not in shell and "provenance_path" not in shell
 
 
 # ---- the dyad raw report ----

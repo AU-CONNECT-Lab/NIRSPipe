@@ -181,6 +181,13 @@ def test_the_decision_table_s_sci_is_each_member_s_own_windowed_sci(groups, grou
 
 
 @pytest.mark.parametrize("group", GROUPS)
+def test_the_decision_table_leaves_out_the_whole_run_sci(groups, group):
+    # two members side by side; screening reads the windowed SCI, which stays
+    columns = [key for key, _ in js_var(_page(groups, group), "_CH_COLUMNS")]
+    assert "sci_whole" not in columns and "sci_win" in columns
+
+
+@pytest.mark.parametrize("group", GROUPS)
 def test_the_channel_summary_is_drawn(groups, group):
     assert groups.figure(group, "desc-rawchsummary_nirs.html").exists()
 
