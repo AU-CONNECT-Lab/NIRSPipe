@@ -49,6 +49,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("motion_correction", {"motion_correction": "tpca"}, "motion_tpca"),
     ("motion_correction", {"motion_correction": "spline"}, "motion_spline"),
     ("motion_correction", {"motion_correction": "spline_sg"}, "motion_spline_sg"),
+    ("motion_correction", {"motion_correction": "wavelet_tddr"}, "motion_wavelet_tddr"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
     ("motion_correction", {}, None),
     ("bandpass", {"high_pass": 0.01, "low_pass": 0.5}, "bandpass"),
@@ -552,6 +553,17 @@ def test_the_tpca_sentence_states_the_package_design():
     for value in (f"{motion.TPCA_T_MOTION:g} s", f"{motion.TPCA_STD_THRESH:g} standard",
                   f"{motion.TPCA_T_MASK:g} s either side", f"less than {motion.TPCA_N_SV:g}",
                   f"{motion.TPCA_MAX_ITER} passes"):
+        assert value in line, value
+
+
+def test_the_wavelet_tddr_sentence_states_the_order_and_the_wavelet_design():
+    from nirspipe.pipeline import motion
+
+    line = step_sentence("motion_correction", {"motion_correction": "wavelet_tddr"})
+    assert "{" not in line
+    assert line.index("wavelet filtering") < line.index("temporal derivative distribution repair")
+    for value in (f"N minus {motion.WAVELET_LOWEST_SCALE} levels", f"({motion.WAVELET})",
+                  f"{motion.WAVELET_IQR_FACTOR:g} interquartile", "TDDR was applied to the reconstructed"):
         assert value in line, value
 
 

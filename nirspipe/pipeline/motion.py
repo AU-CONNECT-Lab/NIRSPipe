@@ -1,4 +1,5 @@
-"""Motion artifact correction for optical density signals: tddr, wavelet, tpca, spline, spline_sg."""
+"""Motion artifact correction for optical density signals: tddr, wavelet, tpca, spline, spline_sg,
+and wavelet_tddr (wavelet, then tddr)."""
 
 from typing import Any, Literal
 
@@ -13,7 +14,7 @@ from scipy.sparse.linalg import spsolve
 from nirspipe.utils import pair_of
 from nirspipe.utils.lineage import stamp
 
-MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "spline_sg", "none"]
+MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr", "none"]
 
 
 def _mround(x: float) -> int:
@@ -623,6 +624,9 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
         corrected, params["spline"] = _spline_motion_correct(raw_od)
     elif method == "spline_sg":
         corrected, params["spline_sg"] = _spline_sg_motion_correct(raw_od)
+    elif method == "wavelet_tddr":
+        corrected = mne.preprocessing.nirs.temporal_derivative_distribution_repair(
+            _wavelet_motion_correct(raw_od))
     elif method == "none":
         corrected = raw_od
     else:

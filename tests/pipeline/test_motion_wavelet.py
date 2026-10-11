@@ -211,6 +211,20 @@ def test_a_missing_method_is_an_error_not_a_default():
         correct_motion(_od_raw(_od_trace()[0]), method=None)
 
 
+@requires_pywt
+def test_wavelet_tddr_runs_the_wavelet_then_tddr():
+    # the order matters: the reverse gives a different signal
+    info = mne.create_info(["S1_D1 760", "S1_D1 850"], SFREQ, "fnirs_od")
+    raw = mne.io.RawArray(np.vstack([_od_trace(0)[0], _od_trace(1)[0]]), info, verbose="error")
+    for ch, wavelength in zip(raw.info["chs"], (760.0, 850.0)):
+        ch["loc"][9] = wavelength
+    tddr = mne.preprocessing.nirs.temporal_derivative_distribution_repair
+    out = correct_motion(raw, method="wavelet_tddr")
+    assert stage_of(out) == "motcorrected"
+    assert (out.get_data() == tddr(_wavelet_motion_correct(raw)).get_data()).all()
+    assert not np.allclose(out.get_data(), _wavelet_motion_correct(tddr(raw)).get_data())
+
+
 def test_every_cli_offers_every_method():
     import argparse
 
@@ -228,7 +242,8 @@ def test_every_cli_offers_every_method():
     found = [c for build in (qc_parser, run_parser) for c in motion_choices(build())]
     assert found, "no --motion-correction argument reached"
     for choices in found:
-        assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "spline_sg", "none"}
+        assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
+                                "none"}
 
 
 def _gui_motion_dropdown() -> str:

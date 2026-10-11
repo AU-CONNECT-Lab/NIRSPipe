@@ -472,7 +472,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "sci_marking":
         return _screening_slots(params)
     # motion: constants of the package rather than of the run, so they are read here
-    if key == "motion_wavelet":
+    if key in ("motion_wavelet", "motion_wavelet_tddr"):
         return {"wavelet": motion.WAVELET, "iqr_factor": f"{motion.WAVELET_IQR_FACTOR:g}",
                 "lowest_scale": f"{motion.WAVELET_LOWEST_SCALE}"}
     if key == "motion_tpca":
