@@ -439,7 +439,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "of the run's windowed pass, on the same window grid and filter as "
                          "the run. Each page's screening verdict is that condition's; the "
                          "run's own page carries the run's.")
-    pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "tpca", "none"],
+    pr.add_argument("--motion-correction", choices=["tddr", "wavelet", "tpca", "spline", "none"],
                     default="none",
                     help="Run this correction on a copy of the optical density and report "
                          "the recording either side of it: the correction's footprint, the "

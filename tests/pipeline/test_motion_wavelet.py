@@ -211,13 +211,7 @@ def test_a_missing_method_is_an_error_not_a_default():
         correct_motion(_od_raw(_od_trace()[0]), method=None)
 
 
-def test_spline_says_it_has_no_backend():
-    with pytest.raises(NotImplementedError):
-        correct_motion(_od_raw(_od_trace()[0]), method="spline")
-
-
-def test_spline_is_not_offered_by_the_clis():
-    # offering it would pass argparse and fail only at the correction step
+def test_every_cli_offers_every_method():
     import argparse
 
     from nirspipe.cli.qc import _build_parser as qc_parser
@@ -234,8 +228,7 @@ def test_spline_is_not_offered_by_the_clis():
     found = [c for build in (qc_parser, run_parser) for c in motion_choices(build())]
     assert found, "no --motion-correction argument reached"
     for choices in found:
-        assert "spline" not in choices
-        assert {"tddr", "wavelet", "tpca", "none"} <= set(choices)
+        assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "none"}
 
 
 def _gui_motion_dropdown() -> str:
@@ -250,10 +243,6 @@ def _gui_motion_dropdown() -> str:
     # the motion-correction dropdown alone: the censor fill offers a spline of its own
     dropdown = src[src.index('"an-motion-correction"'):]
     return dropdown[:dropdown.index("clearable")]
-
-
-def test_gui_does_not_offer_spline():
-    assert '"value": "spline"' not in _gui_motion_dropdown()
 
 
 def test_gui_offers_exactly_the_cli_choices():

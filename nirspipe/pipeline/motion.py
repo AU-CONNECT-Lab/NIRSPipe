@@ -1,14 +1,14 @@
-"""Motion artifact correction for optical density signals.
-
-tddr, wavelet and tpca are implemented; spline has no backend yet.
-"""
+"""Motion artifact correction for optical density signals: tddr, wavelet, tpca and spline."""
 
 from typing import Any, Literal
 
 import mne
 import mne.io
 import numpy as np
+import scipy.sparse as sp
+from scipy.sparse.linalg import spsolve
 
+from nirspipe.utils import pair_of
 from nirspipe.utils.lineage import stamp
 
 MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "none"]
@@ -120,29 +120,58 @@ TPCA_N_SV = 0.97
 TPCA_MAX_ITER = 5
 
 
-def _tpca_motion_mask(d: np.ndarray, sfreq: float, good: np.ndarray) -> np.ndarray:
-    """Motion samples of a time x channels array, one mask shared by every channel.
+def _motion_mask(x: np.ndarray, sfreq: float, t_motion: float, std_thresh: float,
+                 amp_thresh: float, t_mask: float) -> np.ndarray:
+    """Motion samples of a time x channels array, one mask for all its columns.
 
-    Row r of the change matrix is the largest |d[r + lag] - d[r]| over lags 1..n_lag on each
-    good channel; a flagged row is widened by n_mask rows either side and marks sample r + 1.
+    Row r of the change matrix is the largest |x[r + lag] - x[r]| over lags 1..n_lag on each
+    column; a row where any column exceeds std_thresh SDs of its first difference or
+    amp_thresh is widened by n_mask rows either side and marks sample r + 1.
     """
-    x = d[:, good]
-    mask = np.zeros(len(d), bool)
+    mask = np.zeros(len(x), bool)
     if x.shape[1] == 0 or len(x) < 2:
         return mask
     # MATLAB round, half away from zero: 2.5 samples is 3
-    n_lag = int(np.floor(TPCA_T_MOTION * sfreq + 0.5))
-    n_mask = int(np.floor(TPCA_T_MASK * sfreq + 0.5))
+    n_lag = int(np.floor(t_motion * sfreq + 0.5))
+    n_mask = int(np.floor(t_mask * sfreq + 0.5))
     change = np.zeros((len(x) - 1, x.shape[1]))
     for lag in range(1, min(n_lag, len(x) - 1) + 1):
         change[:len(x) - lag] = np.maximum(change[:len(x) - lag], np.abs(x[lag:] - x[:-lag]))
     sd = np.std(np.diff(x, axis=0), axis=0, ddof=1)
-    hit = np.flatnonzero((change > TPCA_STD_THRESH * sd).any(axis=1)
-                         | (change.max(axis=1) > TPCA_AMP_THRESH))
+    hit = np.flatnonzero((change > std_thresh * sd).any(axis=1)
+                         | (change.max(axis=1) > amp_thresh))
     rows = (hit[:, None] + np.arange(-n_mask, n_mask + 1)).ravel()
     rows = rows[(rows >= 0) & (rows < len(x) - 1)]
     mask[rows + 1] = True
     return mask
+
+
+def _tpca_motion_mask(d: np.ndarray, sfreq: float, good: np.ndarray) -> np.ndarray:
+    """Motion samples of a time x channels array, one mask shared by every good channel."""
+    return _motion_mask(d[:, good], sfreq, TPCA_T_MOTION, TPCA_STD_THRESH, TPCA_AMP_THRESH,
+                        TPCA_T_MASK)
+
+
+def _segment_edges(t_inc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """1-based edges of the motion segments of a 1/0 inclusion vector, as published.
+
+    A start is the last clean sample before a segment (1 if the record starts in motion), an
+    end the segment's last motion sample (n if the record ends in motion):
+
+      t_inc = [1 1 0 0 0 1 1] -> starts [2], ends [5]
+    """
+    n = len(t_inc)
+    starts = np.flatnonzero(np.diff(t_inc) == -1) + 1
+    ends = np.flatnonzero(np.diff(t_inc) == 1) + 1
+    if len(ends) == 0:
+        ends = np.array([n])
+    if len(starts) == 0:
+        starts = np.array([1])
+    if starts[0] > ends[0]:
+        starts = np.r_[1, starts]
+    if starts[-1] > ends[-1]:
+        ends = np.r_[ends, n]
+    return starts, ends
 
 
 def _tpca_pca(d: np.ndarray, motion: np.ndarray, good: np.ndarray,
@@ -166,20 +195,8 @@ def _tpca_pca(d: np.ndarray, motion: np.ndarray, good: np.ndarray,
     u = u[:, :n_remove]
     yc = y - y @ u @ u.T
 
-    # 1-based segment edges, as published: a start is the last clean sample, an end the last
-    # motion sample
-    t_inc = (~motion).astype(int)
-    n = len(t_inc)
-    starts = np.flatnonzero(np.diff(t_inc) == -1) + 1
-    ends = np.flatnonzero(np.diff(t_inc) == 1) + 1
-    if len(ends) == 0:
-        ends = np.array([n])
-    if len(starts) == 0:
-        starts = np.array([1])
-    if starts[0] > ends[0]:
-        starts = np.r_[1, starts]
-    if starts[-1] > ends[-1]:
-        ends = np.r_[ends, n]
+    n = len(motion)
+    starts, ends = _segment_edges((~motion).astype(int))
     cum = np.cumsum(ends - starts)
 
     out = d.copy()
@@ -224,13 +241,164 @@ def _tpca_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, Any]
                  "motion_share_after": float(motion.mean())}
 
 
+# ---- Spline (Scholkmann 2010) ----
+
+# a pair's samples are motion when, within SPLINE_T_MOTION seconds, either of its channels
+# changes by more than SPLINE_STD_THRESH SDs of its first difference or by more than
+# SPLINE_AMP_THRESH in OD
+SPLINE_T_MOTION = 0.5
+SPLINE_STD_THRESH = 50.0
+SPLINE_AMP_THRESH = 5.0
+# seconds marked either side of a detected sample
+SPLINE_T_MASK = 1.0
+# smoothing parameter of the cubic smoothing spline, on time in seconds
+SPLINE_P = 0.99
+# rejoining averages a whole stretch shorter than SPLINE_DT_SHORT s, SPLINE_DT_SHORT s of one
+# shorter than SPLINE_DT_LONG s, and a tenth of a longer one
+SPLINE_DT_SHORT = 0.3
+SPLINE_DT_LONG = 3.0
+
+
+def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str],
+                        good: np.ndarray) -> np.ndarray:
+    """Motion samples per channel, time x channels, detected per source-detector pair.
+
+    Both wavelengths of a pair take the pair's mask, and both feed its detection even when
+    one is marked bad; a bad channel is never marked.
+    """
+    pairs = np.array([pair_of(ch) for ch in ch_names])
+    mask = np.zeros(d.shape, bool)
+    for pair in dict.fromkeys(pairs[good]):
+        cols = pairs == pair
+        rows = _motion_mask(d[:, cols], sfreq, SPLINE_T_MOTION, SPLINE_STD_THRESH,
+                            SPLINE_AMP_THRESH, SPLINE_T_MASK)
+        mask[:, cols & good] = rows[:, None]
+    return mask
+
+
+def _smoothing_spline(t: np.ndarray, y: np.ndarray, p: float) -> np.ndarray:
+    """Cubic smoothing spline of y over t with natural ends, read back at t.
+
+    f = argmin  p * sum_i (y_i - f(t_i))^2 + (1 - p) * integral f''(t)^2 dt
+
+    Solved by the Reinsch algorithm with a = (1 - p) / p: (R + a Q'Q) g = Q'y, f = y - a Q g,
+    where Q (n x n-2) takes second divided differences and R is the tridiagonal Gram matrix
+    of the spline's second derivative. Two points or fewer are returned as they are.
+    """
+    n = len(y)
+    if n < 3:
+        return y.copy()
+    h = np.diff(t)
+    inv = 1.0 / h
+    q = sp.diags([inv[:-1], -inv[:-1] - inv[1:], inv[1:]], [0, -1, -2], shape=(n, n - 2))
+    r = sp.diags([(h[:-1] + h[1:]) / 3, h[1:-1] / 6, h[1:-1] / 6], [0, 1, -1],
+                 shape=(n - 2, n - 2))
+    a = (1 - p) / p
+    g = spsolve((r + a * (q.T @ q)).tocsc(), q.T @ y)
+    return y - a * (q @ g)
+
+
+def _spline_window(length: int, sfreq: float) -> int:
+    """Samples averaged at one end of a stretch when it is rejoined to its neighbour."""
+    if length < SPLINE_DT_SHORT * sfreq:
+        return length
+    if length < SPLINE_DT_LONG * sfreq:
+        return int(np.floor(SPLINE_DT_SHORT * sfreq))
+    return length // 10
+
+
+def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray,
+                    sfreq: float) -> np.ndarray:
+    """One channel's spline correction, with the published segment bookkeeping kept exactly.
+
+    Each motion segment loses its smoothing spline; then each stretch is shifted so the mean
+    over a window at its start meets the mean over a window at the end of the stretch
+    before it, clean stretches from the raw signal and segments from the spline residual.
+    As published, a segment runs from the last clean sample to the last motion sample but
+    one, the last clean stretch starts one sample earlier than the others, and a record that
+    ends in motion keeps its final sample raw.
+    """
+    n = len(y)
+    starts, ends = _segment_edges(t_inc)
+    lengths = ends - starts
+    out = y.copy()
+    for s, e in zip(starts, ends):
+        out[s - 1:e - 1] = y[s - 1:e - 1] - _smoothing_spline(t[s - 1:e - 1], y[s - 1:e - 1],
+                                                              SPLINE_P)
+
+    # first segment: onto the stretch before it, or after it if the record starts in motion
+    s, e = starts[0], ends[0]
+    w_curr = _spline_window(lengths[0], sfreq)
+    if s > 1:
+        w_prev = _spline_window(s - 1, sfreq)
+        mean_prev = out[s - 1 - w_prev:s - 1].mean()
+        mean_curr = out[s - 1:s - 1 + w_curr].mean()
+        out[s - 1:e - 1] = out[s - 1:e - 1] - mean_curr + mean_prev
+    else:
+        w_next = _spline_window((starts[1] if len(starts) > 1 else n) - e + 1, sfreq)
+        mean_curr = out[e - 2 - w_curr:e - 2].mean()
+        mean_next = out[e - 1:e - 1 + w_next].mean()
+        out[s - 1:e - 1] = out[s - 1:e - 1] - mean_curr + mean_next
+
+    for k in range(len(starts) - 1):
+        a, b = ends[k], starts[k + 1] - 1
+        clean_len = b - a + 1
+        w_prev = _spline_window(lengths[k], sfreq)
+        w_curr = _spline_window(clean_len, sfreq)
+        mean_prev = out[a - 1 - w_prev:a - 1].mean()
+        mean_curr = y[a - 1:a - 1 + w_curr].mean()
+        out[a - 1:b] = y[a - 1:b] - mean_curr + mean_prev
+
+        a, b = starts[k + 1], ends[k + 1] - 1
+        w_prev = _spline_window(clean_len, sfreq)
+        w_curr = _spline_window(lengths[k + 1], sfreq)
+        mean_prev = out[a - 1 - w_prev:a - 1].mean()
+        mean_curr = out[a - 1:a - 1 + w_curr].mean()
+        out[a - 1:b] = out[a - 1:b] - mean_curr + mean_prev
+
+    if ends[-1] < n:
+        a = ends[-1] - 1
+        w_prev = _spline_window(lengths[-1], sfreq)
+        w_curr = _spline_window(n - a + 1, sfreq)
+        mean_prev = out[a - 1 - w_prev:a - 1].mean()
+        mean_curr = y[a - 1:a - 1 + w_curr].mean()
+        out[a - 1:] = y[a - 1:] - mean_curr + mean_prev
+    return out
+
+
+def _spline_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, Any]]:
+    """Spline motion correction (Scholkmann 2010), channel by channel in OD space.
+
+    Detect with _spline_motion_mask, then _spline_correct every good channel with motion.
+    Bad channels are returned unchanged. Returns the corrected raw, the share of good-channel
+    samples marked as motion, and the number of segments corrected, summed over channels.
+    """
+    sfreq = float(raw_od.info["sfreq"])
+    if np.floor(SPLINE_DT_SHORT * sfreq) < 1:
+        raise ValueError(f"Spline correction needs at least {1 / SPLINE_DT_SHORT:.4g} Hz; this "
+                         f"recording has {sfreq:g} Hz, at which its rejoining would average "
+                         f"over empty windows.")
+    raw = raw_od.copy()
+    d = raw.get_data().T
+    good = ~np.isin(raw.ch_names, raw.info["bads"])
+    motion = _spline_motion_mask(d, sfreq, raw.ch_names, good)
+    out = d.copy()
+    n_segments = 0
+    for ch in np.flatnonzero(motion.any(axis=0)):
+        t_inc = (~motion[:, ch]).astype(int)
+        out[:, ch] = _spline_correct(d[:, ch], t_inc, raw.times, sfreq)
+        n_segments += len(_segment_edges(t_inc)[0])
+    raw.apply_function(lambda _: out.T, picks="all", channel_wise=False)
+    return raw, {"motion_share": float(motion[:, good].mean()) if good.any() else 0.0,
+                 "segments": n_segments}
+
+
 # ---- Dispatch ----
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
     """Apply motion artifact correction to the OD signal.
 
-    Returns corrected raw (modified in-place for tddr). tpca also records what its passes did
-    on the stamp, under ``tpca``.
-    Raises NotImplementedError for spline (no backend yet).
+    Returns corrected raw (modified in-place for tddr). tpca and spline also record what
+    they did on the stamp, under their own name.
     """
     if method is None:
         raise ValueError("--motion-correction is required.")
@@ -242,11 +410,7 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
     elif method == "tpca":
         corrected, params["tpca"] = _tpca_motion_correct(raw_od)
     elif method == "spline":
-        raise NotImplementedError(
-            "Spline correction has no backend. Use tddr, wavelet, tpca or none. "
-            "It is kept as a named method rather than an unknown one so the API says "
-            "which it is; the CLI and the GUI do not offer it."
-        )
+        corrected, params["spline"] = _spline_motion_correct(raw_od)
     elif method == "none":
         corrected = raw_od
     else:

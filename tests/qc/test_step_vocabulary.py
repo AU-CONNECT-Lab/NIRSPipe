@@ -47,6 +47,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("motion_correction", {"motion_correction": "tddr"}, "motion_tddr"),
     ("motion_correction", {"motion_correction": "wavelet"}, "motion_wavelet"),
     ("motion_correction", {"motion_correction": "tpca"}, "motion_tpca"),
+    ("motion_correction", {"motion_correction": "spline"}, "motion_spline"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
     ("motion_correction", {}, None),
     ("bandpass", {"high_pass": 0.01, "low_pass": 0.5}, "bandpass"),
@@ -550,6 +551,18 @@ def test_the_tpca_sentence_states_the_package_design():
     for value in (f"{motion.TPCA_T_MOTION:g} s", f"{motion.TPCA_STD_THRESH:g} standard",
                   f"{motion.TPCA_T_MASK:g} s either side", f"less than {motion.TPCA_N_SV:g}",
                   f"{motion.TPCA_MAX_ITER} passes"):
+        assert value in line, value
+
+
+def test_the_spline_sentence_states_the_package_design():
+    from nirspipe.pipeline import motion
+
+    line = step_sentence("motion_correction", {"motion_correction": "spline"})
+    assert "{" not in line
+    for value in (f"within {motion.SPLINE_T_MOTION:g} s", f"{motion.SPLINE_STD_THRESH:g} standard",
+                  f"{motion.SPLINE_AMP_THRESH:g} in OD", f"{motion.SPLINE_T_MASK:g} s either side",
+                  f"smoothing parameter {motion.SPLINE_P:g}",
+                  f"{motion.SPLINE_DT_SHORT:g} s windows", f"beyond {motion.SPLINE_DT_LONG:g} s"):
         assert value in line, value
 
 

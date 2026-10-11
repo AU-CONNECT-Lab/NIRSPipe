@@ -479,6 +479,12 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"t_motion": f"{motion.TPCA_T_MOTION:g}", "std_thresh": f"{motion.TPCA_STD_THRESH:g}",
                 "amp_thresh": f"{motion.TPCA_AMP_THRESH:g}", "t_mask": f"{motion.TPCA_T_MASK:g}",
                 "n_sv": f"{motion.TPCA_N_SV:g}", "max_iter": f"{motion.TPCA_MAX_ITER}"}
+    if key == "motion_spline":
+        return {"t_motion": f"{motion.SPLINE_T_MOTION:g}",
+                "std_thresh": f"{motion.SPLINE_STD_THRESH:g}",
+                "amp_thresh": f"{motion.SPLINE_AMP_THRESH:g}", "t_mask": f"{motion.SPLINE_T_MASK:g}",
+                "p": f"{motion.SPLINE_P:g}", "dt_short": f"{motion.SPLINE_DT_SHORT:g}",
+                "dt_long": f"{motion.SPLINE_DT_LONG:g}"}
     if key == "beer_lambert":
         return {"dpf": _dpf_phrase(params.get("dpf"))}
     if key == "bandpass":

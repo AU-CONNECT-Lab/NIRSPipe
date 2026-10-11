@@ -55,6 +55,10 @@ citations = ["Molavi2012"]
 plain = "Motion artifacts in the OD were corrected with targeted principal component analysis {citations}: samples where any channel not marked bad changed within {t_motion} s by more than {std_thresh} standard deviations of its first difference, or by more than {amp_thresh} in OD, were marked as motion together with {t_mask} s either side, and the leading principal components of the marked samples across those channels, carrying less than {n_sv} of their variance between them, were removed. Detection and removal were repeated, removing the first pass's number of components each time, until no motion was marked or {max_iter} passes had run."
 citations = ["Yucel2014"]
 
+[motion_spline]
+plain = "Motion artifacts in the OD were marked for each source-detector pair at samples where either wavelength changed within {t_motion} s by more than {std_thresh} standard deviations of its first difference, or by more than {amp_thresh} in OD, together with {t_mask} s either side, and corrected with spline interpolation {citations}: in each channel not marked bad, a cubic smoothing spline (smoothing parameter {p}, time in seconds) was fitted to each marked segment and subtracted, and every segment and every stretch between segments was shifted to continue from the one before it, matching means over {dt_short} s windows (the whole stretch when shorter, a tenth of it beyond {dt_long} s)."
+citations = ["Scholkmann2010"]
+
 [beer_lambert]
 plain = "Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law {citations}, using {dpf}."
 citations = ["Delpy1988", "Cope1988"]
