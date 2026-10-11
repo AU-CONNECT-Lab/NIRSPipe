@@ -20,7 +20,7 @@ NOTES = {
         'That is on the <a href="{href}">post report</a>.',
     "hyper_raw.blocks_verdict":
         "Times are on the shared clock, after the crop. A block whose rows do not line up in "
-        "the section 1 timeline is a trigger that landed late in one member, or two clocks "
+        "the timeline above is a trigger that landed late in one member, or two clocks "
         "drifting apart.",
     "hyper_raw.alignment":
         "Cropping at the first shared trigger removes a constant offset and nothing else "
@@ -58,23 +58,23 @@ NOTES = {
         "<em>uncorrected</em> median and z-score the carpets by the uncorrected mean and SD, "
         "so a drop here is movement removed, not a moved yardstick.",
     "hyper_raw.motion_together":
-        "The two figures in numbers, each before &rarr; after motion correction. A "
+        "The two motion figures in numbers, each before &rarr; after motion correction. A "
         "member&rsquo;s row is its mean GVTD over its own median. <b>Both at once</b> is the "
         "mean of the two traces&rsquo; pointwise minimum, high only where both moved "
         "together; the row under it is how much the correction lowered it, and the last row "
         "counts the amber strip&rsquo;s spans. Both moving at once raises any synchrony "
         "measured on the pair, and shifting or scrambling one member does not remove it.",
     "hyper_raw.head":
-        "The same screening on the montage, member by member: panel a shows each "
-        "block&rsquo;s share of coupled windows, panel b each window&rsquo;s SCI. A long "
+        "The same screening on the montage, member by member: the first map shows each "
+        "block&rsquo;s share of coupled windows, the second each window&rsquo;s SCI. A long "
         "channel is a bar of discs along its path, a short one a larger disc in a grey ring, "
         "both on one colour scale. Light grey is a channel with no value.",
     "hyper_raw.head_by_condition":
         "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
         "in that member.",
     "hyper_raw.head_slider":
-        "Colour is the window&rsquo;s SCI. The block the slider sits in is named above the "
-        "heads.",
+        "One head per member, moved through the recording by the slider. Colour is the "
+        "window&rsquo;s SCI; the block the slider sits in is named above the heads.",
     "hyper_raw.comparable":
         "Everything downstream matches channels by S-D label and assumes one clock. An "
         "unmatched label becomes a blank row without warning. Different nominal sampling "
@@ -100,7 +100,8 @@ NOTES = {
         "<code>nirspipe-rate hyper</code>. A red cell is under the line that member was "
         "screened at; the outline changes no verdict.",
     "hyper_raw.per_channel":
-        "Both members on the same axes, the one view a single-member report cannot give.",
+        "Both members&rsquo; signals and PSD on the same axes, the one view a single-member "
+        "report cannot give.",
 
     # ---- Post dyad report ----
     "hyper_post.scope_condition":

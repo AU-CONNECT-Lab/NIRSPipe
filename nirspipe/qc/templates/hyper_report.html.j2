@@ -31,15 +31,15 @@
 {% endblock %}
 
 {# One cell per section, anchored to it, as the subject and post bars are. An id may differ
-   from the anchor it points at (`Signal_Quality` for #Quality): a rating is filed under the
+   from the anchor it points at (`Signal_Quality` for #Metrics): a rating is filed under the
    id, so renaming one leaves an old verdict on disk with no cell to show it in. #}
 {% set nav_modules = [nav_bar([
   ("Alignment", "Alignment"),
-  ("Usable", "Usable time"),
+  ("Usable", "Shared Usable Time"),
   ("Motion", "Motion"),
-  ("Head", "Head"),
-  ("Signal_Quality", "Comparable", "#Quality"),
-  ("Channels", "Channels"),
+  ("Head", "Where on the Head"),
+  ("Signal_Quality", "Quality Metrics", "#Metrics"),
+  ("Channels", "By channel", "#ChannelSummary"),
 ], siblings=[{"label": "Post report →", "href": post_href,
               "current": not post_href}],
    index=index_href or "", index_label="← All windows")] %}
@@ -89,57 +89,48 @@
     </table>
   </div>
   <p class="qm-note" style="margin-top:0.75rem;">{{ section_note('hyper_raw.scope') }}{% if post_href %} {{ section_note('hyper_raw.scope_post_link', href=post_href) }}{% endif %}</p>
-
-  <h3 style="margin-top:1.1rem;">The two clocks</h3>
-  <p class="qm-note">{{ section_note('hyper.clocks') }}</p>
-  <div class="summary-grid">
-    <table class="qm-table qm-flat" id="align-table">
-      <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
-      <tbody id="align-tbody"></tbody>
-    </table>
-    <table class="qm-table qm-flat" id="blocks-table">
-      <thead><tr><th>Block</th><th>Start (s)</th><th>Length (s)</th></tr></thead>
-      <tbody id="blocks-tbody"></tbody>
-    </table>
-  </div>
-  <p class="qm-note" id="blocks-verdict"></p>
   <h3 style="margin-top:1rem;">Run command</h3>
   <pre>{{ run_command }}</pre>
 </div>
 
-<!-- ================================================= 2. alignment and clocks -->
-<h2 id="Alignment">1 &middot; Alignment and the two clocks</h2>
-<p class="step-desc">{{ section_note('hyper_raw.alignment') }}</p>
+{#- The recording's steps, then the results as the subject report keeps them: the tables
+    under Quality Metrics, the grid under Quality Figures. Section ids are the rating bar's
+    anchors. -#}
+<h2>Recording</h2>
 
-{% if figure_paths.alignment_timeline %}
-<section id="Timeline" class="step">
-  <h3 class="step-title">The blocks, before and after alignment</h3>
+<!-- ------------------------------------------------------------ alignment -->
+<section id="Alignment" class="step">
+  <h3 class="step-title">Alignment</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.alignment') }}</p>
+    {% if figure_paths.alignment_timeline %}
     <iframe class="plotly-frame" src="{{ figure_paths.alignment_timeline.src }}"
             title="conditions before and after alignment"
             style="height:{{ figure_paths.alignment_timeline.h }}px"></iframe>
     <p class="qm-note">{{ section_note('hyper_raw.alignment_timeline') }}</p>
     <p class="fig-path">{{ figure_paths.alignment_timeline.src }}</p>
-    {% if onset_residuals %}
-    <p class="qm-note">{{ section_note('hyper_raw.onset_residuals', ref=subject_ids[0], tol="%.3f"|format(onset_tol_s), n="%g"|format(onset_tol_samples)) }}</p>
-    <table class="qm-table qm-flat" id="onset-residual-table">
-      <thead><tr><th>Condition</th><th>Member</th><th>Onset difference (s)</th><th>Within tolerance</th></tr></thead>
-      <tbody>
-      {% for r in onset_residuals %}
-        <tr><td>{{ r.condition }}</td><td>{{ r.subject_id }}</td><td>{{ "%.3f"|format(r.residual_s) }}</td><td>{{ "yes" if r.within else "no" }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
     {% endif %}
+    {#- the bookkeeping the timeline draws: the offset each member was cropped by, and where
+        each block landed on the shared clock -#}
+    <h3>The two clocks</h3>
+    <p class="qm-note">{{ section_note('hyper.clocks') }}</p>
+    <div class="summary-grid">
+      <table class="qm-table qm-flat" id="align-table">
+        <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
+        <tbody id="align-tbody"></tbody>
+      </table>
+      <table class="qm-table qm-flat" id="blocks-table">
+        <thead><tr><th>Block</th><th>Start (s)</th><th>Length (s)</th></tr></thead>
+        <tbody id="blocks-tbody"></tbody>
+      </table>
+    </div>
+    <p class="qm-note" id="blocks-verdict"></p>
   </div>
 </section>
-{% endif %}
 
-<!-- ============================================================ per-channel signals -->
-<h2 id="Signals">2 &middot; Per-channel signals</h2>
-
-<section id="PerChannel" class="step">
-  <h3 class="step-title">a. Both members on one set of axes <span class="hint">signal overlay and PSD</span></h3>
+<!-- -------------------------------------------------- per-channel signals -->
+<section id="Signals" class="step">
+  <h3 class="step-title">Per-channel Signals</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.per_channel') }}</p>
     <select id="ch-select" class="ch-select"></select>
@@ -148,98 +139,78 @@
   </div>
 </section>
 
-<!-- ================================================== 3. shared usable time -->
-<h2 id="Usable">3 &middot; Shared usable time</h2>
-<p class="step-desc">{{ section_note('hyper_raw.usable') }}</p>
-
-{% if figure_paths.usable_time %}
-<section id="UsablePanel" class="step">
-  <h3 class="step-title">a. Which pairs, when, and why not</h3>
+<!-- --------------------------------------------------- shared usable time -->
+<section id="Usable" class="step">
+  <h3 class="step-title">Shared Usable Time</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.usable') }}</p>
+    {% if figure_paths.usable_time %}
     <iframe class="plotly-frame" src="{{ figure_paths.usable_time.src }}"
             title="usable channel pairs over the shared clock"
             style="height:{{ figure_paths.usable_time.h }}px"></iframe>
     <p class="qm-note">{{ section_note('hyper_raw.usable_panel') }}</p>
     <p class="fig-path">{{ figure_paths.usable_time.src }}</p>
+    {% endif %}
   </div>
 </section>
-{% endif %}
 
-<!-- ======================================================== 3. motion -->
+<!-- --------------------------------------------------------------- motion -->
 {% if figure_paths.motion_before %}
-<h2 id="Motion">4 &middot; Motion, and whether they moved together</h2>
-<p class="step-desc">{{ section_note('hyper_raw.motion') }}</p>
-
-<section id="MotionPanel" class="step">
-  <h3 class="step-title">a. As it arrived</h3>
+<section id="Motion" class="step">
+  <h3 class="step-title">Motion</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.motion') }}</p>
+    <h3>Before motion correction</h3>
     <iframe class="plotly-frame" src="{{ figure_paths.motion_before.src }}"
             title="motion per member over the shared clock, before correction"
             style="height:{{ figure_paths.motion_before.h }}px"></iframe>
     <p class="qm-note">{{ section_note('hyper_raw.motion_before') }}</p>
     <p class="fig-path">{{ figure_paths.motion_before.src }}</p>
-  </div>
-</section>
-
-{% if figure_paths.motion_after %}
-<section id="MotionAfter" class="step">
-  <h3 class="step-title">b. After motion correction</h3>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.motion_after') }}</p>
+    {% if figure_paths.motion_after %}
+    <h3>After motion correction</h3>
+    <p class="qm-note">{{ section_note('hyper_raw.motion_after') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.motion_after.src }}"
             title="motion per member over the shared clock, after correction"
             style="height:{{ figure_paths.motion_after.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.motion_after.src }}</p>
+    {% endif %}
   </div>
 </section>
 {% endif %}
 
-{#- the two figures' numbers, under them rather than as a step of their own -#}
-<div class="details-body" id="motion-summary">
-  <table class="qm-table qm-flat qm-unified" id="motion-table"></table>
-  <p class="qm-note">{{ section_note('hyper_raw.motion_together') }}</p>
-</div>
-{% endif %}
-
-<!-- ==================================================== 3b. where on the head -->
+<!-- ---------------------------------------------------- where on the head -->
 {% if figure_paths.head_by_condition or figure_paths.head_slider %}
-<h2 id="Head">5 &middot; Where on the head</h2>
-<p class="step-desc">{{ section_note('hyper_raw.head') }}</p>
-
-{% if figure_paths.head_by_condition %}
-<section id="HeadByCondition" class="step">
-  <h3 class="step-title">a. Per block</h3>
+<section id="Head" class="step">
+  <h3 class="step-title">Where on the Head</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.head_by_condition') }}</p>
+    <p class="step-desc">{{ section_note('hyper_raw.head') }}</p>
+    {% if figure_paths.head_by_condition %}
+    <h3>Per block</h3>
+    <p class="qm-note">{{ section_note('hyper_raw.head_by_condition') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_by_condition.src }}"
             title="coupled-window share per member per block"
             style="height:{{ figure_paths.head_by_condition.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.head_by_condition.src }}</p>
-  </div>
-</section>
-{% endif %}
-
-{% if figure_paths.head_slider %}
-<section id="HeadSlider" class="step">
-  <h3 class="step-title">b. Over the recording <span class="hint">one head per member, with a slider</span></h3>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.head_slider') }}</p>
+    {% endif %}
+    {% if figure_paths.head_slider %}
+    <h3>Over the recording</h3>
+    <p class="qm-note">{{ section_note('hyper_raw.head_slider') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.head_slider.src }}"
             title="SCI per channel over the recording"
             style="height:{{ figure_paths.head_slider.h }}px"></iframe>
     <p class="fig-path">{{ figure_paths.head_slider.src }}</p>
+    {% endif %}
   </div>
 </section>
 {% endif %}
-{% endif %}
 
-<!-- ================================================== 1. are they comparable -->
-<h2 id="Quality">6 &middot; Are the two members comparable</h2>
-<p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
+<!-- ====================================================== quality metrics -->
+<h2 id="Metrics">Quality Metrics</h2>
 
 <section id="Comparable" class="step">
-  <h3 class="step-title">a. Montage and rate</h3>
+  <h3 class="step-title">Montage and rate</h3>
   <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
     <table class="qm-table qm-flat" id="compare-table">
       <thead><tr><th>Member</th><th>Sampling rate (Hz)</th><th>Aligned duration (s)</th>
         <th>S-D pairs</th><th>Long pairs</th></tr></thead>
@@ -251,7 +222,7 @@
 
 {% if subject_metrics_rows %}
 <section id="MemberMetrics" class="step">
-  <h3 class="step-title">b. Per-member quality metrics</h3>
+  <h3 class="step-title">Member metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.member_metrics') }}</p>
     {{ subject_metrics(subject_metrics_rows) }}
@@ -260,28 +231,56 @@
 {% endif %}
 
 <section id="GroupSQM" class="step">
-  <h3 class="step-title">c. Group-level quality metrics</h3>
+  <h3 class="step-title">Dyad metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.group_sqm') }}</p>
     <ul id="sqm-list" class="qm-list"></ul>
   </div>
 </section>
 
-<!-- ============================================================= 5. channels -->
-<h2 id="Channels">7 &middot; Channels</h2>
+{% if onset_residuals %}
+<section id="OnsetCheck" class="step">
+  <h3 class="step-title">Alignment check</h3>
+  <div class="details-body">
+    <p class="qm-note">{{ section_note('hyper_raw.onset_residuals', ref=subject_ids[0], tol="%.3f"|format(onset_tol_s), n="%g"|format(onset_tol_samples)) }}</p>
+    <table class="qm-table qm-flat" id="onset-residual-table">
+      <thead><tr><th>Condition</th><th>Member</th><th>Onset difference (s)</th><th>Within tolerance</th></tr></thead>
+      <tbody>
+      {% for r in onset_residuals %}
+        <tr><td>{{ r.condition }}</td><td>{{ r.subject_id }}</td><td>{{ "%.3f"|format(r.residual_s) }}</td><td>{{ "yes" if r.within else "no" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if figure_paths.motion_before %}
+<section id="motion-summary" class="step">
+  <h3 class="step-title">Motion summary</h3>
+  <div class="details-body">
+    <table class="qm-table qm-flat qm-unified" id="motion-table"></table>
+    <p class="qm-note">{{ section_note('hyper_raw.motion_together') }}</p>
+  </div>
+</section>
+{% endif %}
 
 <section id="hyper-decisions-card" class="step">
-  <h3 class="step-title">a. Channel decisions <span class="hint" id="hyper-decisions-hint">per member</span></h3>
+  <h3 class="step-title">Channel decisions</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
+    <p class="qm-note" id="hyper-decisions-hint"></p>
     <p class="step-desc" id="hyper-decisions-rate-line" style="display:none"></p>
     <div id="hyper-decisions-tables"></div>
   </div>
 </section>
 
+<!-- ====================================================== quality figures -->
 {% if figure_paths.ch_summary %}
+<h2 id="QualityFigures">Quality Figures</h2>
+
 <section id="ChannelSummary" class="step">
-  <h3 class="step-title">b. Quality summary across the dyad</h3>
+  <h3 class="step-title">By channel</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_summary') }}</p>
     <iframe class="plotly-frame" src="{{ figure_paths.ch_summary.src }}"
@@ -291,7 +290,6 @@
   </div>
 </section>
 {% endif %}
-
 
 
 <script>
@@ -546,14 +544,12 @@ function _set(id, text, cls) {
     .then(function(data) {
       _isStatic = false;
       _hyperDecisions = data || {};
-      var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "per member";
       buildTable();
     })
     .catch(function() {
       _isStatic = true;
       var hint = document.getElementById("hyper-decisions-hint");
-      if (hint) hint.textContent = "per member, read-only: launch via nirspipe-rate hyper to save decisions";
+      if (hint) hint.textContent = "Read-only: launch via nirspipe-rate hyper to save decisions.";
       buildTable();
     });
 
