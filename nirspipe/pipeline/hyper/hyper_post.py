@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, merged
 from nirspipe.exceptions import StageError
@@ -814,6 +814,7 @@ def run_hyper_post(
     # unlike the coherence, which is sliced out of the whole-run transform; see `compute_isc`
     # and `window_result`.
     isc_pair_frames: list = []
+    isc_roi_frames: list = []
     isc_draw_frames: list = []
 
     def _isc_params() -> dict:
@@ -925,6 +926,17 @@ def run_hyper_post(
                         roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
                         step="hyper_isc_roichan", index_label="roi",
                     )
+                    # the ROI cells as the channel ones: one row per pairing, crossed or not
+                    rows = pd.DataFrame(
+                        [{"sub1": pair_ids[0], "sub2": pair_ids[1], "label": a, "label2": b,
+                          "r": float(roi_mat[i, j])}
+                         for i, a in enumerate(roi_names) for j, b in enumerate(roi_names)
+                         if wtc_channel_cross or i == j])
+                    rows["r_z"] = fisher_r_to_z(rows["r"])
+                    rows.insert(0, "chromophore", ch_type)
+                    if label:
+                        rows.insert(0, "condition", label)
+                    isc_roi_frames.append(_with_kept(rows, *(window or run_span)))
         return channel_level, roi_level, arc_level
 
     isc: dict = {}
@@ -960,6 +972,23 @@ def run_hyper_post(
             )
             tables[tsv_path.name] = tsv_path
             logger.info("ISC pair table saved: %s", tsv_path)
+
+    if isc_roi_frames:
+        with guard("ISC ROI pair table", errors, scope):
+            tsv_path = group_output_path(output_dir, group_id,
+                                         {"task": task, **roi_entities, "aggregation": "roi",
+                                          "statistic": "isc"},
+                                         "relmat", ".tsv", session=session)
+            write_tsv(pd.concat(isc_roi_frames, ignore_index=True), tsv_path)
+            _hyper_sidecar(
+                tsv_path, "hyper_isc_roi_pairs",
+                paths_from(aligned_raws.values()),
+                **_isc_params(), seed=wtc_seed,
+                chroma=list(chroma), conditions=[w[0] for w in cond_windows],
+                **align_info,
+            )
+            tables[tsv_path.name] = tsv_path
+            logger.info("ISC ROI pair table saved: %s", tsv_path)
 
     if isc_draw_frames:
         # every surrogate kept, not only their summary, so the correlation can be read above

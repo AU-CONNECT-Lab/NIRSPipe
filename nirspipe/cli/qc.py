@@ -43,9 +43,10 @@ def cmd_prep_raw(
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from nirspipe.io.derivatives import LINK_RAW, write_dataset_description
+    from nirspipe.io.derivatives import LINK_RAW, write_bidsignore, write_dataset_description
     # the records it writes name the raw recordings, which resolve through this link
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
+    write_bidsignore(output_dir)
     sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
@@ -185,9 +186,9 @@ def cmd_hyper_raw(
         _shared.refuse_output_is_source(derivatives_dir, output_dir)
     made_by = _generated_by(output_dir)
     if "nirspipe" in made_by:
-        print(f"Error: {output_dir} is a nirspipe tree; the dyad reports go to the "
-              f"nirspipe-hyper tree. Pass that as OUTPUT_DIR and this one as --derivatives-dir.",
-              file=sys.stderr)
+        print(f"Error: {output_dir} is a nirspipe tree; the dyad reports go to a tree of their "
+              f"own or to the nirspipe-hyper tree. Pass that as OUTPUT_DIR and this one as "
+              f"--derivatives-dir.", file=sys.stderr)
         raise SystemExit(1)
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
@@ -196,12 +197,13 @@ def cmd_hyper_raw(
         LINK_PREPROCESSED, LINK_RAW, write_bidsignore, write_dataset_description,
     )
 
-    # the same stamp nirspipe-hyper gives the tree, plus the raw recordings this also reads
-    write_dataset_description(output_dir, name="nirspipe-hyper output",
-                              generated_by="nirspipe-hyper", source=bids_dir, link=LINK_RAW)
+    # a dyad QC tree of its own is stamped as this command's; the nirspipe-hyper tree keeps its
+    tool = "nirspipe-hyper" if "nirspipe-hyper" in made_by else "nirspipe-qc hyper-raw"
+    write_dataset_description(output_dir, name=f"{tool} output",
+                              generated_by=tool, source=bids_dir, link=LINK_RAW)
     if derivatives_dir is not None:
-        write_dataset_description(output_dir, name="nirspipe-hyper output",
-                                  generated_by="nirspipe-hyper", source=derivatives_dir,
+        write_dataset_description(output_dir, name=f"{tool} output",
+                                  generated_by=tool, source=derivatives_dir,
                                   link=LINK_PREPROCESSED)
     write_bidsignore(output_dir)
 
@@ -465,8 +467,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     hr.add_argument("output_dir", type=Path,
-                    help="The nirspipe-hyper tree the dyad reports go to, the one nirspipe-hyper "
-                         "writes.")
+                    help="The tree the dyad reports go to: a raw QC tree of their own, or the "
+                         "nirspipe-hyper tree.")
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
     _add_dpf_and_cardiac(hr)

@@ -301,9 +301,8 @@ def test_uniform_chromophores_warn_about_nothing(tmp_path, caplog):
     assert "same chromophores" not in caplog.text
 
 
-# ---- wide matrices, which the entity-driven discovery merges ----
-# Discovering kinds by entity picks up the ISC matrices as well as the long band-mean
-# tables, and a matrix's columns are its data.
+# ---- wide matrices stay with their dyad ----
+# The long tables carry the same values one row per pairing, so a matrix is never merged.
 
 def _matrix(root, group_id, task, channels, index="channel"):
     """One dyad's ISC matrix, the shape `write_isc_matrix` writes."""
@@ -316,29 +315,18 @@ def _matrix(root, group_id, task, channels, index="channel"):
     return path
 
 
-ISC = {"chromophore": "hbo", "statistic": "isc"}
+@pytest.mark.parametrize("index", ["channel", "roi"])
+def test_matrices_are_not_merged(tmp_path, index):
+    _matrix(tmp_path, "01", "rest", ["S1_D1", "S1_D2"], index=index)
+    _matrix(tmp_path, "02", "rest", ["S1_D1", "S2_D2"], index=index)
+    _table(tmp_path, "01", "rest")
 
-
-def test_matrices_over_one_channel_set_merge(tmp_path):
-    _matrix(tmp_path, "01", "rest", ["S1_D1", "S1_D2"])
-    _matrix(tmp_path, "02", "rest", ["S1_D1", "S1_D2"])
-
-    merged = _merge(tmp_path, ISC)
-    assert list(merged.columns) == ["group_id", "task", "channel", "S1_D1", "S1_D2"]
-    assert sorted(merged["group_id"].unique()) == ["01", "02"]
-
-
-def test_matrices_over_different_channel_sets_are_refused(tmp_path):
-    """A blank cell in a concatenated matrix is indistinguishable from a measured zero."""
-    _matrix(tmp_path, "01", "rest", ["S1_D1", "S1_D2"])
-    _matrix(tmp_path, "02", "rest", ["S1_D1", "S2_D2"])
-
-    with pytest.raises(ValueError, match="do not cover the same channels"):
-        _merge(tmp_path, ISC)
+    assert list(merge_kinds(tmp_path)) == [(("statistic", "wtc"),)]
+    write_all_aggregates(tmp_path)
+    assert not list(tmp_path.glob("chromo-*_relmat.tsv"))
 
 
 def test_a_long_table_missing_a_column_is_still_only_a_warning(tmp_path, caplog):
-    """The matrix guard must not catch the long tables, whose own rule is laxer."""
     import logging
 
     _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))

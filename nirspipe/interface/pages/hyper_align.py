@@ -107,13 +107,13 @@ layout = dbc.Container([
                            color="secondary", outline=True),
             ),
             params(
-                field("nirspipe-hyper directory",
+                field("Dyad QC directory",
                       dbc.Input(id="ha-hyper-dir", type="text",
-                                placeholder="tree the dyad reports go to, not the derivatives"),
+                                placeholder="raw QC tree of its own, or the nirspipe-hyper tree"),
                       span=PATH),
             ),
             html.Small("The report runs nirspipe-qc hyper-raw over the group CSV with the"
-                       " parameters above, into the nirspipe-hyper directory, reading each"
+                       " parameters above, into the dyad QC directory, reading each"
                        " member's corrected recording from the derivatives directory."
                        " Export writes the aligned recordings themselves.",
                        className="fp-hint d-block mt-1"),

@@ -11,6 +11,9 @@ two agrees, which is the rule a merged name follows as well -- the merged table 
 inputs' own name with ``group-`` and ``task-`` taken out, so it lands at the root, where
 having no analysis unit in the name is what marks a table as cross-dyad.
 
+Only long tables merge. A wide matrix stays with its dyad: the long tables carry the same
+values one row per pairing, which is the shape that stacks across dyads.
+
 The merge refuses more than it warns: nothing downstream of a concatenated TSV can recover
 which band a given row used.
 """
@@ -43,6 +46,19 @@ _ABSENT_MEANS = {"wtc_whiten_s": 0.0}
 # never merged: the draws are the same null at full detail and would double every row of it
 _NOT_MERGED = frozenset({"draws"})
 
+# A wide matrix says so in its first column: `write_isc_matrix` writes the index under one
+# of these, and everything after it is a channel or a region rather than a variable.
+_MATRIX_INDEX = ("channel", "roi")
+
+
+def _is_matrix(path: Path) -> bool:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            first = fh.readline().rstrip("\r\n").split("\t", 1)[0]
+    except OSError:
+        return False
+    return first in _MATRIX_INDEX
+
 
 def _kind_of(path: Path) -> "tuple | None":
     """The entity set that decides which merged table a per-dyad file belongs to.
@@ -61,7 +77,9 @@ def _kind_of(path: Path) -> "tuple | None":
         return None
     if not entities.get("group") or not entities.get("task"):
         return None
-    dropped = {"group", "session", "task", "suffix", "extension", "datatype", "subject"}
+    if _is_matrix(path):
+        return None
+    dropped ={"group", "session", "task", "suffix", "extension", "datatype", "subject"}
     return tuple(sorted((k, str(v)) for k, v in entities.items() if k not in dropped))
 
 
@@ -137,44 +155,6 @@ def _refuse_mixed_shapes(frames: dict[str, pd.DataFrame]) -> None:
             f"label2 half empty, which reads as missing data rather than as a different "
             f"analysis. Aggregate the two sets separately."
         )
-
-
-# A wide matrix says so in its first column: `write_isc_matrix` writes the index under one
-# of these, and everything after it is a channel or a region rather than a variable.
-_MATRIX_INDEX = ("channel", "roi")
-
-
-def _refuse_ragged_matrices(frames: dict[str, pd.DataFrame]) -> None:
-    """Raise if the wide matrices being merged do not share a set of columns.
-
-    A long table survives a column its neighbour lacks: the value is NaN in those rows and a
-    reader can see which rows and why. A wide matrix does not, because its columns *are* the
-    data: two dyads screened onto different channel sets concatenate to a grid whose blanks
-    are indistinguishable from a correlation that was measured and came out empty.
-
-    Only the matrices. The long tables have their own two guards above, one of which
-    deliberately tolerates a missing chromophore column.
-    """
-    # `group_id` and `task` are already on the front by now, so the index column is the
-    # first one that is neither
-    wide = {name: df for name, df in frames.items()
-            if next((c for c in df.columns if c not in ("group_id", "session", "task")), None)
-            in _MATRIX_INDEX}
-    if len(wide) < 2:
-        return
-    shapes = {name: tuple(df.columns) for name, df in wide.items()}
-    if len(set(shapes.values())) == 1:
-        return
-    common = set.intersection(*(set(c) for c in shapes.values()))
-    spread = "\n".join(
-        f"  {name}: {len(cols)} column(s), {sorted(set(cols) - common) or 'none'} not shared"
-        for name, cols in sorted(shapes.items()))
-    raise ValueError(
-        f"these matrices do not cover the same channels, and a matrix's columns are its "
-        f"data, so merging them would fill the gaps with blanks nothing can tell from a "
-        f"correlation that came out empty:\n{spread}\n"
-        f"Aggregate the sets separately, or screen the dyads onto one channel set."
-    )
 
 
 def _warn_mixed_iterations(seen: dict[str, dict]) -> None:
@@ -253,7 +233,6 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
 
     _refuse_mixed_bands(params)
     _refuse_mixed_shapes(frames)
-    _refuse_ragged_matrices(frames)
     _warn_mixed_iterations(params)
     _warn_mixed_chromophores(frames)
 

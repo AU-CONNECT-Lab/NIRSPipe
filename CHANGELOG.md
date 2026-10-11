@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Per-channel tables print each wavelength's share of samples held at the detector's ceiling; run summaries count saturated channels
 - `--motion-correction spline_sg`, spline with Savitzky-Golay filtering (Jahani 2018) as its authors implemented it; also low-passes every channel near 0.1 Hz
 - `--motion-correction wavelet_tddr`, the wavelet filtering followed by TDDR; also on the Analysis page
+- Each dyad writes its ROI ISC as a long table, `seg-<map>_agg-roi_stat-isc_relmat.tsv`, one row per pairing, chromophore and condition
 
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
@@ -17,10 +18,13 @@ All notable changes to this project will be documented in this file.
 - The subject cohort report charts saturated share and saturated channels in their own panels after mean amplitude
 - `--config` reads a run record, or a file of its shape with `[prep]` and `[post]` keyed by flag name, and reruns that run; flat files are refused
 - Run records key settings by flag name in the flag's units, name tables by absolute path, and write a switched-off mode default as `"none"`
+- `nirspipe-hyper-merge` merges long tables only; ISC matrices stay in each dyad's folder
+- `nirspipe-qc hyper-raw` into a tree of its own stamps it `nirspipe-qc hyper-raw`; the nirspipe-hyper tree keeps its stamp. The GUI field follows
 
 ### Fixed
 - Under `--short-channel pca`, short channels are blank in FC and seed FC and left out of ALFF; rest-mode mALFF/zALFF values change
 - A `--config` cutoff set to `"none"` no longer stops the run with a KeyError
+- `nirspipe-qc prep-raw` writes `.bidsignore` to its tree, as the other trees do
 
 ### Removed
 - The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only

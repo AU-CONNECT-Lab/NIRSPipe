@@ -118,7 +118,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
     ph.add_argument("output_dir", type=Path,
-                    help="The nirspipe-hyper tree holding the group-<id>/ raw report.")
+                    help="The tree holding the group-<id>/ raw report, as nirspipe-qc hyper-raw "
+                         "wrote it.")
     ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
                     help="Group ID to open, e.g. 'A'.")
     ph.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,

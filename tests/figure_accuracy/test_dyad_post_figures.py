@@ -335,6 +335,29 @@ def test_the_roi_isc_matrix_is_the_roi_isc_table(groups, group, scope):
                     assert drawn == pytest.approx(want, abs=5e-4), (path.name, chroma, l1, l2)
 
 
+@pytest.mark.parametrize("group", GROUPS)
+@pytest.mark.parametrize("scope", SCOPES)
+def test_the_roi_isc_long_table_is_the_roi_isc_matrix(groups, group, scope):
+    long = pd.read_csv(groups.gdir(group) / "nirs" /
+                       f"group-{group}_task-main_seg-roidyad_agg-roi_stat-isc_relmat.tsv",
+                       sep="\t")
+    rows = long[long["condition"] == scope] if scope else long[long["condition"].isna()]
+    for a, b in _pairings(groups, group):
+        for chroma in ("hbo", "hbr"):
+            matrix = pd.read_csv(
+                groups.gdir(group) / "nirs" / f"group-{group}_task-main_"
+                f"{_slug(groups, group, (a, b))}chromo-{chroma}_seg-roidyad_agg-roi_"
+                f"{_cond(scope)}stat-isc_relmat.tsv", sep="\t", index_col=0)
+            mine = rows[(rows["sub1"] == a) & (rows["sub2"] == b) & (rows["chromophore"] == chroma)]
+            assert len(mine) == matrix.size, (group, scope, a, b, chroma)
+            for r in mine.itertuples():
+                want = matrix.loc[r.label, r.label2]
+                if np.isnan(want):
+                    assert np.isnan(r.r), (group, scope, chroma, r.label, r.label2)
+                else:
+                    assert r.r == pytest.approx(want, abs=1e-6), (group, scope, chroma, r.label)
+
+
 # ---- the tables on the page ----
 
 @pytest.mark.parametrize("group", GROUPS)
