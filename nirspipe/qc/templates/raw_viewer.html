@@ -28,10 +28,9 @@ select#run-select {
 .panel-head .hint { font-weight: 400; }
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
-.row-layout  { grid-template-columns: 1fr 2fr; align-items: start; }
 .row-psd-ep  { grid-template-columns: 1fr; }
 @media (max-width: 900px) {
-  .row-main, .row-layout { grid-template-columns: 1fr; }
+  .row-main { grid-template-columns: 1fr; }
 }
 
 /* buttons */
@@ -137,10 +136,7 @@ select#run-select {
   </div>
 </div>
 
-{#- The page reads as a document, the way the subject report does: a step is a heading with
-    a rule under it, laid out flat, and the results are two parts, the tables and then the
-    figures. The lettering follows that report's, so a run inspected before the pipeline and
-    after it is read in one order. Section ids are the rating bar's anchors. -#}
+{#- read as a document like the subject report: flat steps, then the tables, then the figures; section ids are the rating bar's anchors -#}
 
 <h2 id="Final">Summary</h2>
 <div class="summary-box">
@@ -165,30 +161,22 @@ select#run-select {
   <p class="qm-note" id="sum-scope"></p>
 </div>
 
-<!-- step a: where the channels are. First, because every panel below is read per channel and this is what says which is which. -->
+<h2>Recording</h2>
+
+<!-- where the channels are, first: every panel below is read per channel -->
 <section id="Layout" class="step">
-  <h3 class="step-title">a. Optode Layout</h3>
+  <h3 class="step-title">Optode Layout</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('raw.layout') }}</p>
-    <div class="row row-layout">
-      <div>
-        <p class="panel-head">2D top-down, head-projected</p>
-        <div id="layout-2d-plot"></div>
-      </div>
-      {#- the subject report's figure, so a run reads the same before the pipeline and after -#}
-      <div id="brain-views-block" style="display:none">
-        <p class="panel-head">Channel quality: 3D &amp; optode map</p>
-        <img id="brain-views-img" class="responsive" alt="Brain views and optode map" />
-        <p class="qm-note" id="brain-views-note"></p>
-        <p class="fig-path" id="brain-views-path"></p>
-      </div>
-    </div>
+    {#- the subject report's figure, so a run reads the same before the pipeline and after -#}
+    <img id="brain-views-img" class="responsive" alt="Brain views and optode map" />
+    <p class="qm-note" id="brain-views-note"></p>
+    <p class="fig-path" id="brain-views-path"></p>
   </div>
 </section>
 
-<!-- step b: raw signal + the events it carries -->
+<!-- raw signal + the events it carries -->
 <section id="RawSignal" class="step">
-  <h3 class="step-title">b. Raw Signal</h3>
+  <h3 class="step-title">Raw Signal</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.signal') }}</p>
     <div class="row row-main">
@@ -216,10 +204,10 @@ select#run-select {
   </div>
 </section>
 
-<!-- step b: concentration and spectrum, one channel at a time. Directly under the trace
+<!-- concentration and spectrum, one channel at a time. Directly under the trace
      they are picked off, so a channel clicked above is read without scrolling. -->
 <section id="ChannelDetail" class="step">
-  <h3 class="step-title">c. HbO / HbR &amp; PSD per channel</h3>
+  <h3 class="step-title">HbO / HbR &amp; PSD per channel</h3>
   <div class="details-body">
     <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
     <select class="ch-select" id="ch-detail-select"
@@ -229,28 +217,28 @@ select#run-select {
   </div>
 </section>
 
-<!-- step c: the whole recording's spectrum. No picker: it is a mean across channels, and
+<!-- the whole recording's spectrum. No picker: it is a mean across channels, and
      the per-channel version is the panel above. -->
 <section id="PSD" class="step">
-  <h3 class="step-title">d. Mean PSD across channels</h3>
+  <h3 class="step-title">Mean PSD across channels</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.psd') }}</p>
     <div id="psd-plot"></div>
   </div>
 </section>
 
-<!-- step e: coupling and amplitude over time -->
+<!-- coupling and amplitude over time -->
 <section id="SciPsp" class="step">
-  <h3 class="step-title">e. Raw Signal Quality (SCI / PSP / CV)</h3>
+  <h3 class="step-title">Raw Signal Quality (SCI / PSP / CV)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
   </div>
 </section>
 
-<!-- step f: movement -->
+<!-- movement -->
 <section id="Motion" class="step">
-  <h3 class="step-title">f. Motion (Carpet / GVTD)</h3>
+  <h3 class="step-title">Motion (Carpet / GVTD)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.motion') }}</p>
     <div id="carpet-gvtd-panel"></div>
@@ -264,9 +252,9 @@ select#run-select {
   </div>
 </section>
 
-<!-- step g: whether the concentration looks haemodynamic, either side of the correction -->
+<!-- whether the concentration looks haemodynamic, either side of the correction -->
 <section id="HbCorr" class="step">
-  <h3 class="step-title">g. HbO–HbR Correlation</h3>
+  <h3 class="step-title">HbO–HbR Correlation</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.hbo_hbr_corr') }}</p>
     <p class="step-desc" id="hb-corr-post-note"></p>
@@ -274,18 +262,18 @@ select#run-select {
   </div>
 </section>
 
-<!-- step h: the design -->
+<!-- the design -->
 <section id="Events" class="step">
-  <h3 class="step-title">h. Event Timeline</h3>
+  <h3 class="step-title">Event Timeline</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.events') }}</p>
     <div id="trigger-timeline-plot"></div>
   </div>
 </section>
 
-<!-- step i: what the events did, averaged and trial by trial -->
+<!-- what the events did, averaged and trial by trial -->
 <section id="Epoch" class="step">
-  <h3 class="step-title">i. Epoch (grand mean)</h3>
+  <h3 class="step-title">Epoch (grand mean)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.epoch') }}</p>
     <div id="epoch-mean-plot"></div>
@@ -293,7 +281,7 @@ select#run-select {
 </section>
 
 <section id="TrialImage" class="step">
-  <h3 class="step-title">j. Trial image: single-channel trials</h3>
+  <h3 class="step-title">Trial image: single-channel trials</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
     <select class="ch-select" id="trialimg-select"
@@ -474,7 +462,6 @@ window.addEventListener("DOMContentLoaded", function() {
   loadSummary();
   loadChannelPicker();
   loadTimeSeries();
-  loadLayout();
   loadPsdMean();
   loadTriggerTimeline();
   loadCarpetGvtd();
@@ -609,51 +596,7 @@ function selectChannel(pair) {
   var paths = (_STATIC_DATA[_run_idx] || {}).figure_paths || {};
   var tmpl  = paths.ch_detail_template;
   if (tmpl) _setIframeSrc("detail-plot", tmpl.replace("{pair}", _pairFname(pair)), 900);
-
-  highlightOptode2D(pair);
 }
-
-// ─── layout ───────────────────────────────────────────────────────────────────
-function loadLayout() {
-  function _render(d) {
-    if (d.layout_2d_figure) {
-      // a third of the row, so the head is drawn square in it rather than at the GUI's height
-      Plotly.newPlot("layout-2d-plot", d.layout_2d_figure.data,
-                     Object.assign({}, d.layout_2d_figure.layout, { height: 440 }),
-                     { responsive: true, displayModeBar: false });
-      document.getElementById("layout-2d-plot").on("plotly_click", function(evt) {
-        var pt = evt.points[0];
-        if (!pt || pt.curveNumber !== 1) return;
-        selectChannel(chPair(pt.customdata));
-        highlightTrace(pt.customdata);
-      });
-      document.getElementById("layout-2d-plot").on("plotly_doubleclick", function() {
-        toggleBadFromOptode();
-      });
-    }
-  }
-
-  _render((_STATIC_DATA[_run_idx] || {}).layout || {});
-}
-
-function highlightOptode2D(pair) {
-  var div = document.getElementById("layout-2d-plot");
-  if (!div || !div.data || div.data.length < 2) return;
-  var chTrace = div.data[1];
-  if (!chTrace || !chTrace.customdata) return;
-  var sizes = [], opacities = [], lineWidths = [];
-  chTrace.customdata.forEach(function(ch) {
-    var sel = chPair(ch) === pair;
-    sizes.push(sel ? 15 : 10);
-    opacities.push(sel ? 1.0 : 0.55);
-    lineWidths.push(sel ? 2.0 : 0.8);
-  });
-  Plotly.restyle("layout-2d-plot", {
-    "marker.size": [sizes], "marker.opacity": [opacities], "marker.line.width": [lineWidths],
-  }, [1]);
-}
-
-function toggleBadFromOptode() { /* handled via double-click on ts trace */ }
 
 // ─── Trigger Timeline ─────────────────────────────────────────────────────────
 function loadTriggerTimeline() {
@@ -731,9 +674,7 @@ function loadSciPsp() {
 function loadBrainViews() {
   var d = _STATIC_DATA[_run_idx] || {};
   var p = (d.figure_paths || {}).brain_views;
-  var block = document.getElementById("brain-views-block");
-  if (!block) return;
-  block.style.display = (p && p.src) ? "" : "none";
+  _showSection("Layout", !!(p && p.src));
   if (!(p && p.src)) return;
   document.getElementById("brain-views-img").src = p.src;
   document.getElementById("brain-views-path").textContent = p.src;
@@ -983,7 +924,7 @@ function switchRun(idx) {
     if (sel) sel.value = "";
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
-    loadSummary(); loadChannelPicker(); loadTimeSeries(); loadLayout(); loadPsdMean();
+    loadSummary(); loadChannelPicker(); loadTimeSeries(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
     loadSciPsp(); loadBrainViews(); loadSqm(); loadChannelSummary(); loadConditionSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();

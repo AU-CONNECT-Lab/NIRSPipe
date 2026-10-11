@@ -1149,7 +1149,7 @@ def build_prep_raw_report(
                 d["figure_paths"]["brain_views"] = {"src": href}
             d["errors"] = list(d.get("errors") or []) + collapse_messages(brain_errors)
         # the GUI's alone: the page shows the subject report's brain figure instead
-        (d.get("layout") or {}).pop("layout_3d_figure", None)
+        d.pop("layout", None)
         static_data.append(d)
         if by_condition and ctx:
             with guard("Per-condition views", run_errors, label):

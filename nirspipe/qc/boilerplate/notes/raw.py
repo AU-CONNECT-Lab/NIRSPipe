@@ -21,9 +21,6 @@ NOTES = {
         "recording; the per-channel spectrum and epoch average stay the whole run's.",
 
     # ---- Panels ----
-    "raw.layout":
-        "Red squares are sources and blue dots detectors; a channel's colour is its SCI. "
-        "Click a channel to highlight it.",
     "raw.signal":
         "Short channels in blue, long in orange. Click a trace to select its channel and "
         "double-click to reset the view.",

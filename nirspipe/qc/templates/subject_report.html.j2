@@ -117,9 +117,9 @@
 <!-- ======================================================= preprocessing -->
 <h2>Preprocessing</h2>
 
-<!-- step a: Raw Signal -->
+<!-- Raw Signal -->
 <section id="RawSignal" class="step">
-  <h3 class="step-title">a. Raw Signal</h3>
+  <h3 class="step-title">Raw Signal</h3>
   <div class="details-body">
     <p class="step-desc">{% if channel_detail_stage == 'desc-preproc' %}{{ section_note('steps.raw_signal_fallback',
         dpf=config.dpf | join(', '), motion=config.motion_correction) }}
@@ -144,9 +144,9 @@
   </div>
 </section>
 
-<!-- step b: SCI / PSP quality panels -->
+<!-- SCI / PSP quality panels -->
 <section id="Signal" class="step">
-  <h3 class="step-title">b. Raw Signal Quality (SCI / PSP / CV / Short Channel)</h3>
+  <h3 class="step-title">Raw Signal Quality (SCI / PSP / CV / Short Channel)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('steps.raw_quality', cv='%.3f'|format(cv_threshold), sci=config.sci_threshold) }}</p>
 
@@ -169,9 +169,9 @@
   </div>
 </section>
 
-<!-- step c: motion correction -->
+<!-- motion correction -->
 <section id="Motion" class="step">
-  <h3 class="step-title">c. Motion Correction</h3>
+  <h3 class="step-title">Motion Correction</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('steps.motion_correction', method=config.motion_correction, gvtd_set=gvtd_set or 'long') }}</p>
     {% if carpet_gvtd_path %}
@@ -205,9 +205,9 @@
   </div>
 </section>
 
-<!-- step d: HbO / HbR -->
+<!-- HbO / HbR -->
 <section id="HbO_HbR" class="step">
-  <h3 class="step-title">d. HbO / HbR (Beer-Lambert)</h3>
+  <h3 class="step-title">HbO / HbR (Beer-Lambert)</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('steps.beer_lambert', dpf=config.dpf | join(', ')) }}</p>
     <h3>HbO–HbR Correlation</h3>
@@ -241,9 +241,9 @@
   </div>
 </section>
 
-<!-- step e: PSD -->
+<!-- PSD -->
 <section class="step">
-  <h3 class="step-title">e. Power Spectral Density by stage</h3>
+  <h3 class="step-title">Power Spectral Density by stage</h3>
   <div class="details-body">
     {#- Mayer alone is a fixed visual reference with no metric behind it; the other two bands
     are the configured ones the shading and the band scalars both use -#}
@@ -286,10 +286,10 @@
   </div>
 </section>
 
-<!-- step f: Epoch / HRF preview (task/GLM mode only) -->
+<!-- Epoch / HRF preview (task/GLM mode only) -->
 {% if mode != 'rest' %}
 <section id="Epoch" class="step">
-  <h3 class="step-title">f. Epoch / HRF Preview (grand mean)</h3>
+  <h3 class="step-title">Epoch / HRF Preview (grand mean)</h3>
   <div class="details-body">
     {% if trigger_timeline_path %}
     <h3>Event timeline</h3>
@@ -458,7 +458,7 @@
 {% macro mv_pair(key, before, after) %}{% if after is not none %}{{ mv(key, before) }} &rarr; {{ mv(key, after) }}{% else %}{{ mv(key, before) }}{% endif %}{% endmacro %}
 
 <h2 id="Metrics">Quality Metrics</h2>
-{#- the two tables here, the figures under Quality Figures; not lettered: a-f are processing steps -#}
+{#- the tables here, the figures under Quality Figures -#}
 <section id="RunSummary" class="step">
 <h3 class="step-title">Run summary</h3>
 <div class="details-body">

@@ -37,7 +37,7 @@ def test_the_run_page_draws_the_subject_report_s_brain_figure(raw_viewer_run, pa
     href = page[1]["figure_paths"]["brain_views"]["src"]
     assert href.endswith("_desc-rawbrainviews_nirs.png")
     assert (raw_viewer_run.out / "sub-01" / href).stat().st_size > 0
-    assert "layout_3d_figure" not in page[1]["layout"]
+    assert "layout" not in page[1]
 
 
 # ---- inline figures ----
@@ -48,15 +48,6 @@ def test_each_raw_signal_row_is_the_channel_it_is_labelled(raw_viewer_run, page)
         pair = truth.pair(trace["name"].rsplit(" ", 1)[0])
         if not pair.short and not pair.bad:
             assert which_pair(*xy(trace), truth) == pair.name, trace["name"]
-
-
-def test_the_layout_marks_the_rejected_pair_and_no_other(raw_viewer_run, page):
-    channels = next(t for t in page[1]["layout"]["layout_2d_figure"]["data"]
-                    if t.get("customdata") is not None and np.size(t["customdata"]) == 16)
-    good = channels["marker"]["color"][0]
-    for name, colour in zip(channels["customdata"], channels["marker"]["color"]):
-        bad = raw_viewer_run.truth.pair(name.rsplit(" ", 1)[0]).bad
-        assert (colour != good) if bad else (colour == good), name
 
 
 def test_the_channel_table_heads_both_sci_columns(page):

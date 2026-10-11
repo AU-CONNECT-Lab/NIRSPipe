@@ -12,26 +12,26 @@ Report sections
   Summary
     Subject metadata, bad-channel badge, run command.
 
-  a. Raw Signal
+  Raw Signal
     Per-channel HbO/HbR timeseries + PSD (dropdown selector).
 
-  b. Raw Signal Quality (SCI / PSP)
+  Raw Signal Quality (SCI / PSP)
     Windowed SCI/PSP heatmap + lollipop summary (build_sci_psp_figure), all on the
     uncorrected optical density. Per-channel SCI/PSP across the motion correction.
     Brain-surface quality map + optode flat map (if head coordinates available).
 
-  c. Motion Correction
+  Motion Correction
     GVTD + carpet plot; bad-segment zoom; per-channel before/after OD traces.
 
-  d. HbO / HbR (Beer-Lambert)
+  HbO / HbR (Beer-Lambert)
     HbO–HbR correlation panel before and after denoising, one small panel per metric
     across the haemoglobin stages, and HbO–HbR r per channel over the same stages.
 
-  e. PSD by stage
+  PSD by stage
     Full-dataset PSD panel + per-channel PSD detail (dropdown selector), one line
     per stage file on disk.
 
-  f. Epoch / HRF Preview
+  Epoch / HRF Preview
     Event timeline (one row per condition), then the grand-mean HbO/HbR averaged across
     good channels, baseline-corrected.
 

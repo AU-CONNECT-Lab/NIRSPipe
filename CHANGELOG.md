@@ -6,24 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-10-10
+
 ### Added
-- `--keep-spans` takes a table of the stretches of each recording to use; the rest is marked `BAD_unselected`
 - `--bad-spans` takes a table of corrupted stretches per recording, marked `BAD_manual`: left out of screening, filled and excluded like GVTD spans
-- Each derivative sidecar lists its `excluded_spans`, with kind and source
-- `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
-- The analysis page offers the fill method beside GVTD censoring
-- `--min-time` skips FC and ALFF for a run with less kept time; default 0, also on the analysis page
 - `--export-mean-filled` writes `desc-meanfilled`, the final residual with `BAD_` frames at each channel's kept mean; also on the analysis page
 - The subject report gains an Excluded time section on runs with `BAD_` spans; condition pages show their kept seconds
 
 ### Changed
-- **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run
-- Channel screening leaves out every window touching a `BAD_` span, and stops a run left with fewer than two windows
-- The GLM and confound regressions fit only frames outside `BAD_` spans, on the full-length design with gap-aware AR whitening; the residual stays full length
-- A condition with no signal in kept frames is dropped and named; a fit with fewer than three kept frames per regressor is refused
-- The saved design matrix gains a `censored` column; GLM and residual sidecars record kept frames, excluded shares and events left per condition
-- Per-condition coupled-window shares and assessments leave out windows touching a `BAD_` span; each condition records its kept seconds
-- FC uses only frames outside `BAD_` spans, and ALFF and fALFF a Lomb-Scargle spectrum of them; FC and ALFF sidecars record the kept seconds
 - Dyad coherence and correlation leave out the union of both members' `BAD_` spans; every dyad table records each pairing's kept seconds
 - Dyad prewhitening fits each member's AR coefficients on its time outside `BAD_` spans
 - Both dyad nulls leave out the real pairing's excluded time; the re-paired null also leaves out its stand-in's corrupted spans
@@ -34,11 +24,6 @@ All notable changes to this project will be documented in this file.
 - Methods describe unselected time, GVTD censoring, the fill, and what each regression, FC, ALFF and dyad measure leaves out
 - desc-sci records the GVTD censoring settings; FC and ALFF sidecars list their `excluded_spans`
 - Dyad WTC maps wash out excluded columns and draw no arrows there; scope headers lead with the kept seconds
-- **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
-- QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
-- The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
-- Every QC report table drops its cell grid for hairline rows, numeric columns and their headers right-aligned
-- QC reports print no exponents: drift in µM, band power in µM²/Hz, GVTD in mOD/sample, unit in the label
 - The subject report's processing steps are flat headings and no longer fold
 - The subject report's results sit under one Quality Metrics heading: run summary, denoising stage, channel, condition, per-channel table, trial
 - The Channel Quality Summary prints its figure's file path like every other figure
@@ -84,6 +69,8 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report reads like the subject report: unlettered Recording steps, then Quality Metrics tables, then the channel grid
 - The dyad analysis report drops step letters, ends with Quality Metrics and Quality Figures, and moves clocks and ROI grouping to the appendix
 - The subject cohort summary names metrics by label in their report format; the dyad cohort prints its small-cohort caveat once
+- The raw viewer drops its interactive 2D optode map and step letters, keeping the brain figure under a Recording heading
+- The subject report's preprocessing steps are no longer lettered
 
 ### Fixed
 - The subject report's motion panel, bad-segment zoom and design-matrix shading show the spans `--keep-spans` and `--bad-spans` add
@@ -91,6 +78,36 @@ All notable changes to this project will be documented in this file.
 - A dyad member's SCI and PSP lines no longer vanish from the usable-time panel when a channel saturates; that channel leaves only its own windows' mean
 - The mean PSD of the residual no longer sinks about 20 dB from retained short channels, whose residual is zero
 - A condition page of a montage without short channels prints its metrics in one column, as the run page does
+- A condition wholly inside `BAD_` spans keeps its denoising-stage panels, without the spectral ones, and shows n/a failing
+- The channel epoch panel and the evoked channel map leave out trials under a `BAD_` span
+- Dyad coherence is NaN where a member has no power, as inside a long filled span, instead of inf or above 1
+- The re-paired ISC null's `n_valid_frac` is the share of each window it correlated, no longer always 1.0
+- The raw viewer's condition pages state their kept seconds when the input has `BAD_` spans, and show n/a for an unassessed condition
+
+## [0.64.0] - 2026-10-09
+
+### Added
+- `--keep-spans` takes a table of the stretches of each recording to use; the rest is marked `BAD_unselected`
+- Each derivative sidecar lists its `excluded_spans`, with kind and source
+- `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
+- The analysis page offers the fill method beside GVTD censoring
+- `--min-time` skips FC and ALFF for a run with less kept time; default 0, also on the analysis page
+
+### Changed
+- **Breaking**: the `--bad-channels` table's `participant_id` is optional (blank means every subject), and any unknown column stops the run
+- Channel screening leaves out every window touching a `BAD_` span, and stops a run left with fewer than two windows
+- The GLM and confound regressions fit only frames outside `BAD_` spans, on the full-length design with gap-aware AR whitening; the residual stays full length
+- A condition with no signal in kept frames is dropped and named; a fit with fewer than three kept frames per regressor is refused
+- The saved design matrix gains a `censored` column; GLM and residual sidecars record kept frames, excluded shares and events left per condition
+- Per-condition coupled-window shares and assessments leave out windows touching a `BAD_` span; each condition records its kept seconds
+- FC uses only frames outside `BAD_` spans, and ALFF and fALFF a Lomb-Scargle spectrum of them; FC and ALFF sidecars record the kept seconds
+- **Breaking**: the quality record gains an `excluded` section; derivative trees written before it must be re-run
+- QC reports get a lighter look: new palette, hairline section rules, Methods tabs with a Copy button, and a one-row top bar without ratings
+- The subject report's metrics print as one table, a metric per row and a channel set per column; dyad pages list members as columns
+- Every QC report table drops its cell grid for hairline rows, numeric columns and their headers right-aligned
+- QC reports print no exponents: drift in µM, band power in µM²/Hz, GVTD in mOD/sample, unit in the label
+
+### Fixed
 - `--screen-scope task` no longer counts a long `BAD_` span as a task block
 - GVTD censoring is measured on the channels the screening kept, so a rejected channel no longer censors the run
 - Seed and ALFF head maps keep their size however many rows they draw
@@ -99,13 +116,8 @@ All notable changes to this project will be documented in this file.
 - A channel with no finite sample gets NaN fALFF instead of 0
 - A condition's CNR keeps a `BAD_` span starting before it, so the epochs it covers still drop
 - A recording whose only annotations are `BAD_` spans no longer stops the subject report
-- A condition wholly inside `BAD_` spans keeps its denoising-stage panels, without the spectral ones, and shows n/a failing
-- The channel epoch panel and the evoked channel map leave out trials under a `BAD_` span
 - Per-condition SCI, PSP and CV averages no longer read `nan` when a channel has a window without a value; existing trees need a re-run
 - Condition pages no longer print metric rows that have no value there, and the raw viewer heading carries the new package name
-- Dyad coherence is NaN where a member has no power, as inside a long filled span, instead of inf or above 1
-- The re-paired ISC null's `n_valid_frac` is the share of each window it correlated, no longer always 1.0
-- The raw viewer's condition pages state their kept seconds when the input has `BAD_` spans, and show n/a for an unassessed condition
 
 ## [0.63.0] - 2026-10-09
 
