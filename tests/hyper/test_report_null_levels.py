@@ -222,8 +222,8 @@ def test_the_isc_phase_null_keeps_its_draws_per_condition(dyad, tmp_path):
     path = group_output_path(tmp_path, "G1", {"task": "tap", **entities}, "relmat", ".tsv")
     draws = pd.read_csv(path, sep="\t")
     assert list(draws.columns[:2]) == ["chromophore", "condition"]
-    # the correlation runs both chromophores whatever the coherence was asked for
-    assert set(draws["chromophore"]) == {"hbo", "hbr"}
+    # the correlation runs the chromophores the coherence was asked for
+    assert set(draws["chromophore"]) == {"hbo"}
     assert set(draws["condition"]) == set(_spans(dyad))
     assert set(draws["draw"]) == set(range(4))
     assert {"r", "r_z", "sub1", "sub2", "label", "label2"} <= set(draws.columns)

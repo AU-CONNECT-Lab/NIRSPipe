@@ -1377,21 +1377,21 @@ def build_hyper_post_report(
     isc_hom_values: dict = {}
     for pr in pairings:
         labels = [None] + [label for label, _, _ in cond_windows]
-        isc_panels[pr] = {k: {c: _isc_panel_of(pr, k, c) for c in ("hbo", "hbr")}
+        isc_panels[pr] = {k: {c: _isc_panel_of(pr, k, c) for c in chroma}
                           for k in labels}
         isc_roi_matrices[pr] = {k: _isc_roi_matrix_of(pr, k) for k in labels}
         isc_values[pr] = {k: {c: result.isc.get(pr, {}).get(k, {}).get(c, (None, None))
-                              for c in ("hbo", "hbr")}
+                              for c in chroma}
                           for k in labels}
         isc_roi_values[pr] = {k: {c: result.isc_roi.get(pr, {}).get(k, {}).get(
                                       c, (None, None))
-                                  for c in ("hbo", "hbr")}
+                                  for c in chroma}
                               for k in labels}
         # the homologous table's ISC: same-channel pairs only, as the coherence beside it
         isc_hom_values[pr] = {k: {c: roi_mean_of_homologous_isc(
                                       *isc_values[pr][k][c], roi_map,
                                       min_channels=wtc_roi_min_channels)
-                                  for c in ("hbo", "hbr")}
+                                  for c in chroma}
                               for k in labels}
 
     # ISC has no frequency axis, so an unfiltered stage reaches the number directly; WTC

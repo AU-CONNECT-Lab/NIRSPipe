@@ -125,14 +125,14 @@ NOTES = {
         "panels average over.",
     "hyper_post.chromophores":
         "The maps show {stacked}, stacked; the matrices put the chromophores side by side on "
-        "one colour scale; the tables carry {listed} in a <code>chromophore</code> column; "
-        "the correlation panels always show both. <b>HbO and HbR are parallel passes, never "
+        "one colour scale; the tables carry {listed} in a <code>chromophore</code> column. "
+        "<b>HbO and HbR are parallel passes, never "
         "mixed or averaged.</b> Read them as a consistency check: HbR is less affected by "
         "scalp and systemic circulation, so coupling in HbO but not in HbR is a caution "
         "flag, read as present or absent rather than by value.",
     "hyper_post.chromophore_one":
-        "Only {chroma} was run (<code>--wtc-chroma {flag}</code>): the maps, matrices and "
-        "tables carry it alone, and the correlation panels still show both. "
+        "Only {chroma} was run (<code>--wtc-chroma {flag}</code>), for the coherence and the "
+        "correlation alike: every map, matrix, panel and table carries it alone. "
         "<code>--wtc-chroma both</code> adds the other chromophore as a consistency check.",
     "hyper_post.wtc_channel":
         "Morlet wavelet. Arrows are relative phase: right is in phase, up is {lead} leading. "

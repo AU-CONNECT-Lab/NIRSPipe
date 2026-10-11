@@ -758,7 +758,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "phase randomisation behind --wtc-phase-null. Also bypasses pycwt's "
                           "on-disk cache, which is not keyed on the seed.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
-                     help="Chromophore(s) the coherence runs on (default both). HbO and HbR "
+                     help="Chromophore(s) the coherence and the correlation (ISC) run on "
+                          "(default both). HbO and HbR "
                           "are two parallel passes: a member's HbO pairs only with the other "
                           "member's HbO, they are never mixed and never averaged, so 'both' "
                           "costs twice as much. Every band-mean table gains a chromophore "

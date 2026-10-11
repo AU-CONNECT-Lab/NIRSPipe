@@ -810,9 +810,9 @@ def run_hyper_post(
                                   phase_level_source=cond_level))
 
     # ---- ISC, which is a cut and not a slice ----
-    # Always both chromophores, not --wtc-chroma: its matrix cannot share a file the way the
-    # long-format WTC tables can. A window here is a real cut, unlike the coherence, which is
-    # sliced out of the whole-run transform; see `compute_isc` and `window_result`.
+    # The chromophores --wtc-chroma asks for, as the coherence. A window here is a real cut,
+    # unlike the coherence, which is sliced out of the whole-run transform; see `compute_isc`
+    # and `window_result`.
     isc_pair_frames: list = []
     isc_draw_frames: list = []
 
@@ -932,7 +932,7 @@ def run_hyper_post(
     isc_levels: dict = {}
     for pr in pairings:
         scopes = [(None, analysis_window)] + [(lab, (a, b)) for lab, a, b in cond_windows]
-        both = {lab: {c: _isc_of(c, lab, window, pr) for c in ("hbo", "hbr")}
+        both = {lab: {c: _isc_of(c, lab, window, pr) for c in chroma}
                 for lab, window in scopes}
         isc[pr] = {lab: {c: got[0] for c, got in by_chroma.items()}
                    for lab, by_chroma in both.items()}
@@ -955,7 +955,7 @@ def run_hyper_post(
                 tsv_path, "hyper_isc_pairs",
                 paths_from(aligned_raws.values()),
                 **_isc_params(), seed=wtc_seed,
-                chroma=["hbo", "hbr"], conditions=[w[0] for w in cond_windows],
+                chroma=list(chroma), conditions=[w[0] for w in cond_windows],
                 **align_info,
             )
             tables[tsv_path.name] = tsv_path

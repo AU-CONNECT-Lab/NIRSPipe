@@ -191,8 +191,14 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
         wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
         wtc_chroma=("hbr",),
     )
-    df = pd.read_csv(tmp_path / "group-G1" / "nirs" / name("G1", "tap"), sep="\t")
+    nirs = tmp_path / "group-G1" / "nirs"
+    df = pd.read_csv(nirs / name("G1", "tap"), sep="\t")
     assert df["chromophore"].unique().tolist() == ["hbr"]
+    # the correlation follows the coherence
+    isc = pd.read_csv(nirs / name("G1", "tap", "iscpairs"), sep="\t")
+    assert isc["chromophore"].unique().tolist() == ["hbr"]
+    assert (nirs / name("G1", "tap", "iscpairs", chromophore="hbr")).exists()
+    assert not (nirs / name("G1", "tap", "iscpairs", chromophore="hbo")).exists()
 
 
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
