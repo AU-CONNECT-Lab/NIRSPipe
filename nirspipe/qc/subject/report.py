@@ -621,6 +621,7 @@ def _section_motion(
     skip_carpet: bool = False,
     window: "tuple[float, float] | None" = None,
     imu: "dict[str, ImuTrace] | None" = None,
+    roi_map: "dict | None" = None,
 ) -> dict:
     """The carpet and GVTD panel, with the flagged spans drawn over it.
 
@@ -678,7 +679,8 @@ def _section_motion(
                                      corrected_segments=corrected_segments,
                                      spike_segments=spike_by_set,
                                      raw_after=raw_after_motion,
-                                     channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu)
+                                     channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu,
+                                     roi_map=roi_map)
             carpet_gvtd_path, carpet_gvtd_h = _save_plotly_html(
                 fig, figures_dir / fig_name("carpet"),
                 views=_carpet_views(fig, condition_spans or []))
@@ -905,8 +907,7 @@ def _section_stage_carpets(
             path, h = _save_plotly_html(fig, figures_dir / fig_name("carpetstage"))
             panels.append({"label": "", "path": path, "h": h})
     return {"carpet_panels": panels,
-            "carpet_stage_labels": [lab for lab, _ in stages],
-            "carpet_roi": bool(roi_map)}
+            "carpet_stage_labels": [lab for lab, _ in stages]}
 
 
 def _section_epoch_preview(
@@ -1954,7 +1955,7 @@ def build_subject_report(
                             raw_after_motion=raw_after_motion,
                             condition_spans=_record_windows(
                                 record.get("by_condition") or {}) if by_condition else [],
-                            imu=imu)
+                            imu=imu, roi_map=roi_map)
     motion_det_figs   = _motion_detail_figures(
                             raw_before_motion, raw_after_motion, subject, errors,
                             segments=segments,
@@ -2171,6 +2172,8 @@ def build_subject_report(
         # the set GVTD was actually measured on, so the note says so on a per-condition page
         # too
         gvtd_channel_set=gvtd_set,
+        # both carpets group their rows by ROI and draw the strip only with a map
+        roi_strip=bool(roi_map),
         mode=mode or "",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -5,11 +5,10 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from nirspipe.utils import pair_of
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
-    add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z, roi_colours,
+    _roi_order, add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z, roi_colours,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit
@@ -31,36 +30,6 @@ def _stage_channels(stages, chromophore: str) -> list[str]:
         have = set(raw.ch_names)
         first = [c for c in first if c in have]
     return first
-
-
-def _roi_order(names: list[str], roi_map: "dict | None"):
-    """Row order grouping channels by ROI, plus [(label, first row, last row), ...].
-
-    ``roi_map`` is {ROI label: [channel names]}, matched on the full name then the S-D base.
-    Unclaimed channels go last under "unassigned"; no map means montage order and no groups.
-    """
-    if not roi_map or not names:
-        return np.arange(len(names)), []
-    # index the S-D base too, so an HbO-named map also places the HbR rows
-    ch_to_roi: dict = {}
-    for label, chans in roi_map.items():
-        for ch in chans:
-            ch_to_roi[ch] = label
-            ch_to_roi.setdefault(pair_of(ch), label)
-    labels = [str(ch_to_roi.get(c, ch_to_roi.get(pair_of(c), "unassigned")))
-              for c in names]
-    ordered = sorted(set(labels))
-    if "unassigned" in ordered:  # keep it last rather than wherever it sorts
-        ordered = [l for l in ordered if l != "unassigned"] + ["unassigned"]
-    code_of = {name: i for i, name in enumerate(ordered)}
-    codes = np.array([code_of[l] for l in labels])
-    order = np.argsort(codes, kind="stable")
-    groups = []
-    for i, label in enumerate(ordered):
-        rows = np.where(codes[order] == i)[0]
-        if rows.size:
-            groups.append((label, int(rows[0]), int(rows[-1])))
-    return order, groups
 
 
 def _gvtd_rows(raw_before, raw_after, blocks: list):

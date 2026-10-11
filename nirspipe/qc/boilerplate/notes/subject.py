@@ -74,6 +74,9 @@ NOTES = {
         "<strong>{gvtd_set}</strong> channels, the set the analysis uses; the panel draws a "
         "row per channel set with its count. GVTD is an RMS across channels, so the set is "
         "part of the value.",
+    "motion.roi_strip":
+        "On the carpet the {gvtd_set} rows are grouped by ROI, coloured by the outer strip "
+        "and named in the legend.",
     "motion_detail.picker":
         "Select a channel to compare its optical density before and after motion correction.",
     "motion_detail.condition":

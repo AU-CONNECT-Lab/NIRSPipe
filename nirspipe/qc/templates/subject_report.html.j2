@@ -173,7 +173,8 @@
 <section id="Motion" class="step">
   <h3 class="step-title">Motion Correction</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('steps.motion_correction', method=config.motion_correction, gvtd_set=gvtd_set or 'long') }}</p>
+    <p class="step-desc">{{ section_note('steps.motion_correction', method=config.motion_correction, gvtd_set=gvtd_set or 'long') }}
+      {%- if roi_strip %} {{ section_note('motion.roi_strip', gvtd_set=gvtd_set or 'long') }}{% endif %}</p>
     {% if carpet_gvtd_path %}
       <h3>GVTD + Carpet plot</h3>
       <iframe class="plotly-frame" src="{{ carpet_gvtd_path }}" title="GVTD + Carpet plot"
@@ -228,7 +229,7 @@
       <h3>Carpet after denoising</h3>
       <p class="step-desc">
         {{- section_note('carpet.after_named', stage=carpet_stage_labels[0]) }}
-        {%- if carpet_roi %} {{ section_note('carpet.roi_strip') }}{% endif %}
+        {%- if roi_strip %} {{ section_note('carpet.roi_strip') }}{% endif %}
         {{ section_note('carpet.after') }}
         {%- if mode == 'glm' %} {{ section_note('carpet.glm') }}{% endif %}
         {%- if condition_label %} {{ section_note('carpet.condition') }}{% endif %}</p>

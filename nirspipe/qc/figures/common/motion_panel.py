@@ -24,6 +24,7 @@ from nirspipe.qc.metrics import (
     GVTD_MOTION_BAND, GVTD_N_STD, _motion_band_diff, gvtd_threshold, gvtd_timetrace,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
+from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import span_kind
 
@@ -429,6 +430,36 @@ _ROI_STRIP_X = (-0.026, -0.016)
 _ROI_GAP = 0.002
 
 
+def _roi_order(names: list[str], roi_map: "dict | None"):
+    """Row order grouping channels by ROI, plus [(label, first row, last row), ...].
+
+    ``roi_map`` is {ROI label: [channel names]}, matched on the full name then the S-D base.
+    Unclaimed channels go last under "unassigned"; no map means montage order and no groups.
+    """
+    if not roi_map or not names:
+        return np.arange(len(names)), []
+    # index the S-D base too, so an HbO-named map also places the HbR rows
+    ch_to_roi: dict = {}
+    for label, chans in roi_map.items():
+        for ch in chans:
+            ch_to_roi[ch] = label
+            ch_to_roi.setdefault(pair_of(ch), label)
+    labels = [str(ch_to_roi.get(c, ch_to_roi.get(pair_of(c), "unassigned")))
+              for c in names]
+    ordered = sorted(set(labels))
+    if "unassigned" in ordered:  # keep it last rather than wherever it sorts
+        ordered = [l for l in ordered if l != "unassigned"] + ["unassigned"]
+    code_of = {name: i for i, name in enumerate(ordered)}
+    codes = np.array([code_of[l] for l in labels])
+    order = np.argsort(codes, kind="stable")
+    groups = []
+    for i, label in enumerate(ordered):
+        rows = np.where(codes[order] == i)[0]
+        if rows.size:
+            groups.append((label, int(rows[0]), int(rows[-1])))
+    return order, groups
+
+
 def roi_colours(roi_map: dict) -> dict:
     """{ROI label: colour}, keyed by the whole map so a ROI keeps its colour on every carpet."""
     colours = {label: _ROI_COLOURS[i % len(_ROI_COLOURS)]
@@ -468,8 +499,12 @@ def carpet_gvtd_figure(
     channel_set: str | None = None,
     blocks: "list[tuple[str, list[str]]] | None" = None,
     imu: "dict[str, ImuTrace] | None" = None,
+    roi_map: "dict | None" = None,
 ) -> go.Figure:
     """Motion-band GVTD + per-channel z-scored OD carpet, on one shared time axis.
+
+    ``roi_map`` ({ROI label: [channel names]}) groups the canonical block's rows by ROI,
+    marked by a coloured strip named in the legend; the other blocks keep montage order.
 
     ``imu`` is ``{"gyro": ImuTrace, "accel": ImuTrace}`` at the aux rate, from
     :func:`~nirspipe.io.auxiliary.imu_traces`. Each sensor present is a row above the GVTD
@@ -521,6 +556,9 @@ def carpet_gvtd_figure(
     blocks = [(name, names) for name, names in blocks if names]
     if not blocks:
         blocks = [(channel_set or "all", list(ch_names))]
+    # GVTD is an RMS across a block's channels, so the order is the carpet's alone
+    order, roi_groups = _roi_order(blocks[0][1], roi_map)
+    blocks[0] = (blocks[0][0], [blocks[0][1][i] for i in order])
 
     ordered = [c for _, names in blocks for c in names]
     od_data, times = raw_od.get_data(picks=ordered, return_times=True)
@@ -672,8 +710,13 @@ def carpet_gvtd_figure(
             )
 
     carpet_top = gvtd_row + len(rows)
+    colours = roi_colours(roi_map) if roi_map else {}
     for i, z in enumerate([data_z, data_z_after][:n_carpets]):
         add_carpet(fig, carpet_top + i, z, t_carpet, carpet_rows, band_spans)
+        if len(roi_groups) > 1:
+            add_roi_strip(fig, carpet_top + i, roi_groups, n_ch, colours)
+    if len(roi_groups) > 1:
+        add_roi_legend(fig, {label for label, _, _ in roi_groups}, colours)
 
     if has_strip:
         fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,

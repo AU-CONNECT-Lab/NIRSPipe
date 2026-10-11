@@ -231,3 +231,61 @@ def test_imu_rows_keep_the_jolt_and_stop_at_the_recording(imu_trace, od_with_car
     assert (gyro.yaxis, accel.yaxis) == ("y", "y2")
     assert np.max(gyro.y) == 40.0 and np.max(accel.y) == 90.0
     assert np.max(gyro.x) <= od_with_cardiac.times[-1]
+
+
+# ---- the ROI order ----------------------------------------------------------------------
+
+_ROI_MAP = {"B": ["S1_D1 hbo"], "A": ["S3_D3 hbo"]}
+
+
+@pytest.fixture(scope="module")
+def roi_figs():
+    raw = synth_raw("01", "tapping", duration=200.0)
+    blocks = [("long", raw.ch_names[:6]), ("short", raw.ch_names[6:])]
+    plain = carpet_gvtd_figure(raw, raw.ch_names, blocks=blocks, raw_after=raw)
+    grouped = carpet_gvtd_figure(raw, raw.ch_names, blocks=blocks, raw_after=raw,
+                                 roi_map=_ROI_MAP)
+    return plain, grouped
+
+
+def _heat_rows(fig, k=0):
+    heat = [t for t in fig.data if t.type == "heatmap"][k]
+    return {name: np.asarray(row, dtype=float) for name, row in zip(heat.y, heat.z)}
+
+
+def test_the_long_rows_follow_the_roi_map_and_the_short_rows_keep_theirs(roi_figs):
+    _, grouped = roi_figs
+    for k in (0, 1):        # before and after correction
+        heat = [t for t in grouped.data if t.type == "heatmap"][k]
+        assert list(heat.y) == ["S3_D3 760", "S3_D3 850", "S1_D1 760", "S1_D1 850",
+                                "S2_D2 760", "S2_D2 850",
+                                "S4_D4 760", "S4_D4 850", "S5_D5 760", "S5_D5 850"]
+
+
+def test_a_reordered_row_still_carries_its_own_channel(roi_figs):
+    plain, grouped = roi_figs
+    for k in (0, 1):
+        before, after = _heat_rows(plain, k), _heat_rows(grouped, k)
+        assert before.keys() == after.keys()
+        assert all(np.array_equal(before[c], after[c], equal_nan=True) for c in before)
+    # GVTD is an RMS across the block, so the order moves the traces by rounding at most
+    lines = lambda fig: [np.asarray(t.y, dtype=float) for t in fig.data
+                         if t.type == "scatter" and t.name in ("before", "after")]
+    assert len(lines(plain)) == 4
+    assert all(np.allclose(a, b, rtol=1e-12) for a, b in zip(lines(plain), lines(grouped)))
+
+
+def test_the_strip_marks_the_long_rows_on_both_carpets_and_the_legend_names_them(roi_figs):
+    plain, grouped = roi_figs
+    legend = {t.name: t.marker.color for t in grouped.data
+              if t.type == "scatter" and t.marker.symbol == "square"}
+    assert list(legend) == ["A", "B", "unassigned"]
+    strip = [sh for sh in grouped.layout.shapes if sh.type == "rect" and sh.x1 < -0.015]
+    # three ROI blocks of two rows each, out of ten rows, on each of the two carpets
+    carpets = [f"{t.yaxis} domain" for t in grouped.data if t.type == "heatmap"]
+    assert sorted({sh.yref for sh in strip}) == carpets
+    for yref in carpets:
+        mine = sorted((sh for sh in strip if sh.yref == yref), key=lambda sh: -sh.y1)
+        assert [sh.fillcolor for sh in mine] == [legend["A"], legend["B"], legend["unassigned"]]
+        assert mine[0].y1 == pytest.approx(1.0 - 0.002) and mine[-1].y0 == pytest.approx(0.4 + 0.002)
+    assert not [sh for sh in plain.layout.shapes if sh.type == "rect" and sh.x1 < -0.015]
