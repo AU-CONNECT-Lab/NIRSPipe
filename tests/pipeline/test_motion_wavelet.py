@@ -238,7 +238,7 @@ def test_spline_is_not_offered_by_the_clis():
         assert {"tddr", "wavelet", "tpca", "none"} <= set(choices)
 
 
-def test_gui_does_not_offer_spline():
+def _gui_motion_dropdown() -> str:
     # read rather than import: pages/analysis.py calls dash.register_page() at module level,
     # which raises outside a running app
     from pathlib import Path
@@ -249,8 +249,19 @@ def test_gui_does_not_offer_spline():
     assert '"an-motion-correction"' in src
     # the motion-correction dropdown alone: the censor fill offers a spline of its own
     dropdown = src[src.index('"an-motion-correction"'):]
-    dropdown = dropdown[:dropdown.index("clearable")]
-    assert '"value": "spline"' not in dropdown
+    return dropdown[:dropdown.index("clearable")]
+
+
+def test_gui_does_not_offer_spline():
+    assert '"value": "spline"' not in _gui_motion_dropdown()
+
+
+def test_gui_offers_exactly_the_cli_choices():
+    import re
+
+    from nirspipe.cli.run import _MOTION_CHOICES
+
+    assert re.findall(r'"value": "(\w+)"', _gui_motion_dropdown()) == _MOTION_CHOICES
 
 
 @requires_pywt

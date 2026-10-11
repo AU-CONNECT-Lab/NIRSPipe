@@ -172,6 +172,7 @@ def _preprocessing():
                       dcc.Dropdown(id="an-motion-correction",
                                    options=[{"label": "TDDR", "value": "tddr"},
                                             {"label": "Wavelet", "value": "wavelet"},
+                                            {"label": "Targeted PCA", "value": "tpca"},
                                             {"label": "None", "value": "none"}],
                                    value="tddr", clearable=False)),
                 band("Separations (mm)",

@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `nirspipe-prep keep-spans` writes a `--keep-spans` table from named conditions, one row per occurrence; also on the Batch Prep page
 - `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
-- `--motion-correction tpca`, targeted PCA (Yücel 2014); the motion-corrected sidecar records each pass's removed components
+- `--motion-correction tpca`, targeted PCA (Yücel 2014), also on the Analysis page; the motion-corrected sidecar records each pass's removed components
 
 ### Changed
 - Wavelet motion correction follows the published procedure exactly: one fence per phase, coarsest level left alone, padding clipped
@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
 - Run records leave out the span tables, `channels.tsv` bad channels and a `--bad-channels` table, which they misstated; each prep sidecar holds them
 - The denoised carpet's long and short GVTD row titles no longer overlap; each row is named inside its panel, as on the motion carpet
+- Derivative `_nirs.json` sidecars carry the BIDS REQUIRED fields (`TaskName`, `SamplingFrequency`, channel and optode counts); post and crop refuse stages written without them
 
 ## [0.65.0] - 2026-10-10
 
