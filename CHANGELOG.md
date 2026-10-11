@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - The exported run script's sidecars equal the run's: `Sources`, the screening scores, the OD passthrough step, and no invented `drift_high_pass`
+- The exported run script zeroes non-finite samples and forces their pair bad, as the run does
 
 ## [0.66.0] - 2026-10-11
 
