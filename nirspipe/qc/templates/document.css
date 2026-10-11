@@ -133,6 +133,11 @@ tbody tr:hover > td.ch-group { background: none; }
 .qm-unified tbody tr.qm-group:hover td { background: none; }
 .qm-group-title { font-weight: 600; color: var(--ink); }
 .qm-unified tr.qm-group sup { color: var(--accent); margin-left: 0.1rem; }
+/* two header rows (a channel set over each member) stick as one block */
+.qm-unified th.qm-set-head { text-align: center; border-bottom: 1px solid var(--rule); }
+.qm-two-head thead tr + tr th { text-align: right; }
+.qm-two-head thead { position: sticky; top: var(--qc-topbar-h, 0px); z-index: 1; }
+.qm-two-head thead th { position: static; }
 .qm-group-tag { font-size: 0.78rem; color: var(--muted); margin-left: 0.5rem; }
 .qm-footnotes { margin: 0.6rem 0 0; padding-left: 1.2rem; font-size: 0.8rem; color: var(--muted); }
 .qm-footnotes li { margin-bottom: 0.3rem; }

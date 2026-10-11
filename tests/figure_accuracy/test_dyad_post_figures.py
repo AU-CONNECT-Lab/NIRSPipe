@@ -392,26 +392,28 @@ def test_each_member_s_channel_selector_marks_only_its_own_rejection(groups, gro
 
 
 def _quality(page, heading):
-    """``{member: {metric label: cell}}`` for one channel-set block of the quality table.
+    """``{member: {metric label: cell}}`` for one channel set of the quality table.
 
-    The table is metric-major, a member per column, with a one-cell row heading each set.
+    The table is metric-major: a header row of channel sets over a row of members, each set
+    spanning one column per member, and one-cell rows heading each metric group.
     """
     rows = table_under(page, "Member metrics")
-    members = rows[0][1:]
-    out, inside = {m: {} for m in members}, False
-    for row in rows[1:]:
-        if len(row) == 1:
-            inside = row[0].startswith(heading)
-        elif inside:
-            for member, cell in zip(members, row[1:]):
-                out[member][row[0]] = cell
+    sets, members_row = rows[0][1:], rows[1]
+    width = len(members_row) // len(sets)
+    at = sets.index(heading) * width
+    members = members_row[at:at + width]
+    out = {m: {} for m in members}
+    for row in rows[2:]:
+        if len(row) > 1:
+            for j, member in enumerate(members):
+                out[member][row[0]] = row[1 + at + j]
     return out
 
 
 @pytest.mark.parametrize("scope", SCOPES)
 def test_the_quality_table_prints_each_member_s_own_record(groups, scope):
     page = groups.page("G01", cond=scope or None)
-    table = _quality(page, "Long channels")
+    table = _quality(page, "Long")
     for m in groups.truth.group("G01"):
         rec = groups.member_record(m.sid)
         section = (rec["by_condition"][scope]["od_by_set"]["long"] if scope
@@ -424,7 +426,7 @@ def test_the_quality_table_prints_each_member_s_own_record(groups, scope):
 @pytest.mark.parametrize("scope", ["ca", "cb"])
 def test_a_condition_table_names_the_grid_its_windowed_values_were_cut_from(groups, scope):
     window = groups.member_record("sub-01")["windowed"]["qc_window_s"]
-    head = list(_quality(groups.page("G01", cond=scope), "Long channels").values())[0]
+    head = list(_quality(groups.page("G01", cond=scope), "Long").values())[0]
     for name in ("SCI", "PSP", "CV", "SNR"):
         label = next(k for k in head if k.startswith(f"Mean {name} ("))
         assert f"({window:g} s)" in label, label
@@ -434,7 +436,7 @@ def test_the_condition_quality_table_shows_each_member_s_movement_in_its_own_blo
     from tests._dyad_fingerprint import OWN_SPIKE, SHARED_SPIKE
     for scope in ("ca", "cb"):
         t0, t1 = groups.truth.block(scope)
-        table = _quality(groups.page("G01", cond=scope), "Long channels")
+        table = _quality(groups.page("G01", cond=scope), "Long")
         for m in groups.truth.group("G01"):
             moved = any(t0 <= t < t1 for t in (OWN_SPIKE[m.subject], SHARED_SPIKE))
             spikes = float(table[m.sid]["Spike % frames"].rstrip("%"))
@@ -444,6 +446,6 @@ def test_the_condition_quality_table_shows_each_member_s_movement_in_its_own_blo
 def test_a_pairing_page_lists_only_its_own_two_members(groups):
     for a, b in _pairings(groups, "G02"):
         page = groups.page("G02", pair=(a, b))
-        assert set(_quality(page, "Long channels")) == {a, b}, (a, b)
+        assert set(_quality(page, "Long")) == {a, b}, (a, b)
         html = page.read_text(encoding="utf-8")
         assert {r["subject_id"] for r in js_var(html, "_ALIGN")} == {a, b}, (a, b)

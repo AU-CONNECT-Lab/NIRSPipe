@@ -325,9 +325,9 @@ def motion_summary(motion: dict) -> dict:
 
     ::
 
-      -> {"unit": "x its own before-median",
+      -> {"unit": "x its own before-median", "canonical": "long",
           "long": {"before": {"sub-01": 1.61, "sub-02": 1.51, "together": 0.95},
-                   "after": {...}, "reduction": 0.33}, ...}
+                   "after": {...}, "reduction": 0.33}, "all": {...}, ...}
 
     ``together`` is the mean of the pointwise minimum of the members' traces, which is high
     only where both were high. A minimum needs no cutoff chosen, and being a mean of the same
@@ -335,8 +335,11 @@ def motion_summary(motion: dict) -> dict:
     """
     if not motion:
         return {}
-    out: dict = {"unit": "x its own before-median", "stages": list(motion["stages"])}
-    for name in motion["sets"]:
+    out: dict = {"unit": "x its own before-median", "stages": list(motion["stages"]),
+                 "canonical": motion["sets"][0]}
+    # an All trace measured for the tables alone sits in the series beside the drawn sets
+    extra = [name for name in motion["series"]["before"] if name not in motion["sets"]]
+    for name in [*extra, *motion["sets"]]:
         per_set: dict = {}
         for stage in motion["stages"]:
             entries = motion["series"][stage].get(name) or []
@@ -365,27 +368,35 @@ def compute_hyper_sqm(
     offsets: dict[str, float],
     subject_ids: list[str],
     sci_threshold: float,
+    pair_sets: "dict[str, set[str]] | None" = None,
 ) -> dict:
+    """The dyad's pair counts and alignment span; ``pair_sets`` adds the counts per channel set.
+
+    ``pair_sets={"long": {"S1_D1", ...}, "short": {...}}`` -> ``pairs_by_set`` holding
+    ``n_all_good``, ``n_mixed``, ``n_all_bad``, ``n_total`` for each set.
+    """
     ch_set: set[str] = set()
     for sid in subject_ids:
         for k in sci_of(sqm_data, sid):
             ch_set.add(pair_of(k))
 
-    n_all_good = n_mixed = n_all_bad = n_unknown = 0
+    verdict: dict[str, str] = {}
     for ch in ch_set:
         statuses = _ch_kept_by_member(ch, sqm_data, subject_ids, sci_threshold)
         known = [s for s in statuses if s is not None]
-        if not known:
-            n_unknown += 1
-        elif all(known):
-            n_all_good += 1
-        elif not any(known):
-            n_all_bad += 1
-        else:
-            n_mixed += 1
+        verdict[ch] = ("n_unknown" if not known else "n_all_good" if all(known)
+                       else "n_all_bad" if not any(known) else "n_mixed")
 
-    n_total  = len(ch_set)
-    pct_good = round(n_all_good / n_total * 100, 1) if n_total > 0 else None
+    def tally(pairs) -> dict:
+        out = dict.fromkeys(("n_all_good", "n_mixed", "n_all_bad", "n_unknown"), 0)
+        for ch in pairs:
+            out[verdict[ch]] += 1
+        out["n_total"] = len(pairs)
+        return out
+
+    counts = tally(ch_set)
+    n_total  = counts["n_total"]
+    pct_good = round(counts["n_all_good"] / n_total * 100, 1) if n_total > 0 else None
 
     aligned_duration_s = None
     if aligned_raws:
@@ -393,9 +404,12 @@ def compute_hyper_sqm(
 
     max_offset_s = round(max(offsets.values()), 3) if offsets else None
 
-    return dict(
-        n_all_good=n_all_good, n_mixed=n_mixed,
-        n_all_bad=n_all_bad, n_unknown=n_unknown, n_total=n_total,
+    out = dict(
+        **counts,
         pct_all_good=pct_good,
         aligned_duration_s=aligned_duration_s, max_offset_s=max_offset_s,
     )
+    if pair_sets:
+        out["pairs_by_set"] = {name: tally(ch_set & pairs)
+                               for name, pairs in pair_sets.items() if ch_set & pairs}
+    return out

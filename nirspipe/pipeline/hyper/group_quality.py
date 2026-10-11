@@ -251,6 +251,9 @@ def compute_group_sqm_raw(
         sqm["per_channel_all"]  = (_per_channel or {}).get("raw") or {}
         sqm["per_channel_long"] = ((_per_channel or {}).get("raw_long")
                                    or sqm["per_channel_all"])
+        # the three sections side by side, the shape `load_group_sqm` gives the post report
+        sqm["by_set"] = {name: sections.get(section) or {}
+                         for name, (section, *_rest) in _SET_SECTIONS.items()}
         sqm_data[entry.subject_id] = sqm
 
         # every scalar the record holds, not a whitelist that would leave SCI alone

@@ -259,7 +259,13 @@ def _process_hyper_raw_group(
             f"figures/{fig_name('detail', channel='{pair}')}"
         )
 
-    sqm = compute_hyper_sqm(sqm_data, aligned_raws, offsets, subject_ids, sci_threshold)
+    pair_sets = {sid: dict(zip(("long", "short"),
+                               ({pair_of(ch) for ch in names}
+                                for names in long_short_channels(aligned_raws[sid], sep_bands))))
+                 for sid in subject_ids if sid in aligned_raws}
+    sqm = compute_hyper_sqm(sqm_data, aligned_raws, offsets, subject_ids, sci_threshold,
+                            pair_sets={name: set().union(*(s[name] for s in pair_sets.values()))
+                                       for name in ("long", "short")} if pair_sets else None)
     sqm["motion"] = motion_scalars
     if grid is not None:
         sqm.update(usable_scalars(grid, subject_ids))
@@ -284,10 +290,9 @@ def _process_hyper_raw_group(
                           if sid in aligned_raws else None,
             "n_pairs": len(get_channel_pairs(aligned_raws[sid]))
                        if sid in aligned_raws else 0,
-            # this member's own long pairs, by the run's separation bands
-            "n_long": (len({pair_of(ch) for ch in
-                            long_short_channels(aligned_raws[sid], sep_bands)[0]})
-                       if sid in aligned_raws else 0),
+            # this member's own long and short pairs, by the run's separation bands
+            "n_long": len(pair_sets.get(sid, {}).get("long", ())),
+            "n_short": len(pair_sets.get(sid, {}).get("short", ())),
         }
         for sid in subject_ids
     ]

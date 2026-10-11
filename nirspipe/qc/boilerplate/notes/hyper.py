@@ -60,13 +60,6 @@ NOTES = {
         "The same rows after motion correction. Both figures divide by the "
         "<em>uncorrected</em> median and z-score the carpets by the uncorrected mean and SD, "
         "so a drop here is movement removed, not a moved yardstick.",
-    "hyper_raw.motion_together":
-        "The two motion figures in numbers, each before &rarr; after motion correction. A "
-        "member&rsquo;s row is its mean GVTD over its own median. <b>Both at once</b> is the "
-        "mean of the two traces&rsquo; pointwise minimum, high only where both moved "
-        "together; the row under it is how much the correction lowered it, and the last row "
-        "counts the amber strip&rsquo;s spans. Both moving at once raises any synchrony "
-        "measured on the pair, and shifting or scrambling one member does not remove it.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: the first map shows each "
         "block&rsquo;s share of coupled windows, the second each window&rsquo;s SCI. A long "
@@ -84,12 +77,18 @@ NOTES = {
         "rates are refused by every inter-brain measure; drift between devices at the same "
         "nominal rate passes silently, and alignment cannot remove it.",
     "hyper_raw.member_metrics":
-        "A column per member: long channels where the montage has short ones, every channel "
-        "otherwise. Hover a metric for which end is better; windowed SCI is coloured against "
-        "this run&rsquo;s threshold.",
+        "A channel set over each member&rsquo;s column. Hover a metric for which end is "
+        "better; windowed SCI is coloured against this run&rsquo;s threshold. <b>Mean "
+        "GVTD</b> is the motion figures&rsquo; number: the member&rsquo;s GVTD over its own "
+        "median, before &rarr; after motion correction.",
     "hyper_raw.group_sqm":
-        "The dyad&rsquo;s own numbers: how many channel pairs survived in both members, and "
-        "the aligned span they share.",
+        "The dyad&rsquo;s own numbers, a column per channel set. A pair is good when every "
+        "member kept it. <b>Both at once</b> is the mean of the members&rsquo; pointwise "
+        "minimum GVTD, high only where both moved together, before &rarr; after correction; "
+        "the row under it is how much the correction lowered it. The spans row counts the "
+        "amber strip&rsquo;s spans, found on the long channels. Both moving at once raises "
+        "any synchrony measured on the pair, and shifting or scrambling one member does not "
+        "remove it.",
     "hyper_raw.channel_summary":
         "Green is kept by every member, yellow mixed, red kept by none.",
     "hyper_raw.channel_decisions":
@@ -207,12 +206,12 @@ NOTES = {
         "mean, the ISC in Fisher z, since a correlation is signed. In the homologous table "
         "both average only the same-channel pairs.",
     "hyper_post.member_metrics":
-        "A block per channel set, a column per member. Hover a metric for which end is "
+        "A channel set over each member&rsquo;s column. Hover a metric for which end is "
         "better. Windowed SCI is coloured against each member&rsquo;s own "
         "<code>--sci-threshold</code> from its screening sidecar, and left uncoloured where "
         "none was recorded.",
     "hyper_post.member_metrics_sets":
-        "Each block is its own measurement, not a subset of the one above: GVTD is an RMS "
+        "Each set is its own measurement, not a subset of the one beside it: GVTD is an RMS "
         "over its set&rsquo;s channels and a retention rate a share of them. The coherence "
         "uses the long channels.",
     "hyper_post.member_metrics_condition":

@@ -489,6 +489,20 @@ def motion_series(
                 after_g = gvtd_timetrace(source[rows], sfreq, *GVTD_MOTION_BAND)[cut]
                 series["after"].setdefault(name, []).append((sid, after_g / mid))
 
+        if len(blocks) > 1:
+            # every channel, for the tables' All column; not a figure row, so not in `sets`
+            every = list(od.ch_names)
+            every_src = src_od.get_data(picks=every)
+            g = gvtd_timetrace(every_src, sfreq, *GVTD_MOTION_BAND)[cut]
+            mid = float(np.nanmedian(g))
+            mid = mid if np.isfinite(mid) and mid > 0 else 1.0
+            series["before"].setdefault("all", []).append((sid, g / mid))
+            if "after" in stages and src_after is not None:
+                every_after = _matched_after(src_after, every, every_src.shape, sfreq, sid)
+                if every_after is not None:
+                    after_g = gvtd_timetrace(every_after, sfreq, *GVTD_MOTION_BAND)[cut]
+                    series["after"].setdefault("all", []).append((sid, after_g / mid))
+
         # spikes on the canonical set only: the test is ">= 10% of *these* channels"
         canonical = blocks[0][1]
         for stage, source in (("before", src_od), ("after", src_after)):
@@ -522,6 +536,10 @@ def motion_series(
         logger.warning("only some members have a motion-corrected file; dropping the "
                        "corrected figure rather than drawing one member in it")
         stages.remove("after")
+    # the same rule for the All column's trace
+    if "after" in stages and (len(series["after"].get("all") or [])
+                              != len(series["before"].get("all") or [])):
+        series["after"].pop("all", None)
 
     # aligned recordings are one length by construction, but a member read from a different
     # stage can be a sample short; one length here keeps the pointwise minimum defined

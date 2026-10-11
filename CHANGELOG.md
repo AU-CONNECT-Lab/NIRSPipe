@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
+- Both dyad reports print member metrics with each channel set over its members' columns; the dyad raw report counts pairs and motion per set
 
 ### Removed
 - The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only

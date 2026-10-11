@@ -73,22 +73,25 @@ logger = get_logger("qc.hyper_report")
 # better direction and the colour all come from the metric registry, the same one the
 # individual reports read, so a metric cannot print to three decimals in a subject report
 # and four here. Absent keys render as a dash, so one list serves the raw path (intensity
-# metrics only) and the post path (which adds motion and haemoglobin).
-_SUBJECT_METRICS = [
-    "sci_win_mean",
-    "sci_mean",
-    # the only one of these that screens; the rest are measured and reported
-    "good_frac_mean",
-    "psp_mean",
-    "cv_mean",
-    "snr_mean",
-    "n_saturated_channels",
-    "gvtd_filt_p95",
-    "motion_corrected_pct",
-    "spike_pct_frames",
-    "hbo_hbr_corr_mean",
-    "channel_retention_rate",
-]
+# metrics only) and the post path (which adds motion and haemoglobin). Grouped and ordered
+# as the subject report's run summary.
+_SUBJECT_METRIC_GROUPS = (
+    ("Optical density", (
+        "channel_retention_rate",
+        "sci_win_mean",
+        "sci_mean",
+        # the only one of these that screens; the rest are measured and reported
+        "good_frac_mean",
+        "psp_mean",
+        "snr_mean",
+        "cv_mean",
+        "n_saturated_channels",
+    )),
+    ("Haemoglobin", ("hbo_hbr_corr_mean",)),
+    ("Motion", ("gvtd_filt_p95", "spike_pct_frames", "motion_corrected_pct")),
+)
+_SUBJECT_METRICS = [key for _, keys in _SUBJECT_METRIC_GROUPS for key in keys]
+_METRIC_GROUP = {key: title for title, keys in _SUBJECT_METRIC_GROUPS for key in keys}
 
 # What one WTC result yields, keyed to the type of each. Declared once because two places
 # read it: `_figure_set` fills a fresh one, and a page renderer falls back to an empty value
@@ -176,6 +179,7 @@ def subject_metric_rows(
         if any(c["text"] != MISSING_VALUE for c in cells):
             label = metric_label(key, condition=condition)
             rows.append({"key": key,
+                         "group": _METRIC_GROUP[key],
                          "label": (grid_window_label(label, key, grid_window) if condition
                                    else label),
                          "summary": metric_summary(key, condition),
@@ -196,20 +200,20 @@ def subject_metric_tables(
     condition: bool = False,
     grid_window: "float | None" = None,
 ) -> list[dict]:
-    """One block of the quality table per channel set.
+    """One block of the quality table per channel set, laid out by :func:`member_metric_table`.
 
     ::
 
       -> [{"set": "Long", "members": ["sub-01", "sub-02"],
-           "metrics": [{"key", "label", "summary", "key_metric",
+           "metrics": [{"key", "group", "label", "summary", "key_metric",
                         "cells": [{"text", "cls"}, ...]}, ...]}]
 
     ``by_set`` is ``{set_name: {subject_id: scalars}}``.
 
-    A block per set rather than a column per set, because a set is a separate measurement
-    and not a grouping of the same one: GVTD is an RMS across the channels of its set, and
-    a long and a short retention rate are fractions of different montages. The columns are
-    the members, so the two numbers a dyad page is read for sit side by side.
+    A set is a separate measurement and not a grouping of the same one: GVTD is an RMS
+    across the channels of its set, and a long and a short retention rate are fractions of
+    different montages. So each set is measured and kept on its own, and the page prints it
+    under its own heading.
 
     A montage with no short channel measures one set, and ``all`` and ``long`` are then the
     same numbers printed twice; it gets a single unheaded block instead. That is also what
@@ -235,6 +239,176 @@ def _members_only(table: dict, members: "list[str]") -> dict:
     return {**table,
             "members": [table["members"][i] for i in keep],
             "metrics": [{**m, "cells": [m["cells"][i] for i in keep]} for m in table["metrics"]]}
+
+
+def member_metric_table(
+    tables: "list[dict]", extra: "dict[str, list[dict]] | None" = None,
+) -> dict:
+    """The blocks of :func:`subject_metric_tables` as one table, a channel set over each member.
+
+    ::
+
+      [{"set": "All", "members": ["sub-01", "sub-02"], ...}, {"set": "Long", ...}]
+      -> {"sets": ["All", "Long"], "members": ["sub-01", "sub-02"],
+          "groups": [{"title": "Optical density",
+                      "rows": [{"key", "label", "summary", "key_metric",
+                                "cells": [All sub-01, All sub-02, Long sub-01, Long sub-02]}]}]}
+
+    A metric one set lacks prints a dash in that set's columns. ``extra`` appends a page's
+    own rows, cells in the same order, to the group of that title; "Recording" comes first.
+    A single unheaded block gives an empty ``sets``.
+    """
+    if not tables:
+        return {}
+    members = list(tables[0]["members"])
+    width = len(members)
+    dash = {"text": MISSING_VALUE, "cls": ""}
+    by_key: dict = {}
+    for i, table in enumerate(tables):
+        for metric in table["metrics"]:
+            row = by_key.setdefault(metric["key"],
+                                    {**metric, "cells": [dash] * (len(tables) * width)})
+            row["cells"][i * width:(i + 1) * width] = metric["cells"]
+    groups = []
+    for title in ("Recording", *(t for t, _ in _SUBJECT_METRIC_GROUPS)):
+        rows = [by_key[k] for k in _SUBJECT_METRICS if k in by_key and _METRIC_GROUP[k] == title]
+        rows += (extra or {}).get(title, [])
+        if rows:
+            groups.append({"title": title, "rows": rows})
+    return {"sets": [t["set"] for t in tables if t["set"]], "members": members,
+            "groups": groups}
+
+
+def _text_row(label: str, texts: "list[str]") -> dict:
+    """A page row with no registry entry: ``("S-D pairs", ["26", "26"])`` -> a plain row."""
+    return {"key": "", "label": label, "summary": "", "key_metric": False,
+            "cells": [{"text": t, "cls": ""} for t in texts]}
+
+
+def raw_member_rows(
+    member_info: "list[dict]", motion: dict, subject_ids: "list[str]", sets: "list[str]",
+) -> "dict[str, list[dict]]":
+    """The dyad raw page's own member rows, for :func:`member_metric_table`'s ``extra``.
+
+    ``sets`` are the table's set headings; an empty list is an unsplit montage, whose one
+    column group reads every pair and the motion pass's only set.
+    """
+    info = {m["subject_id"]: m for m in member_info}
+    keys = [s.lower() for s in sets] or ["all"]
+    first = len(subject_ids)
+
+    def per_member(fmt) -> "list[str]":
+        # a value no channel set owns: under the first set's columns, the rest blank
+        return [fmt(info.get(sid) or {}) for sid in subject_ids] + [""] * (first * (len(keys) - 1))
+
+    pair_key = {"all": "n_pairs", "long": "n_long", "short": "n_short"}
+    rows = [
+        _text_row("Sampling rate (Hz)", per_member(
+            lambda m: MISSING_VALUE if m.get("sfreq") is None else f"{m['sfreq']:.4f}")),
+        _text_row("Aligned duration (s)", per_member(
+            lambda m: MISSING_VALUE if m.get("duration_s") is None
+            else f"{m['duration_s']:.1f}")),
+        _text_row("S-D pairs", [str((info.get(sid) or {}).get(pair_key[k], MISSING_VALUE))
+                                for k in keys for sid in subject_ids]),
+    ]
+    out = {"Recording": rows}
+    if motion:
+        motion_keys = keys if sets else [motion.get("canonical") or "all"]
+
+        def ratio(name: str, sid: str) -> str:
+            stages = motion.get(name) or {}
+            before = (stages.get("before") or {}).get(sid)
+            after = (stages.get("after") or {}).get(sid)
+            if before is None:
+                return MISSING_VALUE
+            return f"{before:.2f}" if after is None else f"{before:.2f} → {after:.2f}"
+        out["Motion"] = [_text_row("Mean GVTD (x own median)",
+                                   [ratio(k, sid) for k in motion_keys for sid in subject_ids])]
+    return out
+
+
+def dyad_metric_table(sqm: dict, sets: "list[str]") -> dict:
+    """The dyad's own numbers, a column per channel set.
+
+    ::
+
+      -> {"columns": ["All", "Long", "Short"],
+          "rows": [{"label": "Pairs good in every member",
+                    "cells": [{"text": "14 / 26", "cls": ""}, ...]}, ...]}
+
+    The pair counts and the motion figures' numbers. Colour sits on the long set, as in the
+    subject report; an unsplit montage has one column and colours it.
+    """
+    keys = [s.lower() for s in sets] or ["all"]
+    verdict = keys.index("long") if "long" in keys else 0
+    motion = sqm.get("motion") or {}
+    blank = {"text": "", "cls": ""}
+    na = {"text": MISSING_VALUE, "cls": "na"}
+
+    def counts(name: str) -> dict:
+        return sqm if name == "all" else (sqm.get("pairs_by_set") or {}).get(name) or {}
+
+    def coloured(i: int, text: str, cls: str) -> dict:
+        return {"text": text, "cls": cls if i == verdict else ""}
+
+    def good(i: int, name: str) -> dict:
+        c = counts(name)
+        if c.get("n_all_good") is None:
+            return na
+        total = c.get("n_total") or 0
+        pct = 100 * c["n_all_good"] / total if total else None
+        cls = "" if pct is None else "qm-ok" if pct >= 80 else "qm-warn" if pct >= 50 else "qm-bad"
+        return coloured(i, f"{c['n_all_good']} / {total}", cls)
+
+    def count(i: int, name: str, key: str, bad: bool = False) -> dict:
+        value = counts(name).get(key)
+        if value is None:
+            return na
+        return coloured(i, str(value), "qm-bad" if bad and value > 0 else "")
+
+    rows = [
+        {"label": "Pairs good in every member", "cells": [good(i, k) for i, k in enumerate(keys)]},
+        {"label": "Pairs mixed", "cells": [count(i, k, "n_mixed") for i, k in enumerate(keys)]},
+        {"label": "Pairs bad in every member",
+         "cells": [count(i, k, "n_all_bad", bad=True) for i, k in enumerate(keys)]},
+    ]
+    motion_keys = keys if sets else [motion.get("canonical") or "all"]
+    if any(isinstance(motion.get(k), dict) for k in motion_keys):
+        def together(name: str) -> dict:
+            stages = motion.get(name) or {}
+            before = (stages.get("before") or {}).get("together")
+            after = (stages.get("after") or {}).get("together")
+            if before is None:
+                return na
+            return {"text": f"{before:.2f}" if after is None else f"{before:.2f} → {after:.2f}",
+                    "cls": ""}
+
+        def removed(name: str) -> dict:
+            # a negative value means the correction put some back, worth seeing
+            r = (motion.get(name) or {}).get("reduction")
+            if r is None:
+                return na
+            return {"text": f"{r * 100:.0f}%",
+                    "cls": "qm-ok" if r >= 0.3 else "qm-warn" if r > 0 else "qm-bad"}
+        rows.append({"label": "Both at once (x own median)",
+                     "cells": [together(k) for k in motion_keys]})
+        if any((motion.get(k) or {}).get("reduction") is not None for k in motion_keys):
+            rows.append({"label": "Simultaneous movement removed",
+                         "cells": [removed(k) for k in motion_keys]})
+        spans = motion.get("spike_spans_both") or {}
+        if spans.get("before") is not None:
+            # counted on the canonical set alone, so it sits in that set's column
+            text = (str(spans["before"]) if spans.get("after") is None
+                    else f"{spans['before']} → {spans['after']}")
+            home = motion.get("canonical") or motion_keys[0]
+            rows.append({"label": "Spans where both spiked",
+                         "cells": [{"text": text, "cls": ""} if k == home or not sets else na
+                                   for k in motion_keys]})
+    offset = sqm.get("max_offset_s")
+    rows.append({"label": "Max alignment offset (s)",
+                 "cells": [{"text": MISSING_VALUE if offset is None else f"{offset:.3f}",
+                            "cls": ""}] + [blank] * (len(keys) - 1)})
+    return {"columns": list(sets) or ["Value"], "rows": rows}
 
 
 def _record_window_matches(
@@ -591,6 +765,16 @@ def build_hyper_report(
     post = output_path.with_name(report_name(label))
     post_href = post.name if post.exists() else None
 
+    subject_ids = meta["subject_ids"]
+    blocks = subject_metric_tables(
+        {key: {sid: (sqm_data.get(sid) or {}).get("by_set", {}).get(key) or {}
+               for sid in subject_ids}
+         for key, _ in _CHANNEL_SETS},
+        subject_ids, member_sci_lines(sqm_data, subject_ids))
+    member_table = member_metric_table(blocks, raw_member_rows(
+        meta.get("member_info") or [], (meta.get("sqm") or {}).get("motion") or {},
+        subject_ids, [b["set"] for b in blocks if b["set"]]))
+
     html = render(
         "hyper_report.html.j2",
         **page_vars(
@@ -630,11 +814,8 @@ def build_hyper_report(
             decision_rows(sqm_data, meta["subject_ids"]), default=str),
         blocks_json=json.dumps(meta.get("conditions") or {}),
         member_info_json=json.dumps(meta.get("member_info") or []),
-        # one unheaded table: this page's scalars come from the raw pass, which measures
-        # every channel and does not split by separation
-        subject_metrics_rows=subject_metric_tables(
-            {"all": sqm_data}, meta["subject_ids"],
-            member_sci_lines(sqm_data, meta["subject_ids"])),
+        subject_metrics_rows=member_table,
+        dyad_table=dyad_metric_table(meta["sqm"], member_table.get("sets") or []),
         # this page's own name, which is what the rating server files a verdict under
         page_stem=output_path.stem,
         post_href=post_href,
@@ -1634,7 +1815,7 @@ def build_hyper_post_report(
             isc_roi_matrix=(isc_roi_matrices.get(pair) or {}).get(label) or {},
             isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
             isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
-            subject_metrics_rows=member_rows,
+            subject_metrics_rows=member_metric_table(member_rows),
             condition_grid=_condition_grid(pair, label) if pair else {},
         )
         out_path.write_text(html, encoding="utf-8")

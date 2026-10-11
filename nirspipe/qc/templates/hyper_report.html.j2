@@ -205,34 +205,30 @@
 <!-- ====================================================== quality metrics -->
 <h2 id="Metrics">Quality Metrics</h2>
 
-<section id="Comparable" class="step">
-  <h3 class="step-title">Montage and rate</h3>
-  <div class="details-body">
-    <p class="step-desc">{{ section_note('hyper_raw.comparable') }}</p>
-    <table class="qm-table qm-flat" id="compare-table">
-      <thead><tr><th>Member</th><th>Sampling rate (Hz)</th><th>Aligned duration (s)</th>
-        <th>S-D pairs</th><th>Long pairs</th></tr></thead>
-      <tbody id="compare-tbody"></tbody>
-    </table>
-    <p class="qm-note" id="compare-verdict"></p>
-  </div>
-</section>
-
-{% if subject_metrics_rows %}
 <section id="MemberMetrics" class="step">
   <h3 class="step-title">Member metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.member_metrics') }}</p>
-    {{ subject_metrics(subject_metrics_rows) }}
+    {% if subject_metrics_rows %}{{ subject_metrics(subject_metrics_rows) }}{% endif %}
+    <p class="qm-note" id="compare-verdict"></p>
+    <p class="qm-note">{{ section_note('hyper_raw.comparable') }}</p>
   </div>
 </section>
-{% endif %}
 
 <section id="GroupSQM" class="step">
   <h3 class="step-title">Dyad metrics</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.group_sqm') }}</p>
-    <ul id="sqm-list" class="qm-list"></ul>
+    <table class="qm-table qm-flat qm-unified" id="dyad-table">
+      <colgroup><col class="lab">{% for _ in dyad_table.columns %}<col>{% endfor %}</colgroup>
+      <thead><tr><th>Metric</th>{% for name in dyad_table.columns %}<th>{{ name }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {%- for row in dyad_table.rows %}
+        <tr><td><span class="ql">{{ row.label }}</span></td>
+          {%- for cell in row.cells %}<td class="qv {{ cell.cls }}">{{ cell.text }}</td>{% endfor %}</tr>
+      {%- endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -249,16 +245,6 @@
       {% endfor %}
       </tbody>
     </table>
-  </div>
-</section>
-{% endif %}
-
-{% if figure_paths.motion_before %}
-<section id="motion-summary" class="step">
-  <h3 class="step-title">Motion summary</h3>
-  <div class="details-body">
-    <table class="qm-table qm-flat qm-unified" id="motion-table"></table>
-    <p class="qm-note">{{ section_note('hyper_raw.motion_together') }}</p>
   </div>
 </section>
 {% endif %}
@@ -361,25 +347,11 @@ function _set(id, text, cls) {
   el.className = cls || "";
 }
 
-// ── group-level metrics, and the three of them the summary repeats ───────────
+// ── the dyad numbers the summary repeats ──────────────────────────────────────
 (function() {
   var q = _SQM;
-  function li(label, value, cls) {
-    return "<li><span class='ql'>" + label + "</span>" +
-           "<span class='qv" + (cls ? " " + cls : "") + "'>" + value + "</span></li>";
-  }
   var pct = q.pct_all_good;
   var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
-  document.getElementById("sqm-list").innerHTML =
-    li("Channels: all good",
-       (q.n_all_good != null ? q.n_all_good : "—") +
-         (q.n_total ? " / " + q.n_total : ""), goodCls) +
-    li("Channels: mixed",   q.n_mixed   != null ? q.n_mixed   : "—") +
-    li("Channels: all bad", q.n_all_bad != null ? q.n_all_bad : "—",
-       q.n_all_bad > 0 ? "qm-bad" : "") +
-    li("Aligned duration",    q.aligned_duration_s != null ? q.aligned_duration_s + " s" : "—") +
-    li("Max alignment offset",q.max_offset_s       != null ? q.max_offset_s + " s"       : "—");
-
   _set("sum-n-pairs", q.n_total != null ? String(q.n_total) : "—");
   _set("sum-all-good",
        (q.n_all_good != null ? q.n_all_good : "—") +
@@ -394,18 +366,7 @@ function _set(id, text, cls) {
 
 // ── are the two members comparable ───────────────────────────────────────────
 (function() {
-  var tbody = document.getElementById("compare-tbody");
-  if (!tbody || !_MEMBERS.length) return;
-  _MEMBERS.forEach(function(m) {
-    var tr = document.createElement("tr");
-    tr.innerHTML =
-      "<td>" + m.subject_id + "</td>" +
-      "<td>" + (m.sfreq != null ? m.sfreq.toFixed(4) : "—") + "</td>" +
-      "<td>" + (m.duration_s != null ? m.duration_s.toFixed(1) : "—") + "</td>" +
-      "<td>" + m.n_pairs + "</td>" +
-      "<td>" + m.n_long + "</td>";
-    tbody.appendChild(tr);
-  });
+  if (!_MEMBERS.length) return;
   // a rate mismatch is drift alignment cannot remove, and an unmatched label becomes a
   // blank row in every later panel; both are silent unless this line says so
   var rates = _MEMBERS.map(function(m) { return m.sfreq; });
@@ -449,58 +410,6 @@ function _set(id, text, cls) {
   if (el) {
     el.textContent = {{ section_note('hyper_raw.blocks_verdict') | tojson }};
   }
-})();
-
-// ── motion: the two figures' numbers in one table, a channel set per column ─────
-(function() {
-  var m = _SQM.motion || {};
-  var table = document.getElementById("motion-table");
-  if (!table) return;
-  // a channel set holds one number per member at each stage; the span count holds one number
-  var sets = Object.keys(m).filter(function(k) {
-    return m[k] && typeof m[k].before === "object";
-  });
-  if (!sets.length) {
-    document.getElementById("motion-summary").style.display = "none";
-    return;
-  }
-  function stages(before, after, digits) {
-    if (before == null) return "—";
-    var b = digits == null ? String(before) : before.toFixed(digits);
-    if (after == null) return b;
-    return b + " → " + (digits == null ? String(after) : after.toFixed(digits));
-  }
-  function row(label, cells) {
-    return "<tr><td><span class='ql'>" + label + "</span></td>" + cells.map(function(c) {
-      return "<td class='qv" + (c[1] ? " " + c[1] : "") + "'>" + c[0] + "</td>";
-    }).join("") + "</tr>";
-  }
-  var html = "<thead><tr><th>Metric</th>" + sets.map(function(k) {
-    return "<th>" + k.charAt(0).toUpperCase() + k.slice(1) + "</th>";
-  }).join("") + "</tr></thead><tbody>";
-  // "together" is the mean of the pointwise minimum: high only where both were high
-  var keys = Object.keys(m[sets[0]].before).filter(function(k) { return k !== "together"; });
-  keys.concat(["together"]).forEach(function(key) {
-    var label = key === "together" ? "Both at once" : key + ", mean GVTD over own median";
-    html += row(label, sets.map(function(set) {
-      return [stages(m[set].before[key], (m[set].after || {})[key], 2), ""];
-    }));
-  });
-  if (sets.some(function(set) { return m[set].reduction != null; })) {
-    // a negative value means the correction put some back, worth seeing rather than rounding
-    html += row("Simultaneous movement removed", sets.map(function(set) {
-      var r = m[set].reduction;
-      if (r == null) return ["—", ""];
-      return [(r * 100).toFixed(0) + "%", r >= 0.3 ? "qm-ok" : r > 0 ? "qm-warn" : "qm-bad"];
-    }));
-  }
-  // counted on the canonical channel set alone, so it sits in the first column only
-  var spans = m.spike_spans_both || {};
-  if (spans.before != null) {
-    html += row("Spans where both spiked", [[stages(spans.before, spans.after), ""]]
-      .concat(sets.slice(1).map(function() { return ["", ""]; })));
-  }
-  table.innerHTML = html + "</tbody>";
 })();
 
 </script>

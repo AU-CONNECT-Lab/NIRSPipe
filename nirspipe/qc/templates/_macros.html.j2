@@ -1,33 +1,33 @@
 {# Shared Jinja macros for QC report templates.
    Usage: {% from "_macros.html.j2" import subject_metrics %} #}
 
-{# Per-subject quality metrics: one table, a metric per row and a member per column, with a
-   block per channel set. Blocks come from hyper_report.subject_metric_tables.
+{# Per-subject quality metrics: one table, a metric per row, a channel set over each member's
+   column. The table comes from hyper_report.member_metric_table.
 
-   The shape and the markup are the subject report's own metrics section, down to the class
-   names, so a reader moving between a subject page and a dyad page reads one table twice
-   rather than two tables once.
-
-   A set is its own measurement rather than a grouping of one, which is why it gets its own
-   block: GVTD is an RMS across the channels of its set, and a long retention rate and a
-   short one are fractions of different montages. A block whose `set` is empty is a page
-   with nothing to split, and prints unheaded.
+   The markup is the subject report's own metrics section, down to the class names, so a
+   reader moving between a subject page and a dyad page reads one table twice rather than
+   two tables once. An empty `sets` is a page with nothing to split: one header row.
 
    Cells arrive formatted, with their colour class already chosen against the registry. No
    number is written here; see qc.boilerplate.vocabulary. #}
-{% macro subject_metrics(tables) -%}
-{%- set members = tables[0].members if tables else [] %}
-<table class="qm-table qm-flat qm-unified">
-  <colgroup><col class="lab">{% for _ in members %}<col>{% endfor %}</colgroup>
+{% macro subject_metrics(table) -%}
+{%- set members = table.members or [] %}
+{%- set sets = table.sets or [] %}
+{%- set ncol = (sets | length or 1) * (members | length) %}
+<table class="qm-table qm-flat qm-unified{% if sets %} qm-two-head{% endif %}">
+  <colgroup><col class="lab">{% for _ in range(ncol) %}<col>{% endfor %}</colgroup>
   <thead>
+    {%- if sets %}
+    <tr><th rowspan="2">Metric</th>{% for name in sets %}<th class="qm-set-head" colspan="{{ members | length }}">{{ name }}</th>{% endfor %}</tr>
+    <tr>{% for _ in sets %}{% for member in members %}<th>{{ member }}</th>{% endfor %}{% endfor %}</tr>
+    {%- else %}
     <tr><th>Metric</th>{% for member in members %}<th>{{ member }}</th>{% endfor %}</tr>
+    {%- endif %}
   </thead>
   <tbody>
-  {%- for table in tables %}
-    {%- if table.set %}
-    <tr class="qm-group"><td colspan="{{ members | length + 1 }}"><span class="qm-group-title">{{ table.set }} channels</span></td></tr>
-    {%- endif %}
-    {%- for metric in table.metrics %}
+  {%- for group in table.groups %}
+    <tr class="qm-group"><td colspan="{{ ncol + 1 }}"><span class="qm-group-title">{{ group.title }}</span></td></tr>
+    {%- for metric in group.rows %}
     <tr><td><span class="ql{% if metric.key_metric %} ql-key{% endif %}" title="{{ metric.summary }}"
         >{{ metric.label }}{% if metric.key_metric %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span></td>
       {%- for cell in metric.cells %}<td class="qv {{ cell.cls }}">{{ cell.text }}</td>{% endfor %}
