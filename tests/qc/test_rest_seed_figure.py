@@ -178,3 +178,23 @@ def test_optode_layout_still_renders_after_the_outline_moved(haemo):
     from nirspipe.qc.figures import optode_layout_static
     b64 = optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)
     assert base64.b64decode(b64)[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_optode_layout_puts_each_optode_where_the_head_maps_do(haemo, monkeypatch):
+    from nirspipe.qc.figures.common.topomap import _projected_optodes
+    from nirspipe.qc.figures.subject import optode_layout
+
+    drawn = {}
+    monkeypatch.setattr(optode_layout, "fig_png_b64", lambda fig: drawn.setdefault("fig", fig))
+    optode_layout.optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)
+    ax = drawn["fig"].axes[0]
+
+    opt_xy, _, outlines = _projected_optodes(haemo.info)
+    assert outlines
+    placed = {t.get_text(): t.get_position() for t in ax.texts}
+    assert placed.keys() == opt_xy.keys()
+    for name, xy in opt_xy.items():
+        assert placed[name] == pytest.approx(tuple(xy)), name
+    head = np.column_stack(outlines["head"])
+    assert any(line.get_xydata().shape == head.shape and np.allclose(line.get_xydata(), head)
+               for line in ax.lines)
