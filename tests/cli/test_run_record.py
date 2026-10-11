@@ -21,6 +21,7 @@ _INVOCATION = ["nirspipe", "/bids", "/out", "participant", "--mode", "glm",
 # Only in the TOML, never on the command line. drift_order and stim_dur are
 # deliberately non-default so a value falling back to a default is visible.
 _TOML = """\
+[post]
 hrf_model = "spm"
 drift_model = "cosine"
 drift_high_pass = 0.01
@@ -81,7 +82,7 @@ def test_record_has_the_expected_sections(record):
     ("noise_model", "cli"),          # typed, over both files
     ("hrf_model", "config"),         # in the TOML and in the glm defaults; the TOML wins
     ("drift_order", "config"),
-    ("cardiac_l_freq", "cli"),
+    ("low_pass", "config"),
     ("mode", "cli"),
 ])
 def test_the_record_names_the_layer_each_post_value_came_from(record, field, expected):

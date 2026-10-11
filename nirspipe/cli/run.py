@@ -229,8 +229,10 @@ def _build_parser() -> argparse.ArgumentParser:
                            "--config and then the command line override. The run record "
                            "names where each setting came from.")
     post.add_argument("--config", type=Path,
-                      help="TOML file of post settings, over the mode's defaults. CLI flags "
-                           "override both.")
+                      help="A run record (logs/sub-<label>.toml) or a TOML of the same shape: "
+                           "[prep] and [post] keyed by flag name. Reruns with its settings; "
+                           "flags given here override it, and its post settings override the "
+                           "mode's defaults.")
     post.add_argument("--high-pass", type=_cutoff,
                       help="High-pass filter cutoff in Hz, e.g. 0.01, or none to switch off the "
                            "mode's default.")
@@ -378,6 +380,112 @@ def _check_dirs(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+# ---- --config: a run record, or any file of its shape ----
+
+# a section sets the flags of the parser groups whose title starts with these; roi_mapping
+# sits under output but changes the ROI results, so it travels with the post settings
+_CONFIG_GROUPS = {"prep": "preprocessing", "post": "postprocessing"}
+_CONFIG_EXTRA = {"prep": (), "post": ("roi_mapping",)}
+_EXECUTION_KEYS = ("participant_label", "session_label", "task_label", "bids_filter_file",
+                   "ignore", "allow_cropped_input")
+# describe the run that wrote the record rather than set the next one
+_RECORD_ONLY = ("environment", "post_sources")
+
+
+def config_keys() -> dict[str, tuple[str, ...]]:
+    """The flags each section of a --config file may set, by section."""
+    parser = _build_parser()
+    keys = {section: tuple(a.dest for g in parser._action_groups if g.title.startswith(prefix)
+                           for a in g._group_actions if a.dest != "config") + _CONFIG_EXTRA[section]
+            for section, prefix in _CONFIG_GROUPS.items()}
+    keys["execution"] = _EXECUTION_KEYS
+    return keys
+
+
+def _coerce(action: argparse.Action, key: str, value, path: Path):
+    """A TOML value through the flag's own type and choices, as argparse would have."""
+    def fail(why: str):
+        print(f"Error: {path}: {key} = {value!r}: {why}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if action.nargs == 0:
+        if not isinstance(value, bool):
+            fail("expected true or false")
+        return value
+    many = action.nargs in ("+", "*")
+    items = value if isinstance(value, list) else [value]
+    if isinstance(value, list) and not many:
+        fail("expected one value, not a list")
+    try:
+        items = [action.type(str(item)) if action.type else item for item in items]
+    except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
+        fail(str(exc))
+    if action.choices is not None and any(item not in action.choices for item in items):
+        fail(f"expected one of {', '.join(map(str, action.choices))}")
+    return items if many else items[0]
+
+
+def read_config(path: Path) -> dict:
+    """--config as the settings of each section, plus the version that wrote it.
+
+    The file is a run record or anything of its shape: [prep] and [post] keyed by flag
+    name, [execution] for the selection. A record's other fields describe its own run and
+    are skipped; an unknown key in [prep] or [post], or a key outside any section, is
+    refused, since a misspelt setting would otherwise drop out without a word.
+    """
+    from nirspipe.utils import load_toml
+
+    raw = load_toml(path)
+    stray = [k for k, v in raw.items() if not isinstance(v, dict)]
+    if stray:
+        print(f"Error: {path}: {stray[0]} sits outside any section; --config takes [prep] and "
+              "[post] sections keyed by flag name, as a run record does.", file=sys.stderr)
+        raise SystemExit(1)
+    keys = config_keys()
+    unknown = sorted(set(raw) - set(keys) - set(_RECORD_ONLY))
+    if unknown:
+        print(f"Error: {path}: no section [{unknown[0]}]; expected [prep], [post] or "
+              "[execution].", file=sys.stderr)
+        raise SystemExit(1)
+    actions = {a.dest: a for a in _build_parser()._actions}
+    out: dict = {"version": raw.get("environment", {}).get("nirspipe_version")}
+    for section, allowed in keys.items():
+        settings = raw.get(section, {})
+        if section != "execution":
+            bad = [k for k in settings if k not in allowed]
+            if bad:
+                print(f"Error: {path}: [{section}] has no setting {bad[0]!r}.", file=sys.stderr)
+                raise SystemExit(1)
+        out[section] = {k: _coerce(actions[k], k, v, path)
+                        for k, v in settings.items() if k in allowed}
+    return out
+
+
+def _given_on_command_line(argv: list[str] | None) -> set[str]:
+    """The flags actually typed, which argparse's own defaults would otherwise hide."""
+    quiet = _build_parser()
+    for action in quiet._actions:
+        action.default = argparse.SUPPRESS
+    return set(vars(quiet.parse_args(argv)))
+
+
+def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
+    """Fill what the command line left out from --config; the post settings layer in later."""
+    config = read_config(args.config)
+    if config["version"] and config["version"] != __version__:
+        print(f"Warning: {args.config} was written by nirspipe {config['version']} and this is "
+              f"{__version__}; a setting whose meaning or default changed in between runs as "
+              "this version reads it.", file=sys.stderr)
+    given = _given_on_command_line(argv)
+    taken = {**config["prep"], **config["execution"],
+             **{k: v for k, v in config["post"].items() if k in ("mode", "roi_mapping")}}
+    for key, value in taken.items():
+        if key not in given:
+            setattr(args, key, value)
+    # the record's post_sources reads this to tell a mode from the file from a typed one
+    args.config_applied = sorted(k for k in taken if k not in given)
+
+
 def _require(args: argparse.Namespace, *flags: str) -> None:
     """Exit non-zero naming the first flag the chosen level needs and did not get."""
     for flag in flags:
@@ -388,6 +496,8 @@ def _require(args: argparse.Namespace, *flags: str) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
+    if args.config is not None:
+        _apply_config(args, argv)
     level = args.analysis_level
 
     # checked before the workflow import: a bad command line should not first pay for mne

@@ -136,8 +136,9 @@ Preprocessing:
 
 Postprocessing mode:
   --mode                       {denoise,glm,rest}. Each fills in its own post defaults.
-  --config FILE                TOML file of post settings and separation bands, over the
-                               mode's defaults. CLI flags override both.
+  --config FILE                A run record (logs/sub-<label>.toml) or a TOML of its shape,
+                               [prep] and [post] keyed by flag name. Reruns with its settings;
+                               CLI flags override it, and it overrides the mode's defaults.
 
 Filtering / resampling (all modes):
   --high-pass FLOAT            High-pass filter cutoff in Hz (e.g. 0.01).

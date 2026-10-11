@@ -17,7 +17,7 @@ import mne
 import numpy as np
 
 from nirspipe.cli import _shared
-from nirspipe.cli.run import mode_defaults
+from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               validate_bids)
 from nirspipe.io.naming import report_name, roi_map_name
@@ -245,9 +245,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     config_toml: dict[str, Any] = {}
     if args.get("config"):
-        from nirspipe.utils import load_toml
-        config_toml = load_toml(args["config"])
-        logger.debug("loaded post config: %s", args["config"])
+        config_toml = read_config(args["config"])["post"]
+        logger.debug("loaded post settings from %s", args["config"])
 
     # folded into args before anything reads them: prep stamps the separation bands, and the
     # database and the report read the cutoffs straight off args
@@ -259,7 +258,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
     if args.get("mode"):
         _refuse_cosine_without_cutoff(args, post_sources)
         _refuse_glm_without_durations(args)
-        filled_settings = [(arg, toml[arg], post_sources[field])
+        # a cutoff a file switched off was popped from the layers, so it is absent there
+        filled_settings = [(arg, toml.get(arg, "none"), post_sources[field])
                            for field, arg in _post_setting_args().items()
                            if post_sources[field] in ("config", "mode")]
 

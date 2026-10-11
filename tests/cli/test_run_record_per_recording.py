@@ -1,4 +1,4 @@
-"""The run record is written before any recording is read, so it cannot state a value that differs per recording."""
+"""The run record is written before any recording is read, so it names each table as typed, never what it resolved to."""
 
 import tomllib
 
@@ -28,20 +28,26 @@ def tabled_prep(mini_bids, tmp_path_factory):
                    encoding="utf-8")
     chans.write_text("participant_id\ttask\tbad_channels\nsub-01\ttapping\tS1_D1\n",
                      encoding="utf-8")
-    return _prep_section(mini_bids, root / "out",
-                         "--keep-spans", str(keep), "--keep-spans-from", "tapping",
-                         "--bad-spans", str(bad), "--bad-channels", str(chans))
+    tables = {"keep_spans": keep, "bad_spans": bad, "bad_channels": chans}
+    return tables, _prep_section(mini_bids, root / "out",
+                                 "--keep-spans", str(keep), "--keep-spans-from", "tapping",
+                                 "--bad-spans", str(bad), "--bad-channels", str(chans))
 
 
-@pytest.mark.parametrize("field", ["keep_spans", "bad_spans", "channels_tsv_bads", "bad_channels"])
-def test_the_record_leaves_out_what_differs_per_recording(tabled_prep, field):
-    assert field not in tabled_prep
+@pytest.mark.parametrize("field", ["keep_spans", "bad_spans", "bad_channels"])
+def test_a_table_is_named_by_its_path(tabled_prep, field):
+    tables, prep = tabled_prep
+    assert prep[field] == tables[field].resolve().as_posix()
 
 
-def test_the_record_never_names_the_keep_spans_marker(tabled_prep):
-    assert "keep_spans_from" not in tabled_prep
+def test_what_the_recording_s_own_channels_tsv_marks_is_left_out(tabled_prep):
+    assert "channels_tsv_bads" not in tabled_prep[1]
 
 
-def test_a_bad_channels_list_applies_to_every_recording_and_stays(mini_bids, tmp_path):
+def test_the_keep_spans_marker_is_named_as_typed(tabled_prep):
+    assert tabled_prep[1]["keep_spans_from"] == "tapping"
+
+
+def test_a_bad_channels_list_stays_as_typed(mini_bids, tmp_path):
     prep = _prep_section(mini_bids, tmp_path / "out", "--bad-channels", "S1_D1")
-    assert prep["bad_channels"] == ["S1_D1"]
+    assert prep["bad_channels"] == "S1_D1"

@@ -15,9 +15,12 @@ from nirspipe import __version__
 # a run's id, made when it starts and read back wherever its time is printed
 RUN_TIMESTAMP_FORMAT = "%Y%m%d_%H%M%S"
 
-# PrepConfig fields a table or the recording's channels.tsv sets per recording; each prep
-# sidecar records them, while the record is written before any recording is read
-_PER_RECORDING = ("keep_spans", "keep_spans_from", "bad_spans", "channels_tsv_bads")
+# flag -> config field, where the two are spelled differently
+_FIELD_OF = {"window_length": "qc_window_s", "aux_regressors": "aux"}
+# recorded as typed: a table resolves per recording, after the record is written, and the
+# bands are typed in mm where the configs hold metres
+_AS_GIVEN = ("bad_channels", "keep_spans", "keep_spans_from", "bad_spans", "events_path",
+             "contrast_file", "roi_mapping", "short_max_dist", "long_min_dist", "long_max_dist")
 
 
 def _fwd(p: Any) -> str | None:
@@ -63,24 +66,27 @@ def _section(name: str, data: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _config_section(config: Any) -> dict[str, Any]:
-    """Scalar fields of a config dataclass, minus what [execution] already carries.
+def _settings(keys: tuple[str, ...], args: dict[str, Any], config: Any) -> dict[str, Any]:
+    """Each flag as the run resolved it, spelled and scaled as typed, so the record reads back as --config.
 
-    Read off the config rather than the CLI args, since values supplied by --config TOML
-    never appear in argv. Iterating fields also means new config options are recorded
-    without touching this file.
+    A flag with a config field takes the field, which holds the code default where the flag
+    was left out; values supplied by --config never appear in argv, so the field is the only
+    place they show. The rest, and the inputs in _AS_GIVEN, take the argument.
     """
-    from dataclasses import fields
-
-    skip = {"subject", "session", "dry_run"}
     out: dict[str, Any] = {}
-    for f in fields(config):
-        if f.name in skip:
-            continue
-        value = getattr(config, f.name)
-        if isinstance(value, dict):      # roi_map / contrast_def are structures, not settings
-            continue
-        out[f.name] = list(value) if isinstance(value, tuple) else value
+    for key in keys:
+        field = _FIELD_OF.get(key, key)
+        if key not in _AS_GIVEN and config is not None and hasattr(config, field):
+            value = getattr(config, field)
+        else:
+            value = args.get(key)
+        value = _unwrap(value)
+        # a table is read where the record is read, so it needs a path that works from anywhere
+        if isinstance(value, Path) or (key == "bad_channels" and value and Path(str(value)).exists()):
+            value = Path(value).resolve().as_posix()
+        elif key == "fir_delays" and value is not None:
+            value = ",".join(str(d) for d in value)
+        out[key] = value
     return out
 
 
@@ -127,18 +133,23 @@ def write_run_record(
     Sections:
       [environment]: software versions + system info
       [execution]:   invocation: the verbatim command, paths, selection filters
-      [prep]:        preprocessing parameters as resolved, from PrepConfig, bar per-recording ones
-      [post]:        postprocessing parameters as resolved, from PostConfig (only with --mode)
+      [prep]:        preprocessing flags as resolved, keyed and scaled as typed
+      [post]:        postprocessing flags as resolved (only with --mode)
       [post_sources]: which layer set each [post] value: cli, config, mode or default
 
-    [execution] answers "what was run" and stays copy-pasteable; [prep]/[post] answer
-    "what was used" and come from the config objects the pipeline actually received.
+    [execution] answers "what was run"; [prep]/[post] answer "what was used" and are what
+    --config reads back, so the record reruns its run. A post setting the mode would fill
+    is written "none" where it was switched off, or the rerun would get the mode's value.
 
     # NOTE: a [qc] section with per-subject results (bad channels, SCI
     # distribution, motion summary) will be added here once the QC text
     # summary pipeline is implemented.
     """
+    # the parser decides which flags --config reads back, so the record writes those
+    from nirspipe.cli.run import config_keys, mode_defaults
+
     env = _environment()
+    keys = config_keys()
 
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
@@ -151,11 +162,14 @@ def write_run_record(
         "participant_label": [subject],
         "session_label": args.get("session_label"),
         "task_label": args.get("task_label"),
-        "bids_filter_file": _fwd(args.get("bids_filter_file")),
+        "bids_filter_file": (Path(args["bids_filter_file"]).resolve().as_posix()
+                             if args.get("bids_filter_file") else None),
         "analysis_level": _unwrap(args.get("analysis_level"), "participant"),
         "n_jobs": args.get("n_jobs", 1),
         "skip_bids_validation": args.get("skip_bids_validation", False),
         "ignore": [_unwrap(ig) for ig in (args.get("ignore") or [])],
+        "allow_cropped_input": args.get("allow_cropped_input", False),
+        "config": Path(args["config"]).resolve().as_posix() if args.get("config") else None,
         "dry_run": args.get("dry_run", False),
         "verbose": args.get("verbose", False),
         "no_report": args.get("no_report", False),
@@ -167,23 +181,21 @@ def write_run_record(
     ]
 
     if prep_config is not None:
-        left_out = set(_PER_RECORDING)
-        # a --bad-channels table resolves per recording too, where a plain list does not
-        spec = args.get("bad_channels")
-        if spec and Path(str(spec)).exists():
-            left_out.add("bad_channels")
-        prep = {k: v for k, v in _config_section(prep_config).items() if k not in left_out}
-        sections.append(_section("prep", prep))
+        sections.append(_section("prep", _settings(keys["prep"], args, prep_config)))
 
-    mode = args.get("mode")
+    mode = _unwrap(args.get("mode"))
     if mode is not None and post_config is not None:
-        # mode is not a PostConfig field; it selects which branch run_post takes
-        post = _config_section(post_config)
-        sections.append(_section("post", {"mode": _unwrap(mode), **post}))
+        post = _settings(keys["post"], args, post_config)
+        for key in mode_defaults(mode):
+            if post.get(key) is None:
+                post[key] = "none"
+        sections.append(_section("post", post))
         if post_sources is not None:
+            from_file = "mode" in (args.get("config_applied") or ())
             sections.append(_section("post_sources", {
-                "mode": "cli",
-                **{k: post_sources.get(k, "default") for k, v in post.items() if v is not None}}))
+                "mode": "config" if from_file else "cli",
+                **{k: post_sources[_FIELD_OF.get(k, k)] for k, v in post.items()
+                   if v is not None and _FIELD_OF.get(k, k) in post_sources}}))
 
     base = sub_dir if sub_dir is not None else output_dir
     out = base / "logs" / f"sub-{subject}.toml"

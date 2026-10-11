@@ -15,9 +15,12 @@ All notable changes to this project will be documented in this file.
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
 - Both dyad reports print member metrics with each channel set over its members' columns; the dyad raw report counts pairs and motion per set
 - The subject cohort report charts saturated share and saturated channels in their own panels after mean amplitude
+- `--config` reads a run record, or a file of its shape with `[prep]` and `[post]` keyed by flag name, and reruns that run; flat files are refused
+- Run records key settings by flag name in the flag's units, name tables by absolute path, and write a switched-off mode default as `"none"`
 
 ### Fixed
 - Under `--short-channel pca`, short channels are blank in FC and seed FC and left out of ALFF; rest-mode mALFF/zALFF values change
+- A `--config` cutoff set to `"none"` no longer stops the run with a KeyError
 
 ### Removed
 - The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only
