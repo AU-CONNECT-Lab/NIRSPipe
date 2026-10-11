@@ -83,6 +83,7 @@ All notable changes to this project will be documented in this file.
 - The dyad channel table names wavelengths beside each header label, so each header row is one line
 - The dyad raw report reads like the subject report: unlettered Recording steps, then Quality Metrics tables, then the channel grid
 - The dyad analysis report drops step letters, ends with Quality Metrics and Quality Figures, and moves clocks and ROI grouping to the appendix
+- The subject cohort summary names metrics by label in their report format; the dyad cohort prints its small-cohort caveat once
 
 ### Fixed
 - The subject report's motion panel, bad-segment zoom and design-matrix shading show the spans `--keep-spans` and `--bad-spans` add
