@@ -131,6 +131,13 @@ def _build_parser() -> argparse.ArgumentParser:
                                "A recording no row matches is used whole. "
                                "A row shared by several recordings assumes they started "
                                "time-locked.")
+    prep_opt.add_argument("--bad-spans", type=Path, metavar="TABLE",
+                          help="Table of stretches of each recording known to be corrupted "
+                               "(motion, a loose optode): onset and duration columns in seconds "
+                               "on the recording's own time axis, rows limited to recordings as "
+                               "in --keep-spans. Each is marked BAD_manual: left out of channel "
+                               "screening, filled by --censor-fill before any filter, and left "
+                               "out of every estimate. A recording no row matches has none.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
                           help="Lower bound of cardiac band in Hz (required at participant level; "
                                "population-dependent). Adult resting ~0.7; children/infants higher "

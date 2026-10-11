@@ -854,7 +854,7 @@ RECORD_EXTRA_KEYS = {
     "total_s": "The recording's length in seconds.",
     "kept_s": "Seconds of the recording outside every BAD_ span.",
     "unselected_frac": "Share of the recording marked BAD_unselected, outside the stretches --keep-spans named; the data there is real and was not altered.",
-    "corrupted_frac": "Share of the recording under any other BAD_ span, BAD_gvtd or one the input carried, counted once where spans overlap.",
+    "corrupted_frac": "Share of the recording under any other BAD_ span, BAD_gvtd, BAD_manual from --bad-spans or one the input carried, counted once where spans overlap.",
     "n_spans": "How many BAD_ spans the run carries, of both kinds.",
 }
 # per-wavelength CV keys carry the device's own wavelengths, so they take a template
@@ -863,7 +863,7 @@ COHORT_SECTIONS = {
     **RECORD_SECTIONS,
     "censor": "From the GVTD censoring step.",
     "imu": "From the head-motion sensor, not the optical data.",
-    "excluded": "From the run's BAD_ spans: --keep-spans, --gvtd-censor and any the input carried.",
+    "excluded": "From the run's BAD_ spans: --keep-spans, --bad-spans, --gvtd-censor and any the input carried.",
 }
 COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
 
@@ -1158,7 +1158,8 @@ def metric_rows(
 # regression before ALFF and FC.
 _RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3,
          "hyper_pairnull": 4, "alff": 3, "fc": 4,
-         "excluded_unselected": -1, "gvtd_censoring": 0.5, "censor_fill": -0.5}
+         "excluded_unselected": -1, "excluded_manual": -0.75, "gvtd_censoring": 0.5,
+         "censor_fill": -0.5}
 
 # the post steps that run on the filled copy, any of which can carry the fill sentence
 _FILLED_STEPS = ("bandpass", "resample", "glm_fit", "glm_residuals", "glm_residuals_broadband")
@@ -1174,6 +1175,7 @@ def span_keys(step: str | None, params: dict[str, Any], spans: list) -> list[str
     kinds = {span.get("kind") for span in spans or []}
     if step == "sci_pruning":
         return ((["excluded_unselected"] if "unselected" in kinds else [])
+                + (["excluded_manual"] if params.get("bad_spans") else [])
                 + (["gvtd_censoring"] if params.get("gvtd_censor") else []))
     if step in _FILLED_STEPS and "corrupted" in kinds and params.get("censor_fill"):
         return ["censor_fill"]

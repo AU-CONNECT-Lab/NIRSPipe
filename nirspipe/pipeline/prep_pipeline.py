@@ -34,7 +34,7 @@ from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scor
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
 from nirspipe.utils.spans import (add_bad_spans, bad_spans, excluded_spans, excluded_time,
-                                  mark_unselected)
+                                  mark_manual, mark_unselected)
 
 logger = get_logger("pipeline.prep")
 
@@ -119,7 +119,8 @@ def mark_bad_channels(
                 f"{' and only the task blocks counted' if scope else ''}, channel screening "
                 f"has {int(counted.sum())} window(s) of {SCREEN_WINDOW_S:g} s to count and "
                 f"needs 2 ({excluded_time(raw_od)['kept_s']:.0f} s of the recording "
-                f"are outside every BAD_ span). Widen --keep-spans for this recording.")
+                f"are outside every BAD_ span). Widen --keep-spans or shorten --bad-spans for "
+                f"this recording.")
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                               have={"sci": sci_scores}, cutoffs=cutoffs, scope=scope)
@@ -193,6 +194,8 @@ class PrepConfig:
     ignore: list[str] = field(default_factory=list)
     # (onset, duration) stretches on the recording's own axis; empty uses the whole recording
     keep_spans: list[tuple[float, float]] = field(default_factory=list)
+    # (onset, duration) stretches the user marked corrupted, on the same axis
+    bad_spans: list[tuple[float, float]] = field(default_factory=list)
 
 def run_prep(
     raw: mne.io.Raw,
@@ -220,6 +223,8 @@ def run_prep(
     input_spans = bad_spans(raw)
     if config.keep_spans:
         raw = mark_unselected(raw.copy(), config.keep_spans)
+    if config.bad_spans:
+        raw = mark_manual(raw.copy(), config.bad_spans)
 
     rec = Recorder()
     if source_path is not None:
@@ -427,4 +432,5 @@ def _config_dict(config: PrepConfig) -> dict:
         "bad_channels": config.bad_channels,
         "ignore": config.ignore,
         "keep_spans": [list(span) for span in config.keep_spans],
+        "bad_spans": [list(span) for span in config.bad_spans],
     }

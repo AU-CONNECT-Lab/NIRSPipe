@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `--keep-spans` takes a table of the stretches of each recording to use; the rest is marked `BAD_unselected`
+- `--bad-spans` takes a table of corrupted stretches per recording, marked `BAD_manual`: left out of screening, filled and excluded like GVTD spans
 - Each derivative sidecar lists its `excluded_spans`, with kind and source
 - `--censor-fill linear|spline|lomb` fills corrupted `BAD_` spans before the bandpass; `desc-preproc` keeps the measured data
 - The analysis page offers the fill method beside GVTD censoring

@@ -16,9 +16,10 @@ from nirspipe.utils.logging import get_logger
 logger = get_logger("utils.spans")
 
 UNSELECTED = "BAD_unselected"
+MANUAL = "BAD_manual"
 INPUT_SOURCE = "input file"
 # the flag behind each span the run itself adds; a span already on the input is the input's
-_ADDED_BY = {UNSELECTED: "--keep-spans", "BAD_gvtd": "--gvtd-censor"}
+_ADDED_BY = {UNSELECTED: "--keep-spans", MANUAL: "--bad-spans", "BAD_gvtd": "--gvtd-censor"}
 
 
 def is_bad_span(description: Any) -> bool:
@@ -111,28 +112,52 @@ def mark_unselected(raw: mne.io.BaseRaw, keep) -> mne.io.BaseRaw:
     if not keep:
         return raw
     end = raw.n_times / float(raw.info["sfreq"])
-    stretches = []
-    for onset, duration in keep:
-        onset, stop = float(onset), float(onset) + float(duration)
-        if not 0.0 <= onset < end:
-            raise ValueError(f"--keep-spans onset {onset:g} s lies outside the recording "
-                             f"(0 to {end:g} s)")
-        if stop > end:
-            logger.info("--keep-spans stretch %g-%g s clipped to the recording's end at %g s",
-                        onset, stop, end)
-        stretches.append((onset, min(stop, end)))
+    stretches = _on_recording(keep, end, "--keep-spans")
     gaps, cursor = [], 0.0
-    for start, stop in merged(stretches):
+    for start, stop in stretches:
         if start > cursor:
             gaps.append((cursor, start - cursor))
         cursor = stop
     if cursor < end:
         gaps.append((cursor, end - cursor))
-    kept = sum(b - a for a, b in merged(stretches))
+    kept = sum(b - a for a, b in stretches)
     logger.info("--keep-spans: %.0f of %.0f s kept, %d stretch(es) marked %s",
                 kept, end, len(gaps), UNSELECTED)
     add_bad_spans(raw, gaps, UNSELECTED)
     return raw
+
+
+def mark_manual(raw: mne.io.BaseRaw, spans) -> mne.io.BaseRaw:
+    """Mark the ``(onset, duration)`` stretches in ``spans`` as ``BAD_manual``: corrupted time the user named.
+
+    ::
+
+      a 600 s recording, spans [(100, 20), (110, 30)]  ->  BAD_manual at (100, 40)
+
+    Ends and refusals as :func:`mark_unselected`'s; overlapping stretches become one span.
+    """
+    if not spans:
+        return raw
+    stretches = _on_recording(spans, raw.n_times / float(raw.info["sfreq"]), "--bad-spans")
+    logger.info("--bad-spans: %.0f s in %d stretch(es) marked %s",
+                sum(b - a for a, b in stretches), len(stretches), MANUAL)
+    add_bad_spans(raw, [(a, b - a) for a, b in stretches], MANUAL)
+    return raw
+
+
+def _on_recording(spans, end: float, flag: str) -> list[tuple[float, float]]:
+    """``(onset, duration)`` rows as merged ``(start, stop)``, each end clipped to ``end``."""
+    stretches = []
+    for onset, duration in spans:
+        onset, stop = float(onset), float(onset) + float(duration)
+        if not 0.0 <= onset < end:
+            raise ValueError(f"{flag} onset {onset:g} s lies outside the recording "
+                             f"(0 to {end:g} s)")
+        if stop > end:
+            logger.info("%s stretch %g-%g s clipped to the recording's end at %g s",
+                        flag, onset, stop, end)
+        stretches.append((onset, min(stop, end)))
+    return merged(stretches)
 
 
 def excluded_spans(raw: mne.io.BaseRaw, input_spans=(), known=()) -> list[dict[str, Any]]:

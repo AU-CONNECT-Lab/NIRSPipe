@@ -71,6 +71,7 @@ def _build_script_text(
     min_good_frac: float | None = None,
     screen_scope: str = "run",
     keep_spans_table: str | None = None,
+    bad_spans_table: str | None = None,
     censor_fill: str = DEFAULT_CENSOR_FILL,
     export_mean_filled: bool = False,
 ) -> str:
@@ -134,9 +135,12 @@ def _build_script_text(
         w('from nirspipe.qc.metrics import gvtd_censor_spans')
     if bad_channels_table:
         w('from nirspipe.cli.workflows import _bad_channels_for')
+    if keep_spans_table or bad_spans_table:
+        w('from nirspipe.cli.workflows import _keep_spans_for')
     if keep_spans_table:
-        w('from nirspipe.cli.workflows import _keep_spans_for',
-          'from nirspipe.utils.spans import mark_unselected')
+        w('from nirspipe.utils.spans import mark_unselected')
+    if bad_spans_table:
+        w('from nirspipe.utils.spans import mark_manual')
     if mode:
         w('from nirspipe.pipeline.denoise import bandpass_filter, resample',
           'from nirspipe.pipeline.censor_fill import fill_corrupted')
@@ -181,6 +185,8 @@ def _build_script_text(
         w(f'BAD_CHANNELS_TABLE = Path({_lit(bad_channels_table)})')
     if keep_spans_table:
         w(f'KEEP_SPANS_TABLE = Path({_lit(keep_spans_table)})')
+    if bad_spans_table:
+        w(f'BAD_SPANS_TABLE = Path({_lit(bad_spans_table)})')
     if gvtd_censor:
         w(
             f'GVTD_CENSOR    = {gvtd_censor!r}',
@@ -229,7 +235,7 @@ def _build_script_text(
         '    "psp_threshold": PSP_THRESHOLD, "min_good_frac": MIN_GOOD_FRAC,',
         '    "screen_scope": SCREEN_SCOPE,',
         '    "cardiac_l_freq": CARDIAC_L_FREQ, "cardiac_h_freq": CARDIAC_H_FREQ,',
-        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [],',
+        '    "bad_channels": BAD_CHANNELS, "ignore": IGNORE, "keep_spans": [], "bad_spans": [],',
         '}',
         '',
         '',
@@ -276,6 +282,13 @@ def _build_script_text(
             f'{i3}KEEP_SPANS = _keep_spans_for(str(KEEP_SPANS_TABLE), SUBJECT, src)',
             f'{i3}PREP_PARAMS["keep_spans"] = [list(span) for span in KEEP_SPANS]',
             f'{i3}raw = mark_unselected(raw, KEEP_SPANS)',
+        )
+    if bad_spans_table:
+        w(
+            f'{i3}# the --bad-spans rows that match this recording, marked BAD_manual',
+            f'{i3}BAD_SPANS = _keep_spans_for(str(BAD_SPANS_TABLE), SUBJECT, src, flag="--bad-spans")',
+            f'{i3}PREP_PARAMS["bad_spans"] = [list(span) for span in BAD_SPANS]',
+            f'{i3}raw = mark_manual(raw, BAD_SPANS)',
         )
     if bad_channels_table:
         w(
@@ -481,6 +494,8 @@ def write_run_script(
                           if bad_spec and Path(str(bad_spec)).exists() else None)
     keep_spec = args.get("keep_spans")
     keep_spans_table = _fwd(Path(str(keep_spec)).resolve()) if keep_spec else None
+    bad_spans_spec = args.get("bad_spans")
+    bad_spans_table = _fwd(Path(str(bad_spans_spec)).resolve()) if bad_spans_spec else None
 
     def _pick(key: str, default: Any) -> Any:
         v = args.get(key)
@@ -532,6 +547,7 @@ def write_run_script(
         sep_bands=resolved_separation_bands(args) if args.get("gvtd_censor") else None,
         bad_channels_table=bad_channels_table,
         keep_spans_table=keep_spans_table,
+        bad_spans_table=bad_spans_table,
         psp_threshold=screening.psp_threshold,
         min_good_frac=screening.min_good_frac,
         screen_scope=screening.screen_scope,

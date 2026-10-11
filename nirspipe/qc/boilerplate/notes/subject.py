@@ -17,8 +17,8 @@ NOTES = {
     "excluded.summary":
         "{kept} s of the {total} s recording lie outside every BAD_ span. Of the recording, "
         "{unselected} is BAD_unselected, outside the stretches --keep-spans named: real data "
-        "left out of every estimate. {corrupted} lies under corrupted spans (BAD_gvtd or "
-        "spans the input carried). A stretch can be both, so the two shares can sum to more "
+        "left out of every estimate. {corrupted} lies under corrupted spans (BAD_gvtd, "
+        "BAD_manual from --bad-spans, or spans the input carried). A stretch can be both, so the two shares can sum to more "
         "than was left out. {n} span(s) in all; each analysis section says how it leaves "
         "them out.",
     "excluded.conditions":

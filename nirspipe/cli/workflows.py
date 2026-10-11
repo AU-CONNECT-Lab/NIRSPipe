@@ -238,6 +238,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
     _refuse_bad_keep_span_rows(args.get("keep_spans"), layout)
+    _refuse_bad_keep_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
 
@@ -564,12 +565,12 @@ def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
     return _label_table_rows(path, "--bad-channels", ("bad_channels",))
 
 
-def _keep_span_rows(path: Path) -> list[dict[str, Any]]:
-    """The rows of a --keep-spans table, onset and duration read as seconds.
+def _keep_span_rows(path: Path, flag: str = "--keep-spans") -> list[dict[str, Any]]:
+    """The rows of a --keep-spans or --bad-spans table, onset and duration read as seconds.
 
     ``sub-01 | | rest | | 30 | 240`` comes back with ``"onset": 30.0, "duration": 240.0``.
     """
-    rows = _label_table_rows(path, "--keep-spans", ("onset", "duration"))
+    rows = _label_table_rows(path, flag, ("onset", "duration"))
     for row in rows:
         for column in ("onset", "duration"):
             cell = row[column]
@@ -579,10 +580,10 @@ def _keep_span_rows(path: Path) -> list[dict[str, Any]]:
                 row[column] = float("nan")
             if not np.isfinite(row[column]) or (column == "duration" and row[column] <= 0):
                 raise ValueError(
-                    f"--keep-spans table {path} line {row['line']}: {column} {cell!r} is not "
+                    f"{flag} table {path} line {row['line']}: {column} {cell!r} is not "
                     f"a {'positive ' if column == 'duration' else ''}number of seconds")
         if row["onset"] < 0:
-            raise ValueError(f"--keep-spans table {path} line {row['line']}: onset "
+            raise ValueError(f"{flag} table {path} line {row['line']}: onset "
                              f"{row['onset']:g} s lies before the recording starts")
     return rows
 
@@ -638,16 +639,17 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
     return [c.strip() for c in ",".join(r["bad_channels"] for r in rows).split(",") if c.strip()]
 
 
-def _keep_spans_for(spec: str | None, subject: str,
-                    entities: dict | None = None) -> list[tuple[float, float]]:
-    """The --keep-spans stretches of one recording as ``(onset, duration)``; empty uses it whole.
+def _keep_spans_for(spec: str | None, subject: str, entities: dict | None = None,
+                    flag: str = "--keep-spans") -> list[tuple[float, float]]:
+    """The stretches a --keep-spans or --bad-spans table gives one recording, as ``(onset, duration)``.
 
     Rows are selected as the --bad-channels table's are, so a row with only ``task-rest``
     applies to every subject's rest recordings, and a recording gets every row that matches.
+    No row means none: a --keep-spans recording is then used whole.
     """
     if not spec:
         return []
-    return [(row["onset"], row["duration"]) for row in _keep_span_rows(Path(str(spec)))
+    return [(row["onset"], row["duration"]) for row in _keep_span_rows(Path(str(spec)), flag)
             if _bad_channel_row_matches(row, subject, entities)]
 
 
@@ -673,20 +675,21 @@ def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
                            [f.get_entities() for f in layout.get(extension=".snirf")])
 
 
-def _refuse_bad_keep_span_rows(spec: str | None, layout: Any) -> None:
-    """Stop before any subject runs on a --keep-spans row that matches no recording or
-    starts past the end of one it matches."""
+def _refuse_bad_keep_span_rows(spec: str | None, layout: Any,
+                               flag: str = "--keep-spans") -> None:
+    """Stop before any subject runs on a --keep-spans or --bad-spans row that matches no
+    recording or starts past the end of one it matches."""
     if not spec:
         return
     path = Path(str(spec))
     if not path.exists():
-        raise SystemExit(f"[error] --keep-spans table {spec} not found.")
+        raise SystemExit(f"[error] {flag} table {spec} not found.")
     try:
-        rows = _keep_span_rows(path)
+        rows = _keep_span_rows(path, flag)
     except ValueError as err:
         raise SystemExit(f"[error] {err}") from None
     files = layout.get(extension=".snirf")
-    _refuse_unmatched_rows(rows, "--keep-spans", str(spec), [f.get_entities() for f in files])
+    _refuse_unmatched_rows(rows, flag, str(spec), [f.get_entities() for f in files])
     lengths: dict[str, float] = {}
     for row in rows:
         for f in files:
@@ -698,7 +701,7 @@ def _refuse_bad_keep_span_rows(spec: str | None, layout: Any) -> None:
                 lengths[f.path] = raw.n_times / float(raw.info["sfreq"])
             if row["onset"] >= lengths[f.path]:
                 raise SystemExit(
-                    f"[error] --keep-spans table {spec} line {row['line']}: onset "
+                    f"[error] {flag} table {spec} line {row['line']}: onset "
                     f"{row['onset']:g} s lies past the end of {Path(f.path).name} "
                     f"({lengths[f.path]:g} s).")
 
@@ -719,6 +722,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         motion_correction=_v(args["motion_correction"]),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
         keep_spans=_keep_spans_for(args.get("keep_spans"), subject, entities),
+        bad_spans=_keep_spans_for(args.get("bad_spans"), subject, entities, flag="--bad-spans"),
         cardiac_l_freq=args["cardiac_l_freq"],
         cardiac_h_freq=args["cardiac_h_freq"],
         resp_l_freq=args["resp_l_freq"],
