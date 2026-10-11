@@ -7,11 +7,12 @@ from plotly.subplots import make_subplots
 
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common.motion_panel import (
-    CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _maxpool_xy, _px_rows,
-    _roi_order, add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z, roi_colours,
+    CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _gvtd_row_label, _maxpool_xy,
+    _px_rows, _roi_order, add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z,
+    gvtd_y_top, roi_colours,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
-from nirspipe.qc.boilerplate.vocabulary import display_value, metric_unit
+from nirspipe.qc.boilerplate.vocabulary import display_value
 from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
 
 _CARPET_ROW_PX = 190
@@ -33,7 +34,7 @@ def _stage_channels(stages, chromophore: str) -> list[str]:
 
 
 def _gvtd_rows(raw_before, raw_after, blocks: list):
-    """[(set name, times, before trace, after trace | None), ...], one entry per channel set.
+    """[(set name, channel count, times, before trace, after trace | None), ...], one per set.
 
     One row per set rather than one over their union: GVTD is an RMS across channels and the
     long and short sets measure different depths. ``blocks`` has no default:
@@ -61,7 +62,7 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
             if len(have) == len(picks) and od_a.n_times == od_b.n_times:
                 after = display_value("gvtd_filt_mean",
                                       gvtd_timetrace(od_a.get_data(picks=have), sfreq, *GVTD_MOTION_BAND))
-        out.append((name, od_b.times[:len(g)], g, after))
+        out.append((name, len(picks), od_b.times[:len(g)], g, after))
     return out
 
 
@@ -141,22 +142,32 @@ def carpet_compare_figure(
     for ann in fig.layout.annotations:
         ann.yshift = 3
 
-    legend_drawn = False
-    for k, (name, t_g, g_b, g_a) in enumerate(gvtd, start=1):
+    drawn = []   # per row: set name, channel count and its pooled lines, before any is added
+    for name, n_ch, t_g, g_b, g_a in gvtd:
         keep = _cut(t_g, xlim)
-        for trace, colour, label in ((g_b, _GVTD_LINE, "before correction"),
-                                     (g_a, _GVTD_AFTER, "after correction")):
-            if trace is None:
-                continue
-            t_ds, y_ds = _maxpool_xy(t_g[keep], trace[keep], _LINE_MAX_PTS)
+        lines = [(*_maxpool_xy(t_g[keep], trace[keep], _LINE_MAX_PTS), colour, label)
+                 for trace, colour, label in ((g_b, _GVTD_LINE, "before correction"),
+                                              (g_a, _GVTD_AFTER, "after correction"))
+                 if trace is not None]
+        drawn.append((name, n_ch, lines))
+    # one top for every row, as on the motion carpet, which leaves room for each row's label
+    y_top = gvtd_y_top([y for _, _, lines in drawn for _, y, _, _ in lines if np.size(y)], [])
+
+    legend_drawn = False
+    for k, (name, n_ch, lines) in enumerate(drawn, start=1):
+        for t_ds, y_ds, colour, label in lines:
             fig.add_trace(go.Scatter(
                 x=t_ds, y=y_ds, mode="lines", name=label, legendgroup=label,
                 showlegend=not legend_drawn, line=dict(color=colour, width=1.3),
                 hovertemplate=f"{name} {label}<br>t=%{{x:.1f}}s<br>%{{y:.3g}}<extra></extra>",
             ), row=k, col=1)
-        legend_drawn = legend_drawn or g_a is not None
-        fig.update_yaxes(title_text=f"{name} GVTD ({metric_unit('gvtd_filt_mean')})", title_font_size=10,
-                         row=k, col=1)
+        legend_drawn = legend_drawn or len(lines) > 1
+        fig.update_yaxes(range=[0, y_top], tickfont=dict(size=8), gridcolor="#eef1f4",
+                         zeroline=False, row=k, col=1)
+        # named inside the panel, as on the motion carpet: a rotated title outgrows the row
+        fig.add_annotation(x=0.004, xref="x domain", y=0.99, yref="y domain",
+                           text=_gvtd_row_label(name, n_ch), showarrow=False,
+                           xanchor="left", yanchor="top", font=dict(size=13), row=k, col=1)
 
     first_row = len(gvtd) + 1
     colours = roi_colours(roi_map) if roi_map else {}

@@ -169,6 +169,23 @@ def test_one_gvtd_row_per_channel_set_carrying_both_sides():
     assert not [t for t in fig.data if getattr(t, "fill", None) == "toself"]
 
 
+def test_each_gvtd_row_is_named_inside_its_panel_under_one_shared_top():
+    """A rotated axis title is taller than a GVTD row and ran into the next row's."""
+    od = _od()
+    blocks = [("long", od.ch_names[:6]), ("short", od.ch_names[6:])]
+    fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od, raw_gvtd_after=_od(),
+                                gvtd_blocks=blocks)
+    assert not fig.layout.yaxis.title.text and not fig.layout.yaxis2.title.text
+    labels = {a.yref: a.text for a in fig.layout.annotations if "GVTD" in (a.text or "")}
+    assert labels["y domain"].startswith("<b>GVTD long</b>") and "6 ch" in labels["y domain"]
+    assert labels["y2 domain"].startswith("<b>GVTD short</b>") and "2 ch" in labels["y2 domain"]
+    top = fig.layout.yaxis.range[1]
+    assert tuple(fig.layout.yaxis2.range) == (0, top)
+    drawn = np.concatenate([t.y for t in fig.data if t.type == "scatter"])
+    # the label sits in the top of the row, above the bulk of every trace
+    assert np.percentile(drawn, 99) < 0.75 * top
+
+
 def test_the_motion_rows_fall_back_to_one_trace_without_a_corrected_recording():
     od = _od()
     fig = carpet_compare_figure([("desc-errts", _raw())], raw_gvtd=od,
