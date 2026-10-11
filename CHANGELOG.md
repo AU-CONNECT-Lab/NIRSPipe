@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The denoised carpet marks each ROI with a coloured strip named in the legend, replacing the ROI tick labels
 - The motion carpet groups its long rows by ROI under the same coloured strip when an ROI map is given
 - `hyper-raw --roi-mapping` groups each member's long motion carpet rows by ROI under the coloured strip
+- `prep-raw --roi-mapping` groups the raw viewer's long motion carpet rows by ROI under the coloured strip
 
 ### Fixed
 - The dyad analysis page's chromophore note no longer describes stacked maps and side-by-side matrices when only one chromophore was run
