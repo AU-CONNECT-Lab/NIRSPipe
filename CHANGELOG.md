@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Per-channel tables print each wavelength's share of samples held at the detector's ceiling; run summaries count saturated channels
+- `--motion-correction spline_sg`, spline with Savitzky-Golay filtering (Jahani 2018) as its authors implemented it; also low-passes every channel near 0.1 Hz
 
 ### Changed
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it

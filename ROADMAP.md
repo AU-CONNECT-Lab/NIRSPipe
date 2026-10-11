@@ -30,7 +30,7 @@ Ordered by how often each has come up, not by when it might happen.
 
 **Analysis**
 
-- Two spline variants of motion correction: spline with Savitzky-Golay filtering for spikes, and spline followed by wavelet
+- Spline followed by wavelet motion correction
 - External regressors in confound regression. Built, then withheld: whether it helps has not been shown on enough data to turn on
 - Prewhitening before the dyad coherence. The one study proposing it is a simulation, and its only arm resembling an adult pair found the coherence lowered rather than recovered, so it waits on a measurement of our own
 - All short channels as separate confound regressors, instead of their mean. The published comparison ranks it above the mean, and the change is bounded

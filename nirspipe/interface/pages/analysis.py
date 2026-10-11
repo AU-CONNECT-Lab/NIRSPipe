@@ -174,6 +174,7 @@ def _preprocessing():
                                             {"label": "Wavelet", "value": "wavelet"},
                                             {"label": "Targeted PCA", "value": "tpca"},
                                             {"label": "Spline", "value": "spline"},
+                                            {"label": "Spline-SG", "value": "spline_sg"},
                                             {"label": "None", "value": "none"}],
                                    value="tddr", clearable=False)),
                 band("Separations (mm)",

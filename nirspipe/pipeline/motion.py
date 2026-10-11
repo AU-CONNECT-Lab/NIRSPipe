@@ -1,4 +1,4 @@
-"""Motion artifact correction for optical density signals: tddr, wavelet, tpca and spline."""
+"""Motion artifact correction for optical density signals: tddr, wavelet, tpca, spline, spline_sg."""
 
 from typing import Any, Literal
 
@@ -6,12 +6,19 @@ import mne
 import mne.io
 import numpy as np
 import scipy.sparse as sp
+from numpy.lib.stride_tricks import sliding_window_view
+from scipy.signal import butter, filtfilt, freqz, savgol_coeffs, savgol_filter
 from scipy.sparse.linalg import spsolve
 
 from nirspipe.utils import pair_of
 from nirspipe.utils.lineage import stamp
 
-MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "none"]
+MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "spline_sg", "none"]
+
+
+def _mround(x: float) -> int:
+    """MATLAB round for x >= 0, half away from zero: 2.5 samples is 3."""
+    return int(np.floor(x + 0.5))
 
 
 # ---- Wavelet (Molavi 2012) ----
@@ -131,9 +138,8 @@ def _motion_mask(x: np.ndarray, sfreq: float, t_motion: float, std_thresh: float
     mask = np.zeros(len(x), bool)
     if x.shape[1] == 0 or len(x) < 2:
         return mask
-    # MATLAB round, half away from zero: 2.5 samples is 3
-    n_lag = int(np.floor(t_motion * sfreq + 0.5))
-    n_mask = int(np.floor(t_mask * sfreq + 0.5))
+    n_lag = _mround(t_motion * sfreq)
+    n_mask = _mround(t_mask * sfreq)
     change = np.zeros((len(x) - 1, x.shape[1]))
     for lag in range(1, min(n_lag, len(x) - 1) + 1):
         change[:len(x) - lag] = np.maximum(change[:len(x) - lag], np.abs(x[lag:] - x[:-lag]))
@@ -307,8 +313,8 @@ def _spline_window(length: int, sfreq: float) -> int:
     return length // 10
 
 
-def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray,
-                    sfreq: float) -> np.ndarray:
+def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray, sfreq: float,
+                    p: float = SPLINE_P) -> np.ndarray:
     """One channel's spline correction, with the published segment bookkeeping kept exactly.
 
     Each motion segment loses its smoothing spline; then each stretch is shifted so the mean
@@ -323,8 +329,7 @@ def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray,
     lengths = ends - starts
     out = y.copy()
     for s, e in zip(starts, ends):
-        out[s - 1:e - 1] = y[s - 1:e - 1] - _smoothing_spline(t[s - 1:e - 1], y[s - 1:e - 1],
-                                                              SPLINE_P)
+        out[s - 1:e - 1] = y[s - 1:e - 1] - _smoothing_spline(t[s - 1:e - 1], y[s - 1:e - 1], p)
 
     # first segment: onto the stretch before it, or after it if the record starts in motion
     s, e = starts[0], ends[0]
@@ -393,12 +398,217 @@ def _spline_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, An
                  "segments": n_segments}
 
 
+# ---- Spline-SG (Jahani 2018) ----
+# the authors' implementation, which departs from the paper's text in five places
+
+# smoothing parameter of the spline step, on time in seconds
+SPLINE_SG_P = 0.99
+# the cubic Savitzky-Golay frame that ends the correction, in seconds
+SPLINE_SG_FRAME = 10.0
+SPLINE_SG_ORDER = 3
+# zero-phase third-order Butterworth low-pass under the detection and the spline step
+SPLINE_SG_LOWPASS = 2.0
+# a further low-pass under the detection's moving standard deviation
+SPLINE_SG_DETECT_LOWPASS = 0.5
+# detection: moving SD over this many seconds, fenced at this many IQRs beyond its quartiles
+SPLINE_SG_STD_WINDOW = 1.0
+SPLINE_SG_STD_IQR = 2.0
+# detection: the signal's gradient fenced at this many IQRs beyond its quartiles
+SPLINE_SG_GRAD_IQR = 1.5
+# a mark is a baseline shift when it moves the signal more than the median change of the
+# clean signal over this many seconds
+SPLINE_SG_SHIFT_LAG = 0.5
+# a wavelength whose clean stretches have a mean-to-SD ratio below this takes its partner's
+# marks; a pair below it on both is left unmarked
+SPLINE_SG_SNR_MIN = 3.0
+# seconds of edge value padded onto each end around the spline step
+SPLINE_SG_PAD = 12.0
+
+
+def _butter_lowpass(x: np.ndarray, sfreq: float, cutoff: float) -> np.ndarray:
+    """Third-order Butterworth low-pass along time, zero phase, padded as MATLAB's filtfilt pads."""
+    b, a = butter(3, cutoff * 2 / sfreq)
+    return filtfilt(b, a, x, axis=0, padtype="odd", padlen=3 * (len(a) - 1))
+
+
+def _hazen_fence(x: np.ndarray, factor: float) -> tuple[float, float]:
+    q1, q3 = np.quantile(x, [0.25, 0.75], method="hazen")
+    return q1 - (q3 - q1) * factor, q3 + (q3 - q1) * factor
+
+
+def _clean_runs(clean: np.ndarray) -> list[slice]:
+    """Maximal runs of True: [T T F T] -> [slice(0, 2), slice(3, 4)]."""
+    edges = np.flatnonzero(np.diff(np.r_[0, clean.astype(int), 0]))
+    return [slice(a, b) for a, b in zip(edges[::2], edges[1::2])]
+
+
+def _spline_sg_candidates(s1: np.ndarray, sfreq: float) -> np.ndarray:
+    """0-based samples a channel's low-passed signal flags as motion candidates.
+
+    A gradient outlier flags its own sample, a moving-SD outlier the centre of its window. As
+    implemented, the gradient is the full convolution with [-1 0 1], so its fence takes n + 2
+    values and its first two, -s1[0] and -s1[1], are the signal's own level.
+    """
+    n = len(s1)
+    s2 = _butter_lowpass(s1, sfreq, SPLINE_SG_DETECT_LOWPASS)
+    win = _mround(SPLINE_SG_STD_WINDOW * sfreq)
+    sd = sliding_window_view(s2, win + 1).std(axis=1, ddof=1)
+    low, high = _hazen_fence(sd, SPLINE_SG_STD_IQR)
+    by_sd = np.flatnonzero((sd > high) | (sd < low)) + _mround(win / 2)
+    grad = np.convolve(s1, [-1, 0, 1])
+    low, high = _hazen_fence(grad, SPLINE_SG_GRAD_IQR)
+    by_grad = np.flatnonzero((grad[:n] > high) | (grad[:n] < low))
+    return np.union1d(by_grad, by_sd)
+
+
+def _spline_sg_shift_threshold(x: np.ndarray, runs: list[slice], sfreq: float) -> float:
+    """Median change over SPLINE_SG_SHIFT_LAG s within the clean stretches, as implemented: a zero
+    joins the pool, and a stretch no longer than the lag adds nothing.
+
+      changes 1, 2, 3 -> median of 0 1 2 3 = 1.5
+    """
+    lag = _mround(SPLINE_SG_SHIFT_LAG * sfreq)
+    changes = [np.zeros(1)] + [np.abs(x[r][lag:] - x[r][:-lag]) for r in runs
+                               if r.stop - r.start > lag]
+    return float(np.quantile(np.concatenate(changes), 0.5, method="hazen"))
+
+
+def _spline_sg_snr(x: np.ndarray, runs: list[slice], sfreq: float) -> float:
+    """Mean |mean| / SD of the clean stretches longer than 3 s, the first and last left out;
+    nan with fewer than three such stretches."""
+    ratios = [abs(x[r].mean()) / (x[r].std(ddof=1) + np.finfo(float).eps) for r in runs
+              if r.stop - r.start > 3 * sfreq]
+    return float(np.mean(ratios[1:-1])) if len(ratios) > 2 else np.nan
+
+
+def _spline_sg_keep(moved: np.ndarray, span: np.ndarray, threshold: float,
+                    sfreq: float) -> np.ndarray:
+    """Which candidate runs are corrected, as implemented: those moving the signal more than
+    threshold, and by span (last sample minus the clean sample before it) those over 0.1 s
+    and under 0.5 s, or over 1 s; a run of 0.5 to 1 s is kept by the amplitude rule alone."""
+    return ((moved > threshold) | ((span > 0.1 * sfreq) & (span < 0.49999 * sfreq))
+            | (span > sfreq))
+
+
+def _spline_sg_channel_mask(y: np.ndarray, sfreq: float) -> tuple[np.ndarray, float]:
+    """One channel's marked samples and its clean-signal ratio for the SNR rule (nan if unusable)."""
+    s1 = _butter_lowpass(y, sfreq, SPLINE_SG_LOWPASS)
+    candidates = _spline_sg_candidates(s1, sfreq)
+    if len(candidates) == 0:
+        return np.zeros(len(y), bool), np.nan
+    pad = _mround(SPLINE_SG_PAD * sfreq)
+    s1 = np.r_[np.full(pad, s1[0]), s1, np.full(pad, s1[-1])]
+    sig = np.ones(len(s1))
+    sig[candidates + pad] = 0
+    starts = np.flatnonzero(np.diff(sig) == -1)          # the clean sample before each run
+    ends = np.flatnonzero(np.diff(sig) == 1)             # each run's last sample
+    # clean stretches among all samples but the last, which never joins one
+    runs = _clean_runs(sig[:-1] == 1)
+    threshold = _spline_sg_shift_threshold(_butter_lowpass(s1, sfreq, SPLINE_SG_LOWPASS), runs,
+                                           sfreq)
+    keep = _spline_sg_keep(np.abs(s1[starts] - s1[ends]), ends - starts, threshold, sfreq)
+    marked = np.zeros(len(s1), bool)
+    for a, b in zip(starts[keep], ends[keep]):
+        marked[a:b + 1] = True
+    return marked[pad:len(marked) - pad], _spline_sg_snr(s1, runs, sfreq)
+
+
+def _wavelength_pairs(ch_names: list[str]) -> list[tuple[int, int]]:
+    """Column indices of each source-detector pair, shorter wavelength first."""
+    groups: dict[str, list[int]] = {}
+    for i, ch in enumerate(ch_names):
+        groups.setdefault(pair_of(ch), []).append(i)
+    pairs = []
+    for pair, cols in groups.items():
+        if len(cols) != 2:
+            raise ValueError(f"Spline-SG needs two wavelengths per source-detector pair; "
+                             f"{pair} has {len(cols)}.")
+        pairs.append(tuple(sorted(cols, key=lambda c: float(ch_names[c].rsplit(" ", 1)[1]))))
+    return pairs
+
+
+def _spline_sg_motion_mask(d: np.ndarray, sfreq: float,
+                           ch_names: list[str]) -> tuple[np.ndarray, int]:
+    """Marked samples per channel, time x channels, after the authors' SNR rule; and how many
+    pairs the rule left unmarked because both wavelengths fell below SPLINE_SG_SNR_MIN.
+
+    A channel without a usable ratio is scored on its whole record instead.
+    """
+    masks, snrs = zip(*(_spline_sg_channel_mask(d[:, c], sfreq) for c in range(d.shape[1])))
+    mask = np.column_stack(masks)
+    snr = np.array(snrs)
+    redo = np.isnan(snr) | (snr == 0)
+    snr[redo] = np.abs(d[:, redo].mean(axis=0)) / d[:, redo].std(axis=0, ddof=1)
+    n_below = 0
+    for a, b in _wavelength_pairs(ch_names):
+        if snr[a] < SPLINE_SG_SNR_MIN and snr[b] < SPLINE_SG_SNR_MIN:
+            mask[:, [a, b]] = False
+            n_below += 1
+        elif snr[a] > SPLINE_SG_SNR_MIN and snr[b] < SPLINE_SG_SNR_MIN:
+            mask[:, b] = mask[:, a]
+        elif snr[a] < SPLINE_SG_SNR_MIN and snr[b] > SPLINE_SG_SNR_MIN:
+            mask[:, a] = mask[:, b]
+    return mask, n_below
+
+
+def _spline_sg_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, Any]]:
+    """Spline-SG motion correction (Jahani 2018) in OD space, as its authors implemented it.
+
+    Mark with _spline_sg_motion_mask; pad SPLINE_SG_PAD s of edge value onto both ends of the
+    data and the marks, low-pass at SPLINE_SG_LOWPASS Hz, _spline_correct both wavelengths of
+    every pair whose shorter wavelength is good, trim, then smooth every channel, bad ones
+    included, with a cubic Savitzky-Golay filter over SPLINE_SG_FRAME s, which low-passes
+    the record near 0.1 Hz. Returns the corrected raw and what the marking did.
+    """
+    sfreq = float(raw_od.info["sfreq"])
+    if sfreq <= 2 * SPLINE_SG_LOWPASS:
+        raise ValueError(f"Spline-SG needs more than {2 * SPLINE_SG_LOWPASS:g} Hz for its "
+                         f"{SPLINE_SG_LOWPASS:g} Hz low-pass; this recording has {sfreq:g} Hz.")
+    raw = raw_od.copy()
+    d = raw.get_data().T
+    good = ~np.isin(raw.ch_names, raw.info["bads"])
+    motion, n_below = _spline_sg_motion_mask(d, sfreq, raw.ch_names)
+
+    pad = _mround(SPLINE_SG_PAD * sfreq)
+    x = _butter_lowpass(np.pad(d, ((pad, pad), (0, 0)), mode="edge"), sfreq, SPLINE_SG_LOWPASS)
+    marked = np.pad(motion, ((pad, pad), (0, 0)), mode="edge")
+    t = np.arange(len(x)) / sfreq
+    out = x.copy()
+    n_segments = 0
+    for first, second in _wavelength_pairs(raw.ch_names):
+        if not good[first]:
+            continue
+        for ch in (first, second):
+            if marked[:, ch].any():
+                t_inc = (~marked[:, ch]).astype(int)
+                out[:, ch] = _spline_correct(x[:, ch], t_inc, t, sfreq, p=SPLINE_SG_P)
+                n_segments += len(_segment_edges(t_inc)[0])
+    out = out[pad:len(out) - pad]
+    frame = _mround(SPLINE_SG_FRAME * sfreq)
+    frame += frame % 2 == 0
+    out = savgol_filter(out, frame, SPLINE_SG_ORDER, axis=0, mode="interp")
+    raw.apply_function(lambda _: out.T, picks="all", channel_wise=False)
+    return raw, {"motion_share": float(motion[:, good].mean()) if good.any() else 0.0,
+                 "segments": n_segments, "pairs_below_snr": n_below}
+
+
+def spline_sg_cutoff(sfreq: float = 10.0) -> float:
+    """-3 dB frequency (Hz) of the Savitzky-Golay step at this sampling rate.
+
+    The frame is fixed in seconds, so the cutoff barely moves with the rate.
+    """
+    frame = _mround(SPLINE_SG_FRAME * sfreq)
+    frame += frame % 2 == 0
+    w, h = freqz(savgol_coeffs(frame, SPLINE_SG_ORDER), worN=2 ** 14, fs=sfreq)
+    return float(w[np.argmax(np.abs(h) < 1 / np.sqrt(2))])
+
+
 # ---- Dispatch ----
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
     """Apply motion artifact correction to the OD signal.
 
-    Returns corrected raw (modified in-place for tddr). tpca and spline also record what
-    they did on the stamp, under their own name.
+    Returns corrected raw (modified in-place for tddr). tpca, spline and spline_sg also
+    record what they did on the stamp, under their own name.
     """
     if method is None:
         raise ValueError("--motion-correction is required.")
@@ -411,6 +621,8 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mn
         corrected, params["tpca"] = _tpca_motion_correct(raw_od)
     elif method == "spline":
         corrected, params["spline"] = _spline_motion_correct(raw_od)
+    elif method == "spline_sg":
+        corrected, params["spline_sg"] = _spline_sg_motion_correct(raw_od)
     elif method == "none":
         corrected = raw_od
     else:

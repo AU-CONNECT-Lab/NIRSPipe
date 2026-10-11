@@ -485,6 +485,17 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "amp_thresh": f"{motion.SPLINE_AMP_THRESH:g}", "t_mask": f"{motion.SPLINE_T_MASK:g}",
                 "p": f"{motion.SPLINE_P:g}", "dt_short": f"{motion.SPLINE_DT_SHORT:g}",
                 "dt_long": f"{motion.SPLINE_DT_LONG:g}"}
+    if key == "motion_spline_sg":
+        return {"lowpass": f"{motion.SPLINE_SG_LOWPASS:g}",
+                "detect_lowpass": f"{motion.SPLINE_SG_DETECT_LOWPASS:g}",
+                "grad_iqr": f"{motion.SPLINE_SG_GRAD_IQR:g}",
+                "std_window": f"{motion.SPLINE_SG_STD_WINDOW:g}",
+                "std_iqr": f"{motion.SPLINE_SG_STD_IQR:g}",
+                "shift_lag": f"{motion.SPLINE_SG_SHIFT_LAG:g}",
+                "snr_min": f"{motion.SPLINE_SG_SNR_MIN:g}", "pad": f"{motion.SPLINE_SG_PAD:g}",
+                "p": f"{motion.SPLINE_SG_P:g}", "sg_order": f"{motion.SPLINE_SG_ORDER}",
+                "frame": f"{motion.SPLINE_SG_FRAME:g}",
+                "sg_cutoff": f"{motion.spline_sg_cutoff():.2f}"}
     if key == "beer_lambert":
         return {"dpf": _dpf_phrase(params.get("dpf"))}
     if key == "bandpass":

@@ -381,8 +381,10 @@ def run_prep(
     raw_od = correct_motion(raw_od, method=config.motion_correction)
     tpca = (lineage_of(raw_od).params or {}).get("tpca")
     spline = (lineage_of(raw_od).params or {}).get("spline")
+    spline_sg = (lineage_of(raw_od).params or {}).get("spline_sg")
     _save(raw_od, "motcorrected",
-          extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline)) if v} or None,
+          extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline),
+                                              ("spline_sg", spline_sg)) if v} or None,
           extra_parameters={"motion_correction": config.motion_correction})
 
     # step 4: Beer-Lambert

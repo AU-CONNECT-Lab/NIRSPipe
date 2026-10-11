@@ -228,7 +228,7 @@ def test_every_cli_offers_every_method():
     found = [c for build in (qc_parser, run_parser) for c in motion_choices(build())]
     assert found, "no --motion-correction argument reached"
     for choices in found:
-        assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "none"}
+        assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "spline_sg", "none"}
 
 
 def _gui_motion_dropdown() -> str:

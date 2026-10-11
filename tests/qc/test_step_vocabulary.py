@@ -48,6 +48,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("motion_correction", {"motion_correction": "wavelet"}, "motion_wavelet"),
     ("motion_correction", {"motion_correction": "tpca"}, "motion_tpca"),
     ("motion_correction", {"motion_correction": "spline"}, "motion_spline"),
+    ("motion_correction", {"motion_correction": "spline_sg"}, "motion_spline_sg"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
     ("motion_correction", {}, None),
     ("bandpass", {"high_pass": 0.01, "low_pass": 0.5}, "bandpass"),
@@ -551,6 +552,19 @@ def test_the_tpca_sentence_states_the_package_design():
     for value in (f"{motion.TPCA_T_MOTION:g} s", f"{motion.TPCA_STD_THRESH:g} standard",
                   f"{motion.TPCA_T_MASK:g} s either side", f"less than {motion.TPCA_N_SV:g}",
                   f"{motion.TPCA_MAX_ITER} passes"):
+        assert value in line, value
+
+
+def test_the_spline_sg_sentence_states_the_package_design():
+    from nirspipe.pipeline import motion
+
+    line = step_sentence("motion_correction", {"motion_correction": "spline_sg"})
+    assert "{" not in line and "as implemented by its authors" in line
+    for value in (f"low-pass filtered at {motion.SPLINE_SG_LOWPASS:g} Hz",
+                  f"{motion.SPLINE_SG_GRAD_IQR:g} interquartile", f"lay more than {motion.SPLINE_SG_STD_IQR:g};",
+                  f"median {motion.SPLINE_SG_SHIFT_LAG:g} s change", f"below {motion.SPLINE_SG_SNR_MIN:g}",
+                  f"smoothing parameter {motion.SPLINE_SG_P:g}", f"over {motion.SPLINE_SG_FRAME:g} s",
+                  f"near {motion.spline_sg_cutoff():.2f} Hz"):
         assert value in line, value
 
 

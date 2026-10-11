@@ -59,6 +59,10 @@ citations = ["Yucel2014"]
 plain = "Motion artifacts in the OD were marked for each source-detector pair at samples where either wavelength changed within {t_motion} s by more than {std_thresh} standard deviations of its first difference, or by more than {amp_thresh} in OD, together with {t_mask} s either side, and corrected with spline interpolation {citations}: in each channel not marked bad, a cubic smoothing spline (smoothing parameter {p}, time in seconds) was fitted to each marked segment and subtracted, and every segment and every stretch between segments was shifted to continue from the one before it, matching means over {dt_short} s windows (the whole stretch when shorter, a tenth of it beyond {dt_long} s)."
 citations = ["Scholkmann2010"]
 
+[motion_spline_sg]
+plain = "Motion artifacts in the OD were corrected with spline interpolation and Savitzky-Golay filtering as implemented by its authors {citations}. In each channel low-pass filtered at {lowpass} Hz, samples were marked where the gradient lay more than {grad_iqr} interquartile ranges beyond its quartiles, or where the standard deviation over {std_window} s windows, after a further {detect_lowpass} Hz low-pass, lay more than {std_iqr}; a marked stretch was corrected when it moved the signal more than the median {shift_lag} s change of the unmarked signal, or lasted over 0.1 s and under 0.5 s, or over 1 s. A wavelength whose unmarked stretches had a mean-to-standard-deviation ratio below {snr_min} took its partner's marks, and a pair below it on both was not spline-corrected. The signal, padded by {pad} s of its edge values, was corrected by cubic smoothing spline interpolation of the marked stretches (smoothing parameter {p}, time in seconds), and every channel was then smoothed with a Savitzky-Golay filter of order {sg_order} over {frame} s, which low-passes it with a -3 dB point near {sg_cutoff} Hz."
+citations = []
+
 [beer_lambert]
 plain = "Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law {citations}, using {dpf}."
 citations = ["Delpy1988", "Cope1988"]
