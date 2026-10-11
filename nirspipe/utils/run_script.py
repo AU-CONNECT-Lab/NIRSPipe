@@ -88,6 +88,15 @@ def _build_script_text(
         '    data_band=(HIGH_PASS, LOW_PASS),',
         '    data_filter_method=FILTER_METHOD, data_filter_order=FILTER_ORDER,',
     ] if aux else [])
+    # the broadband residual's input skipped the bandpass, so its aux is not band-matched
+    _aux_bb_lines = ([
+        '    aux_path=find_aux_table(preproc_path), aux_channels=AUX_CHANNELS, data_band=None,',
+        '    data_filter_method=FILTER_METHOD, data_filter_order=FILTER_ORDER,',
+    ] if aux else [])
+    # mirrors run_post: rest writes a broadband residual for ALFF when the drift model detrends
+    broadband = (mode == "rest" and high_pass is not None and low_pass is not None
+                 and (drift_model == "cosine"
+                      or (drift_model == "polynomial" and (drift_order is None or drift_order >= 1))))
     # before desc-sci is written, as in run_prep, so every later stage inherits the spans
     _gvtd_lines = ([
         '',
@@ -158,6 +167,8 @@ def _build_script_text(
           'from nirspipe.qc.metrics._helpers import bands_to_record')
     if mode and export_mean_filled:
         w('from nirspipe.pipeline.post_pipeline import MEAN_FILLED_DESCRIPTION, mean_filled')
+    if broadband:
+        w('from nirspipe.utils.lineage import carried_params')
     if mode in ("glm", "rest") or denoise_regress:
         w('from nirspipe.pipeline.glm import run_glm_pipeline')
     if mode == "rest" or denoise_regress:
@@ -430,7 +441,9 @@ def _build_script_text(
     if mode:
         b('', '# ================= post =================', 'result = raw_haemo.copy()',
           '# corrupted BAD_ spans filled before the bandpass; BAD_unselected stays as measured',
-          'result = fill_corrupted(result, CENSOR_FILL)')
+          *(['filled = fill_corrupted(result, CENSOR_FILL)  # the broadband residual starts here',
+             'result = filled.copy()'] if broadband
+            else ['result = fill_corrupted(result, CENSOR_FILL)']))
 
         if high_pass is not None or low_pass is not None:
             b(
@@ -438,20 +451,16 @@ def _build_script_text(
                 '# ----- block: bandpass | bandpass filter (l=HIGH_PASS, h=LOW_PASS) -----',
                 'result = bandpass_filter(result, l_freq=HIGH_PASS, h_freq=LOW_PASS,',
                 '                         method=FILTER_METHOD, order=FILTER_ORDER)',
+                'save_step(result, "filtered", "bandpass", src, params=post_params(result, "filtered"))',
             )
-            if mode in ("denoise", "glm"):
-                b('save_step(result, "filtered", "bandpass", src,',
-                  '          params=post_params(result, "filtered"))')
 
         if resample_sfreq is not None:
             b(
                 '',
                 '# ----- block: resample | downsample to RESAMPLE_SFREQ Hz -----',
                 'result = resample(result, RESAMPLE_SFREQ)',
+                'save_step(result, "resampled", "resample", src, params=post_params(result, "resampled"))',
             )
-            if mode in ("denoise", "glm"):
-                b('save_step(result, "resampled", "resample", src,',
-                  '          params=post_params(result, "resampled"))')
 
         if denoise_regress:
             b(
@@ -522,9 +531,32 @@ def _build_script_text(
                 ')',
                 'save_step(raw_resid, "errts", "glm_residuals", src,',
                 '          params=post_params(raw_resid, "errts"))',
-                '# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
-                '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).',
             )
+            if broadband:
+                b(
+                    '',
+                    '# ----- block: errtsbroad | the same regression on the un-bandpassed data -----',
+                    "#   fALFF's denominator spans the whole spectrum, so ALFF reads this residual",
+                    'result_bb = filled.copy()',
+                    *(['result_bb = resample(result_bb, RESAMPLE_SFREQ)']
+                      if resample_sfreq is not None else []),
+                    '_, _, _, raw_resid_bb = run_glm_pipeline(',
+                    '    result_bb,',
+                    '    stim_dur=None, hrf_model="spm", noise_model=NOISE_MODEL,',
+                    '    drift_model=DRIFT_MODEL, high_pass=DRIFT_HIGH_PASS, drift_order=DRIFT_ORDER,',
+                    '    fir_delays=None, short_channel=SHORT_CHANNEL, sep_bands=SEP_BANDS,',
+                    *_aux_bb_lines,
+                    '    events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),',
+                    ')',
+                    '# its own stage, keeping the regression\'s params and saying it skipped the bandpass',
+                    'stamp(raw_resid_bb, stage="errtsbroad", step="glm_residuals_broadband", source=raw_haemo,',
+                    '      **{**carried_params(raw_resid_bb), "resample_sfreq": RESAMPLE_SFREQ,',
+                    '         "high_pass": None, "low_pass": None, "filter_method": None, "filter_order": None})',
+                    'save_step(raw_resid_bb, "errtsbroad", "glm_residuals_broadband", src,',
+                    '          params=post_params(raw_resid_bb, "errtsbroad"))',
+                )
+            b('# Derivatives/QC (not run here): ALFF/fALFF, FC, ROI-FC and regression',
+              '#   GCOR are written by run_post (_write_rest_derivatives / gcor_metrics).')
 
         if export_mean_filled:
             final = "raw_resid" if (denoise_regress or mode in ("glm", "rest")) else "result"

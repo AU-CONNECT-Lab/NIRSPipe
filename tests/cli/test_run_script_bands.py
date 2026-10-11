@@ -1,4 +1,4 @@
-"""The exported script reproduces a run whose separation bands are not the defaults."""
+"""The exported script reproduces a run whose separation bands are not the defaults, in every mode."""
 
 import json
 import re
@@ -11,26 +11,33 @@ import pytest
 from nirspipe.cli import run as run_cli
 from nirspipe.io.snirf import read_snirf
 
-from tests._fingerprint import CLI_ARGS, make_fingerprint_dataset
+from tests._fingerprint import CLI_ARGS, EVENT_DURATION, make_fingerprint_dataset
 
 # the fingerprint's 30 mm pairs count as short under these bands, so the split moves
-ARGS = (*CLI_ARGS, "--mode", "denoise", "--drift-model", "polynomial", "--drift-order", "1",
-        "--short-channel", "mean", "--short-max-dist", "31", "--long-min-dist", "32",
-        "--gvtd-censor", "all", "--high-pass", "0.01", "--low-pass", "0.1",
-        "--resample-sfreq", "5", "--export-mean-filled",
-        "--participant-label", "01", "--no-report", "--skip-bids-validation")
+COMMON = (*CLI_ARGS, "--short-channel", "mean", "--short-max-dist", "31", "--long-min-dist", "32",
+          "--participant-label", "01", "--no-report", "--skip-bids-validation")
+MODES = {
+    "denoise": ("--mode", "denoise", "--drift-model", "polynomial", "--drift-order", "1",
+                "--gvtd-censor", "all", "--high-pass", "0.01", "--low-pass", "0.1",
+                "--resample-sfreq", "5", "--export-mean-filled"),
+    "glm": ("--mode", "glm", "--stim-dur", f"{EVENT_DURATION:g}", "--drift-model", "polynomial",
+            "--noise-model", "ar1", "--high-pass", "0.01", "--low-pass", "0.5",
+            "--resample-sfreq", "5"),
+    "rest": ("--mode", "rest", "--drift-model", "polynomial", "--drift-order", "1",
+             "--high-pass", "0.01", "--low-pass", "0.1"),
+}
 
 
 def _stages(root):
     return {p.name.split("_desc-")[1].split("_")[0]: p for p in root.rglob("*_desc-*_nirs.snirf")}
 
 
-@pytest.fixture(scope="module")
-def both(tmp_path_factory):
-    root = tmp_path_factory.mktemp("script_bands")
+@pytest.fixture(scope="module", params=sorted(MODES))
+def both(request, tmp_path_factory):
+    root = tmp_path_factory.mktemp(f"script_bands_{request.param}")
     bids, _ = make_fingerprint_dataset(root)
     out = root / "out"
-    run_cli.main([str(bids), str(out), "participant", *ARGS])
+    run_cli.main([str(bids), str(out), "participant", *COMMON, *MODES[request.param]])
     script = (out / "sub-01" / "logs" / "sub-01_script.py").read_text(encoding="utf-8")
     script = re.sub(r"^OUTPUT_DIR = .*$", f"OUTPUT_DIR = Path({(root / 'script').as_posix()!r})",
                     script, count=1, flags=re.M)
