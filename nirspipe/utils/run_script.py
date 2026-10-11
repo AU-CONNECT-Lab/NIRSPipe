@@ -96,6 +96,8 @@ def _build_script_text(
         '    raw_od, n_std=GVTD_N_STD, min_epoch_s=GVTD_MIN_EPOCH,',
         '    sep_bands=SEP_BANDS, channel_set=GVTD_CENSOR)',
         'add_bad_spans(raw_od, censor_spans, "BAD_gvtd")',
+        'PREP_PARAMS.update(gvtd_censor=GVTD_CENSOR, **{k: censor_metrics.get(k) for k in (',
+        '    "gvtd_censor_n_std", "gvtd_censor_min_epoch_s", "gvtd_censor_channel_set")})',
     ] if gvtd_censor else [])
     sessions_repr = repr(session_label if session_label else [None])
     tasks_repr    = repr(task_label    if task_label    else [None])
@@ -125,8 +127,9 @@ def _build_script_text(
         'from nirspipe import __version__',
         'from nirspipe.io.auxiliary import aux_table_path, find_aux_table, write_aux_table',
         'from nirspipe.io.bids import channel_status_bads, get_layout, get_nirs_files',
-        'from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,',
-        '                                     nirs_required_fields, write_sidecar_json)',
+        'from nirspipe.io.derivatives import (LINK_RAW, build_output_path, carry_entities,',
+        '                                     data_state, nirs_required_fields,',
+        '                                     write_dataset_description, write_sidecar_json)',
         'from nirspipe.io.snirf import write_snirf',
         'from nirspipe.utils import is_optical_density',
         'from nirspipe.utils.lineage import lineage_of',
@@ -150,7 +153,9 @@ def _build_script_text(
         w('from nirspipe.utils.spans import mark_manual')
     if mode:
         w('from nirspipe.pipeline.denoise import bandpass_filter, resample',
-          'from nirspipe.pipeline.censor_fill import fill_corrupted')
+          'from nirspipe.pipeline.censor_fill import fill_corrupted',
+          'from nirspipe.pipeline.post_pipeline import _RESTATED',
+          'from nirspipe.qc.metrics._helpers import bands_to_record')
     if mode and export_mean_filled:
         w('from nirspipe.pipeline.post_pipeline import MEAN_FILLED_DESCRIPTION, mean_filled')
     if mode in ("glm", "rest") or denoise_regress:
@@ -202,8 +207,9 @@ def _build_script_text(
             f'GVTD_CENSOR    = {gvtd_censor!r}',
             f'GVTD_N_STD     = {gvtd_censor_n_std!r}',
             f'GVTD_MIN_EPOCH = {gvtd_min_epoch_s!r}',
-            f'SEP_BANDS      = {tuple(sep_bands) if sep_bands else None!r}',
         )
+    if gvtd_censor or mode:
+        w(f'SEP_BANDS      = {tuple(sep_bands) if sep_bands else None!r}')
 
     # ---- post parameters ----
     if mode:
@@ -211,7 +217,7 @@ def _build_script_text(
           f'LOW_PASS       = {low_pass!r}', f'CENSOR_FILL    = {censor_fill!r}',
           f'FILTER_METHOD  = {filter_method!r}',
           f'FILTER_ORDER   = {filter_order!r}', f'RESAMPLE_SFREQ = {resample_sfreq!r}',
-          '# the filter state each post file carries; from desc-resampled on, the rate too',
+          '# the filter state every post file carries',
           'POST_PARAMS = {"high_pass": HIGH_PASS, "low_pass": LOW_PASS, "filter_method": FILTER_METHOD,',
           '               "filter_order": FILTER_ORDER if FILTER_METHOD == "iir" else None,',
           '               "censor_fill": CENSOR_FILL}')
@@ -272,6 +278,19 @@ def _build_script_text(
         '        "excluded_spans": excluded_spans(raw_step, INPUT_SPANS), **(extra or {})})',
         '    return path',
     )
+    if mode:
+        w(
+            '',
+            '',
+            'def post_params(raw_step, desc):',
+            '    # as run_post records them: the filter state, the rate from desc-resampled on, the',
+            '    # bands on the residuals, then the settings of the step that made the file',
+            '    return {**POST_PARAMS,',
+            '            **({} if desc == "filtered" else {"resample_sfreq": RESAMPLE_SFREQ}),',
+            '            **({} if desc in ("filtered", "resampled") else bands_to_record(SEP_BANDS)),',
+            '            **{k: v for k, v in (lineage_of(raw_step).params or {}).items()',
+            '               if k not in _RESTATED}}',
+        )
 
     if mode and contrast_file:
         w(
@@ -281,7 +300,9 @@ def _build_script_text(
         )
 
     # ---- main loop ----
-    w('', '', 'layout = get_layout(BIDS_DIR)', '')
+    w('', '', '# links the raw dataset, which the Sources the sidecars name resolve against',
+      'write_dataset_description(OUTPUT_DIR, source=BIDS_DIR, link=LINK_RAW)',
+      'layout = get_layout(BIDS_DIR)', '')
     i1, i2, i3 = '    ', '        ', '            '
     w(
         f'for session in {sessions_repr}:',
@@ -358,6 +379,9 @@ def _build_script_text(
            '    bad_chs = sorted(set(bad_chs) | set(_expand_bad_pairs(raw_od, CHANNELS_TSV_BADS)))',
            '    raw_od.info["bads"] = bad_chs'] if channel_status else []),
         *_gvtd_lines,
+        '# what the screening counted over: a "task" request falls back to the run without blocks',
+        'PREP_PARAMS["screen_scope_counted"] = (',
+        '    "task" if (lineage_of(raw_od).params or {}).get("screen_scope_windows") else "run")',
         'save_step(raw_od, "sci", "sci_pruning", src, params=PREP_PARAMS,',
         ('          extra={"bad_channels": bad_chs, "gvtd_censor": censor_metrics,'
          if gvtd_censor else '          extra={"bad_channels": bad_chs,'),

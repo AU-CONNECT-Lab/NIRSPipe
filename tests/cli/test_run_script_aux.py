@@ -4,15 +4,11 @@ import re
 import subprocess
 import sys
 
-import pytest
-
 from nirspipe.cli import run as run_cli
 
 from tests._fingerprint import CLI_ARGS, make_fingerprint_dataset
 
 
-@pytest.mark.xfail(strict=True, reason="the script's aux sidecar names the raw file as a "
-                   "source, and its output tree has no dataset_description linking that dataset")
 def test_the_script_writes_the_aux_table_of_a_recording_with_aux(tmp_path):
     bids, _ = make_fingerprint_dataset(tmp_path, aux=True)
     out = tmp_path / "out"

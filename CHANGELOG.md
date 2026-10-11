@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-prep keep-spans` writes a `--keep-spans` table from named conditions, one row per occurrence; also on the Batch Prep page
 - `--keep-spans-from MARKER` measures `--keep-spans` onsets from each recording's first marker of that name
 - `--motion-correction tpca`, targeted PCA (Yücel 2014), also on the Analysis page; the motion-corrected sidecar records each pass's removed components
+- `--motion-correction spline` (Scholkmann 2010) with per-pair motion detection, also on the Analysis page; refuses recordings below 10/3 Hz
 
 ### Changed
 - Wavelet motion correction follows the published procedure exactly: one fence per phase, coarsest level left alone, padding clipped
