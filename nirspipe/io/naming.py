@@ -107,9 +107,11 @@ def figure_name(stem: str, desc: str, *, suffix: str = "nirs",
                 extension: str = ".html", **entities) -> str:
     """One figure's filename. ``desc`` names the panel, ``suffix`` names what it draws.
 
-    ``("sub-01_task-rest", "carpet")``        -> ``"sub-01_task-rest_desc-carpet_nirs.html"``
-    ``("sub-01_task-rest", "detail", channel="S1D1")``
-        -> ``"sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"``
+    ::
+
+      ("sub-01_task-rest", "carpet")        -> "sub-01_task-rest_desc-carpet_nirs.html"
+      ("sub-01_task-rest", "detail", channel="S1D1")
+          -> "sub-01_task-rest_chan-S1D1_desc-detail_nirs.html"
 
     The run stem is in the name because a subject's runs share one ``figures/`` folder. It
     is ``stem`` and not ``label`` because ``label-`` is itself an entity a caller passes
@@ -133,10 +135,12 @@ def report_name(label: str, *, desc: "str | None" = None,
                 condition: "str | None" = None, pairing: "str | None" = None) -> str:
     """One report page's filename, from the run label the QC code passes around.
 
-    ``("sub-01_task-rest")``              -> ``"sub-01_task-rest_report.html"``
-    ``("sub-01_task-rest", desc="raw")``  -> ``"sub-01_task-rest_desc-raw_report.html"``
-    ``("group-G1_task-rest", condition="game1")``
-        -> ``"group-G1_task-rest_cond-game1_report.html"``
+    ::
+
+      ("sub-01_task-rest")              -> "sub-01_task-rest_report.html"
+      ("sub-01_task-rest", desc="raw")  -> "sub-01_task-rest_desc-raw_report.html"
+      ("group-G1_task-rest", condition="game1")
+          -> "group-G1_task-rest_cond-game1_report.html"
 
     The QC code carries a label rather than a set of entities, so the entities are read back
     out of it.

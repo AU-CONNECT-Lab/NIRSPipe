@@ -8,6 +8,7 @@ rather than renames:
   into bandpass / highpass / lowpass depending on which cutoff was given
 - ``glm_fit`` and ``glm_residuals`` are two files from one regression described in a single
   paragraph, a task GLM or a confound regression depending on the conditions they record
+
 Steps with no paragraph are not omissions: reading a file or recording quality metrics is
 bookkeeping, not method, and putting it in ``steps.toml`` would leak it into the Methods
 section. Those get a plain one-liner here instead.
@@ -1044,7 +1045,9 @@ _GRID_SLICED = {"sci_win_mean": SCI_WINDOW_S, "psp_mean": PSP_WINDOW_S,
 def grid_window_label(label: str, metric: str, window_s: "float | None") -> str:
     """``label`` naming the grid a condition value was sliced from: ``window_s``, or
     "windowed" when the runs read together were measured on different grids.
+
     ::
+
       ("SCI (10 s)", "sci_win_mean", 12.0) -> "SCI (12 s)"
     """
     if metric not in _GRID_SLICED:
@@ -1170,9 +1173,11 @@ def metric_rows(
 ) -> list[dict[str, Any]]:
     """A scalar panel's rows, ready for whatever renders them.
 
-    metric_rows({"sci_mean": 0.81}, ["sci_mean"])
-    -> [{"key": "sci_mean", "label": "Mean SCI", "value": "0.810", "cls": "qm-ok",
-         "tip": "Scalp coupling: ...", "key_metric": True}]
+    ::
+
+      metric_rows({"sci_mean": 0.81}, ["sci_mean"])
+      -> [{"key": "sci_mean", "label": "Mean SCI", "value": "0.810", "cls": "qm-ok",
+           "tip": "Scalp coupling: ...", "key_metric": True}]
 
     Every view that prints these numbers goes through here, so a threshold or a label moves
     in one place instead of once per renderer. ``keys`` is the print order and defaults to
@@ -1260,6 +1265,7 @@ def steps_from_lineage(path: "str | Path") -> "list[tuple[str, dict[str, str]]] 
 
       .../sub-01_task-rest_desc-preproc_nirs.snirf
         -> od_conversion, sci_marking, motion_tddr, beer_lambert   (no filter, no regression)
+
     What a later stage did to the same recording is not in the chain, so a reader of an
     earlier stage is never described as having read the later one. None when the file's own
     record cannot be found, which is a moved tree or an input this package did not write.

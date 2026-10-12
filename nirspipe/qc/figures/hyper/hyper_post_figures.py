@@ -973,7 +973,7 @@ def build_isc_panel(
         ch_type:       "hbo" or "hbr", shown in titles.
         isc_threshold: Absolute ``|ISC|`` a pairing must clear for a chord. None, the
                        default, leaves the choice to :func:`_arc_rule`.
-        arc_level:     Per-cell |r| level out of a null, when one was drawn.
+        arc_level:     Per-cell ``|r|`` level out of a null, when one was drawn.
         arc_level_name: How the chord subtitle names that null.
     """
     if isc_mat is None or len(ch_names) == 0:

@@ -1,11 +1,14 @@
 """Inter-subject correlation: the same question as wavelet coherence, in the time domain.
 
+::
+
   compute_isc                     One correlation per channel pair between two members,
                                   optionally after a lag search. The matrix a report
                                   draws.
   compute_isc_pairs               The same computation delivered as a long table, with the
                                   scrambled null beside it.
   roi_mean_of_isc                 Groups those correlations into ROIs.
+
 """
 
 from __future__ import annotations

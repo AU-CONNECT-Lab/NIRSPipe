@@ -168,7 +168,7 @@ def _robust_z(values: np.ndarray) -> np.ndarray:
 
 
 def deviation_scores(df: pd.DataFrame, metric_cols: list[str]) -> np.ndarray:
-    """Mean |z| per run over every metric that has any spread."""
+    """Mean ``|z|`` per run over every metric that has any spread."""
     columns = [c for c in metric_cols if c in df.columns]
     if not columns:
         return np.full(len(df), np.nan)
@@ -181,7 +181,7 @@ def deviation_scores(df: pd.DataFrame, metric_cols: list[str]) -> np.ndarray:
 def detect_outliers(
     df: pd.DataFrame, metric_cols: list[str], threshold: float = SCORE_THRESHOLD,
 ) -> dict[str, list[str]]:
-    """{bids_name: [worst metrics]} for runs whose mean |z| is past the threshold.
+    """{bids_name: [worst metrics]} for runs whose mean ``|z|`` is past the threshold.
 
     The metric list is what put the run there, worst first, so the reader gets the reason
     beside the verdict rather than a name alone.

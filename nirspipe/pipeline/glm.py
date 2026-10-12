@@ -318,7 +318,8 @@ def build_design_matrix(
     Modified from mne_nirs.experimental_design.make_first_level_design_matrix to accept
     external events and confounds, and to fall back to snirf annotations when events is None.
 
-    Conditional/non-obvious parameters:
+    Conditional/non-obvious parameters::
+
       stim_dur     required when events is None (annotation fallback)
       high_pass    only used when drift_model='cosine'
       drift_order  only used when drift_model='polynomial'

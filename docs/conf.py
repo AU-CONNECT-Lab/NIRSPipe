@@ -24,6 +24,8 @@ extensions = [
     "sphinxcontrib.mermaid",
     "sphinxarg.ext",
     "metric_docs",
+    # footcite inside autodoc2 docstrings and eval-rst blocks resolves only with this
+    "nested_footnotes",
 ]
 
 # The usage page's argparse directives import nirspipe.cli (factories in _ext/cli_parsers.py),

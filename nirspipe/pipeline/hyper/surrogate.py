@@ -1,11 +1,14 @@
 """Surrogate coherence: what a dyad's value is read against.
 
+::
+
   phase_scramble             One surrogate trace, the spectrum kept and the phases randomised.
   compute_wtc_phase_null     A dyad against a phase-scrambled partner, computed inside the
                              per-dyad pass.
   compute_wtc_pair_null      The accounting the re-paired null needs, whose draws are real
                              recordings rather than scrambled ones and therefore arrive from
                              outside.
+
 """
 
 from __future__ import annotations

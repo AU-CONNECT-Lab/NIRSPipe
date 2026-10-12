@@ -650,9 +650,11 @@ def format_rows(
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
-    format_rows([{"name": "S1_D1 760", "sci_win": 0.412, "corr": None, "is_bad": True, ...}], 0.8)
-    -> [{"name": "S1_D1 760", "status": "BAD", "status_cls": "bad",
-         "sci_win": "0.412", "sci_win_cls": "bad", "corr": "\u2014", "corr_cls": "", ...}]
+    ::
+
+      format_rows([{"name": "S1_D1 760", "sci_win": 0.412, "corr": None, "is_bad": True, ...}], 0.8)
+      -> [{"name": "S1_D1 760", "status": "BAD", "status_cls": "bad",
+           "sci_win": "0.412", "sci_win_cls": "bad", "corr": "\u2014", "corr_cls": "", ...}]
 
     Formatting lives here rather than in each renderer because two of the three cannot use
     the Python registry directly: the raw viewer prints in JavaScript and the GUI builds

@@ -344,7 +344,7 @@ def carpet_z(
     Each row is detrended before it is scaled, so the grey is a fluctuation about the row's
     own trend and not where on a slow drift the sample sits. The display copy only.
 
-    A column is one bin of samples, drawn at the bin's centre as its sample of largest |z|,
+    A column is one bin of samples, drawn at the bin's centre as its sample of largest ``|z|``,
     so a burst shorter than a column still shows, as the GVTD line above keeps its peaks.
 
     Returns the per-channel mean and SD alongside, so a second carpet of the same recording
@@ -841,7 +841,7 @@ def build_motion_detail_figure(
     Both inputs must be in OD space (output of optical_density()). The bottom strip shows
     the motion-correction footprint and spike timepoints, never overlapping the traces.
 
-    Row 2 is this channel's band-limited |dOD/dt|, the signal the spike marks in the strip are
+    Row 2 is this channel's band-limited ``|dOD/dt|``, the signal the spike marks in the strip are
     detected on, so a peak there and a mark below it refer to the same event. It is a
     per-channel view of the spike detector, not a per-channel GVTD: GVTD is defined across
     channels :footcite:`Sherafati2020` and has no single-channel form. Both rows are

@@ -1,5 +1,7 @@
 """Wavelet transform coherence: the transform, and the numbers a finished map collapses to.
 
+::
+
   compute_wtc          Coherence resolved in both time and frequency, per channel pair, so a
                        pair that only synchronises during part of the task still shows it.
                        Backed by pycwt.

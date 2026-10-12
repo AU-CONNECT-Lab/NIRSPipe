@@ -359,9 +359,11 @@ def _section_writer(sections: dict[str, Any], per_channel: dict[str, Any]):
 def raw_verdict_view(record: dict) -> dict:
     """The raw-family scalars a quality verdict is read off, as one flat dict.
 
-    raw_verdict_view({"raw": {"sci_mean": 0.71, "duration_s": 600},
-                      "raw_long": {"sci_mean": 0.86}})
-    -> {"sci_mean": 0.86, "duration_s": 600}
+    ::
+
+      raw_verdict_view({"raw": {"sci_mean": 0.71, "duration_s": 600},
+                        "raw_long": {"sci_mean": 0.86}})
+      -> {"sci_mean": 0.86, "duration_s": 600}
 
     The long-channel split sits on top of the whole-file section rather than replacing it,
     because the split carries only what a channel set can be measured on and the run-level

@@ -2434,9 +2434,11 @@ def _cropped_sections(
 def condition_page_name(run_label: str, condition: str, desc: "str | None" = None) -> str:
     """One condition's page of a run's report, from the condition's own label.
 
-    ``("sub-01_task-rest", "game 1")`` -> ``"sub-01_task-rest_cond-game1_report.html"``
-    ``("sub-01_task-rest", "game 1", desc="raw")``
-        -> ``"sub-01_task-rest_cond-game1_desc-raw_report.html"``
+    ::
+
+      ("sub-01_task-rest", "game 1") -> "sub-01_task-rest_cond-game1_report.html"
+      ("sub-01_task-rest", "game 1", desc="raw")
+          -> "sub-01_task-rest_cond-game1_desc-raw_report.html"
 
     Module level and not inside the writer, because the subject index looks these up on
     disk: the two ends came apart once already and every per-condition link went dead. The

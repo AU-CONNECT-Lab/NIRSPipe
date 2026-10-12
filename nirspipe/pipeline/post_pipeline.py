@@ -513,7 +513,7 @@ MEAN_FILLED_DESCRIPTION = (
 
 
 def mean_filled(raw: mne.io.Raw) -> mne.io.Raw:
-    """A copy whose BAD_ frames hold each channel's mean over its kept frames, stamped ``meanfilled``.
+    """A copy whose ``BAD_`` frames hold each channel's mean over its kept frames, stamped ``meanfilled``.
 
     ::
 
