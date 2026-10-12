@@ -41,49 +41,50 @@ The JSON holds the scalars. The arrays sit in tab-separated tables beside it, li
 
 ## Metrics
 
-**Coupling** (sections `raw`, `raw_long`, `raw_short`; SCI and PSP also in `motion_post`)
+Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the sentence the report shows when you hover that label and, where the code defines one, its formula. A metric with a better end says which; the rest are descriptive. The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
 
-| Metric | Description |
-|--------|-------------|
-| `sci_win_mean`, `sci_win_per_channel` | SCI measured inside windows and then averaged, the estimate screening counts on. **Read this one for coupling.** The channel table heads it `SCI (10 s)` |
-| `sci_mean`, `sci_per_channel` | SCI over the whole run, `SCI (whole run)`. It can disagree with the windowed value |
-| `good_frac_mean` | Share of windows in which SCI and PSP both pass, averaged over channels: the quantity a channel is rejected on |
-| `psp_mean`, `psp_per_channel` | Peak spectral power, measured in windows on optical density |
-| `channel_retention_rate` | Share of channels the screening kept |
-| `cv_mean`, `cv_per_channel` | Coefficient of variation, overall and per wavelength |
-| `snr_mean`, `snr_per_channel`, `snr_pass_rate` | Intensity SNR (mean over SD) and the share of channels above threshold, counted against every channel |
-| `n_flat_channels` | Channels with no variation at all; they have no finite SNR and are counted as failures |
-| `saturated_pct`, `saturated_per_channel`, `n_saturated_channels` | Samples held at the detector's ceiling: a sample counts when it equals the recording's highest intensity and its neighbour does too. Descriptive, no cutoff |
-| `mean_amp_mean`, `ch_dist_mean` / `min` / `max` | Mean amplitude; source-detector distances |
-| `cp_mean`, `cp_per_channel` | Cardiac power on optical density, in `[0, 1]`. Experimental, no pass line |
-| `n_long_channels`, `n_short_channels` | The size of the split; both zero means the recording has no registered optode positions |
+### Coupling and signal level
 
-**Motion from the optical signal** (sections `raw`, `raw_long`, `motion`)
+Sections `raw`, `raw_long` and `raw_short`; SCI and PSP also in `motion_post`. For coupling, read the windowed SCI: it is the estimate screening counts on, and the whole-run value can disagree with it. `n_long_channels` and `n_short_channels` give the size of the split; both zero means the recording has no registered optode positions.
 
-| Metric | Description |
-|--------|-------------|
-| `gvtd_filt_mean`, `gvtd_filt_p95` | Global variance of the temporal derivative on optical density band-passed to 0.02–0.5 Hz, mean and 95th percentile. The GVTD the reports draw |
-| `gvtd_mean`, `gvtd_p95` | The same on unfiltered optical density, dominated by the cardiac pulse. Recorded, not drawn |
-| `gvtd_vstd_mean`, `gvtd_vstd_p95` | GVTD with each channel's derivative divided by its own SD first. Recorded, not drawn |
-| `gvtd_thresh`, `gvtd_num_above_thresh`, `gvtd_pct_above_thresh` | The adaptive threshold (the histogram mode plus 10 SDs of the left tail, the default censoring cutoff) and the frames above it |
-| `gvtd_censor_pct`, `gvtd_censor_retained_s` | With `--gvtd-censor`: the share marked `BAD_gvtd` and the seconds left |
-| `spike_count`, `spike_pct`, `spike_num_frames`, `spike_pct_frames` | Samples flagged by a robust derivative threshold on motion-band optical density, and the frames where many channels spike at once. Experimental |
-| `*_per_window` | Windowed GVTD series, unfiltered and motion-band |
+```{eval-rst}
+.. metric-reference:: coupling
+```
 
-**Motion from the sensor** (section `imu`, only where the recording carries one): `gyro_speed_mean` / `_p95`, the gyroscope's angular speed with each axis's median removed, and `accel_jerk_mean` / `_p95`, the derivative of the acceleration, which removes gravity; their per-window series on the GVTD grid; and the unit the recording declared. They belong to no channel set and are descriptive.
+### Motion from the optical signal
 
-**Processed signal** (sections `preproc`, `filtered`, `resampled`, `errts`; band power and drift in `preproc` only)
+Sections `raw`, `raw_long` and `motion`, measured on optical density. The band-passed GVTD is the trace the reports draw and the threshold applies to; the unfiltered and variance-normalised ones are recorded for comparison and drawn nowhere. The unfiltered and band-passed GVTD also have per-window series (`*_per_window`). The spike counts are experimental.
 
-| Metric | Description |
-|--------|-------------|
-| `hbo_hbr_corr_mean`, `hbo_hbr_corr_per_channel` | HbO–HbR Pearson r, normally negative |
-| `cardiac_band_power_*`, `resp_band_power_*`, `*_band_frac_*` | Spectral power in the cardiac and respiration bands, absolute and as a share of the total |
-| `cnr_hbo_mean`, `cnr_hbr_mean`, `cnr_n_epochs` | How far the evoked response clears its own noise, and over how many epochs |
-| `gcor_hbo`, `gcor_hbr` | Global correlation, the mean pairwise channel correlation; with `--short-channel`, also before and after the regression. Experimental |
-| `lowfreq_drift_amplitude_*` | Peak-to-peak low-frequency drift, from a polynomial trend |
-| `pct_data_retained` | Share of the recording not annotated `BAD_` |
+```{eval-rst}
+.. metric-reference:: motion
+```
 
-The one-line description of each metric that the report shows on hover lives in `nirspipe/qc/boilerplate/vocabulary.py`.
+### Motion-correction footprint
+
+When a correction ran, the optical density before and after it is compared to report which samples the correction actually changed. These are kept in the record's `motion` section, and the report draws them as a strip at the top of the motion figures. Experimental.
+
+```{eval-rst}
+.. metric-reference:: correction
+```
+
+### Motion from the sensor
+
+Section `imu`, only where the recording carries one. These belong to no channel set and are descriptive; each also has a per-window series on the GVTD grid, and the record keeps the unit the recording declared.
+
+```{eval-rst}
+.. metric-reference:: imu
+```
+
+### Processed signal
+
+Sections `preproc`, `filtered`, `resampled` and `errts`; band power and drift in `preproc` only.
+
+```{eval-rst}
+.. metric-reference:: processed
+```
+
+```{footbibliography}
+```
 
 ## The run report
 
@@ -140,10 +141,6 @@ The appendix holds the errors and warnings, the run's provenance graph with a ta
 ### Condition pages
 
 A condition page is a view of the run, not a second measurement: its numbers are sliced out of the windowed pass already in the record, on the run's window grid and filter. Every rejection on it is the run's. The condition's own result is shown apart: the channels **Failing in this condition**, and the share **Passing in condition** in place of retention. On a run with `BAD_` spans, a condition's shares leave out every window touching one, and a condition with no counted window shows `n/a`. The GLM panel shows that condition's map from the one model fitted over the whole run. Two conditions whose names keep the same letters and digits would share a file, so neither gets a page; the run page names them as an error.
-
-### Motion-correction footprint
-
-When a correction ran, the optical density before and after it is compared to report which samples it actually changed (`motion_corrected_pct`, `_num`, `_n_segments`, and per channel). They are kept in the record's `motion` section, and the report draws them as a strip at the top of the motion figures. Experimental.
 
 ## Raw report
 

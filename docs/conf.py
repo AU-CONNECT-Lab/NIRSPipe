@@ -23,10 +23,12 @@ extensions = [
     "sphinxcontrib.bibtex",
     "sphinxcontrib.mermaid",
     "sphinxarg.ext",
+    "metric_docs",
 ]
 
 # The usage page's argparse directives import nirspipe.cli (factories in _ext/cli_parsers.py),
-# so a docs build needs the package installed with its runtime dependencies.
+# and the QC page's metric entries import nirspipe.qc (_ext/metric_docs.py), so a docs build
+# needs the package installed with its runtime dependencies.
 
 # NOT sphinx.ext.viewcode: it resolves [source] links by importing every module, the GUI and
 # report writers included. Once the repo is public, sphinx.ext.linkcode gives the same links

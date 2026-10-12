@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
+- The QC documentation lists every recorded metric with its report label, hover description, better end and, where the code defines one, its formula
 
 ### Changed
 - The README is a short overview that links the documentation
