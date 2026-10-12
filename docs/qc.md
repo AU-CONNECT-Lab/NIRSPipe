@@ -37,7 +37,7 @@ The record is divided into sections, each named after the file it was measured o
 
 Every family is written over all channels, the long ones and the short ones, so a metric is only ever compared with one measured on the same channel set. Metrics that aggregate across the montage (GVTD, the spike counts, the correction footprint) are not written for the short channels alone, and `pct_data_retained`, a share of the recording's duration, is one number for every set. Sections measured on intensity or optical density include rejected channels, the archival view of what was recorded; sections measured on haemoglobin exclude them, the view of what is analysed.
 
-The JSON holds the scalars. The arrays sit in tab-separated tables beside it, listed under `data.tables`: the channel-by-window matrices (`stat-sci`, `stat-psp`, `stat-cv`), the per-window series (`stat-summary`) and the per-channel values (`desc-sqm_nirsmap.tsv`). A matrix has one row per window and one column per channel; row `i` is the window starting at `i * WindowLength` seconds, both given in its sidecar. In Python, `nirspipe.qc.subject.record_io.read_record(path)` returns the record with its tables folded back in. `<run>_desc-channel_qc.tsv` beside it holds the per-channel metrics and verdicts, one row per channel.
+The JSON holds the scalars. The arrays sit in tab-separated tables beside it, listed under `data.tables`: the channel-by-window matrices (`stat-sci`, `stat-psp`, `stat-cv`), the per-window series (`stat-summary`) and the per-channel values (`desc-sqm_nirsmap.tsv`). A matrix has one row per window and one column per channel; row `i` is the window starting at `i * WindowLength` seconds, both given in its sidecar. `<run>_desc-channel_qc.tsv` beside it holds the per-channel metrics and verdicts, one row per channel.
 
 ## Metrics
 
@@ -166,12 +166,7 @@ Its run summary is the same one table, grouped Optical density, Motion and Haemo
 | Outliers | One test per run rather than per metric: a run is flagged when its mean \|z\| over every charted metric exceeds 2, with the metrics that put it there. The place to start triage. |
 | Quality Metrics | The cohort summary and every scalar in a sortable table. |
 
-```python
-import pandas as pd
-df = pd.read_csv("desc-subjects_qc.tsv", sep="\t")
-df["task"] = df["bids_name"].str.extract(r"task-([^_]+)")
-df.groupby("task")["raw_long_sci_mean"].agg(["mean", "std"])
-```
+For an analysis of your own, read `desc-subjects_qc.tsv` directly: it is tab-separated with `n/a` for a missing value, and its first column, `bids_name`, is the run's file name without suffix, so the subject, session, task and run are read off its entities.
 
 There is no windowed variant: for a cohort report over one window of time, crop first ([Cropping](data-preparation.md#cropping)).
 
@@ -239,13 +234,7 @@ When the default port is busy the server takes the next free one; a port given w
 | `raw` | `sub-<id>/nirs/<page>_desc-rawrating_qc.json`, every save appended to `logs/group_raw_ratings.jsonl` | `sub-<id>/nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json` |
 | `hyper` | `group-<id>/nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
 
-The channel decisions file is shared with the GUI's preparation pages. `--sci-threshold` on `raw` and `hyper` outlines in orange every windowed SCI cell below a second line, as a reading aid; no verdict changes. Ratings are not aggregated across reports; read the JSONL logs or the sidecars:
-
-```python
-import pandas as pd
-df = pd.read_json("logs/group_ratings.jsonl", lines=True)
-latest = df.sort_values("rated_at").groupby("subject").last()
-```
+The channel decisions file is shared with the GUI's preparation pages. `--sci-threshold` on `raw` and `hyper` outlines in orange every windowed SCI cell below a second line, as a reading aid; no verdict changes. Ratings are not aggregated across reports; read the JSONL logs or the sidecars. A log holds one JSON object per line, one line per save, carrying what was rated (`subject` in `group_ratings.jsonl`, the page's `stem` in `group_raw_ratings.jsonl`), the save time `rated_at`, each section's verdict and the comments, so the current ratings are the line with the latest `rated_at`.
 
 ## Methods text
 

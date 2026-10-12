@@ -26,16 +26,6 @@ nirspipe --version
 deno install -A -g -n bids-validator jsr:@bids/validator
 ```
 
-## fsaverage for the brain figures
-
-The 3D brain figures place the optodes on MNE's fsaverage brain, which is downloaded the first time it is needed. On a machine without internet access, fetch it beforehand on one that has it:
-
-```bash
-python -c "import mne; mne.datasets.fetch_fsaverage()"
-```
-
-Without it the brain figures are listed as errors on the run's report page rather than drawn with the optodes off the brain; the rest of the report is unaffected.
-
 ## Dependencies
 
 | Package | Version | Role |
