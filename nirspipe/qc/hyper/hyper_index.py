@@ -331,8 +331,8 @@ def _refuse_split(path: Path) -> None:
     side = path.with_suffix(".json")
     if path.exists() and side.exists() and "conditions" not in (
             json.loads(side.read_text(encoding="utf-8")).get("parameters", {})):
-        raise StageError(f"{path.name} holds the whole run only, its conditions in a "
-                         f"cond-all table beside it. Rerun `nirspipe-hyper` for this task.")
+        raise StageError(f"{path.name} was written before the whole run and its conditions "
+                         f"shared one table. Rerun `nirspipe-hyper` for this task.")
 
 
 def _window_of(table_path: Path, label: "str | None") -> str:

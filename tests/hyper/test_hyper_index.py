@@ -140,5 +140,5 @@ def test_a_table_holding_the_whole_run_only_by_layout_is_refused(tmp_path):
     _whole_run_only(tmp_path)
     (tmp_path / "nirs" / name("G01", "main", extension=".json")).write_text(
         json.dumps({"parameters": {"band_fmin": 0.01, "band_fmax": 0.1}}))
-    with pytest.raises(StageError, match="cond-all"):
+    with pytest.raises(StageError, match="shared one table"):
         collect_rows(tmp_path, "G01")
