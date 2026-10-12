@@ -180,6 +180,8 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
         return no_update, no_update
     if not output_dir or not Path(output_dir).is_dir():
         return no_update, dbc.Alert("Set Output Directory first.", color="warning")
+    if not bids_dir:
+        return no_update, dbc.Alert("Set BIDS Directory first.", color="warning")
     if sci_thresh is None or cardiac_l is None or cardiac_h is None or dpf is None:
         return no_update, dbc.Alert(
             "Set SCI Threshold, Cardiac Band (lo/hi) and DPF before loading a run.",
@@ -235,7 +237,15 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
         try:
             from nirspipe.qc.subject.prep_raw_report import _process_run
             run_label = Path(snirf_path).stem
-            run_dir   = Path(output_dir) / ".fnirs_cache"
+            from nirspipe.io.derivatives import LINK_RAW, write_dataset_description
+            # laid out as prep-raw lays out its tree: the quality record filed under sub- names
+            # its sources through the description's link, one root per BIDS dataset read
+            cache_root = (Path(output_dir) / ".fnirs_cache"
+                          / hashlib.md5(str(bids_dir).encode()).hexdigest()[:8])
+            cache_root.mkdir(parents=True, exist_ok=True)
+            write_dataset_description(cache_root, source=Path(bids_dir), link=LINK_RAW)
+            subject   = _parse_bids_entities(Path(snirf_path).name).get("sub", "")
+            run_dir   = cache_root / f"sub-{subject}"
             # the second half is what the per-condition report pages need: windowed
             # matrices and paths, none of it serialisable and none of it this page's
             result, _ = _process_run(

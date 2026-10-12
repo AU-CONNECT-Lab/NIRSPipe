@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - GUI Raw QC, Hyper Analysis and Cohort Reports pages stream the command's output and can stop it, as Analysis does
 - GUI Hyper Analysis sends several group-null `--null` and `--chroma` values; none ticked reads every one on disk
+- GUI Data Preparation drops its QC Metrics tab; Raw QC and `nirspipe-rate raw` show those panels
+- GUI Data Preparation screens channels with the PSP threshold, coupled-window share, scope and `channels.tsv` status, as `prep-raw` does
+- GUI Data Preparation saves markers and crops by running `nirspipe-prep`
 - `nirspipe-rate hyper` reads and writes each member's dyad decisions under `_hyper` only, apart from the run pages' own
 - GUI Data Preparation no longer records channel decisions or writes the raw report; `nirspipe-rate raw` and the Raw QC page do
 - The README is a short overview that links the documentation
@@ -28,6 +31,8 @@ All notable changes to this project will be documented in this file.
 - GUI Hyper Preparation page; alignment, the dyad raw report and channel decisions are on Batch Prep, Raw QC and `nirspipe-rate hyper`
 
 ### Fixed
+- GUI Data Preparation lists runs inside `ses-` folders
+- GUI Data Preparation loads a run into an output directory that holds no `dataset_description.json`
 - GUI Analysis page's schematic drew motion correction after Beer-Lambert; it follows the pipeline's order and each mode's stages
 - `nirspipe-rate raw` serves the subject index's figures and tables when the index is opened from the raw report
 - `nirspipe-rate hyper` refuses channel decisions for anyone outside the dyad
