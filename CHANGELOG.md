@@ -9,12 +9,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
 - The QC documentation lists every recorded metric with its report label, hover description, better end and, where the code defines one, its formula
+- Documentation pages show figures from public recordings: screening, motion, GLM design, rest connectivity, report panels, dyad coherence and ISC, and provenance
 
 ### Changed
 - The README is a short overview that links the documentation
 
 ### Fixed
 - The run report's stage comparison no longer filters an already band-passed stage a second time
+- The cohort report's over-time grid aligns runs sampled at different rates onto one time axis, so its band and run lines draw again
 
 ## [0.67.0] - 2026-10-11
 

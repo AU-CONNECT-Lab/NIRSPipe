@@ -98,7 +98,7 @@ The coherence map of one channel pairing, time by frequency, under the condition
 
 ```{figure} figures/wtc_matrix.png
 :alt: A channel-by-channel matrix of band-mean coherence between two members
-:width: 60%
+:width: 70%
 
 The channel-by-channel matrix of band means a crossed run adds to the report, one member's channels as rows and the other's as columns.
 ```
