@@ -35,7 +35,7 @@ def _merge(root, kind):
 
 _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.20,
          "mask_coi": True, "aligned_duration_s": 900.0, "channel_cross": False,
-         "roi_min_channels": 1, "desc": "preproc", "bads_scope": "run"}
+         "roi_min_channels": 1, "desc": "preproc", "bads_scope": "run", "conditions": []}
 
 
 def _real_table(root, gid="G01", task="main", params=None, kind="wtc"):
@@ -251,7 +251,8 @@ def test_a_value_that_disagrees_with_the_real_table_is_refused():
         _follow_real("--wtc-roi-min-channels", 2, 3)
 
 
-@pytest.mark.parametrize("key", ["channel_cross", "roi_min_channels", "desc", "bads_scope"])
+@pytest.mark.parametrize("key", ["channel_cross", "roi_min_channels", "desc", "bads_scope",
+                                 "conditions"])
 def test_a_real_table_that_does_not_record_one_is_refused(tmp_path, key):
     """Nothing is guessed: the null is built the way the table says, or not at all."""
     tsv = _real_table(tmp_path, params={k: v for k, v in _REAL.items() if k != key})
