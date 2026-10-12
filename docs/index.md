@@ -12,6 +12,7 @@
 :hidden:
 
 installation
+tutorial
 usage
 data-preparation
 workflows

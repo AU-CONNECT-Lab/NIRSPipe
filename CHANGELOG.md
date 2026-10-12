@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
+- A tutorial page runs three public dyads from download to the cohort null tests, one command per step
 
 ### Changed
 - The README is a short overview that links the documentation
