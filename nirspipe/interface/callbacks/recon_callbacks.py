@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html
 
+from nirspipe.interface import process_stream
+from nirspipe.interface.callbacks._cli_run import log_panel, poll_run
 from nirspipe.interface.cli_args import build_recon_args
 
 _CONT = {"bash": "\\", "cmd": "^", "powershell": "`"}
@@ -83,41 +84,71 @@ def preview_commands(rows, shell, bids_dir, overwrite, optode_frame):
 
 
 @callback(
-    Output("rc-log",     "children"),
-    Input("rc-run-btn",  "n_clicks"),
-    State("rc-table",    "virtualRowData"),
-    State("rc-bids-dir", "value"),
-    State("rc-overwrite","value"),
+    Output("rc-log",       "children"),
+    Output("rc-skipped",   "children"),
+    Output("rc-run-store", "data"),
+    Output("rc-run-tick",  "disabled"),
+    Output("rc-stop-btn",  "disabled"),
+    Output("rc-run-btn",   "disabled"),
+    Input("rc-run-btn",    "n_clicks"),
+    State("rc-table",      "virtualRowData"),
+    State("rc-bids-dir",   "value"),
+    State("rc-overwrite",  "value"),
     State("rc-optode-frame", "value"),
     prevent_initial_call=True,
 )
 def run_all(n_clicks, rows, bids_dir, overwrite, optode_frame):
+    idle = (None, None, True, True, False)
     if not bids_dir:
-        return dbc.Alert("Set the output BIDS directory.", color="warning")
+        return dbc.Alert("Set the output BIDS directory.", color="warning"), *idle
     if not rows:
-        return dbc.Alert("Detect files first.", color="warning")
+        return dbc.Alert("Detect files first.", color="warning"), *idle
 
-    lines, n_ok, n_fail = [], 0, 0
+    steps, skipped = [], []
     for row in rows:
         argv = build_recon_args(row, bids_dir, overwrite, optode_frame)
         if argv is None:
-            n_fail += 1
-            lines.append(html.Div(f"✗ {row['file']}: subject/task missing", className="text-danger"))
-            continue
-        try:
-            proc = subprocess.run(argv, capture_output=True, text=True)
-        except FileNotFoundError:
-            return dbc.Alert("`nirspipe-recon` not found on PATH. Make sure nirspipe is installed.",
-                             color="danger")
-        if proc.returncode == 0:
-            n_ok += 1
-            lines.append(html.Div(f"✓ {row['file']} → sub-{row['subject']}", className="text-success"))
+            skipped.append(row["file"])
         else:
-            n_fail += 1
-            # the CLI's last line is its error message; the rest is the traceback above it
-            why = ((proc.stderr or proc.stdout or "").strip().splitlines() or [f"exit {proc.returncode}"])[-1]
-            lines.append(html.Div(f"✗ {row['file']}: {why}", className="text-danger"))
+            steps.append((row, argv))
+    if not steps:
+        return dbc.Alert("Fill in subject and task for at least one file.",
+                         color="warning"), *idle
 
-    color = "success" if n_fail == 0 else "warning"
-    header = dbc.Alert(f"Done: {n_ok} written, {n_fail} failed.", color=color, className="py-2")
-    return html.Div([header, *lines])
+    n = len(steps)
+    headed = [(f"[{i}/{n}] {row['file']} -> sub-{row['subject']}", argv)
+              for i, (row, argv) in enumerate(steps, 1)]
+    try:
+        run_id = process_stream.start_each(headed)
+    except FileNotFoundError:
+        return dbc.Alert("`nirspipe-recon` not found on PATH. Make sure nirspipe is installed.",
+                         color="danger"), *idle
+    note = (html.Small(f"Skipped, no subject or task: {', '.join(skipped)}",
+                       className="text-warning d-block mt-2") if skipped else None)
+    return log_panel("Running...", [], 0, "info"), note, run_id, False, False, True
+
+
+@callback(
+    Output("rc-log",      "children", allow_duplicate=True),
+    Output("rc-run-tick", "disabled", allow_duplicate=True),
+    Output("rc-stop-btn", "disabled", allow_duplicate=True),
+    Output("rc-run-btn",  "disabled", allow_duplicate=True),
+    Input("rc-run-tick",  "n_intervals"),
+    State("rc-run-store", "data"),
+    prevent_initial_call=True,
+)
+def stream_run_output(_n, run_id):
+    return poll_run(run_id, "Recon")
+
+
+@callback(
+    Output("rc-stop-btn", "disabled", allow_duplicate=True),
+    Input("rc-stop-btn",  "n_clicks"),
+    State("rc-run-store", "data"),
+    prevent_initial_call=True,
+)
+def stop_run(_n, run_id):
+    # the tick reports the outcome; this only asks the current file's command to end
+    if run_id:
+        process_stream.stop(run_id)
+    return True

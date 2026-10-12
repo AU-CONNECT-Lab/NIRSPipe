@@ -7,7 +7,7 @@ import platform
 import dash
 import dash_ag_grid as dag
 import dash_bootstrap_components as dbc
-from dash import html
+from dash import dcc, html
 
 from nirspipe.interface.components import (
     PATH, action_field, actions, card, field, params, split,
@@ -69,8 +69,12 @@ def _files():
 
 def _run_panel():
     return card("Run",
-        actions(dbc.Button("Run all", id="rc-run-btn", color="success")),
-        html.Div(id="rc-log", className="mt-2 small"),
+        actions(
+            dbc.Button("Run all", id="rc-run-btn", color="success"),
+            dbc.Button("Stop", id="rc-stop-btn", color="danger", outline=True, disabled=True),
+        ),
+        html.Div(id="rc-skipped"),
+        html.Div(id="rc-log", className="mt-3"),
     )
 
 
@@ -97,4 +101,7 @@ layout = dbc.Container([
         main=[_files()],
         aside=[_run_panel(), _command_panel()],
     ),
+
+    dcc.Store(id="rc-run-store", storage_type="memory"),
+    dcc.Interval(id="rc-run-tick", interval=1000, disabled=True),
 ], fluid=True)

@@ -50,7 +50,7 @@ Closing the browser tab does not stop a command, but nothing will be watching it
 
 Raw QC, Hyper Analysis and Cohort Reports embed the report the command wrote once it succeeds, with its path printed above the frame. A command that writes tables rather than a page says so, and a command that should have written a page and did not shows a warning instead.
 
-Recon and the two edit buttons on Data Preparation run a short command per click and wait for it, then show the command and what it printed.
+Recon streams the same way, one command per file, with **Run all** and **Stop** but no **Generate command**: its preview follows the table as you edit it. The two edit buttons on Data Preparation run a short command per click and wait for it, then show the command and what it printed.
 
 ## Shared state across pages
 
@@ -161,7 +161,7 @@ Raw SNIRFs in the BIDS dataset are never modified. Both commands refuse an outpu
 
 ## Recon
 
-The **Recon** page converts a folder of raw `.snirf` files into a BIDS dataset, one row per file. **Run all** runs [`nirspipe-recon`](usage.md#nirspipe-recon) once per row and waits for each, so the page writes exactly what the command line writes.
+The **Recon** page converts a folder of raw `.snirf` files into a BIDS dataset, one row per file. **Run all** runs [`nirspipe-recon`](usage.md#nirspipe-recon) once per row, one after another, so the page writes exactly what the command line writes.
 
 URL: `http://localhost:8050/recon`
 
@@ -185,7 +185,7 @@ URL: `http://localhost:8050/recon`
 | `session` | `--session-label` | yes | Optional. |
 | `run` | `--run-label` | yes | Optional. |
 
-**Overwrite existing** adds `--overwrite` to every row. A row with no `subject` or no `task` is skipped: it produces no command in the preview and is counted as a failure when run.
+**Overwrite existing** adds `--overwrite` to every row. A row with no `subject` or no `task` is skipped: it produces no command in the preview, and **Run all** names it under the buttons.
 
 ### Command preview
 
@@ -201,12 +201,9 @@ nirspipe-recon "/data/raw/sub01_run1.snirf" \
 
 ### Run
 
-**Run all** converts every valid row in order and reports per file:
+**Run all** converts every valid row in order and shows the output as it is printed, as the batch pages do. Each file starts with a line `[2/5] <file> -> sub-<label>`; a file whose command failed ends with `failed (exit N)` under the error it printed. One failing file does not stop the rest, and the last line gives the totals, for example `4 of 5 succeeded`.
 
-- `✓ <file> → sub-<label>` for each conversion that succeeded
-- `✗ <file>: <error>` for each one that did not, with the last line the command printed
-
-One failing file does not stop the rest. The banner at the top gives the totals.
+**Stop** ends the file being converted and skips the rest; the last line counts the files not run. Files converted before the stop stay written.
 
 :::{tip}
 Convert a couple of files first and open the resulting tree before running the whole folder. A wrong `subject` or `task` here propagates into every derivative and QC report downstream, and the fix is a re-conversion.

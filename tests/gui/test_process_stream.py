@@ -108,3 +108,42 @@ def test_forget_leaves_a_live_run_alone():
 def test_missing_executable_raises_rather_than_returning_an_id():
     with pytest.raises(FileNotFoundError):
         process_stream.start(["definitely-not-a-real-command-xyz"])
+
+
+def _step(header: str, body: str) -> tuple[str, list[str]]:
+    return header, [sys.executable, "-c", body]
+
+
+def test_steps_run_in_order_each_after_its_header():
+    run_id = process_stream.start_each([_step("[1/2] a", "print('one')"),
+                                        _step("[2/2] b", "print('two')")])
+    assert _wait_for(lambda: process_stream.poll(run_id)[1] is not None)
+    lines, returncode, _ = process_stream.poll(run_id)
+    assert returncode == 0
+    assert lines == ["[1/2] a", "one", "[2/2] b", "two", "2 of 2 succeeded"]
+
+
+def test_a_failed_step_does_not_stop_the_ones_after_it():
+    run_id = process_stream.start_each([_step("a", "print('one')"),
+                                        _step("b", "raise SystemExit(3)"),
+                                        _step("c", "print('three')")])
+    assert _wait_for(lambda: process_stream.poll(run_id)[1] is not None)
+    lines, returncode, _ = process_stream.poll(run_id)
+    assert returncode == 3
+    assert lines == ["a", "one", "b", "failed (exit 3)", "c", "three", "2 of 3 succeeded"]
+
+
+def test_stop_ends_the_current_step_and_skips_the_rest():
+    run_id = process_stream.start_each([_step("a", "import time\ntime.sleep(60)\n"),
+                                        _step("b", "print('never')")])
+    assert process_stream.stop(run_id) is True
+    assert _wait_for(lambda: process_stream.poll(run_id)[1] is not None)
+    lines, returncode, _ = process_stream.poll(run_id)
+    assert returncode != 0
+    assert "b" not in lines and "never" not in lines
+    assert lines[-1] == "0 of 2 succeeded, 1 not run"
+
+
+def test_steps_with_a_missing_executable_raise_before_returning_an_id():
+    with pytest.raises(FileNotFoundError):
+        process_stream.start_each([("a", ["definitely-not-a-real-command-xyz"])])
