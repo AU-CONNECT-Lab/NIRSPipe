@@ -176,3 +176,25 @@ def test_cropping_a_pipeline_output_back_into_its_own_tree_is_allowed(tmp_path, 
     except SystemExit:
         pass          # nothing to crop in an empty tree; the point is what it was stopped for
     assert "output directory is the input" not in capsys.readouterr().err
+
+
+# each writes into a folder of its own under the output directory
+WRITES_INTO = {
+    "crop":          ("cropped", ["crop", "{i}", "{o}", "--participant-label", "01",
+                                  "--tmin", "0"]),
+    "align":         ("aligned", ["align", "{i}", "{o}", "--group-csv", "{i}/pairs.csv"]),
+    "markers apply": ("marker_edited", ["edit-markers", "apply", "{i}", "{o}",
+                                        "--participant-label", "01", "--shift", "1"]),
+}
+
+
+@pytest.mark.parametrize("name", list(WRITES_INTO))
+def test_every_command_refuses_an_input_that_is_the_folder_it_writes(name, tmp_path, capsys):
+    from nirspipe.cli import prep
+    folder, argv = WRITES_INTO[name]
+    out = tmp_path / "out"
+    (out / folder).mkdir(parents=True)
+    with pytest.raises(SystemExit) as exit_:
+        prep.main([a.format(i=out / folder, o=out) for a in argv] + ["--skip-bids-validation"])
+    assert exit_.value.code != 0
+    assert "which is the input" in capsys.readouterr().err

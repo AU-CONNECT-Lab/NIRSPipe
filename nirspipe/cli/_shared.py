@@ -42,12 +42,18 @@ class BidsLabel(str):
         return super().__new__(cls, text)
 
 
-def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str) -> None:
-    """Exit non-zero when the output directory is the input dataset itself."""
+def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str,
+                           writes: str | None = None) -> None:
+    """Exit non-zero when the output directory, or its ``writes`` folder, is the input."""
     bids_dir = Path(bids_dir).resolve()
-    if Path(output_dir).resolve() == bids_dir:
+    output_dir = Path(output_dir).resolve()
+    if output_dir == bids_dir:
         print(f"Error: the output directory is the input BIDS directory; choose another, "
               f"e.g. {bids_dir / 'derivatives' / tool}.", file=sys.stderr)
+        raise SystemExit(1)
+    if writes and output_dir / writes == bids_dir:
+        print(f"Error: this command writes into {output_dir / writes}, which is the input "
+              f"directory; choose another output directory.", file=sys.stderr)
         raise SystemExit(1)
 
 
