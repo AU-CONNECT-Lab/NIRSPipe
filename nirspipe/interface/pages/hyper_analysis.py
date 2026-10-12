@@ -196,11 +196,8 @@ def _pair_null_section():
                 value=[], inline=True, switch=True,
             )),
         ),
-        subtitle="Pairs one member with people from the other groups who did the same task. "
-                 "Run it after nirspipe-hyper: the band, the mask, the window, the stage, the "
-                 "rejected channels, the ROI minimum and the crossing come off the tables "
-                 "nirspipe-hyper wrote, not off this form. The number of draws is the number of "
-                 "other groups, which is what limits how finely it can rank.",
+        subtitle="Pairs each member with people from other groups on the same task. Runs "
+                 "after nirspipe-hyper and reuses its settings; one draw per other group.",
     ))
 
 
@@ -244,9 +241,8 @@ def _group_null_section():
                                        "value": "magnitude"}],
                              value="signed")),
         ),
-        subtitle="Averages the channels before ranking, once per occasion and once over the "
-                 "cohort, so it tests the pairing as a whole, not each channel. Reads what "
-                 "nirspipe-hyper-pairnull wrote and runs no transform.",
+        subtitle="Tests the pairing as a whole, per occasion and over the cohort, from the "
+                 "draws nirspipe-hyper-pairnull wrote.",
     ))
 
 
@@ -313,9 +309,8 @@ layout = dbc.Container([
     dcc.Interval(id="hy-run-tick", interval=1000, disabled=True),
 
     html.H3("Hyper Analysis"),
-    html.P("Wavelet coherence and inter-subject correlation over dyads, run by nirspipe-hyper "
-           "on what the individual pipeline already wrote. Reads a derivatives tree, never "
-           "BIDS.", className="text-muted"),
+    html.P("Wavelet coherence and inter-subject correlation over dyads, from the individual "
+           "pipeline's derivatives.", className="text-muted"),
     html.Hr(),
 
     split(

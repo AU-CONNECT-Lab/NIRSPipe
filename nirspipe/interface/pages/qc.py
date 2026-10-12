@@ -64,8 +64,8 @@ layout = dbc.Container([
     dcc.Interval(id="qc-run-tick", interval=1000, disabled=True),
 
     html.H3("Cohort Reports"),
-    html.P("Cohort aggregates over the quality records every run already wrote. Each command "
-           "takes one derivatives directory and nothing else.", className="text-muted"),
+    html.P("Cohort summaries of the quality records every run already wrote.",
+           className="text-muted"),
     html.Hr(),
 
     split(

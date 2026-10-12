@@ -144,8 +144,7 @@ def _operation():
                       dbc.Input(id="bp-keep-conditions", type="text",
                                 placeholder="e.g. rest, task"),
                       span=PATH,
-                      hint="Annotation names, separated by commas. One row per occurrence,"
-                           " written to the derivatives directory as keep-spans.tsv for"
+                      hint="Annotation names, comma-separated; written as keep-spans.tsv for"
                            " nirspipe --keep-spans."),
                 field("Duration (s)", dbc.Input(id="bp-keep-duration", type="number", step="any"),
                       hint="every occurrence's length; needed when a marker has none"),
