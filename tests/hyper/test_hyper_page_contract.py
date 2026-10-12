@@ -282,7 +282,7 @@ def test_the_chromophore_note_says_what_was_run(pages, dyad, tmp_path):
     from nirspipe.qc.boilerplate.notes import section_note
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
-    assert "The maps show HbO above HbR, stacked" in pages[0].read_text(encoding="utf-8")
+    assert "Maps stack HbO above HbR" in pages[0].read_text(encoding="utf-8")
     path = build_hyper_post_report(
         group_id="G1", task="tap",
         group=[GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")],
@@ -292,7 +292,7 @@ def test_the_chromophore_note_says_what_was_run(pages, dyad, tmp_path):
     )
     html = path.read_text(encoding="utf-8")
     assert section_note("hyper_post.chromophore_one", chroma="HbO", flag="hbo") in html
-    assert "The maps show" not in html
+    assert "Maps stack" not in html
 
 
 def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
@@ -314,7 +314,7 @@ def test_a_condition_page_draws_its_own_roi_isc_matrix(pages):
 
 # the count is always printed; this sentence only appears when it is below it
 COUNT = "cycles of the slowest"
-CAVEAT = "rests on very few independent looks"
+CAVEAT = "rests on very few looks"
 
 
 @pytest.mark.parametrize("window, band_fmin, expected", [

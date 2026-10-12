@@ -321,9 +321,8 @@ NOTES = {
 
     # ---- Cohort report ----
     "group.small_cohort":
-        "Only {n} runs. Boxes, robust z-scores and the outlier rule measure distance from "
-        "the cohort's middle, which so few runs do not have; read the panels as the runs' "
-        "own values side by side.",
+        "Only {n} runs, too few for boxes, robust z-scores and the outlier rule to mean much; "
+        "read the panels as the runs' own values side by side.",
     "group.outliers":
         "{count} of {n} runs sit more than {z} robust SDs from the cohort median on the "
         "average metric{worst}. They are listed under Outliers, and the furthest are drawn "
@@ -345,9 +344,8 @@ NOTES = {
         "names on the left edge.",
     "group.windowed":
         "Rows are metrics, columns channel sets: every run pale under the cohort's "
-        "interquartile band and median, smoothed over {smooth} s. SCI here follows the QC "
-        "window; the table's <code>sci_win_mean</code> is pinned to {sci_window} s and "
-        "<code>sci_mean</code> covers the whole run.",
+        "interquartile band and median, smoothed over {smooth} s. SCI here uses the QC "
+        "window, not the table's {sci_window} s.",
     "group.outlier_rule":
         "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
         "metric.",
