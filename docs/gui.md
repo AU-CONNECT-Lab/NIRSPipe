@@ -531,7 +531,7 @@ nirspipe /data/bids /data/output participant \
     --participant-label 11 \
     --dpf 6.0 \
     --sci-threshold 0.8 \
-    --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+    --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
     --resp-l-freq 0.1 --resp-h-freq 0.5 \
     --motion-correction tddr \
     --mode glm --stim-dur 15 --hrf-model spm --noise-model ar1 \

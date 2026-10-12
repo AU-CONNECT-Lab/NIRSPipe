@@ -85,7 +85,7 @@ A cohort QC report over one window of time is a crop followed by the usual QC co
 nirspipe-prep crop /data/bids /data/deriv --participant-label 01 02 \
     --tmin 0 --tmax 30 --align trigger --trigger-name task_block_1
 nirspipe-qc prep-raw /data/deriv/cropped /data/out --participant-label 01 02 \
-    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 --sci-threshold 0.8
+    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 --sci-threshold 0.8
 nirspipe-qc cohort /data/out
 ```
 

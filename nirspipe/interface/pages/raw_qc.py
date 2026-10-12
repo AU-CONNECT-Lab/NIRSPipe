@@ -80,7 +80,7 @@ def _screening():
                                placeholder="lo (adult ~0.7)"),
                      "–",
                      dbc.Input(id="rq-cardiac-h", type="number", step=0.1,
-                               placeholder="hi (adult ~1.5)")),
+                               placeholder="hi (adult ~2.0)")),
             ),
          key="rq-required", open=True),
         section("Channel screening",

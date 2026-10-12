@@ -263,7 +263,7 @@ def _preprocessing():
                                placeholder="lo (adult ~0.7)"),
                      "–",
                      dbc.Input(id="an-cardiac-h", type="number", step=0.1,
-                               placeholder="hi (adult ~1.5)")),
+                               placeholder="hi (adult ~2.0)")),
                 band("Respiration (Hz)",
                      dbc.Input(id="an-resp-l", type="number", step=0.1,
                                placeholder="lo (adult ~0.1)"),

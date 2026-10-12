@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs
+
 ## [0.68.0] - 2026-10-12
 
 ### Added

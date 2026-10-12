@@ -31,7 +31,7 @@ Preprocessing only, with a report per run:
 ```bash
 nirspipe /data/bids /data/derivatives participant \
     --dpf 6.0 --sci-threshold 0.8 \
-    --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+    --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
     --resp-l-freq 0.1 --resp-h-freq 0.5
 ```
 

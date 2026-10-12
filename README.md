@@ -37,7 +37,7 @@ Preprocessing only:
 nirspipe /data/bids /data/derivatives participant \
   --participant-label 01 02 \
   --dpf 6.0 --sci-threshold 0.8 \
-  --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+  --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
   --resp-l-freq 0.1 --resp-h-freq 0.5
 ```
 
@@ -47,7 +47,7 @@ Preprocessing and a first-level GLM, with the events taken from the SNIRF annota
 nirspipe /data/bids /data/derivatives participant \
   --participant-label 01 \
   --dpf 6.0 --sci-threshold 0.8 \
-  --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 \
+  --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
   --resp-l-freq 0.1 --resp-h-freq 0.5 \
   --mode glm --stim-dur 15 --drift-high-pass 0.01 \
   --short-channel mean

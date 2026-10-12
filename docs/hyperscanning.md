@@ -197,7 +197,7 @@ Without a shared trigger, pass `--no-align` to both the raw dyad QC and the anal
 
 ```bash
 nirspipe-qc hyper-raw /data/bids /data/derivatives/nirspipe-hyper group --pairs-csv pairs.csv --no-align \
-    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 1.5 --sci-threshold 0.8
+    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 --sci-threshold 0.8
 nirspipe-hyper /data/derivatives/nirspipe /data/derivatives/nirspipe-hyper group --pairs-csv pairs.csv --no-align
 ```
 

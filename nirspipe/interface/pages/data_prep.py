@@ -234,7 +234,7 @@ layout = dbc.Container([
                                placeholder="lo (adult ~0.7)"),
                      "–",
                      dbc.Input(id="dp-cardiac-h", type="number", step=0.1,
-                               placeholder="hi (adult ~1.5)")),
+                               placeholder="hi (adult ~2.0)")),
                 band("Epoch window (s)",
                      dbc.Input(id="dp-epoch-tmin", type="number", step=0.5, value=-5.0),
                      "–",
