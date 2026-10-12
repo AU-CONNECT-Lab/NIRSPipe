@@ -30,6 +30,24 @@ def test_the_outcome_line_keeps_each_page_s_wording(monkeypatch, returncode, nou
     assert (tick_off, stop_off, run_off) == (True, True, False)
 
 
+@pytest.mark.parametrize("returncode", [1, -15])
+def test_stop_reads_as_stopped_on_every_platform(monkeypatch, returncode):
+    monkeypatch.setattr(process_stream, "poll", lambda run_id: (["line"], returncode, 0))
+    monkeypatch.setattr(process_stream, "was_stopped", lambda run_id: True)
+    monkeypatch.setattr(process_stream, "forget", lambda run_id: None)
+    panel, *_ = poll_run("r1", "Pipeline")
+    assert _header(panel) == "Pipeline stopped."
+    assert panel.color == "warning"
+
+
+def test_a_stop_that_lost_the_race_to_a_clean_exit_reads_as_finished(monkeypatch):
+    monkeypatch.setattr(process_stream, "poll", lambda run_id: (["line"], 0, 0))
+    monkeypatch.setattr(process_stream, "was_stopped", lambda run_id: True)
+    monkeypatch.setattr(process_stream, "forget", lambda run_id: None)
+    panel, *_ = poll_run("r1")
+    assert _header(panel) == "Finished."
+
+
 def test_a_running_command_keeps_the_tick_on(monkeypatch):
     monkeypatch.setattr(process_stream, "poll", lambda run_id: ([], None, 0))
     _, tick_off, stop_off, run_off = poll_run("r1")

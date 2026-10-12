@@ -83,6 +83,16 @@ def test_stop_ends_a_running_process():
     assert process_stream.stop(run_id) is False, "a finished run cannot be stopped again"
 
 
+def test_a_stopped_run_is_known_as_stopped_whatever_its_exit_code():
+    run_id = _run("import time\ntime.sleep(60)\n")
+    assert process_stream.was_stopped(run_id) is False
+    process_stream.stop(run_id)
+    assert _wait_for(lambda: process_stream.poll(run_id)[1] is not None)
+    assert process_stream.poll(run_id)[1] != 0
+    assert process_stream.was_stopped(run_id) is True
+    assert process_stream.was_stopped("nope") is False
+
+
 def test_scrollback_is_bounded_and_says_what_it_dropped(monkeypatch):
     monkeypatch.setattr(process_stream, "_MAX_LINES", 10)
     run_id = _run("for i in range(50):\n    print(i)\n")
@@ -141,7 +151,7 @@ def test_stop_ends_the_current_step_and_skips_the_rest():
     lines, returncode, _ = process_stream.poll(run_id)
     assert returncode != 0
     assert "b" not in lines and "never" not in lines
-    assert lines[-1] == "0 of 2 succeeded, 1 not run"
+    assert lines[-2:] == ["stopped", "0 of 2 succeeded, 1 not run"]
 
 
 def test_steps_with_a_missing_executable_raise_before_returning_an_id():

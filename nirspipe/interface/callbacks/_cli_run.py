@@ -53,6 +53,8 @@ def _tick(run_id, noun: str):
         return log_panel("Running...", lines, dropped, "info"), None
     if returncode == 0:
         outcome, color = "finished.", "success"
+    elif process_stream.was_stopped(run_id):
+        outcome, color = "stopped.", "warning"
     elif returncode < 0:
         outcome, color = f"stopped (signal {-returncode}).", "warning"
     else:

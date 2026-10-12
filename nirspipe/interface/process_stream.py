@@ -71,7 +71,8 @@ class _Run:
             if rc:
                 code = rc
                 if n > 1:
-                    self._append(f"failed (exit {rc})")
+                    # terminate() exits 1 on Windows, so the code alone cannot tell a stop
+                    self._append("stopped" if self.stopped else f"failed (exit {rc})")
             else:
                 ok += 1
         if n > 1:
@@ -133,6 +134,13 @@ def stop(run_id: str) -> bool:
     if proc is not None and proc.poll() is None:
         proc.terminate()
     return True
+
+
+def was_stopped(run_id: str) -> bool:
+    """Whether Stop was pressed on this run, whatever exit code that produced."""
+    with _lock:
+        run = _runs.get(run_id)
+    return run is not None and run.stopped
 
 
 def forget(run_id: str) -> None:

@@ -291,10 +291,14 @@ def test_hyper_reads_derivatives_and_never_raw_bids():
 
 def test_the_band_flags_are_shared_between_run_and_band():
     """One name per parameter: `nirspipe-hyper-band` reuses the `nirspipe-hyper` flags rather
-    than carrying them under a second name that has to be kept in step."""
-    flags = {f for parser in hyper_cli._parsers().values()
-             for a in parser._actions for f in a.option_strings}
-    assert not ({"--band-fmin", "--band-fmax", "--mask-coi", "--suffix"} & flags)
+    than carrying them under a second name that has to be kept in step. `--band-fmin/fmax`
+    is `nirspipe-hyper`'s shorthand for setting the WTC and ISC bands together, and only there."""
+    flags = {prog: {f for a in parser._actions for f in a.option_strings}
+             for prog, parser in hyper_cli._parsers().items()}
+    assert not any({"--mask-coi", "--suffix"} & f for f in flags.values())
+    assert {prog for prog, f in flags.items() if {"--band-fmin", "--band-fmax"} <= f} \
+        == {"nirspipe-hyper"}
+    assert not {"--band-fmin", "--band-fmax"} & flags["nirspipe-hyper-band"]
     for prog, argv in (("nirspipe-hyper", ["/deriv", "/o", "group", "--pairs-csv", "p.csv"]),
                        ("nirspipe-hyper-band",
                         ["/o", "group", "--wtc-band-fmin", "0.1", "--wtc-band-fmax", "0.2"])):
