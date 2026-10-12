@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - GUI Hyper Preparation page; alignment, the dyad raw report and channel decisions are on Batch Prep, Raw QC and `nirspipe-rate hyper`
 
 ### Fixed
+- GUI Analysis page's schematic drew motion correction after Beer-Lambert; it follows the pipeline's order and each mode's stages
 - `nirspipe-rate raw` serves the subject index's figures and tables when the index is opened from the raw report
 - `nirspipe-rate hyper` refuses channel decisions for anyone outside the dyad
 - The run report's stage comparison no longer filters an already band-passed stage a second time

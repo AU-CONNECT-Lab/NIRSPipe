@@ -122,55 +122,53 @@ def _provenance_elements(output_dir: str | None) -> list | None:
 @callback(
     Output("an-dag", "elements"),
     Input("an-post-mode", "value"),
+    Input("an-fc", "value"),
+    Input("an-drift-model", "value"),
+    Input("an-short-channel", "value"),
     Input("an-run-status", "children"),
     State("an-output-dir", "value"),
 )
-def update_dag(post_mode, _run_status, output_dir):
+def update_dag(post_mode, fc, drift_model, short_channel, _run_status, output_dir):
     # after a run there is a real graph on disk; before one, the schematic is all we have
     real = _provenance_elements(output_dir)
     if real:
         return real
+    # denoise regresses only when there is something to regress, as _has_confounds decides
+    confounds = drift_model in ("cosine", "polynomial") or short_channel in ("mean", "pca")
+    return _schematic_elements(post_mode, bool(fc), confounds)
 
+
+def _schematic_elements(post_mode: str | None, fc: bool, confounds: bool) -> list[dict]:
+    """The stages the chosen mode runs, in the order run_prep and run_post run them."""
     def node(nid, label, cls):
         return {"data": {"id": nid, "label": label}, "classes": cls}
 
     def edge(src, tgt, cls):
         return {"data": {"source": src, "target": tgt}, "classes": cls}
 
-    elements = [
-        node("load",   "Load SNIRF",         "prep"),
-        node("od",     "Optical Density",     "prep"),
-        node("sci",    "SCI / Bad Channels",  "prep"),
-        node("bll",    "Beer-Lambert Law",    "prep"),
-        node("motion", "Motion Correction",   "prep"),
-        edge("load",   "od",     "prep"),
-        edge("od",     "sci",    "prep"),
-        edge("sci",    "bll",    "prep"),
-        edge("bll",    "motion", "prep"),
-    ]
+    # motion correction works on optical density, so it comes before Beer-Lambert
+    chain = [("load", "Load SNIRF"), ("od", "Optical Density"),
+             ("sci", "Channel Screening"), ("motion", "Motion Correction"),
+             ("bll", "Beer-Lambert Law")]
+    elements = [node(nid, label, "prep") for nid, label in chain]
+    elements += [edge(a, b, "prep") for (a, _), (b, _) in zip(chain, chain[1:])]
+    if not post_mode or post_mode == "none":
+        return elements
 
-    last = "motion"
-
-    if post_mode and post_mode != "none":
-        elements += [
-            node("filter", "Bandpass Filter", "post"),
-            edge(last, "filter", "post"),
-        ]
-        last = "filter"
-
-        elements += [
-            node("resample", "Resample", "post"),
-            edge(last, "resample", "post"),
-        ]
-        last = "resample"
-
-        if post_mode == "glm":
-            elements += [
-                node("glm", "GLM", "glm"),
-                edge(last, "glm", "glm"),
-            ]
-            last = "glm"
-
+    elements += [node("filter", "Bandpass / Resample", "post"), edge("bll", "filter", "post")]
+    last = "filter"
+    if post_mode == "glm":
+        elements += [node("glm", "GLM", "glm"), edge("filter", "glm", "glm")]
+        last = "glm"
+    elif post_mode == "rest" or confounds:
+        elements += [node("regress", "Confound Regression", "post"),
+                     edge("filter", "regress", "post")]
+        last = "regress"
+    if post_mode == "rest":
+        elements += [node("alff", "ALFF", "post"), edge(last, "alff", "post")]
+    # rest writes connectivity whatever the switch says
+    if post_mode == "rest" or fc:
+        elements += [node("fc", "Connectivity", "post"), edge(last, "fc", "post")]
     return elements
 
 
