@@ -5,22 +5,19 @@ from __future__ import annotations
 NOTES = {
     # ---- Subject report ----
     "summary.condition_scope":
-        "Coupling and motion numbers are sliced out of the whole recording&rsquo;s windowed "
-        "pass, on the run&rsquo;s window grid and filter; haemoglobin numbers and panels are "
-        "recomputed on this condition&rsquo;s stretch. Rejected channels are the "
-        "run&rsquo;s. The count above is the channels failing on this stretch alone, a guide "
-        "that rejects nothing.",
+        "Coupling and motion numbers are sliced out of the whole run&rsquo;s windowed pass; "
+        "haemoglobin numbers and panels are recomputed on this condition&rsquo;s stretch. "
+        "Rejected channels are the run&rsquo;s; the count above is a guide that rejects "
+        "nothing.",
     "summary.condition_failing":
         "Failing in this condition",
     "summary.condition_kept":
         "{kept} of {window} s outside every BAD_ span; {windows} screening windows counted",
     "excluded.summary":
-        "{kept} s of the {total} s recording lie outside every BAD_ span. Of the recording, "
-        "{unselected} is BAD_unselected, outside the stretches --keep-spans named: real data "
-        "left out of every estimate. {corrupted} lies under corrupted spans (BAD_gvtd, "
-        "BAD_manual from --bad-spans, or spans the input carried). A stretch can be both, so the two shares can sum to more "
-        "than was left out. {n} span(s) in all; each analysis section says how it leaves "
-        "them out.",
+        "{kept} s of the {total} s recording lie outside every BAD_ span: {unselected} is "
+        "BAD_unselected (outside --keep-spans) and {corrupted} lies under corrupted spans "
+        "(BAD_gvtd, BAD_manual or the input&rsquo;s own). {n} span(s) in all; each analysis "
+        "section says how it leaves them out.",
     "excluded.conditions":
         "Per condition: its window, its seconds outside every BAD_ span, the screening "
         "windows its coupled share counted, and for a task GLM the trials whose interval "
@@ -57,11 +54,8 @@ NOTES = {
         "scalp haemodynamics.",
     "steps.raw_quality":
         "SCI and PSP per channel and window on <code>desc-sci</code>, the optical density "
-        "before motion correction; CV on the raw intensity over windows of the same length. "
-        "SCI and PSP cross-correlate the two wavelengths, so they exist only for optical "
-        "density. In the CV row low is good; its hover gives SNR (1/CV), and its colour "
-        "scale tops out at twice the <strong>{cv}</strong> line. SCI threshold: "
-        "<strong>{sci}</strong>.",
+        "before motion correction; CV on the raw intensity over the same windows, where low "
+        "is good (line <strong>{cv}</strong>). SCI threshold: <strong>{sci}</strong>.",
     "quality.brain_views":
         "Red is rejected by screening, whatever its SCI; the rest are graded green to red by "
         "SCI against the run&rsquo;s line. Screening counts coupled windows, so a channel "
@@ -97,11 +91,9 @@ NOTES = {
     "carpet.roi_strip":
         "The strip outside it colours the rows by ROI, named in the legend.",
     "carpet.after":
-        "Above it, a GVTD row per channel set before and after motion correction, on the "
-        "same time axis, so a dark or light column can be read against the movement at that "
-        "moment; thresholds and spike shading stay in the motion section. Each block is "
-        "z-scored per channel, so it shows the structure left rather than amplitude; on the "
-        "run page the title gives the median SD against <code>desc-preproc</code>.",
+        "Above it, a GVTD row per channel set before and after motion correction on the "
+        "same time axis, so a column can be read against the movement at that moment. Each "
+        "block is z-scored per channel: it shows structure, not amplitude.",
     "carpet.glm":
         "On a GLM run this is the residual, with the task model and confounds removed: what "
         "the model left unexplained, not the data the betas came from.",
@@ -148,11 +140,9 @@ NOTES = {
         "channels are dotted: when the dotted line rises with the solid one, part of the "
         "response is scalp signal.",
     "epoch.channel_maps":
-        "The condition-averaged response drawn along each channel&rsquo;s path, a head per "
-        "condition; the slider steps through the response one second at a time. Nothing is "
-        "interpolated between channels. Short channels get their own row on the same colour "
-        "scale; a short row as strong as the long row above means part of the response is "
-        "scalp signal.",
+        "The condition-averaged response along each channel&rsquo;s path, a head per "
+        "condition, one second per slider step. Short channels have their own row: one as "
+        "strong as the long row means part of the response is scalp signal.",
     "epoch.trial_image_roi":
         "Per ROI, HbO channels averaged first, then each trial a row, on the bandpassed "
         "signal before confound regression; runs with enough trials are smoothed across "
@@ -167,17 +157,13 @@ NOTES = {
         "from the denoised residual. The map shows where the amplitude is; the connectivity "
         "panel below gives each channel&rsquo;s value beside its correlations.",
     "rest.alff_layout":
-        "One disc per channel at its source-detector midpoint, HbO on top and HbR below. The "
-        "amplitude column draws mALFF, each channel over its own chromophore's mean, so HbO "
-        "and HbR share one scale and the measured molar value is on the hover; fALFF is "
-        "already a share. Grey channels carry no value, which is what a rejected one has. "
-        "Short channels are not drawn.",
+        "One disc per channel at its source-detector midpoint, HbO on top and HbR below. "
+        "Amplitude is mALFF (each channel over its chromophore's mean), with the molar "
+        "value on hover. Grey channels carry no value; short channels are not drawn.",
     "fc.channel_matrix":
-        "Channel-by-channel Pearson r on top, HbO left and HbR right on one scale, on the "
-        "signal the mode leaves: the confound residual in rest and denoise (the bandpassed "
-        "data if denoise ran no regression), the task residual in glm. In rest mode each "
-        "channel&rsquo;s ALFF and fALFF sit below in the same order. A channel with no "
-        "correlation, as a rejected one has, is left off the matrix and the strips.",
+        "Channel-by-channel Pearson r, HbO left and HbR right on one scale, on the residual "
+        "the mode analyses. In rest mode each channel&rsquo;s ALFF and fALFF sit below in "
+        "the same order. Rejected channels are left off.",
     "fc.roi_matrix":
         "The same correlation between ROI-averaged signals, on the same scale. Channels are "
         "averaged before correlating, so this is not the mean of the cells above. Needs "
@@ -262,27 +248,25 @@ NOTES = {
         "Scores on the recording before any correction. HbO&ndash;HbR corr is after "
         "Beer-Lambert, before and after denoising where two values are shown.",
     "metrics.per_channel":
-        "BAD means too few windows in which SCI and PSP both pass (<code>--min-good-frac</code>), "
-        "so a channel can be BAD with a passing whole-run SCI; BAD (manual) was rejected by hand. "
-        "A BAD short channel is left out of the regressors. Saturated % is the share of samples "
-        "held at the detector&rsquo;s ceiling; those stretches carry no pulse, so they fail "
-        "coupling.",
+        "BAD means too few windows in which SCI and PSP both pass "
+        "(<code>--min-good-frac</code>), so a channel can be BAD with a passing whole-run "
+        "SCI; BAD (manual) was rejected by hand. A BAD short channel is left out of the "
+        "regressors.",
     "channel_summary":
-        "Green pass, red fail, grey missing. Only Status rejects a channel: it fails when the "
-        "share of windows where SCI (<code>--sci-threshold</code> {sci}) and PSP both pass is "
-        "below <code>--min-good-frac</code>, or when the channel was rejected by hand. The other "
-        "rows are for reference.",
+        "Green pass, red fail, grey missing. Only Status rejects a channel: too few windows "
+        "where SCI (<code>--sci-threshold</code> {sci}) and PSP both pass "
+        "(<code>--min-good-frac</code>), or a rejection by hand. The other rows are for "
+        "reference.",
     "condition_summary":
-        "The condition pages&rsquo; channel grids in one figure, one metric&rsquo;s conditions on "
-        "adjacent rows, same cutoffs (<code>--sci-threshold</code> {sci}). <b>In condition</b> "
-        "says whether a channel passes within that condition alone; a channel rejected by hand "
-        "fails everywhere. It rejects nothing, and Status on each condition page stays the run&rsquo;s.",
+        "The condition pages&rsquo; channel grids in one figure, one metric&rsquo;s "
+        "conditions on adjacent rows, same cutoffs (<code>--sci-threshold</code> {sci}). "
+        "<b>In condition</b> says whether a channel passes within that condition alone; it "
+        "rejects nothing.",
     "trial_qc":
         "Every trial window scored on its own, over {window}, on the intensity recording. "
-        "Colour is relative within a row rather than a threshold: red marks the worse end of "
-        "what this recording did, so a run with a fine mean SCI can still show the few trials "
-        "where the cap moved. Whole-montage numbers, so read them against the metrics table's "
-        "<b>All</b> row.",
+        "Colour is relative within a row, not a threshold: red marks this recording's worse "
+        "trials. Whole-montage numbers, so read them against the metrics table's <b>All</b> "
+        "row.",
     # ---- Subject index ----
     "subject_index.runs":
         "Read from each run&rsquo;s quality record (<code>desc-sqm</code>, or "
@@ -293,18 +277,13 @@ NOTES = {
         "subject&rsquo;s median on that metric. It means the run differs from the others, "
         "not that it failed.",
     "subject_index.conditions":
-        "Each condition is a window of the whole-run pass, so the rows compare with each "
-        "other and with the whole-run row. Long channels throughout, except Channels "
-        "passing, which counts every channel: on the whole-run row what the run kept, on a "
-        "condition&rsquo;s row what passes on that stretch alone, a guide that rejects "
-        "nothing. Runs cropped per condition before preprocessing are listed under "
-        "<b>Runs</b> instead.",
+        "Each condition is a window of the whole-run pass, so its row compares with the "
+        "whole-run row. Long channels throughout, except Channels passing, which counts "
+        "every channel and on a condition&rsquo;s row rejects nothing.",
     "subject_index.channel_condition":
         "Colour is the robust z inside one condition: how far a channel sat from the others "
-        "in that block, not how the blocks rank; hover for the value. The panels are the "
-        "profile&rsquo;s that have a per-channel form (GVTD, an RMS across channels, has "
-        "none), plus <b>Coupled windows</b>, the line a channel is rejected on. One channel "
-        "order throughout, sorted by how far each channel moves on the SCI panel.",
+        "in that block, not how the blocks rank; hover for the value. Channels keep one "
+        "order throughout, sorted by how much they move on the SCI panel.",
     "subject_index.timeline":
         "Smoothed over {smooth:g} s and sampled at that step. Long and short only, since "
         "<code>all</code> blends the two. Each band is coloured by its window in order; the "
