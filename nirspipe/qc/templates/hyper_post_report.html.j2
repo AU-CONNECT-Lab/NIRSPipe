@@ -374,10 +374,8 @@
       <thead><tr><th>Member</th><th>Offset (s)</th><th>Aligned duration (s)</th></tr></thead>
       <tbody id="align-tbody"></tbody>
     </table>
-  </div>
-  {% if onset_residuals %}
-  <div id="OnsetCheck">
-    <h3 style="margin:0 0 0.3rem;">Alignment check</h3>
+    {% if onset_residuals %}
+    <h3 id="OnsetCheck" style="margin:1.2rem 0 0.3rem;">Alignment check</h3>
     <p class="qm-note">{{ section_note('hyper_raw.onset_residuals', ref=onset_ref, tol="%.3f"|format(onset_tol_s), n="%g"|format(onset_tol_samples)) }}</p>
     <table class="qm-table qm-flat" id="onset-residual-table">
       <thead><tr><th>Condition</th><th>Member</th><th>Onset difference (s)</th><th>Within tolerance</th></tr></thead>
@@ -387,8 +385,8 @@
       {% endfor %}
       </tbody>
     </table>
+    {% endif %}
   </div>
-  {% endif %}
   {% if roi_rows %}
   <div id="ROI">
     <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
