@@ -40,6 +40,8 @@ def _run_panel():
     return card("Run",
         actions(
             dbc.Button("Run", id="qc-run-btn", color="success"),
+            dbc.Button("Stop", id="qc-stop-btn", color="danger",
+                       outline=True, disabled=True),
             dbc.Button("Generate command", id="qc-generate-btn",
                        color="secondary", outline=True),
         ),
@@ -57,6 +59,9 @@ def _run_panel():
 
 layout = dbc.Container([
     dcc.Store(id="qc-command-store"),
+    dcc.Store(id="qc-run-store", storage_type="memory"),
+    # the run is polled rather than waited on; disabled until there is something to poll
+    dcc.Interval(id="qc-run-tick", interval=1000, disabled=True),
 
     html.H3("Cohort Reports"),
     html.P("Cohort aggregates over the quality records every run already wrote. Each command "

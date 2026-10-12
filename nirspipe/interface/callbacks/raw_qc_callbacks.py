@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dash import Input, Output, State, callback, html
 
-from nirspipe.interface.callbacks._cli_run import preview_text, run_and_report
+from nirspipe.interface import process_stream
+from nirspipe.interface.callbacks._cli_run import (
+    poll_run_and_report, preview_text, start_run,
+)
 from nirspipe.interface.callbacks._sections import rng, summary, value
 from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
@@ -157,9 +160,44 @@ def generate_command(n_clicks, command, *values):
 @callback(
     Output("rq-run-status", "children"),
     Output("rq-report-preview", "children"),
+    Output("rq-run-store", "data"),
+    Output("rq-run-tick", "disabled"),
+    Output("rq-stop-btn", "disabled"),
+    Output("rq-run-btn", "disabled"),
     Input("rq-run-btn", "n_clicks"),
     State("rq-command-store", "data"),
     prevent_initial_call=True,
 )
 def run_command(n_clicks, stored):
-    return run_and_report(stored)
+    status, run_id, *buttons = start_run(stored, "Generate command",
+                                         "`{exe}` not found on PATH. Make sure nirspipe is installed.")
+    # the previous run's report would otherwise sit under this run's log
+    return status, None, run_id, *buttons
+
+
+@callback(
+    Output("rq-run-status", "children", allow_duplicate=True),
+    Output("rq-report-preview", "children", allow_duplicate=True),
+    Output("rq-run-tick", "disabled", allow_duplicate=True),
+    Output("rq-stop-btn", "disabled", allow_duplicate=True),
+    Output("rq-run-btn", "disabled", allow_duplicate=True),
+    Input("rq-run-tick", "n_intervals"),
+    State("rq-run-store", "data"),
+    State("rq-command-store", "data"),
+    prevent_initial_call=True,
+)
+def stream_run_output(_n, run_id, stored):
+    return poll_run_and_report(run_id, stored)
+
+
+@callback(
+    Output("rq-stop-btn", "disabled", allow_duplicate=True),
+    Input("rq-stop-btn", "n_clicks"),
+    State("rq-run-store", "data"),
+    prevent_initial_call=True,
+)
+def stop_command(_n, run_id):
+    # the tick reports the outcome; this only asks the process to end
+    if run_id:
+        process_stream.stop(run_id)
+    return True

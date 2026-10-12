@@ -1,8 +1,7 @@
-"""Run a built argv and show what it made. Shared by the two pages that drive a CLI."""
+"""Run a built argv and show what it made. Shared by the pages that drive a CLI."""
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -47,16 +46,11 @@ def start_run(cmd_data, generate_label: str, not_found: str):
     return log_panel("Running...", [], 0, "info"), run_id, False, False, True
 
 
-def poll_run(run_id, noun: str = ""):
-    """One tick of a running command: (status, tick off, stop off, run off).
-
-    ``noun`` leads the outcome line, "Pipeline finished." against a bare "Finished.".
-    """
-    if not run_id:
-        return no_update, True, True, False
+def _tick(run_id, noun: str):
+    """The status panel for one poll, and the exit code once the command has ended."""
     lines, returncode, dropped = process_stream.poll(run_id)
     if returncode is None:
-        return log_panel("Running...", lines, dropped, "info"), False, False, True
+        return log_panel("Running...", lines, dropped, "info"), None
     if returncode == 0:
         outcome, color = "finished.", "success"
     elif returncode < 0:
@@ -65,7 +59,29 @@ def poll_run(run_id, noun: str = ""):
         outcome, color = f"failed (exit {returncode}).", "danger"
     header = f"{noun} {outcome}" if noun else outcome[0].upper() + outcome[1:]
     process_stream.forget(run_id)
-    return log_panel(header, lines, dropped, color), True, True, False
+    return log_panel(header, lines, dropped, color), returncode
+
+
+def poll_run(run_id, noun: str = ""):
+    """One tick of a running command: (status, tick off, stop off, run off).
+
+    ``noun`` leads the outcome line, "Pipeline finished." against a bare "Finished.".
+    """
+    if not run_id:
+        return no_update, True, True, False
+    status, returncode = _tick(run_id, noun)
+    ended = returncode is not None
+    return status, ended, ended, not ended
+
+
+def poll_run_and_report(run_id, stored: dict | None):
+    """poll_run plus the report preview, filled once the command has succeeded."""
+    if not run_id:
+        return no_update, no_update, True, True, False
+    status, returncode = _tick(run_id, "")
+    if returncode is None:
+        return status, no_update, False, False, True
+    return status, report_preview(stored) if returncode == 0 else None, True, True, False
 
 
 def preview_text(argv: list[str], shell: str) -> str:
@@ -100,46 +116,24 @@ def find_report(patterns: list[str], output_dir: Path) -> Path | None:
     return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
-def run_and_report(stored: dict | None):
-    if not stored or not stored.get("argv"):
-        return dbc.Alert("Click 'Generate command' first.", color="warning",
-                         className="mb-0"), None
-
-    argv = stored["argv"]
-    try:
-        proc = subprocess.run(argv, capture_output=True, text=True)
-    except FileNotFoundError:
-        return dbc.Alert(f"`{argv[0]}` not found on PATH. Make sure nirspipe is installed.",
-                         color="danger", className="mb-0"), None
-    except Exception as exc:
-        return dbc.Alert(f"Failed to launch: {exc}", color="danger", className="mb-0"), None
-
-    tail = "\n".join(((proc.stdout or "") + (proc.stderr or "")).splitlines()[-30:])
-    ok = proc.returncode == 0
-    alert = dbc.Alert([
-        html.Div("Finished." if ok else f"Failed (exit {proc.returncode}).",
-                 className="fw-bold"),
-        html.Pre(tail, className="fp-run-tail"),
-    ], color="success" if ok else "danger", className="mb-0")
-
-    if not ok:
-        return alert, None
-
+def report_preview(stored: dict | None):
+    """What a successful command wrote, framed, or why there is nothing to frame."""
+    if not stored:
+        return None
     patterns = REPORT_PATTERNS.get(stored["command"])
     if patterns is None:
-        return alert, html.Small("This command writes tables, not a report.",
-                                 className="text-muted")
+        return html.Small("This command writes tables, not a report.", className="text-muted")
 
     report = find_report(patterns, Path(stored["output_dir"]))
     if report is None:
         # the command is known to write a page and did not, so say so instead of reading
         # as "nothing to show here": a pattern left behind by a rename looks identical
-        return alert, dbc.Alert([
+        return dbc.Alert([
             html.Div("The run finished but its report is missing.", className="fw-bold"),
             html.Small(f"Looked for {', '.join(patterns)} under {stored['output_dir']}."),
         ], color="warning", className="mb-0")
 
-    return alert, html.Div([
+    return html.Div([
         html.Small(str(report), className="text-muted d-block mb-2"),
         html.Iframe(src=report_url(report), className="fp-report-frame"),
     ])

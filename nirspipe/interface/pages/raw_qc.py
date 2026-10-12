@@ -175,6 +175,8 @@ def _run_panel():
     return card("Run",
         actions(
             dbc.Button("Run", id="rq-run-btn", color="success"),
+            dbc.Button("Stop", id="rq-stop-btn", color="danger",
+                       outline=True, disabled=True),
             dbc.Button("Generate command", id="rq-generate-btn",
                        color="secondary", outline=True),
         ),
@@ -193,6 +195,9 @@ def _run_panel():
 
 layout = dbc.Container([
     dcc.Store(id="rq-command-store"),
+    dcc.Store(id="rq-run-store", storage_type="memory"),
+    # the run is polled rather than waited on; disabled until there is something to poll
+    dcc.Interval(id="rq-run-tick", interval=1000, disabled=True),
 
     html.H3("Raw QC"),
     html.P("Quality reports on the recordings as delivered, before any analysis. Rate them "

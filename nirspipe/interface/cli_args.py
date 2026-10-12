@@ -81,8 +81,10 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
     # those tables carry. Only what to read and how finely to resample is this form's
     if command == "group-null":
         args += _text("--task-label", opts.get("gn_task"))
-        args += _text("--chroma", opts.get("gn_chroma"))
-        args += _text("--null", opts.get("gn_null"))
+        # nargs="+" without extend: one flag carries every value; none sent reads all on disk
+        for flag, key in (("--chroma", "gn_chroma"), ("--null", "gn_null")):
+            if opts.get(key):
+                args += [flag, *opts[key]]
         args += _text("--roi-mapping", opts.get("gn_roi_mapping"))
         args += _num("--n-resample", opts.get("gn_resample"))
         args += _num("--seed", opts.get("gn_seed"))

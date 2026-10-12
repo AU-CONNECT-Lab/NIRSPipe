@@ -418,7 +418,7 @@ _QC_FULL_OPTS = dict(
                  "no_by_condition", "bads_subject", "wtc_save_maps", "no_align", "normalize",
                  "check_only"],
     wtc_pair_pool="position", wtc_pair_max=20, pair_flags=["wtc_pair_homologous"],
-    gn_task="main", gn_chroma="hbo", gn_null="repaired",
+    gn_task="main", gn_chroma=["hbo", "hbr"], gn_null=["repaired", "phase"],
     gn_roi_mapping="/roi.json", gn_resample=20000, gn_seed=7,
     gn_p_correction="fdr_bh", gn_isc_test="magnitude",
     band_fmin=0.05, band_fmax=0.2, band_suffix="band0p05-0p2",
@@ -520,6 +520,17 @@ def test_the_generated_qc_command_parses(command):
     else:
         assert argv[:2] == ["nirspipe-qc", command]
         _build_qc_parser().parse_args(argv[1:])
+
+
+def test_the_group_null_sends_every_ticked_value_under_one_flag():
+    parser = _hyper_parsers_by_command()["group-null"]
+    args = parser.parse_args(build_qc_args("group-null", _QC_FULL_OPTS)[1:])
+    assert (args.chroma, args.null) == (["hbo", "hbr"], ["repaired", "phase"])
+
+
+def test_nothing_ticked_leaves_the_group_null_reading_everything_on_disk():
+    argv = build_qc_args("group-null", {**_QC_FULL_OPTS, "gn_chroma": [], "gn_null": []})
+    assert not {"--chroma", "--null"} & set(argv)
 
 
 def test_neither_tool_on_this_page_asks_for_a_bids_directory():

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dash import Input, Output, State, callback
 
-from nirspipe.interface.callbacks._cli_run import preview_text, run_and_report
+from nirspipe.interface import process_stream
+from nirspipe.interface.callbacks._cli_run import (
+    poll_run_and_report, preview_text, start_run,
+)
 from nirspipe.interface.cli_args import build_qc_args, missing
 from nirspipe.utils.logging import get_logger
 
@@ -99,9 +102,44 @@ def generate_command(n_clicks, command, *values):
 @callback(
     Output("hy-run-status", "children"),
     Output("hy-report-preview", "children"),
+    Output("hy-run-store", "data"),
+    Output("hy-run-tick", "disabled"),
+    Output("hy-stop-btn", "disabled"),
+    Output("hy-run-btn", "disabled"),
     Input("hy-run-btn", "n_clicks"),
     State("hy-command-store", "data"),
     prevent_initial_call=True,
 )
 def run_command(n_clicks, stored):
-    return run_and_report(stored)
+    status, run_id, *buttons = start_run(stored, "Generate command",
+                                         "`{exe}` not found on PATH. Make sure nirspipe is installed.")
+    # the previous run's report would otherwise sit under this run's log
+    return status, None, run_id, *buttons
+
+
+@callback(
+    Output("hy-run-status", "children", allow_duplicate=True),
+    Output("hy-report-preview", "children", allow_duplicate=True),
+    Output("hy-run-tick", "disabled", allow_duplicate=True),
+    Output("hy-stop-btn", "disabled", allow_duplicate=True),
+    Output("hy-run-btn", "disabled", allow_duplicate=True),
+    Input("hy-run-tick", "n_intervals"),
+    State("hy-run-store", "data"),
+    State("hy-command-store", "data"),
+    prevent_initial_call=True,
+)
+def stream_run_output(_n, run_id, stored):
+    return poll_run_and_report(run_id, stored)
+
+
+@callback(
+    Output("hy-stop-btn", "disabled", allow_duplicate=True),
+    Input("hy-stop-btn", "n_clicks"),
+    State("hy-run-store", "data"),
+    prevent_initial_call=True,
+)
+def stop_command(_n, run_id):
+    # the tick reports the outcome; this only asks the process to end
+    if run_id:
+        process_stream.stop(run_id)
+    return True

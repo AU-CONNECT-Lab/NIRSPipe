@@ -201,16 +201,16 @@ def _group_null_section():
         params(
             field("Task",
                   dbc.Input(id="hy-gn-task", type="text", placeholder="task label (required)")),
-            field("Chromophore",
-                  dbc.Select(id="hy-gn-chroma",
-                             options=[{"label": "HbO", "value": "hbo"},
-                                      {"label": "HbR", "value": "hbr"}],
-                             value="hbo")),
+            field("Chromophores",
+                  dbc.Checklist(id="hy-gn-chroma", inline=True, value=[],
+                                options=[{"label": "HbO", "value": "hbo"},
+                                         {"label": "HbR", "value": "hbr"}]),
+                  hint="None ticked reads every chromophore the draws hold."),
             field("Draws to read",
-                  dbc.Select(id="hy-gn-null",
-                             options=[{"label": "Re-paired", "value": "repaired"},
-                                      {"label": "Phase-scrambled", "value": "phase"}],
-                             value="repaired")),
+                  dbc.Checklist(id="hy-gn-null", inline=True, value=[],
+                                options=[{"label": "Re-paired", "value": "repaired"},
+                                         {"label": "Phase-scrambled", "value": "phase"}]),
+                  hint="None ticked reads every null whose draws are on disk."),
             field("ROI mapping",
                   dbc.Input(id="hy-gn-roi-mapping", type="text",
                             placeholder="path to roi.json, optional"),
@@ -237,7 +237,7 @@ def _group_null_section():
         ),
         subtitle="Averages the channels before ranking, once per occasion and once over the "
                  "cohort, so it tests the pairing as a whole, not each channel. Reads what "
-                 "nirspipe-hyper-pairnull wrote and runs no transform, so one chromophore at a time.",
+                 "nirspipe-hyper-pairnull wrote and runs no transform.",
     ))
 
 
@@ -280,6 +280,8 @@ def _run_panel():
     return card("Run",
         actions(
             dbc.Button("Run", id="hy-run-btn", color="success"),
+            dbc.Button("Stop", id="hy-stop-btn", color="danger",
+                       outline=True, disabled=True),
             dbc.Button("Generate command", id="hy-generate-btn",
                        color="secondary", outline=True),
         ),
@@ -297,6 +299,9 @@ def _run_panel():
 
 layout = dbc.Container([
     dcc.Store(id="hy-command-store"),
+    dcc.Store(id="hy-run-store", storage_type="memory"),
+    # the run is polled rather than waited on; disabled until there is something to poll
+    dcc.Interval(id="hy-run-tick", interval=1000, disabled=True),
 
     html.H3("Hyper Analysis"),
     html.P("Wavelet coherence and inter-subject correlation over dyads, run by nirspipe-hyper "

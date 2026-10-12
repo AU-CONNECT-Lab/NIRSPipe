@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - A tutorial page runs three public dyads from download to the cohort null tests, one command per step
 
 ### Changed
+- GUI Raw QC, Hyper Analysis and Cohort Reports pages stream the command's output and can stop it, as Analysis does
+- GUI Hyper Analysis sends several group-null `--null` and `--chroma` values; none ticked reads every one on disk
 - `nirspipe-rate hyper` reads and writes each member's dyad decisions under `_hyper` only, apart from the run pages' own
 - GUI Data Preparation no longer records channel decisions or writes the raw report; `nirspipe-rate raw` and the Raw QC page do
 - The README is a short overview that links the documentation
