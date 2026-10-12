@@ -8,7 +8,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from nirspipe.interface.components import (
-    PATH, action_field, actions, band, card, field, params, section, switches,
+    PATH, action_field, band, card, field, params, section, switches,
 )
 from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
@@ -191,7 +191,6 @@ def _marker_editor(extra_class=""):
 layout = dbc.Container([
     dcc.Download(id="dp-tsv-download"),
     dcc.Store(id="dp-marker-store",    storage_type="memory"),
-    dcc.Store(id="dp-decisions-store", storage_type="memory"),
     dcc.Interval(id="dp-mount-tick", interval=150, max_intervals=1),
 
     dbc.Row([dbc.Col([html.H3("Data Preparation"), html.Hr()])]),
@@ -265,17 +264,6 @@ layout = dbc.Container([
             ),
             html.Div(id="dp-load-status", className="mt-2 small"),
          key="dp-params", open=False),
-        section("Report",
-            actions(
-                dbc.Button("Write QC report", id="dp-report-btn",
-                           color="secondary", outline=True),
-            ),
-            html.Small("Runs nirspipe-qc prep-raw on the loaded run with the parameters above,"
-                       " and writes the report and its quality record into the output"
-                       " directory.", className="fp-hint d-block mt-1"),
-            html.Div(id="dp-report-status", className="mt-2"),
-            html.Div(id="dp-report-preview", className="mt-2"),
-         key="dp-report", open=False),
     ),
 
     dbc.Tabs([
@@ -439,13 +427,12 @@ layout = dbc.Container([
                       ])),
 
                 _card("Per-channel Metrics",
-                      html.Small("one row per source-detector pair · click chip to cycle: "
-                                 "— → good → bad · auto-saves",
+                      html.Small("one row per source-detector pair · channel decisions are "
+                                 "made in nirspipe-rate raw",
                                  className="text-muted d-block mb-2"),
-                      html.Div(id="dp-decisions-table",
-                               children=html.Small("Load a run to rate channels.",
-                                                   className="text-muted")),
-                      html.Div(id="dp-decisions-status", className="mt-1 small text-muted")),
+                      html.Div(id="dp-channel-table",
+                               children=html.Small("Load a run to see its channels.",
+                                                   className="text-muted"))),
 
             ]),
         ]),

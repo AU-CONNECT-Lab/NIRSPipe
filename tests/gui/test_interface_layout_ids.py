@@ -40,7 +40,7 @@ def registered():
     import nirspipe.interface.callbacks.analysis_callbacks      # noqa: F401
     import nirspipe.interface.callbacks.batch_prep_callbacks    # noqa: F401
     import nirspipe.interface.callbacks.data_prep_callbacks     # noqa: F401
-    import nirspipe.interface.callbacks.hyper_align_callbacks    # noqa: F401
+    import nirspipe.interface.callbacks.raw_qc_callbacks        # noqa: F401
     import nirspipe.interface.callbacks.hyper_analysis_callbacks  # noqa: F401
     import nirspipe.interface.callbacks.qc_callbacks            # noqa: F401
     import nirspipe.interface.callbacks.recon_callbacks         # noqa: F401

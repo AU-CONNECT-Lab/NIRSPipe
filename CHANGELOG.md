@@ -7,14 +7,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- GUI Raw QC page runs `nirspipe-qc prep-raw` and `hyper-raw` over several subjects or dyads and names the `nirspipe-rate` command that opens each report
 - `nirspipe-hyper --band-fmin/--band-fmax` set the coherence and correlation bands together; the per-metric band flags override them
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
 - A tutorial page runs three public dyads from download to the cohort null tests, one command per step
 
 ### Changed
+- GUI Data Preparation no longer records channel decisions or writes the raw report; `nirspipe-rate raw` and the Raw QC page do
 - The README is a short overview that links the documentation
 - **Breaking**: `nirspipe-rate rate` keeps one JSON rating file per report page, as `raw` does; `logs/group_ratings.jsonl` lines name the page `stem`
 - `nirspipe-hyper-groupnull` takes several `--null` and `--chroma` values in one run, each defaulting to every null and chromophore whose draws are on disk; a chromophore the draws lack is refused
+
+### Removed
+- GUI Hyper Preparation page; alignment, the dyad raw report and channel decisions are on Batch Prep, Raw QC and `nirspipe-rate hyper`
 
 ### Fixed
 - `nirspipe-rate raw` serves the subject index's figures and tables when the index is opened from the raw report

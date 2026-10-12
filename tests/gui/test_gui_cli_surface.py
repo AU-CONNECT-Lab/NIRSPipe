@@ -88,7 +88,7 @@ _UNBOUND_BY_DESIGN = {
 _APP_LEVEL_IDS = {"dp-run-store"}
 
 # every page whose controls are held against the callbacks that drive them
-_PREFIXES = ("an-", "qc-", "bp-", "dp-", "ha-", "rc-")
+_PREFIXES = ("an-", "qc-", "bp-", "dp-", "rq-", "rc-")
 
 
 def _long_flags(action) -> set[str]:
@@ -259,7 +259,7 @@ def analysis_page():
     import nirspipe.interface.callbacks.analysis_callbacks
     import nirspipe.interface.callbacks.batch_prep_callbacks
     import nirspipe.interface.callbacks.data_prep_callbacks
-    import nirspipe.interface.callbacks.hyper_align_callbacks
+    import nirspipe.interface.callbacks.raw_qc_callbacks
     import nirspipe.interface.callbacks.qc_callbacks
     import nirspipe.interface.callbacks.recon_callbacks  # noqa: F401
 
@@ -664,54 +664,26 @@ def test_one_marker_edit_is_sent_at_a_time():
         assert not (others & set(argv)), f"{marker_op} also sent {sorted(others & set(argv))}"
 
 
-# ── The two QC pages → nirspipe-qc prep-raw / hyper-raw ─────────────────────────
+# ── The Raw QC page → nirspipe-qc prep-raw / hyper-raw ─────────────────────────
 
-# These are the static counterparts of what Data Preparation and Hyper Preparation show
-# interactively. Both take a BIDS root, which is what separates them from the aggregate
-# commands on the Cohort Reports page.
+# Both take a BIDS root, which is what separates them from the aggregate commands on the
+# Cohort Reports page.
 RAW_QC_NOT_EXPOSED = {
-    "prep-raw": {
-        # the page screens on SCI alone, and its figures are drawn against that. A second
-        # threshold here could be set to a number the viewer never used
-        "--psp-threshold", "--min-good-frac", "--screen-scope",
-        # the page shows one run at a time, so there is no second condition to split by
-        "--by-condition",
-        # the raw report is the recording before correction; the page has no control for it
-        # because nothing it draws is motion-corrected, nor for the settings only a
-        # correction reads
-        "--motion-correction", "--motion-std-thresh", "--wavelet-iqr",
-        "--skip-bids-validation", "--no-skip-bids-validation",
-        # channels.tsv is read by default, as the pipeline reads it; the off switch only
-        # matters when checking a run that passed it, which the page cannot know
-        "--ignore",
-        # a file path, and the page has no file picker
-        "--roi-mapping",
-    },
-    "hyper-raw": {
-        "--psp-threshold", "--min-good-frac", "--screen-scope",
-        # alignment and normalisation are what the page itself does and shows; the report
-        # is of the recordings as they are, so it does not re-decide them
-        "--normalize", "--no-normalize", "--no-align",
-        # the analysis window belongs to Hyper Analysis, which is where a window changes a
-        # result. Here it would only trim what the report draws
-        "--tstart", "--tend",
-        # the page reads a task per row out of the group CSV
-        "--task-label",
-        "--skip-bids-validation", "--no-skip-bids-validation",
-        # the page reads its dyads out of the group CSV, as for --task-label
-        "--participant-label", "--participant_label",
-        # a file path, and the page has no file picker
-        "--roi-mapping",
-        "--ignore",
-    },
+    # the off spelling is the default, so a switch left off already says it
+    "prep-raw": {"--no-skip-bids-validation"},
+    "hyper-raw": {"--no-skip-bids-validation", "--no-normalize"},
 }
 
 _RAW_QC_FULL_OPTS = dict(
-    bids_dir="/bids", output_dir="/out", subject="001", ses="01", task="tapping",
+    bids_dir="/bids", output_dir="/out", subjects="001 002", ses="01", task="tapping",
     dpf=6.0, cardiac_l=0.7, cardiac_h=1.5, sci_threshold=0.8,
-    window_length=10.0, epoch_tmin=-5.0, epoch_tmax=25.0, epoch_qc=True,
+    psp_threshold=0.1, min_good_frac=0.75, screen_scope="task",
+    roi_mapping="/roi.json", ignore_channel_status=True, skip_bids_validation=True,
+    window_length=10.0, epoch_tmin=-5.0, epoch_tmax=25.0, epoch_qc=True, by_condition=True,
+    motion_correction="spline_wavelet", motion_std_thresh=13.0, wavelet_iqr=0.8,
     short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
     pairs_csv="/pairs.csv", group_id="G01", derivatives_dir="/deriv",
+    normalize=True, no_align=True, tstart=0.0, tend=300.0,
 )
 
 
@@ -778,6 +750,39 @@ def test_the_raw_reports_take_a_bids_directory():
     for command in _RAW_QC:
         argv = build_raw_qc_args(command, _RAW_QC_FULL_OPTS)
         assert argv[2] == "/bids"
+
+
+
+def test_several_subjects_reach_the_raw_report_as_one_label_each():
+    argv = build_raw_qc_args("prep-raw", _RAW_QC_FULL_OPTS)
+    labels = [argv[i + 1] for i, a in enumerate(argv) if a == "--participant-label"]
+    assert labels == ["001", "002"]
+    assert missing_raw_qc("prep-raw", dict(_RAW_QC_FULL_OPTS, subjects="  ")) is not None
+
+
+def test_the_motion_preview_sends_only_the_settings_its_method_reads():
+    tddr = build_raw_qc_args("prep-raw", dict(_RAW_QC_FULL_OPTS, motion_correction="tddr"))
+    assert "--motion-correction" in tddr
+    assert not {"--motion-std-thresh", "--wavelet-iqr"} & set(tddr)
+    none = build_raw_qc_args("prep-raw", dict(_RAW_QC_FULL_OPTS, motion_correction="none"))
+    assert "--motion-correction" not in none
+
+
+def test_half_a_trial_window_is_not_sent():
+    argv = build_raw_qc_args("prep-raw", dict(_RAW_QC_FULL_OPTS, epoch_tmax=None))
+    assert not {"--epoch-tmin", "--epoch-tmax"} & set(argv)
+
+
+def test_the_page_names_the_viewer_that_opens_what_it_wrote():
+    from nirspipe.cli.rate import _build_parser as rate_parser
+    from nirspipe.interface.callbacks.raw_qc_callbacks import rate_commands
+
+    subject_lines = rate_commands("prep-raw", _RAW_QC_FULL_OPTS)
+    assert len(subject_lines) == 2
+    dyad_lines = rate_commands("hyper-raw", _RAW_QC_FULL_OPTS)
+    for line in subject_lines + dyad_lines:
+        assert line.startswith("nirspipe-rate ")
+        rate_parser().parse_args(line.split()[1:])   # raises SystemExit on an unknown flag
 
 
 # ---- an empty field takes the mode's default ----

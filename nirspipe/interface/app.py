@@ -30,13 +30,13 @@ _CONTENT_EXPANDED  = {"marginLeft": "200px", "padding": "1.25rem 1.5rem", "trans
 _CONTENT_COLLAPSED = {"marginLeft": "44px",  "padding": "1.25rem 1.5rem", "transition": "margin-left 0.2s"}
 
 
-# Two families: the QC pages load one recording and show it, and no single CLI covers
-# them; the batch pages assemble a command and run it, one CLI each.
+# Two families: Data Preparation loads one recording to look at and edit, which no single
+# CLI covers; the batch pages assemble a command and run it, one CLI each.
 _NAV = [
-    ("Quality control", [("Data Preparation", "/"),
-                         ("Hyper Preparation", "/hyper-align")]),
+    ("Interactive", [("Data Preparation", "/")]),
     ("Batch", [("Recon", "/recon"),
                ("Batch Prep", "/batch-prep"),
+               ("Raw QC", "/raw-qc"),
                ("Analysis", "/analysis"),
                ("Hyper Analysis", "/hyper-analysis"),
                ("Cohort Reports", "/qc")]),
@@ -117,7 +117,7 @@ def launch(port: int | None = None) -> None:
     import nirspipe.interface.callbacks.data_prep_callbacks
     import nirspipe.interface.callbacks.recon_callbacks
     import nirspipe.interface.callbacks.batch_prep_callbacks
-    import nirspipe.interface.callbacks.hyper_align_callbacks
+    import nirspipe.interface.callbacks.raw_qc_callbacks
     import nirspipe.interface.callbacks.analysis_callbacks
     import nirspipe.interface.callbacks.hyper_analysis_callbacks
     import nirspipe.interface.callbacks.qc_callbacks  # noqa: F401  (side effect: registers callbacks)

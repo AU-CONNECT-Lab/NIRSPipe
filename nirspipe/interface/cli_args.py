@@ -8,6 +8,8 @@ what stops the two surfaces drifting apart.
 
 from __future__ import annotations
 
+from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
+
 # nirspipe-qc commands whose whole argument list is one output_dir
 _AGGREGATE = ("cohort", "cohort-hyper", "provenance")
 
@@ -243,20 +245,42 @@ def missing_prep(operation: str, opts: dict) -> str | None:
 
 # ---- nirspipe-qc raw reports ----
 
-# the static counterparts of what the two QC pages show interactively
+# the Raw QC page's two commands
 _RAW_QC = ("prep-raw", "hyper-raw")
 
 
 def _screening(opts: dict) -> list[str]:
     args = _num("--sci-threshold", opts.get("sci_threshold"))
+    args += _num("--psp-threshold", opts.get("psp_threshold"))
+    args += _num("--min-good-frac", opts.get("min_good_frac"))
+    args += _text("--screen-scope", opts.get("screen_scope"))
     args += _num("--dpf", opts.get("dpf"))
     args += _num("--cardiac-l-freq", opts.get("cardiac_l"))
     args += _num("--cardiac-h-freq", opts.get("cardiac_h"))
     args += _num("--short-max-dist", opts.get("short_max_dist"))
     args += _num("--long-min-dist", opts.get("long_min_dist"))
     args += _num("--long-max-dist", opts.get("long_max_dist"))
-    args += _text("--session-label", opts.get("ses"))
-    args += _text("--task-label", opts.get("task"))
+    args += _split("--participant-label", opts.get("subjects"))
+    args += _split("--session-label", opts.get("ses"))
+    args += _split("--task-label", opts.get("task"))
+    args += _text("--roi-mapping", opts.get("roi_mapping"))
+    if opts.get("ignore_channel_status"):
+        args += ["--ignore", "channel-status"]
+    if opts.get("skip_bids_validation"):
+        args.append("--skip-bids-validation")
+    return args
+
+
+def _motion(opts: dict) -> list[str]:
+    method = opts.get("motion_correction")
+    if not method or method == "none":
+        return []
+    args = ["--motion-correction", method]
+    # only to a method that reads it: the CLI refuses the setting anywhere else
+    if opts.get("motion_std_thresh") is not None and method in STD_THRESH_DEFAULTS:
+        args += ["--motion-std-thresh", str(opts["motion_std_thresh"])]
+    if opts.get("wavelet_iqr") is not None and method in IQR_FACTOR_DEFAULTS:
+        args += ["--wavelet-iqr", str(opts["wavelet_iqr"])]
     return args
 
 
@@ -264,27 +288,34 @@ def build_raw_qc_args(command: str, opts: dict) -> list[str]:
     args = ["nirspipe-qc", command, opts.get("bids_dir"), opts.get("output_dir")]
 
     if command == "prep-raw":
-        args += _text("--participant-label", opts.get("subject"))
         args += _screening(opts)
         args += _num("--window-length", opts.get("window_length"))
-        args += _num("--epoch-tmin", opts.get("epoch_tmin"))
-        args += _num("--epoch-tmax", opts.get("epoch_tmax"))
+        # both edges or neither: the CLI refuses half a window
+        if opts.get("epoch_tmin") is not None and opts.get("epoch_tmax") is not None:
+            args += _num("--epoch-tmin", opts["epoch_tmin"])
+            args += _num("--epoch-tmax", opts["epoch_tmax"])
         if opts.get("epoch_qc"):
             args.append("--epoch-qc")
-        return args
+        if opts.get("by_condition"):
+            args.append("--by-condition")
+        return args + _motion(opts)
 
     args.append("group")
     args += _text("--derivatives-dir", opts.get("derivatives_dir"))
     args += _text("--pairs-csv", opts.get("pairs_csv"))
     args += _text("--group-id", opts.get("group_id"))
     args += _screening(opts)
+    if opts.get("normalize"):
+        args.append("--normalize")
+    if opts.get("no_align"):
+        args.append("--no-align")
+    args += _num("--tstart", opts.get("tstart"))
+    args += _num("--tend", opts.get("tend"))
     return args
 
 
 def missing_raw_qc(command: str, opts: dict) -> str | None:
     if not opts.get("bids_dir") or not opts.get("output_dir"):
-        if command == "hyper-raw":
-            return "Set the BIDS and nirspipe-hyper directories."
         return "Set the BIDS and output directories."
     # these four have no defaults anywhere, by design
     if opts.get("sci_threshold") is None:
@@ -294,5 +325,5 @@ def missing_raw_qc(command: str, opts: dict) -> str | None:
     if opts.get("cardiac_l") is None or opts.get("cardiac_h") is None:
         return "Both ends of the cardiac band are required."
     if command == "prep-raw":
-        return None if opts.get("subject") else "Load a run first."
+        return None if (opts.get("subjects") or "").split() else "Enter at least one subject."
     return None if opts.get("pairs_csv") else "Set the group CSV."

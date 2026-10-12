@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import json
 import re
 from pathlib import Path
 import hashlib
@@ -14,12 +13,10 @@ import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from nirspipe.utils import is_marker, pair_of
-from nirspipe.interface.callbacks._cli_run import run_and_report
 from nirspipe.interface.callbacks._sections import rng, summary, value
-from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from nirspipe.interface.grid import rows_minus_clicked
 from nirspipe.interface.theme import style_figure
-from nirspipe.io.derivatives import channel_decisions_path, subject_labels
+from nirspipe.io.derivatives import subject_labels
 from nirspipe.qc.common.channel_table import channel_columns
 from nirspipe.utils.logging import get_logger
 
@@ -1112,65 +1109,8 @@ def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_
         return dbc.Alert(f"Crop failed: {exc}", color="danger", className="mb-0 py-2")
 
 
-# ── Channel Decisions ─────────────────────────────────────────────────────────
-
-_CD_STATES = ["unrated", "good", "bad"]
-_CD_COLOR  = {"unrated": "outline-secondary", "good": "success", "bad": "danger"}
-_CD_LABEL  = {"unrated": "—", "good": "good", "bad": "bad"}
-
-
-def _decisions_file_info(snirf_path: str, output_dir: str) -> tuple[Path, str]:
-    """Return (decisions_json_path, run_label) for the given snirf file."""
-    entities  = _parse_bids_entities(Path(snirf_path).stem)
-    sub       = entities.get("sub", "unknown")
-    ses       = entities.get("ses")
-    task      = entities.get("task")
-    run       = entities.get("run")
-    run_parts = [f"sub-{sub}"]
-    if ses:  run_parts.append(f"ses-{ses}")
-    if task: run_parts.append(f"task-{task}")
-    # the run entity separates two recordings of one task inside the file, not across files
-    if run:  run_parts.append(f"run-{run}")
-    return (channel_decisions_path(Path(output_dir), sub, task=task, session=ses),
-            "_".join(run_parts))
-
-
-def _read_decisions(dec_path: Path, run_label: str) -> dict:
-    if not dec_path.exists():
-        return {}
-    try:
-        data = json.loads(dec_path.read_text(encoding="utf-8"))
-        return data.get(run_label, {})
-    except Exception:
-        return {}
-
-
-def _write_decisions(dec_path: Path, run_label: str, run_decisions: dict) -> None:
-    existing: dict = {}
-    if dec_path.exists():
-        try:
-            existing = json.loads(dec_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    existing[run_label] = run_decisions
-    dec_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def _cd_btn(pair: str, state: str) -> dbc.Button:
-    s = state if state in _CD_STATES else "unrated"
-    return dbc.Button(
-        _CD_LABEL[s],
-        id={"type": "dp-cd-btn", "index": pair},
-        color=_CD_COLOR[s],
-        size="sm",
-        n_clicks=0,
-        style={"minWidth": "3.5rem", "fontSize": "0.78rem"},
-    )
-
-
-# the same columns the subject report and the raw viewer print, in the same order: the
-# decision chip is added beside them here, and the HbO-HbR correlation is a haemoglobin
-# measurement this intensity view has no stage for. The saturated share is not on this page.
+# the same columns the subject report and the raw viewer print, in the same order; the
+# HbO-HbR correlation is a haemoglobin measurement this intensity view has no stage for. The saturated share is not on this page.
 _CH_COLUMNS = channel_columns(("corr", "saturated", "separation"))
 _CELL_COLOR = {"bad": "#c0392b", "good": "#27ae60", "neg": "#27ae60", "pos": "#c0392b"}
 _TH_STYLE = {"padding": "4px 8px", "fontWeight": "600", "fontSize": "0.8rem",
@@ -1211,15 +1151,14 @@ def _build_split_table(split: dict) -> "html.Div | None":
     ])
 
 
-def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
-                            run_decisions: dict) -> html.Div:
-    """Per-channel metrics with the rating decision as the last column.
+def _build_channel_table(pair_cells: list[dict], blocks: list, notes: list) -> html.Div:
+    """Per-channel metrics, one row per source-detector pair.
 
     Rows arrive from nirspipe.qc.common.channel_table with their numbers formatted and their
     cells classed, so this table, the raw viewer's and the subject report's cannot print one
     channel three ways.
     """
-    n_cols = len(_CH_COLUMNS) + 1  # the columns, plus the decision chip
+    n_cols = len(_CH_COLUMNS)
 
     def _cell(cell: dict, key: str) -> html.Td:
         # the name identifies the row rather than scoring it, so it carries the rejection
@@ -1235,11 +1174,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
                               "color": _CELL_COLOR.get(cell.get(f"{key}_cls", ""), "#6c757d")})
 
     def _row(cell: dict) -> html.Tr:
-        decision = html.Td(_cd_btn(cell["name"],
-                                   run_decisions.get(f"{cell['name']} hbo", "unrated")),
-                           style={"padding": "2px 6px",
-                                  "borderBottom": "1px solid #f0f0f0"})
-        return html.Tr([*(_cell(cell, key) for key, _ in _CH_COLUMNS), decision])
+        return html.Tr([_cell(cell, key) for key, _ in _CH_COLUMNS])
 
     body_rows: list = []
     # group headers only when the montage split into more than one block
@@ -1251,8 +1186,7 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
         body_rows.extend(_row(cell) for cell in block)
 
     table = html.Table(
-        [html.Thead(html.Tr([html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS]
-                            + [html.Th("Decision", style=_TH_STYLE)])),
+        [html.Thead(html.Tr([html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS])),
          html.Tbody(body_rows)],
         style={"borderCollapse": "collapse", "width": "100%", "fontSize": "0.82rem"},
     )
@@ -1261,149 +1195,37 @@ def _build_decisions_table(pair_cells: list[dict], blocks: list, notes: list,
     return html.Div([*warnings, html.Div(table, style={"overflowX": "auto"})])
 
 
-def _cached_channels(cache_key) -> tuple[list, list, list]:
-    """The run's per-channel rows as ``(pair_cells, blocks, notes)``, empty when uncached.
-
-    One reader for both decisions callbacks, since they render the same table.
-    """
-    channels = (_RESULT_CACHE.get(cache_key, {}) or {}).get("channels") or {}
-    return channels.get("pairs", []), channels.get("blocks", []), channels.get("notes", [])
-
-
 @callback(
-    Output("dp-decisions-store", "data"),
-    Output("dp-decisions-table", "children"),
+    Output("dp-channel-table", "children"),
     Input("dp-run-store", "data"),
-    State("app-output-dir",   "data"),
     prevent_initial_call=True,
 )
-def load_decisions(store, output_dir):
+def render_channel_table(store):
     if not store:
-        return no_update, no_update
-    pair_cells, blocks, notes = _cached_channels(store.get("cache_key"))
+        return no_update
+    channels = (_RESULT_CACHE.get(store.get("cache_key"), {}) or {}).get("channels") or {}
+    pair_cells = channels.get("pairs", [])
     if not pair_cells:
-        return {}, html.Small("No channels found.", className="text-muted")
-
-    run_decisions = {}
-    state: dict = {"snirf_path": store["snirf_path"]}
-    if output_dir:
-        dec_path, run_label = _decisions_file_info(store["snirf_path"], output_dir)
-        run_decisions       = _read_decisions(dec_path, run_label)
-        state.update({"output_dir": output_dir, "run_label": run_label,
-                      "dec_path": str(dec_path), "run_decisions": run_decisions})
-
-    return state, _build_decisions_table(pair_cells, blocks, notes, run_decisions)
-
-
-@callback(
-    Output("dp-decisions-store", "data",    allow_duplicate=True),
-    Output("dp-decisions-table", "children",allow_duplicate=True),
-    Output("dp-decisions-status","children"),
-    Input({"type": "dp-cd-btn", "index": ALL}, "n_clicks"),
-    State("dp-decisions-store", "data"),
-    State("dp-run-store",       "data"),
-    prevent_initial_call=True,
-)
-def click_cd(_, dec_state, run_store):
-    if not dec_state or not ctx.triggered_id:
-        return no_update, no_update, no_update
-    triggered = ctx.triggered_id
-    if not isinstance(triggered, dict) or triggered.get("type") != "dp-cd-btn":
-        return no_update, no_update, no_update
-
-    pair          = triggered["index"]
-    run_decisions = dict(dec_state.get("run_decisions", {}))
-    hbo, hbr      = f"{pair} hbo", f"{pair} hbr"
-    cur           = run_decisions.get(hbo, "unrated")
-    new           = _CD_STATES[(_CD_STATES.index(cur) + 1) % len(_CD_STATES)]
-    run_decisions[hbo] = new
-    run_decisions[hbr] = new
-
-    dec_state = {**dec_state, "run_decisions": run_decisions}
-
-    if dec_state.get("dec_path"):
-        try:
-            _write_decisions(Path(dec_state["dec_path"]),
-                             dec_state["run_label"], run_decisions)
-            msg = "Saved."
-        except Exception as exc:
-            msg = f"Save failed: {exc}"
-    else:
-        msg = "No output dir set: decisions not saved."
-
-    pair_cells, blocks, notes = _cached_channels((run_store or {}).get("cache_key"))
-    table = _build_decisions_table(pair_cells, blocks, notes, run_decisions)
-    return dec_state, table, msg
-
-
-# ── Static QC report for the loaded run ──────────────────────────────────────
-
-@callback(
-    Output("dp-report-status",  "children"),
-    Output("dp-report-preview", "children"),
-    Input("dp-report-btn",  "n_clicks"),
-    State("dp-run-store",   "data"),
-    State("dp-bids-dir",    "value"),
-    State("dp-output-dir",  "value"),
-    State("dp-sci-thresh",  "value"),
-    State("dp-dpf",         "value"),
-    State("dp-cardiac-l",   "value"),
-    State("dp-cardiac-h",   "value"),
-    State("dp-window-s",    "value"),
-    State("dp-epoch-tmin",  "value"),
-    State("dp-epoch-tmax",  "value"),
-    State("dp-epoch-qc",    "value"),
-    State("dp-short-max-dist", "value"),
-    State("dp-long-min-dist",  "value"),
-    State("dp-long-max-dist",  "value"),
-    prevent_initial_call=True,
-)
-def write_raw_report(
-    n_clicks, store, bids_dir, output_dir, sci_thresh, dpf, cardiac_l, cardiac_h,
-    window_s, epoch_tmin, epoch_tmax, epoch_qc, short_max, long_min, long_max,
-):
-    entities = _parse_bids_entities(Path(store["snirf_path"]).name) if store else {}
-    opts = {
-        "bids_dir": bids_dir, "output_dir": output_dir,
-        "subject": entities.get("sub"), "ses": entities.get("ses"),
-        "task": entities.get("task"),
-        "sci_threshold": sci_thresh, "dpf": dpf,
-        "cardiac_l": cardiac_l, "cardiac_h": cardiac_h,
-        "window_length": window_s,
-        "epoch_tmin": epoch_tmin, "epoch_tmax": epoch_tmax,
-        "epoch_qc": bool(epoch_qc),
-        "short_max_dist": short_max, "long_min_dist": long_min, "long_max_dist": long_max,
-    }
-
-    problem = missing_raw_qc("prep-raw", opts)
-    if problem:
-        return dbc.Alert(problem, color="warning", className="mb-0 py-2"), None
-
-    argv = build_raw_qc_args("prep-raw", opts)
-    return run_and_report({"argv": argv, "command": "prep-raw", "output_dir": output_dir})
+        return html.Small("No channels found.", className="text-muted")
+    return _build_channel_table(pair_cells, channels.get("blocks", []), channels.get("notes", []))
 
 
 @callback(
     Output("dp-params-summary", "children"),
-    Output("dp-report-summary", "children"),
     Input("dp-sci-thresh", "value"), Input("dp-window-s", "value"),
     Input("dp-dpf", "value"),
     Input("dp-cardiac-l", "value"), Input("dp-cardiac-h", "value"),
     Input("dp-epoch-tmin", "value"), Input("dp-epoch-tmax", "value"),
     Input("dp-epoch-qc", "value"),
     Input("dp-short-max-dist", "value"), Input("dp-long-min-dist", "value"),
-    Input("dp-report-status", "children"),
 )
-def section_summaries(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
-                      short_max, long_min, report_status):
-    return (
-        summary(value("SCI", sci), value("window", window, " s"), value("DPF", dpf),
-                rng("cardiac", card_l, card_h, " Hz"),
-                rng("epoch", tmin, tmax, " s"),
-                "per-trial QC" if epoch_qc else None,
-                rng("separations", short_max, long_min, " mm")),
-        "written" if report_status else "nirspipe-qc prep-raw",
-    )
+def params_summary(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
+                   short_max, long_min):
+    return summary(value("SCI", sci), value("window", window, " s"), value("DPF", dpf),
+                   rng("cardiac", card_l, card_h, " Hz"),
+                   rng("epoch", tmin, tmax, " s"),
+                   "per-trial QC" if epoch_qc else None,
+                   rng("separations", short_max, long_min, " mm"))
 
 
 # ── The drift cutoff this run's own markers allow ────────────────────────────
