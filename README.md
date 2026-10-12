@@ -57,15 +57,25 @@ The cardiac and respiration bands depend on the population and have no default. 
 
 ### Hyperscanning
 
-Wavelet coherence and inter-subject correlation for every dyad, read from the tree `nirspipe` wrote, with the dyads listed in a pairs table (`group_id,subject_id,task`, one row per member):
+Wavelet coherence (WTC) and inter-subject correlation (ISC) for every dyad, read from the tree `nirspipe` wrote. The dyads are listed in a pairs table (`group_id,subject_id,task`, one row per member) and the regions in a JSON file mapping each region label to its channel names. Each measure gets its own phase-scrambled null:
 
 ```bash
 nirspipe-hyper /data/derivatives /data/hyper group \
-  --pairs-csv pairs.csv \
-  --band-fmin 0.02 --band-fmax 0.10
+  --pairs-csv pairs.csv --roi-mapping roi.json \
+  --band-fmin 0.02 --band-fmax 0.10 \
+  --wtc-phase-null 100 --isc-phase-null 100
 ```
 
-The nulls and the cohort test are in [Hyperscanning](docs/hyperscanning.md); the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
+The re-paired null pairs each member with people from the other dyads who did the same task, for both measures; the cohort test then ranks each dyad's mean against both nulls:
+
+```bash
+nirspipe-hyper-pairnull /data/derivatives /data/hyper group \
+  --pairs-csv pairs.csv --roi-mapping roi.json
+nirspipe-hyper-groupnull /data/hyper group --task-label main \
+  --roi-mapping roi.json
+```
+
+[Hyperscanning](docs/hyperscanning.md#nulls) explains what each null controls for; the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
 
 ## Commands
 
