@@ -29,6 +29,8 @@ The sidebar has two groups. **Interactive** holds Data Preparation, which loads 
 
 A study usually moves down the table: convert with Recon, fix markers on Data Preparation and roll the fix out with Batch Prep, write the raw reports on Raw QC, rate them in `nirspipe-rate`, then run Analysis, Hyper Analysis and Cohort Reports. Channel decisions are taken in `nirspipe-rate` only; no GUI page records them.
 
+The screenshots on this page come from the [tutorial](tutorial.md) run through the GUI, its folder mapped to the drive `S:` so the paths stay short.
+
 ## When to use the GUI
 
 - **Use the GUI for:** looking at a recording, fixing markers, configuring a run without typing every flag, launching the raw reports and the analyses.
@@ -46,15 +48,15 @@ The batch pages that write derivatives (Batch Prep, Raw QC, Analysis, Hyper Anal
 Run uses the command from the last **Generate command**, not the current form, so an edit made after generating is not in what runs.
 :::
 
-Closing the browser tab does not stop a command, but nothing will be watching it: use **Stop** if you want it to end. The **Shell** picker sets the line-continuation style of the printed command (`bash`, `cmd`, PowerShell) and follows the platform by default.
+Closing the browser tab does not stop a command, but nothing will be watching it: use **Stop** if you want it to end. The **Shell** picker sets the line-continuation style of the printed command (`bash`, `cmd`, PowerShell) and follows the platform by default. The printed command puts each positional argument on its own line and each flag beside its values, and quotes every path for the chosen shell, so it pastes into that shell as it stands.
 
-Raw QC, Hyper Analysis and Cohort Reports embed the report the command wrote once it succeeds, with its path printed above the frame. A command that writes tables rather than a page says so, and a command that should have written a page and did not shows a warning instead.
+Raw QC, Hyper Analysis and Cohort Reports embed the report the command wrote once it succeeds, with its path and an **Open in a new tab** link above the frame. The frame is as tall as the browser window, so the report scrolls inside it and keeps its own tabs in view. A command that writes tables rather than a page says so, and a command that should have written a page and did not shows a warning instead.
 
 Recon streams the same way, one command per file, with **Run all** and **Stop** but no **Generate command**: its preview follows the table as you edit it. The two edit buttons on Data Preparation run a short command per click and wait for it, then show the command and what it printed.
 
 ## Shared state across pages
 
-The BIDS and output directories typed on Data Preparation or Batch Prep are kept in browser session storage and fill the same fields on Batch Prep and Analysis. Everything else a page holds (the loaded run, the marker table, a generated command) lives in memory only: refreshing the page or restarting `nirspipe-gui` clears it.
+The BIDS and output directories typed on Data Preparation or Batch Prep are kept in browser session storage and fill the same fields on Batch Prep and Analysis when those pages are opened. Everything else a page holds (the loaded run, the marker table, a generated command) lives in memory only: refreshing the page or restarting `nirspipe-gui` clears it.
 
 :::{note}
 The GUI runs with `debug=False`. Tracebacks are not shown in the browser; check the terminal where `nirspipe-gui` was launched for any errors.
@@ -66,6 +68,13 @@ The **Data Preparation** page loads one subject's run so you can look at it, edi
 
 URL: `http://localhost:8050/`
 
+```{figure} figures/gui_dataprep.png
+:alt: The Data Preparation page with a run loaded, its Signal Topo, optode layout, PSD, crop and marker cards
+:width: 100%
+
+Data Preparation with sub-101's drawing run loaded: Signal Topo averages each channel per condition, the optode layout colours each channel by SCI, and the Crop and Markers cards show the four renamed blocks.
+```
+
 ---
 
 ### Data source
@@ -73,7 +82,7 @@ URL: `http://localhost:8050/`
 | Field | Required | Notes |
 |-------|----------|-------|
 | **BIDS directory** | Yes | The BIDS dataset root. |
-| **Output directory** | Yes | Where edited and cropped SNIRFs are written, and where loaded runs are cached. |
+| **Output directory** | Yes | Where edited and cropped SNIRFs are written, and where loaded runs are cached. Created if it does not exist. |
 
 ### Subject
 
@@ -101,13 +110,10 @@ The settings are read when a run is selected, and with the same settings the pag
 ### Panels
 
 #### Signal Topo
-Raw HbO / HbR per channel arranged by topographic position. Click a trace to select the channel; the selection is shared with the other panels.
+Raw HbO / HbR per channel, each in a cell at the channel's position on the head. A run with markers shows one average per condition over the **Epoch window**, named in the legend below the head; a run without them shows the continuous signal. Click a trace to select the channel; the selection is shared with the other panels.
 
 #### Optode Layout (2D)
 2D source-detector map. Each channel is coloured by its windowed SCI against the **SCI threshold**: green at or above it, amber down to 0.625 of it, red below that. A rejected channel, by screening or by `channels.tsv`, is grey whatever its SCI. Click a channel to select it.
-
-#### 3D (fsaverage)
-The same channel layout projected onto the fsaverage cortical surface, each line running from source to detector and each channel coloured long, short or unclassified by separation. View-only.
 
 #### Channel Detail
 HbO and HbR time series for the selected channel, with that channel's power spectrum below. The dropdown also lets you pick a channel pair by name.
@@ -192,8 +198,9 @@ URL: `http://localhost:8050/recon`
 One `nirspipe-recon` invocation per row, in the line-continuation style of the shell you pick. Paths are quoted, so a folder with spaces pastes correctly.
 
 ```bash
-nirspipe-recon "/data/raw/sub01_run1.snirf" \
-  "/data/bids" \
+nirspipe-recon \
+  '/data/raw/sub01_run1.snirf' \
+  '/data/bids' \
   --participant-label 01 \
   --task-label tapping \
   --optode-frame head
@@ -223,6 +230,7 @@ URL: `http://localhost:8050/batch-prep`
 |-------|-------|
 | **BIDS directory** | Source SNIRFs. |
 | **Derivatives directory** | Where edited SNIRFs are written. |
+| **Skip BIDS validation** | `--skip-bids-validation`, sent with every operation. |
 
 ### Subjects
 
@@ -330,6 +338,13 @@ The **Raw QC** page writes the quality reports on the recordings as delivered, b
 
 URL: `http://localhost:8050/raw-qc`
 
+```{figure} figures/gui_rawqc.png
+:alt: The Raw QC page after a dyad run, with the form, the command, its log and the dyad report embedded
+:width: 100%
+
+Raw QC after `nirspipe-qc hyper-raw` on the tutorial's three dyads: the command and its log on the right, the rating commands under them, and the newest dyad report below the form.
+```
+
 ---
 
 ### Scope
@@ -395,6 +410,13 @@ The **Analysis** page configures and launches the full `nirspipe` pipeline (prep
 
 URL: `http://localhost:8050/analysis`
 
+```{figure} figures/gui_analysis.png
+:alt: The Analysis page filled in for a denoise run, with the generated command and the stage schematic
+:width: 100%
+
+The Analysis page set up as the tutorial's preprocessing step, after the run: the command it generated on the right, and the schematic of the denoise stages below the form.
+```
+
 ---
 
 ### Scope
@@ -405,7 +427,7 @@ URL: `http://localhost:8050/analysis`
 | **Output directory** | `output_dir` (positional) | |
 | **Session label(s)** | `--session-label` | Space-separated; optional. |
 | **Task label(s)** | `--task-label` | Space-separated; optional. |
-| **Detect subjects** | `--participant-label` | Scans BIDS and lists the subjects; each selected one becomes a `--participant-label`. |
+| **Detect subjects** | `--participant-label` | Scans BIDS and lists the subjects; the selected ones become its values. |
 | **Run record** + **Load settings** | | Fills the form from a run record; see below. |
 
 #### Loading a run record
@@ -504,6 +526,8 @@ See [Postprocessing](workflows.md#postprocessing) for the GLM details.
 | **No report** | `--no-report` |
 | **Combine runs** | `--combine-runs` |
 
+**Dry run** starts switched on, so a run launched without touching it writes each subject's run record and nothing else. Switch it off to process the data.
+
 **Generate Command**, **Run Pipeline** and **Stop** work as described in [How a page runs its command](#how-a-page-runs-its-command).
 
 ### Choosing the drift cutoff
@@ -527,16 +551,26 @@ The lower bound is the field above it: a basis that does not cover what the filt
 The exact `nirspipe` command that would run. Copy and paste into your terminal:
 
 ```bash
-nirspipe /data/bids /data/output participant \
-    --participant-label 11 \
-    --dpf 6.0 \
-    --sci-threshold 0.8 \
-    --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
-    --resp-l-freq 0.1 --resp-h-freq 0.5 \
-    --motion-correction tddr \
-    --mode glm --stim-dur 15 --hrf-model spm --noise-model ar1 \
-    --drift-high-pass 0.01 \
-    --high-pass 0.01 --low-pass 0.5 --resample-sfreq 2.0
+nirspipe \
+  '/data/bids' \
+  '/data/output' \
+  participant \
+  --participant-label 11 \
+  --dpf 6 \
+  --sci-threshold 0.8 \
+  --cardiac-l-freq 0.7 \
+  --cardiac-h-freq 2 \
+  --resp-l-freq 0.1 \
+  --resp-h-freq 0.5 \
+  --motion-correction tddr \
+  --mode glm \
+  --high-pass 0.01 \
+  --low-pass 0.5 \
+  --resample-sfreq 2 \
+  --hrf-model spm \
+  --noise-model ar1 \
+  --drift-high-pass 0.01 \
+  --stim-dur 15
 ```
 
 ### Pipeline DAG
@@ -556,6 +590,13 @@ The view is fixed and fitted to the panel: it does not zoom or pan. **Download P
 The **Hyper Analysis** page drives `nirspipe-hyper`, the hyperscanning pipeline that runs on what the individual pipeline already wrote. It is a separate stage, not a report: the Analysis page produces per-subject derivatives, and this page reads them to measure coupling between the members of a dyad.
 
 URL: `http://localhost:8050/hyper-analysis`
+
+```{figure} figures/gui_hyper.png
+:alt: The Hyper Analysis page after a dyad run, with the form, the command, its log and a dyad landing page embedded
+:width: 100%
+
+Hyper Analysis after the tutorial's dyad analysis: the form as the tutorial fills it, the command and its log on the right, and the newest dyad's landing page below.
+```
 
 ---
 
@@ -588,7 +629,7 @@ Shown for `nirspipe-hyper`, and for `nirspipe-hyper-pairnull`, which reuses part
 | **Source derivatives** | first positional | The tree `nirspipe` wrote, holding `sub-*/nirs/`. Required by `nirspipe-hyper` and `nirspipe-hyper-pairnull`, the two commands that open a member's recording, and must differ from the derivatives directory above. |
 | **Pairs CSV** | `--pairs-csv` | Required. |
 | **Group ID** | `--group-id` | Empty runs every group in the CSV. |
-| **Task label** | `--task-label` | Space-separated for several; each name is passed as its own flag. |
+| **Task label** | `--task-label` | Space-separated for several, all passed under the one flag. |
 | **Source stage** | `--desc` | Default `preproc`. The dropdown offers the haemoglobin stages only, because the earlier ones are refused. |
 | **ROI mapping** | `--roi-mapping` | Required by the ROI options. |
 
@@ -597,8 +638,9 @@ Shown for `nirspipe-hyper`, and for `nirspipe-hyper-pairnull`, which reuses part
 | Field | CLI flag | Notes |
 |-------|----------|-------|
 | **Frequency range (Hz)** | `--wtc-fmin` / `--wtc-fmax` | The axis the coherence is computed on. |
-| **Band averaged over (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` | Empty averages over the whole axis. |
-| **ISC band (Hz)** | `--isc-fmin` / `--isc-fmax` | Its own pair, independent of the one above; set it to the same band to compare the correlation with the coherence. Empty leaves the correlation on whatever the preprocessing passband held. |
+| **Band (Hz)** | `--band-fmin` / `--band-fmax` | One band for both measures: the coherence averages over it, the correlation filters to it. |
+| **WTC band (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` | Coherence only, overriding **Band** for it. Empty takes **Band**, or the whole axis when that is empty too. |
+| **ISC band (Hz)** | `--isc-fmin` / `--isc-fmax` | Correlation only, overriding **Band** for it. Empty takes **Band**, or leaves the correlation on whatever the preprocessing passband held. |
 | **Chromophore** | `--wtc-chroma` | HbO and HbR by default, which costs exactly twice and is a consistency check rather than two results. |
 | **Min channels per ROI** | `--wtc-roi-min-channels` | Drops an ROI cell where either member keeps fewer channels than this. Empty means 1, so one surviving channel keeps a region. |
 | **Equal windows (s)** | `--wtc-window-s` | Empty leaves each condition as the unit. Set, every condition is cut into non-overlapping windows of this length. Needs per-condition results. |
@@ -692,6 +734,13 @@ The **Cohort Reports** page drives `nirspipe-qc`, the cohort aggregates. Every c
 
 URL: `http://localhost:8050/qc`
 
+```{figure} figures/gui_cohort.png
+:alt: The Cohort Reports page after a cohort run, with the cohort report embedded
+:width: 100%
+
+Cohort Reports after `nirspipe-qc cohort` on the tutorial's six members.
+```
+
 ---
 
 ### Scope
@@ -709,4 +758,4 @@ URL: `http://localhost:8050/qc`
 
 ### Run and report preview
 
-**Generate command**, **Run** and **Stop** work as described in [How a page runs its command](#how-a-page-runs-its-command). After a successful run, the newest HTML the command is known to write (`desc-subjects_report.html` or `desc-groups_report.html` at the tree root) is embedded. `provenance` writes graphs rather than a page, so the panel says so instead.
+**Generate command**, **Run** and **Stop** work as described in [How a page runs its command](#how-a-page-runs-its-command). After a successful run, the newest HTML the command is known to write (`desc-subjects_report.html` or `desc-groups_report.html` at the tree root) is embedded. `provenance` writes graphs rather than a page, so the panel says so instead. A tree that holds no quality records stops the cohort commands with an error rather than an empty page.
