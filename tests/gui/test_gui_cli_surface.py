@@ -776,11 +776,19 @@ def test_the_raw_reports_take_a_bids_directory():
 
 
 
-def test_several_subjects_reach_the_raw_report_as_one_label_each():
+def test_several_subjects_reach_the_raw_report_under_one_flag():
     argv = build_raw_qc_args("prep-raw", _RAW_QC_FULL_OPTS)
-    labels = [argv[i + 1] for i, a in enumerate(argv) if a == "--participant-label"]
-    assert labels == ["001", "002"]
+    assert argv.count("--participant-label") == 1
+    assert _build_qc_parser().parse_args(argv[1:]).participant_label == ["001", "002"]
     assert missing_raw_qc("prep-raw", dict(_RAW_QC_FULL_OPTS, subjects="  ")) is not None
+
+
+def test_several_labels_reach_the_pipeline_under_one_flag_each():
+    argv = _build_cli_args({**_FULL_OPTS, "subjects": ["001", "002"], "task_label": "a b"})
+    for flag in ("--participant-label", "--task-label"):
+        assert argv.count(flag) == 1
+    parsed = _build_parser().parse_args(argv[1:])
+    assert parsed.participant_label == ["001", "002"] and parsed.task_label == ["a", "b"]
 
 
 def test_the_motion_preview_sends_only_the_settings_its_method_reads():

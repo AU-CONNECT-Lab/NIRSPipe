@@ -73,3 +73,7 @@ def test_the_report_is_linked_when_it_is_there(tmp_path):
     panel = report_preview({"argv": ["nirspipe-qc", "prep-raw"], "command": "prep-raw",
                             "output_dir": str(tmp_path)})
     assert not isinstance(panel, dbc.Alert)
+    header, frame = panel.children
+    link = header.children[1]
+    assert isinstance(frame, html.Iframe)
+    assert link.href == frame.src and link.target == "_blank"

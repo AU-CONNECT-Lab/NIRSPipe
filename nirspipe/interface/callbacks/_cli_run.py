@@ -168,7 +168,11 @@ def report_preview(stored: dict | None):
             html.Small(f"Looked for {', '.join(patterns)} under {stored['output_dir']}."),
         ], color="warning", className="mb-0")
 
+    url = report_url(report)
     return html.Div([
-        html.Small(str(report), className="text-muted d-block mb-2"),
-        html.Iframe(src=report_url(report), className="fp-report-frame"),
+        html.Div([
+            html.Small(str(report), className="text-muted"),
+            html.A("Open in a new tab", href=url, target="_blank", className="small ms-2"),
+        ], className="mb-2"),
+        html.Iframe(src=url, className="fp-report-frame"),
     ])

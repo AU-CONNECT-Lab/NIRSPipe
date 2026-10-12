@@ -39,8 +39,9 @@ def _text(flag: str, value) -> list[str]:
 
 
 def _split(flag: str, value) -> list[str]:
-    """A space-separated box feeds an nargs="+" flag, which repeats rather than joins."""
-    return [x for item in (value or "").split() for x in (flag, item)]
+    """A space-separated box feeds an nargs="+" flag: the flag once, then every value."""
+    items = (value or "").split()
+    return [flag, *items] if items else []
 
 
 def build_qc_args(command: str, opts: dict) -> list[str]:

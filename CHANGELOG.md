@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs
 - GUI command previews put each flag beside its values and quote paths for the chosen shell
 - GUI Data Preparation creates an output directory that does not exist yet
+- GUI report previews are a window tall and open in a new tab
+- GUI commands give `--participant-label`, `--session-label` and `--task-label` once, followed by all their values
 
 ### Fixed
 - GUI number fields left values off their step grid out of the command, such as a 12 mm separation, 5 phase-null draws or a 0.01 Hz drift cutoff
