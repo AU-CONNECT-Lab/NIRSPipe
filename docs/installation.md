@@ -1,0 +1,79 @@
+---
+title: Installation
+---
+
+# Installation
+
+NIRSPipe needs Python 3.10 or later and is installed from source:
+
+```bash
+git clone https://github.com/AU-CONNECT-Lab/NIRSPipe.git
+cd NIRSPipe
+pip install -e ".[dev]"
+```
+
+Every dependency below is required and is resolved by the install. Check it with:
+
+```bash
+nirspipe --version
+```
+
+## bids-validator
+
+`nirspipe`, `nirspipe-prep` and `nirspipe-qc` check their BIDS input with bids-validator when it is installed, and carry on with a warning when it is not. It runs on [Deno](https://deno.com):
+
+```bash
+deno install -A -g -n bids-validator jsr:@bids/validator
+```
+
+## fsaverage for the brain figures
+
+The 3D brain figures place the optodes on MNE's fsaverage brain, which is downloaded the first time it is needed. On a machine without internet access, fetch it beforehand on one that has it:
+
+```bash
+python -c "import mne; mne.datasets.fetch_fsaverage()"
+```
+
+Without it the brain figures are listed as errors on the run's report page rather than drawn with the optodes off the brain; the rest of the report is unaffected.
+
+## Dependencies
+
+| Package | Version | Role |
+|---------|---------|------|
+| `mne` | ≥ 1.6 | fNIRS signal processing |
+| `mne-nirs` | ≥ 0.7 | fNIRS preprocessing, GLM |
+| `mne-bids` | ≥ 0.14 | BIDS read and write |
+| `pybids` | ≥ 0.16 | BIDS dataset querying |
+| `nilearn` | ≥ 0.10 | GLM design matrix and fitting |
+| `nibabel` | ≥ 3.2 | Surface curvature for the brain renders |
+| `scipy` | ≥ 1.11 | Filters, spectra |
+| `numpy` | ≥ 1.24 | Numerics |
+| `pandas` | ≥ 2.0 | Table I/O |
+| `h5py` | ≥ 3.9 | SNIRF read and write |
+| `plotly` | ≥ 5.18 | Interactive QC figures |
+| `pyvista` | ≥ 0.43 | Off-screen 3D brain renders |
+| `matplotlib` | ≥ 3.8 | Static QC panels |
+| `pillow` | ≥ 10.0 | Stitches the rendered brain views side by side |
+| `jinja2` | ≥ 3.1 | HTML report templates |
+| `joblib` | ≥ 1.3 | Parallel `--n-jobs` dispatch |
+| `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
+| `pycwt` | ≥ 0.4 | Wavelet transform coherence for hyperscanning |
+| `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
+| `tomli` | ≥ 2.0 | TOML reader (Python < 3.11 only) |
+| `flask` | ≥ 3.0 | Rating viewer (`nirspipe-rate`) |
+| `dash` | ≥ 2.16 | GUI (`nirspipe-gui`) |
+| `dash-ag-grid` | ≥ 33 | GUI tables |
+| `dash-bootstrap-components` | ≥ 1.6 | GUI layout |
+| `dash-cytoscape` | ≥ 1.0 | GUI analysis graph |
+
+`tables` (PyTables) is not among them. The package writes no HDF5 file of its own beyond SNIRF; install it yourself to call `save()` on a GLM object the Python API returned.
+
+## Building these docs
+
+The documentation is built with Sphinx. The usage page renders every command's flags from its own parser, so the package has to be installed first:
+
+```bash
+pip install -e .
+pip install -r docs/requirements.txt
+python -m sphinx -E -b html docs docs/_build/site
+```

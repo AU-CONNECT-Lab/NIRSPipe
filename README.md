@@ -22,7 +22,7 @@ Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/
 Python 3.10 or later. Every dependency is resolved by the install:
 
 ```bash
-git clone <repo>
+git clone https://github.com/AU-CONNECT-Lab/NIRSPipe.git
 cd NIRSPipe
 pip install -e ".[dev]"
 ```
@@ -73,7 +73,7 @@ Every flag is listed in [Usage](docs/usage.md).
 
 ## Documentation
 
-See [`docs/`](docs/).
+See <https://au-connect-lab.github.io/NIRSPipe/>.
 
 ## Development
 

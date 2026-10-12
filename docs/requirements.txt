@@ -1,0 +1,11 @@
+# Docs build dependencies, on top of the package itself: the usage page renders every
+# command's flags from its argparse parser, so install nirspipe first (pip install -e .).
+sphinx>=9.1
+myst-parser>=5.1
+sphinx-autodoc2>=0.5
+sphinx-book-theme>=1.4
+sphinx-design>=0.7
+sphinxcontrib-bibtex>=2.7
+# renders the pipeline flow diagrams client-side; no graphviz binary needed
+sphinxcontrib-mermaid>=1.0
+sphinx-argparse>=0.6

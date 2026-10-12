@@ -1,0 +1,4 @@
+/* the theme caps the whole page at 88rem, which leaves the article column narrow on a wide screen */
+.bd-page-width {
+  max-width: 100%;
+}

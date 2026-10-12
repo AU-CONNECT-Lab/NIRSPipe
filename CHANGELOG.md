@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
+
+### Changed
+- The README is a short overview that links the documentation
+
 ## [0.67.0] - 2026-10-11
 
 ### Added
@@ -14,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - `--motion-correction wavelet_tddr`, the wavelet filtering followed by TDDR; also on the Analysis page
 - `--motion-correction spline_wavelet`, spline at its paper's detection thresholds then wavelet filtering (Di Lorenzo 2019); also on the Analysis page
 - `--motion-std-thresh` and `--wavelet-iqr` set the spline detection threshold and the wavelet fence, defaulting per method; methods that do not read them refuse them
+- Spline motion correction warns in the log and the report when it marks over 10% of the samples; its threshold tightens as the sampling rate rises
 - Each dyad writes its ROI ISC as a long table, `seg-<map>_agg-roi_stat-isc_relmat.tsv`, one row per pairing, chromophore and condition
 
 ### Changed

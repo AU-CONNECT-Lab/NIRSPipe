@@ -4,7 +4,7 @@
 
 
 
-docs/
+docs/api/_generated/
 ### Java ###
 # Compiled class file
 *.class
