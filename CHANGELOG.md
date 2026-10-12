@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- GUI Analysis page takes `--bad-channels`, `--keep-spans` with `--keep-spans-from`, `--bad-spans`, `--events-path` and `--contrast-file`
 - `nirspipe-rate export` writes the viewers' channel decisions as a `--bad-channels` table, and lists every FINAL verdict
 - A `--bad-channels` table takes a `keep_channels` column: pairs screening rejected that a reviewer kept; the Methods name them
 - GUI Raw QC page runs `nirspipe-qc prep-raw` and `hyper-raw` over several subjects or dyads and names the `nirspipe-rate` command that opens each report

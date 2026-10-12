@@ -202,6 +202,15 @@ def _build_cli_args(opts: dict) -> list[str]:
         args += ["--screen-scope", opts["screen_scope"]]
     if opts.get("window_length") is not None:
         args += ["--window-length", str(opts["window_length"])]
+    if opts.get("bad_channels"):
+        args += ["--bad-channels", str(opts["bad_channels"]).strip()]
+    if opts.get("keep_spans"):
+        args += ["--keep-spans", str(opts["keep_spans"]).strip()]
+        # the marker only says where the table's onsets count from
+        if opts.get("keep_spans_from"):
+            args += ["--keep-spans-from", str(opts["keep_spans_from"]).strip()]
+    if opts.get("bad_spans"):
+        args += ["--bad-spans", str(opts["bad_spans"]).strip()]
     # each independently optional: omitting --long-max-dist is how "no upper bound" is said
     for opt_key, flag in (("short_max_dist", "--short-max-dist"),
                           ("long_min_dist", "--long-min-dist"),
@@ -280,6 +289,10 @@ def _build_cli_args(opts: dict) -> list[str]:
             if opts.get("noise_model"): args += ["--noise-model", opts["noise_model"]]
             if opts.get("stim_dur") is not None:
                 args += ["--stim-dur", str(opts["stim_dur"])]
+            if opts.get("events_path"):
+                args += ["--events-path", str(opts["events_path"]).strip()]
+            if opts.get("contrast_file"):
+                args += ["--contrast-file", str(opts["contrast_file"]).strip()]
 
         # rest writes the connectivity products regardless, so the flag would be noise there
         if mode in ("denoise", "glm") and opts.get("fc"):
@@ -344,6 +357,12 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-drift-high-pass",   "value"),
     State("an-drift-order",       "value"),
     State("an-stim-dur",          "value"),
+    State("an-events-path",       "value"),
+    State("an-contrast-file",     "value"),
+    State("an-bad-channels",      "value"),
+    State("an-keep-spans",        "value"),
+    State("an-keep-spans-from",   "value"),
+    State("an-bad-spans",         "value"),
     State("an-roi-mapping",       "value"),
     State("an-fc",                "value"),
     State("an-flags",             "value"),
@@ -363,6 +382,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
                      resample, n_jobs,
                      hrf_model, noise_model, short_channel,
                      drift_model, drift_high_pass, drift_order, stim_dur,
+                     events_path, contrast_file,
+                     bad_channels, keep_spans, keep_spans_from, bad_spans,
                      roi_mapping, fc, flags,
                      session_label, task_label, shell):
     if not bids_dir or not output_dir:
@@ -375,6 +396,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         return "Error: cardiac band lower/upper frequency is required (population-dependent).", {}
     if resp_l is None or resp_h is None:
         return "Error: respiration band lower/upper frequency is required (population-dependent).", {}
+    if post_mode == "glm" and stim_dur is not None and events_path:
+        return "Error: give either a stim duration or an events table, not both.", {}
 
     opts = dict(
         bids_dir=bids_dir, output_dir=output_dir, subjects=subjects,
@@ -397,6 +420,9 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         hrf_model=hrf_model, noise_model=noise_model, short_channel=short_channel,
         drift_model=drift_model, drift_high_pass=drift_high_pass,
         drift_order=drift_order, stim_dur=stim_dur,
+        events_path=events_path, contrast_file=contrast_file,
+        bad_channels=bad_channels, keep_spans=keep_spans,
+        keep_spans_from=keep_spans_from, bad_spans=bad_spans,
         roi_mapping=roi_mapping, fc=bool(fc),
         flags=flags,
     )
@@ -508,6 +534,18 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
                 value("short channel", short_ch), "FC products" if fc else None),
         summary(value("HRF", hrf), value("noise", noise), value("stim", stim_dur, " s")),
     )
+
+
+@callback(
+    Output("an-tables-summary", "children"),
+    Input("an-bad-channels", "value"), Input("an-keep-spans", "value"),
+    Input("an-keep-spans-from", "value"), Input("an-bad-spans", "value"),
+)
+def tables_summary(bad_channels, keep_spans, keep_from, bad_spans):
+    return summary("bad channels" if bad_channels else None,
+                   "keep spans" if keep_spans else None,
+                   value("from", keep_from) if keep_spans else None,
+                   "bad spans" if bad_spans else None) or "none"
 
 
 @callback(

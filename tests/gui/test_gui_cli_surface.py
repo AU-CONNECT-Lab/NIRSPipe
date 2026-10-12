@@ -32,15 +32,9 @@ from nirspipe.interface.cli_args import (
 # Flags the analysis page deliberately does not offer, and why. A flag listed here must still
 # exist in the CLI, and must not also be emitted; both are asserted below.
 NOT_EXPOSED = {
-    "--bad-channels": "a per-subject channel list or a table path, and the page has no file picker",
-    "--keep-spans": "a table path, and the page has no file picker",
-    "--keep-spans-from": "only meaningful with --keep-spans, which the page does not offer",
-    "--bad-spans": "a table path, and the page has no file picker",
     "--epoch-single-trial": "only meaningful when no condition repeats",
     "--gvtd-min-epoch-s": "housekeeping beside the threshold, which is the knob that moves the result",
     "--config": "the form is the config surface; a TOML overriding it would make the preview lie",
-    "--events-path": "a file path, and mutually exclusive with the Stim Duration field",
-    "--contrast-file": "a file path, and the page has no file picker",
     "--fir-delays": "only meaningful with --hrf-model fir",
     "--no-combine-runs": "the negative half of a paired flag; the checkbox emits the positive",
     "--aux-regressors": "withheld pending evaluation; suppressed from --help too",
@@ -65,6 +59,9 @@ _FULL_OPTS = dict(
     hrf_model="spm", noise_model="ar1", short_channel="mean",
     drift_model="cosine", drift_high_pass=0.01, drift_order=1,
     stim_dur=5.0, roi_mapping="/roi.json", fc=True,
+    events_path="/events.tsv", contrast_file="/contrasts.toml",
+    bad_channels="/rated.tsv", keep_spans="/keep.tsv", keep_spans_from="start",
+    bad_spans="/bad.tsv",
     flags=["dry_run", "skip_bids_validation", "no_report", "combine_runs"],
 )
 
@@ -192,7 +189,8 @@ def test_the_generated_command_parses(mode):
 @pytest.mark.parametrize("mode", _MODES)
 def test_the_generated_command_satisfies_its_modes_requirements(mode):
     """GLM and Rest arrive with a drift model, and GLM with its HRF and noise models."""
-    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
+    # the contrast file is read when the config is built, and the fixture path is not on disk
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode, "contrast_file": None})
     args = vars(_build_parser().parse_args(argv[1:]))
     config = _build_post_config("001", None, args, {})
 
@@ -206,7 +204,7 @@ def test_the_generated_command_satisfies_its_modes_requirements(mode):
 
 @pytest.mark.parametrize("mode", _MODES)
 def test_short_channel_reaches_every_mode(mode):
-    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode})
+    argv = _build_cli_args({**_FULL_OPTS, "post_mode": mode, "contrast_file": None})
     assert "--short-channel" in _emitted(post_mode=mode)
     args = vars(_build_parser().parse_args(argv[1:]))
     assert _build_post_config("001", None, args, {}).short_channel == "mean"
@@ -238,6 +236,20 @@ def test_a_motion_setting_goes_only_to_a_method_that_reads_it(method, sent):
     """A hidden field can still hold a value from another method; the CLI would refuse it."""
     emitted = _emitted(post_mode="none", motion_correction=method)
     assert emitted & {"--motion-std-thresh", "--wavelet-iqr"} == sent
+
+
+
+def test_the_keep_spans_marker_goes_only_with_its_table():
+    argv = _build_cli_args({**_FULL_OPTS, "keep_spans": None})
+    assert "--keep-spans-from" not in argv
+    assert "--bad-channels" in argv
+
+
+def test_the_event_and_contrast_tables_go_only_to_a_glm():
+    assert {"--events-path", "--contrast-file"} <= set(
+        _build_cli_args({**_FULL_OPTS, "post_mode": "glm"}))
+    assert not {"--events-path", "--contrast-file"} & set(
+        _build_cli_args({**_FULL_OPTS, "post_mode": "denoise"}))
 
 
 # ---- controls and the callbacks that read them ----
