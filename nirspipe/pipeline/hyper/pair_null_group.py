@@ -571,6 +571,15 @@ def nulls_on_disk(output_dir: Path, task: str) -> list[str]:
                    for suffix in (DRAWS_SUFFIX[null], ISC_DRAWS_SUFFIX[null]))]
 
 
+def chromas_on_disk(output_dir: Path, task: str, null: str) -> list[str]:
+    """The chromophores one null's draws, coherence or correlation, hold for ``task``."""
+    found = set()
+    for suffix in (DRAWS_SUFFIX[null], ISC_DRAWS_SUFFIX[null]):
+        for path in Path(output_dir).rglob(f"group-*_task-{task}{suffix}"):
+            found |= set(pd.read_csv(path, sep="\t", usecols=["chromophore"]).chromophore.dropna())
+    return sorted(found)
+
+
 def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
                      n_resample: int = 20000, seed: int | None = None,
@@ -594,6 +603,13 @@ def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
             f"correlation. The cohort levels are built from the draws a null writes, so "
             f"`nirspipe-hyper pair-null` or a `run --wtc-phase-null` / `--isc-phase-null` has "
             f"to have produced them.")
+    # otherwise every level comes out empty and nothing is written, without an error
+    held = chromas_on_disk(output_dir, task, null)
+    if chroma not in held:
+        raise ValueError(
+            f"no {chroma} draws from the {null} null for task {task} under {output_dir}; "
+            f"they hold {', '.join(held) or 'no chromophore'}. Rerun the null with {chroma}, "
+            f"or ask only for what the draws hold.")
     shared = dict(output_dir=output_dir, task=task, chroma=chroma, null=null, roi_map=roi_map,
                   n_resample=n_resample, seed=seed, p_correction=p_correction)
     written = []

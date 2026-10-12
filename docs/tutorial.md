@@ -107,7 +107,7 @@ The members' markers in dyads 1002 and 1003 disagree by 5 to 30 s after alignmen
 
 ## 6. Nulls
 
-The re-paired null, about a minute, then the cohort test against both nulls. `--chroma hbo` matches the HbO-only run above; leave it out after a run with both chromophores.
+The re-paired null, about a minute, then the cohort test, which reads every null and chromophore the draws hold. `--chroma hbo` on the first command matches the HbO-only run above; leave it out after a run with both chromophores.
 
 ```bash
 nirspipe-hyper-pairnull derivatives hyper group \

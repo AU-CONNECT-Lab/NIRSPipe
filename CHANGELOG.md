@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The README is a short overview that links the documentation
-- `nirspipe-hyper-groupnull` takes several `--null` and `--chroma` values in one run; `--null` defaults to every null whose draws are on disk
+- `nirspipe-hyper-groupnull` takes several `--null` and `--chroma` values in one run, each defaulting to every null and chromophore whose draws are on disk; a chromophore the draws lack is refused
 
 ### Fixed
 - The run report's stage comparison no longer filters an already band-passed stage a second time

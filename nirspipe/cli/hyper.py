@@ -533,12 +533,13 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, chroma: list[str], null: "list[str] | None",
+    output_dir: Path, task: str, chroma: "list[str] | None", null: "list[str] | None",
     roi_mapping: "Path | None", n_resample: int, seed: int | None, verbose: bool,
     p_correction: str = "none", isc_test: str = "signed",
 ) -> None:
     """Read each null's draws above the cell: one verdict per occasion, one per cohort."""
-    from nirspipe.pipeline.hyper.pair_null_group import nulls_on_disk, write_group_null
+    from nirspipe.pipeline.hyper.pair_null_group import (
+        chromas_on_disk, nulls_on_disk, write_group_null)
     from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
 
     setup_logging(verbose=verbose)
@@ -550,8 +551,8 @@ def cmd_group_null(
               "--isc-phase-null, first.", file=sys.stderr)
         raise SystemExit(1)
     # each combination seeded alike, so it matches a run that asked for it alone
-    for one_chroma in chroma:
-        for one_null in nulls:
+    for one_null in nulls:
+        for one_chroma in chroma or chromas_on_disk(output_dir, task, one_null):
             written = write_group_null(output_dir, task=task, chroma=one_chroma,
                                        null=one_null, roi_map=roi_map,
                                        n_resample=n_resample, seed=seed,
@@ -965,9 +966,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
                             required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
-    group_null.add_argument("--chroma", nargs="+", choices=("hbo", "hbr"), default=["hbo"],
-                            help="Chromophores to read (default hbo), each into its own "
-                                 "tables.")
+    group_null.add_argument("--chroma", nargs="+", choices=("hbo", "hbr"), default=None,
+                            help="Chromophores to read, each into its own tables (default "
+                                 "every chromophore the null's draws hold). One the draws do "
+                                 "not hold is refused.")
     group_null.add_argument("--null", nargs="+", choices=("repaired", "phase"), default=None,
                             help="Which nulls' draws to read, each into its own tables "
                                  "(default every null whose draws are on disk for the task). "

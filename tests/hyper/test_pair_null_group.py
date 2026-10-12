@@ -951,7 +951,7 @@ def test_groupnull_takes_several_nulls_and_chromophores():
                               "--null", "repaired", "phase", "--chroma", "hbo", "hbr"])
     assert args.null == ["repaired", "phase"] and args.chroma == ["hbo", "hbr"]
     args = parser.parse_args(["out", "group", "--task-label", "main"])
-    assert args.null is None and args.chroma == ["hbo"]
+    assert args.null is None and args.chroma is None
 
 
 def test_without_null_every_null_on_disk_is_read_as_if_asked_alone(tmp_path):
@@ -979,3 +979,32 @@ def test_groupnull_without_any_draws_stops(tmp_path, capsys):
         cmd_group_null(tmp_path, task="main", chroma=["hbo"], null=None, roi_mapping=None,
                        n_resample=300, seed=3, verbose=False)
     assert "no null draws for task main" in capsys.readouterr().err
+
+
+def _add_hbr_rows(root):
+    """Every table again under HbR, a little lower, so the chromophores differ."""
+    for path in root.rglob("group-*_task-main_*.tsv"):
+        frame = pd.read_csv(path, sep=SEP)
+        hbr = frame.assign(chromophore="hbr")
+        if "coherence" in hbr:
+            hbr["coherence"] = hbr["coherence"] - 0.05
+        pd.concat([frame, hbr]).to_csv(path, sep=SEP, index=False)
+
+
+def test_without_chroma_every_chromophore_the_draws_hold_is_read_on_its_own(tmp_path):
+    from nirspipe.cli.hyper import cmd_group_null
+
+    _write_tree(tmp_path)
+    _add_hbr_rows(tmp_path)
+    cmd_group_null(tmp_path, task="main", chroma=None, null=["repaired"], roi_mapping=None,
+                   n_resample=300, seed=3, verbose=False)
+    hbo = pd.read_csv(tmp_path / _cohort("pair", "cohort", chromophore="hbo"), sep=SEP)
+    hbr = pd.read_csv(tmp_path / _cohort("pair", "cohort", chromophore="hbr"), sep=SEP)
+    # each read from its own rows: the HbR coherence sits 0.05 under the HbO one
+    assert hbr.coherence.to_numpy() == pytest.approx(hbo.coherence.to_numpy() - 0.05)
+
+
+def test_a_chromophore_the_draws_do_not_hold_is_refused(tmp_path):
+    _write_tree(tmp_path)
+    with pytest.raises(ValueError, match="no hbr draws from the repaired null.*they hold hbo"):
+        write_group_null(tmp_path, "main", chroma="hbr", n_resample=300, seed=3)
