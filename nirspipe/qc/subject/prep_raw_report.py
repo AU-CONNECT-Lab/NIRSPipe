@@ -425,17 +425,14 @@ def _process_run(
             "t_end":       t_end,
         }
 
-    # ── inline: layout figures (kept for click interactivity) ──────────────────
+    # ── inline: layout figure (kept for click interactivity) ───────────────────
     layout_inline: dict = {}
     with guard("Optode layout", errors, label):
         # graded by the windowed SCI against the run's own line, as the pipeline's flat map is
-        fig_2d, fig_3d = build_layout_figure(
+        fig_2d = build_layout_figure(
             raw, bad_channels, (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
-            sep_bands, sci_threshold=cutoffs["sci"])
-        layout_inline = {
-            "layout_2d_figure": fig_2d.to_dict() if fig_2d else None,
-            "layout_3d_figure": fig_3d.to_dict() if fig_3d else None,
-        }
+            sci_threshold=cutoffs["sci"])
+        layout_inline = {"layout_2d_figure": fig_2d.to_dict() if fig_2d else None}
 
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000

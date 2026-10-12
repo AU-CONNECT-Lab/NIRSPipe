@@ -279,21 +279,17 @@ layout = dbc.Container([
                 ),
                 width=6,
             ),
-            dbc.Col([
+            dbc.Col(
                 _card("Optode Layout (2D)",
                       html.Small("colour = SCI · click = select channel",
                                  className="text-muted d-block mb-1"),
                       html.Div(id="dp-layout-2d-wrap", style=_HIDDEN, children=[
+                          # as tall as Signal Topo beside it
                           dcc.Graph(id="dp-layout-2d", responsive=True,
-                                    style={"height": "370px"}),
-                      ]),
-                      body_class="p-2"),
-                _card("3D (fsaverage)",
-                      html.Div(id="dp-layout-3d-wrap", style=_HIDDEN, children=[
-                          dcc.Graph(id="dp-layout-3d", responsive=True,
-                                    style={"height": "320px"}),
+                                    style={"aspectRatio": "700 / 760"}),
                       ])),
-            ], width=6),
+                width=6,
+            ),
         ], className="mb-3", align="start"),
 
         # Channel Detail (full width)

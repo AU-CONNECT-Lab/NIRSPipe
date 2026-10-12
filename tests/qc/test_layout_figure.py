@@ -1,8 +1,7 @@
-"""The montage figures of the raw report: where the lines run, and what each channel is drawn as.
+"""The montage figures: what each channel is drawn as.
 
-The 3-D lines are read off MNE's channel loc, whose first three values are the channel
-midpoint and the next six the source and detector. The colours follow the one long/short
-split the reports use, so a channel in the gap between the two ranges is neither.
+The colours follow the one long/short split the reports use, so a channel in the gap between
+the two ranges is neither.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nirspipe.qc.figures.common._brain_utils import to_mni
 from nirspipe.qc.figures.common._utils import (BAND_COLORS, LONG_COLOR, SHORT_COLOR,
                                                   UNCLASSIFIED_COLOR)
 from nirspipe.qc.figures.hyper.hyper_figures import _psd_band_shapes
@@ -25,31 +23,10 @@ def raw():
     return synth_raw("01", "hold", duration=20.0, motion_onset=None)
 
 
-@pytest.fixture
-def no_brain_mesh(monkeypatch):
-    """The fsaverage mesh is decoration here, and fetching it is a download."""
-    import nilearn.datasets
-
-    def _refuse(*args, **kwargs):
-        raise OSError("mesh not needed for this test")
-    monkeypatch.setattr(nilearn.datasets, "fetch_surf_fsaverage", _refuse)
-
-
-def test_the_3d_lines_run_from_source_to_detector(raw, no_brain_mesh):
-    _, fig_3d = build_layout_figure(raw, set(), {}, sci_threshold=0.8)
-    lines = next(t for t in fig_3d.data if t.type == "scatter3d" and t.mode == "lines")
-    first = np.array([[lines.x[0], lines.y[0], lines.z[0]],
-                      [lines.x[1], lines.y[1], lines.z[1]]])
-
-    loc = raw.info["chs"][0]["loc"]
-    expected = to_mni(np.array([loc[3:6], loc[6:9]]), raw.info)
-    np.testing.assert_allclose(first, expected, atol=1e-6)
-
-
-def test_a_bad_channel_stays_on_the_2d_map_and_is_drawn_grey(raw, no_brain_mesh):
+def test_a_bad_channel_stays_on_the_2d_map_and_is_drawn_grey(raw):
     bad = raw.ch_names[0]
     raw.info["bads"] = [bad]
-    fig_2d, _ = build_layout_figure(raw, {bad}, {}, sci_threshold=0.8)
+    fig_2d = build_layout_figure(raw, {bad}, {}, sci_threshold=0.8)
     channels = fig_2d.data[1]
 
     assert bad in list(channels.customdata)

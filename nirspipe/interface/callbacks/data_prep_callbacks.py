@@ -298,7 +298,6 @@ _SHOW = {}
 
 @callback(
     Output("dp-layout-2d",              "figure"),
-    Output("dp-layout-3d",              "figure"),
     Output("dp-psd-mean",               "figure"),
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
@@ -306,7 +305,6 @@ _SHOW = {}
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
     Output("dp-layout-2d-wrap",         "style"),
-    Output("dp-layout-3d-wrap",         "style"),
     Output("dp-psd-mean-wrap",          "style"),
     Output("dp-evoked-topo-wrap",       "style"),
     Output("dp-trigger-timeline-wrap",  "style"),
@@ -330,7 +328,6 @@ def restore_from_store(store, _tick):
         return style_figure(d) if d else no_update
 
     layout_2d    = _fig(cached, "layout",           "layout_2d_figure")
-    layout_3d    = _fig(cached, "layout",           "layout_3d_figure")
     psd_out      = _fig(cached, "psd",              "figure")
     evoked_topo  = _fig(cached, "evoked_topo",      "figure")
     trigger_tl   = _fig(cached, "trigger_timeline", "figure")
@@ -355,7 +352,6 @@ def restore_from_store(store, _tick):
 
     return (
         layout_2d,
-        layout_3d,
         psd_out,
         marker_rows,
         ch_options,
@@ -363,54 +359,10 @@ def restore_from_store(store, _tick):
         evoked_topo,
         trigger_tl,
         _wrap(layout_2d),
-        _wrap(layout_3d),
         _wrap(psd_out),
         _wrap(evoked_topo),
         _wrap(trigger_tl),
     )
-
-
-# ── Selector → highlight 3D optode ───────────────────────────────────────────
-
-@callback(
-    Output("dp-layout-3d", "figure", allow_duplicate=True),
-    Input("dp-channel-selector", "value"),
-    State("dp-run-store",        "data"),
-    prevent_initial_call=True,
-)
-def highlight_optode_3d(channel_pair, store):
-    if not store:
-        return no_update
-    cached   = _RESULT_CACHE.get(store.get("cache_key"), {})
-    fig_dict = cached.get("layout", {}).get("layout_3d_figure")
-    if not isinstance(fig_dict, dict):
-        return no_update
-    try:
-        traces  = fig_dict.get("data", [])
-        ch_tr   = next((t for t in traces if t.get("name") == "Channels"), None)
-        hl_idx  = next((i for i, t in enumerate(traces) if t.get("name") == "_hl"), None)
-        if ch_tr is None or hl_idx is None:
-            return no_update
-
-        customdata = ch_tr.get("customdata", [])
-        xs, ys, zs = ch_tr.get("x", []), ch_tr.get("y", []), ch_tr.get("z", [])
-
-        # this figure is built on the CW object, so its channels are 'S1_D1 760', not ' hbo'
-        idx = next((i for i, ch in enumerate(customdata)
-                    if pair_of(ch) == channel_pair), None) if channel_pair else None
-        if idx is None:
-            hx, hy, hz = [], [], []
-        else:
-            hx, hy, hz = [xs[idx]], [ys[idx]], [zs[idx]]
-
-        patched = Patch()
-        patched["data"][hl_idx]["x"] = hx
-        patched["data"][hl_idx]["y"] = hy
-        patched["data"][hl_idx]["z"] = hz
-        return patched
-    except Exception as exc:
-        logger.warning("3D optode highlight failed", exc_info=exc)
-        return no_update
 
 
 def _placeholder_fig(msg: str, height: int = 220) -> dict:

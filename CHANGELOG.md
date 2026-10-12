@@ -18,6 +18,9 @@ All notable changes to this project will be documented in this file.
 - GUI commands give `--participant-label`, `--session-label` and `--task-label` once, followed by all their values
 - GUI Data Preparation keeps the Signal Topo legend below the head and shows whole marker descriptions
 
+### Removed
+- GUI Data Preparation's 3D fsaverage layout card; the 2D optode layout stays
+
 ### Fixed
 - GUI number fields left values off their step grid out of the command, such as a 12 mm separation, 5 phase-null draws or a 0.01 Hz drift cutoff
 - `nirspipe-qc cohort`, `cohort-hyper` and the `group` level exited 0 over a tree without quality records, `cohort` writing an empty page

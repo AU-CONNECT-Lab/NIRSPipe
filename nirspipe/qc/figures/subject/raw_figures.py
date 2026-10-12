@@ -11,7 +11,6 @@ from nirspipe.utils import is_marker, pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans
 
-from nirspipe.qc.figures.common._brain_utils import mni_trans
 from nirspipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
     LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
@@ -426,18 +425,16 @@ def build_layout_figure(
     raw: mne.io.Raw,
     bad_channels: set[str],
     sci_scores: dict[str, float],
-    sep_bands: "Bands | None" = None,
     *,
     sci_threshold: float,
-) -> tuple[go.Figure | None, go.Figure | None]:
+) -> go.Figure | None:
     chs = raw.info["chs"]
     ch_names = raw.ch_names
-    colors = _ch_colors(raw, sep_bands)
 
     ch_locs = np.array([ch["loc"][:3] for ch in chs])
     has_positions = np.any(ch_locs != 0)
 
-    fig_2d = fig_3d = None
+    fig_2d = None
 
     if has_positions:
         # bads stay in, or the grey they are drawn in below never reaches them
@@ -518,82 +515,7 @@ def build_layout_figure(
             ),
         )
 
-        trans     = mni_trans(raw.info)
-        coords_mm = mne.transforms.apply_trans(trans, ch_locs) * 1000
-
-        seen3: set = set()
-        lx, ly, lz = [], [], []
-        for ch in chs:
-            # loc[:3] is the channel midpoint; the source and detector follow it
-            src, det = ch["loc"][3:6], ch["loc"][6:9]
-            key = tuple(round(float(v), 5) for v in np.concatenate([src, det]))
-            if key in seen3 or not (np.any(src) or np.any(det)):
-                continue
-            seen3.add(key)
-            src_m = mne.transforms.apply_trans(trans, src.reshape(1, 3))[0] * 1000
-            det_m = mne.transforms.apply_trans(trans, det.reshape(1, 3))[0] * 1000
-            lx += [float(src_m[0]), float(det_m[0]), None]
-            ly += [float(src_m[1]), float(det_m[1]), None]
-            lz += [float(src_m[2]), float(det_m[2]), None]
-
-        traces_3d = []
-        try:
-            from nilearn import datasets, surface as surf
-            fsavg5 = datasets.fetch_surf_fsaverage(mesh="fsaverage5")
-            for key in ("pial_left", "pial_right"):
-                verts, faces = surf.load_surf_mesh(fsavg5[key])
-                traces_3d.append(go.Mesh3d(
-                    x=verts[:, 0].tolist(), y=verts[:, 1].tolist(), z=verts[:, 2].tolist(),
-                    i=faces[:, 0].tolist(), j=faces[:, 1].tolist(), k=faces[:, 2].tolist(),
-                    color="#e3e3e3", opacity=0.55, flatshading=False,
-                    lighting=dict(ambient=0.85, diffuse=0.5, specular=0.4, fresnel=0.6),
-                    lightposition=dict(x=100, y=200, z=300),
-                    hoverinfo="skip", showlegend=False,
-                ))
-        except Exception as exc:
-            logger.warning("brain mesh skipped: %s", exc)
-
-        if lx:
-            traces_3d.append(go.Scatter3d(
-                x=lx, y=ly, z=lz, mode="lines",
-                line=dict(color="#95a5a6", width=4),
-                hoverinfo="skip", showlegend=False,
-            ))
-
-        ch_colors_3d = [
-            "#7f8c8d" if n in bad_channels else colors[i]
-            for i, n in enumerate(ch_names)
-        ]
-        traces_3d += [
-            go.Scatter3d(
-                x=coords_mm[:, 0].tolist(), y=coords_mm[:, 1].tolist(),
-                z=coords_mm[:, 2].tolist(), mode="markers",
-                marker=dict(size=7, color=ch_colors_3d, opacity=0.92,
-                            line=dict(width=0.5, color="#333")),
-                customdata=ch_names,
-                hovertemplate="<b>%{customdata}</b><br>%{x:.1f}, %{y:.1f}, %{z:.1f} mm<extra></extra>",
-                name="Channels", showlegend=True,
-            ),
-            go.Scatter3d(x=[], y=[], z=[], mode="markers",
-                         marker=dict(size=14, color="#f39c12", opacity=1.0,
-                                     line=dict(width=1.5, color="#e67e22")),
-                         hoverinfo="skip", showlegend=False, name="_hl"),
-        ]
-        fig_3d = go.Figure(
-            data=traces_3d,
-            layout=go.Layout(
-                scene=dict(
-                    xaxis=dict(visible=False), yaxis=dict(visible=False),
-                    zaxis=dict(visible=False),
-                    camera=dict(eye=dict(x=0, y=-1.9, z=0.6)), bgcolor="#ffffff",
-                ),
-                margin=dict(l=0, r=0, t=0, b=0),
-                paper_bgcolor="#ffffff", height=700,
-                legend=dict(x=0.01, y=0.99, font=dict(size=9)),
-            ),
-        )
-
-    return fig_2d, fig_3d
+    return fig_2d
 
 
 def _psd_groups(
