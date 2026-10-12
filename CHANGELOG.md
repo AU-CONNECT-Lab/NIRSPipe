@@ -13,9 +13,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The README is a short overview that links the documentation
+- **Breaking**: `nirspipe-rate rate` keeps one JSON rating file per report page, as `raw` does; `logs/group_ratings.jsonl` lines name the page `stem`
 - `nirspipe-hyper-groupnull` takes several `--null` and `--chroma` values in one run, each defaulting to every null and chromophore whose draws are on disk; a chromophore the draws lack is refused
 
 ### Fixed
+- `nirspipe-rate raw` serves the subject index's figures and tables when the index is opened from the raw report
+- `nirspipe-rate hyper` refuses channel decisions for anyone outside the dyad
 - The run report's stage comparison no longer filters an already band-passed stage a second time
 - The cohort report's over-time grid aligns runs sampled at different rates onto one time axis, so its band and run lines draw again
 - `--keep-spans` help said unselected time was left out of the GLM and confound fits only; it is left out of every estimate

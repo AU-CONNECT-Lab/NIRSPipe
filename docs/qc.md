@@ -255,11 +255,11 @@ When the default port is busy the server takes the next free one; a port given w
 
 | Viewer | Section ratings | Channel decisions |
 |--------|-----------------|-------------------|
-| `rate` | `sub-<id>/figures/sub-<id>_ratings.toml`, every save appended to `logs/group_ratings.jsonl` | none |
+| `rate` | `sub-<id>/nirs/<page>_desc-rating_qc.json`, every save appended to `logs/group_ratings.jsonl` | none |
 | `raw` | `sub-<id>/nirs/<page>_desc-rawrating_qc.json`, every save appended to `logs/group_raw_ratings.jsonl` | `sub-<id>/nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json` |
 | `hyper` | `group-<id>/nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
 
-The channel decisions file is shared with the GUI's preparation pages. `--sci-threshold` on `raw` and `hyper` outlines in orange every windowed SCI cell below a second line, as a reading aid; no verdict changes. Ratings are not aggregated across reports; read the JSONL logs or the sidecars. A log holds one JSON object per line, one line per save, carrying what was rated (`subject` in `group_ratings.jsonl`, the page's `stem` in `group_raw_ratings.jsonl`), the save time `rated_at`, each section's verdict and the comments, so the current ratings are the line with the latest `rated_at`.
+The channel decisions file is shared with the GUI's preparation pages. `--sci-threshold` on `raw` and `hyper` outlines in orange every windowed SCI cell below a second line, as a reading aid; no verdict changes. Ratings are not aggregated across reports; read the JSONL logs or the sidecars. A log holds one JSON object per line, one line per save, carrying the rated page's `stem`, the save time `rated_at`, each section's verdict and the comments, so the current ratings are the line with the latest `rated_at`.
 
 ## Methods text
 

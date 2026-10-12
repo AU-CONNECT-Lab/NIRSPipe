@@ -36,10 +36,10 @@
 {% set nav_modules = [nav_bar(_sections, key=_rk, siblings=nav_links or [],
                               index=index_href or "")] %}
 {% set nav_chip = "sub-" ~ subject %}
-{% set rating_subject = "sub-" ~ subject %}
+{% set rating_subject = page_stem %}
 {% set rating_pinned = [{"id": "Final" ~ _rk, "name": "FINAL", "href": "#Final"}] %}
 {% set rating_save_endpoint = "/save_ratings" %}
-{% set rating_load_endpoint = "/load_ratings/sub-" ~ subject %}
+{% set rating_load_endpoint = "/load_ratings/" ~ page_stem %}
 
 {# The subject report reads as a document, so its header is a titled band rather than the
    sticky nav bar the dashboard reports carry. #}

@@ -29,6 +29,14 @@ def test_there_is_one_page_per_block(condition_run):
     assert pages == [f"sub-01_task-main_cond-{b}_report.html" for b in _blocks(condition_run)]
 
 
+def test_each_page_rates_under_its_own_stem(condition_run):
+    pages = [condition_run.report, *condition_run.report.parent.glob("*_cond-*_report.html")]
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert f'var participantId = "{page.stem}"' in html
+        assert f'"/load_ratings/{page.stem}"' in html
+
+
 @pytest.mark.parametrize("block", ["ca", "cb"])
 def test_each_page_rejects_what_the_run_rejected_and_colours_its_own_coupling(condition_run, block):
     _check_condition_grid(_grid(_figure(condition_run, "chsummary", block, "qc")), condition_run, block)

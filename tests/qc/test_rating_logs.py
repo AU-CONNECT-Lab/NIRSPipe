@@ -6,14 +6,16 @@ from nirspipe.qc.rating.app import FNIRSRatingApp, RawRatingApp
 
 
 def test_the_subject_rating_log_goes_under_logs(tmp_path):
-    FNIRSRatingApp(tmp_path, ["01"])._append_jsonl("01", {"carpet": "good"}, {})
+    FNIRSRatingApp(tmp_path, ["01"]).app.test_client().post(
+        "/save_ratings", json={"id": "sub-01_task-rest_report", "ratings": {"carpet": "good"}})
     assert (tmp_path / "logs" / "group_ratings.jsonl").exists()
     assert not list(tmp_path.glob("*.jsonl"))
 
 
 def test_the_raw_rating_log_goes_under_logs(tmp_path):
     html = tmp_path / "sub-01" / report_name("sub-01_task-rest", desc="raw")
-    RawRatingApp(html, tmp_path)._append_jsonl(html.stem, {"carpet": "good"}, {})
+    RawRatingApp(html, tmp_path).app.test_client().post(
+        "/save_raw_ratings", json={"id": html.stem, "ratings": {"carpet": "good"}})
     assert (tmp_path / "logs" / "group_raw_ratings.jsonl").exists()
     assert not list(tmp_path.glob("*.jsonl"))
 

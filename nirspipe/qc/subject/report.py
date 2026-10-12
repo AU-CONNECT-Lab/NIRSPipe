@@ -2142,6 +2142,7 @@ def build_subject_report(
         motion_split_columns=measured_columns(
             MOTION_SPLIT_COLUMNS, *(sqm_vars["motion_sets"] or {}).values()),
         subject=subject,
+        page_stem=out_path.stem,
         run_label=sqm_label,
         run_entities={k: v for k, v in entities_of(sqm_label or "").items() if v},
         index_href=(report_name(f"sub-{subject}", desc="index") if sqm_label else None),
@@ -2712,6 +2713,7 @@ def _write_condition_reports(
                 and entry.get("kept_s") is not None and entry.get("window_s") else ""),
             # what keeps this page's rating keys out of the run's; see the template's `_rk`
             "condition_slug": slug,
+            "page_stem": Path(_page_name(label)).stem,
             "index_href": out_path.name,
         }
         leaks = _figure_leaks(page, _pair_fname(label))
