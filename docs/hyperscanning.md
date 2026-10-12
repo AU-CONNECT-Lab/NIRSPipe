@@ -39,7 +39,7 @@ A typical cohort, after `nirspipe ... participant` has run for every member:
 ```bash
 nirspipe-hyper /data/derivatives/nirspipe /data/derivatives/nirspipe-hyper group \
     --pairs-csv pairs.csv --roi-mapping rois.json \
-    --wtc-band-fmin 0.01 --wtc-band-fmax 0.10 --isc-fmin 0.01 --isc-fmax 0.10 \
+    --band-fmin 0.01 --band-fmax 0.10 \
     --wtc-phase-null 100 --isc-phase-null 100
 nirspipe-hyper-pairnull /data/derivatives/nirspipe /data/derivatives/nirspipe-hyper group \
     --pairs-csv pairs.csv --roi-mapping rois.json
@@ -78,7 +78,7 @@ Before anything expensive starts, every dyad prints its channel budget:
 
 ## Wavelet transform coherence
 
-Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/8`) over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number tables carry is the **band mean**, the coherence averaged over `--wtc-band-fmin` to `--wtc-band-fmax` (the whole axis by default) and over time, with its Fisher z.
+Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/8`) over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number tables carry is the **band mean**, the coherence averaged over `--wtc-band-fmin` to `--wtc-band-fmax` (by default `--band-fmin` to `--band-fmax`, else the whole axis) and over time, with its Fisher z.
 
 - **Cone of influence.** By default the band mean averages only the cells outside the cone of influence, the cells the edges of the record reach. `--no-wtc-mask-coi` averages the whole band. The share of band cells that held a value is written as `n_valid_frac` either way.
 - **Chromophores.** HbO and HbR are two separate passes, a member's HbO paired only with the other's HbO, never mixed or averaged. `--wtc-chroma` picks `hbo`, `hbr` or `both` (the default); every band-mean table has a `chromophore` column.
@@ -124,7 +124,7 @@ ISC is the Pearson correlation between the long channels of the two members, wri
 
 All of its options are off by default, so a run naming none reports the zero-lag correlation of the signals themselves.
 
-- `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation, and before a window is cut. Without them the correlation reads whatever band preprocessing left. Set them to the coherence band; the run warns when the two differ.
+- `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation, and before a window is cut. Without them, or `--band-fmin` / `--band-fmax`, which set the coherence band and this one together, the correlation reads whatever band preprocessing left. The run warns when the two bands differ.
 - `--isc-whiten-s SECONDS` correlates the residuals of an autoregressive model, by the coherence's rule with an order of its own. Whitening shrinks r, so a whitened matrix does not compare with an unwhitened one.
 - `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way, sign kept, and writes the shift as `lag_s`, positive where the second member follows. The maximum over many shifts is larger than any single one under no coupling, so pair it with `--isc-phase-null`.
 - `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates of the second member, searched the same way, adding `null_abs_mean`, `null_abs_sd`, `null_abs_p95` and `percentile` and keeping every draw.

@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `nirspipe-hyper --band-fmin/--band-fmax` set the coherence and correlation bands together; the per-metric band flags override them
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
 - A tutorial page runs three public dyads from download to the cohort null tests, one command per step
 

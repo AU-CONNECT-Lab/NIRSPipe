@@ -84,13 +84,12 @@ Writes `derivatives/desc-subjects_report.html` and `derivatives/desc-subjects_qc
 ```bash
 nirspipe-hyper derivatives hyper group \
     --pairs-csv pairs.csv --desc errts --roi-mapping roi.json \
-    --wtc-band-fmin 0.02 --wtc-band-fmax 0.10 \
-    --isc-fmin 0.02 --isc-fmax 0.10 \
+    --band-fmin 0.02 --band-fmax 0.10 \
     --wtc-chroma hbo \
     --wtc-phase-null 5 --isc-phase-null 100 --wtc-seed 1
 ```
 
-About 6 minutes. `--wtc-chroma hbo` keeps coherence and correlation to HbO, which halves the time, and five WTC scrambles is a tutorial setting, far below what a study needs. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
+About 6 minutes. Two settings only save time here. Five coherence scrambles is far too few; a study uses about 100, as the correlation does. `--wtc-chroma hbo` limits both measures to HbO; without it HbO and HbR are both computed, which doubles the time. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
 
 Then the raw quality page for each dyad, under a minute:
 
@@ -108,7 +107,7 @@ The members' markers in dyads 1002 and 1003 disagree by 5 to 30 s after alignmen
 
 ## 6. Nulls
 
-The re-paired null, about a minute, then the cohort test against both nulls:
+The re-paired null, about a minute, then the cohort test against both nulls. `--chroma hbo` matches the HbO-only run above; leave it out after a run with both chromophores.
 
 ```bash
 nirspipe-hyper-pairnull derivatives hyper group \
@@ -126,4 +125,16 @@ nirspipe-hyper-merge hyper group
 nirspipe-qc cohort-hyper hyper
 ```
 
-The merged tables land at the top of `hyper/`, one per kind (`stat-wtc_relmat.tsv`, `stat-isc_relmat.tsv`, ...), and the cohort page is `hyper/desc-groups_report.html`. [Outputs](outputs.md) lists every file both trees hold, and [QC](qc.md) and [Hyperscanning](hyperscanning.md) explain the pages.
+## What was written
+
+| File | What it is | Explained in |
+|---|---|---|
+| `derivatives/sub-101/sub-101_desc-index_report.html` | One person: every run and condition page | [The run report](qc.md#the-run-report), [Condition pages](qc.md#condition-pages) |
+| `derivatives/desc-subjects_report.html` | All six people compared | [Cohort of runs](qc.md#cohort-of-runs) |
+| `hyper/group-1001/group-1001_desc-index_report.html` | One dyad: coherence, correlation, nulls | [Dyad analysis report](qc.md#dyad-analysis-report) |
+| `hyper/group-1001/group-1001_ses-02_task-drawing_desc-raw_report.html` | One dyad: raw quality and shared usable time | [Raw dyad report](qc.md#raw-dyad-report) |
+| `hyper/desc-groups_report.html` | All three dyads' quality compared | [Cohort of dyads](qc.md#cohort-of-dyads) |
+| `hyper/task-drawing_desc-groupnull_report.html` | The cohort tests against both nulls | [Above the channel](hyperscanning.md#above-the-channel-nirspipe-hyper-groupnull) |
+| `hyper/stat-wtc_relmat.tsv`, `hyper/stat-isc_relmat.tsv`, ... | Merged tables, one per kind, one row per dyad, pairing and condition | [The nirspipe-hyper tree](outputs.md#the-nirspipe-hyper-tree) |
+
+[Outputs](outputs.md) lists every file both trees hold.
