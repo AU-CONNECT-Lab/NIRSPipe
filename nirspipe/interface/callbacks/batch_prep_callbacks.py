@@ -259,6 +259,7 @@ def _write_segments(deriv_dir: str, rows) -> str:
     State("bp-keep-duration", "value"),
     State("bp-group-csv",   "value"),
     State("bp-n-jobs",      "value"),
+    State("bp-flags",       "value"),
     State("bp-shell-select", "value"),
     prevent_initial_call=True,
 )
@@ -268,7 +269,7 @@ def generate_command(
     operation, marker_op, shift_val, duration_val, rename_rows,
     crop_mode, crop_tmin, crop_tmax, seg_rows, combine_val,
     keep_conditions, keep_duration,
-    group_csv, n_jobs, shell,
+    group_csv, n_jobs, flags, shell,
 ):
     subjects = []
     if isinstance(subjects_container, dict):
@@ -283,6 +284,7 @@ def generate_command(
         "segments": seg_rows, "combine": bool(combine_val),
         "conditions": _condition_names(keep_conditions), "keep_duration": keep_duration,
         "group_csv": group_csv,
+        "skip_bids_validation": "skip_bids_validation" in (flags or []),
     }
 
     problem = missing_prep(operation, opts)

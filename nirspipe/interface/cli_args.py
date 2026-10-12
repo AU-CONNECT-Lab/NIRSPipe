@@ -99,6 +99,8 @@ def build_qc_args(command: str, opts: dict) -> list[str]:
         args += _text("--roi-mapping", opts.get("roi_mapping"))
         args += _num("--wtc-fmin", opts.get("wtc_fmin"))
         args += _num("--wtc-fmax", opts.get("wtc_fmax"))
+        args += _num("--band-fmin", opts.get("shared_band_fmin"))
+        args += _num("--band-fmax", opts.get("shared_band_fmax"))
         args += _num("--wtc-band-fmin", opts.get("wtc_band_fmin"))
         args += _num("--wtc-band-fmax", opts.get("wtc_band_fmax"))
         args += _num("--wtc-mc-count", opts.get("wtc_mc_count"))
@@ -171,7 +173,11 @@ def _selection(opts: dict) -> list[str]:
     args += _text("--task-label", opts.get("task"))
     args += _text("--run-label", opts.get("run"))
     args += _num("--n-jobs", opts.get("n_jobs"))
-    return args
+    return args + _skip_validation(opts)
+
+
+def _skip_validation(opts: dict) -> list[str]:
+    return ["--skip-bids-validation"] if opts.get("skip_bids_validation") else []
 
 
 def build_prep_args(operation: str, opts: dict) -> list[str]:
@@ -180,7 +186,7 @@ def build_prep_args(operation: str, opts: dict) -> list[str]:
     # align selects its subjects through the group CSV, so it takes no selection flags
     if operation == "hyper_align":
         return ["nirspipe-prep", "align", bids, deriv,
-                *_text("--group-csv", opts.get("group_csv"))]
+                *_text("--group-csv", opts.get("group_csv")), *_skip_validation(opts)]
 
     if operation == "markers":
         args = ["nirspipe-prep", "edit-markers", "apply", bids, deriv, *_selection(opts)]

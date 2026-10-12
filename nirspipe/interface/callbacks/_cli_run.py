@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
@@ -86,9 +87,41 @@ def poll_run_and_report(run_id, stored: dict | None):
     return status, report_preview(stored) if returncode == 0 else None, True, True, False
 
 
+_CONTINUATION = {"bash": "\\", "cmd": "^", "powershell": "`"}
+# a subcommand or an analysis level; a token that is not one ends the first line
+_WORD = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+# what every shell takes unquoted; anything else, a path included, is quoted
+_PLAIN = re.compile(r"[A-Za-z0-9_.,:=+@%-]+")
+
+
+def _quote(token: str, shell: str) -> str:
+    if _PLAIN.fullmatch(token):
+        return token
+    if shell == "cmd":
+        # the C runtime's rule: backslashes before a quote, the closing one included, double
+        escaped = re.sub(r'(\\*)"', r'\1\1\\"', token)
+        return '"' + re.sub(r"(\\+)$", r"\1\1", escaped) + '"'
+    # single quotes are literal in both, so a trailing backslash or a $ survives
+    if shell == "powershell":
+        return "'" + token.replace("'", "''") + "'"
+    return "'" + token.replace("'", "'\\''") + "'"
+
+
 def preview_text(argv: list[str], shell: str) -> str:
-    cont = {"bash": "\\", "cmd": "^", "powershell": "`"}.get(shell, "\\")
-    return f" {cont}\n".join([" ".join(argv[:2])] + [f"  {a}" for a in argv[2:]])
+    """The argv as a pasteable command: each positional, and each flag with its values, on a line."""
+    first, rest = [argv[0]], list(argv[1:])
+    while rest and _WORD.fullmatch(rest[0]):
+        first.append(rest.pop(0))
+    lines = [" ".join(first)]
+    for token in rest:
+        quoted = _quote(token, shell)
+        # a value follows its flag; a positional, or a flag, starts a line
+        if token.startswith("--") or not lines[-1].lstrip().startswith("--"):
+            lines.append(f"  {quoted}")
+        else:
+            lines[-1] += f" {quoted}"
+    cont = _CONTINUATION.get(shell, "\\")
+    return f" {cont}\n".join(lines)
 
 
 # The landing page each command writes, newest match wins. A command absent from this table

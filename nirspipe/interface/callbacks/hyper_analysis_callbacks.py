@@ -32,6 +32,7 @@ _STATES = [
     State("hy-pairs-csv", "value"), State("hy-group-id", "value"),
     State("hy-desc", "value"), State("hy-roi-mapping", "value"),
     State("hy-wtc-fmin", "value"), State("hy-wtc-fmax", "value"),
+    State("hy-shared-band-fmin", "value"), State("hy-shared-band-fmax", "value"),
     State("hy-wtc-band-fmin", "value"), State("hy-wtc-band-fmax", "value"),
     State("hy-wtc-mc-count", "value"), State("hy-wtc-seed", "value"),
     State("hy-isc-threshold", "value"),
@@ -55,7 +56,8 @@ _STATES = [
 ]
 
 _KEYS = ["output_dir", "derivatives_dir", "pairs_csv", "group_id", "desc", "roi_mapping",
-         "wtc_fmin", "wtc_fmax", "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
+         "wtc_fmin", "wtc_fmax", "shared_band_fmin", "shared_band_fmax",
+         "wtc_band_fmin", "wtc_band_fmax", "wtc_mc_count",
          "wtc_seed", "isc_threshold", "wtc_phase_null", "wtc_roi_min_channels",
          "wtc_window_s", "wtc_whiten",
          "isc_whiten", "isc_max_lag", "isc_fmin", "isc_fmax", "isc_phase_null",

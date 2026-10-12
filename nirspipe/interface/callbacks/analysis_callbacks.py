@@ -12,7 +12,7 @@ from dash import Input, Output, State, callback, html, no_update
 from nirspipe import __version__
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import poll_run, start_run
+from nirspipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
 from nirspipe.interface.callbacks._sections import rng, summary, value
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
@@ -440,11 +440,7 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         flags=flags,
     )
     argv = _build_cli_args(opts)
-    # Pretty-print: shell-specific line-continuation per arg group for readability.
-    cont = {"bash": "\\", "cmd": "^", "powershell": "`"}.get(shell, "\\")
-    lines = [argv[0]] + [f"  {a}" for a in argv[1:]]
-    preview = f" {cont}\n".join(lines)
-    return preview, {"argv": argv}
+    return preview_text(argv, shell), {"argv": argv}
 
 
 @callback(

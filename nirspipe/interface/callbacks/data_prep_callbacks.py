@@ -178,7 +178,8 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
              short_max_dist, long_min_dist, long_max_dist, bids_dir, output_dir):
     if not run_path:
         return no_update, no_update
-    if not output_dir or not Path(output_dir).is_dir():
+    # a missing directory is created with the cache below, as the commands create theirs
+    if not output_dir:
         return no_update, dbc.Alert("Set Output Directory first.", color="warning")
     if not bids_dir:
         return no_update, dbc.Alert("Set BIDS Directory first.", color="warning")

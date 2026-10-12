@@ -10,7 +10,7 @@ import dash_bootstrap_components as dbc
 from dash import dcc, html
 
 from nirspipe.interface.components import (
-    FULL, PATH, action_field, actions, card, field, params, section, split,
+    FULL, PATH, action_field, actions, card, field, params, section, split, switches,
 )
 from nirspipe.interface.grid import AUTO_HEIGHT, COL_DEF, DEL_COL
 
@@ -48,6 +48,11 @@ def _scope():
                                 placeholder="/path/to/derivatives"),
                       span=PATH),
             ),
+            switches(dbc.Checklist(
+                id="bp-flags",
+                options=[{"label": "Skip BIDS validation", "value": "skip_bids_validation"}],
+                value=[], inline=True, switch=True,
+            )),
         ),
         # both sections are hidden whole when the operation does not select subjects
         html.Div(id="bp-subjects-card", children=section("Subjects",

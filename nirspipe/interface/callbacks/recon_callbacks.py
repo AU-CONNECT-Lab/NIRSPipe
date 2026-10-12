@@ -9,10 +9,8 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html
 
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import log_panel, poll_run
+from nirspipe.interface.callbacks._cli_run import log_panel, poll_run, preview_text
 from nirspipe.interface.cli_args import build_recon_args
-
-_CONT = {"bash": "\\", "cmd": "^", "powershell": "`"}
 
 
 def _sanitize_label(text: str) -> str:
@@ -52,17 +50,6 @@ def detect_files(n_clicks, input_dir):
     return f"Detected {len(rows)} file(s).", rows
 
 
-def _row_preview(argv: list[str], cont: str) -> str:
-    # the two paths quoted, so a folder with spaces pastes as it stands; a flag keeps its value
-    lines = [f'{argv[0]} "{argv[1]}"', f'  "{argv[2]}"']
-    for token in argv[3:]:
-        if token.startswith("--"):
-            lines.append(f"  {token}")
-        else:
-            lines[-1] += f" {token}"
-    return f" {cont}\n".join(lines)
-
-
 @callback(
     Output("rc-command-preview", "children"),
     Input("rc-table",         "virtualRowData"),
@@ -74,10 +61,9 @@ def _row_preview(argv: list[str], cont: str) -> str:
 def preview_commands(rows, shell, bids_dir, overwrite, optode_frame):
     if not rows:
         return "Detect files to preview commands."
-    cont = _CONT.get(shell, "\\")
     bids_dir = bids_dir or "<output-bids-dir>"
     argvs = [build_recon_args(r, bids_dir, overwrite, optode_frame) for r in rows]
-    cmds = [_row_preview(argv, cont) for argv in argvs if argv is not None]
+    cmds = [preview_text(argv, shell) for argv in argvs if argv is not None]
     if not cmds:
         return "Fill in subject and task for at least one file."
     return "\n\n".join(cmds)

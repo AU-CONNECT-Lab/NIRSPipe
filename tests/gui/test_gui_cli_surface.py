@@ -364,8 +364,6 @@ QC_NOT_EXPOSED = {
             # display only: it decides where a phase arrow is drawn on the WTC maps and
             # changes no table or figure value, so the page has nothing to preview for it
             "--wtc-arrow-min",
-            # a shorthand for the WTC and ISC band fields the page already sends
-            "--band-fmin", "--band-fmax",
             # the page exists to show the report; a run started from it that writes no
             # report leaves the user looking at an empty panel with no way to tell the run
             # from a failure. It is for a batch that will be read as tables
@@ -411,7 +409,8 @@ QC_NOT_EXPOSED = {
 _QC_FULL_OPTS = dict(
     derivatives_dir="/deriv", output_dir="/out", pairs_csv="/pairs.csv", group_id="01",
     desc="errts", roi_mapping="/roi.json",
-    wtc_fmin=0.004, wtc_fmax=0.2, wtc_band_fmin=0.01, wtc_band_fmax=0.1,
+    wtc_fmin=0.004, wtc_fmax=0.2, shared_band_fmin=0.02, shared_band_fmax=0.1,
+    wtc_band_fmin=0.01, wtc_band_fmax=0.1,
     wtc_mc_count=300, wtc_seed=42, isc_threshold=0.3,
     wtc_phase_null=100, wtc_roi_min_channels=2, wtc_chroma="both", wtc_window_s=30.0,
     wtc_whiten=10.0, isc_whiten=10.0, isc_max_lag=2.0, isc_phase_null=100, isc_fmin=0.06, isc_fmax=0.15,
@@ -569,17 +568,16 @@ PREP_NOT_EXPOSED = {
         # cutting a processed stage rather than a recording. The page takes a BIDS root, so
         # offering this would make the two directory fields mean different things per mode
         "--input-desc",
-        # the negative half of a paired flag; the checkbox emits the positive
-        "--no-combine",
-        "--skip-bids-validation", "--no-skip-bids-validation",
+        # the negative halves of paired flags; the switches emit the positive
+        "--no-combine", "--no-skip-bids-validation",
     },
-    "align": {"--skip-bids-validation", "--no-skip-bids-validation"},
-    "keep-spans": {"--skip-bids-validation", "--no-skip-bids-validation"},
+    "align": {"--no-skip-bids-validation"},
+    "keep-spans": {"--no-skip-bids-validation"},
     "edit-markers": {
         # an edited events TSV applied to every subject, and the page has no file picker.
         # Its three radio options are the edits that need no file
         "--tsv",
-        "--skip-bids-validation", "--no-skip-bids-validation",
+        "--no-skip-bids-validation",
     },
 }
 
@@ -590,7 +588,7 @@ _PREP_FULL_OPTS = dict(
     crop_tmin=10.0, crop_tmax=600.0,
     segments_path="/deriv/batch-crop-segments.tsv", combine=True,
     conditions=["talk", "listen"], keep_duration=60.0, keep_spans_path="/deriv/keep-spans.tsv",
-    group_csv="/groups.csv",
+    group_csv="/groups.csv", skip_bids_validation=True,
 )
 
 # every branch of the page's two radios, as (operation, extra opts)

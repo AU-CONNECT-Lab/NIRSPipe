@@ -6,8 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- GUI Batch Prep page takes `--skip-bids-validation`
+- GUI Hyper Analysis page takes `--band-fmin/--band-fmax`; its WTC and ISC band fields override them
+
 ### Changed
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs
+- GUI command previews put each flag beside its values and quote paths for the chosen shell
+- GUI Data Preparation creates an output directory that does not exist yet
 
 ## [0.68.0] - 2026-10-12
 
