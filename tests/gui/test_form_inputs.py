@@ -2,7 +2,41 @@
 
 from __future__ import annotations
 
+import os
+
+import dash
+import pytest
+
 from nirspipe.interface.callbacks import data_prep_callbacks, hyper_analysis_callbacks
+
+
+@pytest.fixture(scope="module")
+def page_layouts():
+    import nirspipe.interface as interface_pkg
+    pages = os.path.join(os.path.dirname(interface_pkg.__file__), "pages")
+    dash.Dash(__name__, use_pages=True, pages_folder=pages, suppress_callback_exceptions=True)
+    layouts = [page["layout"] for page in dash.page_registry.values()]
+    return [layout() if callable(layout) else layout for layout in layouts]
+
+
+def _number_steps(component, found):
+    if getattr(component, "type", None) == "number":
+        found[str(component.id)] = getattr(component, "step", None)
+    children = getattr(component, "children", None)
+    for child in children if isinstance(children, (list, tuple)) else [children]:
+        if child is not None and not isinstance(child, (str, int, float)):
+            _number_steps(child, found)
+    return found
+
+
+def test_no_number_field_drops_a_value_off_its_step_grid(page_layouts):
+    # the browser holds a value off min + n*step invalid and dbc then sends None, so the flag
+    # vanishes from the command while the field still shows it
+    steps = {}
+    for layout in page_layouts + [data_prep_callbacks._make_marker_row(0, {})]:
+        _number_steps(layout, steps)
+    assert {"an-short-max-dist", "hy-wtc-phasenull", "bp-crop-tmin"} <= steps.keys()
+    assert {cid: step for cid, step in steps.items() if step not in ("any", 1)} == {}
 
 
 def test_data_preparation_takes_an_output_directory_that_does_not_exist_yet(tmp_path):

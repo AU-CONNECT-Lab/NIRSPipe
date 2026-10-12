@@ -110,14 +110,15 @@ def _operation():
             html.Div(id="bp-shift-panel", children=[
                 params(
                     field("Shift (s)",
-                          dbc.Input(id="bp-shift-val", type="number"),
+                          dbc.Input(id="bp-shift-val", type="number", step="any"),
                           hint="negative = earlier; clipped to 0"),
                 ),
             ]),
 
             html.Div(id="bp-duration-panel", style=_HIDDEN, children=[
                 params(
-                    field("Duration (s)", dbc.Input(id="bp-duration-val", type="number")),
+                    field("Duration (s)",
+                          dbc.Input(id="bp-duration-val", type="number", step="any")),
                 ),
             ]),
 
@@ -146,7 +147,7 @@ def _operation():
                       hint="Annotation names, separated by commas. One row per occurrence,"
                            " written to the derivatives directory as keep-spans.tsv for"
                            " nirspipe --keep-spans."),
-                field("Duration (s)", dbc.Input(id="bp-keep-duration", type="number"),
+                field("Duration (s)", dbc.Input(id="bp-keep-duration", type="number", step="any"),
                       hint="every occurrence's length; needed when a marker has none"),
             ),
         ]),
@@ -161,8 +162,8 @@ def _operation():
 
             html.Div(id="bp-crop-single", children=[
                 params(
-                    field("tmin (s)", dbc.Input(id="bp-crop-tmin", type="number")),
-                    field("tmax (s)", dbc.Input(id="bp-crop-tmax", type="number")),
+                    field("tmin (s)", dbc.Input(id="bp-crop-tmin", type="number", step="any")),
+                    field("tmax (s)", dbc.Input(id="bp-crop-tmax", type="number", step="any")),
                 ),
             ]),
 

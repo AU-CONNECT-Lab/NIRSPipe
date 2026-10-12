@@ -526,7 +526,7 @@ def _make_marker_row(i: int, row: dict):
         dbc.Col(
             dbc.Input(
                 id={"type": "mk-onset", "index": i},
-                type="number", value=row.get("onset", 0.0),
+                type="number", step="any", value=row.get("onset", 0.0),
                 debounce=True, size="sm", style={"width": "80px"},
             ),
             width=4,
@@ -534,7 +534,7 @@ def _make_marker_row(i: int, row: dict):
         dbc.Col(
             dbc.Input(
                 id={"type": "mk-dur", "index": i},
-                type="number", value=row.get("duration", 1.0),
+                type="number", step="any", value=row.get("duration", 1.0),
                 debounce=True, size="sm", style={"width": "65px"},
             ),
             width=3,
