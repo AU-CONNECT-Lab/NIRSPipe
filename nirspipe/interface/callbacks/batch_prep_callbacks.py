@@ -31,14 +31,15 @@ def _bp_dirs_to_store(bids_dir, deriv_dir):
     return bids_dir, deriv_dir
 
 
+# once, when the page opens: on every store change it would write a field's older value back
 @callback(
     Output("bp-bids-dir",  "value"),
     Output("bp-deriv-dir", "value"),
-    Input("app-bids-dir",   "data"),
-    Input("app-output-dir", "data"),
-    prevent_initial_call="initial_duplicate",
+    Input("bp-bids-dir",    "id"),
+    State("app-bids-dir",   "data"),
+    State("app-output-dir", "data"),
 )
-def _restore_dirs(bids_dir, output_dir):
+def _restore_dirs(_, bids_dir, output_dir):
     return bids_dir or no_update, output_dir or no_update
 
 

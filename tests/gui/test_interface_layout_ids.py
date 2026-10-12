@@ -76,3 +76,21 @@ def test_every_callback_id_is_in_a_layout(registered):
 
 def test_pages_all_register(registered):
     assert len(dash.page_registry) == 7
+
+
+def test_no_field_round_trips_through_a_shared_store(registered):
+    # a field written back from the store it writes can lose a value typed in the meantime
+    from dash._callback import GLOBAL_CALLBACK_MAP
+
+    stores = {"app-bids-dir", "app-output-dir"}
+    feeds_store, fed_by_store = set(), set()
+    for key, spec in GLOBAL_CALLBACK_MAP.items():
+        outputs = {t.strip(".").rsplit(".", 1)[0]
+                   for t in (key.split("...") if "..." in key else [key])}
+        inputs = {d.get("id") if isinstance(d, dict) else d.component_id
+                  for d in spec.get("inputs", [])}
+        if outputs & stores:
+            feeds_store |= inputs
+        if inputs & stores:
+            fed_by_store |= outputs
+    assert feeds_store & fed_by_store == set()
