@@ -74,6 +74,11 @@ NOTES = {
     "caveat.never_aligned":
         "these recordings were trimmed to a common length but never aligned on a shared "
         "trigger, so every number below assumes they already shared a clock",
+    "caveat.onsets_disagree":
+        "The members&rsquo; markers disagree by more than {n} samples ({tol}&nbsp;s) after "
+        "alignment: {listing}. Every window is cut from {ref}&rsquo;s markers. A trigger that "
+        "landed late in one member moves only that block; two clocks drifting apart move "
+        "everything after the shared trigger, the whole-run coherence included.",
     "caveat.cut_with_margin":
         "Input is a cut ({where}), made with a {margin:.1f} s margin on each side. Each "
         "condition's row reads its block out of the transform, so there the margin absorbs "

@@ -4,6 +4,7 @@ import mne
 import pytest
 
 from nirspipe.pipeline.hyper.alignment import onset_residuals
+from nirspipe.qc.common.windows import condition_windows
 from nirspipe.qc.figures.hyper.hyper_figures import build_alignment_timeline
 from tests._synth import synth_raw
 
@@ -28,6 +29,13 @@ def test_each_block_is_measured_against_the_first_member_s_copy():
     # a repeat is matched by order; a block the member lacks and BAD spans have no row
     assert rows == {"sync": pytest.approx(0.0), "ca (1)": pytest.approx(0.098, abs=1e-9),
                     "ca (2)": pytest.approx(0.0)}
+
+
+def test_each_row_carries_the_label_its_condition_window_has():
+    pair = _pair()
+    labels = {r["condition"]: r["label"] for r in onset_residuals(pair, ["sub-01", "sub-02"])}
+    assert labels == {"sync": "sync", "ca (1)": "ca#1", "ca (2)": "ca#2"}
+    assert set(labels.values()) <= {w[0] for w in condition_windows(pair["sub-01"], 0.0)}
 
 
 def test_a_lone_member_has_nothing_to_differ_from():

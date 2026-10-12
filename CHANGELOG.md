@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - A `--config` cutoff set to `"none"` no longer stops the run with a KeyError
 - `nirspipe-qc prep-raw` writes `.bidsignore` to its tree, as the other trees do
 - Phase-scrambled and re-paired null percentiles are no longer blank for conditions with numeric labels
+- `nirspipe-hyper` warns when members' markers disagree beyond two samples after alignment; dyad condition pages say why a member's column is blank
 
 ### Removed
 - The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only

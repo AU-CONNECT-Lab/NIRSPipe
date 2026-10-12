@@ -18,7 +18,7 @@ from nirspipe.io.derivatives import (
 )
 from nirspipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from nirspipe.pipeline.hyper.wtc_null import write_wtc_null
-from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
+from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES, onset_residuals
 from nirspipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
 from nirspipe.pipeline.hyper import (
     GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
@@ -452,6 +452,7 @@ def member_condition_entries(
     windows: "list[tuple[str, float, float]]",
     offsets: "dict[str, float] | None" = None,
     sfreq: "float | None" = None,
+    refused: "dict | None" = None,
 ) -> "dict[str, dict[str, dict]]":
     """``{sid: {label: by_condition entry}}`` for every dyad window a member's record holds.
 
@@ -460,7 +461,9 @@ def member_condition_entries(
       windows [("ca", 30.0, 190.0)], sub-02 offset 37.0, its record's ca at [67.0, 227.0]
       -> {"sub-01": {"ca": {...}}, "sub-02": {"ca": {...}}}
 
-    A member whose record has no ``by_condition`` section is absent.
+    A member whose record has no ``by_condition`` section is absent. ``refused``, when
+    given, gains ``{label: {sid: (start, end)}}``, the record's window on the aligned clock,
+    for each window that holds the label at bounds other than the dyad's.
     """
     offsets = offsets or {}
     # the dyad resolves its windows from one member, the records carry each member's own
@@ -479,9 +482,13 @@ def member_condition_entries(
             entry = by_condition.get(label)
             if entry is None:
                 continue
-            if _record_window_matches(entry.get("window_s"), t0, t1,
-                                      float(offsets.get(sid, 0.0)), tol, sid, label):
+            offset = float(offsets.get(sid, 0.0))
+            window_s = entry.get("window_s")
+            if _record_window_matches(window_s, t0, t1, offset, tol, sid, label):
                 out.setdefault(sid, {})[label] = entry
+            elif refused is not None and window_s and len(window_s) == 2:
+                refused.setdefault(label, {})[sid] = (float(window_s[0]) - offset,
+                                                      float(window_s[1]) - offset)
     return out
 
 
@@ -1182,6 +1189,23 @@ def build_hyper_post_report(
         else:
             note(notes, scope, section_note("caveat.cut_no_margin", where=where))
         logger.warning("cropped input: %s, margin %.1f s", where, crop_info["margin_s"])
+
+    # ---- do the members' copies of each marker agree? ----
+    # every window is cut from the first member's markers, whatever the others' say
+    onset_tol_s = (_TRIGGER_JITTER_SAMPLES / float(ref_raw.info["sfreq"])
+                   if ref_raw is not None else 0.0)
+    onset_rows = [{**r, "within": abs(r["residual_s"]) <= onset_tol_s}
+                  for r in onset_residuals(aligned_raws, subject_ids)]
+    apart = [r for r in onset_rows if not r["within"]]
+    if apart:
+        listing = ", ".join(f"{r['condition']} {r['subject_id']} {r['residual_s']:+.3f} s"
+                            for r in apart)
+        note(notes, scope, section_note(
+            "caveat.onsets_disagree", ref=subject_ids[0], listing=listing,
+            n=f"{_TRIGGER_JITTER_SAMPLES:g}", tol=f"{onset_tol_s:.3f}"))
+        logger.warning("the members' markers disagree beyond %g samples (%.3f s) after "
+                       "alignment: %s. Every window is cut from %s's markers",
+                       _TRIGGER_JITTER_SAMPLES, onset_tol_s, listing, subject_ids[0])
     markers_list = markers_on_data_axis(ref_raw) if ref_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
@@ -1599,12 +1623,15 @@ def build_hyper_post_report(
             sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None)
     # the channel grids: each member's run verdict beside every window's own result
     cond_status: dict = {}
+    # the windows refused here are the ones blank in the quality table above as well
+    refused_windows: dict = {}
     with guard("Per-condition channel grid", errors, scope):
         cond_status = condition_channel_status(
             subject_sqm or {}, subject_ids,
             member_condition_entries(
                 subject_sqm or {}, subject_ids, cond_windows, offsets,
-                sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None),
+                sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None,
+                refused=refused_windows),
             bad_channels)
 
     def _condition_grid(pair: "tuple[str, str]", label: "str | None") -> dict:
@@ -1697,6 +1724,12 @@ def build_hyper_post_report(
         pair_ids = list(pair) if pair else subject_ids
         # a pairing page describes its own two members, not the whole group
         page_alignment = [r for r in alignment_rows if r["subject_id"] in pair_ids]
+        page_onsets = [r for r in onset_rows if r["subject_id"] in pair_ids
+                       and (label is None or r["label"] == label)]
+        page_refused = [{"sid": sid, "record": f"{r0:.3f}–{r1:.3f}",
+                         "dyad": f"{window[0]:.3f}–{window[1]:.3f}"}
+                        for sid, (r0, r1) in (refused_windows.get(label) or {}).items()
+                        if sid in pair_ids]
         member_rows = [_members_only(t, pair_ids)
                        for t in (run_metric_rows if label is None
                                  else cond_metric_rows.get(label, []))]
@@ -1774,6 +1807,11 @@ def build_hyper_post_report(
                 max((result.isc_level_sources.get(pair, {}).get(label) or {}).values(),
                     default=None)),
             alignment_json=json.dumps(page_alignment),
+            onset_residuals=page_onsets,
+            onset_ref=subject_ids[0],
+            onset_tol_s=onset_tol_s,
+            onset_tol_samples=_TRIGGER_JITTER_SAMPLES,
+            refused_windows=page_refused,
             per_channel_post_json=json.dumps(per_channel),
             # the long axis, not `ch_pairs_post`: the selector has to name the set the
             # matrix beside it is drawn on, and the short channels have no coherence

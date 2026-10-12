@@ -237,6 +237,11 @@ NOTES = {
         'split window from <code>--wtc-window-s</code>, or bounds that do not match), so it '
         'has no per-condition numbers. The whole recording&rsquo;s are on the <a '
         'href="{href}">whole-run page</a>.',
+    "hyper_post.member_metrics_refused":
+        "{sid}&rsquo;s record puts this condition at {record}&nbsp;s on the aligned clock and "
+        "the dyad at {dyad}&nbsp;s, more than {n} samples ({tol}&nbsp;s) apart, so this page "
+        "has no per-condition numbers for {sid}. The alignment check under Clocks and ROIs "
+        "gives each block&rsquo;s onset difference.",
 
     # ---- Cohort hyperscanning report ----
     "hyper_group.row_order":

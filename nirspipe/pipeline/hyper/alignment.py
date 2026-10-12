@@ -286,11 +286,13 @@ def onset_residuals(raws: dict[str, mne.io.Raw], subject_ids: list[str]) -> list
     ::
 
       ca at 30.0 s in sub-01 and 30.098 s in sub-02
-        -> [{"condition": "ca", "subject_id": "sub-02", "residual_s": 0.098}]
+        -> [{"condition": "ca", "label": "ca", "subject_id": "sub-02", "residual_s": 0.098}]
 
     What alignment cannot remove: a trigger that landed late in one member, or two clocks
     drifting apart. Blocks are matched by description and by order of occurrence, a repeat
-    labelled ``ca (2)``; a block the first member or this member lacks has no row.
+    labelled ``ca (2)``; a block the first member or this member lacks has no row. ``label``
+    is the name :func:`~nirspipe.qc.common.windows.condition_windows` gives the same block,
+    ``ca#2``.
     """
     def onsets(raw: mne.io.Raw) -> dict[str, list[float]]:
         out: dict[str, list[float]] = {}
@@ -311,6 +313,7 @@ def onset_residuals(raws: dict[str, mne.io.Raw], subject_ids: list[str]) -> list
         for desc, ref_times in ref.items():
             for i, (t_ref, t_own) in enumerate(zip(ref_times, own.get(desc, []))):
                 rows.append({"condition": desc if len(ref_times) == 1 else f"{desc} ({i + 1})",
+                             "label": desc if len(ref_times) == 1 else f"{desc}#{i + 1}",
                              "subject_id": sid, "residual_s": t_own - t_ref})
     return rows
 

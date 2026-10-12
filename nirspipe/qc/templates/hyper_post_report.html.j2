@@ -319,6 +319,12 @@
 {% if subject_metrics_rows or condition_label %}
 <h2 id="Quality">Quality Metrics</h2>
 <section id="MemberMetrics" class="step">
+{#- a member whose record holds this condition elsewhere has no column; say why under either heading -#}
+{% set refused_notes %}
+{% for r in refused_windows %}
+    <p class="qm-note">{{ section_note('hyper_post.member_metrics_refused', sid=r.sid, record=r.record, dyad=r.dyad, n="%g"|format(onset_tol_samples), tol="%.3f"|format(onset_tol_s)) }}</p>
+{% endfor %}
+{% endset %}
 {% if subject_metrics_rows %}
   <h3 class="step-title">Member metrics</h3>
   <div class="details-body">
@@ -328,11 +334,13 @@
     {% if condition_label %}
     <p class="qm-note">{{ section_note('hyper_post.member_metrics_condition', href=run_href) }}</p>
     {% endif %}
+    {{ refused_notes }}
   </div>
 {% else %}
   <h3 class="step-title">Member metrics: not available for this window</h3>
   <div class="details-body">
     <p class="qm-note">{{ section_note('hyper_post.member_metrics_missing', href=run_href) }}</p>
+    {{ refused_notes }}
   </div>
 {% endif %}
 </section>
@@ -367,6 +375,20 @@
       <tbody id="align-tbody"></tbody>
     </table>
   </div>
+  {% if onset_residuals %}
+  <div id="OnsetCheck">
+    <h3 style="margin:0 0 0.3rem;">Alignment check</h3>
+    <p class="qm-note">{{ section_note('hyper_raw.onset_residuals', ref=onset_ref, tol="%.3f"|format(onset_tol_s), n="%g"|format(onset_tol_samples)) }}</p>
+    <table class="qm-table qm-flat" id="onset-residual-table">
+      <thead><tr><th>Condition</th><th>Member</th><th>Onset difference (s)</th><th>Within tolerance</th></tr></thead>
+      <tbody>
+      {% for r in onset_residuals %}
+        <tr><td>{{ r.condition }}</td><td>{{ r.subject_id }}</td><td>{{ "%.3f"|format(r.residual_s) }}</td><td>{{ "yes" if r.within else "no" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
   {% if roi_rows %}
   <div id="ROI">
     <h3 style="margin:0 0 0.3rem;">ROI grouping</h3>
