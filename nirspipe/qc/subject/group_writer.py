@@ -290,9 +290,6 @@ def _render_group(
     output_dir.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
     notes: list[str] = []
-    if df.empty:
-        note(notes, out_desc, "no quality records found, so the report is empty; run the "
-                              "pipeline or `nirspipe-qc prep-raw` first")
 
     tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc=out_desc).name
     write_tsv(df, tsv_path)
@@ -434,9 +431,11 @@ def _build_group(
     out_desc: str,
     title: str,
     template_name: str = "group_report.html.j2",
-) -> Path:
-    """Glob SQM JSONs and render group report."""
+) -> Path | None:
+    """Glob SQM JSONs and render group report; None when there are none."""
     df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
+    if df.empty:
+        return None
     return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name)
 
 
@@ -449,7 +448,7 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(scalar_rows, columns=cols)
 
 
-def build_group_raw_report(output_dir: Path) -> Path:
+def build_group_raw_report(output_dir: Path) -> Path | None:
     """Aggregate all sub-XX/nirs/...desc-sqm_qc.json into desc-subjects_{qc.tsv,report.html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",

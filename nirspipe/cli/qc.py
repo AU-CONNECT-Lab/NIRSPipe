@@ -327,6 +327,10 @@ def cmd_group_raw(output_dir: Path) -> None:
     from nirspipe.qc.subject.group_writer import build_group_raw_report
 
     path = build_group_raw_report(output_dir)
+    if path is None:
+        print(f"Error: no quality records under {output_dir}; run `nirspipe` or "
+              "`nirspipe-qc prep-raw` into it first.", file=sys.stderr)
+        raise SystemExit(1)
     print(f"report -> {path}")
 
 
@@ -336,8 +340,9 @@ def cmd_group_hyper_raw(output_dir: Path) -> None:
 
     path = build_group_hyper_report(output_dir)
     if path is None:
-        print(f"no dyad records under {output_dir}; run `nirspipe-qc hyper-raw` first")
-        return
+        print(f"Error: no dyad records under {output_dir}; run `nirspipe-qc hyper-raw` "
+              "into it first.", file=sys.stderr)
+        raise SystemExit(1)
     print(f"report -> {path}")
 
 

@@ -344,6 +344,24 @@ def test_qc_provenance_requires_output_dir():
         qc_cli._build_parser().parse_args(["provenance"])
 
 
+@pytest.mark.parametrize("command", ["cohort", "cohort-hyper"])
+def test_a_cohort_over_a_tree_without_records_fails_and_writes_nothing(tmp_path, capsys, command):
+    (tmp_path / "sub-01" / "logs").mkdir(parents=True)
+    with pytest.raises(SystemExit) as exit_info:
+        qc_cli.main([command, str(tmp_path)])
+    assert exit_info.value.code == 1
+    assert "no " in capsys.readouterr().err
+    assert not list(tmp_path.glob("desc-*"))
+
+
+def test_the_group_level_over_a_tree_without_records_fails_and_writes_nothing(tmp_path):
+    from nirspipe.cli.workflows import run_group_level
+
+    with pytest.raises(SystemExit, match="no quality records"):
+        run_group_level({"output_dir": str(tmp_path)})
+    assert not list(tmp_path.glob("desc-*"))
+
+
 def test_qc_provenance_accepts_no_options():
     # it rebuilds the graph from sidecars alone; an option here would mean the picture
     # depends on something the run did not record

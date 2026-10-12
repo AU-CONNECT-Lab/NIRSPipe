@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - GUI number fields left values off their step grid out of the command, such as a 12 mm separation, 5 phase-null draws or a 0.01 Hz drift cutoff
+- `nirspipe-qc cohort`, `cohort-hyper` and the `group` level exited 0 over a tree without quality records, `cohort` writing an empty page
 
 ## [0.68.0] - 2026-10-12
 

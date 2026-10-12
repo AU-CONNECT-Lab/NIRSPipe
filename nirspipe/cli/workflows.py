@@ -935,11 +935,16 @@ def run_group_level(args: dict[str, Any]) -> None:
 
     logger.info("nirspipe group: aggregating individual SQMs from %s", output_dir)
     ind_path = build_group_raw_report(output_dir)
-    logger.info("  -> %s", ind_path)
+    if ind_path is not None:
+        logger.info("  -> %s", ind_path)
 
+    hyper_path = None
     if any([*output_dir.glob(f"group-*/nirs/*{RECORD_SUFFIX}"),
             *output_dir.glob(f"group-*/ses-*/nirs/*{RECORD_SUFFIX}")]):
         logger.info("nirspipe group: also aggregating hyperscanning SQMs")
         hyper_path = build_group_hyper_report(output_dir)
         logger.info("  -> %s", hyper_path)
+    if ind_path is None and hyper_path is None:
+        raise SystemExit(f"Error: no quality records under {output_dir}; run the "
+                         "participant level into it first.")
 
