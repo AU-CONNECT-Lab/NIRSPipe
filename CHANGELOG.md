@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- GUI Recon page takes `--optode-frame`
 - GUI Analysis page takes `--bad-channels`, `--keep-spans` with `--keep-spans-from`, `--bad-spans`, `--events-path` and `--contrast-file`
 - `nirspipe-rate export` writes the viewers' channel decisions as a `--bad-channels` table, and lists every FINAL verdict
 - A `--bad-channels` table takes a `keep_channels` column: pairs screening rejected that a reviewer kept; the Methods name them
@@ -21,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - GUI Data Preparation drops its QC Metrics tab; Raw QC and `nirspipe-rate raw` show those panels
 - GUI Data Preparation screens channels with the PSP threshold, coupled-window share, scope and `channels.tsv` status, as `prep-raw` does
 - GUI Data Preparation saves markers and crops by running `nirspipe-prep`
+- GUI Recon runs `nirspipe-recon` once per file instead of converting in its own process
 - `nirspipe-rate hyper` reads and writes each member's dyad decisions under `_hyper` only, apart from the run pages' own
 - GUI Data Preparation no longer records channel decisions or writes the raw report; `nirspipe-rate raw` and the Raw QC page do
 - The README is a short overview that links the documentation

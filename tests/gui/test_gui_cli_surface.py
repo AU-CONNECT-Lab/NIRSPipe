@@ -26,6 +26,7 @@ from nirspipe.interface.cli_args import (
     build_prep_args,
     build_qc_args,
     build_raw_qc_args,
+    build_recon_args,
     missing_raw_qc,
 )
 
@@ -101,13 +102,15 @@ def _alias_map() -> dict[str, frozenset[str]]:
     write-off naming either spelling as covering only that one.
     """
     parsers = [_build_parser(), *_qc_subparsers().values(),
-               *_hyper_parsers_by_command().values(), *_prep_subparsers().values()]
+               *_hyper_parsers_by_command().values(), *_prep_subparsers().values(),
+               _recon_parser()]
     out: dict[str, frozenset[str]] = {}
     for parser in parsers:
         for action in parser._actions:
             longs = frozenset(_long_flags(action))
+            # merged, since one tool may lack a spelling another tool gives the same option
             for flag in longs:
-                out[flag] = longs
+                out[flag] = out.get(flag, frozenset()) | longs
     return out
 
 
@@ -875,3 +878,43 @@ def test_a_switched_off_high_pass_raises_no_glm_band_warning():
 
     assert band_note("glm", "none", "polynomial", None) is None
     assert band_note("glm", "0.01", "polynomial", None) is not None
+
+
+# ── Recon → nirspipe-recon, once per file ───────────────────────────────────────
+
+# the off spelling is the default, so a checkbox left off already says it
+RECON_NOT_EXPOSED = {"--no-overwrite"}
+
+_RECON_ROW = dict(path="/raw/a.snirf", file="a.snirf", subject="01", task="tapping",
+                  session="01", run="01")
+
+
+def _recon_parser():
+    from nirspipe.cli.recon import _build_parser as build
+    return build()
+
+
+def test_every_recon_flag_is_sendable_or_written_off():
+    flags = {flag for action in _recon_parser()._actions
+             if action.dest not in ("help", "version") for flag in _long_flags(action)}
+    emitted = {a for a in build_recon_args(_RECON_ROW, "/bids", True, "head")
+               if a.startswith("--")}
+    missing = flags - _with_aliases(emitted | RECON_NOT_EXPOSED)
+    assert not missing, (
+        f"nirspipe-recon grew {sorted(missing)} and the Recon page cannot send them; "
+        f"add a control, or add them to RECON_NOT_EXPOSED with a reason"
+    )
+
+
+def test_the_generated_recon_command_parses():
+    argv = build_recon_args(_RECON_ROW, "/bids", True, "head")
+    args = _recon_parser().parse_args(argv[1:])
+    assert (args.participant_label, args.task_label, args.optode_frame) == ("01", "tapping", "head")
+
+
+def test_a_row_without_subject_or_task_builds_nothing():
+    assert build_recon_args({**_RECON_ROW, "task": ""}, "/bids", False, None) is None
+
+
+def test_the_default_optode_frame_is_left_to_the_cli():
+    assert "--optode-frame" not in build_recon_args(_RECON_ROW, "/bids", False, "unknown")

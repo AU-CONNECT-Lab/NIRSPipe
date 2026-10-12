@@ -1,7 +1,7 @@
 """Translate a page's form into an argv for the CLI that owns it.
 
 The batch editing is `nirspipe-prep`, the dyad analysis is `nirspipe-hyper`, the aggregate reports
-are `nirspipe-qc`. Kept beside the pages rather than derived from the parsers, because argparse
+are `nirspipe-qc`, the BIDS conversion is `nirspipe-recon`. Kept beside the pages rather than derived from the parsers, because argparse
 can say a flag exists but not which widget should fill it. `tests/gui/test_gui_cli_surface.py` is
 what stops the two surfaces drifting apart.
 """
@@ -329,3 +329,23 @@ def missing_raw_qc(command: str, opts: dict) -> str | None:
     if command == "prep-raw":
         return None if (opts.get("subjects") or "").split() else "Enter at least one subject."
     return None if opts.get("pairs_csv") else "Set the group CSV."
+
+
+# ---- nirspipe-recon ----
+
+def build_recon_args(row: dict, bids_dir: str, overwrite: bool,
+                     optode_frame: str | None) -> list[str] | None:
+    """One file's nirspipe-recon argv, or None while its row lacks a subject or a task."""
+    subject, task = row.get("subject"), row.get("task")
+    if not subject or not task:
+        return None
+    args = ["nirspipe-recon", row["path"], bids_dir,
+            "--participant-label", subject, "--task-label", task]
+    args += _text("--session-label", row.get("session"))
+    args += _text("--run-label", row.get("run"))
+    # unknown is the CLI's default, so only a frame someone chose is sent
+    if optode_frame and optode_frame != "unknown":
+        args += ["--optode-frame", optode_frame]
+    if overwrite:
+        args.append("--overwrite")
+    return args
