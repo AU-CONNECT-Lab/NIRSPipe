@@ -115,6 +115,13 @@ A run with `BAD_` spans gets an **Excluded** section: the kept seconds, the span
 
 **Run summary.** The record's scalars as one table, a metric per row, with columns **All**, **Long** and **Short**. Long is the column the verdict is read off and the only one coloured; Short says whether the regressors those channels feed can be trusted; All is the archival number. A montage that cannot be split has one value column. Where a metric was measured before and after a step, the cell reads before → after. Hover a label for what it measures and which way is good. Seven metrics are marked as the ones that decide whether a run is usable: channel retention, data retained, GVTD share above threshold, band-passed GVTD p95, windowed SCI, coupled windows and HbO–HbR correlation.
 
+```{figure} figures/qc_run_summary.png
+:alt: The run summary table of a run report
+:width: 75%
+
+The run summary of one run. A cell with an arrow holds the value before and after a step.
+```
+
 | Indicator | Green | Yellow | Red |
 |-----------|-------|--------|-----|
 | Channel retention | ≥ 90 % | 70–90 % | < 70 % |
@@ -133,6 +140,13 @@ No other metric is coloured: uncoloured means no cutoff was applied, not that th
 - **By channel.** A pass/fail grid over status, coupled windows, SCI, CV, PSP and SNR, long channels first. A channel can be BAD with a green SCI cell: the cell is the average over windows, and rejection counts the windows that clear both lines.
 - **By condition.** With `--by-condition`, each condition's grid regrouped so one metric's conditions sit together, headed **In condition**: whether each channel passes on that stretch alone. A guide to choosing conditions; it rejects nothing.
 - **By trial.** Every trial window scored on its own, as a trial-by-metric heatmap, on the intensity recording. Colour is relative within a row, not a threshold. A window shorter than 10 s is left unscored.
+
+```{figure} figures/qc_channel_grid.png
+:alt: A pass/fail grid of status, coupled windows, SCI, CV, PSP and SNR per channel
+:width: 100%
+
+The pass/fail grid by channel and wavelength, long channels first. S3_D3 is rejected with a green SCI cell: the cell averages SCI over windows, and rejection counts the windows that clear both lines.
+```
 
 ### Run record
 
@@ -162,6 +176,13 @@ Its run summary is the same one table, grouped Optical density, Motion and Haemo
 | Over time | Windowed SCI, CV and motion-band GVTD per channel set, every run pale under the cohort median and interquartile band. |
 | Outliers | One test per run rather than per metric: a run is flagged when its mean \|z\| over every charted metric exceeds 2, with the metrics that put it there. The place to start triage. |
 | Quality Metrics | The cohort summary and every scalar in a sortable table. |
+
+```{figure} figures/qc_cohort_distributions.png
+:alt: Box plots of coupling and retention metrics across a cohort, one point per run
+:width: 100%
+
+One Distributions chart of a six-run cohort, each point a run, split by channel set.
+```
 
 For an analysis of your own, read `desc-subjects_qc.tsv` directly: it is tab-separated with `n/a` for a missing value, and its first column, `bids_name`, is the run's file name without suffix, so the subject, session, task and run are read off its entities.
 
@@ -194,6 +215,13 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 | Where on the head | Each member's coupled-window share on the montage, and each window's SCI by slider. |
 | Member and dyad metrics | Each member's numbers side by side, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
 | Channel decisions | Each member's per-channel table side by side, with the rating decision. |
+
+```{figure} figures/qc_dyad_usable.png
+:alt: Shared usable time of one dyad per channel pair over the recording
+:width: 100%
+
+Shared usable time of one dyad: each channel pair's windows coupled in both members, in one member only or in neither, below the members' windowed SCI, PSP and CV and the condition blocks, on the shared clock.
+```
 
 It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `desc-channel_qc.tsv` and `desc-usable_qc.tsv`. They go into the dyad tree or into a raw QC tree of its own, as `prep-raw` writes the subjects' raw reports; `nirspipe-qc cohort-hyper` reads the quality records, so it runs on whichever tree `hyper-raw` wrote.
 

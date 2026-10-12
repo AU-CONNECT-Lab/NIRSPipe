@@ -64,6 +64,13 @@ The scalp coupling index (SCI) measures the strength of the cardiac pulsation in
 
 Neither metric decides on its own. They are paired inside short windows (`--window-length`, 10 s by default): a window counts as *coupled* when the channel clears both `--sci-threshold` and `--psp-threshold` (0.1 by default) in it, and a channel is marked bad when it is coupled in fewer than `--min-good-frac` (0.75 by default) of the windows that count. `--screen-scope` says which windows count: `run`, the whole recording, or `task`, only the annotated blocks, so the lead-in and the gaps between blocks are not held against a channel. `task` falls back to `run` when no annotation is long enough to hold two windows. A channel coupled for only part of a recording can therefore be rejected even when its whole-run SCI and PSP pass. The same criteria are used by every path that screens: the pipeline, the raw QC report, the per-trial scoring and the dyad commands.
 
+```{figure} figures/screening_scipsp.png
+:alt: Windowed SCI, PSP and CV heatmaps, channels by time
+:width: 100%
+
+Windowed SCI, PSP and CV of one recording, channels by time, with each channel's mean and the line it is held to beside the heatmap.
+```
+
 Bad channels are **marked, not removed or interpolated**. Three sources are unioned into one set:
 
 - the channels screening rejected;
@@ -90,6 +97,13 @@ Motion artifacts are corrected in optical density, before the conversion to haem
 `--motion-std-thresh` and `--wavelet-iqr` set the spline detection threshold and the wavelet fence of the methods that use them; their per-method defaults are in [Usage](usage.md#nirspipe). The detection threshold is measured against each channel's sample-to-sample change, so the same value marks more of a faster recording; when `spline` or `spline_wavelet` marks over 10% of the samples, the log warns and the report adds a note.
 
 Writes `desc-motcorrected`. The before-and-after comparison the report draws is described in [QC](qc.md#motion-correction-footprint).
+
+```{figure} figures/motion_gvtd_carpet.png
+:alt: Motion-band GVTD traces above carpets of the optical density before and after correction
+:width: 100%
+
+The motion-band GVTD of the long and the short channels above a carpet of the optical density, before and after correction, on one scale; the dashed line is the run's threshold.
+```
 
 ### Beer-Lambert law
 
@@ -154,6 +168,13 @@ A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual a
 
 **Design.** `--hrf-model` sets the HRF basis (`spm` by default; `glover`, the derivative and dispersion variants, or `fir` with `--fir-delays`). `--drift-model` sets the drift basis (`cosine` by default, or `polynomial` of order `--drift-order`, or `none`).
 
+```{figure} figures/glm_design.png
+:alt: A GLM design matrix drawn as an image
+:width: 100%
+
+A design matrix as the report draws it: the condition regressors, the short-channel regressors, the cosine drift basis and the constant, one row per sample.
+```
+
 **Cosine drift cutoff.** `--drift-high-pass` has no default in this mode, because it is bounded by the design. The cosine basis spans every frequency below its cutoff, so the cutoff has to sit at or above the data's `--high-pass`, so the task regressors are detrended the way the data was, and below the rate at which a condition repeats, or the basis fits that condition away as drift. A condition whose trials are at most `T` seconds apart repeats at `1/T` Hz, and `1/(2T)` is a cutoff that clears it. The run warns when either bound is crossed, naming each condition the basis would absorb, and suggests a cutoff that clears the slowest.
 
 **Noise model.** `--noise-model` sets the residual autocorrelation model: `ols`, `arN` for an AR model of order N, `auto` (the default) for an AR order of four times the sampling rate, or `ar_irls`. `ar_irls` alternates the AR whitening with a robust refit that down-weights outlying samples such as residual motion, until the betas stop moving; the order is chosen per channel by BIC, capped at the same bound `auto` uses or at N with `ar_irlsN`. Every channel keeps its own AR coefficients. Every mode fits the noise model, `denoise` and `rest` on their confound regression.
@@ -217,6 +238,13 @@ fALFF is the band's share of the total spectral amplitude, so ALFF and fALFF are
 | `zalff` | `alff` z-scored within its own chromophore |
 
 ALFF needs both cutoffs; with either switched off it is skipped, and connectivity is still computed.
+
+```{figure} figures/rest_connectivity.png
+:alt: HbO and HbR channel correlation matrices above ALFF and fALFF per channel
+:width: 100%
+
+The rest-mode panel of the report: HbO and HbR channel correlation matrices on one scale, and ALFF and fALFF per channel for each chromophore.
+```
 
 **Regions.** With `--roi-mapping`, each region's good channels are averaged into one signal, and the region-by-region correlation and each region's seed map (region against every channel) are computed from those signals. The amplitude measures are averaged within each region after they are measured, the opposite order, with `n_channels` beside them. A region left with no good channel stays in every output as a blank entry, so every subject's tables have the same rows. Each ROI product's sidecar records, as `roi_channels`, which channels the region was actually averaged from.
 

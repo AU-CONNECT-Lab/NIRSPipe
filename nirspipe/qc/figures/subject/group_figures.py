@@ -402,9 +402,13 @@ def _bundle(x, ys, colour: str = "#c8d0d8", width: float = 0.5, opacity: float =
 def _stacked_series(rows: list[dict], key: str, channel_set: str) -> tuple:
     """(times, matrix, run names) of one metric and channel set over the cohort, on a shared grid.
 
-    Each run is smoothed and then sampled at the smoothing step. Runs binned differently land
-    on the union of their grids, with the gaps left as NaN rather than interpolated. A run
-    without this set has no row, so the names say which run each row is.
+    Each run is smoothed, sampled at the smoothing step, and interpolated onto one grid spaced
+    :data:`SMOOTH_S` apart, NaN more than half a step outside its own span. Window centres
+    follow each run's sampling rate, so two runs never share their own sample times::
+
+        run A at 5.025, 65.325, ...   run B at 5.096, 66.248, ...   -> grid 5.025, 65.025, ...
+
+    A run without this set has no row, so the names say which run each row is.
     """
     series, names = [], []
     for row in rows:
@@ -417,10 +421,13 @@ def _stacked_series(rows: list[dict], key: str, channel_set: str) -> tuple:
         names.append(str(row.get("bids_name", "")))
     if not series:
         return None, None, []
-    grid = np.unique(np.concatenate([t for t, _ in series]))
-    stack = np.full((len(series), grid.size), np.nan)
-    for i, (times, values) in enumerate(series):
-        stack[i, np.searchsorted(grid, times)] = values
+    start = min(t[0] for t, _ in series)
+    end = max(t[-1] for t, _ in series)
+    grid = start + SMOOTH_S * np.arange(int(np.floor((end - start) / SMOOTH_S)) + 1)
+    stack = np.array([np.interp(grid, times, values) for times, values in series])
+    # runs start a fraction of a second apart, so each holds its end value for half a step
+    for i, (times, _values) in enumerate(series):
+        stack[i, (grid < times[0] - SMOOTH_S / 2) | (grid > times[-1] + SMOOTH_S / 2)] = np.nan
     return grid, stack, names
 
 

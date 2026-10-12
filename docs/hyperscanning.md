@@ -89,6 +89,20 @@ Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/8`
 
 **Phase.** The band-mean table also carries the relative phase: `phase_angle`, its circular mean in degrees, positive where the first member leads, `phase_sd` and `phase_n`. A band mean collapses scales whose phase differs, so its angle cannot be divided by a frequency to give a delay; `stat-wtcphase_relmat.tsv` resolves the phase one row per frequency, with `lag_s`. A delay is known only modulo one period, so only a `lag_s` that agrees across neighbouring scales is a delay. The maps draw phase as arrows where the coherence clears a per-frequency level ([Arrow levels](#arrow-levels)).
 
+```{figure} figures/wtc_map.png
+:alt: A wavelet coherence map of one channel pairing, time by frequency
+:width: 100%
+
+The coherence map of one channel pairing, time by frequency, under the condition windows. The washed-out band is the cone of influence, and the arrows give the relative phase where the coherence clears 0.5.
+```
+
+```{figure} figures/wtc_matrix.png
+:alt: A channel-by-channel matrix of band-mean coherence between two members
+:width: 60%
+
+The channel-by-channel matrix of band means a crossed run adds to the report, one member's channels as rows and the other's as columns.
+```
+
 ## Conditions and windows
 
 By default the coherence is read out of each task annotation's window as well as over the whole recording. A trigger with a duration uses it; one without runs to the next trigger, and the last to the end of the recording. Each window is read out of the transform of the whole recording rather than transformed on its own, so it costs no second transform and is not inflated by edges of its own. A window shorter than one cycle of `--wtc-fmin` is skipped. The windows land in the same tables as the whole recording, after its rows, told apart by a `condition` column that is `n/a` on the whole recording's rows, as the correlation's table does; each window gets a report page. `--no-by-condition` turns this off.
@@ -116,6 +130,13 @@ All of its options are off by default, so a run naming none reports the zero-lag
 - `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates of the second member, searched the same way, adding `null_abs_mean`, `null_abs_sd`, `null_abs_p95` and `percentile` and keeping every draw.
 
 The report's connectivity circle draws a chord where a pairing beats the 95th percentile of its own surrogates, or, without a null, for the strongest tenth of pairings, labelled as a display cut. `--isc-threshold` forces an absolute cut instead.
+
+```{figure} figures/isc_panel.png
+:alt: An ISC matrix beside a connectivity circle of the pairings above their null
+:width: 100%
+
+The ISC matrix of one dyad beside the connectivity circle, whose chords are the pairings above the 95th percentile of their own surrogates.
+```
 
 ## Nulls
 

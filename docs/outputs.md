@@ -167,6 +167,13 @@ The stage is carried by the file name, so renaming a `desc-` entity by hand brea
 
 **The provenance graph.** At the end of each subject, `nirspipe` draws one graph per run from the sidecars, `figures/<run>_desc-provenance_nirs.png` with its Mermaid source `.mmd`, and the run report embeds it. Nodes are files, labelled by their entities; edges are labelled with the step; three or more outputs one step made from the same inputs are drawn as one box. A node whose file is missing keeps its place with a dashed red outline. `nirspipe-qc provenance OUTPUT_DIR` redraws the graphs from the sidecars on disk, for subjects, dyads and the tree root alike, so it works on any past run and refreshes the image a written report points at.
 
+```{figure} figures/provenance.png
+:alt: A provenance graph of one run, one box per file
+:width: 100%
+
+The provenance graph of a GLM run: one box per file, labelled with the step that made it and, for the signal files, the channels kept, the sampling rate and the duration.
+```
+
 ## Logs and run records
 
 | Layer | Format | Path | For |

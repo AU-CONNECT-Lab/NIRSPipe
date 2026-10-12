@@ -6,7 +6,8 @@ does not know leaves the metric unrecognised and drops it into "Other", settings
 
 import numpy as np
 
-from nirspipe.qc.figures.subject.group_figures import (_split_column, build_condition_panels,
+from nirspipe.qc.figures.subject.group_figures import (_split_column, _stacked_series,
+                                                         build_condition_panels,
                                                          build_window_grid, group_metrics)
 from nirspipe.qc.metrics import GVTD_MOTION_BAND
 
@@ -42,6 +43,19 @@ def test_the_over_time_grid_draws_the_motion_band_gvtd():
     assert drawn and 1.0 not in drawn
     # the row says which trace it is, the band read off the constant
     assert f"{GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz" in fig.layout.yaxis.title.text
+
+
+def test_runs_windowed_at_different_rates_share_every_column():
+    # window centres follow the sampling rate, so no two runs share a sample time
+    rows = [{"bids_name": f"sub-0{k}_task-rest", "qc_window_s": 10.0,
+             "gvtd_window_times_s": [5.0 + 0.07 * k + (10.0 + 0.15 * k) * i for i in range(180)],
+             "gvtd_filt_per_window": [float(k)] * 180}
+            for k in range(3)]
+    grid, stack, _ = _stacked_series(rows, "gvtd", "long")
+    shared = grid <= min(r["gvtd_window_times_s"][-1] for r in rows)
+    assert shared.sum() > 20
+    assert np.isfinite(stack[:, shared]).all()
+    np.testing.assert_allclose(np.median(stack[:, shared], axis=0), 1.0)
 
 
 def test_the_condition_panels_draw_the_motion_band_gvtd():
