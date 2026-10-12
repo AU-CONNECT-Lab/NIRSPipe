@@ -24,7 +24,6 @@ from typing import Any
 from nirspipe.pipeline import motion
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
-from nirspipe.qc.metrics.imu import AGREEMENT_HALF_WINDOW_S
 from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.utils import pair_of
@@ -644,78 +643,78 @@ def step_summary(step: str | None) -> str:
 # Per-channel keys are not listed; they are the same quantity as their scalar sibling.
 METRIC_SUMMARY = {
     # coupling
-    "sci_mean": "Scalp coupling over the whole recording: how well the two wavelengths share a pulse, near 1 being good and low meaning poor optode contact. A few loud stretches shared by both wavelengths, such as movement, outweigh the rest of a whole-run correlation, which is what sci_win_mean is beside it for.",
-    "sci_win_mean": f"The same coupling measured inside {SCI_WINDOW_S:g} s windows and then averaged, on the window grid psp_mean and cv_mean use. Read this one for coupling; it and sci_mean can disagree about which channel set coupled better.",
-    "channel_retention_rate": "Fraction of channels not marked bad, by screening, by --bad-channels or for non-finite samples. Higher is better.",
-    "psp_mean": f"Strength of the shared cardiac peak across the two wavelengths, averaged over {PSP_WINDOW_S:g} s windows and then over channels; higher is a more clearly detected heartbeat.",
-    "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass, averaged over channels; higher is better. This is the line a channel is rejected on.",
-    "cp_mean": "How peaked one channel's spectrum is inside the cardiac band, 0 to 1. Experimental: it never compares the two wavelengths, so read SCI and PSP for coupling, and it rises when the pulse is removed, so it has no better end.",
+    "sci_mean": "Scalp coupling over the whole run: how well the two wavelengths share a heartbeat. Near 1 is good; low means poor optode contact.",
+    "sci_win_mean": f"Scalp coupling in {SCI_WINDOW_S:g} s windows, averaged, so brief movement sways it less than the whole-run SCI. Near 1 is good.",
+    "channel_retention_rate": "Share of channels not marked bad. Higher is better.",
+    "psp_mean": f"Strength of the heartbeat peak the two wavelengths share, in {PSP_WINDOW_S:g} s windows. Higher is better.",
+    "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass; channels are rejected on this. Higher is better.",
+    "cp_mean": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental, with no better end; read SCI and PSP for coupling.",
 
     # raw intensity
-    "cv_mean": f"Noise relative to a channel's own brightness (SD / mean), per wavelength, measured inside {CV_WINDOW_S:g} s windows and then averaged, lower being cleaner.",
-    "snr_mean": f"Mean / SD per channel, the reciprocal of that channel's {CV_WINDOW_S:g} s CV, then averaged over channels, so it is not 1 / cv_mean and one near-constant channel can inflate it. Higher is better.",
-    "snr_pass_rate": "Fraction of channels whose SNR clears the per-channel line. Higher is better.",
-    "n_flat_channels": "How many channels carry no variation at all; zero is what you want. They fail snr_pass_rate and stay out of both means; a saturated channel with any residual noise is not counted here and inflates snr_mean.",
-    "mean_amp_mean": "Average light level reaching the detectors. No universal good value; use it to spot channels far dimmer than their neighbours.",
-    "n_saturated_channels": "How many channels sit at the detector's ceiling for at least two samples in a row, the recording's highest intensity repeated; zero is what you want. Those stretches carry no pulse, so they fail coupling.",
-    "saturated_pct": "Share of channel-samples held at the detector's ceiling, the recording's highest intensity repeated over two samples or more.",
+    "cv_mean": f"Noise relative to brightness (SD / mean) of the raw intensity, in {CV_WINDOW_S:g} s windows. Lower is better.",
+    "snr_mean": f"Mean / SD of the raw intensity, in {CV_WINDOW_S:g} s windows. Higher is better.",
+    "snr_pass_rate": "Share of channels whose SNR clears the per-channel line. Higher is better.",
+    "n_flat_channels": "Channels with no variation at all. Zero is best.",
+    "mean_amp_mean": "Average light level reaching the detectors. Descriptive: use it to spot unusually dim channels.",
+    "n_saturated_channels": "Channels held at the detector's ceiling for two samples or more. Zero is best.",
+    "saturated_pct": "Share of samples held at the detector's ceiling. Zero is best.",
     # geometry
-    "ch_dist_mean": "Average source-detector separation in metres. Descriptive, not a quality judgement.",
-    "ch_dist_min": "Shortest source-detector separation in metres.",
-    "ch_dist_max": "Longest source-detector separation in metres.",
+    "ch_dist_mean": "Average source-detector separation, in metres. Descriptive.",
+    "ch_dist_min": "Shortest source-detector separation, in metres. Descriptive.",
+    "ch_dist_max": "Longest source-detector separation, in metres. Descriptive.",
 
     # haemoglobin
-    "hbo_hbr_corr_mean": "Correlation between HbO and HbR. A cortical response pushes it negative and shared systemic or motion signals push it positive, and it moves with the passband, so compare runs at the same stage rather than against a fixed value.",
-    "cnr_hbo_mean": "How far the evoked HbO response clears its own noise, averaged over channels; higher is better. Absent on a run with no stimulus annotations.",
-    "cnr_hbr_mean": "The same for HbR. HbR falls with a response, so this one runs negative and more negative is better.",
-    "cnr_n_epochs": "How many stimulus epochs the CNR was averaged over. Descriptive; a handful of epochs makes the value noisy.",
-    "gcor_hbo": "How much every HbO channel moves together, higher meaning a stronger shared systemic or global component rather than localised activity. A pair's before side is the bandpassed signal.",
+    "hbo_hbr_corr_mean": "Correlation of HbO and HbR: cortical signal pushes it negative, systemic or motion signal positive. Lower is better, with no fixed cutoff.",
+    "cnr_hbo_mean": "How far the evoked HbO response clears its noise, averaged over channels. Higher is better; needs stimulus annotations.",
+    "cnr_hbr_mean": "The same for HbR, which falls with a response, so more negative is better.",
+    "cnr_n_epochs": "Stimulus epochs the CNR averaged over; with only a few, the CNR is noisy. Descriptive.",
+    "gcor_hbo": "How much all HbO channels move together; high means a strong global or systemic component. Descriptive.",
     "gcor_hbr": "The same for HbR.",
-    "lowfreq_drift_amplitude_hbo": "Peak-to-peak of a fitted trend: how far the HbO baseline travelled, not how slowly, so a step moves it more than a slow sag does and lower is more stable. Non-standard, and not comparable between recordings of different length.",
+    "lowfreq_drift_amplitude_hbo": "How far the HbO baseline travelled, peak to peak of a fitted trend. Lower is better; not comparable across recording lengths.",
     "lowfreq_drift_amplitude_hbr": "The same for HbR.",
 
     # spectral. Power is a mean PSD level inside the band, fraction is a sum over the band
     # against the sum over the whole spectrum; they are not the same quantity rescaled.
-    "cardiac_band_power_hbo": "Average HbO spectral density inside the cardiac band. Scales with signal amplitude, so it does not compare across subjects, and it rises with any broadband artifact.",
+    "cardiac_band_power_hbo": "Average HbO spectral density in the cardiac band. Descriptive; it scales with signal amplitude, so it does not compare across subjects.",
     "cardiac_band_power_hbr": "The same for HbR.",
-    "cardiac_band_frac_hbo": "Share of total HbO power sitting in the cardiac band, 0 to 1, comparable across subjects. Spectral content, not quality: motion lifts every band, so read SCI and PSP for whether the pulse is real.",
+    "cardiac_band_frac_hbo": "Share of HbO power in the cardiac band, 0 to 1. Descriptive; read SCI and PSP for pulse quality.",
     "cardiac_band_frac_hbr": "The same for HbR.",
-    "resp_band_power_hbo": "Average HbO spectral density inside the respiration band.",
+    "resp_band_power_hbo": "Average HbO spectral density in the respiration band. Descriptive.",
     "resp_band_power_hbr": "The same for HbR.",
-    "resp_band_frac_hbo": "Share of total HbO power that sits in the respiration band, 0 to 1.",
+    "resp_band_frac_hbo": "Share of HbO power in the respiration band, 0 to 1. Descriptive.",
     "resp_band_frac_hbr": "The same for HbR.",
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
-    "gvtd_mean": "Unfiltered GVTD of this channel set, averaged over the run: the value other implementations report, kept for comparison with them and shown in no report. Not validated as a motion index and with no cutoff of its own (gvtd_thresh does not apply), so read gvtd_filt_mean for movement.",
+    "gvtd_mean": "Unfiltered GVTD averaged over the run, recorded for comparison with other tools. The GVTD threshold does not apply; read the band-passed GVTD for movement.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
-    "gvtd_filt_mean": f"Average movement after band-passing to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, where head motion lives. This is the trace gvtd_thresh applies to.",
-    "gvtd_filt_p95": "The same at the worst moments, the 95th percentile.",
-    "gvtd_vstd_mean": "Unfiltered GVTD with each channel's derivative scaled to unit SD, so loud channels cannot dominate; recorded, shown in no report. Its mean square is 1 by construction, so the run mean shows how bursty the trace is rather than how much it moved, and it falls as motion concentrates.",
-    "gvtd_vstd_p95": "The same at the 95th percentile, which also falls when motion fills under 5% of the run.",
-    "gvtd_thresh": f"Motion cutoff from this recording's own band-passed GVTD histogram: its mode plus {GVTD_N_STD:g} times the spread below the mode; read it against gvtd_filt_p95. Each side of a pair sets its own, so a change here is not motion removed.",
-    "gvtd_thresh_applied": "The cutoff the counts below were actually taken against: the uncorrected recording's on both sides of a pair, so the two share one yardstick.",
-    "gvtd_num_above_thresh": "Timepoints whose band-passed GVTD exceeds gvtd_thresh_applied.",
-    "gvtd_pct_above_thresh": "Timepoints well clear of the run's own quiet level (above gvtd_thresh_applied) as a fraction of the recording, not every frame with some movement in it; lower is cleaner. Both sides of a pair are counted against the uncorrected cutoff, so a fall is motion removed rather than the cutoff moving.",
-    "gvtd_censor_pct": "Fraction of the recording marked BAD_gvtd: samples above the censoring cutoff, which --gvtd-censor-n-std sets and which by default is the gvtd_thresh rule, plus surviving stretches too short to analyse. Nothing was deleted.",
-    "gvtd_censor_retained_s": "Seconds left after censoring, in gvtd_censor_n_epochs continuous stretches; this, not the censored fraction, is what an analysis has to work with.",
-    "spike_count": "Sudden jumps across all channels, counted on the motion-band-filtered derivative so they reflect movement rather than pulse; lower is better.",
-    "spike_pct": "Those jumps as a fraction of all channel-samples. Experimental.",
-    "spike_num_frames": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental.",
-    "spike_pct_frames": "Those timepoints as a fraction of the recording. Experimental.",
-    "motion_corrected_frac_mean": "Average fraction of each channel's samples where the correction changed abruptly, its frame-to-frame change exceeding the channel's own noise. Experimental.",
-    "motion_corrected_num": f"Timepoints where at least {100 * SPIKE_CH_FRAC:g}% of channels were corrected abruptly at once. Experimental.",
-    "motion_corrected_pct": "Those timepoints as a fraction of the recording. Experimental.",
-    "motion_corrected_n_segments": "How many separate stretches those timepoints form. Experimental.",
+    "gvtd_filt_mean": f"Head movement: GVTD band-passed to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, averaged over the run. Lower is better.",
+    "gvtd_filt_p95": "The same at the worst moments, the 95th percentile. Lower is better.",
+    "gvtd_vstd_mean": "Unfiltered GVTD with every channel scaled to unit variance, so loud channels cannot dominate. Recorded only, with no better end.",
+    "gvtd_vstd_p95": "The same at the 95th percentile.",
+    "gvtd_thresh": f"Motion cutoff from this recording's own band-passed GVTD: its mode plus {GVTD_N_STD:g} times the spread below it. Descriptive.",
+    "gvtd_thresh_applied": "The cutoff the frame counts are taken against: the uncorrected recording's, on both sides of a before and after pair.",
+    "gvtd_num_above_thresh": "Frames whose band-passed GVTD exceeds the applied threshold. Lower is better.",
+    "gvtd_pct_above_thresh": "Share of the recording with clear movement, above the applied GVTD threshold. Lower is better.",
+    "gvtd_censor_pct": "Share of the recording marked BAD_gvtd by censoring; nothing was deleted. Lower is better.",
+    "gvtd_censor_retained_s": "Seconds left after censoring, the time an analysis can actually use. Higher is better.",
+    "spike_count": "Sudden jumps across all channels, on the motion-band derivative. Lower is better.",
+    "spike_pct": "Spike samples as a share of all channel-samples. Experimental; lower is better.",
+    "spike_num_frames": f"Frames where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental; lower is better.",
+    "spike_pct_frames": "Spike frames as a share of the recording. Experimental; lower is better.",
+    "motion_corrected_frac_mean": "Average share of each channel's samples the correction changed abruptly. Experimental and descriptive.",
+    "motion_corrected_num": f"Frames where at least {100 * SPIKE_CH_FRAC:g}% of channels were corrected abruptly at once. Experimental and descriptive.",
+    "motion_corrected_pct": "Corrected frames as a share of the recording. Experimental and descriptive.",
+    "motion_corrected_n_segments": "Separate stretches the corrected frames form. Experimental and descriptive.",
     # motion, measured by the sensor rather than inferred from the optical data
-    "gyro_speed_mean": "Descriptive: how fast the head turned on average, from the gyroscope (each axis minus its median, then the magnitude), in the unit the recording declares (gyro_speed_unit). Not optical, so it belongs to no channel set.",
-    "gyro_speed_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
-    "accel_jerk_mean": "Descriptive: how abruptly the head's acceleration changed on average, from the accelerometer's time derivative, which removes gravity, in the unit the recording declares (accel_jerk_unit). Not optical, so it belongs to no channel set.",
-    "accel_jerk_p95": "Descriptive: the same at the worst moments, the 95th percentile.",
-    "gyro_speed_gvtd_rho": f"Spearman correlation, frame by frame, between the band-passed GVTD of the channel set a run is judged on and the gyroscope speed averaged over {AGREEMENT_HALF_WINDOW_S:g} s either side: how closely the optical motion index follows the sensor on this run. Recorded, not shown in the reports.",
+    "gyro_speed_mean": "Average head turning speed from the gyroscope, in the recording's unit. Descriptive.",
+    "gyro_speed_p95": "The same at the worst moments, the 95th percentile. Descriptive.",
+    "accel_jerk_mean": "Average jerk (change in acceleration) from the accelerometer, in the recording's unit. Descriptive.",
+    "accel_jerk_p95": "The same at the worst moments, the 95th percentile. Descriptive.",
+    "gyro_speed_gvtd_rho": "How closely the band-passed GVTD follows the gyroscope speed, frame by frame (Spearman). Recorded only, with no better end.",
     "accel_jerk_gvtd_rho": "The same against the accelerometer jerk.",
     # time
-    "pct_data_retained": "Fraction of the recording not covered by BAD annotations; higher is more usable data. A share of duration rather than of channels, so it is one number for every channel set.",
+    "pct_data_retained": "Share of the recording outside BAD_ spans. Higher is better.",
 }
 # The few that decide whether a subject is usable at all. Everything else is context for
 # why. Three questions: are enough channels left, is enough time left, and is the signal
@@ -737,34 +736,19 @@ KEY_METRICS = frozenset({
 # separated by a bandpass and a resample; without this line a tooltip cannot say which of
 # the two the reader is looking at, and the section name is not visible from inside a
 # panel. The section-to-stage mapping this follows lives in the SQM record.
-_STAGE_RAW = "Measured on the recording as it arrived, before any processing."
-_STAGE_MOTION = (
-    "Measured across the motion-correction step, on the optical density either side of it."
-)
-_STAGE_PREPROC = (
-    "Measured after Beer-Lambert and before filtering."
-)
-_STAGE_BOTH = (
-    "Measured on each haemoglobin stage the record covers (preproc, filtered, resampled, "
-    "errts), so which stage you are reading is the section it sits in."
-)
+_STAGE_RAW = "Measured on the raw recording."
+_STAGE_MOTION = "Measured across motion correction."
+_STAGE_PREPROC = "Measured after Beer-Lambert, before filtering."
+_STAGE_BOTH = "Measured at each haemoglobin stage; the section says which."
 # the one haemoglobin metric the raw viewer also measures, on its own Beer-Lambert
 _STAGE_BOTH_AND_RAW = (
-    "Measured on each haemoglobin stage the record covers (preproc, filtered, resampled, "
-    "errts, and in the raw viewer unfiltered haemoglobin before and after motion "
-    "correction), so which stage you are reading is the section it sits in."
+    "Measured at each haemoglobin stage, unfiltered in the raw viewer; the section says which."
 )
-_STAGE_RAW_AND_CORRECTED = (
-    "Measured on the recording as it arrived and again on the motion-corrected file, over the "
-    "same channels both times."
-)
+_STAGE_RAW_AND_CORRECTED = "Measured on the raw recording and again after motion correction."
 
 # A condition page reads GVTD off the corrected file's windows alone, so the whole-run line
 # above would name a second file and a percentile the page does not hold.
-_STAGE_CONDITION_MOTION = (
-    "On a condition page: the motion-corrected file's windows sliced to this condition, so a "
-    "95th percentile is the mean of the windows' own and the threshold is that file's own."
-)
+_STAGE_CONDITION_MOTION = "Here: the motion-corrected file's windows inside this condition."
 _RAW_METRICS = (
     # good_frac_mean sits here and not with sci/psp, which it is built from: those two are
     # measured again on the corrected file, and the coupled-window count is taken once, at
@@ -1036,7 +1020,7 @@ _CONDITION_LABELS = {
     "channel_retention_rate": "Passing in condition",
 }
 _CONDITION_SUMMARIES = {
-    "channel_retention_rate": "Fraction of channels that pass on this condition's stretch alone, against the run's line; a channel rejected by hand or for non-finite samples fails every condition. A guide to choosing conditions that rejects nothing: the data were processed under the run's verdict. Higher is better.",
+    "channel_retention_rate": "Share of channels that pass on this condition alone, against the run's line; a guide that rejects nothing. Higher is better.",
 }
 
 def condition_label(metric: str) -> "str | None":

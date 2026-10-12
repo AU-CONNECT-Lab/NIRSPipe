@@ -198,14 +198,10 @@ NOTES = {
         "Long channels only: the channels outside both separation ranges are left out of "
         "these averages and listed in their own block of the per-channel table below.",
     "metrics.set_help":
-        "Long is the set the verdict is read off. Short is left uncoloured: a short "
-        "channel&rsquo;s coupling is high by construction, so that column answers whether the "
-        "regressors those channels feed are trustworthy rather than whether the run is "
-        "usable. Rejection is per channel, against the screening criteria over the whole "
-        "montage, and is not read off these averages.",
+        "Judge the run on Long. Short is uncoloured: short channels couple well by "
+        "construction and only feed the regressors.",
     "metrics.set_help_condition":
-        "On this page every value is this condition's, and the channel sets are the run's, "
-        "since one montage has to serve every condition.",
+        "Values are this condition's; the channel sets are the run's.",
     "metrics.stages":
         "One panel per metric on the long channels' HbO (HbO&ndash;HbR r uses both), each on "
         "its own scale. Short channels are left out because they serve as regressors.",
@@ -239,10 +235,8 @@ NOTES = {
     "metrics.motion_arrow":
         "Two values are before and after motion correction.",
     "metrics.gvtd_set_help":
-        "Long is the set the verdict is read off and the only one coloured. Each set is its own "
-        "measurement rather than a grouping of one, with its own GVTD cutoff and its own bar "
-        "of {pct:g}% of the channels. Corrected per channel is the exception, an average over "
-        "the set.",
+        "Judge the run on Long, the only coloured set. Each set is measured on its own, with its "
+        "own GVTD cutoff and its own {pct:g}% bar.",
     "metrics.motion_extra_split":
         "A value in the All column with Long and Short blank belongs to no channel set: the "
         "motion sensor is not optical data, and censoring uses its own set "

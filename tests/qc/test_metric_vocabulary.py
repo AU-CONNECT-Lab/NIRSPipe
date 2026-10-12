@@ -194,12 +194,14 @@ def test_the_chromophore_pairs_are_complete():
 
 
 def test_a_tooltip_stays_short_enough_to_read():
-    # a native title tooltip is a hover, not a paragraph: past about three sentences readers
-    # stop opening them
+    # a native title tooltip is a hover, not a paragraph; sentences packed with semicolons
+    # dodge a sentence count, so the words are capped too
     for metric in METRIC_SUMMARY:
-        text = metric_summary(metric)
-        n = len([p for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()])
-        assert n <= 3, f"{metric} tooltip runs to {n} sentences: {text}"
+        for condition in (False, True):
+            text = metric_summary(metric, condition)
+            n = len([p for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()])
+            assert n <= 3, f"{metric} tooltip runs to {n} sentences: {text}"
+            assert len(text.split()) <= 40, f"{metric} tooltip runs to {len(text.split())} words: {text}"
 
 
 def test_an_unknown_metric_reads_as_empty_rather_than_raising():
@@ -307,8 +309,7 @@ def test_gvtd_points_at_the_threshold_that_applies_to_it():
     `gvtd_thresh` is computed from the band-passed trace and compared against it, so it is
     a cutoff for `gvtd_filt_*` and not for the unfiltered `gvtd_mean` / `gvtd_p95`.
     """
-    assert "gvtd_thresh" in METRIC_SUMMARY["gvtd_filt_p95"] or \
-           "gvtd_thresh" in METRIC_SUMMARY["gvtd_filt_mean"]
+    assert "band-passed GVTD" in METRIC_SUMMARY["gvtd_thresh"]
     assert "does not apply" in METRIC_SUMMARY["gvtd_mean"]
 
 
@@ -326,7 +327,7 @@ def test_the_scan_reaches_every_metric_module():
 def test_a_condition_page_names_the_one_file_its_gvtd_comes_from():
     whole_run = metric_summary("gvtd_filt_p95")
     condition = metric_summary("gvtd_filt_p95", condition=True)
-    assert "again on the motion-corrected file" in whole_run
+    assert "again after motion correction" in whole_run
     assert "motion-corrected file's windows" in condition and "again" not in condition
     # a metric the condition page does not re-read keeps its own stage line
     assert metric_summary("cv_mean", condition=True) == metric_summary("cv_mean")
