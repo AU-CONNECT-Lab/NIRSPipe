@@ -75,7 +75,6 @@ _DYNAMIC_IDS = {"an-subjects-checklist", "dp-subject-radio"}
 # in the same spirit as NOT_EXPOSED: an id may go unread, but only on purpose and only in
 # writing. An id nothing reads and nothing will read belongs deleted, not listed here.
 _UNBOUND_BY_DESIGN = {
-    "dp-tabs": "a dbc.Tabs container; switching is client-side and reaches no callback",
     "an-noise-model-suggest": "an html.Datalist; the browser reads it through the input's "
                               "list= attribute, so no callback ever names it",
 }

@@ -5,8 +5,11 @@ from __future__ import annotations
 import io
 import re
 from pathlib import Path
+import functools
 import hashlib
 import pickle
+import subprocess
+import tempfile
 
 import dash_bootstrap_components as dbc
 import numpy as np
@@ -17,7 +20,6 @@ from nirspipe.interface.callbacks._sections import rng, summary, value
 from nirspipe.interface.grid import rows_minus_clicked
 from nirspipe.interface.theme import style_figure
 from nirspipe.io.derivatives import subject_labels
-from nirspipe.qc.common.channel_table import channel_columns
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.data_prep_callbacks")
@@ -33,11 +35,9 @@ def _parse_bids_entities(filename: str) -> dict:
 
 
 def _snirf_options(subject: str, bids_dir: str) -> list[dict]:
-    nirs_dir = Path(bids_dir) / f"sub-{subject}" / "nirs"
-    if not nirs_dir.is_dir():
-        return []
+    sub_dir = Path(bids_dir) / f"sub-{subject}"
     options = []
-    for f in sorted(nirs_dir.glob("*_nirs.snirf")):
+    for f in sorted([*sub_dir.glob("nirs/*_nirs.snirf"), *sub_dir.glob("ses-*/nirs/*_nirs.snirf")]):
         e = _parse_bids_entities(f.name)
         parts = [f"sub-{e.get('sub', subject)}"]
         if e.get("ses"):  parts.append(f"ses-{e['ses']}")
@@ -52,13 +52,19 @@ _CACHE_VERSION = 9
 
 
 def _make_cache_key(snirf_path: str, sci_thresh: float, cardiac_l: float, cardiac_h: float,
-                    dpf: float, window_s: float, epoch_qc: bool,
-                    epoch_tmin: float, epoch_tmax: float,
-                    sep_bands=None) -> str:
+                    dpf: float, window_s: float, epoch_tmin: float, epoch_tmax: float,
+                    sep_bands=None, screening=None) -> str:
     payload = (f"v{_CACHE_VERSION}|{snirf_path}|{sci_thresh}|{cardiac_l}|{cardiac_h}|{dpf}"
-               f"|{window_s}|{epoch_qc}|{epoch_tmin}|{epoch_tmax}"
-               f"|{sep_bands}")
+               f"|{window_s}|{epoch_tmin}|{epoch_tmax}"
+               f"|{sep_bands}|{screening}")
     return hashlib.md5(payload.encode()).hexdigest()[:16]
+
+
+@functools.lru_cache(maxsize=2)
+def _layout(bids_dir: str):
+    """One pybids index per dataset, which is what the channels.tsv lookup walks."""
+    from nirspipe.io.bids import get_layout
+    return get_layout(Path(bids_dir), validate=False)
 
 
 # ── Directory sync: page → shared Store ──────────────────────────────────────
@@ -153,18 +159,23 @@ def populate_runs(subject, bids_dir):
     State("dp-cardiac-h",    "value"),
     State("dp-dpf",          "value"),
     State("dp-window-s",     "value"),
-    State("dp-epoch-qc",     "value"),
+    State("dp-psp-thresh",   "value"),
+    State("dp-min-good-frac", "value"),
+    State("dp-screen-scope", "value"),
+    State("dp-ignore-status", "value"),
     State("dp-epoch-tmin",   "value"),
     State("dp-epoch-tmax",   "value"),
     State("dp-short-max-dist", "value"),
     State("dp-long-min-dist",  "value"),
     State("dp-long-max-dist",  "value"),
+    State("app-bids-dir",    "data"),
     State("app-output-dir",  "data"),
     prevent_initial_call=True,
 )
 def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
-             window_s, epoch_qc, epoch_tmin, epoch_tmax,
-             short_max_dist, long_min_dist, long_max_dist, output_dir):
+             window_s, psp_thresh, min_good_frac, screen_scope, ignore_status,
+             epoch_tmin, epoch_tmax,
+             short_max_dist, long_min_dist, long_max_dist, bids_dir, output_dir):
     if not run_path:
         return no_update, no_update
     if not output_dir or not Path(output_dir).is_dir():
@@ -180,7 +191,6 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
     window_s   = float(window_s if window_s is not None else 10.0)
     ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
     ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
-    trial_qc   = bool(epoch_qc)
     from nirspipe.cli._shared import separation_bands_from_args
     from nirspipe.qc.metrics._helpers import separation_bands
     try:
@@ -191,9 +201,17 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
     except ValueError as exc:
         return no_update, dbc.Alert(str(exc), color="warning")
     snirf_path = run_path
+    # the recording's channels.tsv rejections, joined as nirspipe-qc prep-raw joins them
+    tsv_bads: list[str] = []
+    if not ignore_status and bids_dir:
+        from nirspipe.io.bids import channel_status_bads
+        try:
+            tsv_bads = channel_status_bads(_layout(str(bids_dir)), Path(snirf_path))
+        except Exception as exc:
+            logger.warning("channels.tsv status unreadable, screening alone decides: %s", exc)
+    screening = (psp_thresh, min_good_frac, screen_scope or "run", tuple(tsv_bads))
     cache_key  = _make_cache_key(snirf_path, sci_threshold, cardiac_l, cardiac_h, dpf,
-                                 window_s, trial_qc, ep_tmin, ep_tmax,
-                                 sep_bands)
+                                 window_s, ep_tmin, ep_tmax, sep_bands, screening)
     disk_path  = Path(output_dir) / ".fnirs_cache" / f"{cache_key}.pkl"
 
     if cache_key in _RESULT_CACHE:
@@ -221,17 +239,19 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
             # the second half is what the per-condition report pages need: windowed
             # matrices and paths, none of it serialisable and none of it this page's
             result, _ = _process_run(
-                {"snirf_path": snirf_path, "label": run_label},
+                {"snirf_path": snirf_path, "label": run_label, "channels_tsv_bads": tsv_bads},
                 sci_threshold,
                 run_dir,
                 cardiac_l,
                 cardiac_h,
                 [dpf],
                 window_s=window_s,
-                epoch_qc=trial_qc,
                 epoch_tmin=ep_tmin,
                 epoch_tmax=ep_tmax,
+                psp_threshold=psp_thresh,
                 sep_bands=sep_bands,
+                min_good_frac=min_good_frac,
+                screen_scope=screen_scope or "run",
             )
             result["epoch_window"] = [ep_tmin, ep_tmax]
             # the per-channel figures are built on demand in update_channel_detail; the DPF
@@ -266,32 +286,19 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
 _SHOW = {}
 
 @callback(
-    Output("dp-ts-figure",              "figure"),
     Output("dp-layout-2d",              "figure"),
     Output("dp-layout-3d",              "figure"),
-    Output("dp-sci-psp-figure",         "figure"),
     Output("dp-psd-mean",               "figure"),
-    Output("dp-ch-summary-figure",      "figure"),
     Output("dp-marker-store",           "data",    allow_duplicate=True),
     Output("dp-channel-selector",       "options"),
-    Output("dp-sqm-table",              "rowData"),
-    Output("dp-sqm-scope",              "children"),
-    Output("dp-sqm-split",              "children"),
     Output("dp-channel-selector",       "value",   allow_duplicate=True),
     Output("dp-evoked-topo",            "figure"),
     Output("dp-trigger-timeline",       "figure"),
-    Output("dp-carpet-gvtd",            "figure"),
-    Output("dp-trial-qc",               "figure"),
-    Output("dp-ts-figure-wrap",         "style"),
     Output("dp-layout-2d-wrap",         "style"),
     Output("dp-layout-3d-wrap",         "style"),
-    Output("dp-sci-psp-figure-wrap",    "style"),
     Output("dp-psd-mean-wrap",          "style"),
-    Output("dp-ch-summary-figure-wrap", "style"),
     Output("dp-evoked-topo-wrap",       "style"),
     Output("dp-trigger-timeline-wrap",  "style"),
-    Output("dp-carpet-gvtd-wrap",       "style"),
-    Output("dp-trial-qc-wrap",          "style"),
     Input("dp-run-store",          "data"),
     Input("dp-mount-tick",         "n_intervals"),
     prevent_initial_call="initial_duplicate",
@@ -311,12 +318,9 @@ def restore_from_store(store, _tick):
             d = d.get(k)
         return style_figure(d) if d else no_update
 
-    ts_fig       = _fig(cached, "ts",               "figure")
     layout_2d    = _fig(cached, "layout",           "layout_2d_figure")
     layout_3d    = _fig(cached, "layout",           "layout_3d_figure")
-    sci_psp_out  = _fig(cached, "sci_psp",          "figure")
     psd_out      = _fig(cached, "psd",              "figure")
-    ch_sum_out   = _fig(cached, "ch_summary",       "figure")
     evoked_topo  = _fig(cached, "evoked_topo",      "figure")
     trigger_tl   = _fig(cached, "trigger_timeline", "figure")
 
@@ -335,96 +339,24 @@ def restore_from_store(store, _tick):
     ch_labels = cached.get("channel_labels", {})
     ch_options = [{"label": ch_labels.get(p, p), "value": p} for p in ch_pairs] or no_update
 
-    # already labelled, formatted and coloured by the metric registry, which is also what
-    # the subject report and the raw viewer print, so this panel carries no copy of any of it
-    sqm = cached.get("sqm", {})
-    sqm_rows = sqm.get("rows", []) or no_update      # each row carries its own `tip`
-
-    carpet_src = cached.get("carpet_gvtd", {}).get("figure")
-    carpet_src = style_figure(carpet_src) if carpet_src else no_update
-    trial_qc   = _fig(cached, "trial_qc", "figure")
-
     def _wrap(val):
         return _SHOW if val is not no_update else no_update
 
     return (
-        ts_fig,
         layout_2d,
         layout_3d,
-        sci_psp_out,
         psd_out,
-        ch_sum_out,
         marker_rows,
         ch_options,
-        sqm_rows,
-        _sqm_scope_text(sqm),
-        _build_split_table(sqm.get("split") or {}),
         no_update,
         evoked_topo,
         trigger_tl,
-        carpet_src,
-        trial_qc,
-        _wrap(ts_fig),
         _wrap(layout_2d),
         _wrap(layout_3d),
-        _wrap(sci_psp_out),
         _wrap(psd_out),
-        _wrap(ch_sum_out),
         _wrap(evoked_topo),
         _wrap(trigger_tl),
-        _wrap(carpet_src),
-        _wrap(trial_qc),
     )
-
-
-# ── Trace click → channel selector only (highlight handled by selector callback) ─
-
-@callback(
-    Output("dp-channel-selector", "value"),
-    Input("dp-ts-figure",         "clickData"),
-    State("dp-run-store",         "data"),
-    prevent_initial_call=True,
-)
-def on_ts_click(click_data, store):
-    if not click_data or not store:
-        return no_update
-    cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
-    ts_fig      = cached.get("ts", {}).get("figure", {})
-    trace_names = [t.get("name", "") for t in ts_fig.get("data", [])]
-    valid_pairs = set(cached.get("channel_pairs", []))
-
-    curve_num = click_data["points"][0]["curveNumber"]
-    if curve_num >= len(trace_names):
-        return no_update
-    trace_name = trace_names[curve_num]
-    pair = pair_of(trace_name)
-    logger.debug("on_ts_click: pair=%r, valid=%s", pair, pair in valid_pairs)
-    return pair if pair in valid_pairs else no_update
-
-
-# ── Selector → highlight Raw Signal traces ────────────────────────────────────
-
-@callback(
-    Output("dp-ts-figure", "figure", allow_duplicate=True),
-    Input("dp-channel-selector", "value"),
-    State("dp-run-store",        "data"),
-    prevent_initial_call=True,
-)
-def highlight_ts_from_selector(channel_pair, store):
-    if not store:
-        return no_update
-    cached      = _RESULT_CACHE.get(store.get("cache_key"), {})
-    ts_fig      = cached.get("ts", {}).get("figure", {})
-    trace_names = [t.get("name", "") for t in ts_fig.get("data", [])]
-    if not trace_names:
-        return no_update
-
-    patched = Patch()
-    for i, name in enumerate(trace_names):
-        patched["data"][i]["opacity"] = 1.0 if (
-            not channel_pair or pair_of(name) == channel_pair
-        ) else 0.05
-    return patched
 
 
 # ── Selector → highlight 3D optode ───────────────────────────────────────────
@@ -690,41 +622,62 @@ def add_marker_row(n_clicks, rows):
     return rows
 
 
+def _selection(snirf_path: Path) -> list[str]:
+    """nirspipe-prep's selection flags that pick out exactly the loaded run."""
+    entities = _parse_bids_entities(snirf_path.name)
+    args = ["--participant-label", entities.get("sub", "")]
+    for flag, key in (("--session-label", "ses"), ("--task-label", "task"),
+                      ("--run-label", "run")):
+        if entities.get(key):
+            args += [flag, entities[key]]
+    # the run was read from this tree a moment ago; validating it again costs the save seconds
+    return args + ["--skip-bids-validation"]
+
+
+def _run_prep(argv: list[str]) -> dbc.Alert:
+    """Run one nirspipe-prep command to the end and show what it printed."""
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True)
+    except FileNotFoundError:
+        return dbc.Alert(f"`{argv[0]}` not found on PATH. Make sure nirspipe is installed.",
+                         color="danger", className="mb-0 py-2")
+    output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    ok = proc.returncode == 0
+    return dbc.Alert([
+        html.Div("Done." if ok else f"Failed (exit {proc.returncode}).", className="fw-bold"),
+        html.Code(" ".join(argv), className="d-block small mb-1"),
+        html.Pre("\n".join(output.splitlines()[-10:]), className="fp-run-tail mb-0"),
+    ], color="success" if ok else "danger", className="mb-0 py-2")
+
+
 @callback(
     Output("dp-save-status", "children"),
     Input("dp-save-markers-btn", "n_clicks"),
     State("dp-marker-store",     "data"),
     State("dp-run-store",        "data"),
+    State("app-bids-dir",        "data"),
     State("app-output-dir",      "data"),
     prevent_initial_call=True,
 )
-def save_markers(n_clicks, rows, store, output_dir):
+def save_markers(n_clicks, rows, store, bids_dir, output_dir):
     if not store or not store.get("snirf_path"):
         return dbc.Alert("No run loaded.", color="warning", className="mb-0 py-2")
-    if not output_dir:
-        return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
+    if not bids_dir or not output_dir:
+        return dbc.Alert("Set the BIDS and output directories.", color="warning",
+                         className="mb-0 py-2")
 
     import pandas as pd
-    from nirspipe.pipeline.edit_markers import apply_markers_from_df
+    from nirspipe.io.tables import write_tsv
 
-    snirf_path = Path(store["snirf_path"])
-    entities = _parse_bids_entities(snirf_path.name)
-    sub = entities.get("sub", "")
-    ses = entities.get("ses")
-
-    rows = rows or []
-    df = pd.DataFrame(rows, columns=["onset", "duration", "trial_type"])
+    df = pd.DataFrame(rows or [], columns=["onset", "duration", "trial_type"])
     df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
     df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
 
-    try:
-        out_snirf = apply_markers_from_df(
-            snirf_path, Path(output_dir), sub, ses, df
-        )
-        return dbc.Alert(f"Saved to derivatives: {out_snirf.name}",
-                         color="success", className="mb-0 py-2")
-    except Exception as exc:
-        return dbc.Alert(f"Save failed: {exc}", color="danger", className="mb-0 py-2")
+    with tempfile.TemporaryDirectory() as tmp:
+        events = write_tsv(df, Path(tmp) / "events.tsv")
+        return _run_prep(["nirspipe-prep", "edit-markers", "apply", str(bids_dir),
+                          str(output_dir), *_selection(Path(store["snirf_path"])),
+                          "--tsv", str(events)])
 
 
 # ── Enable/disable − Sel / + Sel (uses row checkboxes) ───────────────────────
@@ -1066,166 +1019,63 @@ def update_crop_highlight(tmin, tmax, segments, mode):
     State("dp-crop-seg-table",  "virtualRowData"),
     State("dp-crop-combine",    "value"),
     State("dp-run-store",       "data"),
+    State("app-bids-dir",       "data"),
     State("app-output-dir",     "data"),
     prevent_initial_call=True,
 )
-def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, output_dir):
+def apply_crop(n_clicks, mode, tmin, tmax, seg_rows, combine_val, store, bids_dir, output_dir):
     if not store or not store.get("snirf_path"):
         return dbc.Alert("No run loaded.", color="warning", className="mb-0 py-2")
-    if not output_dir:
-        return dbc.Alert("Output directory not set.", color="warning", className="mb-0 py-2")
+    if not bids_dir or not output_dir:
+        return dbc.Alert("Set the BIDS and output directories.", color="warning",
+                         className="mb-0 py-2")
+
+    argv = ["nirspipe-prep", "crop", str(bids_dir), str(output_dir),
+            *_selection(Path(store["snirf_path"]))]
+    if mode == "single":
+        if tmin is None and tmax is None:
+            return dbc.Alert("Set tmin or tmax.", color="warning", className="mb-0 py-2")
+        if tmin is not None:
+            argv += ["--tmin", str(tmin)]
+        if tmax is not None:
+            argv += ["--tmax", str(tmax)]
+        return _run_prep(argv)
+
+    if not seg_rows:
+        return dbc.Alert("Add at least one segment.", color="warning", className="mb-0 py-2")
 
     import pandas as pd
-    from nirspipe.pipeline.crop import crop_snirf_from_path
+    from nirspipe.io.tables import write_tsv
 
-    snirf_path = Path(store["snirf_path"])
-    entities   = _parse_bids_entities(snirf_path.name)
-    sub        = entities.get("sub", "")
-    ses        = entities.get("ses")
-    combine    = bool(combine_val)
-
-    try:
-        if mode == "single":
-            if tmin is None and tmax is None:
-                return dbc.Alert("Set tmin or tmax.", color="warning", className="mb-0 py-2")
-            out_paths = crop_snirf_from_path(
-                snirf_path, Path(output_dir), sub, ses,
-                tmin=float(tmin) if tmin is not None else None,
-                tmax=float(tmax) if tmax is not None else None,
-            )
-        else:
-            if not seg_rows:
-                return dbc.Alert("Add at least one segment.", color="warning", className="mb-0 py-2")
-            df = pd.DataFrame(seg_rows, columns=["onset", "duration", "task"])
-            df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
-            df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
-            out_paths = crop_snirf_from_path(
-                snirf_path, Path(output_dir), sub, ses,
-                segments_df=df, combine=combine,
-            )
-        names = ", ".join(p.name for p in out_paths)
-        return dbc.Alert(f"Written: {names}", color="success", className="mb-0 py-2")
-    except Exception as exc:
-        return dbc.Alert(f"Crop failed: {exc}", color="danger", className="mb-0 py-2")
-
-
-# the same columns the subject report and the raw viewer print, in the same order; the
-# HbO-HbR correlation is a haemoglobin measurement this intensity view has no stage for. The saturated share is not on this page.
-_CH_COLUMNS = channel_columns(("corr", "saturated", "separation"))
-_CELL_COLOR = {"bad": "#c0392b", "good": "#27ae60", "neg": "#27ae60", "pos": "#c0392b"}
-_TH_STYLE = {"padding": "4px 8px", "fontWeight": "600", "fontSize": "0.8rem",
-             "borderBottom": "2px solid #dde3ea", "background": "#f8f9fa"}
-_TD_STYLE = {"padding": "3px 8px", "borderBottom": "1px solid #f0f0f0",
-             "fontVariantNumeric": "tabular-nums"}
-
-
-def _sqm_scope_text(sqm: dict) -> str:
-    if sqm.get("channel_set") == "long channels":
-        return ("Measured on long channels only.")
-    return "Measured on every channel: this montage carries no short channels."
-
-
-def _build_split_table(split: dict) -> "html.Div | None":
-    """The one-recording-three-channel-sets table, cells already formatted and classed."""
-    if not split.get("rows"):
-        return None
-    head = html.Thead(html.Tr(
-        [html.Th("Channel set", style=_TH_STYLE), html.Th("Channels", style=_TH_STYLE)]
-        + [html.Th(c["label"], title=c["tip"], style=_TH_STYLE) for c in split["columns"]]))
-    body = html.Tbody([
-        html.Tr(
-            [html.Td(r["name"], style=_TD_STYLE),
-             html.Td("—" if r["n"] is None else r["n"], style=_TD_STYLE)]
-            + [html.Td(c["value"],
-                       style={**_TD_STYLE,
-                              "color": _CELL_COLOR.get(c["cls"].removeprefix("qm-"), "")})
-               for c in r["cells"]])
-        for r in split["rows"]])
-    return html.Div([
-        html.Small("The same recording over three channel sets. Long is what the verdict is "
-                   "read off; Short carries no colouring.",
-                   className="text-muted d-block mb-1"),
-        html.Table([head, body],
-                   style={"borderCollapse": "collapse", "width": "100%",
-                          "fontSize": "0.82rem"}),
-    ])
-
-
-def _build_channel_table(pair_cells: list[dict], blocks: list, notes: list) -> html.Div:
-    """Per-channel metrics, one row per source-detector pair.
-
-    Rows arrive from nirspipe.qc.common.channel_table with their numbers formatted and their
-    cells classed, so this table, the raw viewer's and the subject report's cannot print one
-    channel three ways.
-    """
-    n_cols = len(_CH_COLUMNS)
-
-    def _cell(cell: dict, key: str) -> html.Td:
-        # the name identifies the row rather than scoring it, so it carries the rejection
-        # highlight instead of a metric colour
-        if key == "name":
-            return html.Td(cell["name"],
-                           style={**_TD_STYLE, "fontWeight": "500",
-                                  "background": "#fff8f8" if cell["is_bad"] else ""})
-        # the verdict, not one of its inputs: screening is a union, so a channel rejected on
-        # PSP alone still has to be marked
-        return html.Td(cell[key],
-                       style={**_TD_STYLE,
-                              "color": _CELL_COLOR.get(cell.get(f"{key}_cls", ""), "#6c757d")})
-
-    def _row(cell: dict) -> html.Tr:
-        return html.Tr([_cell(cell, key) for key, _ in _CH_COLUMNS])
-
-    body_rows: list = []
-    # group headers only when the montage split into more than one block
-    for title, block in (blocks or [("", pair_cells)]):
-        if title and len(blocks) > 1:
-            body_rows.append(html.Tr(html.Td(
-                f"{title} ({len(block)})", colSpan=n_cols,
-                style={**_TD_STYLE, "fontWeight": "600", "background": "#f2f4f6"})))
-        body_rows.extend(_row(cell) for cell in block)
-
-    table = html.Table(
-        [html.Thead(html.Tr([html.Th(label, style=_TH_STYLE) for _, label in _CH_COLUMNS])),
-         html.Tbody(body_rows)],
-        style={"borderCollapse": "collapse", "width": "100%", "fontSize": "0.82rem"},
-    )
-    warnings = [dbc.Alert(note, color="warning", className="py-2 small")
-                for note in (notes or [])]
-    return html.Div([*warnings, html.Div(table, style={"overflowX": "auto"})])
-
-
-@callback(
-    Output("dp-channel-table", "children"),
-    Input("dp-run-store", "data"),
-    prevent_initial_call=True,
-)
-def render_channel_table(store):
-    if not store:
-        return no_update
-    channels = (_RESULT_CACHE.get(store.get("cache_key"), {}) or {}).get("channels") or {}
-    pair_cells = channels.get("pairs", [])
-    if not pair_cells:
-        return html.Small("No channels found.", className="text-muted")
-    return _build_channel_table(pair_cells, channels.get("blocks", []), channels.get("notes", []))
+    df = pd.DataFrame(seg_rows, columns=["onset", "duration", "task"])
+    df["onset"]    = pd.to_numeric(df["onset"],    errors="coerce").fillna(0.0)
+    df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0.0)
+    if combine_val:
+        argv.append("--combine")
+    with tempfile.TemporaryDirectory() as tmp:
+        segments = write_tsv(df, Path(tmp) / "segments.tsv")
+        return _run_prep([*argv, "--segments-path", str(segments)])
 
 
 @callback(
     Output("dp-params-summary", "children"),
     Input("dp-sci-thresh", "value"), Input("dp-window-s", "value"),
+    Input("dp-psp-thresh", "value"), Input("dp-min-good-frac", "value"),
+    Input("dp-screen-scope", "value"),
     Input("dp-dpf", "value"),
     Input("dp-cardiac-l", "value"), Input("dp-cardiac-h", "value"),
     Input("dp-epoch-tmin", "value"), Input("dp-epoch-tmax", "value"),
-    Input("dp-epoch-qc", "value"),
     Input("dp-short-max-dist", "value"), Input("dp-long-min-dist", "value"),
+    Input("dp-ignore-status", "value"),
 )
-def params_summary(sci, window, dpf, card_l, card_h, tmin, tmax, epoch_qc,
-                   short_max, long_min):
-    return summary(value("SCI", sci), value("window", window, " s"), value("DPF", dpf),
+def params_summary(sci, window, psp, good_frac, scope, dpf, card_l, card_h, tmin, tmax,
+                   short_max, long_min, ignore_status):
+    return summary(value("SCI", sci), value("window", window, " s"), value("PSP", psp),
+                   value("coupled", good_frac), scope, value("DPF", dpf),
                    rng("cardiac", card_l, card_h, " Hz"),
                    rng("epoch", tmin, tmax, " s"),
-                   "per-trial QC" if epoch_qc else None,
-                   rng("separations", short_max, long_min, " mm"))
+                   rng("separations", short_max, long_min, " mm"),
+                   "channels.tsv ignored" if ignore_status else None)
 
 
 # ── The drift cutoff this run's own markers allow ────────────────────────────

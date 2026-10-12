@@ -3,7 +3,6 @@
 import numpy as np
 import pytest
 
-from nirspipe.interface.callbacks.data_prep_callbacks import _CH_COLUMNS as GUI_COLUMNS
 from nirspipe.qc.boilerplate.vocabulary import format_metric
 from nirspipe.qc.common.channel_table import channel_rows, format_rows, pair_rows
 from nirspipe.qc.metrics import compute_sci_scores, saturated_share
@@ -59,6 +58,5 @@ def test_the_per_channel_table_prints_both_wavelengths(clipped):
                               f"{format_metric('saturated_pct', 0.25)}")
 
 
-def test_a_condition_page_prints_a_dash_and_the_gui_table_stays_as_it_was():
+def test_a_condition_page_prints_a_dash():
     assert "saturated_per_channel" in UNSLICEABLE
-    assert "saturated" not in {key for key, _ in GUI_COLUMNS}
