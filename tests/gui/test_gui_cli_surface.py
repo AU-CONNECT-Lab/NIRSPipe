@@ -812,6 +812,21 @@ def test_the_page_names_the_viewer_that_opens_what_it_wrote():
         rate_parser().parse_args(line.split()[1:])   # raises SystemExit on an unknown flag
 
 
+# the tables go to the first tree, the CLI's default, which is the folder the page already names
+RATE_EXPORT_NOT_EXPOSED = {"--out-dir", "--out_dir"}
+
+
+def test_every_export_flag_is_sendable_or_written_off():
+    from nirspipe.cli.rate import _build_parser as rate_parser
+    from nirspipe.interface.callbacks.raw_qc_callbacks import export_args
+
+    export = _subcommands(rate_parser)["export"]
+    flags = {flag for action in export._actions if action.dest != "help"
+             for flag in _long_flags(action)}
+    emitted = {a for c in _RAW_QC for a in export_args(c, _RAW_QC_FULL_OPTS) if a.startswith("--")}
+    assert not flags - emitted - RATE_EXPORT_NOT_EXPOSED
+
+
 # ---- an empty field takes the mode's default ----
 
 def test_the_band_note_reads_the_mode_default_for_an_empty_cutoff():

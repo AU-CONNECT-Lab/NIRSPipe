@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - GUI Recon page takes `--optode-frame`
+- GUI Raw QC page runs `nirspipe-rate export` from a button and shows the `--bad-channels` table it wrote
 - GUI Analysis page takes `--bad-channels`, `--keep-spans` with `--keep-spans-from`, `--bad-spans`, `--events-path` and `--contrast-file`
 - `nirspipe-rate export` writes the viewers' channel decisions as a `--bad-channels` table, and lists every FINAL verdict
 - A `--bad-channels` table takes a `keep_channels` column: pairs screening rejected that a reviewer kept; the Methods name them

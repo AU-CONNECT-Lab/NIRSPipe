@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import subprocess
+
+import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html
 
 from nirspipe.interface import process_stream
@@ -77,13 +80,17 @@ def rate_commands(command: str, opts: dict) -> list[str]:
     return [line]
 
 
-def export_command(command: str, opts: dict) -> str:
+def export_args(command: str, opts: dict) -> list[str]:
     """The export that turns those ratings into Analysis's --bad-channels table."""
     # the dyad viewer files each member's decisions in the nirspipe tree when given one
     trees = [opts["output_dir"]]
     if command == "hyper-raw" and opts.get("derivatives_dir"):
         trees.append(opts["derivatives_dir"])
-    return "nirspipe-rate export " + " ".join(trees)
+    return ["nirspipe-rate", "export", *trees]
+
+
+def export_command(command: str, opts: dict) -> str:
+    return " ".join(export_args(command, opts))
 
 
 @callback(
@@ -201,3 +208,29 @@ def stop_command(_n, run_id):
     if run_id:
         process_stream.stop(run_id)
     return True
+
+
+@callback(
+    Output("rq-export-status", "children"),
+    Input("rq-export-btn", "n_clicks"),
+    State("rq-command", "value"),
+    State("rq-output-dir", "value"),
+    State("rq-derivatives-dir", "value"),
+    prevent_initial_call=True,
+)
+def export_decisions(n_clicks, command, output_dir, derivatives_dir):
+    if not output_dir:
+        return dbc.Alert("Set the output directory.", color="warning", className="mb-0")
+    argv = export_args(command, {"output_dir": output_dir, "derivatives_dir": derivatives_dir})
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True)
+    except FileNotFoundError:
+        return dbc.Alert("`nirspipe-rate` not found on PATH. Make sure nirspipe is installed.",
+                         color="danger", className="mb-0")
+    ok = proc.returncode == 0
+    # the CLI prints the table's path and the --bad-channels line to give Analysis
+    return dbc.Alert([
+        html.Div("Exported." if ok else f"Failed (exit {proc.returncode}).", className="fw-bold"),
+        html.Code(" ".join(argv), className="d-block small mb-1"),
+        html.Pre(((proc.stdout or "") + (proc.stderr or "")).strip(), className="fp-run-tail mb-0"),
+    ], color="success" if ok else "danger", className="mb-0")

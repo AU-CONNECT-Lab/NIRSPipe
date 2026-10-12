@@ -190,6 +190,12 @@ def _run_panel():
         html.Pre(id="rq-command-preview", className="fp-command"),
         html.Div(id="rq-run-status", className="mt-3"),
         html.Div(id="rq-rate-hint", className="mt-3"),
+        html.Hr(),
+        html.Small("Once the reports are rated, write the decisions as Analysis's "
+                   "Bad channels table.", className="text-muted d-block mb-2"),
+        dbc.Button("Export channel decisions", id="rq-export-btn", color="secondary",
+                   outline=True, size="sm"),
+        html.Div(id="rq-export-status", className="mt-2"),
     )
 
 
