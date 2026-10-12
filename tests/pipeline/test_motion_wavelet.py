@@ -243,7 +243,7 @@ def test_every_cli_offers_every_method():
     assert found, "no --motion-correction argument reached"
     for choices in found:
         assert set(choices) == {"tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
-                                "none"}
+                                "spline_wavelet", "none"}
 
 
 def _gui_motion_dropdown() -> str:

@@ -67,6 +67,10 @@ citations = []
 plain = "Motion artifacts in the OD were corrected with wavelet filtering followed by temporal derivative distribution repair (TDDR) {citations}: each channel, zero-padded to 2^N samples, was decomposed into N minus {lowest_scale} levels with a shift-invariant discrete wavelet transform ({wavelet}); at every level but the coarsest, detail coefficients more than {iqr_factor} interquartile ranges beyond the quartiles of their level and phase were set to zero; and TDDR was applied to the reconstructed signal."
 citations = []
 
+[motion_spline_wavelet]
+plain = "Motion artifacts in the OD were corrected with spline interpolation followed by wavelet filtering {citations}. Motion was marked for each source-detector pair at samples where either wavelength changed within {t_motion} s by more than {std_thresh} standard deviations of its first difference, or by more than {amp_thresh} in OD, together with {t_mask} s either side. In each channel not marked bad, a cubic smoothing spline (smoothing parameter {p}, time in seconds) was fitted to each marked segment and subtracted, and every segment and every stretch between segments was shifted to continue from the one before it, matching means over {dt_short} s windows (the whole stretch when shorter, a tenth of it beyond {dt_long} s). Each channel, zero-padded to 2^N samples, was then decomposed into N minus {lowest_scale} levels with a shift-invariant discrete wavelet transform ({wavelet}), and at every level but the coarsest, detail coefficients more than {iqr_factor} interquartile ranges beyond the quartiles of their level and phase were set to zero."
+citations = []
+
 [beer_lambert]
 plain = "Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law {citations}, using {dpf}."
 citations = ["Delpy1988", "Cope1988"]

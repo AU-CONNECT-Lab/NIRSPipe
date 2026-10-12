@@ -11,6 +11,7 @@ from nirspipe.cli.run import mode_defaults
 from nirspipe.interface import process_stream
 from nirspipe.interface.callbacks._cli_run import poll_run, start_run
 from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.analysis_callbacks")
@@ -221,7 +222,14 @@ def _build_cli_args(opts: dict) -> list[str]:
         if opts.get("gvtd_n_std") is not None:
             args += ["--gvtd-censor-n-std", str(opts["gvtd_n_std"])]
     if opts.get("motion_correction"):
-        args += ["--motion-correction", opts["motion_correction"]]
+        method = opts["motion_correction"]
+        args += ["--motion-correction", method]
+        # only to a method that reads it: a hidden field may still hold a value, and the CLI
+        # refuses the setting anywhere else
+        if opts.get("motion_std_thresh") is not None and method in STD_THRESH_DEFAULTS:
+            args += ["--motion-std-thresh", str(opts["motion_std_thresh"])]
+        if opts.get("wavelet_iqr") is not None and method in IQR_FACTOR_DEFAULTS:
+            args += ["--wavelet-iqr", str(opts["wavelet_iqr"])]
     if opts.get("cardiac_l") is not None:
         args += ["--cardiac-l-freq", str(opts["cardiac_l"])]
     if opts.get("cardiac_h") is not None:
@@ -316,6 +324,8 @@ def _build_cli_args(opts: dict) -> list[str]:
     State("an-min-time",          "value"),
     State("an-export-mean-filled", "value"),
     State("an-motion-correction", "value"),
+    State("an-motion-std-thresh", "value"),
+    State("an-wavelet-iqr",       "value"),
     State("an-cardiac-l",         "value"),
     State("an-cardiac-h",         "value"),
     State("an-resp-l",            "value"),
@@ -347,7 +357,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
                      short_max_dist, long_min_dist, long_max_dist,
                      epoch_tmin, epoch_tmax, epoch_chunk,
                      by_condition, gvtd_censor, gvtd_n_std, censor_fill, min_time,
-                     export_mean_filled, motion_correction, cardiac_l, cardiac_h, resp_l, resp_h,
+                     export_mean_filled, motion_correction, motion_std_thresh, wavelet_iqr,
+                     cardiac_l, cardiac_h, resp_l, resp_h,
                      post_mode, high_pass, low_pass, filter_method, filter_order,
                      resample, n_jobs,
                      hrf_model, noise_model, short_channel,
@@ -377,7 +388,8 @@ def generate_command(n_clicks, bids_dir, output_dir, subjects, dpf, sci_thresh, 
         by_condition=bool(by_condition), gvtd_censor=gvtd_censor, gvtd_n_std=gvtd_n_std,
         censor_fill=censor_fill, min_time=min_time,
         export_mean_filled=bool(export_mean_filled),
-        motion_correction=motion_correction, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
+        motion_correction=motion_correction, motion_std_thresh=motion_std_thresh,
+        wavelet_iqr=wavelet_iqr, cardiac_l=cardiac_l, cardiac_h=cardiac_h,
         resp_l=resp_l, resp_h=resp_h,
         post_mode=post_mode, high_pass=high_pass, low_pass=low_pass,
         filter_method=filter_method, filter_order=filter_order,
@@ -547,6 +559,22 @@ def mode_placeholders(mode):
     return (cutoff("high_pass"), cutoff("low_pass"),
             shown("drift_high_pass", "from your design"), shown("drift_model", "none"),
             shown("hrf_model", "none"), shown("noise_model", "auto"))
+
+
+# ── The motion settings: shown for the methods that read them, defaults as placeholders ──
+
+@callback(
+    Output("an-motion-std-thresh-wrap", "style"),
+    Output("an-wavelet-iqr-wrap",       "style"),
+    Output("an-motion-std-thresh",      "placeholder"),
+    Output("an-wavelet-iqr",            "placeholder"),
+    Input("an-motion-correction", "value"),
+)
+def motion_setting_fields(method):
+    std, iqr = STD_THRESH_DEFAULTS.get(method), IQR_FACTOR_DEFAULTS.get(method)
+    return (_SHOWN if std is not None else _GONE, _SHOWN if iqr is not None else _GONE,
+            f"{std:g} ({method} default)" if std is not None else "",
+            f"{iqr:g} ({method} default)" if iqr is not None else "")
 
 
 # ── The drift cutoff is bracketed, so say so while the form is being filled ──

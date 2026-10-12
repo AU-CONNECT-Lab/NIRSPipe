@@ -468,9 +468,10 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """
     if key == "sci_marking":
         return _screening_slots(params)
-    # motion: constants of the package rather than of the run, so they are read here
+    # motion: constants of the package, read here, bar the two settings a run may change,
+    # which its sidecar records
     if key in ("motion_wavelet", "motion_wavelet_tddr"):
-        return {"wavelet": motion.WAVELET, "iqr_factor": f"{motion.WAVELET_IQR_FACTOR:g}",
+        return {"wavelet": motion.WAVELET, "iqr_factor": _recorded(params, "wavelet_iqr"),
                 "lowest_scale": f"{motion.WAVELET_LOWEST_SCALE}"}
     if key == "motion_tpca":
         return {"t_motion": f"{motion.TPCA_T_MOTION:g}", "std_thresh": f"{motion.TPCA_STD_THRESH:g}",
@@ -478,10 +479,18 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "n_sv": f"{motion.TPCA_N_SV:g}", "max_iter": f"{motion.TPCA_MAX_ITER}"}
     if key == "motion_spline":
         return {"t_motion": f"{motion.SPLINE_T_MOTION:g}",
-                "std_thresh": f"{motion.SPLINE_STD_THRESH:g}",
+                "std_thresh": _recorded(params, "motion_std_thresh"),
                 "amp_thresh": f"{motion.SPLINE_AMP_THRESH:g}", "t_mask": f"{motion.SPLINE_T_MASK:g}",
                 "p": f"{motion.SPLINE_P:g}", "dt_short": f"{motion.SPLINE_DT_SHORT:g}",
                 "dt_long": f"{motion.SPLINE_DT_LONG:g}"}
+    if key == "motion_spline_wavelet":
+        return {"t_motion": f"{motion.SPLINE_WAVELET_T_MOTION:g}",
+                "std_thresh": _recorded(params, "motion_std_thresh"),
+                "amp_thresh": f"{motion.SPLINE_WAVELET_AMP_THRESH:g}",
+                "t_mask": f"{motion.SPLINE_T_MASK:g}", "p": f"{motion.SPLINE_P:g}",
+                "dt_short": f"{motion.SPLINE_DT_SHORT:g}", "dt_long": f"{motion.SPLINE_DT_LONG:g}",
+                "wavelet": motion.WAVELET, "iqr_factor": _recorded(params, "wavelet_iqr"),
+                "lowest_scale": f"{motion.WAVELET_LOWEST_SCALE}"}
     if key == "motion_spline_sg":
         return {"lowpass": f"{motion.SPLINE_SG_LOWPASS:g}",
                 "detect_lowpass": f"{motion.SPLINE_SG_DETECT_LOWPASS:g}",
@@ -556,6 +565,13 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         desc = params.get("desc")
         return {"stage": f"desc-{desc}" if desc else "input"}
     return {}
+
+def _recorded(params: dict[str, Any], key: str) -> str:
+    """A motion setting from the motion-corrected sidecar; a tree written before it was is refused."""
+    if params.get(key) is None:
+        raise ValueError(f"The motion-corrected sidecar records no {key}; it was written by an "
+                         f"older nirspipe. Rerun nirspipe on this subject.")
+    return _num(params[key])
 
 def _num(value: Any) -> str:
     """A frequency as the Methods should print it: 0.004 not 0.004000000000000001."""

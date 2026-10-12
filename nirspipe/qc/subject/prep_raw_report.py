@@ -184,6 +184,8 @@ def _process_run(
     screen_scope: str = "run",
     motion_correction: str | None = None,
     roi_map: "dict | None" = None,
+    motion_std_thresh: float | None = None,
+    wavelet_iqr: float | None = None,
 ) -> "tuple[dict, dict]":
     """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
 
@@ -250,7 +252,8 @@ def _process_run(
     if motion_correction and motion_correction != "none":
         with guard("Motion correction", errors, label):
             from nirspipe.pipeline.motion import correct_motion
-            raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction)
+            raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction,
+                                         std_thresh=motion_std_thresh, iqr_factor=wavelet_iqr)
 
     ppf = dpf[0] if len(dpf) == 1 else dpf
     # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do
@@ -1134,6 +1137,8 @@ def build_prep_raw_report(
     by_condition: bool = False,
     motion_correction: str | None = None,
     roi_map: "dict | None" = None,
+    motion_std_thresh: float | None = None,
+    wavelet_iqr: float | None = None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
@@ -1161,7 +1166,8 @@ def build_prep_raw_report(
             d, ctx = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
                                   dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
                                   psp_threshold, sep_bands, min_good_frac, screen_scope,
-                                  motion_correction, roi_map=roi_map)
+                                  motion_correction, roi_map=roi_map,
+                                  motion_std_thresh=motion_std_thresh, wavelet_iqr=wavelet_iqr)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         if ctx.get("remake_brain"):

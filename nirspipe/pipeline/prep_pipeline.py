@@ -25,7 +25,11 @@ from nirspipe.io.auxiliary import aux_table_path, write_aux_table
 from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,
                                      nirs_required_fields, write_sidecar_json)
 from nirspipe.io.snirf import write_snirf
-from nirspipe.pipeline.motion import MotionMethod, correct_motion  # noqa: F401  re-exported
+from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
+    MotionMethod,
+    correct_motion,
+    motion_settings,
+)
 from nirspipe.exceptions import StageError
 from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
 from nirspipe.utils import is_optical_density, pair_of
@@ -186,6 +190,9 @@ class PrepConfig:
     gvtd_censor_n_std: float = 10.0
     gvtd_min_epoch_s: float = 30.0
     motion_correction: str | None = None
+    # None takes the method's default; a method that does not read one refuses it
+    motion_std_thresh: float | None = None
+    wavelet_iqr: float | None = None
     # separation bands, in metres; None each keeps the package default, and a None
     # long_max_dist means no upper bound at all
     short_max_dist: float | None = None
@@ -378,14 +385,19 @@ def run_prep(
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
     # no copy kept: desc-sci on disk is this same object, and the report and the record
     # both read the correction's two sides from there
-    raw_od = correct_motion(raw_od, method=config.motion_correction)
+    raw_od = correct_motion(raw_od, method=config.motion_correction,
+                            std_thresh=config.motion_std_thresh, iqr_factor=config.wavelet_iqr)
     tpca = (lineage_of(raw_od).params or {}).get("tpca")
     spline = (lineage_of(raw_od).params or {}).get("spline")
     spline_sg = (lineage_of(raw_od).params or {}).get("spline_sg")
+    spline_wavelet = (lineage_of(raw_od).params or {}).get("spline_wavelet")
     _save(raw_od, "motcorrected",
           extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline),
-                                              ("spline_sg", spline_sg)) if v} or None,
-          extra_parameters={"motion_correction": config.motion_correction})
+                                              ("spline_sg", spline_sg),
+                                              ("spline_wavelet", spline_wavelet)) if v} or None,
+          extra_parameters={"motion_correction": config.motion_correction,
+                            **motion_settings(config.motion_correction, config.motion_std_thresh,
+                                              config.wavelet_iqr)})
 
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)

@@ -51,7 +51,9 @@ NOT_EXPOSED = {
 _FULL_OPTS = dict(
     bids_dir="/bids", output_dir="/out", subjects=["001"],
     session_label="ses-1", task_label="tapping",
-    dpf=6.0, sci_thresh=0.5, psp_thresh=0.1, motion_correction="tddr",
+    dpf=6.0, sci_thresh=0.5, psp_thresh=0.1,
+    # the one method that reads both motion settings, so both are sent
+    motion_correction="spline_wavelet", motion_std_thresh=13.0, wavelet_iqr=0.8,
     min_good_frac=0.75, screen_scope="run", window_length=10.0,
     short_max_dist=10.0, long_min_dist=15.0, long_max_dist=45.0,
     epoch_tmin=-5.0, epoch_tmax=25.0, epoch_chunk=25.0,
@@ -223,6 +225,19 @@ def test_fc_is_not_sent_to_rest_mode():
 
 def test_no_postprocessing_flags_without_a_mode():
     assert _emitted(post_mode="none") & _post_flags() == set()
+
+
+@pytest.mark.parametrize("method, sent", [
+    ("spline_wavelet", {"--motion-std-thresh", "--wavelet-iqr"}),
+    ("spline", {"--motion-std-thresh"}),
+    ("wavelet", {"--wavelet-iqr"}),
+    ("wavelet_tddr", {"--wavelet-iqr"}),
+    ("tddr", set()),
+])
+def test_a_motion_setting_goes_only_to_a_method_that_reads_it(method, sent):
+    """A hidden field can still hold a value from another method; the CLI would refuse it."""
+    emitted = _emitted(post_mode="none", motion_correction=method)
+    assert emitted & {"--motion-std-thresh", "--wavelet-iqr"} == sent
 
 
 # ---- controls and the callbacks that read them ----
@@ -660,8 +675,9 @@ RAW_QC_NOT_EXPOSED = {
         # the page shows one run at a time, so there is no second condition to split by
         "--by-condition",
         # the raw report is the recording before correction; the page has no control for it
-        # because nothing it draws is motion-corrected
-        "--motion-correction",
+        # because nothing it draws is motion-corrected, nor for the settings only a
+        # correction reads
+        "--motion-correction", "--motion-std-thresh", "--wavelet-iqr",
         "--skip-bids-validation", "--no-skip-bids-validation",
         # channels.tsv is read by default, as the pipeline reads it; the off switch only
         # matters when checking a run that passed it, which the page cannot know

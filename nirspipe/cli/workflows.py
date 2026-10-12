@@ -27,6 +27,7 @@ from nirspipe.io.derivatives import (
 from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
+from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils import job_db as _jdb
@@ -734,6 +735,9 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
                       channels_tsv_bads: list[str] | None = None) -> "PrepConfig":
     marker = args.get("keep_spans_from")
     keep_spans = _spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
+    # resolved here so the run record writes the value the method ran with
+    motion = motion_settings(_v(args["motion_correction"]), args.get("motion_std_thresh"),
+                             args.get("wavelet_iqr"))
     return PrepConfig(
         subject=subject,
         session=session,
@@ -746,6 +750,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         **({"screen_scope": args["screen_scope"]}
            if args.get("screen_scope") is not None else {}),
         motion_correction=_v(args["motion_correction"]),
+        motion_std_thresh=motion.get("motion_std_thresh"),
+        wavelet_iqr=motion.get("wavelet_iqr"),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
         channels_tsv_bads=channels_tsv_bads or [],
         keep_spans=keep_spans,

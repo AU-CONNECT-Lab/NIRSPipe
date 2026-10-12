@@ -49,6 +49,7 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("motion_correction", {"motion_correction": "spline"}, "motion_spline"),
     ("motion_correction", {"motion_correction": "spline_sg"}, "motion_spline_sg"),
     ("motion_correction", {"motion_correction": "wavelet_tddr"}, "motion_wavelet_tddr"),
+    ("motion_correction", {"motion_correction": "spline_wavelet"}, "motion_spline_wavelet"),
     ("motion_correction", {"motion_correction": "none"}, None),  # nothing to describe
     ("motion_correction", {}, None),
     ("bandpass", {"high_pass": 0.01, "low_pass": 0.5}, "bandpass"),
@@ -535,11 +536,21 @@ def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expect
 
 
 def test_the_wavelet_sentence_states_the_package_design():
-    from nirspipe.pipeline.motion import WAVELET, WAVELET_IQR_FACTOR, WAVELET_LOWEST_SCALE
+    from nirspipe.pipeline.motion import WAVELET, WAVELET_LOWEST_SCALE
 
-    line = step_sentence("motion_correction", {"motion_correction": "wavelet"})
-    assert f"({WAVELET})" in line and f"{WAVELET_IQR_FACTOR:g} interquartile ranges" in line
+    # the fence is the run's, from its sidecar, not the constant
+    line = step_sentence("motion_correction", {"motion_correction": "wavelet", "wavelet_iqr": 1.2})
+    assert f"({WAVELET})" in line and "1.2 interquartile ranges" in line
     assert f"N minus {WAVELET_LOWEST_SCALE} levels" in line and "but the coarsest" in line
+
+
+@pytest.mark.parametrize("method, missing", [("wavelet", "wavelet_iqr"),
+                                             ("wavelet_tddr", "wavelet_iqr"),
+                                             ("spline", "motion_std_thresh"),
+                                             ("spline_wavelet", "motion_std_thresh")])
+def test_a_sidecar_without_the_motion_setting_is_refused(method, missing):
+    with pytest.raises(ValueError, match=f"records no {missing}.*Rerun nirspipe"):
+        step_sentence("motion_correction", {"motion_correction": method})
 
 
 def test_the_tpca_sentence_states_the_package_design():
@@ -556,7 +567,8 @@ def test_the_tpca_sentence_states_the_package_design():
 def test_the_wavelet_tddr_sentence_states_the_order_and_the_wavelet_design():
     from nirspipe.pipeline import motion
 
-    line = step_sentence("motion_correction", {"motion_correction": "wavelet_tddr"})
+    line = step_sentence("motion_correction", {"motion_correction": "wavelet_tddr",
+                                               "wavelet_iqr": motion.WAVELET_IQR_FACTOR})
     assert "{" not in line
     assert line.index("wavelet filtering") < line.index("temporal derivative distribution repair")
     for value in (f"N minus {motion.WAVELET_LOWEST_SCALE} levels", f"({motion.WAVELET})",
@@ -580,12 +592,29 @@ def test_the_spline_sg_sentence_states_the_package_design():
 def test_the_spline_sentence_states_the_package_design():
     from nirspipe.pipeline import motion
 
-    line = step_sentence("motion_correction", {"motion_correction": "spline"})
+    line = step_sentence("motion_correction", {"motion_correction": "spline",
+                                               "motion_std_thresh": motion.SPLINE_STD_THRESH})
     assert "{" not in line
     for value in (f"within {motion.SPLINE_T_MOTION:g} s", f"{motion.SPLINE_STD_THRESH:g} standard",
                   f"{motion.SPLINE_AMP_THRESH:g} in OD", f"{motion.SPLINE_T_MASK:g} s either side",
                   f"smoothing parameter {motion.SPLINE_P:g}",
                   f"{motion.SPLINE_DT_SHORT:g} s windows", f"beyond {motion.SPLINE_DT_LONG:g} s"):
+        assert value in line, value
+
+
+def test_the_spline_wavelet_sentence_states_the_order_and_both_steps():
+    from nirspipe.pipeline import motion
+
+    line = step_sentence("motion_correction", {"motion_correction": "spline_wavelet",
+                                               "motion_std_thresh": 13.0, "wavelet_iqr": 0.8})
+    assert "{" not in line
+    assert line.index("spline interpolation") < line.index("followed by wavelet filtering")
+    for value in (f"within {motion.SPLINE_WAVELET_T_MOTION:g} s", "13 standard",
+                  f"{motion.SPLINE_WAVELET_AMP_THRESH:g} in OD",
+                  f"{motion.SPLINE_T_MASK:g} s either side",
+                  f"smoothing parameter {motion.SPLINE_P:g}", f"{motion.SPLINE_DT_SHORT:g} s windows",
+                  f"N minus {motion.WAVELET_LOWEST_SCALE} levels", f"({motion.WAVELET})",
+                  "0.8 interquartile"):
         assert value in line, value
 
 

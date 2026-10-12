@@ -1,5 +1,5 @@
 """Motion artifact correction for optical density signals: tddr, wavelet, tpca, spline, spline_sg,
-and wavelet_tddr (wavelet, then tddr)."""
+wavelet_tddr (wavelet, then tddr) and spline_wavelet (spline, then wavelet)."""
 
 from typing import Any, Literal
 
@@ -14,7 +14,8 @@ from scipy.sparse.linalg import spsolve
 from nirspipe.utils import pair_of
 from nirspipe.utils.lineage import stamp
 
-MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr", "none"]
+MotionMethod = Literal["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
+                       "spline_wavelet", "none"]
 
 
 def _mround(x: float) -> int:
@@ -266,8 +267,9 @@ SPLINE_DT_SHORT = 0.3
 SPLINE_DT_LONG = 3.0
 
 
-def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str],
-                        good: np.ndarray) -> np.ndarray:
+def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str], good: np.ndarray,
+                        t_motion: float = SPLINE_T_MOTION, std_thresh: float = SPLINE_STD_THRESH,
+                        amp_thresh: float = SPLINE_AMP_THRESH) -> np.ndarray:
     """Motion samples per channel, time x channels, detected per source-detector pair.
 
     Both wavelengths of a pair take the pair's mask, and both feed its detection even when
@@ -277,8 +279,7 @@ def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str],
     mask = np.zeros(d.shape, bool)
     for pair in dict.fromkeys(pairs[good]):
         cols = pairs == pair
-        rows = _motion_mask(d[:, cols], sfreq, SPLINE_T_MOTION, SPLINE_STD_THRESH,
-                            SPLINE_AMP_THRESH, SPLINE_T_MASK)
+        rows = _motion_mask(d[:, cols], sfreq, t_motion, std_thresh, amp_thresh, SPLINE_T_MASK)
         mask[:, cols & good] = rows[:, None]
     return mask
 
@@ -372,7 +373,9 @@ def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray, sfreq: floa
     return out
 
 
-def _spline_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, Any]]:
+def _spline_motion_correct(raw_od: mne.io.Raw, t_motion: float = SPLINE_T_MOTION,
+                           std_thresh: float = SPLINE_STD_THRESH,
+                           amp_thresh: float = SPLINE_AMP_THRESH) -> tuple[mne.io.Raw, dict[str, Any]]:
     """Spline motion correction (Scholkmann 2010), channel by channel in OD space.
 
     Detect with _spline_motion_mask, then _spline_correct every good channel with motion.
@@ -387,7 +390,7 @@ def _spline_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, An
     raw = raw_od.copy()
     d = raw.get_data().T
     good = ~np.isin(raw.ch_names, raw.info["bads"])
-    motion = _spline_motion_mask(d, sfreq, raw.ch_names, good)
+    motion = _spline_motion_mask(d, sfreq, raw.ch_names, good, t_motion, std_thresh, amp_thresh)
     out = d.copy()
     n_segments = 0
     for ch in np.flatnonzero(motion.any(axis=0)):
@@ -604,29 +607,81 @@ def spline_sg_cutoff(sfreq: float = 10.0) -> float:
     return float(w[np.argmax(np.abs(h) < 1 / np.sqrt(2))])
 
 
+# ---- Spline + wavelet (Di Lorenzo 2019) ----
+# spline with this detection, then the wavelet; smoothing, rejoining and the wavelet itself
+# keep spline's and the wavelet's constants
+
+SPLINE_WAVELET_T_MOTION = 1.0
+SPLINE_WAVELET_AMP_THRESH = 0.4
+# what --motion-std-thresh and --wavelet-iqr default to under this method
+SPLINE_WAVELET_STD_THRESH = 13.0
+SPLINE_WAVELET_IQR_FACTOR = 0.8
+
+
 # ---- Dispatch ----
-def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None) -> mne.io.Raw:
+
+# the methods each user setting reaches, and what each takes when the setting is left unset
+STD_THRESH_DEFAULTS = {"spline": SPLINE_STD_THRESH, "spline_wavelet": SPLINE_WAVELET_STD_THRESH}
+IQR_FACTOR_DEFAULTS = {"wavelet": WAVELET_IQR_FACTOR, "wavelet_tddr": WAVELET_IQR_FACTOR,
+                       "spline_wavelet": SPLINE_WAVELET_IQR_FACTOR}
+
+
+def motion_settings(method: str | None, std_thresh: float | None = None,
+                    iqr_factor: float | None = None) -> dict[str, float]:
+    """The settings this method runs with, keyed as its sidecar records them.
+
+    An unset one takes the method's default; one the method does not read is refused:
+
+      spline_wavelet, nothing set -> {"motion_std_thresh": 13.0, "wavelet_iqr": 0.8}
+      tddr, nothing set           -> {}
+      tddr, iqr_factor 0.5        -> ValueError
+    """
+    settings: dict[str, float] = {}
+    for key, flag, value, defaults in (
+            ("motion_std_thresh", "--motion-std-thresh", std_thresh, STD_THRESH_DEFAULTS),
+            ("wavelet_iqr", "--wavelet-iqr", iqr_factor, IQR_FACTOR_DEFAULTS)):
+        if method in defaults:
+            settings[key] = defaults[method] if value is None else float(value)
+        elif value is not None:
+            raise ValueError(f"{flag} applies to {', '.join(defaults)}; "
+                             f"--motion-correction {method} does not read it.")
+        if key in settings and not settings[key] > 0:
+            raise ValueError(f"{flag} must be positive, not {settings[key]:g}.")
+    return settings
+
+
+def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None,
+                   std_thresh: float | None = None,
+                   iqr_factor: float | None = None) -> mne.io.Raw:
     """Apply motion artifact correction to the OD signal.
 
-    Returns corrected raw (modified in-place for tddr). tpca, spline and spline_sg also
-    record what they did on the stamp, under their own name.
+    Returns corrected raw (modified in-place for tddr). tpca, spline, spline_sg and
+    spline_wavelet also record what they did on the stamp, under their own name. std_thresh
+    and iqr_factor are resolved by motion_settings.
     """
     if method is None:
         raise ValueError("--motion-correction is required.")
+    settings = motion_settings(method, std_thresh, iqr_factor)
+    std_thresh, iqr_factor = settings.get("motion_std_thresh"), settings.get("wavelet_iqr")
     params: dict[str, Any] = {}
     if method == "tddr":
         corrected = mne.preprocessing.nirs.temporal_derivative_distribution_repair(raw_od)
     elif method == "wavelet":
-        corrected = _wavelet_motion_correct(raw_od)
+        corrected = _wavelet_motion_correct(raw_od, iqr_factor=iqr_factor)
     elif method == "tpca":
         corrected, params["tpca"] = _tpca_motion_correct(raw_od)
     elif method == "spline":
-        corrected, params["spline"] = _spline_motion_correct(raw_od)
+        corrected, params["spline"] = _spline_motion_correct(raw_od, std_thresh=std_thresh)
     elif method == "spline_sg":
         corrected, params["spline_sg"] = _spline_sg_motion_correct(raw_od)
     elif method == "wavelet_tddr":
         corrected = mne.preprocessing.nirs.temporal_derivative_distribution_repair(
-            _wavelet_motion_correct(raw_od))
+            _wavelet_motion_correct(raw_od, iqr_factor=iqr_factor))
+    elif method == "spline_wavelet":
+        splined, params["spline_wavelet"] = _spline_motion_correct(
+            raw_od, t_motion=SPLINE_WAVELET_T_MOTION, std_thresh=std_thresh,
+            amp_thresh=SPLINE_WAVELET_AMP_THRESH)
+        corrected = _wavelet_motion_correct(splined, iqr_factor=iqr_factor)
     elif method == "none":
         corrected = raw_od
     else:

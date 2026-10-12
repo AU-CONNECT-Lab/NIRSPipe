@@ -20,7 +20,7 @@ from nirspipe.pipeline.denoise import (
 )
 
 _MOTION_CHOICES        = ["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
-                          "none"]
+                          "spline_wavelet", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
 _PRESETS_DIR           = Path(__file__).resolve().parent.parent / "data" / "presets"
 
@@ -110,6 +110,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt = p.add_argument_group("preprocessing (optional)")
     prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
                           help="Motion correction method.")
+    _shared.add_motion_settings(prep_opt)
     prep_opt.add_argument("--bad-channels",
                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', applied to "
                                "every subject. Or a path to a table with a bad_channels column, and "
@@ -504,6 +505,7 @@ def main(argv: list[str] | None = None) -> None:
     _require(args, *_LEVEL_REQUIRES[level])
     _check_epoch_window(args)
     _check_keep_spans_from(args)
+    _shared.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)
     _check_dirs(args)
 
     from nirspipe.cli.workflows import run_group_level, run_participant_level

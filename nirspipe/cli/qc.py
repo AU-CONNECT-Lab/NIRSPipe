@@ -37,8 +37,11 @@ def cmd_prep_raw(
     skip_bids_validation: bool,
     ignore: list[str] | None = None,
     roi_mapping: Path | None = None,
+    motion_std_thresh: float | None = None,
+    wavelet_iqr: float | None = None,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
+    _shared.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
@@ -117,7 +120,9 @@ def cmd_prep_raw(
                                       window_s=window_length, epoch_qc=epoch_qc,
                                       epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                                       sep_bands=sep_bands, by_condition=by_condition,
-                                      motion_correction=motion_correction, roi_map=roi_map)
+                                      motion_correction=motion_correction,
+                                      motion_std_thresh=motion_std_thresh,
+                                      wavelet_iqr=wavelet_iqr, roi_map=roi_map)
                 print(f"  -> {html_path}")
             except Exception as exc:
                 logger.exception("Raw report generation failed for %s", html_path.name)
@@ -443,7 +448,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "run's own page carries the run's.")
     pr.add_argument("--motion-correction",
                     choices=["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
-                             "none"],
+                             "spline_wavelet", "none"],
                     default="none",
                     help="Run this correction on a copy of the optical density and report "
                          "the recording either side of it: the correction's footprint, the "
@@ -453,6 +458,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "coupling metric still describe the recording as delivered. "
                          "Default none, which reports it uncorrected, with no corrected-stage "
                          "counts or GVTD series.")
+    _shared.add_motion_settings(pr)
     _shared.add_skip_bids_validation(pr)
     _add_ignore(pr)
     pr.add_argument("--roi-mapping", type=Path, default=None,

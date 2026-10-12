@@ -209,6 +209,40 @@ def add_screen_scope(container, note: str = "") -> None:
              + (f" {note}" if note else ""))
 
 
+def add_motion_settings(container) -> None:
+    """``--motion-std-thresh`` and ``--wavelet-iqr``: the two settings some correction methods read."""
+    from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
+
+    def defaults(table: dict[str, float]) -> str:
+        return ", ".join(f"{method} {value:g}" for method, value in table.items())
+
+    container.add_argument(
+        "--motion-std-thresh", type=float, default=None,
+        help="Motion detection threshold of the spline methods, in standard deviations of "
+             "each channel's first difference: a source-detector pair's samples are marked "
+             "where either wavelength changes by more than this within the detection window. "
+             f"Read by {', '.join(STD_THRESH_DEFAULTS)}; default per method "
+             f"({defaults(STD_THRESH_DEFAULTS)}). Refused with any other method.")
+    container.add_argument(
+        "--wavelet-iqr", type=float, default=None,
+        help="Wavelet outlier fence, in interquartile ranges beyond the quartiles: detail "
+             "coefficients past it are zeroed, so a smaller value removes more of the signal. "
+             f"Read by {', '.join(IQR_FACTOR_DEFAULTS)}; default per method "
+             f"({defaults(IQR_FACTOR_DEFAULTS)}). Refused with any other method.")
+
+
+def check_motion_settings(method: str | None, std_thresh: float | None,
+                          iqr_factor: float | None) -> None:
+    """Exit non-zero when a motion setting is one the chosen method does not read, or not positive."""
+    from nirspipe.pipeline.motion import motion_settings
+
+    try:
+        motion_settings(method, std_thresh, iqr_factor)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def screening(note: str = "") -> argparse.ArgumentParser:
     """The screening lines as a parent parser.
 

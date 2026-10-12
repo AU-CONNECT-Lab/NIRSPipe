@@ -10,9 +10,12 @@ All notable changes to this project will be documented in this file.
 - Per-channel tables print each wavelength's share of samples held at the detector's ceiling; run summaries count saturated channels
 - `--motion-correction spline_sg`, spline with Savitzky-Golay filtering (Jahani 2018) as its authors implemented it; also low-passes every channel near 0.1 Hz
 - `--motion-correction wavelet_tddr`, the wavelet filtering followed by TDDR; also on the Analysis page
+- `--motion-correction spline_wavelet`, spline at its paper's detection thresholds then wavelet filtering (Di Lorenzo 2019); also on the Analysis page
+- `--motion-std-thresh` and `--wavelet-iqr` set the spline detection threshold and the wavelet fence, defaulting per method; methods that do not read them refuse them
 - Each dyad writes its ROI ISC as a long table, `seg-<map>_agg-roi_stat-isc_relmat.tsv`, one row per pairing, chromophore and condition
 
 ### Changed
+- Motion-corrected sidecars record the spline threshold and wavelet fence used; the Methods paragraph quotes them and refuses older trees
 - The dyad analysis report folds its channel value table and links the full-precision WTC and ISC tables above it
 - Both dyad reports print member metrics with each channel set over its members' columns; the dyad raw report counts pairs and motion per set
 - The subject cohort report charts saturated share and saturated channels in their own panels after mean amplitude
