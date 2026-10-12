@@ -563,6 +563,14 @@ def _cell_table(out: pd.DataFrame, method: str) -> pd.DataFrame:
     return out[keep].sort_values(["level", "condition", "p"], ignore_index=True)
 
 
+def nulls_on_disk(output_dir: Path, task: str) -> list[str]:
+    """The nulls whose draws, coherence or correlation, a dyad tree holds for ``task``."""
+    output_dir = Path(output_dir)
+    return [null for null in DRAWS_SUFFIX
+            if any(any(output_dir.rglob(f"group-*_task-{task}{suffix}"))
+                   for suffix in (DRAWS_SUFFIX[null], ISC_DRAWS_SUFFIX[null]))]
+
+
 def write_group_null(output_dir: Path, task: str, chroma: str = "hbo",
                      null: str = "repaired", roi_map: "dict | None" = None,
                      n_resample: int = 20000, seed: int | None = None,

@@ -171,7 +171,7 @@ Ranking each channel inside its own draws spends the pool's resolution on every 
 | by occasion | the channels averaged, ranked in that occasion's own draws |
 | cohort | the channels averaged, then the occasions averaged |
 
-The cohort level is written two ways, a `test` column naming each. `resample` redraws one stand-in per occasion (`--n-resample`, 20000) and ranks the real statistic inside that; `paired` averages each occasion's draws into one baseline and tests the real values against it, paired over occasions. On the phase-scrambled null `paired` is the only valid read. `--null` picks which draws are read (`repaired` by default, or `phase`), `--chroma` one chromophore at a time.
+The cohort level is written two ways, a `test` column naming each. `resample` redraws one stand-in per occasion (`--n-resample`, 20000) and ranks the real statistic inside that; `paired` averages each occasion's draws into one baseline and tests the real values against it, paired over occasions. On the phase-scrambled null `paired` is the only valid read. `--null` names which draws are read (`repaired`, `phase` or both; by default every null whose draws are on disk), `--chroma` which chromophores (`hbo` by default); each combination writes its own tables.
 
 With `--roi-mapping` each region is a level beside the whole-brain mean, its homologous pairings averaged, and when the null was drawn crossed every ordered region pair is a level too. A region is ranked for an occasion only where that dyad's own table kept it.
 

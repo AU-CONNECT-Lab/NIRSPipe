@@ -719,7 +719,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     from nirspipe.cli.hyper import cmd_group_null
 
     _write_tree(tmp_path)
-    cmd_group_null(tmp_path, task="main", chroma="hbo", null="repaired",
+    cmd_group_null(tmp_path, task="main", chroma=["hbo"], null=["repaired"],
                    roi_mapping=None, n_resample=500, seed=3, verbose=False)
 
     written = list((tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md"))
@@ -816,7 +816,7 @@ def test_each_statistic_gets_its_own_methods_paragraph(tmp_path):
 
     _write_tree(tmp_path)
     _write_isc_tree(tmp_path, [0.3] * 4)
-    cmd_group_null(tmp_path, task="main", chroma="hbo", null="repaired", roi_mapping=None,
+    cmd_group_null(tmp_path, task="main", chroma=["hbo"], null=["repaired"], roi_mapping=None,
                    n_resample=200, seed=3, verbose=False)
     texts = {p.name: p.read_text(encoding="utf-8")
              for p in (tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md")}
@@ -932,3 +932,50 @@ def test_a_crossed_isc_null_gives_the_region_matrix_its_own_family(tmp_path):
         ("front", "front"), ("front", "back"), ("back", "front"), ("back", "back")}
     assert len(crossed) == 4 * len(OCCASIONS) and set(crossed.family) == {12}
     assert set(cells[cells.level == "channel"].family) == {16 * len(OCCASIONS)}
+
+
+# ---- one command over several nulls and chromophores ----
+
+def _add_phase_draws(root):
+    """The re-paired draws again under the phase null's name, so both nulls are on disk."""
+    for occ in OCCASIONS:
+        d = root / f"group-{occ}" / "nirs"
+        src = d / name(occ, "main", "wtcbycond-pairnull-draws")
+        (d / name(occ, "main", "wtcbycond-phasenull-draws")).write_bytes(src.read_bytes())
+
+
+def test_groupnull_takes_several_nulls_and_chromophores():
+    from nirspipe.cli.hyper import _parsers
+    parser = _parsers()["nirspipe-hyper-groupnull"]
+    args = parser.parse_args(["out", "group", "--task-label", "main",
+                              "--null", "repaired", "phase", "--chroma", "hbo", "hbr"])
+    assert args.null == ["repaired", "phase"] and args.chroma == ["hbo", "hbr"]
+    args = parser.parse_args(["out", "group", "--task-label", "main"])
+    assert args.null is None and args.chroma == ["hbo"]
+
+
+def test_without_null_every_null_on_disk_is_read_as_if_asked_alone(tmp_path):
+    from nirspipe.cli.hyper import cmd_group_null
+
+    _write_tree(tmp_path)
+    _add_phase_draws(tmp_path)
+    cmd_group_null(tmp_path, task="main", chroma=["hbo"], null=None, roi_mapping=None,
+                   n_resample=300, seed=3, verbose=False)
+    together = {k: pd.read_csv(tmp_path / _cohort(k, "cohort"), sep=SEP) for k in ("pair", "phase")}
+
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    _write_tree(alone)
+    write_group_null(alone, "main", null="repaired", n_resample=300, seed=3)
+    pd.testing.assert_frame_equal(together["pair"],
+                                  pd.read_csv(alone / _cohort("pair", "cohort"), sep=SEP))
+    assert (tmp_path / "task-main_desc-groupnull_report.html").exists()
+
+
+def test_groupnull_without_any_draws_stops(tmp_path, capsys):
+    from nirspipe.cli.hyper import cmd_group_null
+
+    with pytest.raises(SystemExit):
+        cmd_group_null(tmp_path, task="main", chroma=["hbo"], null=None, roi_mapping=None,
+                       n_resample=300, seed=3, verbose=False)
+    assert "no null draws for task main" in capsys.readouterr().err

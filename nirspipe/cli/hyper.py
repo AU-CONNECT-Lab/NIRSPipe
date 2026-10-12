@@ -527,24 +527,34 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, chroma: str, null: str, roi_mapping: "Path | None",
-    n_resample: int, seed: int | None, verbose: bool, p_correction: str = "none",
-    isc_test: str = "signed",
+    output_dir: Path, task: str, chroma: list[str], null: "list[str] | None",
+    roi_mapping: "Path | None", n_resample: int, seed: int | None, verbose: bool,
+    p_correction: str = "none", isc_test: str = "signed",
 ) -> None:
-    """Read a null's draws above the cell: one verdict per occasion, one per cohort."""
-    from nirspipe.pipeline.hyper.pair_null_group import write_group_null
+    """Read each null's draws above the cell: one verdict per occasion, one per cohort."""
+    from nirspipe.pipeline.hyper.pair_null_group import nulls_on_disk, write_group_null
     from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
 
     setup_logging(verbose=verbose)
     roi_map = _shared.load_roi_mapping(roi_mapping)
-    written = write_group_null(output_dir, task=task, chroma=chroma, null=null,
-                               roi_map=roi_map, n_resample=n_resample, seed=seed,
-                               p_correction=p_correction, isc_test=isc_test)
-    for path in written:
-        print(f"group-null -> {path}")
-    # one per statistic read, coherence and correlation each having its own test
-    for cohort in (p for p in written if entity_of(p.name, "desc") == "cohort"):
-        print(f"group-null methods -> {_write_group_null_methods(cohort)}")
+    nulls = null or nulls_on_disk(output_dir, task)
+    if not nulls:
+        print(f"Error: no null draws for task {task} under {output_dir}. Run "
+              "nirspipe-hyper-pairnull, or nirspipe-hyper with --wtc-phase-null or "
+              "--isc-phase-null, first.", file=sys.stderr)
+        raise SystemExit(1)
+    # each combination seeded alike, so it matches a run that asked for it alone
+    for one_chroma in chroma:
+        for one_null in nulls:
+            written = write_group_null(output_dir, task=task, chroma=one_chroma,
+                                       null=one_null, roi_map=roi_map,
+                                       n_resample=n_resample, seed=seed,
+                                       p_correction=p_correction, isc_test=isc_test)
+            for path in written:
+                print(f"group-null -> {path}")
+            # one per statistic read, coherence and correlation each having its own test
+            for cohort in (p for p in written if entity_of(p.name, "desc") == "cohort"):
+                print(f"group-null methods -> {_write_group_null_methods(cohort)}")
     # every table on disk for the task, so a second chromophore or null adds a section
     page = write_groupnull_report(output_dir, task)
     if page is not None:
@@ -941,12 +951,14 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
                             required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
-    group_null.add_argument("--chroma", choices=("hbo", "hbr"), default="hbo",
-                            help="Chromophore to read (default hbo), one at a time.")
-    group_null.add_argument("--null", choices=("repaired", "phase"), default="repaired",
-                            help="Which null's draws to read (default repaired). Both are "
-                                 "read the same way above the cell; they differ in what a "
-                                 "draw is, a stand-in against a scrambled partner.")
+    group_null.add_argument("--chroma", nargs="+", choices=("hbo", "hbr"), default=["hbo"],
+                            help="Chromophores to read (default hbo), each into its own "
+                                 "tables.")
+    group_null.add_argument("--null", nargs="+", choices=("repaired", "phase"), default=None,
+                            help="Which nulls' draws to read, each into its own tables "
+                                 "(default every null whose draws are on disk for the task). "
+                                 "Both are read the same way above the cell; they differ in "
+                                 "what a draw is, a stand-in against a scrambled partner.")
     group_null.add_argument("--roi-mapping", type=Path, default=None,
                             help="Region to channel map, the same file the other stages "
                                  "take. Given it, each region is reported as its own level "

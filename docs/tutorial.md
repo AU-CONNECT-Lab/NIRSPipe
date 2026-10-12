@@ -4,7 +4,7 @@ title: Tutorial
 
 # Tutorial
 
-This page runs three dyads from a public hyperscanning dataset through every command, from download to the cohort null tests. It takes about 20 minutes on a desktop and 1.3 GB of disk. NIRSPipe must be [installed](installation.md) first.
+This page runs three dyads from a public hyperscanning dataset through every command, from download to the cohort null tests. It takes about 11 minutes on a desktop and 1.1 GB of disk. NIRSPipe must be [installed](installation.md) first.
 
 The commands are written for a Mac or Linux terminal and Git Bash. In Windows PowerShell, end each continued line with a backtick (`` ` ``) instead of `\`.
 
@@ -61,7 +61,7 @@ nirspipe timed/marker_edited derivatives participant \
     --skip-bids-validation --n-jobs 3
 ```
 
-About 3 minutes. Three settings are specific to this dataset:
+About 2.5 minutes. Three settings are specific to this dataset:
 
 | Option | Why |
 |---|---|
@@ -90,9 +90,9 @@ nirspipe-hyper derivatives hyper group \
     --wtc-phase-null 5 --isc-phase-null 100 --wtc-seed 1
 ```
 
-About 10 minutes. `--wtc-chroma hbo` keeps coherence and correlation to HbO, which halves the time, and five WTC scrambles is a tutorial setting, far below what a study needs. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
+About 6 minutes. `--wtc-chroma hbo` keeps coherence and correlation to HbO, which halves the time, and five WTC scrambles is a tutorial setting, far below what a study needs. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
 
-Then the raw quality page for each dyad, about a minute:
+Then the raw quality page for each dyad, under a minute:
 
 ```bash
 nirspipe-qc hyper-raw timed/marker_edited hyper group \
@@ -108,18 +108,16 @@ The members' markers in dyads 1002 and 1003 disagree by 5 to 30 s after alignmen
 
 ## 6. Nulls
 
-The re-paired null, about 2 minutes, then the cohort test against each null:
+The re-paired null, about a minute, then the cohort test against both nulls:
 
 ```bash
 nirspipe-hyper-pairnull derivatives hyper group \
     --pairs-csv pairs.csv --roi-mapping roi.json --chroma hbo
 nirspipe-hyper-groupnull hyper group --task-label drawing \
-    --null repaired --roi-mapping roi.json --seed 1
-nirspipe-hyper-groupnull hyper group --task-label drawing \
-    --null phase --roi-mapping roi.json --seed 1
+    --roi-mapping roi.json --seed 1
 ```
 
-The cohort test writes `hyper/task-drawing_desc-groupnull_report.html`.
+The cohort test writes `hyper/task-drawing_desc-groupnull_report.html` and its `chromo-hbo_*` tables.
 
 ## 7. Merge and the dyad cohort page
 
@@ -128,4 +126,4 @@ nirspipe-hyper-merge hyper group
 nirspipe-qc cohort-hyper hyper
 ```
 
-The merged tables are the `.tsv` files at the top of `hyper/`, and the cohort page is `hyper/desc-groups_report.html`. [Outputs](outputs.md) lists every file both trees hold, and [QC](qc.md) and [Hyperscanning](hyperscanning.md) explain the pages.
+The merged tables land at the top of `hyper/`, one per kind (`stat-wtc_relmat.tsv`, `stat-isc_relmat.tsv`, ...), and the cohort page is `hyper/desc-groups_report.html`. [Outputs](outputs.md) lists every file both trees hold, and [QC](qc.md) and [Hyperscanning](hyperscanning.md) explain the pages.
