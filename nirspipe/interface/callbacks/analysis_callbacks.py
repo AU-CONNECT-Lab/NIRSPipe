@@ -13,7 +13,7 @@ from nirspipe import __version__
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.interface import process_stream
 from nirspipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
-from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.interface.callbacks._sections import rng, separations, summary, value
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
 from nirspipe.utils.logging import get_logger
@@ -524,7 +524,7 @@ def section_summaries(dpf, motion, short_max, long_min, sci, psp, frac, scope, w
     noise = noise or defaults.get("noise_model")
     return (
         summary(value("DPF", dpf), motion,
-                rng("separations", short_max, long_min, " mm")),
+                separations(short_max, long_min)),
         summary(value("SCI", sci), value("PSP", psp), value("coupled", frac),
                 {"run": "whole run", "task": "task blocks"}.get(scope),
                 value("window", window, " s")),

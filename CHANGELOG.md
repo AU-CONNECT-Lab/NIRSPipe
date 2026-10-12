@@ -16,10 +16,12 @@ All notable changes to this project will be documented in this file.
 - GUI Data Preparation creates an output directory that does not exist yet
 - GUI report previews are a window tall and open in a new tab
 - GUI commands give `--participant-label`, `--session-label` and `--task-label` once, followed by all their values
+- GUI Data Preparation keeps the Signal Topo legend below the head and shows whole marker descriptions
 
 ### Fixed
 - GUI number fields left values off their step grid out of the command, such as a 12 mm separation, 5 phase-null draws or a 0.01 Hz drift cutoff
 - `nirspipe-qc cohort`, `cohort-hyper` and the `group` level exited 0 over a tree without quality records, `cohort` writing an empty page
+- GUI parameter summaries showed `?` for a separation left at its default
 
 ## [0.68.0] - 2026-10-12
 

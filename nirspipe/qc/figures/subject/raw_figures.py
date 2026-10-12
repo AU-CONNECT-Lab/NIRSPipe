@@ -1377,7 +1377,8 @@ def build_evoked_topo_figure(
     evoked_mode = bool(layers[0]["label"])
     x_title = "Time from onset (s)" if evoked_mode else "Time (s)"
 
-    _H, _ML, _MR, _MT, _MB = 700, 10, 10, 12, 8
+    # the bottom margin holds the legend, below the head where it covers no cell
+    _H, _ML, _MR, _MT, _MB = 760, 10, 10, 12, 68
 
     hw, hh = 0.048, 0.023
     norm = _spread_topo_cells(norm01, hw, hh)
@@ -1484,9 +1485,8 @@ def build_evoked_topo_figure(
         hoverdistance=-1,   # the default 20px cutoff leaves dead spots inside a cell
         margin=dict(l=_ML, r=_MR, t=_MT, b=_MB),
         shapes=box_shapes + onset_shapes + head_shapes,
-        legend=dict(x=0.99, y=0.99, xanchor="right",
-                    font=dict(size=9), bgcolor="rgba(255,255,255,0.75)",
-                    title=dict(text="HbO / HbR", font=dict(size=9))),
+        legend=dict(orientation="h", x=0.5, y=-0.01, xanchor="center", yanchor="top",
+                    font=dict(size=9), title=dict(text="HbO / HbR", font=dict(size=9))),
     )
     span = layers[0]["times"]
     if span:

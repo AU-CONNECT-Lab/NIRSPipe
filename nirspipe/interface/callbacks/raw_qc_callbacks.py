@@ -11,7 +11,7 @@ from nirspipe.interface import process_stream
 from nirspipe.interface.callbacks._cli_run import (
     poll_run_and_report, preview_text, start_run,
 )
-from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.interface.callbacks._sections import rng, separations, summary, value
 from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
 
@@ -130,7 +130,7 @@ def motion_setting_fields(method):
 def section_summaries(sci, dpf, card_l, card_h, psp, good_frac, scope, short_max, long_min):
     return (summary(value("SCI", sci), value("DPF", dpf), rng("cardiac", card_l, card_h, " Hz")),
             summary(value("PSP", psp), value("coupled", good_frac), scope,
-                    rng("separations", short_max, long_min, " mm")))
+                    separations(short_max, long_min)))
 
 
 @callback(

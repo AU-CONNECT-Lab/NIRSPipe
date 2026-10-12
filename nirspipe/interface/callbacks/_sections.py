@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dash import MATCH, Input, Output, State, callback
 
+from nirspipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
+
 
 @callback(
     Output({"type": "fp-section-body", "key": MATCH}, "is_open"),
@@ -33,3 +35,12 @@ def rng(label: str, lo, hi, unit: str = "") -> str | None:
     if lo in (None, "") and hi in (None, ""):
         return None
     return f"{label} {lo if lo not in (None, '') else '?'}–{hi if hi not in (None, '') else '?'}{unit}"
+
+
+def separations(short_max, long_min) -> str | None:
+    # two thresholds rather than a range, and an empty one is the default rather than a gap
+    if short_max in (None, "") and long_min in (None, ""):
+        return None
+    short = SHORT_MAX_DIST * 1000 if short_max in (None, "") else short_max
+    long = LONG_MIN_DIST * 1000 if long_min in (None, "") else long_min
+    return f"separations ≤{float(short):g} / ≥{float(long):g} mm"

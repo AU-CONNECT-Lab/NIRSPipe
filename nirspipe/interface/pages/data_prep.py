@@ -142,7 +142,7 @@ def _marker_editor(extra_class=""):
         ], className="g-1 mb-2 align-items-center flex-wrap"),
         dbc.Row([
             dbc.Col(width=1),
-            dbc.Col(html.Small("Onset (s)",   className="text-muted fw-semibold"), width=4),
+            dbc.Col(html.Small("Onset (s)",   className="text-muted fw-semibold"), width=3),
             dbc.Col(html.Small("Dur (s)",     className="text-muted fw-semibold"), width=3),
             dbc.Col(html.Small("Description", className="text-muted fw-semibold")),
         ], className="g-1 px-2 mb-1"),
@@ -271,9 +271,10 @@ layout = dbc.Container([
                     html.Div(id="dp-evoked-topo-wrap", style=_HIDDEN, children=[
                         # plotly's 20px axis drag handles blanket cells this small,
                         # so a neighbour's handle takes the click
+                        # the figure's own width to height, its legend strip included
                         dcc.Graph(id="dp-evoked-topo", responsive=True,
                                   config={"showAxisDragHandles": False},
-                                  style={"aspectRatio": "1 / 1"}),
+                                  style={"aspectRatio": "700 / 760"}),
                     ]),
                 ),
                 width=6,
@@ -335,8 +336,8 @@ layout = dbc.Container([
 
         # Crop | Markers
         dbc.Row([
-            dbc.Col(_crop_card(), width=9),
-            dbc.Col(_marker_editor(), width=3),
+            dbc.Col(_crop_card(), width=8),
+            dbc.Col(_marker_editor(), width=4),
         ], className="mb-3", align="start"),
 
         # Epoch Preview

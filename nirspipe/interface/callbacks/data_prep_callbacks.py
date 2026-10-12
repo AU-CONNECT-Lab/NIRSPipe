@@ -16,7 +16,7 @@ import numpy as np
 from dash import ALL, Input, Output, Patch, State, callback, ctx, dcc, html, no_update
 
 from nirspipe.utils import is_marker, pair_of
-from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.interface.callbacks._sections import rng, separations, summary, value
 from nirspipe.interface.grid import rows_minus_clicked
 from nirspipe.interface.theme import style_figure
 from nirspipe.io.derivatives import subject_labels
@@ -527,15 +527,15 @@ def _make_marker_row(i: int, row: dict):
             dbc.Input(
                 id={"type": "mk-onset", "index": i},
                 type="number", step="any", value=row.get("onset", 0.0),
-                debounce=True, size="sm", style={"width": "80px"},
+                debounce=True, size="sm", className="px-1",
             ),
-            width=4,
+            width=3,
         ),
         dbc.Col(
             dbc.Input(
                 id={"type": "mk-dur", "index": i},
                 type="number", step="any", value=row.get("duration", 1.0),
-                debounce=True, size="sm", style={"width": "65px"},
+                debounce=True, size="sm", className="px-1",
             ),
             width=3,
         ),
@@ -1085,7 +1085,7 @@ def params_summary(sci, window, psp, good_frac, scope, dpf, card_l, card_h, tmin
                    value("coupled", good_frac), scope, value("DPF", dpf),
                    rng("cardiac", card_l, card_h, " Hz"),
                    rng("epoch", tmin, tmax, " s"),
-                   rng("separations", short_max, long_min, " mm"),
+                   separations(short_max, long_min),
                    "channels.tsv ignored" if ignore_status else None)
 
 

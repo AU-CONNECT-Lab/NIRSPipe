@@ -8,6 +8,7 @@ import dash
 import pytest
 
 from nirspipe.interface.callbacks import data_prep_callbacks, hyper_analysis_callbacks
+from nirspipe.interface.callbacks._sections import separations
 
 
 @pytest.fixture(scope="module")
@@ -66,3 +67,9 @@ def test_the_shared_band_reaches_the_command_and_the_overrides_follow_it():
     assert argv[argv.index("--band-fmax") + 1] == "0.1"
     assert argv[argv.index("--isc-fmin") + 1] == "0.05"
     assert "--wtc-band-fmin" not in argv
+
+
+def test_the_separations_summary_reads_an_empty_threshold_as_its_default():
+    assert separations(None, None) is None
+    assert separations(12, None) == "separations ≤12 / ≥15 mm"
+    assert separations(None, 20.5) == "separations ≤10 / ≥20.5 mm"
