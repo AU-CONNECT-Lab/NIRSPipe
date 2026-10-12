@@ -5,30 +5,24 @@ from __future__ import annotations
 NOTES = {
     # ---- Montage ----
     "caveat.unregistered":
-        "The optode positions are not registered to this recording's head coordinates: they "
-        "sit a median of {reach:.0f} mm from the head centre while the fiducials put the scalp "
-        "at {scalp:.0f} mm. Everything drawn from positions, the 3-D views, the flat maps and "
-        "the topographies, is therefore not anatomical, and no channel can be placed on a "
-        "brain region. Separations are measured between optodes rather than against the head, "
-        "so the long / short split, the screening and every metric built on them are "
-        "unaffected. Fixing it needs the digitised nasion and preauricular points the "
-        "recording was taken with, or a standard montage put in their place; neither can be "
-        "recovered from the file itself.",
+        "The optode positions are not registered to this head: they sit a median of "
+        "{reach:.0f} mm from its centre, the scalp at {scalp:.0f} mm. The 3-D views, flat "
+        "maps and topographies are therefore not anatomical; separations, screening and "
+        "metrics are unaffected. Fixing it needs the digitised fiducials or a standard "
+        "montage.",
     "caveat.no_separation":
-        "No channel fell in either separation range, which is what a recording with no "
-        "optode positions looks like (every separation reads as zero), or one whose ranges "
-        "exclude every channel. The quantitative metrics are over every channel rather "
-        "than long channels only, the per-channel table is not grouped, and short-channel "
-        "regression is unavailable for this run.",
+        "No channel fell in either separation range: the recording has no optode positions "
+        "(every separation reads as zero) or the ranges exclude every channel. Metrics "
+        "cover every channel, the per-channel table is not grouped, and short-channel "
+        "regression is unavailable.",
     "caveat.unclassified":
-        "{n} channel(s) sit at a separation the long and short ranges leave out ({ranges}). "
-        "They were screened and their row in the per-channel table carries the whole-montage "
-        "scores, but no split claims them, so they are in none of the long or short scalar "
-        "metrics.{where}",
+        "{n} channel(s) sit at a separation neither range covers ({ranges}). They were "
+        "screened and keep their per-channel scores, but count in no long or short "
+        "metric.{where}",
     "caveat.unclassified_where":
-        "Theirs sit at {span}, so --short-max-dist {short_max} would make them short channels "
-        "and --long-min-dist {long_min} would make them long; which is right depends on how "
-        "deep this montage's short end reaches, which the separations alone do not settle.",
+        "Theirs sit at {span}: --short-max-dist {short_max} would make them short and "
+        "--long-min-dist {long_min} long, depending on how deep this montage's short end "
+        "reaches.",
     "caveat.short_regression_all_bad":
         "Short-channel regression was requested but all {n} short channels were rejected, so "
         "it did not run. Their scores are in the per-channel table.",
@@ -36,35 +30,31 @@ NOTES = {
     # ---- Motion correction ----
     "caveat.motion_overmarked":
         "Motion correction ({method}) marked {share:.0%} of the good channels' samples as "
-        "motion. Its detection threshold, {thresh:g} standard deviations of each channel's "
-        "sample-to-sample change, falls in OD as the sampling rate rises ({sfreq:g} Hz here), "
-        "so it may have taken physiology for motion and corrected much of the recording. "
-        "Check the corrected signal and set --motion-std-thresh for this recording.",
+        "motion. At {sfreq:g} Hz its threshold of {thresh:g} standard deviations may take "
+        "physiology for motion; check the corrected signal and set --motion-std-thresh for "
+        "this recording.",
 
     # ---- ROI mapping ----
     "caveat.roi_overlap":
-        "The ROI mapping lists {n} channel(s) in more than one ROI: {channels}. Each counts in "
-        "every ROI that lists it, so those ROIs share part of what they average and the values "
-        "between them are not independent.",
+        "The ROI mapping lists {n} channel(s) in more than one ROI: {channels}. Each counts "
+        "in every ROI that lists it, so those ROIs are not independent.",
 
     # ---- Epochs and trials ----
     "caveat.chunked_trials":
         "Annotations at least twice {chunk:g} s long were cut into {chunk:g} s trials "
-        "before epoching, so such a trial in the epoch figures and the per-trial panel is "
-        "one piece of a block rather than the whole block.",
+        "before epoching, so a trial in the epoch figures is one piece of a block.",
     "caveat.epoch_window":
-        "The epoch figures average a {tmin:g} to {tmax:g} s window while this run's events are "
-        "{outruns:g} s long, so they describe the start of each block rather than the whole of "
-        "it. Pass --epoch-tmin / --epoch-tmax to widen it. The per-trial panel below is "
-        "unaffected: it scores each event over its own duration.",
+        "The epoch figures average {tmin:g} to {tmax:g} s while this run's events are "
+        "{outruns:g} s long, so they show only the start of each block. Pass --epoch-tmin / "
+        "--epoch-tmax to widen it.",
     "caveat.epoch_skipped":
         "Grand mean, evoked channel map, trial images and per-trial quality were skipped "
         "because {reason}. The per-channel, carpet and layout figures show the continuous "
         "signal instead.",
     "caveat.short_trials":
-        "{n} of {total} trial windows are shorter than {window:g} s, the window the per-trial "
-        "panel's CV, SNR and PSP rows are measured in, so the panel leaves them unscored. Pass "
-        "--epoch-tmin / --epoch-tmax to score a fixed window from each onset.",
+        "{n} of {total} trial windows are shorter than {window:g} s, the window the "
+        "per-trial CV, SNR and PSP need, so they are left unscored. Pass --epoch-tmin / "
+        "--epoch-tmax to score a fixed window from each onset.",
     "caveat.block_design_trials":
         "no scored trial falls inside this window: the annotation that defines it is not "
         "one, and events with no duration are scored only with --epoch-tmin/--epoch-tmax",
@@ -74,9 +64,8 @@ NOTES = {
     # ---- Filtering ----
     "caveat.filter_edge":
         "The first and last {edge_s:g} s of the filtered recording, one period of the "
-        "{l_freq:g} Hz high-pass, are partly the filter settling at the ends rather than "
-        "signal. A GLM run avoids this with --drift-model cosine and --drift-high-pass in "
-        "place of --high-pass.",
+        "{l_freq:g} Hz high-pass, are partly filter settling. A GLM run avoids this with "
+        "--drift-model cosine and --drift-high-pass in place of --high-pass.",
 
     # ---- Dyads ----
     "caveat.never_aligned":
@@ -84,40 +73,32 @@ NOTES = {
         "trigger, so every number below assumes they already shared a clock",
     "caveat.onsets_disagree":
         "The members&rsquo; markers disagree by more than {n} samples ({tol}&nbsp;s) after "
-        "alignment: {listing}. Every window is cut from {ref}&rsquo;s markers. A trigger that "
-        "landed late in one member moves only that block; two clocks drifting apart move "
-        "everything after the shared trigger, the whole-run coherence included.",
+        "alignment: {listing}. Every window is cut from {ref}&rsquo;s markers, so a late "
+        "trigger shifts that block and clock drift shifts everything after it.",
     "caveat.cut_with_margin":
-        "Input is a cut ({where}), made with a {margin:.1f} s margin on each side. Each "
-        "condition's row reads its block out of the transform, so there the margin absorbs "
-        "the cone; the whole-run row still averages the margin unless --tstart/--tend "
-        "restrict it to the cut's span.",
+        "Input is a cut ({where}) with a {margin:.1f} s margin on each side. Condition rows "
+        "read their block out of the transform, so the margin absorbs the cone; the "
+        "whole-run row still averages the margin unless --tstart/--tend restrict it.",
     "caveat.cut_no_margin":
-        "Input is a cut ({where}), made with no margin. A wavelet transform of a segment "
-        "has two edges of its own, so this run's band means are inflated by an amount that "
-        "grows as the segment shortens; n_valid_frac reports the share of band cells that "
-        "survived. Re-cut the stage this run reads with `nirspipe-prep crop --input-desc "
-        "&lt;desc&gt; --margin auto --band-fmin &lt;f&gt;`; the per-condition rows then "
-        "exclude the margin.",
+        "Input is a cut ({where}) with no margin, so its own edges inflate the band means, "
+        "more as the segment shortens (n_valid_frac gives the share of band cells kept). "
+        "Re-cut with `nirspipe-prep crop --input-desc &lt;desc&gt; --margin auto "
+        "--band-fmin &lt;f&gt;`.",
     "caveat.isc_unfiltered":
-        "The files for {subjects} record no bandpass (stage {stages}). A correlation has "
-        "no frequency axis, so unless --isc-fmin/--isc-fmax limit its band, drift and "
-        "systemic physiology enter it directly, and two members recorded together drift "
-        "alike. The wavelet coherence panels are unaffected. Pass --isc-fmin/--isc-fmax, "
-        "or point --desc at a filtered stage (filtered, errts).",
+        "The files for {subjects} record no bandpass (stage {stages}), so drift and "
+        "systemic physiology enter the correlation directly, and members recorded together "
+        "drift alike. Pass --isc-fmin/--isc-fmax, or point --desc at a filtered stage "
+        "(filtered, errts).",
 
     # ---- Cohorts ----
     "caveat.bandpass_pairs":
         "{pre}_* was measured before the run's filter or model and {post}_* after it, so "
-        "the difference between such a pair is mostly the frequencies that step removed "
-        "and not what the step was for. {n} metrics sit on both sides ({shown}). The "
-        "subject report's stage comparison re-applies the passband before comparing where "
-        "there is one; this table stores each stage as it stands.",
+        "the difference between such a pair is mostly what that step removed. {n} metrics "
+        "sit on both sides ({shown}).",
     "caveat.window_mismatch":
-        "the table's sci_win_mean, psp_mean, cv_mean and snr_mean are measured over "
-        "{pinned:g} s windows whatever --window-length is set to, so they stay comparable "
-        "across runs; this cohort binned its windowed panels at {windows} s, so a panel "
-        "and its column are averaged over different window lengths and need not agree.",
+        "the table's sci_win_mean, psp_mean, cv_mean and snr_mean use {pinned:g} s windows "
+        "whatever --window-length is, while this cohort's windowed panels use {windows} s, "
+        "so a panel and its column need not agree.",
 
     # ---- Figure captions ----
     "figure.phase_arrows":

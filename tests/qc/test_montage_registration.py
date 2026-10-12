@@ -64,5 +64,5 @@ def test_the_note_says_both_distances_and_that_the_metrics_survive():
     note = registration_note(registration_offset(_montage((0.15, 0.10, 0.25))))
     assert "396 mm" in note and "86 mm" in note
     # a reader's first question is whether the run is wasted, and it is not
-    assert "Separations are measured between optodes" in note
+    assert "separations, screening and metrics are unaffected" in note
     assert registration_note(None) is None
