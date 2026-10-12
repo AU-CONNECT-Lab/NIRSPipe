@@ -5,6 +5,7 @@ import numpy as np
 from nirspipe.pipeline.denoise import band_limited
 from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from nirspipe.qc.metrics import comparable_stage_metrics
+from nirspipe.utils.lineage import stamp
 from tests._synth import synth_raw
 
 BANDS = (0.7, 1.5, 0.2, 0.5)
@@ -38,3 +39,19 @@ def test_the_band_is_applied_with_the_pipeline_design_not_mne_default():
     mne_default = haemo.copy().filter(0.01, 0.2, verbose=False)
     one_hz = lambda r: r.compute_psd(fmin=0.9, fmax=1.1, verbose=False).get_data().mean()
     assert one_hz(ours) < one_hz(mne_default) / 100
+
+
+def test_a_stage_already_on_the_band_is_read_as_stored():
+    haemo = od_to_haemo(intensity_to_od(synth_raw("01", "rest")), [6.0])
+    filtered = stamp(band_limited(haemo, 0.01, 0.2), stage="filtered", step="bandpass",
+                     high_pass=0.01, low_pass=0.2)
+    unstamped = band_limited(haemo, 0.01, 0.2)
+
+    out = comparable_stage_metrics([("a", haemo), ("b", filtered), ("c", unstamped)],
+                                   0.01, 0.2, *BANDS)
+
+    corr = out["quality"]["hbo_hbr_corr_mean"]
+    # filtered once either way, so the two agree exactly
+    assert corr[0] == corr[1]
+    # nothing records the band on the third, so it goes through the filter a second time
+    assert corr[2] != corr[1]

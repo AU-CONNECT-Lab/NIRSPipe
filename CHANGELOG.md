@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The README is a short overview that links the documentation
 
+### Fixed
+- The run report's stage comparison no longer filters an already band-passed stage a second time
+
 ## [0.67.0] - 2026-10-11
 
 ### Added

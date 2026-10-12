@@ -23,7 +23,7 @@ from nirspipe.qc.metrics.haemo import (
 from nirspipe.qc.metrics.motion import _spike_metrics
 from nirspipe.pipeline.denoise import band_limited
 from nirspipe.utils import is_optical_density
-from nirspipe.utils.lineage import require_stage
+from nirspipe.utils.lineage import lineage_of, require_stage
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.metrics.aggregate")
@@ -145,6 +145,24 @@ def compute_prep_haemo_sqm(
     return record
 
 
+def in_analysis_band(raw: mne.io.Raw, l_freq: "float | None", h_freq: "float | None",
+                     **design: Any) -> mne.io.Raw:
+    """``raw`` on the analysis band, filtered only if its stamp records a different band.
+
+    A stage the bandpass already wrote would otherwise go through the filter twice, and the
+    second pass alone moves its metrics away from those of a stage filtered once::
+
+        desc-preproc  {dpf: [6.0]}                     -> band_limited(raw, 0.01, None)
+        desc-filtered {high_pass: 0.01, low_pass: None} -> raw, as stored
+    """
+    params = (lin.params if (lin := lineage_of(raw)) else None) or {}
+    recorded = (params.get("high_pass", params.get("l_freq")),
+                params.get("low_pass", params.get("h_freq")))
+    if recorded == (l_freq, h_freq):
+        return raw
+    return band_limited(raw, l_freq, h_freq, **design)
+
+
 def comparable_stage_metrics(
     stages: "list[tuple[str, mne.io.Raw]]",
     l_freq: "float | None",
@@ -162,8 +180,9 @@ def comparable_stage_metrics(
     that stage, which is the right thing to store and the wrong thing to subtract. A stage
     before the bandpass and one after it are dominated by different frequency content, so
     the difference between their quality metrics is mostly the filter. Every quality metric
-    here is therefore recomputed with the analysis passband applied at every stage, which
-    is the only way the columns answer the same question::
+    here is therefore recomputed with every stage on the analysis passband, which is the
+    only way the columns answer the same question. A stage already filtered to that band is
+    read as stored (see :func:`in_analysis_band`)::
 
         stages = [("desc-preproc", raw_a), ("desc-errts", raw_b)], l_freq=0.02, h_freq=0.2
         -> quality["gcor_hbo"] == [<a in 0.02-0.2 Hz>, <b in 0.02-0.2 Hz>]
@@ -190,7 +209,7 @@ def comparable_stage_metrics(
     raws = [raw for _, raw in stages]
     banded = l_freq is not None or h_freq is not None
     if limited is None:
-        limited = [band_limited(raw, l_freq, h_freq, **(design or {})) if banded else raw
+        limited = [in_analysis_band(raw, l_freq, h_freq, **(design or {})) if banded else raw
                    for raw in raws]
 
     haemo = [haemo_quality_metrics(r) for r in limited]

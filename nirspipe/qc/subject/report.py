@@ -60,8 +60,8 @@ from nirspipe.io.auxiliary import (
     ImuTrace, aux_table_units, find_aux_table, imu_traces, read_aux_table, table_channels,
 )
 from nirspipe.io.derivatives import entity_of, read_json
-from nirspipe.pipeline.denoise import band_limited
 from nirspipe.pipeline.motion import overmarked
+from nirspipe.qc.metrics.aggregate import in_analysis_band
 from nirspipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
@@ -740,7 +740,7 @@ def _section_haemo(
     cropped input because the order matters and only this function knows it. The correlation
     panels and the spectra can be cut and then measured: a correlation is over whatever
     samples it gets, and ``compute_psd`` is Welch, which segments and tapers but does not
-    band-pass. The stage comparison band-limits every stage (see
+    band-pass. The stage comparison band-limits every stage not already on the band (see
     :func:`~nirspipe.qc.metrics.comparable_stage_metrics`), so the stages are filtered over
     the whole run and cut afterwards, and ``comparable_stage_metrics`` is then told not to
     filter again.
@@ -816,7 +816,7 @@ def _section_haemo(
             if banded_here:
                 # filter over the whole run and cut after, for the quality rows; what left
                 # the recording is read off the stages as stored, cut the same way
-                limited = [_cut(band_limited(_long_only(raw), l_freq, h_freq, **design))
+                limited = [_cut(in_analysis_band(_long_only(raw), l_freq, h_freq, **design))
                            for _, raw in stages]
                 stage_metrics = comparable_stage_metrics(
                     [(label, _cut(_long_only(raw))) for label, raw in stages], l_freq, h_freq,
