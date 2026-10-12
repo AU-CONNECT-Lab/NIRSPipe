@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- GUI Analysis page downloads its pipeline graph as a PNG
 - GUI Recon page takes `--optode-frame`
 - GUI Raw QC page runs `nirspipe-rate export` from a button and shows the `--bad-channels` table it wrote
 - GUI Analysis page fills its form from a run record, read as `--config` reads it, and names the settings it cannot hold

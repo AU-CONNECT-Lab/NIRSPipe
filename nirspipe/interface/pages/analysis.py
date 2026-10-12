@@ -120,7 +120,11 @@ def _dag_legend():
 def _dag_card():
     return card(
         "Pipeline DAG",
-        _dag_legend(),
+        html.Div([
+            _dag_legend(),
+            dbc.Button("Download PNG", id="an-dag-download", color="secondary",
+                       outline=True, size="sm"),
+        ], className="d-flex justify-content-between align-items-start"),
         cyto.Cytoscape(
             id="an-dag",
             elements=[],

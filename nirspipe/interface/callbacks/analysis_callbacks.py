@@ -142,6 +142,17 @@ def update_dag(post_mode, fc, drift_model, short_channel, _run_status, output_di
     return _schematic_elements(post_mode, bool(fc), confounds)
 
 
+@callback(
+    Output("an-dag", "generateImage"),
+    Input("an-dag-download", "n_clicks"),
+    prevent_initial_call=True,
+)
+def download_dag(_n):
+    # the whole graph rather than the viewport, on white rather than the canvas grey
+    return {"type": "png", "action": "download", "filename": "pipeline_dag",
+            "options": {"full": True, "scale": 2, "bg": "#FFFFFF"}}
+
+
 def _schematic_elements(post_mode: str | None, fc: bool, confounds: bool) -> list[dict]:
     """The stages the chosen mode runs, in the order run_prep and run_post run them."""
     def node(nid, label, cls):

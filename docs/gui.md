@@ -552,7 +552,7 @@ Before a run, a schematic of the stages the chosen mode runs, in the order the p
 | Blue | Postprocessing |
 | Green | GLM |
 
-The view is fixed and fitted to the panel: it does not zoom or pan.
+The view is fixed and fitted to the panel: it does not zoom or pan. **Download PNG** saves the graph as shown, on a white background at twice the screen resolution. Each run's full provenance graph, one box per file, is already in `figures/` ([Sidecars and provenance](outputs.md#sidecars-and-provenance)).
 
 ## Hyper Analysis
 
