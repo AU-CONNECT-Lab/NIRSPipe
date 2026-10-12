@@ -135,10 +135,9 @@ def test_the_correlation_is_not_whitened_by_it(plain_and_white):
 def test_every_wtc_table_records_the_whitening(plain_and_white):
     plain, white = plain_and_white
     assert "wtc_whiten_s" not in _params(plain, statistic="wtc")
-    for entities in ({"statistic": "wtc"}, {"condition": "all", "statistic": "wtc"}):
-        params = _params(white, **entities)
-        assert params["wtc_whiten_s"] == 10.0
-        assert params["wtc_whiten_order"] == int(round(10.0 * SFREQ))
+    params = _params(white, statistic="wtc")
+    assert params["wtc_whiten_s"] == 10.0
+    assert params["wtc_whiten_order"] == int(round(10.0 * SFREQ))
 
 
 def test_a_phase_level_drawn_unwhitened_is_refused_by_a_whitened_report(dyad, tmp_path):

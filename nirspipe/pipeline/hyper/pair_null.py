@@ -24,7 +24,7 @@ from nirspipe.io.derivatives import group_output_path, occasion_label
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
 from nirspipe.pipeline.hyper.wtc import cone_margin_s
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import split_whole_run, write_tsv
 from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
@@ -155,8 +155,10 @@ def real_table_params(real_tsv: Path) -> dict:
     except (OSError, json.JSONDecodeError) as exc:
         raise StageError(f"unreadable sidecar {sidecar}: {exc}") from exc
 
+    # `conditions` marks a table holding the whole run and the conditions as one
     missing = [k for k in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi",
-                           "channel_cross", "roi_min_channels", "desc", "bads_scope")
+                           "channel_cross", "roi_min_channels", "desc", "bads_scope",
+                           "conditions")
                if params.get(k) is None]
     if missing:
         raise StageError(
@@ -429,7 +431,6 @@ def run_pair_null(
                                  "relmat", ".tsv", session=session)
 
     real_wtc = _path({"statistic": "wtc"})
-    real_by_cond_path = _path({"condition": "all", "statistic": "wtc"})
     real_params = real_table_params(real_wtc)
     band_fmin, band_fmax = real_params["band_fmin"], real_params["band_fmax"]
     wtc_fmin, wtc_fmax = real_params["wtc_fmin"], real_params["wtc_fmax"]
@@ -487,7 +488,7 @@ def run_pair_null(
     # table was written on a window grid. A draw cuts each side at its own marker, so for a
     # window it needs the condition it belongs to and how far into it the window starts
     window_sources: dict = {}
-    if real_by_cond_path.exists():
+    if real_params["conditions"]:
         windows = condition_windows(aligned_real[fixed_id], min_duration=1.0 / wtc_fmin)
         if analysis_window is not None:
             lo, hi = analysis_window
@@ -499,13 +500,13 @@ def run_pair_null(
             logger.info("null on the real table's window grid: %d window(s) of %.1f s",
                         len(windows), float(real_params["wtc_window_s"]))
 
-    # the whole-run tables are not read: this null has no whole-run half to rank against
-    real_by_cond = _real_table(real_by_cond_path)
-    real_roi_by_cond = _real_table(
-        _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
-    real_cross_by_cond = (_real_table(_path({**cross_entities, "condition": "all",
-                                             "statistic": "wtc"}))
-                          if roi_map and cross else None)
+    # the condition rows only: this null has no whole-run half to rank against
+    _, real_by_cond = split_whole_run(_real_table(real_wtc))
+    _, real_roi_by_cond = split_whole_run(
+        _real_table(_path({**roi_entities, "statistic": "wtc"})))
+    _, real_cross_by_cond = (split_whole_run(
+        _real_table(_path({**cross_entities, "statistic": "wtc"})))
+                             if roi_map and cross else (None, None))
     # an uncrossed run's ROI diagonal is the homologous mean, not what a crossed null groups
     roi_crossed = real_cross_by_cond is not None and "label2" in real_cross_by_cond.columns
 

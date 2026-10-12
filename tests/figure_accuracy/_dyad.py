@@ -48,7 +48,7 @@ class Groups:
 
     def table(self, group: str, name: str) -> pd.DataFrame:
         return pd.read_csv(self.gdir(group) / "nirs" / f"group-{group}_task-{TASK}_{name}",
-                           sep="\t")
+                           sep="\t", dtype={"condition": str})
 
     def record(self, group: str) -> dict:
         path = self.gdir(group) / "nirs" / f"group-{group}_task-{TASK}_desc-sqm_qc.json"
@@ -85,10 +85,9 @@ class Groups:
 
 
 def wtc_tables(groups: Groups, group: str) -> pd.DataFrame:
-    """The channel band means of the whole run and every condition, one frame."""
-    whole = groups.table(group, "stat-wtc_relmat.tsv").assign(condition="")
-    cond = groups.table(group, "cond-all_stat-wtc_relmat.tsv")
-    return pd.concat([whole, cond], ignore_index=True)
+    """The channel band means of the whole run and every condition, the run's condition ""."""
+    table = groups.table(group, "stat-wtc_relmat.tsv")
+    return table.assign(condition=table["condition"].fillna(""))
 
 
 def band_mean(wtc: np.ndarray, coi: np.ndarray, freqs: np.ndarray, band=BAND) -> float:

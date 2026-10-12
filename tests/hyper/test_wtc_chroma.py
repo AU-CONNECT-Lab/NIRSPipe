@@ -344,12 +344,13 @@ def by_condition_cut(dyad, tmp_path_factory):
                                 wtc_cond_pad_s=30.0)
 
 
-@pytest.mark.parametrize("kind", ["wtcbycond", "wtcbycond-roichan"])
-def test_the_per_condition_tables_carry_both_chromophores(by_condition, kind):
+@pytest.mark.parametrize("kind", ["wtc", "wtc-roichan"])
+def test_the_per_condition_rows_carry_both_chromophores(by_condition, kind):
     """Its own code path, and the one where the tag is added to a frame that already has a
     `condition` column: two inserts at position 0, so the order matters."""
     df = pd.read_csv(by_condition / name("G1", "tap", kind), sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
+    df = df[df["condition"].notna()]
     counts = df.groupby(["chromophore", "condition"]).size().unstack()
     assert sorted(counts.index) == ["hbo", "hbr"]
     assert sorted(counts.columns) == ["chat", "quiet"]
@@ -357,17 +358,20 @@ def test_the_per_condition_tables_carry_both_chromophores(by_condition, kind):
 
 
 def test_the_whole_run_pass_still_stands_beside_the_conditions(by_condition):
-    """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis."""
-    whole = pd.read_csv(by_condition / name("G1", "tap"), sep="\t")
-    assert "condition" not in whole.columns
+    """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis: its
+    rows come first in the one table, condition n/a."""
+    table = pd.read_csv(by_condition / name("G1", "tap"), sep="\t")
+    whole = table[table["condition"].isna()]
     assert set(whole["chromophore"]) == {"hbo", "hbr"}
+    assert whole.index.max() < table[table["condition"].notna()].index.min()
 
 
 def test_the_condition_windows_reach_the_sidecar(by_condition):
     """The one thing a reader cannot reconstruct from the table."""
     params = json.loads((by_condition / name(
-        "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
+        "G1", "tap", extension=".json")).read_text())["parameters"]
     assert sorted(params["condition_windows_s"]) == ["chat", "quiet"]
+    assert sorted(params["conditions"]) == ["chat", "quiet"]
     assert params["chroma"] == ["hbo", "hbr"]
     # read out of the whole-run transform unless asked otherwise
     assert params["wtc_cond_pad_s"] is None
@@ -390,7 +394,7 @@ def test_the_cut_route_reaches_the_sidecar_and_the_methods(by_condition_cut):
     from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
 
     params = json.loads((by_condition_cut / name(
-        "G1", "tap", "wtcbycond", extension=".json")).read_text())["parameters"]
+        "G1", "tap", extension=".json")).read_text())["parameters"]
     assert params["wtc_cond_pad_s"] == 30.0
     slots = dict(steps_from_sidecars(by_condition_cut))["hyper_wtc"]
     assert "separate transform of each condition" in slots["conditions"]

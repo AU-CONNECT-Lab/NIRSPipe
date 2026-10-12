@@ -64,7 +64,7 @@ def _nirs(tree, ses):
 def test_each_session_writes_its_own_tables_and_pages(tree):
     for ses in SESSIONS:
         stem = f"group-G01_ses-{ses}_task-{TASK}"
-        for name in (f"{stem}_stat-wtc_relmat.tsv", f"{stem}_cond-all_stat-wtc_relmat.tsv",
+        for name in (f"{stem}_stat-wtc_relmat.tsv", f"{stem}_null-phase_stat-wtc_relmat.tsv",
                      f"{stem}_stat-isc_relmat.tsv",
                      f"{stem}_chromo-hbo_null-phase_stat-wtc_desc-level_relmat.npz",
                      f"{stem}_cond-all_null-pair_stat-wtc_relmat.tsv",

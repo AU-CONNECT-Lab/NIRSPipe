@@ -288,52 +288,58 @@ def _null_frames():
     return whole, by_cond
 
 
-def test_windows_add_a_second_table_beside_the_whole_run_one(tmp_path, monkeypatch, make_raw):
-    """Two files rather than one, mirroring the real side, where the whole-run and
-    per-condition tables are also merged separately."""
+def _write_windowed_null(tmp_path, monkeypatch, make_raw):
     import nirspipe.pipeline.hyper as hyper
     from nirspipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
     monkeypatch.setattr(hyper, "compute_wtc_phase_null",
                         lambda *a, **k: _null(whole, [by_cond]))
-
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = _draw_and_write(
+    return _draw_and_write(
         wtc_null,
         group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
         n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
 
+
+def test_windows_add_condition_rows_to_the_whole_run_table(tmp_path, monkeypatch, make_raw):
+    """One table, as the real side has: the whole run's rows condition n/a, then each window's."""
+    out = _write_windowed_null(tmp_path, monkeypatch, make_raw)
+
     assert out.name == name("G01", "main", "wtc-phasenull")
-    cond_path = out.with_name(name("G01", "main", "wtcbycond-phasenull"))
-    assert cond_path.exists()
-    df = pd.read_csv(cond_path, sep="\t")
+    df = pd.read_csv(out, sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
-    assert set(df["condition"]) == {"rest", "talk"}
+    assert df["condition"].isna().sum() == 1
+    assert set(df["condition"].dropna()) == {"rest", "talk"}
+    assert not list(tmp_path.rglob("*_cond-all_null-phase_stat-wtc_relmat.tsv"))
 
 
 def test_the_windowed_sidecar_names_the_conditions(tmp_path, monkeypatch, make_raw):
     """Without them a table of five conditions and a table of two read the same on disk."""
-    import nirspipe.pipeline.hyper as hyper
-    from nirspipe.pipeline.hyper import wtc_null
+    out = _write_windowed_null(tmp_path, monkeypatch, make_raw)
 
-    whole, by_cond = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null",
-                        lambda *a, **k: _null(whole, [by_cond]))
-
-    raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
-    out = _draw_and_write(
-        wtc_null,
-        group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
-        n_iter=2, chroma=("hbo",), windows=[("rest", 0.0, 30.0), ("talk", 30.0, 60.0)])
-
-    cond_path = out.with_name(name("G01", "main", "wtcbycond-phasenull"))
-    params = json.loads(cond_path.with_suffix(".json").read_text())["parameters"]
+    params = json.loads(out.with_suffix(".json").read_text())["parameters"]
     assert params["conditions"] == ["rest", "talk"]
     assert params["n_iter"] == 2
 
 
-def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_raw):
+def test_each_half_is_ranked_against_its_own_real_rows(tmp_path, monkeypatch, make_raw):
+    """Matched on the cell alone, the whole run's null row would meet three real values."""
+    from nirspipe.io.derivatives import group_output_path
+
+    # a condition's row first, so a lookup on the cell alone would find it before the run's
+    real = pd.DataFrame({"chromophore": "hbo", "condition": ["rest", "talk", None],
+                         "sub1": "a", "sub2": "b", "label": "S1_D1",
+                         "coherence": [0.0, 0.9, 0.9]})
+    real.to_csv(group_output_path(tmp_path, "G01", {"task": "main", "statistic": "wtc"},
+                                  "relmat", ".tsv"), sep="\t", index=False, na_rep="n/a")
+    out = _write_windowed_null(tmp_path, monkeypatch, make_raw)
+
+    ranked = pd.read_csv(out, sep="\t").set_index("condition", drop=False)
+    assert ranked["percentile"].tolist() == [100.0, 0.0, 100.0]
+
+
+def test_no_windows_writes_no_condition_column(tmp_path, monkeypatch, make_raw):
     import nirspipe.pipeline.hyper as hyper
     from nirspipe.pipeline.hyper import wtc_null
 
@@ -346,20 +352,8 @@ def test_no_windows_writes_only_the_whole_run_table(tmp_path, monkeypatch, make_
         group_id="G01", task="main", aligned_raws=raws, output_dir=tmp_path,
         n_iter=1, chroma=("hbo",))
 
-    assert not out.with_name(name("G01", "main", "wtcbycond-phasenull")).exists()
-
-
-def test_the_per_condition_null_is_its_own_merge_kind(tmp_path):
-    """Merging it into the whole-run null would average five conditions into one row.
-
-    They differ by the `cond-` entity, which is what puts them in two merges: the kind a
-    file belongs to is the entity set it carries besides its group and its task.
-    """
-    from nirspipe.pipeline.hyper.wtc_aggregate import merge_kinds
-
-    _write_table(tmp_path, "G01", "main", kind="wtc-phasenull")
-    _write_table(tmp_path, "G01", "main", kind="wtcbycond-phasenull")
-    assert len(merge_kinds(tmp_path)) == 2
+    assert "condition" not in pd.read_csv(out, sep="\t").columns
+    assert json.loads(out.with_suffix(".json").read_text())["parameters"]["conditions"] == []
 
 
 # ---- the ROI tables follow the run ----

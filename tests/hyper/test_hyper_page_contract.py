@@ -523,8 +523,7 @@ def test_the_channel_table_is_the_one_folded_and_its_tables_are_linked(pages):
         assert [f.strip() for f in folded] == ["Channel pairs"], page.name
         links = re.findall(r'<a href="([^"]+_relmat\.tsv)">', html)
         names = {Path(link).name.split("task-tap_")[-1] for link in links}
-        assert names == {"stat-wtc_relmat.tsv", "cond-all_stat-wtc_relmat.tsv",
-                         "stat-isc_relmat.tsv"}, (page.name, names)
+        assert names == {"stat-wtc_relmat.tsv", "stat-isc_relmat.tsv"}, (page.name, names)
         assert all((page.parent / link).is_file() for link in links), page.name
 
 

@@ -27,7 +27,6 @@ ALL_STEPS = [
     "hyper_sqm", "hyper_bads", "hyper_usable",
     "hyper_wtc", "hyper_wtc_roichan", "hyper_wtc_phasenull",
     "hyper_isc", "hyper_isc_roichan",
-    "hyper_wtc_bycondition", "hyper_wtc_bycondition_roichan",
     "hyper_merge",
 ]
 
@@ -322,16 +321,15 @@ def test_both_regressor_families_are_named_when_both_ran():
 # and are read off disk, while the alignment leaves no file and is passed in by the report.
 # Both go through the same table, and a key the table does not know renders as nothing.
 
-@pytest.mark.parametrize("step", ["hyper_wtc", "hyper_wtc_bycondition"])
+@pytest.mark.parametrize("step", ["hyper_wtc"])
 def test_every_coherence_output_maps_to_the_one_coherence_sentence(step):
-    # the whole run and its conditions are one method; the band is the same for both
+    # the whole run and its conditions are one table and one method
     assert boilerplate_key(step, {}) == "hyper_wtc"
     assert boilerplate_key(step, {"channel_cross": True}) == "hyper_wtc_crossed"
 
 
 @pytest.mark.parametrize("step", [
-    "hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_roichan",
-    "hyper_wtc_bycondition_roihom", "hyper_isc_roichan",
+    "hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_isc_roichan",
 ])
 def test_every_region_table_shares_the_one_roi_sentence(step):
     assert boilerplate_key(step, {"channel_cross": True}) == "hyper_roi"
@@ -339,7 +337,6 @@ def test_every_region_table_shares_the_one_roi_sentence(step):
 
 @pytest.mark.parametrize("step", [
     "hyper_wtc_phasenull", "hyper_wtc_roihom_phasenull", "hyper_wtc_roichan_phasenull",
-    "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_bycondition_roichan_phasenull",
 ])
 def test_a_null_keeps_its_own_line_and_no_coherence_sentence(step):
     # a null's sidecar records how the null was drawn, so it gets its own sentence and never
@@ -721,7 +718,7 @@ def test_both_nulls_read_after_the_regions_phase_first(tmp_path):
 
 # ---- the phase per frequency, and the cohort test ----
 
-@pytest.mark.parametrize("step", ["hyper_wtc_phasescale", "hyper_wtc_bycondition_phasescale"])
+@pytest.mark.parametrize("step", ["hyper_wtc_phasescale"])
 def test_the_phase_per_frequency_has_one_sentence(step):
     assert boilerplate_key(step, {}) == "hyper_phasescale"
     assert template_slots("hyper_phasescale", {"mask_coi": True})["coi"] \

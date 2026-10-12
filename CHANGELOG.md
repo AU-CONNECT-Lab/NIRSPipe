@@ -20,11 +20,13 @@ All notable changes to this project will be documented in this file.
 - Run records key settings by flag name in the flag's units, name tables by absolute path, and write a switched-off mode default as `"none"`
 - `nirspipe-hyper-merge` merges long tables only; ISC matrices stay in each dyad's folder
 - `nirspipe-qc hyper-raw` into a tree of its own stamps it `nirspipe-qc hyper-raw`; the nirspipe-hyper tree keeps its stamp. The GUI field follows
+- Each WTC table kind holds the whole run and the conditions in one file, `condition` n/a on whole-run rows, as ISC does; readers refuse older trees
 
 ### Fixed
 - Under `--short-channel pca`, short channels are blank in FC and seed FC and left out of ALFF; rest-mode mALFF/zALFF values change
 - A `--config` cutoff set to `"none"` no longer stops the run with a KeyError
 - `nirspipe-qc prep-raw` writes `.bidsignore` to its tree, as the other trees do
+- Phase-scrambled and re-paired null percentiles are no longer blank for conditions with numeric labels
 
 ### Removed
 - The per-subject `sub-<label>_script.py` transcript; the run record and package version reproduce a run, and `--dry-run` writes the record only

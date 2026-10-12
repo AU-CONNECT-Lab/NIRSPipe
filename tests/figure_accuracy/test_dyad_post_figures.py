@@ -224,9 +224,8 @@ def test_the_channel_matrix_puts_each_coupling_on_its_own_cell(groups, group, sc
 
 
 def _roi_cells(groups, group, a, b, chroma, scope):
-    whole = groups.table(group, "seg-roidyad_agg-roi_stat-wtc_relmat.tsv").assign(condition="")
-    cond = groups.table(group, "seg-roidyad_agg-roi_cond-all_stat-wtc_relmat.tsv")
-    return _cells(pd.concat([whole, cond]), a, b, chroma, scope)
+    table = groups.table(group, "seg-roidyad_agg-roi_stat-wtc_relmat.tsv")
+    return _cells(table.assign(condition=table["condition"].fillna("")), a, b, chroma, scope)
 
 
 @pytest.mark.parametrize("group", GROUPS)

@@ -210,10 +210,3 @@ def test_no_two_kinds_of_table_share_a_name(tmp_path):
     kinds = merge_kinds(tmp_path)
     assert len(kinds) == len(KINDS) - sum("draws" in k for k in KINDS)
     assert all(len(paths) == 1 for paths in kinds.values())
-
-
-def test_the_per_condition_tables_are_merged_apart_from_the_whole_run_ones():
-    from tests.hyper._names import name
-
-    assert name("07", "rest", "wtcbycond") != name("07", "rest", "wtc")
-    assert name("07", "rest", "wtcbycond-roichan") != name("07", "rest", "wtc-roichan")

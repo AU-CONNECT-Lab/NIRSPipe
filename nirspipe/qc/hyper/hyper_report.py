@@ -1076,8 +1076,9 @@ def build_hyper_post_report(
 
     ``wtc_by_condition`` repeats the whole coherence analysis inside each task annotation's
     own window, on top of the whole-run pass, which stays as it was. The band means of every
-    window land in one ``cond-all_stat-wtc_relmat.tsv`` with a ``condition`` column, and each window
-    gets its own figures. See :func:`condition_windows` for how a window is decided, and note
+    window land in ``stat-wtc_relmat.tsv`` beside the whole run's, told apart by a
+    ``condition`` column (``n/a`` on the whole run's rows), and each window gets its own
+    figures. See :func:`condition_windows` for how a window is decided, and note
     that the runtime is roughly doubled: the windows together are about one more pass over
     the recording.
 
@@ -1499,8 +1500,7 @@ def build_hyper_post_report(
     channel_tables = [p for p in (
         group_output_path(output_dir, group_id, {"task": task, **entities}, "relmat", ".tsv",
                           session=session)
-        for entities in ({"statistic": "wtc"}, {"condition": "all", "statistic": "wtc"},
-                         {"statistic": "isc"}))
+        for entities in ({"statistic": "wtc"}, {"statistic": "isc"}))
         if p in written]
 
     # One ROI map file per pairing, carrying the run and a view per window, rather than one

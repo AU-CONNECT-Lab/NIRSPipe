@@ -82,7 +82,7 @@ def test_every_dyad_output_is_named_by_the_occasion(tree):
     for gid in GROUPS:
         stem = f"group-{gid}_ses-{OCCASION}_task-{TASK}"
         nirs = hyper / f"group-{gid}" / f"ses-{OCCASION}" / "nirs"
-        for name in (f"{stem}_stat-wtc_relmat.tsv", f"{stem}_cond-all_stat-wtc_relmat.tsv",
+        for name in (f"{stem}_stat-wtc_relmat.tsv", f"{stem}_null-phase_stat-wtc_relmat.tsv",
                      f"{stem}_stat-isc_relmat.tsv",
                      f"{stem}_chromo-hbo_null-phase_stat-wtc_desc-level_relmat.npz",
                      f"{stem}_cond-all_null-pair_stat-wtc_relmat.tsv",

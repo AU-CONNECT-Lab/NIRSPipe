@@ -1,7 +1,7 @@
 """Merge the per-dyad WTC band-mean tables into one long table per study.
 
 ``nirspipe-hyper`` writes one ``group-<id>_task-<task>_stat-wtc_relmat.tsv`` per dyad and
-task, and a dozen more beside it for the ROI means, the conditions and the nulls. This
+task, and more beside it for the ROI means and the nulls. This
 produces the stitched tables, with ``group_id`` and ``task`` carried as columns so nothing
 about a row depends on the filename it came from.
 
@@ -28,7 +28,7 @@ import pandas as pd
 from nirspipe.utils.logging import get_logger
 from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 from nirspipe.io.naming import parse_path, derivative_path
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, write_tsv
 
 logger = get_logger("pipeline.wtc_aggregate")
 
@@ -65,8 +65,8 @@ def _kind_of(path: Path) -> "tuple | None":
 
     ::
 
-      group-07_task-rest_cond-all_stat-wtc_relmat.tsv
-        -> (("condition", "all"), ("statistic", "wtc"))
+      group-07_task-rest_null-phase_stat-wtc_relmat.tsv
+        -> (("nulldist", "phase"), ("statistic", "wtc"))
 
     The group and the task come out, being what varies across the files of one merge; they
     survive as columns. Everything else is what makes two files the same kind. A file this
@@ -215,7 +215,7 @@ def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:
         entities = parse_path(tsv_path.name)
         group_id, task = entities.get("group"), entities.get("task")
         try:
-            df = pd.read_csv(tsv_path, sep="\t")
+            df = pd.read_csv(tsv_path, sep="\t", dtype=LABEL_DTYPES)
         except (OSError, pd.errors.ParserError) as exc:
             logger.warning("skipping unreadable table %s: %s", tsv_path, exc)
             continue

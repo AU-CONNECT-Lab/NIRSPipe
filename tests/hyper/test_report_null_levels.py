@@ -89,8 +89,10 @@ def _phase_n(out, entities, condition=None) -> int:
     """How many cells the phase columns averaged: none when a level of 2.0 was applied."""
     path = group_output_path(out, "G1", {"task": "tap", **entities}, "relmat", ".tsv")
     table = pd.read_csv(path, sep="\t")
-    if condition is not None:
-        table = table[table["condition"] == condition]
+    if "condition" in table.columns:
+        # the whole run's rows carry no condition
+        keep = table["condition"].isna() if condition is None else table["condition"] == condition
+        table = table[keep]
     return int(table["phase_n"].sum())
 
 
@@ -140,8 +142,9 @@ def test_the_re_paired_level_thresholds_its_condition_and_nothing_else(dyad, n_f
     assert _cell(_page(tmp_path, "talk"), "Arrow threshold") == "the re-paired null"
     assert _cell(_page(tmp_path, "rest"), "Arrow threshold") == "the phase-scrambled null"
     assert _cell(_page(tmp_path), "Arrow threshold") == "the phase-scrambled null"
-    by_cond = _sidecar(tmp_path, {"condition": "all", "statistic": "wtc"})
-    assert by_cond["phase_level_source"] == {"hbo": {"rest": "phase", "talk": "pair"}}
+    side = _sidecar(tmp_path, {"statistic": "wtc"})
+    assert side["phase_level_source"] == {"hbo": "phase"}
+    assert side["phase_level_source_by_condition"] == {"hbo": {"rest": "phase", "talk": "pair"}}
 
 
 def test_a_re_paired_level_for_another_span_is_not_used(dyad, n_freqs, tmp_path):
@@ -151,7 +154,7 @@ def test_a_re_paired_level_for_another_span_is_not_used(dyad, n_freqs, tmp_path)
     spans = {k: [a + 5.0, b] for k, (a, b) in _spans(dyad).items()}
     _stamp(path, dyad, condition_windows_s=spans, n_iter=5)
     _build(dyad, tmp_path)
-    assert _phase_n(tmp_path, {"condition": "all", "statistic": "wtc"}, "talk") > 0
+    assert _phase_n(tmp_path, {"statistic": "wtc"}, "talk") > 0
 
 
 def test_the_chords_name_the_re_paired_null_where_it_drew_them(dyad, tmp_path):

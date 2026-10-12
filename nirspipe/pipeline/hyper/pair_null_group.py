@@ -30,7 +30,7 @@ from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.derivatives import occasion_label
 from nirspipe.io.naming import derivative_path, parse_path
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, write_tsv
 
 logger = get_logger("pipeline.pair_null_group")
 
@@ -42,7 +42,7 @@ def _tail(**entities) -> str:
 
     ::
 
-      _tail(condition="all", statistic="wtc") -> "_cond-all_stat-wtc_relmat.tsv"
+      _tail(nulldist="phase", statistic="wtc") -> "_null-phase_stat-wtc_relmat.tsv"
 
     Built through the namer rather than spelled out, so the tables this module reads and
     the ones the null writers produce cannot be renamed apart. The ROI map's own name is a
@@ -52,21 +52,25 @@ def _tail(**entities) -> str:
     return name.split("_task-T", 1)[1]
 
 
+_REAL = {"statistic": "wtc"}
 _BY_COND = {"condition": "all", "statistic": "wtc"}
 _ROI = {"segmentation": "*", "aggregation": "homologous"}
 _ROI_CROSSED = {"segmentation": "*", "aggregation": "roi"}
 
-REAL_SUFFIX = _tail(**_BY_COND)
+# the real table holds the whole run and every condition in one file
+REAL_SUFFIX = _tail(**_REAL)
+# the phase null's cell tables are shaped like the real one; the re-paired null has no
+# whole-run half, so its tables hold the conditions only
+_CELLS = {"repaired": _BY_COND, "phase": _REAL}
 # each cell table a null writes, under the level its cells are corrected as one family in
 CELL_SUFFIX = {
-    kind: {"channel": _tail(**_BY_COND, nulldist=null),
-           "roi": _tail(**_ROI, **_BY_COND, nulldist=null),
-           "roi_crossed": _tail(**_ROI_CROSSED, **_BY_COND, nulldist=null)}
+    kind: {"channel": _tail(**_CELLS[kind], nulldist=null),
+           "roi": _tail(**_ROI, **_CELLS[kind], nulldist=null),
+           "roi_crossed": _tail(**_ROI_CROSSED, **_CELLS[kind], nulldist=null)}
     for kind, null in _NULL.items()
 }
 DRAWS_SUFFIX = {kind: _tail(**_BY_COND, nulldist=null, desc="draws")
                 for kind, null in _NULL.items()}
-# the correlation's real table holds the whole run and every condition in one file
 ISC_REAL_SUFFIX = _tail(statistic="isc")
 ISC_DRAWS_SUFFIX = {kind: _tail(condition="all", nulldist=null, statistic="isc", desc="draws")
                     for kind, null in _NULL.items()}
@@ -187,11 +191,20 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
 
     A table missing a column the others have concatenates to NaN and then leaves the groupby
     without a word, taking that occasion's contribution to every mean with it.
+
+    Every reading here is per condition, so a table's whole-run rows (condition n/a) are
+    dropped, and a table with no ``condition`` column is refused.
     """
     frames = []
     for path in sorted(Path(output_dir).rglob(f"group-*_task-{task}{suffix}")):
         entities = parse_path(path.name)
-        frame = _of_chroma(pd.read_csv(path, sep="\t"), chroma)
+        frame = _of_chroma(pd.read_csv(path, sep="\t", dtype=LABEL_DTYPES), chroma)
+        if "condition" not in frame.columns:
+            raise ValueError(
+                f"{path.name} has no condition column: its run had no conditions, or it "
+                f"predates the table holding the whole run and the conditions as one. Rerun "
+                f"`nirspipe-hyper` for that dyad with --wtc-by-condition.")
+        frame = frame[frame["condition"].notna()]
         missing = [c for c in needs if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -639,12 +652,9 @@ def _read_isc(output_dir: Path, suffix: str, task: str, chroma: str, isc_test: s
       r -0.4, signed  ->  coherence -0.42;  magnitude  ->  +0.42
 
     Renamed into the column the coherence code reads rather than that code duplicated, as the
-    re-paired null does. The whole-run rows carry no condition and are dropped, the draws
-    being per condition only.
+    re-paired null does.
     """
     frame = _read_tree(output_dir, suffix, task, chroma, needs=("r_z", *needs))
-    if "condition" in frame.columns:
-        frame = frame[frame["condition"].notna()]
     z = frame["r_z"]
     frame = frame.assign(coherence=z.abs() if isc_test == "magnitude" else z)
     return frame.dropna(subset=["coherence"])

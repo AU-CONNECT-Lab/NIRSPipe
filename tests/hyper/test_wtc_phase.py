@@ -315,6 +315,7 @@ def test_the_written_lag_is_still_the_lag_that_was_put_in(report):
     """The point of the file. A table that round-tripped the plumbing but lost the sign or
     the scaling would pass every other test here."""
     df = _table(report, "wtc-phasescale")
+    df = df[df["condition"].isna()]
     hbo = df[(df["chromophore"] == "hbo") & (df["phase_sd"] < 2.0)]
     assert not hbo.empty
     assert hbo["lag_s"].mean() == pytest.approx(LAG_S, rel=0.20)
@@ -322,9 +323,10 @@ def test_the_written_lag_is_still_the_lag_that_was_put_in(report):
 
 
 def test_each_condition_gets_its_own_per_scale_rows(report):
-    df = _table(report, "wtcbycond-phasescale")
-    assert set(df["condition"]) == {d for d, _, _ in CONDITIONS}
+    df = _table(report, "wtc-phasescale")
     assert df.columns[0] == "chromophore" and df.columns[1] == "condition"
+    df = df[df["condition"].notna()]
+    assert set(df["condition"]) == {d for d, _, _ in CONDITIONS}
     # the rhythm runs through the whole recording, so both conditions carry the same lead
     tight = df[df["phase_sd"] < 2.0]
     for cond, rows in tight.groupby("condition"):

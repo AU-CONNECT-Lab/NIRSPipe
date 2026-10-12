@@ -22,7 +22,7 @@ from pathlib import Path
 import pandas as pd
 
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, join_whole_run, split_whole_run, write_tsv
 from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 
 logger = logging.getLogger(__name__)
@@ -183,13 +183,13 @@ def write_wtc_null(
     never drew the off-diagonal pairings that matrix averages. Both group their cells under
     ``roi_min_channels``, the rule the real ROI tables were blanked by.
 
-    ``windows`` adds a second table, the ``cond-all`` twin, with a ``condition``
-    column: the null for what ``--wtc-by-condition`` wrote. It mirrors the real side, where
-    the whole-run and per-condition tables are also two files merged separately. Returns the
-    whole-run path either way; the per-condition one sits beside it.
+    ``windows`` adds the null for what ``--wtc-by-condition`` wrote, as rows of the same
+    tables with a ``condition`` column, the whole run's rows carrying ``n/a``: the shape of
+    the real tables. Only the draws, which exist per condition only, keep a ``cond-all``
+    file of their own.
 
     The real tables are read back off disk rather than passed in, the report step having just
-    written them, and are what gives both tables their ``percentile`` column. A tree without
+    written them, and are what gives the rows their ``percentile`` column. A tree without
     them still gets a null, just one nothing has been ranked against yet.
     """
     from nirspipe.pipeline.hyper import _hyper_sidecar, alignment_params
@@ -207,17 +207,15 @@ def write_wtc_null(
         return group_output_path(output_dir, group_id, {"task": task, **entities},
                                  "relmat", extension, session=session)
 
-    # the real tables this null is ranked against, each the same name minus `null-`
-    real = _real_table(_path({"statistic": "wtc"}))
-    real_by_cond = _real_table(_path({"condition": "all", "statistic": "wtc"}))
-    real_roi = _real_table(_path({**roi_entities, "statistic": "wtc"}))
-    real_roi_by_cond = _real_table(
-        _path({**roi_entities, "condition": "all", "statistic": "wtc"}))
+    # the real tables this null is ranked against, each the same name minus `null-`, split
+    # into the whole run and the conditions, since the ranking matches on the cell alone
+    real, real_by_cond = split_whole_run(_real_table(_path({"statistic": "wtc"})))
+    real_roi, real_roi_by_cond = split_whole_run(
+        _real_table(_path({**roi_entities, "statistic": "wtc"})))
     real_cross = real_cross_by_cond = None
     if roi_map and cross:
-        real_cross = _real_table(_path({**cross_entities, "statistic": "wtc"}))
-        real_cross_by_cond = _real_table(
-            _path({**cross_entities, "condition": "all", "statistic": "wtc"}))
+        real_cross, real_cross_by_cond = split_whole_run(
+            _real_table(_path({**cross_entities, "statistic": "wtc"})))
     # an uncrossed run's ROI diagonal is the homologous mean, not what a crossed null groups
     roi_crossed = any(t is not None and "label2" in t.columns
                       for t in (real_cross, real_cross_by_cond))
@@ -274,45 +272,32 @@ def write_wtc_null(
         # they were built on the same clock for that subtraction to mean anything
         **alignment_params(aligned_raws),
     )
+    conditions = [w[0] for w in (windows or [])]
     out_path = _path({"nulldist": "phase", "statistic": "wtc"})
-    write_tsv(pd.concat(frames, ignore_index=True), out_path)
-    _hyper_sidecar(out_path, "hyper_wtc_phasenull", sources, **params)
-    logger.info("Phase-scrambled WTC band means saved: %s", out_path)
-
-    if cond_frames:
-        cond_path = _path({"condition": "all", "nulldist": "phase",
-                           "statistic": "wtc"})
-        write_tsv(pd.concat(cond_frames, ignore_index=True), cond_path)
-        _hyper_sidecar(cond_path, "hyper_wtc_bycondition_phasenull", sources,
-                       conditions=[w[0] for w in (windows or [])], **params)
-        logger.info("Phase-scrambled WTC per condition saved: %s", cond_path)
-
-    for group, entities, step, extra in (
-            (draw_frames,
-             {"condition": "all", "nulldist": "phase", "statistic": "wtc",
-              "desc": "draws"},
-             "hyper_wtc_bycondition_phasenull_draws",
-             {"conditions": [w[0] for w in (windows or [])]}),
-            (roi_frames, {**roi_entities, "nulldist": "phase", "statistic": "wtc"},
-             "hyper_wtc_roihom_phasenull", {}),
-            (roi_cond_frames,
-             {**roi_entities, "condition": "all", "nulldist": "phase",
-              "statistic": "wtc"},
-             "hyper_wtc_bycondition_roihom_phasenull",
-             {"conditions": [w[0] for w in (windows or [])]}),
-            (cross_frames, {**cross_entities, "nulldist": "phase", "statistic": "wtc"},
-             "hyper_wtc_roichan_phasenull", {}),
-            (cross_cond_frames,
-             {**cross_entities, "condition": "all", "nulldist": "phase",
-              "statistic": "wtc"},
-             "hyper_wtc_bycondition_roichan_phasenull",
-             {"conditions": [w[0] for w in (windows or [])]})):
-        if not group:
+    for whole, by_cond, entities, step in (
+            (frames, cond_frames, {"nulldist": "phase", "statistic": "wtc"},
+             "hyper_wtc_phasenull"),
+            (roi_frames, roi_cond_frames,
+             {**roi_entities, "nulldist": "phase", "statistic": "wtc"},
+             "hyper_wtc_roihom_phasenull"),
+            (cross_frames, cross_cond_frames,
+             {**cross_entities, "nulldist": "phase", "statistic": "wtc"},
+             "hyper_wtc_roichan_phasenull")):
+        table = join_whole_run(whole, by_cond)
+        if table is None:
             continue
         path = _path(entities)
-        write_tsv(pd.concat(group, ignore_index=True), path)
-        _hyper_sidecar(path, step, sources, **extra, **params)
-        logger.info("Phase-scrambled WTC ROI means saved: %s", path)
+        write_tsv(table, path)
+        _hyper_sidecar(path, step, sources, conditions=conditions, **params)
+        logger.info("Phase-scrambled WTC saved: %s", path)
+
+    if draw_frames:
+        path = _path({"condition": "all", "nulldist": "phase", "statistic": "wtc",
+                      "desc": "draws"})
+        write_tsv(pd.concat(draw_frames, ignore_index=True), path)
+        _hyper_sidecar(path, "hyper_wtc_bycondition_phasenull_draws", sources,
+                       conditions=conditions, **params)
+        logger.info("Phase-scrambled WTC draws saved: %s", path)
 
     return out_path
 
@@ -323,7 +308,7 @@ def _real_table(path: Path) -> "pd.DataFrame | None":
         logger.info("no %s to rank the null against; writing it without a percentile column",
                     path.name)
         return None
-    return pd.read_csv(path, sep="\t")
+    return pd.read_csv(path, sep="\t", dtype=LABEL_DTYPES)
 
 
 def _for_chroma(table: "pd.DataFrame | None", ch_type: str) -> "pd.DataFrame | None":

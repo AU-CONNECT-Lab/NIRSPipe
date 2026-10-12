@@ -32,14 +32,13 @@ from nirspipe.utils import pair_of
 
 _DIRECT = ("od_conversion", "beer_lambert", "resample")
 
-# A dyad's coherence is written once for the whole run and once per condition; they are one
-# method sentence. The nulls stay out: they record their own crossing, not the table's.
-_WTC_STEPS = ("hyper_wtc", "hyper_wtc_bycondition")
+# A dyad's coherence table, the whole run and the conditions in one. The nulls stay out:
+# they record their own crossing, not the table's.
+_WTC_STEPS = ("hyper_wtc",)
 
 # Every table that groups channel pairs into regions, for either measure: one sentence says
 # how a region value is formed.
-_ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_wtc_bycondition_roichan",
-              "hyper_wtc_bycondition_roihom", "hyper_isc_roichan")
+_ROI_STEPS = ("hyper_wtc_roichan", "hyper_wtc_roihom", "hyper_isc_roichan")
 
 # The cohort tables nirspipe-hyper-groupnull writes from either null's draws: one test.
 _GROUPNULL_STEPS = tuple(f"hyper_{null}_null_{table}" for null in ("repaired", "phase")
@@ -47,10 +46,8 @@ _GROUPNULL_STEPS = tuple(f"hyper_{null}_null_{table}" for null in ("repaired", "
 
 # Every table the phase-scrambled null writes; its level file, like the re-paired one's, is
 # left out.
-_PHASENULL_STEPS = ("hyper_wtc_phasenull", "hyper_wtc_bycondition_phasenull",
-                    "hyper_wtc_bycondition_phasenull_draws", "hyper_wtc_roihom_phasenull",
-                    "hyper_wtc_bycondition_roihom_phasenull", "hyper_wtc_roichan_phasenull",
-                    "hyper_wtc_bycondition_roichan_phasenull")
+_PHASENULL_STEPS = ("hyper_wtc_phasenull", "hyper_wtc_bycondition_phasenull_draws",
+                    "hyper_wtc_roihom_phasenull", "hyper_wtc_roichan_phasenull")
 # Every table the re-paired null writes, coherence and correlation, summary and draws: one
 # sentence says how its stand-ins were drawn. The level file carries too little to fill it.
 _PAIRNULL_STEPS = ("hyper_wtc_bycondition_pairnull", "hyper_wtc_bycondition_pairnull_draws",
@@ -95,7 +92,7 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
         # one correlation over channels, regions or a seed, and its z transform
         return "fc"
-    if step in ("hyper_wtc_phasescale", "hyper_wtc_bycondition_phasescale"):
+    if step == "hyper_wtc_phasescale":
         # the phase per frequency, whole run and per condition
         return "hyper_phasescale"
     if step in _GROUPNULL_STEPS:
@@ -601,9 +598,7 @@ STEP_SUMMARY = {
     "hyper_wtc_roichan": "Channel-level coherences averaged within each ROI, or per pair of ROIs on a crossed run, every pairing between them: the ROI number to report.",
     "hyper_wtc_roihom": "Channel-level coherences averaged over each ROI's homologous channel pairs alone, the subset a homologous-only design reports.",
     "hyper_wtc_roihom_phasenull": "The null for that ROI mean, its iterations grouped into regions before they were summarised.",
-    "hyper_wtc_bycondition_roihom_phasenull": "The phase-scrambled null for each condition's homologous ROI means, each iteration grouped into regions before the iterations were summarised.",
     "hyper_wtc_roichan_phasenull": "The phase-scrambled null for the ROI x ROI coherence matrix, each iteration grouped into region pairs before the iterations were summarised.",
-    "hyper_wtc_bycondition_roichan_phasenull": "The phase-scrambled null for each condition's ROI x ROI coherence matrix, each iteration grouped into region pairs before the iterations were summarised.",
     "hyper_wtc_bycondition_roichan_pairnull": "The re-paired null for each condition's ROI x ROI coherence matrix, each stand-in grouped into region pairs before the stand-ins were summarised.",
     "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",

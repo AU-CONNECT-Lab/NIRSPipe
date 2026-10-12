@@ -8,7 +8,9 @@ that are actually wrong rather than every test at once.
 
 from nirspipe.io.naming import derivative_path
 
-# the entity sets the WTC pass writes, under the names this suite refers to them by
+# the entity sets the WTC pass writes, under the names this suite refers to them by; the
+# whole run and the conditions share one table, `wtcbycond` only where a table has no
+# whole-run half
 KINDS = {
     "wtc":                        {"statistic": "wtc"},
     "wtc-roichan":                {"segmentation": "custom", "aggregation": "roi",
@@ -16,27 +18,13 @@ KINDS = {
     "wtc-roihom":                 {"segmentation": "custom", "aggregation": "homologous",
                                    "statistic": "wtc"},
     "wtc-phasescale":             {"statistic": "wtcphase"},
-    "wtcbycond":                  {"condition": "all", "statistic": "wtc"},
-    "wtcbycond-roichan":          {"segmentation": "custom", "aggregation": "roi",
-                                   "condition": "all", "statistic": "wtc"},
-    "wtcbycond-roihom":           {"segmentation": "custom", "aggregation": "homologous",
-                                   "condition": "all", "statistic": "wtc"},
-    "wtcbycond-phasescale":       {"condition": "all", "statistic": "wtcphase"},
     "wtc-phasenull":              {"nulldist": "phase", "statistic": "wtc"},
     "wtc-roihom-phasenull":       {"segmentation": "custom", "aggregation": "homologous",
                                    "nulldist": "phase", "statistic": "wtc"},
-    "wtcbycond-phasenull":        {"condition": "all", "nulldist": "phase",
-                                   "statistic": "wtc"},
-    "wtcbycond-roihom-phasenull": {"segmentation": "custom", "aggregation": "homologous",
-                                   "condition": "all", "nulldist": "phase",
-                                   "statistic": "wtc"},
     "wtcbycond-phasenull-draws":  {"condition": "all", "nulldist": "phase",
                                    "statistic": "wtc", "desc": "draws"},
     "wtc-roichan-phasenull":      {"segmentation": "custom", "aggregation": "roi",
                                    "nulldist": "phase", "statistic": "wtc"},
-    "wtcbycond-roichan-phasenull": {"segmentation": "custom", "aggregation": "roi",
-                                    "condition": "all", "nulldist": "phase",
-                                    "statistic": "wtc"},
     "wtcbycond-roichan-pairnull": {"segmentation": "custom", "aggregation": "roi",
                                    "condition": "all", "nulldist": "pair",
                                    "statistic": "wtc"},

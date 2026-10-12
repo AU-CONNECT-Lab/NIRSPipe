@@ -125,8 +125,15 @@ def _write_tree(root, crossed=False):
                               real.assign(label2="S9_D9", coherence=0.9)])
         draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"),
                      sep="\t", index=False)
-        real.to_csv(d / name(occ, "main", "wtcbycond"), sep="\t", index=False)
-        _record_minimum(d / name(occ, "main", "wtcbycond"))
+        _with_whole_run(real).to_csv(d / name(occ, "main", "wtc"), sep="\t", index=False,
+                                     na_rep="n/a")
+        _record_minimum(d / name(occ, "main", "wtc"))
+
+
+def _with_whole_run(real):
+    """The whole run's rows ahead of the conditions', as the real table holds them; never read."""
+    whole = real.drop(columns=["condition"]).assign(coherence=0.99)
+    return pd.concat([whole, real], ignore_index=True)[list(real.columns)]
 
 
 def _record_minimum(real_tsv, minimum=2):
@@ -164,7 +171,7 @@ def test_a_channel_no_occasion_can_rank_is_left_out_rather_than_raised(tmp_path)
     _write_tree(tmp_path)
     for occ in OCCASIONS:
         d = tmp_path / f"group-{occ}" / "nirs"
-        kind = "wtcbycond" if occ == "G01" else "wtcbycond-pairnull-draws"
+        kind = "wtc" if occ == "G01" else "wtcbycond-pairnull-draws"
         path = d / name(occ, "main", kind)
         table = pd.read_csv(path, sep="\t")
         table[table.label != "S1_D1"].to_csv(path, sep="\t", index=False)
@@ -271,9 +278,9 @@ def _write_crossed_tree(root, value):
         draws = _full_cross(_draws()[lambda f: f.occasion == occ]).drop(columns=["occasion"])
         real = _full_cross(_real(0.40)[lambda f: f.occasion == occ], value)
         draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"), sep=SEP, index=False)
-        real.drop(columns=["occasion"]).to_csv(d / name(occ, "main", "wtcbycond"),
-                                               sep=SEP, index=False)
-        _record_minimum(d / name(occ, "main", "wtcbycond"))
+        _with_whole_run(real.drop(columns=["occasion"])).to_csv(
+            d / name(occ, "main", "wtc"), sep=SEP, index=False, na_rep="n/a")
+        _record_minimum(d / name(occ, "main", "wtc"))
 
 
 def test_a_crossed_null_with_a_region_map_tests_every_ordered_region_pair():
@@ -325,6 +332,30 @@ def test_a_table_predating_the_draw_column_is_refused_not_dropped(tmp_path):
         write_group_null(tmp_path, "main", n_resample=200, seed=3)
 
 
+def test_a_real_table_holding_the_whole_run_only_is_refused(tmp_path):
+    """What a tree from before the whole run and the conditions shared one table holds."""
+    _write_tree(tmp_path)
+    path = tmp_path / "group-G03" / "nirs" / name("G03", "main", "wtc")
+    old = pd.read_csv(path, sep=SEP)
+    old[old.condition.isna()].drop(columns=["condition"]).to_csv(path, sep=SEP, index=False)
+    with pytest.raises(ValueError, match="no condition column"):
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
+
+
+def test_a_numeric_condition_label_meets_its_draws(tmp_path):
+    """Beside the whole run's n/a a label "1" would read as 1.0 and match no draw."""
+    _write_tree(tmp_path)
+    for occ in OCCASIONS:
+        for path in _paths(tmp_path, occ):
+            table = pd.read_csv(path, sep=SEP, dtype={"condition": str})
+            table["condition"] = table["condition"].replace("game", "1")
+            table.to_csv(path, sep=SEP, index=False, na_rep="n/a")
+    written = write_group_null(tmp_path, "main", n_resample=500, seed=3)
+    out = _resample_rows(pd.read_csv(written[1], sep=SEP, dtype={"condition": str}))
+    assert not out.empty and set(out.condition) == {"1"}
+    assert out.coherence.iloc[0] == pytest.approx(0.40)
+
+
 def _cross(path):
     """Turn a homologous table on disk into a crossed one, as a crossed run writes it."""
     d = pd.read_csv(path, sep=SEP)
@@ -335,7 +366,7 @@ def _cross(path):
 def _paths(root, occ):
     nirs = root / f"group-{occ}" / "nirs"
     return (nirs / name(occ, "main", "wtcbycond-pairnull-draws"),
-            nirs / name(occ, "main", "wtcbycond"))
+            nirs / name(occ, "main", "wtc"))
 
 
 def test_a_part_crossed_tree_gets_no_all_pairings_level(tmp_path, caplog):

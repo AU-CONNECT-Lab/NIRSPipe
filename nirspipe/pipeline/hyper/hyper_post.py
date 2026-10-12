@@ -26,7 +26,7 @@ from nirspipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
 from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from nirspipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
 from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import join_whole_run, write_tsv
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -749,65 +749,32 @@ def run_hyper_post(
         return pd.concat(frames, ignore_index=True) if frames else None
 
     chan_band_df = _stack("chan")
-    if chan_band_df is not None:
-        logger.info("WTC band means saved: %s",
-                    _write_df_tsv(chan_band_df, {"statistic": "wtc"}, "hyper_wtc", phase_level_source=run_level))
     roi_band_df = _stack("roichan")
-    if roi_band_df is not None:
-        logger.info("WTC ROI means from channels saved: %s",
-                    _write_df_tsv(roi_band_df,
-                                  {**roi_entities, "aggregation": "roi",
-                                   "statistic": "wtc"}, "hyper_wtc_roichan", phase_level_source=run_level))
-    roi_hom_df = _stack("roihom")
-    if roi_hom_df is not None:
-        logger.info("WTC homologous ROI means saved: %s",
-                    _write_df_tsv(roi_hom_df,
-                                  {**roi_entities, "aggregation": "homologous",
-                                   "statistic": "wtc"}, "hyper_wtc_roihom", phase_level_source=run_level))
 
-    phase_scale_df = _stack("phasescale")
-    if phase_scale_df is not None:
-        logger.info("WTC phase per scale saved: %s",
-                    _write_df_tsv(phase_scale_df, {"statistic": "wtcphase"},
-                                  "hyper_wtc_phasescale", phase_level_source=run_level))
-
+    # ---- one table per kind: the whole run's rows, condition n/a, then each condition's ----
     # the windows are the one thing a reader cannot reconstruct from the table
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
-    cond_chan_frames = [f for r in passes.values() for f in r["cond_chan"]]
-    cond_roi_frames  = [f for r in passes.values() for f in r["cond_roi"]]
-    if cond_chan_frames:
-        logger.info("WTC band means per condition saved: %s",
-                    _write_df_tsv(pd.concat(cond_chan_frames, ignore_index=True),
-                                  {"condition": "all", "statistic": "wtc"},
-                                  "hyper_wtc_bycondition",
-                                  condition_windows_s=spans,
-                                  phase_level_source=cond_level))
-    if cond_roi_frames:
-        logger.info("WTC ROI means per condition saved: %s",
-                    _write_df_tsv(pd.concat(cond_roi_frames, ignore_index=True),
-                                  {**roi_entities, "aggregation": "roi",
-                                   "condition": "all", "statistic": "wtc"},
-                                  "hyper_wtc_bycondition_roichan",
-                                  condition_windows_s=spans,
-                                  phase_level_source=cond_level))
-    cond_hom_frames = [f for r in passes.values() for f in r["cond_roihom"]]
-    if cond_hom_frames:
-        logger.info("WTC homologous ROI means per condition saved: %s",
-                    _write_df_tsv(pd.concat(cond_hom_frames, ignore_index=True),
-                                  {**roi_entities, "aggregation": "homologous",
-                                   "condition": "all", "statistic": "wtc"},
-                                  "hyper_wtc_bycondition_roihom",
-                                  condition_windows_s=spans,
-                                  phase_level_source=cond_level))
-
-    cond_scale_frames = [f for r in passes.values() for f in r["cond_phasescale"]]
-    if cond_scale_frames:
-        logger.info("WTC phase per scale per condition saved: %s",
-                    _write_df_tsv(pd.concat(cond_scale_frames, ignore_index=True),
-                                  {"condition": "all", "statistic": "wtcphase"},
-                                  "hyper_wtc_bycondition_phasescale",
-                                  condition_windows_s=spans,
-                                  phase_level_source=cond_level))
+    by_condition = dict(conditions=[w[0] for w in cond_windows],
+                        phase_level_source=run_level,
+                        **({"condition_windows_s": spans,
+                            "phase_level_source_by_condition": cond_level}
+                           if cond_windows else {}))
+    for whole, cond_key, entities, step, what in (
+            (chan_band_df, "cond_chan", {"statistic": "wtc"}, "hyper_wtc",
+             "WTC band means"),
+            (roi_band_df, "cond_roi",
+             {**roi_entities, "aggregation": "roi", "statistic": "wtc"},
+             "hyper_wtc_roichan", "WTC ROI means from channels"),
+            (_stack("roihom"), "cond_roihom",
+             {**roi_entities, "aggregation": "homologous", "statistic": "wtc"},
+             "hyper_wtc_roihom", "WTC homologous ROI means"),
+            (_stack("phasescale"), "cond_phasescale", {"statistic": "wtcphase"},
+             "hyper_wtc_phasescale", "WTC phase per scale")):
+        table = join_whole_run([whole] if whole is not None else [],
+                               [f for r in passes.values() for f in r[cond_key]])
+        if table is not None:
+            logger.info("%s saved: %s", what,
+                        _write_df_tsv(table, entities, step, **by_condition))
 
     # ---- ISC, which is a cut and not a slice ----
     # The chromophores --wtc-chroma asks for, as the coherence. A window here is a real cut,

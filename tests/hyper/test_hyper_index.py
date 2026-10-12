@@ -7,9 +7,12 @@ goes wrong quietly: a tree with no null must keep the column off rather than pri
 that reads as a result.
 """
 
+import json
+
 import pandas as pd
 import pytest
 
+from nirspipe.exceptions import StageError
 from nirspipe.io.naming import report_name
 from nirspipe.qc.hyper.hyper_index import (NULL_PERCENTILE, _links, _mean_by_chroma, _past_null,
                                              collect_rows)
@@ -110,3 +113,32 @@ def test_a_table_on_disk_that_cannot_be_read_is_still_reported(tmp_path, caplog)
     with caplog.at_level("WARNING", logger="nirspipe.qc.hyper_index"):
         collect_rows(tmp_path, "G01")
     assert "unreadable" in caplog.text
+
+
+# ---- the whole run and the conditions in one table ----
+
+def test_each_condition_row_of_the_table_is_a_window(tmp_path):
+    """Numeric labels, which beside the whole run's n/a would read as 1.0 and 2.0."""
+    (tmp_path / "nirs").mkdir()
+    table = tmp_path / "nirs" / name("G01", "main")
+    pd.DataFrame({"chromophore": "hbo", "condition": [None, "1", "2"],
+                  "label": "S1_D1", "coherence": [0.4, 0.6, 0.2]}).to_csv(
+        table, sep="\t", index=False, na_rep="n/a")
+    table.with_suffix(".json").write_text(json.dumps({"parameters": {
+        "conditions": ["1", "2"],
+        "condition_windows_s": {"1": [0.0, 300.0], "2": [300.0, 600.0]}}}))
+
+    rows = collect_rows(tmp_path, "G01")
+    assert [(r["kind"], r["condition"]) for r in rows] == [
+        ("whole run", None), ("window", "1"), ("window", "2")]
+    assert [r["coherence"]["hbo"] for r in rows] == [0.4, 0.6, 0.2]
+    assert rows[1]["window"] == "0–300 s"
+
+
+def test_a_table_holding_the_whole_run_only_by_layout_is_refused(tmp_path):
+    """Written before the conditions moved in: its sidecar names none, not even an empty list."""
+    _whole_run_only(tmp_path)
+    (tmp_path / "nirs" / name("G01", "main", extension=".json")).write_text(
+        json.dumps({"parameters": {"band_fmin": 0.01, "band_fmax": 0.1}}))
+    with pytest.raises(StageError, match="cond-all"):
+        collect_rows(tmp_path, "G01")

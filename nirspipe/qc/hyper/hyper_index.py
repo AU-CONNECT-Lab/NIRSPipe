@@ -22,7 +22,8 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.qc.boilerplate import collect_software_versions
-from nirspipe.io.tables import read_tsv_or_none
+from nirspipe.exceptions import StageError
+from nirspipe.io.tables import read_tsv_or_none, split_whole_run
 from nirspipe.io.naming import report_name, derivative_path, parse_path
 from nirspipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from nirspipe.qc.common.report_shell import (
@@ -253,8 +254,8 @@ def _nirs_dirs(group_dir: Path) -> "list[tuple[str | None, Path]]":
 def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
     """One row per analysed window under ``group_dir``, for the index table.
 
-    A task contributes its whole-run row and then one row per condition found in its
-    ``cond-all`` table. The conditions come in the order that table lists them, which
+    A task contributes its whole-run row and then one row per condition its coherence
+    table holds. The conditions come in the order that table lists them, which
     is the order the windows were found in the recording, so the rows read down the session
     rather than alphabetically. A group recorded per session lists each session's tasks.
     """
@@ -279,14 +280,12 @@ def _session_rows(group_dir: Path, group_id: str, session: "str | None",
     nirs = nirs_dir.relative_to(group_dir).as_posix()
     for task in _tasks(nirs_dir, group_id):
         stem = group_label(group_id, task, session)
-        whole = read_tsv_or_none(nirs_dir / _table(stem, statistic="wtc"), _LOST)
-        bycond = read_tsv_or_none(nirs_dir / _table(stem, condition="all", statistic="wtc"),
-                                  _LOST)
+        coherence = nirs_dir / _table(stem, statistic="wtc")
+        _refuse_split(coherence)
+        whole, bycond = split_whole_run(read_tsv_or_none(coherence, _LOST))
         # written only when the run drew a null; a tree without one keeps the column empty
-        whole_null = read_tsv_or_none(nirs_dir / _table(stem, nulldist="phase", statistic="wtc"),
-                                      _LOST)
-        bycond_null = read_tsv_or_none(nirs_dir / _table(stem, condition="all",
-                                                  nulldist="phase", statistic="wtc"), _LOST)
+        whole_null, bycond_null = split_whole_run(read_tsv_or_none(
+            nirs_dir / _table(stem, nulldist="phase", statistic="wtc"), _LOST))
         # every inter-brain number is of two members, so a group of three contributes three
         # rows per window, one per pairing, rather than one row averaging across them
         pairings = _pairings(whole, bycond)
@@ -316,8 +315,7 @@ def _session_rows(group_dir: Path, group_id: str, session: "str | None",
                 "valid_frac": _mean_by_chroma(source, "n_valid_frac", where, pair),
                 "isc": _isc_mean(nirs_dir, stem, label, slug),
                 "isc_crossed": _isc_mean(nirs_dir, stem, label, slug, crossed=True),
-                "window": _window_of(
-                    nirs_dir / _table(stem, condition="all", statistic="wtc"), label),
+                "window": _window_of(coherence, label),
             }
 
         for pair in pairings:
@@ -328,12 +326,21 @@ def _session_rows(group_dir: Path, group_id: str, session: "str | None",
     return rows
 
 
-def _window_of(bycond_path: Path, label: "str | None") -> str:
+def _refuse_split(path: Path) -> None:
+    """Refuse a coherence table written before the whole run and the conditions shared it."""
+    side = path.with_suffix(".json")
+    if path.exists() and side.exists() and "conditions" not in (
+            json.loads(side.read_text(encoding="utf-8")).get("parameters", {})):
+        raise StageError(f"{path.name} holds the whole run only, its conditions in a "
+                         f"cond-all table beside it. Rerun `nirspipe-hyper` for this task.")
+
+
+def _window_of(table_path: Path, label: "str | None") -> str:
     """``"300.0-1200.0 s"`` for one condition, off the table's sidecar, or ""."""
     if label is None:
         return ""
     try:
-        spans = (json.loads(bycond_path.with_suffix(".json").read_text(encoding="utf-8"))
+        spans = (json.loads(table_path.with_suffix(".json").read_text(encoding="utf-8"))
                  ["parameters"]["condition_windows_s"])
         lo, hi = spans[label]
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
