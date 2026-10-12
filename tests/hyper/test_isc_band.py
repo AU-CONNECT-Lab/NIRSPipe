@@ -112,3 +112,43 @@ def test_the_unfiltered_note_stands_down_when_the_correlation_is_high_passed(isc
 
     raws = _pair(0.05)
     assert (unfiltered_stage_note(raws, isc_band) is not None) is warned
+
+
+# ---- --band-fmin/--band-fmax name both metrics at once ----
+
+class _Stop(Exception):
+    pass
+
+
+def _resolved_bands(monkeypatch, *flags):
+    """The ISC and WTC bands `cmd_run` settles on, stopped before any dyad is loaded."""
+    from nirspipe.cli import hyper
+
+    seen = {}
+
+    def capture(isc_band, wtc_band_fmin, wtc_band_fmax):
+        seen.update(isc=isc_band, wtc=(wtc_band_fmin, wtc_band_fmax))
+        raise _Stop
+
+    monkeypatch.setattr(hyper, "_warn_band_mismatch", capture)
+    args = hyper._parsers()["nirspipe-hyper"].parse_args(
+        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", *flags])
+    with pytest.raises(_Stop):
+        hyper.cmd_run(**{k: v for k, v in vars(args).items() if k != "analysis_level"})
+    return seen
+
+
+def test_the_shared_band_reaches_both_metrics(monkeypatch):
+    seen = _resolved_bands(monkeypatch, "--band-fmin", "0.02", "--band-fmax", "0.1")
+    assert seen == {"isc": (0.02, 0.1), "wtc": (0.02, 0.1)}
+
+
+def test_a_metric_flag_overrides_the_shared_band_for_that_metric_only(monkeypatch):
+    seen = _resolved_bands(monkeypatch, "--band-fmin", "0.02", "--band-fmax", "0.1",
+                           "--isc-fmin", "0.01")
+    assert seen == {"isc": (0.01, 0.1), "wtc": (0.02, 0.1)}
+
+
+def test_without_the_shared_band_each_metric_keeps_only_its_own(monkeypatch):
+    seen = _resolved_bands(monkeypatch, "--wtc-band-fmin", "0.06", "--wtc-band-fmax", "0.15")
+    assert seen == {"isc": None, "wtc": (0.06, 0.15)}

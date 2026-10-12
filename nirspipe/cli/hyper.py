@@ -220,7 +220,7 @@ def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
         logger.warning(
             "ISC reads the whole passband while the coherence band is %s-%s Hz, so the two "
             "describe different frequencies and comparing them is not meaningful. Pass "
-            "--isc-fmin/--isc-fmax to put them on one band.",
+            "--band-fmin/--band-fmax to put them on one band.",
             wtc_band_fmin, wtc_band_fmax)
     elif isc_band != wtc_band:
         logger.warning(
@@ -251,6 +251,7 @@ def cmd_run(
     long_max_dist: float | None,
     check_only: bool, verbose: bool,
     participant_label: list[str] | None = None,
+    band_fmin: "float | None" = None, band_fmax: "float | None" = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -260,6 +261,11 @@ def cmd_run(
     # unset, the null is crossed exactly when the real table is
     if wtc_phase_null_cross is None:
         wtc_phase_null_cross = wtc_channel_cross
+    # the shared band fills whichever metric was not given its own
+    wtc_band_fmin = band_fmin if wtc_band_fmin is None else wtc_band_fmin
+    wtc_band_fmax = band_fmax if wtc_band_fmax is None else wtc_band_fmax
+    isc_fmin = band_fmin if isc_fmin is None else isc_fmin
+    isc_fmax = band_fmax if isc_fmax is None else isc_fmax
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
@@ -714,12 +720,13 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     band_opts = argparse.ArgumentParser(add_help=False)
     band_opts.add_argument("--wtc-band-fmin", type=float, default=None,
                            help="Lower bound (Hz) of the band the per-channel WTC TSV "
-                                "averages over. For nirspipe-hyper it defaults to --wtc-fmin, i.e. "
-                                "the whole computed axis; for nirspipe-hyper-band it is the new band and "
-                                "is required.")
+                                "averages over. For nirspipe-hyper it defaults to --band-fmin, "
+                                "else --wtc-fmin, i.e. the whole computed axis; for "
+                                "nirspipe-hyper-band it is the new band and is required.")
     band_opts.add_argument("--wtc-band-fmax", type=float, default=None,
-                           help="Upper bound (Hz) of that band. Defaults to --wtc-fmax for "
-                                "nirspipe-hyper; required for nirspipe-hyper-band.")
+                           help="Upper bound (Hz) of that band. Defaults to --band-fmax, "
+                                "else --wtc-fmax, for nirspipe-hyper; required for "
+                                "nirspipe-hyper-band.")
     band_opts.add_argument("--wtc-mask-coi", action=argparse.BooleanOptionalAction,
                            default=True,
                            help="Average each band mean only over cells outside the cone "
@@ -874,14 +881,21 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Write the tables and skip the HTML report and its figures. "
                           "Everything else is unchanged: the same numbers, the same files, the same npz when "
                           "--wtc-save-maps is given.")
+    run.add_argument("--band-fmin", type=float, default=None, metavar="HZ",
+                     help="Low edge of the band both metrics read, the coherence averaging "
+                          "over it and the correlation filtering to it. --wtc-band-fmin and "
+                          "--isc-fmin override it for one metric.")
+    run.add_argument("--band-fmax", type=float, default=None, metavar="HZ",
+                     help="High edge of that band. --wtc-band-fmax and --isc-fmax override "
+                          "it for one metric.")
     run.add_argument("--isc-fmin", type=float, default=None, metavar="HZ",
-                     help="Band-limit each member before the correlation, low edge. Without "
-                          "it ISC reads whatever the preprocessing passband left. The run "
-                          "warns when the ISC band differs from --wtc-band-fmin/fmax; set "
-                          "the two equal to compare ISC with the coherence. Filtering "
-                          "happens on the whole recording, before a condition window is cut.")
+                     help="Band-limit each member before the correlation, low edge "
+                          "(default --band-fmin). Without either, ISC reads whatever the "
+                          "preprocessing passband left. The run warns when the ISC band "
+                          "differs from the coherence band. Filtering happens on the whole "
+                          "recording, before a condition window is cut.")
     run.add_argument("--isc-fmax", type=float, default=None, metavar="HZ",
-                     help="The high edge of that band. No default: see --isc-fmin.")
+                     help="The high edge of that band (default --band-fmax).")
     run.add_argument("--wtc-whiten", type=float, default=0.0, metavar="SECONDS",
                      help="Prewhiten each long channel with an autoregressive model of this "
                           "many seconds of order before the wavelet coherence, one order for "

@@ -350,6 +350,8 @@ QC_NOT_EXPOSED = {
             # display only: it decides where a phase arrow is drawn on the WTC maps and
             # changes no table or figure value, so the page has nothing to preview for it
             "--wtc-arrow-min",
+            # a shorthand for the WTC and ISC band fields the page already sends
+            "--band-fmin", "--band-fmax",
             # the page exists to show the report; a run started from it that writes no
             # report leaves the user looking at an empty panel with no way to tell the run
             # from a failure. It is for a batch that will be read as tables
