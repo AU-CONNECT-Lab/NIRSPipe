@@ -57,19 +57,18 @@ def test_the_hyper_viewer_writes_only_this_dyad_s_members(tmp_path):
     assert not channel_decisions_path(tmp_path, "sub-09", task="rest").exists()
 
 
-def test_hyper_decisions_merge_into_every_run_or_one_hyper_entry(tmp_path):
+def test_hyper_decisions_live_under_their_own_key_beside_the_runs(tmp_path):
     html = tmp_path / "group-G1" / report_name("group-G1_task-rest", desc="raw")
     app = HyperRatingApp(html, tmp_path, ["sub-01", "sub-02"])
-    with_runs = app._decisions_path("sub-01")
-    with_runs.write_text(json.dumps({"sub-01_task-rest_run-01": {"S1_D1 hbo": "good"},
-                                     "sub-01_task-rest_run-02": {}}), encoding="utf-8")
+    path = app._decisions_path("sub-01")
+    run_key = "sub-01_task-rest_run-01"
+    path.write_text(json.dumps({run_key: {"S1_D1 hbo": "good"},
+                                "_hyper": {"S3_D3 hbo": "bad"}}), encoding="utf-8")
+    client = app.app.test_client()
 
-    r = app.app.test_client().post("/save_hyper_decisions", json={
-        "sub-01": {"S2_D2 hbo": "bad"}, "sub-02": {"S2_D2 hbo": "bad"}})
+    assert client.get("/load_decisions").get_json() == {"sub-01": {"S3_D3 hbo": "bad"},
+                                                         "sub-02": {}}
+    r = client.post("/save_hyper_decisions", json={"sub-01": {"S2_D2 hbo": "bad"}})
     assert r.get_json() == {"status": "success"}
-
-    runs = json.loads(with_runs.read_text(encoding="utf-8"))
-    assert runs == {"sub-01_task-rest_run-01": {"S1_D1 hbo": "good", "S2_D2 hbo": "bad"},
-                    "sub-01_task-rest_run-02": {"S2_D2 hbo": "bad"}}
-    fresh = json.loads(app._decisions_path("sub-02").read_text(encoding="utf-8"))
-    assert fresh == {"_hyper": {"S2_D2 hbo": "bad"}}
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        run_key: {"S1_D1 hbo": "good"}, "_hyper": {"S2_D2 hbo": "bad"}}

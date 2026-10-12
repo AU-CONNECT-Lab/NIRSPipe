@@ -149,6 +149,17 @@ def mark_bad_channels(
           screen_scope=screen_scope, screen_scope_windows=len(scope or []))
     return raw_od, bad_chs, sci_scores, scores.get("good_frac") or {}
 
+def release_kept(screened: list[str], keep: list[str]) -> tuple[list[str], list[str]]:
+    """Screening's rejections minus the pairs a reviewer kept, as ``(still bad, kept)``.
+
+    ``(["S1_D1 760", "S1_D1 850", "S2_D2 760", "S2_D2 850"], ["S2_D2"])``
+        -> ``(["S1_D1 760", "S1_D1 850"], ["S2_D2 760", "S2_D2 850"])``
+    """
+    wanted = {pair_of(c) for c in keep}
+    kept = [c for c in screened if pair_of(c) in wanted]
+    return [c for c in screened if c not in kept], kept
+
+
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
     """Convert OD to haemoglobin concentration via Beer-Lambert law."""
@@ -201,6 +212,8 @@ class PrepConfig:
     long_min_dist: float | None = None
     long_max_dist: float | None = None
     bad_channels: list[str] = field(default_factory=list)
+    # the reviewer's keeps: screening's rejections of these come back out; marks by hand still win
+    keep_channels: list[str] = field(default_factory=list)
     # the channels the run's BIDS channels.tsv marks bad in its status column
     channels_tsv_bads: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
@@ -304,6 +317,17 @@ def run_prep(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
         min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
+    kept: list[str] = []
+    if config.keep_channels:
+        both = sorted({pair_of(c) for c in config.keep_channels}
+                      & {pair_of(c) for c in config.bad_channels})
+        if both:
+            raise StageError(f"--bad-channels both marks bad and keeps {', '.join(both)} for "
+                             f"this recording; settle each in the rating viewer")
+        bad_chs, kept = release_kept(bad_chs, config.keep_channels)
+        if kept:
+            logger.info("sub-%s | kept on review despite screening: %s", config.subject, kept)
+        raw_od.info["bads"] = bad_chs
     forced = _expand_bad_pairs(raw_od, list(non_finite))
     if config.bad_channels:
         manual = _expand_bad_pairs(raw_od, config.bad_channels)
@@ -324,6 +348,11 @@ def run_prep(
         forced += listed
     if forced:
         bad_chs = sorted(set(bad_chs) | set(forced))
+        overruled = sorted({pair_of(c) for c in kept} & {pair_of(c) for c in forced})
+        if overruled:
+            logger.warning("sub-%s | kept on review but marked bad by channels.tsv or for "
+                           "non-finite samples, so still bad: %s", config.subject, overruled)
+            kept = [c for c in kept if pair_of(c) not in overruled]
         if len(bad_chs) == len(sci_scores):
             why = [w for w, on in (("--bad-channels", config.bad_channels),
                                    ("channels.tsv", config.channels_tsv_bads),
@@ -376,6 +405,8 @@ def run_prep(
     }, extra_parameters={
         **_screening_parameters(config),
         "screen_scope_counted": counted,
+        # what the Methods sentence on reviewer keeps is written from
+        "kept_channels": kept,
         # what the Methods sentence on GVTD censoring is written from
         **({"gvtd_censor": config.gvtd_censor,
             **{k: censor_metrics.get(k) for k in ("gvtd_censor_n_std", "gvtd_censor_min_epoch_s",
@@ -480,6 +511,7 @@ def _screening_parameters(config: PrepConfig) -> dict:
         "resp_h_freq": config.resp_h_freq,
         "qc_window_s": config.qc_window_s,
         "bad_channels": config.bad_channels,
+        "keep_channels": config.keep_channels,
         "channels_tsv_bads": config.channels_tsv_bads,
         # read by no step, but it tells an empty channels_tsv_bads from a skipped status column
         "ignore": config.ignore,

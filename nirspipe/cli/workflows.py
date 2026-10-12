@@ -530,7 +530,8 @@ _BAD_CHANNEL_KEYS = {"participant_id": ("subject", "sub-"), "session": ("session
                      "task": ("task", "task-"), "run": ("run", "run-")}
 
 
-def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...]) -> list[dict]:
+def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...],
+                      optional: tuple[str, ...] = ()) -> list[dict]:
     """The rows of a per-recording table, each label cell with its prefix taken off.
 
     A ``--bad-channels`` row ``sub-01 | ses-02 | | 1 | S1_D1`` comes back as
@@ -544,15 +545,16 @@ def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...]) -> l
     if missing:
         raise ValueError(f"{flag} table {path} needs a {' and a '.join(missing)} column")
     # a misspelt label column would otherwise read as blank, i.e. every recording
-    unknown = set(table.columns) - set(_BAD_CHANNEL_KEYS) - set(data_columns)
+    unknown = set(table.columns) - set(_BAD_CHANNEL_KEYS) - set(data_columns) - set(optional)
     if unknown:
         raise ValueError(
             f"{flag} table {path} has unknown columns {sorted(unknown)}; "
-            f"allowed: {', '.join([*_BAD_CHANNEL_KEYS, *data_columns])}")
+            f"allowed: {', '.join([*_BAD_CHANNEL_KEYS, *data_columns, *optional])}")
     rows = []
     for i, record in enumerate(table.to_dict("records")):
         line = i + 2  # the header is line 1
-        row: dict[str, Any] = {**{c: record[c] for c in data_columns}, "line": line}
+        row: dict[str, Any] = {**{c: record[c] for c in data_columns},
+                               **{c: record.get(c, "") for c in optional}, "line": line}
         for column, (_, prefix) in _BAD_CHANNEL_KEYS.items():
             label = str(record.get(column, "")).strip().removeprefix(prefix)
             if label and not (label.isdigit() if column == "run" else label.isalnum()):
@@ -566,7 +568,8 @@ def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...]) -> l
 
 
 def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
-    return _label_table_rows(path, "--bad-channels", ("bad_channels",))
+    # keep_channels: the reviewer kept these although screening rejected them
+    return _label_table_rows(path, "--bad-channels", ("bad_channels",), optional=("keep_channels",))
 
 
 def _span_rows(path: Path, flag: str = "--keep-spans",
@@ -640,9 +643,20 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
     if not path.exists():
         return [c.strip() for c in spec.split(",") if c.strip()]
 
+    return _channel_cells_for(path, subject, entities, "bad_channels")
+
+
+def _keep_channels_for(spec: str | None, subject: str, entities: dict | None = None) -> list[str]:
+    """The keep_channels cells of a --bad-channels table for one recording; a bare list keeps none."""
+    if not spec or not Path(spec).exists():
+        return []
+    return _channel_cells_for(Path(spec), subject, entities, "keep_channels")
+
+
+def _channel_cells_for(path: Path, subject: str, entities: dict | None, column: str) -> list[str]:
     rows = [row for row in _bad_channel_rows(path)
             if _bad_channel_row_matches(row, subject, entities)]
-    return [c.strip() for c in ",".join(r["bad_channels"] for r in rows).split(",") if c.strip()]
+    return [c.strip() for c in ",".join(r[column] for r in rows).split(",") if c.strip()]
 
 
 def _spans_for(spec: str | None, subject: str, entities: dict | None = None,
@@ -753,6 +767,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         motion_std_thresh=motion.get("motion_std_thresh"),
         wavelet_iqr=motion.get("wavelet_iqr"),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
+        keep_channels=_keep_channels_for(args.get("bad_channels"), subject, entities),
         channels_tsv_bads=channels_tsv_bads or [],
         keep_spans=keep_spans,
         # a recording no row names is used whole, so no marker applies to it

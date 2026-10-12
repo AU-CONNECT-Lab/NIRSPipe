@@ -83,6 +83,21 @@ def cmd_hyper(
                    decisions_dir=derivatives_dir).run(port=port)
 
 
+def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
+    """Write the rated channels as a --bad-channels table, and the FINAL verdicts as a list."""
+    from nirspipe.qc.rating.export import export_ratings
+
+    channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0])
+    print(f"Channel decisions: {channels}")
+    print(f"  pass it to nirspipe as --bad-channels {channels}")
+    print(f"FINAL verdicts (for reading; nothing reads them): {verdicts}")
+    if conflicts:
+        print("[warning] rated both bad and good for one recording; nirspipe will refuse "
+              "these until they are settled in the viewer:", file=sys.stderr)
+        for line in conflicts:
+            print(f"  {line}", file=sys.stderr)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-rate",
@@ -138,6 +153,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="The nirspipe tree. Each member's channel decisions are kept there, "
                          "in the file their raw page reads; without it they go to OUTPUT_DIR.")
     ph.set_defaults(func=cmd_hyper)
+
+    pe = sub.add_parser("export", help="Export channel decisions for nirspipe --bad-channels.")
+    pe.add_argument("trees", type=Path, nargs="+",
+                    help="Trees holding the decision files: the raw QC tree, and for dyads "
+                         "the tree given to hyper as --derivatives-dir.")
+    pe.add_argument("--out-dir", "--out_dir", type=Path, default=None,
+                    help="Folder for the two tables. Default: the first tree.")
+    pe.set_defaults(func=cmd_export)
     return p
 
 

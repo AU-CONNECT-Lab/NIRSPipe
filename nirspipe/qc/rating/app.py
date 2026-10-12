@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from nirspipe.io.derivatives import channel_decisions_path, entity_of
 from nirspipe.io.naming import rating_path, report_name
+from nirspipe.qc.rating.export import HYPER_KEY
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.net import resolve_port
 
@@ -287,25 +288,16 @@ class HyperRatingApp(_ReportViewer):
         return channel_decisions_path(self.decisions_dir, sid,
                                       task=self.task, session=self.session)
 
+    # the dyad page's verdicts sit under their own key, apart from each run's own
     def _load_decisions(self) -> dict:
-        """Return {sid: {ch: state}} by flattening each subject's run-level JSON."""
-        result: dict[str, dict] = {}
-        for sid in self.subject_ids:
-            flat: dict[str, str] = {}
-            for run_decisions in _read_json(self._decisions_path(sid)).values():
-                if isinstance(run_decisions, dict):
-                    flat.update(run_decisions)
-            result[sid] = flat
-        return result
+        return {sid: _read_json(self._decisions_path(sid)).get(HYPER_KEY, {})
+                for sid in self.subject_ids}
 
     def _save_decisions(self, data: dict) -> None:
-        """Merge chip states into every run of each member's file, or one `_hyper` entry when it has none."""
         for sid, ch_states in data.items():
             path = self._decisions_path(sid)
             existing = _read_json(path)
-            runs = [k for k, v in existing.items() if isinstance(v, dict)]
-            for run_key in runs or ["_hyper"]:
-                existing.setdefault(run_key, {}).update(ch_states)
+            existing[HYPER_KEY] = dict(ch_states)
             _write_json(path, existing)
 
     def _setup_decision_routes(self, app: Flask) -> None:

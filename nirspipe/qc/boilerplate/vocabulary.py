@@ -279,6 +279,7 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     low, high = params.get("cardiac_l_freq"), params.get("cardiac_h_freq")
     manual = list(dict.fromkeys(pair_of(c) for c in params.get("bad_channels") or []))
     listed = list(dict.fromkeys(pair_of(c) for c in params.get("channels_tsv_bads") or []))
+    kept = list(dict.fromkeys(pair_of(c) for c in params.get("kept_channels") or []))
     return {
         "threshold": _num(params.get("sci_threshold")),
         "psp_threshold": _num(psp if psp is not None else cutoffs["psp"]),
@@ -294,6 +295,10 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
         "manual": (f" {'Channels' if len(manual) > 1 else 'Channel'} {_series(manual)} "
                    f"{'were' if len(manual) > 1 else 'was'} also marked as bad by hand."
                    if manual else ""),
+        "kept": (f" {'Channels' if len(kept) > 1 else 'Channel'} {_series(kept)} "
+                 f"{'were' if len(kept) > 1 else 'was'} kept after visual review although the "
+                 f"screening rejected {'them' if len(kept) > 1 else 'it'}."
+                 if kept else ""),
         "channels_tsv": (f" {'Channels' if len(listed) > 1 else 'Channel'} {_series(listed)} "
                          f"{'were' if len(listed) > 1 else 'was'} also marked as bad, as the "
                          f"recording's BIDS channels.tsv lists {'them' if len(listed) > 1 else 'it'}."
