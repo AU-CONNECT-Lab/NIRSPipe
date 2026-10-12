@@ -74,6 +74,15 @@ def rate_commands(command: str, opts: dict) -> list[str]:
     return [line]
 
 
+def export_command(command: str, opts: dict) -> str:
+    """The export that turns those ratings into Analysis's --bad-channels table."""
+    # the dyad viewer files each member's decisions in the nirspipe tree when given one
+    trees = [opts["output_dir"]]
+    if command == "hyper-raw" and opts.get("derivatives_dir"):
+        trees.append(opts["derivatives_dir"])
+    return "nirspipe-rate export " + " ".join(trees)
+
+
 @callback(
     Output("rq-subject-section", "style"),
     Output("rq-dyad-section", "style"),
@@ -136,6 +145,9 @@ def generate_command(n_clicks, command, *values):
     hint = html.Div([
         html.Small("Then rate the reports with:", className="text-muted d-block mb-1"),
         html.Pre("\n".join(rate_commands(command, opts)), className="fp-command"),
+        html.Small("and export the channel decisions for Analysis with:",
+                   className="text-muted d-block mb-1"),
+        html.Pre(export_command(command, opts), className="fp-command"),
     ])
     return (preview_text(argv, shell),
             {"argv": argv, "command": command, "output_dir": opts["output_dir"]},

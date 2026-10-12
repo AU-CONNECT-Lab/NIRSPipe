@@ -775,12 +775,14 @@ def test_half_a_trial_window_is_not_sent():
 
 def test_the_page_names_the_viewer_that_opens_what_it_wrote():
     from nirspipe.cli.rate import _build_parser as rate_parser
-    from nirspipe.interface.callbacks.raw_qc_callbacks import rate_commands
+    from nirspipe.interface.callbacks.raw_qc_callbacks import export_command, rate_commands
 
     subject_lines = rate_commands("prep-raw", _RAW_QC_FULL_OPTS)
     assert len(subject_lines) == 2
     dyad_lines = rate_commands("hyper-raw", _RAW_QC_FULL_OPTS)
-    for line in subject_lines + dyad_lines:
+    exports = [export_command(c, _RAW_QC_FULL_OPTS) for c in _RAW_QC]
+    assert exports[1].split()[-1] == "/deriv"   # the members' decisions sit in the nirspipe tree
+    for line in subject_lines + dyad_lines + exports:
         assert line.startswith("nirspipe-rate ")
         rate_parser().parse_args(line.split()[1:])   # raises SystemExit on an unknown flag
 

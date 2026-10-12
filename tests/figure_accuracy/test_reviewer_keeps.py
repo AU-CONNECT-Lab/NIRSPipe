@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from tests._fingerprint import BAD_PAIR
 from tests.figure_accuracy._run import Run
 from tests.figure_accuracy.conftest import HAND_MARKED, run_capturing
@@ -10,6 +12,7 @@ UNCOUPLED = f"S{BAD_PAIR + 1}_D{BAD_PAIR + 1}"
 
 
 def _run_with(tmp_path, bad: str, keep: str) -> Run:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     table = tmp_path / "decisions.tsv"
     table.write_text(f"participant_id\tbad_channels\tkeep_channels\nsub-01\t{bad}\t{keep}\n",
                      encoding="utf-8")
@@ -36,5 +39,6 @@ def test_the_kept_pair_leaves_the_bad_list_and_the_hand_marked_one_stays(tmp_pat
 
 
 def test_a_pair_both_marked_bad_and_kept_stops_the_run(tmp_path):
-    run = _run_with(tmp_path, UNCOUPLED, UNCOUPLED)
-    assert not run.stage("sci").exists()
+    with pytest.raises(SystemExit):
+        _run_with(tmp_path, UNCOUPLED, UNCOUPLED)
+    assert not Run(tmp_path / "out", None).stage("sci").exists()

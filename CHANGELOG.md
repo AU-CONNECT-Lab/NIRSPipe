@@ -7,12 +7,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `nirspipe-rate export` writes the viewers' channel decisions as a `--bad-channels` table, and lists every FINAL verdict
+- A `--bad-channels` table takes a `keep_channels` column: pairs screening rejected that a reviewer kept; the Methods name them
 - GUI Raw QC page runs `nirspipe-qc prep-raw` and `hyper-raw` over several subjects or dyads and names the `nirspipe-rate` command that opens each report
 - `nirspipe-hyper --band-fmin/--band-fmax` set the coherence and correlation bands together; the per-metric band flags override them
 - Documentation published to GitHub Pages, rebuilt from `docs/` on every push to `main`; each command's flag list is generated from its parser
 - A tutorial page runs three public dyads from download to the cohort null tests, one command per step
 
 ### Changed
+- `nirspipe-rate hyper` reads and writes each member's dyad decisions under `_hyper` only, apart from the run pages' own
 - GUI Data Preparation no longer records channel decisions or writes the raw report; `nirspipe-rate raw` and the Raw QC page do
 - The README is a short overview that links the documentation
 - **Breaking**: `nirspipe-rate rate` keeps one JSON rating file per report page, as `raw` does; `logs/group_ratings.jsonl` lines name the page `stem`

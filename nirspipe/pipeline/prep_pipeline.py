@@ -348,7 +348,7 @@ def run_prep(
         forced += listed
     if forced:
         bad_chs = sorted(set(bad_chs) | set(forced))
-        overruled = sorted({pair_of(c) for c in kept} & {pair_of(c) for c in forced})
+        overruled = sorted({pair_of(c) for c in config.keep_channels} & {pair_of(c) for c in forced})
         if overruled:
             logger.warning("sub-%s | kept on review but marked bad by channels.tsv or for "
                            "non-finite samples, so still bad: %s", config.subject, overruled)

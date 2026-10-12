@@ -19,7 +19,8 @@ ARGS = (*CLI_ARGS, "--mode", "denoise", "--drift-model", "polynomial", "--drift-
         "--participant-label", "01", "--no-report", "--skip-bids-validation")
 SCREENING = {"sci_threshold", "psp_threshold", "min_good_frac", "screen_scope",
              "screen_scope_counted", "cardiac_l_freq", "cardiac_h_freq", "resp_l_freq",
-             "resp_h_freq", "qc_window_s", "bad_channels", "channels_tsv_bads", "ignore",
+             "resp_h_freq", "qc_window_s", "bad_channels", "keep_channels", "kept_channels",
+             "channels_tsv_bads", "ignore",
              "keep_spans", "keep_spans_from", "bad_spans"}
 FILTER_STATE = {"high_pass", "low_pass", "filter_method", "filter_order", "censor_fill"}
 SEPARATION = {"sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm"}
