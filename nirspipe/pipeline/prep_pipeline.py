@@ -29,8 +29,10 @@ from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
     MotionMethod,
     correct_motion,
     motion_settings,
+    overmarked,
 )
 from nirspipe.exceptions import StageError
+from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
 from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
@@ -398,6 +400,13 @@ def run_prep(
           extra_parameters={"motion_correction": config.motion_correction,
                             **motion_settings(config.motion_correction, config.motion_std_thresh,
                                               config.wavelet_iqr)})
+    summary = (lineage_of(raw_od).params or {}).get(config.motion_correction)
+    if overmarked(config.motion_correction, summary):
+        logger.warning("sub-%s | %s", config.subject, section_note(
+            "caveat.motion_overmarked", method=config.motion_correction,
+            share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
+            thresh=motion_settings(config.motion_correction,
+                                   config.motion_std_thresh)["motion_std_thresh"]))
 
     # step 4: Beer-Lambert
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)

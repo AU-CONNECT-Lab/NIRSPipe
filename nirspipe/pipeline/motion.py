@@ -650,6 +650,17 @@ def motion_settings(method: str | None, std_thresh: float | None = None,
     return settings
 
 
+# a spline detector that marks more of the good-channel samples than this has likely read
+# physiology as motion: its threshold in OD falls as the sampling rate rises
+MOTION_SHARE_WARN = 0.10
+
+
+def overmarked(method: str | None, summary: dict[str, Any] | None) -> bool:
+    """Whether a spline detector's recorded summary marks more than MOTION_SHARE_WARN."""
+    return (method in STD_THRESH_DEFAULTS and summary is not None
+            and summary.get("motion_share", 0.0) > MOTION_SHARE_WARN)
+
+
 def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None,
                    std_thresh: float | None = None,
                    iqr_factor: float | None = None) -> mne.io.Raw:

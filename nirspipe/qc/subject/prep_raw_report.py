@@ -42,6 +42,7 @@ from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
 from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
+from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans
 from nirspipe.qc.boilerplate import collect_software_versions
@@ -251,9 +252,16 @@ def _process_run(
     raw_motcorr = None
     if motion_correction and motion_correction != "none":
         with guard("Motion correction", errors, label):
-            from nirspipe.pipeline.motion import correct_motion
+            from nirspipe.pipeline.motion import correct_motion, motion_settings, overmarked
             raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction,
                                          std_thresh=motion_std_thresh, iqr_factor=wavelet_iqr)
+            summary = (lineage_of(raw_motcorr).params or {}).get(motion_correction)
+            if overmarked(motion_correction, summary):
+                note(notes, label, section_note(
+                    "caveat.motion_overmarked", method=motion_correction,
+                    share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
+                    thresh=motion_settings(motion_correction,
+                                           motion_std_thresh)["motion_std_thresh"]))
 
     ppf = dpf[0] if len(dpf) == 1 else dpf
     # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do

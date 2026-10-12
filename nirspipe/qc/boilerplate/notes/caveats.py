@@ -33,6 +33,14 @@ NOTES = {
         "Short-channel regression was requested but all {n} short channels were rejected, so "
         "it did not run. Their scores are in the per-channel table.",
 
+    # ---- Motion correction ----
+    "caveat.motion_overmarked":
+        "Motion correction ({method}) marked {share:.0%} of the good channels' samples as "
+        "motion. Its detection threshold, {thresh:g} standard deviations of each channel's "
+        "sample-to-sample change, falls in OD as the sampling rate rises ({sfreq:g} Hz here), "
+        "so it may have taken physiology for motion and corrected much of the recording. "
+        "Check the corrected signal and set --motion-std-thresh for this recording.",
+
     # ---- ROI mapping ----
     "caveat.roi_overlap":
         "The ROI mapping lists {n} channel(s) in more than one ROI: {channels}. Each counts in "

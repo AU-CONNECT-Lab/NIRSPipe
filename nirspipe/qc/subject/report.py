@@ -61,6 +61,7 @@ from nirspipe.io.auxiliary import (
 )
 from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.pipeline.denoise import band_limited
+from nirspipe.pipeline.motion import overmarked
 from nirspipe.io.naming import parse_path, report_name
 import matplotlib
 matplotlib.use("Agg")
@@ -1928,6 +1929,15 @@ def build_subject_report(
     raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
     raw_errts         = _load_stage_raw(nirs_dir, sqm_label, "errts", subject, errors)
     imu               = _load_imu(nirs_dir, sqm_label, subject, errors)
+    # a spline detector that marked much of the run has likely read physiology as motion
+    motcorrected = _sidecar_of(nirs_dir, sqm_label, subject, "desc-motcorrected_nirs")
+    motion_method = (motcorrected.get("parameters") or {}).get("motion_correction")
+    if overmarked(motion_method, motcorrected.get(motion_method)):
+        _note(notes, subject, section_note(
+            "caveat.motion_overmarked", method=motion_method,
+            share=motcorrected[motion_method]["motion_share"],
+            thresh=motcorrected["parameters"]["motion_std_thresh"],
+            sfreq=motcorrected["SamplingFrequency"]))
     # the haemo chain as it exists on disk, in the order it was written; a stage missing here
     # gets no line
     psd_stages        = [

@@ -20,7 +20,9 @@ from nirspipe.pipeline.motion import (
     _wavelet_motion_correct,
     correct_motion,
     motion_settings,
+    overmarked,
 )
+from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils.lineage import lineage_of, stage_of
 
@@ -169,3 +171,56 @@ def test_prep_records_the_values_the_method_ran_with(tmp_path):
     assert sidecar["parameters"]["motion_std_thresh"] == 13.0
     assert sidecar["parameters"]["wavelet_iqr"] == 0.5
     assert set(sidecar["spline_wavelet"]) == {"motion_share", "segments"}
+
+
+# ---- The warning when the detector marks most of a run ----
+
+def test_the_sd_rule_tightens_as_the_sampling_rate_rises():
+    # a 1 Hz pulse, 0.01 in OD: its 1 s change is about 0.45 * rate first-difference SDs,
+    # so 13 SDs is not reached at 10 Hz and is passed at 50 Hz
+    def mask(sfreq):
+        t = np.arange(int(600 * sfreq)) / sfreq
+        d = np.tile(0.01 * np.sin(2 * np.pi * 1.0 * t)[:, None], (1, N_CH))
+        return _spline_motion_mask(d, sfreq, NAMES, np.ones(N_CH, bool), t_motion=1.0,
+                                   std_thresh=13.0, amp_thresh=0.4)
+    assert not mask(10.0).any()
+    assert mask(50.0).mean() > 0.9
+
+
+@pytest.mark.parametrize("method, summary, expected", [
+    ("spline_wavelet", {"motion_share": 0.11}, True),
+    ("spline", {"motion_share": 0.5}, True),
+    ("spline_wavelet", {"motion_share": motion.MOTION_SHARE_WARN}, False),
+    ("spline_sg", {"motion_share": 0.5}, False),        # its detector reads no SD threshold
+    ("spline", None, False),
+    ("tddr", None, False),
+])
+def test_overmarked_reads_the_spline_detectors_share(method, summary, expected):
+    assert overmarked(method, summary) is expected
+
+
+def test_the_note_names_the_share_the_rate_and_the_setting():
+    line = section_note("caveat.motion_overmarked", method="spline_wavelet", share=0.67,
+                        thresh=13.0, sfreq=50.0)
+    for part in ("spline_wavelet", "67%", "13 standard deviations", "50 Hz", "--motion-std-thresh"):
+        assert part in line, part
+
+
+def test_prep_warns_and_still_writes_the_correction(tmp_path, caplog):
+    config = PrepConfig(subject="01", dpf=[6.0], sci_threshold=0.8,
+                        motion_correction="spline_wavelet", motion_std_thresh=0.5,
+                        cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.4)
+    with caplog.at_level("WARNING", logger="nirspipe"):
+        run_prep(synth_raw("01", "rest"), config, tmp_path, source_entities={"task": "rest"})
+    warned = [r.getMessage() for r in caplog.records if "--motion-std-thresh" in r.getMessage()]
+    assert len(warned) == 1 and "sub-01" in warned[0]
+    assert next(tmp_path.rglob("*desc-motcorrected_nirs.snirf")).exists()
+
+
+def test_prep_says_nothing_when_the_share_is_low(tmp_path, caplog):
+    config = PrepConfig(subject="01", dpf=[6.0], sci_threshold=0.8,
+                        motion_correction="spline_wavelet",
+                        cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.4)
+    with caplog.at_level("WARNING", logger="nirspipe"):
+        run_prep(synth_raw("01", "rest"), config, tmp_path, source_entities={"task": "rest"})
+    assert not [r for r in caplog.records if "--motion-std-thresh" in r.getMessage()]

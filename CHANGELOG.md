@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-10-11
+
 ### Added
 - Per-channel tables print each wavelength's share of samples held at the detector's ceiling; run summaries count saturated channels
 - `--motion-correction spline_sg`, spline with Savitzky-Golay filtering (Jahani 2018) as its authors implemented it; also low-passes every channel near 0.1 Hz
