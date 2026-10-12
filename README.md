@@ -55,6 +55,18 @@ nirspipe /data/bids /data/derivatives participant \
 
 The cardiac and respiration bands depend on the population and have no default. More examples are in [Usage](docs/usage.md#examples).
 
+### Hyperscanning
+
+Wavelet coherence and inter-subject correlation for every dyad, read from the tree `nirspipe` wrote, with the dyads listed in a pairs table (`group_id,subject_id,task`, one row per member):
+
+```bash
+nirspipe-hyper /data/derivatives /data/hyper group \
+  --pairs-csv pairs.csv \
+  --band-fmin 0.02 --band-fmax 0.10
+```
+
+The nulls and the cohort test are in [Hyperscanning](docs/hyperscanning.md); the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
+
 ## Commands
 
 | Command | Purpose |

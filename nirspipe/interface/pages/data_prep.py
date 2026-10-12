@@ -1,4 +1,4 @@
-"""Page 1: individual and hyperscanning data preparation and modification."""
+"""Page: one recording at a time, to look at and to edit its markers and its time span."""
 
 from __future__ import annotations
 
