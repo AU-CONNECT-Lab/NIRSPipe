@@ -41,7 +41,7 @@ The JSON holds the scalars. The arrays sit in tab-separated tables beside it, li
 
 ## Metrics
 
-Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the sentence the report shows when you hover that label and, where the code defines one, its formula. A metric with a better end says which; the rest are descriptive. The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
+Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the text the report shows when you hover that label and, where the code defines one, its formula. Each entry ends with how to read the value: higher is better, lower is better, best near a given value, or descriptive (no better end). The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
 
 ### Coupling and signal level
 

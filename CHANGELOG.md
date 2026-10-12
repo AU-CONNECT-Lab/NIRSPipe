@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - GUI commands give `--participant-label`, `--session-label` and `--task-label` once, followed by all their values
 - GUI Data Preparation keeps the Signal Topo legend below the head and shows whole marker descriptions
 - Report metric hover text is one or two short sentences: what the number is and which end is better
+- Shorter captions on the dyad, cohort, group-test and raw QC pages, and shorter GUI hints
 
 ### Removed
 - GUI Data Preparation's 3D fsaverage layout card; the 2D optode layout stays

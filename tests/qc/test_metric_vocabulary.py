@@ -175,6 +175,25 @@ def test_a_description_is_a_sentence(metric):
         assert len(text) > 25, f"{metric}: too short to say which way is good"
 
 
+# the phrases a description may use to name its better end, by METRIC_DISPLAY's direction
+_BETTER_END = {
+    "higher": ("Higher is better", "higher is better", "Near 1 is good"),
+    "lower": ("Lower is better", "lower is better", "Zero is best", "more negative is better"),
+    None: ("Descriptive", "descriptive", "no better end"),
+}
+
+
+@pytest.mark.parametrize("metric", sorted(METRIC_SUMMARY))
+def test_a_description_names_the_better_end_the_display_colours_by(metric):
+    # the docs page prints these as the metric's verdict, so the prose and the colouring
+    # cannot disagree; a "The same ..." line may inherit its sibling's instead
+    text = METRIC_SUMMARY[metric]
+    named = {d for d, phrases in _BETTER_END.items() if any(p in text for p in phrases)}
+    if not named and text.startswith("The same"):
+        return
+    assert named == {metric_direction(metric)}, f"{metric}: says {named or 'nothing'}: {text}"
+
+
 def test_a_cross_reference_has_something_to_refer_to():
     """An `_hbr` entry saying "the same" is orphaned if its `_hbo` twin is renamed away."""
     for metric, text in METRIC_SUMMARY.items():

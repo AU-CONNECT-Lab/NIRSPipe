@@ -123,31 +123,25 @@ def _number(key, value):
     return f"{value * 100:g} %" if metric_format(key) == "pct" else f"{value:g}"
 
 
-def verdict(key, sentence):
-    direction = metric_direction(key)
-    if direction is None:
-        return ""
+def colouring(key):
     spec = METRIC_DISPLAY.get(key)
     cut = spec[2] if spec else None
-    # the sentence often names the better end already ("lower being cleaner")
-    said = re.search(r"\b(higher|lower)\b", sentence, re.I)
-    if direction == "higher":
-        text = [] if said else ["Higher is better."]
-        if cut:
-            text.append(f"The report colours it green at {_number(key, cut[0])} or above and red below {_number(key, cut[1])}.")
-    else:
-        text = [] if said else ["Lower is better."]
-        if cut:
-            text.append(f"The report colours it green below {_number(key, cut[0])} and red at {_number(key, cut[1])} or above.")
-    return " ".join(text)
+    if not cut:
+        return ""
+    if metric_direction(key) == "higher":
+        return f"The report colours it green at {_number(key, cut[0])} or above and red below {_number(key, cut[1])}."
+    return f"The report colours it green below {_number(key, cut[0])} and red at {_number(key, cut[1])} or above."
 
 
 def entry(key, bib_keys):
-    """One definition-list item of reST: label and keys, sentence, formula, better end."""
+    """One definition-list item of reST: label and keys, definition, formula, better end."""
     label = metric_label(key)
     codes = ", ".join(f"``{k}``" for k in (key, PER_CHANNEL.get(key)) if k)
     term = codes if label == key else f"**{_rst(label)}** ({codes})"
-    sentence = first_sentence(METRIC_SUMMARY[key])
+    # the hover text: its first sentence defines, the rest says which end is better
+    summary = METRIC_SUMMARY[key]
+    sentence = first_sentence(summary)
+    rest = summary[len(sentence):].strip()
     body = [_rst(sentence)]
     if key in DEFINED_IN:
         formula, cites = definition(DEFINED_IN[key])
@@ -159,8 +153,8 @@ def entry(key, bib_keys):
             body[0] += f" :footcite:`{','.join(kept)}`"
         if formula:
             body += ["", *formula]
-    if text := verdict(key, sentence):
-        body += ["", text]
+    if tail := " ".join(filter(None, (_rst(rest), colouring(key)))):
+        body += ["", tail]
     return [term, *(f"   {line}" if line.strip() else "" for line in body), ""]
 
 

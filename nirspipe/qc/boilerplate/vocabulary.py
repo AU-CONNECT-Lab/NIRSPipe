@@ -686,14 +686,14 @@ METRIC_SUMMARY = {
     # motion and spikes, all measured on optical density.
     # Note which trace gvtd_thresh belongs to: it is computed from the band-passed trace
     # and compared against it, so it is not a cutoff for the unfiltered gvtd_mean/p95.
-    "gvtd_mean": "Unfiltered GVTD averaged over the run, recorded for comparison with other tools. The GVTD threshold does not apply; read the band-passed GVTD for movement.",
+    "gvtd_mean": "Unfiltered GVTD averaged over the run, recorded for comparison with other tools; lower is better. The GVTD threshold does not apply; read the band-passed GVTD for movement.",
     "gvtd_p95": "The same at the worst moments, the 95th percentile.",
     "gvtd_filt_mean": f"Head movement: GVTD band-passed to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, averaged over the run. Lower is better.",
     "gvtd_filt_p95": "The same at the worst moments, the 95th percentile. Lower is better.",
     "gvtd_vstd_mean": "Unfiltered GVTD with every channel scaled to unit variance, so loud channels cannot dominate. Recorded only, with no better end.",
     "gvtd_vstd_p95": "The same at the 95th percentile.",
     "gvtd_thresh": f"Motion cutoff from this recording's own band-passed GVTD: its mode plus {GVTD_N_STD:g} times the spread below it. Descriptive.",
-    "gvtd_thresh_applied": "The cutoff the frame counts are taken against: the uncorrected recording's, on both sides of a before and after pair.",
+    "gvtd_thresh_applied": "The cutoff the frame counts are taken against: the uncorrected recording's, on both sides of a before and after pair. Descriptive.",
     "gvtd_num_above_thresh": "Frames whose band-passed GVTD exceeds the applied threshold. Lower is better.",
     "gvtd_pct_above_thresh": "Share of the recording with clear movement, above the applied GVTD threshold. Lower is better.",
     "gvtd_censor_pct": "Share of the recording marked BAD_gvtd by censoring; nothing was deleted. Lower is better.",
