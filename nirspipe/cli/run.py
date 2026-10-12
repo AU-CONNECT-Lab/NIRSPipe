@@ -129,7 +129,7 @@ def _build_parser() -> argparse.ArgumentParser:
                                "row matching no recording, or starting past a recording's end, "
                                "stops the run). The rest of the recording is marked "
                                "BAD_unselected: it is processed as usual but left out of "
-                               "channel screening and of the GLM and confound regression fits. "
+                               "channel screening and of every estimate. "
                                "A recording no row matches is used whole. "
                                "A row shared by several recordings assumes they started "
                                "time-locked, unless --keep-spans-from is given.")

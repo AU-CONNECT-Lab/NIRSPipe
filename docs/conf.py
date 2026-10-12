@@ -62,11 +62,6 @@ smartquotes_action = "qe"
 exclude_patterns = [
     "_build",
     "README.md",
-    # superseded by the generated API pages under api/_generated
-    "api/pipeline.md",
-    "api/io.md",
-    "api/qc.md",
-    "api/utils.md",
 ]
 
 # ---- Markdown ----

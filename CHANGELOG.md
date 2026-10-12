@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The run report's stage comparison no longer filters an already band-passed stage a second time
 - The cohort report's over-time grid aligns runs sampled at different rates onto one time axis, so its band and run lines draw again
+- `--keep-spans` help said unselected time was left out of the GLM and confound fits only; it is left out of every estimate
 
 ## [0.67.0] - 2026-10-11
 

@@ -136,7 +136,7 @@ No other metric is coloured: uncoloured means no cutoff was applied, not that th
 
 ### Quality Figures
 
-- **By denoising stage.** One small panel per metric across `desc-preproc`, `desc-filtered` and `desc-errts`, recomputed with the analysis passband applied at every stage so the panels show what each step did rather than what the filter did.
+- **By denoising stage.** One small panel per metric across `desc-preproc`, `desc-filtered` and `desc-errts`, recomputed with every stage on the analysis passband so the panels show what each step did rather than what the filter did; a stage already filtered to that band is read as stored.
 - **By channel.** A pass/fail grid over status, coupled windows, SCI, CV, PSP and SNR, long channels first. A channel can be BAD with a green SCI cell: the cell is the average over windows, and rejection counts the windows that clear both lines.
 - **By condition.** With `--by-condition`, each condition's grid regrouped so one metric's conditions sit together, headed **In condition**: whether each channel passes on that stretch alone. A guide to choosing conditions; it rejects nothing.
 - **By trial.** Every trial window scored on its own, as a trial-by-metric heatmap, on the intensity recording. Colour is relative within a row, not a threshold. A window shorter than 10 s is left unscored.
