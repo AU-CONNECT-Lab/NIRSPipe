@@ -103,7 +103,8 @@ def _sci_win_metrics(
     raw_od = as_optical_density(raw)
     scores, _times = compute_windowed_sci(
         raw_od, cardiac_l_freq, cardiac_h_freq, SCI_WINDOW_S)
-    with np.errstate(invalid="ignore"):
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
         means = np.nanmean(np.asarray(scores, dtype=float), axis=1)
     per_channel = {ch: float(v) for ch, v in zip(raw_od.ch_names, means)
                    if np.isfinite(v)}

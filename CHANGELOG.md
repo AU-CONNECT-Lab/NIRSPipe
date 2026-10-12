@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-qc cohort`, `cohort-hyper` and the `group` level exited 0 over a tree without quality records, `cohort` writing an empty page
 - GUI parameter summaries showed `?` for a separation left at its default
 - `nirspipe-prep crop`, `align` and `edit-markers apply` failed file by file, rather than refusing, when the input was the folder they write
+- Run logs carried numpy divide and empty-slice warnings for a channel with no windowed SCI
 
 ## [0.68.0] - 2026-10-12
 

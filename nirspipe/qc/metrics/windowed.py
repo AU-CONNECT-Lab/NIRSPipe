@@ -53,9 +53,11 @@ def compute_windowed_sci(
     coupling drifts over the recording rather than as a single whole-run value.
     """
     from mne_nirs.preprocessing import scalp_coupling_index_windowed
-    _, scores, times = scalp_coupling_index_windowed(
-        raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
-    )
+    # a flat window divides by a zero spread here, and is blanked just below
+    with np.errstate(invalid="ignore", divide="ignore"):
+        _, scores, times = scalp_coupling_index_windowed(
+            raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
+        )
     return blank_flat_windows(raw_od, scores, window_s), times
 
 

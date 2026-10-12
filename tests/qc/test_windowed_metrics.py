@@ -8,6 +8,8 @@ samples however you round, so every grid disagreement here is invisible; at 7.81
 78.125 samples and the rounding difference accumulates over the recording.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -196,3 +198,15 @@ def test_sci_heatmap_time_axis_spans_the_recording(od_raw):
 
     assert len(heatmap.x) == sci_matrix.shape[1]
     assert max(heatmap.x) > 0.9 * od_raw.times[-1]
+
+
+def test_a_flat_channel_leaves_the_windowed_sci_without_a_warning(od_raw):
+    from nirspipe.qc.metrics.coupling import _sci_win_metrics
+
+    raw = od_raw.copy().apply_function(lambda x: x * 0, picks=[od_raw.ch_names[0]])
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        out = _sci_win_metrics(raw, *CARDIAC)
+    assert [str(w.message) for w in caught if w.category is RuntimeWarning] == []
+    assert od_raw.ch_names[0] not in out["sci_win_per_channel"]
+    assert out["sci_win_per_channel"]
