@@ -133,8 +133,9 @@ def _dag_card():
                 "rankSep":       80,
                 "spacingFactor": 1.0,
             },
-            userZoomingEnabled=True,
-            userPanningEnabled=True,
+            # a fixed, fitted view: dragging the canvas only lost the graph off its edge
+            userZoomingEnabled=False,
+            userPanningEnabled=False,
             autoungrabify=True,
         ),
     )
