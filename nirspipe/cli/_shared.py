@@ -126,8 +126,7 @@ def add_separation_bands(container, note: str = "") -> None:
     container.add_argument(
         "--long-max-dist", type=float, default=None, metavar="MM",
         help="Separation above which a channel is too far to be long, in mm. Off by "
-             "default, so any separation past --long-min-dist counts as long. Set it on a "
-             "montage carrying pairs too far apart to trust."
+             "default, so any separation past --long-min-dist counts as long."
              + (f" {note}" if note else ""))
 
 
@@ -207,11 +206,9 @@ def add_screen_scope(container, note: str = "") -> None:
     """``--screen-scope``: which part of the recording the coupled windows are counted over."""
     container.add_argument(
         "--screen-scope", choices=["run", "task"], default="run",
-        help="Which windows count toward --min-good-frac. 'run' (default) counts the whole "
-             "recording. 'task' counts only the annotated task blocks, leaving out the "
-             "lead-in before the first block and the gaps between them. 'task' falls back "
-             "to 'run' when no annotation is long enough to hold two screening windows, as "
-             "in a recording carrying only short triggers."
+        help="Which windows count toward --min-good-frac: 'run' (default) the whole "
+             "recording, 'task' only the annotated task blocks. 'task' falls back to 'run' "
+             "when no annotation holds two screening windows."
              + (f" {note}" if note else ""))
 
 
@@ -294,12 +291,8 @@ def alignment_window() -> argparse.ArgumentParser:
                    help="Report on this time (s) onward, on the aligned clock, where 0 is "
                         "the shared trigger. Omit to start at the alignment point.")
     p.add_argument("--tend", type=float, default=None,
-                   help="Report up to this time (s) on the aligned clock. Omit to run to "
-                        "the end; a value past the end is clipped. The window narrows the "
-                        "synchrony metrics only: the per-subject quality record describes "
-                        "the whole recording either way. For `nirspipe-hyper` this selects "
-                        "rather than cuts: the wavelet transform is computed over the whole "
-                        "recording and the window read out of it, so the window carries the "
-                        "recording's cone of influence rather than two edges of its own, "
-                        "and a condition falling outside it is dropped from the run.")
+                   help="Report up to this time (s) on the aligned clock; omit to run to the "
+                        "end. Narrows the synchrony metrics only, not the per-subject quality "
+                        "record. In `nirspipe-hyper` the window is read out of the "
+                        "whole-recording transform, and conditions outside it are dropped.")
     return p

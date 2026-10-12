@@ -455,14 +455,10 @@ def _build_parser() -> argparse.ArgumentParser:
                     choices=["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
                              "spline_wavelet", "none"],
                     default="none",
-                    help="Run this correction on a copy of the optical density and report "
-                         "the recording either side of it: the correction's footprint, the "
-                         "corrected file measured again on the keys the uncorrected one "
-                         "carries, and one carpet showing both. Nothing is written back and "
-                         "no other preprocessing runs, so the screening verdict and every "
-                         "coupling metric still describe the recording as delivered. "
-                         "Default none, which reports it uncorrected, with no corrected-stage "
-                         "counts or GVTD series.")
+                    help="Run this correction on a copy of the optical density and report the "
+                         "recording before and after it. Nothing is written back and nothing "
+                         "else runs, so screening and coupling still describe the recording as "
+                         "delivered. Default none: report it uncorrected.")
     _shared.add_motion_settings(pr)
     _shared.add_skip_bids_validation(pr)
     _add_ignore(pr)

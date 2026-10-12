@@ -776,14 +776,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "phase randomisation behind --wtc-phase-null. Also bypasses pycwt's "
                           "on-disk cache, which is not keyed on the seed.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
-                     help="Chromophore(s) the coherence and the correlation (ISC) run on "
-                          "(default both). HbO and HbR "
-                          "are two parallel passes: a member's HbO pairs only with the other "
-                          "member's HbO, they are never mixed and never averaged, so 'both' "
-                          "costs twice as much. Every band-mean table gains a chromophore "
-                          "column, and the report gains a switch that moves every coherence "
-                          "panel between the chromophores at once. The null of "
-                          "--wtc-phase-null follows.")
+                     help="Chromophore(s) the coherence and the correlation run on (default "
+                          "both). HbO and HbR are separate passes, never mixed, so 'both' costs "
+                          "twice as much; the tables gain a chromophore column and the report a "
+                          "switch.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=ROI_MIN_CHANNELS, metavar="N",
                      help="Drop an ROI cell where either member contributes fewer than N "
                           f"channels (default {ROI_MIN_CHANNELS}). The default keeps a region "
@@ -791,39 +787,26 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "pairings each value rests on. Each side of a crossed cell is counted "
                           "on its own.")
     run.add_argument("--wtc-arrow-min", type=float, default=0.5, metavar="R",
-                     help="Coherence a cell has to reach before its phase arrow is drawn on "
-                          "the WTC maps, when neither null was computed (default 0.5). "
-                          "Display only: no table or figure value changes with it. Both "
-                          "--wtc-phase-null and --wtc-significance override it with a level per "
-                          "frequency, the phase-scrambled one winning where both ran.")
+                     help="Coherence a cell needs before its phase arrow is drawn, when no null "
+                          "was computed (default 0.5). Display only; --wtc-phase-null or "
+                          "--wtc-significance replace it with a level per frequency.")
     run.add_argument("--channel-cross", dest="wtc_channel_cross",
                      action=argparse.BooleanOptionalAction, default=True,
-                     help="Cross every long channel with every other across the two brains "
-                          "(default on), so n channels give n^2 coherence values rather than "
-                          "n. The extra pairs reach the channel TSV with a label2 column, and "
-                          "the time-frequency maps get a second selector for the partner's "
-                          "channel. --no-channel-cross pairs each channel with its "
+                     help="Cross every long channel with every channel of the other brain "
+                          "(default on), so n channels give n^2 values; the channel TSV gains a "
+                          "label2 column. --no-channel-cross pairs each channel with its "
                           "counterpart only, for the ISC as for the coherence.")
     run.add_argument("--wtc-window-s", type=float, default=None, metavar="SECONDS",
-                     help="Cut every condition into non-overlapping windows of this length "
-                          "and make the window the unit instead of the condition. Needs "
-                          "--by-condition. The remainder past the last whole window is "
-                          "dropped, and a condition too short for one window is left out. "
-                          "nirspipe-hyper-pairnull reads this off the sidecar, so both sides resolve the "
-                          "same grid.")
+                     help="Cut every condition into non-overlapping windows of this length and "
+                          "make the window the unit. Needs --by-condition; the remainder, and "
+                          "any condition shorter than one window, is dropped.")
     run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
                      action=argparse.BooleanOptionalAction, default=True,
-                     help="Read the coherence out of each task annotation's own window, "
-                          "so a block design gets one result per block as well as the one "
+                     help="Read the coherence out of each task annotation's window as well as "
                           "over the whole recording (default on; --no-by-condition turns it "
-                          "off). Band means land in stat-wtc_relmat.tsv beside the whole "
-                          "run's, told apart by a condition column, and each window gets "
-                          "its own figures. A "
-                          "trigger with a duration uses it; one without runs to the next "
-                          "trigger, and the last to the end. Windows shorter than one cycle "
-                          "of --wtc-fmin are skipped. Each window is read off the whole-run "
-                          "transform, so it costs almost nothing; --wtc-cond-transform "
-                          "transforms each condition on its own instead.")
+                          "off), as rows of stat-wtc_relmat.tsv with a condition column. A "
+                          "trigger without a duration runs to the next; windows shorter than "
+                          "one cycle of --wtc-fmin are skipped.")
     run.add_argument("--wtc-cond-transform", action="store_true",
                      help="Transform each condition on its own instead of reading it out of "
                           "the whole-run transform, over a cut padded by --wtc-cond-pad-s. "
@@ -846,14 +829,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "`nirspipe-hyper-band` instead of a second wavelet transform. Large: one array "
                           "per pair per dyad per task.")
     run.add_argument("--wtc-phase-null", type=int, default=None, metavar="N",
-                     help="Also write the phase-scrambled null: the same band means against a "
-                          "phase-scrambled partner, averaged over N iterations. Omit it and "
-                          "no null is computed; each iteration costs a full WTC run. With "
-                          "--wtc-by-condition the null follows the same windows and lands in "
-                          "a second table, at no extra transform. Each table carries the spread the mean came out of and each "
-                          "cell's percentile inside its own draws, and the maps draw their "
-                          "phase arrows against the null's level rather than "
-                          "--wtc-arrow-min.")
+                     help="Also write the phase-scrambled null over N iterations, each as "
+                          "costly as a full WTC run; omitted, no null is computed. It follows "
+                          "the --by-condition windows, and the maps then draw phase arrows "
+                          "against its level instead of --wtc-arrow-min.")
     run.add_argument("--wtc-phase-null-cross", action=argparse.BooleanOptionalAction,
                      default=None,
                      help="Cross the channels for the phase-scrambled null too. Unset, it "
@@ -862,22 +841,15 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "homologous pairings only, which covers the homologous rows of a "
                           "crossed real table (label equal to label2).")
     run.add_argument("--bads-scope", choices=_BADS_SCOPE_CHOICES, default="run",
-                     help="Which rejected channels are excluded from the inter-brain "
-                          "metrics. 'run' (default) uses this task's own rejections. "
-                          "'subject' unions them over the subject's runs that the pairs "
-                          "table names, so all conditions rest on the same channel set. "
-                          "The two differ only where the conditions were cropped to "
-                          "separate tasks before preprocessing; a recording preprocessed "
-                          "whole is screened once. A line in the log says which case a "
-                          "given run is.")
+                     help="Which rejected channels are excluded: 'run' (default) this task's "
+                          "own, 'subject' the union over the subject's runs in the pairs table, "
+                          "so all conditions share one channel set. They differ only when "
+                          "conditions were cropped to separate tasks before preprocessing.")
     run.add_argument("--isc-threshold", type=float, default=None,
-                     help="Absolute |ISC| a pairing has to clear to get a chord in the "
-                          "connectivity circle. By default, with --isc-phase-null a chord is "
-                          "drawn where the pairing beats the 95th percentile of its own "
-                          "surrogate draws, and without it the strongest tenth are drawn and "
-                          "the subtitle labels them a display cut. A number here forces the "
-                          "absolute cut; its scale moves with --desc, the passband, "
-                          "--isc-whiten and --isc-max-lag.")
+                     help="Absolute |ISC| a pairing must clear for a chord in the connectivity "
+                          "circle. By default chords mark pairings above their own null (with "
+                          "--isc-phase-null) or the strongest tenth (without). Its scale moves "
+                          "with --desc, the passband, whitening and --isc-max-lag.")
     run.add_argument("--no-report", action="store_true",
                      help="Write the tables and skip the HTML report and its figures. "
                           "Everything else is unchanged: the same numbers, the same files, the same npz when "
@@ -899,33 +871,22 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="The high edge of that band (default --band-fmax).")
     run.add_argument("--wtc-whiten", type=float, default=0.0, metavar="SECONDS",
                      help="Prewhiten each long channel with an autoregressive model of this "
-                          "many seconds of order before the wavelet coherence, one order for "
-                          "every channel of both members, fitted on the whole aligned record; "
-                          "0, the default, transforms the signals themselves. The phase and "
-                          "lag_s then describe the whitened signals. The "
-                          "phase-scrambled null follows it, the re-paired null reads it off "
-                          "the real table, and the sidecars record wtc_whiten_s. The first "
-                          "order's worth of samples is a filter transient and is zeroed. The "
-                          "correlation is not affected; see --isc-whiten-s.")
+                          "many seconds of order before the wavelet coherence, fitted on the "
+                          "whole aligned record; 0, the default, transforms the signals "
+                          "themselves. Phase and lag then describe the whitened signals, and "
+                          "the nulls follow it.")
     run.add_argument("--isc-whiten-s", type=float, default=0.0, metavar="SECONDS",
                      help="Prewhiten each long channel with an autoregressive model of this "
-                          "many seconds of order before the inter-subject correlation, one "
-                          "order for every channel of both members, fitted on the whole "
+                          "many seconds of order before the correlation, fitted on the whole "
                           "aligned record; 0, the default, correlates the signals themselves. "
-                          "The first order's worth of samples is a filter transient and is "
-                          "left out. Whitening shrinks r, so a whitened matrix is not "
-                          "comparable with an unwhitened one. The phase-scrambled null "
-                          "follows it, the re-paired null reads it off the real table, and "
-                          "the sidecars record isc_whiten_s.")
+                          "Whitening shrinks r, so whitened and unwhitened matrices do not "
+                          "compare; the nulls follow it.")
     run.add_argument("--isc-max-lag", type=float, default=0.0, metavar="SECONDS",
-                     help="Re-correlate the pair at every shift within this many seconds "
-                          "either way and keep the strongest, instead of correlating sample "
-                          "against sample (default 0, no search). Strongest means largest in "
-                          "magnitude with the sign kept. The winning shift "
-                          "reaches stat-isc_relmat.tsv as lag_s, positive where the second "
-                          "member follows the first. A maximum over many shifts is larger "
-                          "than any one of them under no coupling, so pair this with "
-                          "--isc-phase-null, whose surrogates are searched the same way.")
+                     help="Correlate at every shift within this many seconds either way and "
+                          "keep the strongest (default 0, no search); the shift reaches "
+                          "stat-isc_relmat.tsv as lag_s. A maximum over shifts is inflated "
+                          "under no coupling, so pair it with --isc-phase-null, which searches "
+                          "the same way.")
     run.add_argument("--isc-phase-null", type=int, default=0, metavar="N",
                      help="Also rank each correlation against N phase-scrambled surrogates "
                           "of the second member, which keep its spectrum. Adds null_abs_mean, "
@@ -937,11 +898,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "computed on, and stop. Nothing is written. Use it to look over a "
                           "cohort's channel budget before committing to a long run, such as "
                           "one with --wtc-phase-null.")
-    _shared.add_separation_bands(run, note="An override, not the source: the bands are "
-                                 "read back from what nirspipe stamped in each member's "
+    _shared.add_separation_bands(run, note="An override: the bands come from each member's "
                                  "record, and members prepped with different bands are "
-                                 "refused. Pass this only for a tree whose records carry "
-                                 "no bands. A band left off keeps the records' value.")
+                                 "refused. Use it only for records that carry none.")
 
     band = _command_parser(
         "nirspipe-hyper-band", reads_subjects=False, parents=[common, band_opts],
@@ -976,17 +935,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "Both are read the same way above the cell; they differ in "
                                  "what a draw is, a stand-in against a scrambled partner.")
     group_null.add_argument("--roi-mapping", type=Path, default=None,
-                            help="Region to channel map, the same file the other stages "
-                                 "take. Given it, each region is reported as its own level "
-                                 "beside the whole-brain mean: the region's homologous "
-                                 "pairings averaged. When the null was drawn crossed, every "
-                                 "ordered region pair is a level too (region A of the first "
-                                 "member against region B of the second, every pairing "
-                                 "between them averaged), as one family per condition. A "
-                                 "region needs as many channels per member as the real "
-                                 "tables' --wtc-roi-min-channels, read off their sidecars, in "
-                                 "each occasion and condition it is ranked for. "
-                                 "Omitted, only the whole-brain levels are written.")
+                            help="Region to channel map, as in the other stages. Given it, each "
+                                 "region is a level of its own beside the whole brain (its "
+                                 "homologous pairings averaged), and with a crossed null so is "
+                                 "every ordered region pair. A region needs the real tables' "
+                                 "--wtc-roi-min-channels channels per member.")
     group_null.add_argument("--n-resample", type=int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
                                  "picks one stand-in per occasion, so the finest p it can "
@@ -1000,12 +953,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "written; a method adds a p_<method> column beside it, and "
                                  "the family column says how many tests it ran over.")
     group_null.add_argument("--isc-test", default="signed", choices=ISC_TESTS,
-                            help="How the correlation is tested (default signed). 'signed' "
-                                 "averages Fisher z and tests either direction, so a "
-                                 "negative correlation counts; 'magnitude' averages |Fisher "
-                                 "z| and tests it above the null, so channels of opposite "
-                                 "sign do not cancel but the direction is not reported. "
-                                 "Coherence is unsigned and always tested above its null.")
+                            help="How the correlation is tested (default signed): 'signed' "
+                                 "averages Fisher z and tests either direction; 'magnitude' "
+                                 "averages |Fisher z| and tests it above the null, so opposite "
+                                 "signs do not cancel. Coherence is always tested above its "
+                                 "null.")
 
     index = _command_parser(
         "nirspipe-hyper-index", reads_subjects=False, parents=[common],
@@ -1046,13 +998,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     pair.add_argument("--chroma", choices=("hbo", "hbr", "both"), default="both",
                       help="Chromophore(s) to draw the null on, coherence and correlation alike (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
-                      help="Who may stand in. 'position' (default) replaces a member only "
-                           "with another group's member at the same index, which keeps "
-                           "roles apart and is the only safe pool where one person appears "
-                           "in several groups. 'any' draws from every other group's "
-                           "members, doubling the pool, and is refused where the table "
-                           "shows anybody repeated: there it would rank a person against "
-                           "themselves.")
+                      help="Who may stand in: 'position' (default) only another group's member "
+                           "at the same index, which keeps roles apart and is safe when one "
+                           "person is in several groups; 'any' every other group's member, "
+                           "refused when anyone appears twice.")
     pair.add_argument("--wtc-pair-max", type=int, default=None, metavar="N",
                       help="Stop after N draws. The pool is finite, so this is a ceiling "
                            "rather than a count: without it every eligible stand-in is "

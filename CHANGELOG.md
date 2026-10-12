@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - Report metric hover text is one or two short sentences: what the number is and which end is better
 - Shorter captions on the dyad, cohort, group-test and raw QC pages, and shorter GUI hints
 - Shorter captions on the run report, and shorter caveats on every report
+- Shorter `--help` texts on 34 options
 
 ### Removed
 - GUI Data Preparation's 3D fsaverage layout card; the 2D optode layout stays

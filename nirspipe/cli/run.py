@@ -11,7 +11,6 @@ from nirspipe.pipeline.censor_fill import (
     DEFAULT_CENSOR_FILL,
     FILL_METHODS,
     LOMB_FMAX_HZ,
-    LOMB_OVERSAMPLE,
 )
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
@@ -112,42 +111,27 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Motion correction method.")
     _shared.add_motion_settings(prep_opt)
     prep_opt.add_argument("--bad-channels",
-                          help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', applied to "
-                               "every subject. Or a path to a table with a bad_channels column, and "
-                               "optionally participant_id, session, task and run to limit a row to "
-                               "some recordings (blank or absent means all; a recording gets the "
-                               "union of its rows; a row matching no recording stops the run). "
-                               "Naming either wavelength "
-                               "of a pair marks both. Kept in the data, unioned with SCI-detected "
-                               "bad channels.")
+                          help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "
+                               "every subject; or a table with a bad_channels column, rows "
+                               "optionally limited by participant_id, session, task and run as "
+                               "in --keep-spans. Either wavelength marks the pair. Marked, not "
+                               "removed, and added to the SCI-detected bad channels.")
     prep_opt.add_argument("--keep-spans", type=Path, metavar="TABLE",
-                          help="Table of the stretches of each recording to use: onset and "
-                               "duration columns in seconds on the recording's own time axis "
-                               "(the axis of its events.tsv), and optionally participant_id, "
-                               "session, task and run to limit a row to some recordings (blank "
-                               "or absent means all; a recording gets the union of its rows; a "
-                               "row matching no recording, or starting past a recording's end, "
-                               "stops the run). The rest of the recording is marked "
-                               "BAD_unselected: it is processed as usual but left out of "
-                               "channel screening and of every estimate. "
-                               "A recording no row matches is used whole. "
-                               "A row shared by several recordings assumes they started "
-                               "time-locked, unless --keep-spans-from is given.")
+                          help="Table of the stretches to use (onset and duration in s on each "
+                               "recording's own time axis), rows optionally limited by "
+                               "participant_id, session, task and run. The rest is marked "
+                               "BAD_unselected and left out of screening and every estimate; a "
+                               "recording no row matches is used whole. See --keep-spans-from.")
     prep_opt.add_argument("--keep-spans-from", metavar="MARKER",
-                          help="Measure each --keep-spans onset from the first annotation "
-                               "named MARKER in the recording instead of from its start, so "
-                               "one row serves recordings that did not start time-locked. An "
-                               "onset may then be negative, before the marker. A recording a "
-                               "row matches that lacks the marker, or a stretch starting "
-                               "outside a recording, stops the run. --bad-spans stays on the "
-                               "recording's own axis.")
+                          help="Measure each --keep-spans onset from the first annotation named "
+                               "MARKER instead of the recording's start, so one row serves "
+                               "recordings that did not start time-locked; an onset may be "
+                               "negative. --bad-spans stays on the recording's own axis.")
     prep_opt.add_argument("--bad-spans", type=Path, metavar="TABLE",
-                          help="Table of stretches of each recording known to be corrupted "
-                               "(motion, a loose optode): onset and duration columns in seconds "
-                               "on the recording's own time axis, rows limited to recordings as "
-                               "in --keep-spans. Each is marked BAD_manual: left out of channel "
+                          help="Table of corrupted stretches (motion, a loose optode) in the "
+                               "--keep-spans format. Each is marked BAD_manual: left out of "
                                "screening, filled by --censor-fill before any filter, and left "
-                               "out of every estimate. A recording no row matches has none.")
+                               "out of every estimate.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
                           help="Lower bound of cardiac band in Hz (required at participant level; "
                                "population-dependent). Adult resting ~0.7; children/infants higher "
@@ -170,50 +154,34 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
     prep_opt.add_argument("--epoch-tmin", type=float, default=None,
-                          help="Trial window start relative to event onset in s, for the "
-                               "report's epoch figures and per-trial scoring; negative pulls "
-                               "in a baseline. Omitted, the epoch figures use -5 to 25 s, "
-                               "which suits a single trial and not a 60 s block, and each "
-                               "trial is scored over its event's own duration.")
+                          help="Trial window start relative to event onset in s, for the epoch "
+                               "figures and per-trial scoring; negative pulls in a baseline. "
+                               "Omitted, the figures use -5 to 25 s and each trial is scored "
+                               "over its own duration.")
     prep_opt.add_argument("--epoch-tmax", type=float, default=None,
                           help="Trial window end relative to event onset in s. Given together "
                                "with --epoch-tmin, or neither.")
     prep_opt.add_argument("--epoch-chunk-duration", type=float, default=None, metavar="SECONDS",
-                          help="Cut each task annotation into trials this long before any "
-                               "epoching, so a block design gets one trial per piece instead "
-                               "of one per block. A 240 s block at 25 s gives 9 trials and "
-                               "drops the remainder. Without this, the epoch figures of a "
-                               "block design describe the start of each block.")
+                          help="Cut each task annotation into trials this long before epoching, "
+                               "so a block design gets one trial per piece: a 240 s block at 25 "
+                               "s gives 9, the remainder dropped.")
     prep_opt.add_argument("--epoch-single-trial", action="store_true",
-                          help="Draw the epoch section even when no condition repeats, where "
-                               "it is skipped by default because one trial per condition "
-                               "leaves nothing to average. Pass this when the single trial is "
-                               "the thing to look at, such as a block-onset transient. Has no "
-                               "effect when the run carries no events or no event leaves room "
-                               "for the window.")
+                          help="Draw the epoch section even when no condition repeats (skipped "
+                               "by default, as one trial leaves nothing to average), for when "
+                               "the single trial is the thing to look at.")
     prep_opt.add_argument("--by-condition", action="store_true",
-                          help="Also write one QC report page per annotated condition, "
-                               "beside the run's own, as cond-<condition>. Their numbers "
-                               "are sliced out of the windowed pass already in the quality "
-                               "record, so every condition sits on the same window grid and "
-                               "the same filter as the run; nothing is measured again. The "
-                               "spectra, epoch preview and topography are redrawn on a copy "
-                               "cropped to the condition, and the GLM panel shows that "
-                               "condition's activation. Each page screens on its own "
-                               "stretch, so its verdict is that condition's; the run was "
+                          help="Also write one QC report page per annotated condition, as "
+                               "cond-<condition>. Its numbers are sliced from the run's "
+                               "windowed pass, its spectra and epochs are redrawn on the "
+                               "condition, and its verdict is the condition's; the data were "
                                "processed under the run's.")
     prep_opt.add_argument("--gvtd-censor", nargs="?", const="long", default=None,
                           choices=("long", "short", "all"), metavar="SET",
-                          help="Mark the frames GVTD flags as BAD_gvtd. The data is annotated, "
-                               "never cut, so epoching drops the trials they overlap and a "
-                               "threshold set too strictly is undone by rerunning. Off by "
-                               "default: on a high-motion recording this can flag everything. "
-                               "Takes the channel set to flag on, defaulting to long, the set "
-                               "the analysis uses; `all` is the conservative choice, since a "
-                               "movement seen only on the scalp channels still marks the "
-                               "frame. It changes which frames are censored and nothing else: "
-                               "the QC panels still draw every set, and the metrics that "
-                               "decide whether a run is usable stay on the long channels.")
+                          help="Mark the frames GVTD flags as BAD_gvtd on the given channel "
+                               "set: long if none is named, or `all` to also catch movement "
+                               "seen only on short channels. Annotated, never cut, so epoching "
+                               "drops the trials they overlap. Off by default: on a high-motion "
+                               "recording it can flag everything.")
     prep_opt.add_argument("--gvtd-censor-n-std", type=float, default=10.0,
                           help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
                                "mode. 10 is the lenient value used for censoring, and the "
@@ -250,24 +218,16 @@ def _build_parser() -> argparse.ArgumentParser:
                            "--filter-method fir. Applied with filtfilt, so the effective rolloff "
                            "is twice this and the cutoff sits at -6 dB.")
     post.add_argument("--export-mean-filled", action="store_true", default=None,
-                      help="Also write desc-meanfilled beside the final residual (desc-errts, "
-                           "or the last stage when no regression ran): the same data with "
-                           "every frame inside a BAD_ span set to its channel's mean over the "
-                           "frames outside them, annotations kept, for tools that read a "
-                           "continuous array and ignore annotations. Written whenever a mode "
-                           "runs, spans or none. Not for ALFF, fALFF or a GLM: the filled "
-                           "frames are placeholders.")
+                      help="Also write desc-meanfilled beside the final residual: every frame "
+                           "inside a BAD_ span set to its channel's kept mean, annotations "
+                           "kept, for tools that ignore annotations. Not for ALFF, fALFF or a "
+                           "GLM: the filled frames are placeholders.")
     post.add_argument("--censor-fill", choices=FILL_METHODS,
-                      help=f"How corrupted BAD_ spans (every BAD_ span but BAD_unselected, "
-                           f"such as BAD_gvtd) are filled before the bandpass, default "
-                           f"{DEFAULT_CENSOR_FILL!r}. 'linear' joins the kept samples either "
-                           f"side; 'spline' runs one cubic spline through every kept sample; "
-                           f"'lomb' rebuilds each span from a Lomb-Scargle fit to the kept "
-                           f"samples (sinusoids up to {LOMB_FMAX_HZ:g} Hz at "
-                           f"{LOMB_OVERSAMPLE}x oversampling, scaled to the kept samples' SD). "
-                           f"A span at the recording's edge takes the nearest kept value under "
-                           f"linear and spline. The fill keeps the artefact out of the filter; "
-                           f"the spans stay marked, and desc-preproc keeps the measured data.")
+                      help=f"How corrupted BAD_ spans (all but BAD_unselected) are filled "
+                           f"before the bandpass, default {DEFAULT_CENSOR_FILL!r}: 'linear' "
+                           f"joins the kept samples either side, 'spline' fits one cubic spline "
+                           f"through them, 'lomb' rebuilds the span from a Lomb-Scargle fit up "
+                           f"to {LOMB_FMAX_HZ:g} Hz. The spans stay marked.")
     post.add_argument("--resample-sfreq", type=float,
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
     # None rather than False, here and on --drift-order, so a --config or mode value can show
@@ -280,14 +240,11 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
     glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",
-                     help="Residual autocorrelation model, default 'auto'. 'ols', 'auto', "
-                          "'arN' for any order, or 'ar_irls'. 'auto' is an AR order of 4x the "
-                          "sampling rate. An order too low for the sampling rate leaves a "
-                          "task contrast's t values too large. 'ar_irls' adds a robust norm "
-                          "on top of the whitening, so "
-                          "residual motion is down-weighted instead of fitted; 'ar_irlsN' "
-                          "pins the largest order it may choose, which otherwise follows the "
-                          "same 4x rule.")
+                     help="Residual autocorrelation model, default 'auto': 'ols', 'auto' (an AR "
+                          "order of 4x the sampling rate), 'arN' for order N, or 'ar_irls', "
+                          "which adds a robust norm so residual motion is down-weighted "
+                          "('ar_irlsN' caps its order). Too low an order inflates task t "
+                          "values.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
                      help="Low-frequency drift regressors in design matrix. glm and rest "
                           "default to cosine; optional in denoise, where the bandpass detrends.")
@@ -311,20 +268,14 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--aux-channels", nargs="+", action="extend",
                      help=argparse.SUPPRESS)
     glm.add_argument("--fc", action="store_true", default=None,
-                     help="Also write the connectivity products rest mode writes, from "
-                          "whatever the mode produced: glm correlates the task residual, so "
-                          "what correlates is what the model did not explain; denoise "
-                          "correlates its confound residual, or the bandpassed data itself "
-                          "when no regression was asked for. Ignored by --mode rest, which "
-                          "writes them anyway.")
+                     help="Also write the connectivity products rest mode writes, from the "
+                          "residual this mode leaves: the task residual in glm, the confound "
+                          "residual in denoise. Ignored by --mode rest, which writes them "
+                          "anyway.")
     glm.add_argument("--min-time", type=float,
-                     help="Seconds outside every BAD_ span (unselected or corrupted) a run "
-                          "needs before its FC and ALFF are computed, in every mode that "
-                          "writes them; default 0, off. A run under it gets no FC or ALFF "
-                          "file, and the sidecar of the residual they would have come from "
-                          "says why. The kept seconds are logged and written to every FC "
-                          "and ALFF sidecar either way. The GLM fit itself is not governed "
-                          "by it.")
+                     help="Seconds outside every BAD_ span a run needs before FC and ALFF are "
+                          "computed; default 0, off. A run under it gets no FC or ALFF file, "
+                          "and its residual's sidecar says why. The GLM fit is not affected.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
     glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")
