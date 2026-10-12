@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
 
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, callback, no_update
+from dash import Input, Output, State, callback, html, no_update
 
-from nirspipe.cli.run import mode_defaults
+from nirspipe import __version__
+from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.interface import process_stream
 from nirspipe.interface.callbacks._cli_run import poll_run, start_run
 from nirspipe.interface.callbacks._sections import rng, summary, value
+from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
 from nirspipe.utils.logging import get_logger
 
@@ -669,3 +673,147 @@ def band_note(mode, high_pass, drift_model, drift_high_pass):
         f"The high-pass and the cosine drift basis are both at {high_pass} Hz and doing the "
         "same job. The high-pass can be left empty.",
         color="info", className="mb-0")
+
+
+# ── A run record into the form ───────────────────────────────────────────────
+
+def _switch(name: str):
+    return lambda on: [name] if on else []
+
+
+# Each setting a run record keys by flag name, the control it fills, what that control holds
+# when the record leaves the setting out, and how the record's value becomes the control's.
+# Every control here is set on a load, so the form shows that run and nothing of the last one.
+_RECORD_CONTROLS = {
+    "sci_threshold":        ("an-sci-thresh",         None,   None),
+    "psp_threshold":        ("an-psp-thresh",         0.1,    None),
+    "min_good_frac":        ("an-min-good-frac",      0.75,   None),
+    "screen_scope":         ("an-screen-scope",       "run",  None),
+    "window_length":        ("an-window-length",      None,   None),
+    "motion_correction":    ("an-motion-correction",  "tddr", None),
+    "motion_std_thresh":    ("an-motion-std-thresh",  None,   None),
+    "wavelet_iqr":          ("an-wavelet-iqr",        None,   None),
+    "short_max_dist":       ("an-short-max-dist",     None,   None),
+    "long_min_dist":        ("an-long-min-dist",      None,   None),
+    "long_max_dist":        ("an-long-max-dist",      None,   None),
+    "bad_channels":         ("an-bad-channels",       "",     str),
+    "keep_spans":           ("an-keep-spans",         "",     str),
+    "keep_spans_from":      ("an-keep-spans-from",    "",     str),
+    "bad_spans":            ("an-bad-spans",          "",     str),
+    "cardiac_l_freq":       ("an-cardiac-l",          None,   None),
+    "cardiac_h_freq":       ("an-cardiac-h",          None,   None),
+    "resp_l_freq":          ("an-resp-l",             None,   None),
+    "resp_h_freq":          ("an-resp-h",             None,   None),
+    "epoch_tmin":           ("an-epoch-tmin",         None,   None),
+    "epoch_tmax":           ("an-epoch-tmax",         None,   None),
+    "epoch_chunk_duration": ("an-epoch-chunk",        None,   None),
+    "by_condition":         ("an-by-condition",       [],     _switch("by_condition")),
+    "gvtd_censor":          ("an-gvtd-censor",        "off",  None),
+    "gvtd_censor_n_std":    ("an-gvtd-n-std",         None,   None),
+    "mode":                 ("an-post-mode",          "none", None),
+    "high_pass":            ("an-high-pass",          "",     str),
+    "low_pass":             ("an-low-pass",           "",     str),
+    "filter_method":        ("an-filter-method",      DEFAULT_FILTER_METHOD, None),
+    "filter_order":         ("an-filter-order",       DEFAULT_FILTER_ORDER,  None),
+    "resample_sfreq":       ("an-resample",           None,   None),
+    "export_mean_filled":   ("an-export-mean-filled", [],     _switch("export")),
+    "censor_fill":          ("an-censor-fill",        None,   None),
+    "min_time":             ("an-min-time",           None,   None),
+    "drift_model":          ("an-drift-model",        None,   None),
+    "drift_high_pass":      ("an-drift-high-pass",    None,   None),
+    "drift_order":          ("an-drift-order",        None,   None),
+    "short_channel":        ("an-short-channel",      None,   None),
+    "roi_mapping":          ("an-roi-mapping",        "",     str),
+    "fc":                   ("an-fc",                 [],     _switch("fc")),
+    "hrf_model":            ("an-hrf-model",          None,   None),
+    "noise_model":          ("an-noise-model",        "",     str),
+    "stim_dur":             ("an-stim-dur",           None,   None),
+    "events_path":          ("an-events-path",        "",     str),
+    "contrast_file":        ("an-contrast-file",      "",     str),
+    "session_label":        ("an-session-label",      "",     " ".join),
+    "task_label":           ("an-task-label",         "",     " ".join),
+}
+# filled by hand below: one field for what the CLI takes per wavelength, one checklist for
+# four flags, and the subjects, which stay the subject list's
+_RECORD_BY_HAND = {"dpf", "combine_runs", "participant_label"}
+_RECORD_OUTPUTS = sorted({control for control, _, _ in _RECORD_CONTROLS.values()} | {"an-dpf"})
+
+
+def record_to_form(config: dict) -> tuple[dict, list[str]]:
+    """Control values for a record read by nirspipe's own --config reader, and what the form cannot hold.
+
+    ``config`` is what ``read_config`` returns. The second value names, as flags, every setting
+    the record carries away from its default that no control on this page can show.
+    """
+    from nirspipe.cli.run import _build_parser
+
+    settings = {**config["prep"], **config["post"], **config["execution"]}
+    values = {}
+    for dest, (control, empty, convert) in _RECORD_CONTROLS.items():
+        given = settings.get(dest)
+        values[control] = empty if given is None else (convert(given) if convert else given)
+
+    not_held = []
+    dpf = settings.get("dpf")
+    values["an-dpf"] = dpf[0] if dpf and len(set(dpf)) == 1 else None
+    if dpf and len(set(dpf)) > 1:
+        not_held.append("--dpf " + " ".join(str(d) for d in dpf))
+
+    actions = {a.dest: a for a in _build_parser()._actions if a.option_strings}
+    for dest, given in settings.items():
+        if dest in _RECORD_CONTROLS or dest in _RECORD_BY_HAND or given in (None, False, []):
+            continue
+        if given == actions[dest].default:
+            continue
+        if isinstance(given, list):
+            shown = " ".join(map(str, given))
+        else:
+            shown = "" if given is True else str(given)
+        not_held.append(f"{actions[dest].option_strings[0]} {shown}".strip())
+    return values, not_held
+
+
+@callback(
+    *[Output(control, "value", allow_duplicate=True) for control in _RECORD_OUTPUTS],
+    Output("an-flags", "value", allow_duplicate=True),
+    Output("an-config-status", "children"),
+    Input("an-config-load-btn", "n_clicks"),
+    State("an-config-path", "value"),
+    State("an-flags", "value"),
+    prevent_initial_call=True,
+)
+def load_run_record(n_clicks, path, flags):
+    unchanged = [no_update] * (len(_RECORD_OUTPUTS) + 1)
+    if not path:
+        return *unchanged, dbc.Alert("Give the path of a run record.", color="warning",
+                                     className="mb-0 py-2")
+    path = path.strip().strip('"')
+    # the reader prints its refusal and exits, which is how the command line shows it
+    said = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(said):
+            config = read_config(Path(path))
+    except SystemExit:
+        return *unchanged, dbc.Alert(said.getvalue().strip(), color="danger",
+                                     className="mb-0 py-2")
+    except Exception as exc:
+        return *unchanged, dbc.Alert(f"Could not read {path}: {exc}", color="danger",
+                                     className="mb-0 py-2")
+
+    values, not_held = record_to_form(config)
+    flags = [f for f in (flags or []) if f != "combine_runs"]
+    if config["post"].get("combine_runs"):
+        flags.append("combine_runs")
+
+    notes = [html.Div(f"Loaded the settings of {Path(path).name}.", className="fw-bold")]
+    if config["version"] and config["version"] != __version__:
+        notes.append(html.Div(f"Written by nirspipe {config['version']}; this is {__version__}, "
+                              "so a setting whose meaning or default changed runs as this "
+                              "version reads it."))
+    if not_held:
+        notes.append(html.Div(["Not on this page, so the generated command leaves them out: ",
+                               html.Code(", ".join(not_held)), ". Rerun with ",
+                               html.Code(f"nirspipe --config {path}"), " to keep them."]))
+    return (*[values[control] for control in _RECORD_OUTPUTS], flags,
+            dbc.Alert(notes, color="warning" if not_held else "success",
+                      className="mb-0 py-2 small"))

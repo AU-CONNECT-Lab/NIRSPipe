@@ -161,6 +161,16 @@ def _scope():
         ),
         html.Div(id="an-subjects-result", className="mt-2"),
         html.Div(id="an-subjects-container"),
+        params(
+            field("Run record",
+                  dbc.Input(id="an-config-path", type="text",
+                            placeholder="<output>/sub-01/logs/sub-01.toml"),
+                  span=PATH,
+                  hint="Fills the form with that run's settings; the subjects stay yours to pick."),
+            action_field(dbc.Button("Load settings", id="an-config-load-btn",
+                                    color="secondary", outline=True)),
+        ),
+        html.Div(id="an-config-status", className="mt-2"),
     )
 
 
@@ -281,6 +291,7 @@ def _preprocessing():
                       dcc.Dropdown(id="an-gvtd-censor",
                                    options=[{"label": "Off", "value": "off"},
                                             {"label": "Long channels", "value": "long"},
+                                            {"label": "Short channels", "value": "short"},
                                             {"label": "All channels", "value": "all"}],
                                    value="off", clearable=False),
                       hint="Annotates BAD_gvtd. Nothing is cut."),
