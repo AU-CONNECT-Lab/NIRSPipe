@@ -74,6 +74,9 @@ select#run-select {
 /* under the second line nirspipe-rate was given, apart from the run's own red */
 .qm-table td.rate-low { outline:2px dashed var(--warn); outline-offset:-3px; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
+.span-btn { margin:0.4rem 0.6rem 0.4rem 0; padding:0.2rem 0.7rem; font-size:0.8rem; cursor:pointer; }
+.span-table { width:auto; margin-top:0.3rem; }
+.span-input { width:6.5rem; font-size:0.8rem; }
 </style>
 </head>
 <body>
@@ -242,6 +245,15 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.motion') }} <span id="motion-roi-note"></span></p>
     <div id="carpet-gvtd-panel"></div>
+    <div id="span-editor" style="display:none">
+      <p class="qm-note">{{ section_note('raw.bad_spans') }}</p>
+      <button type="button" id="span-mode-btn" class="span-btn">Mark bad stretches</button>
+      <span id="span-status" class="qm-note"></span>
+      <table class="qm-table span-table">
+        <thead><tr><th>Start (s)</th><th>End (s)</th><th>Length (s)</th><th></th></tr></thead>
+        <tbody id="span-tbody"></tbody>
+      </table>
+    </div>
 
     <div id="motion-detail-block" style="display:none">
       <h3 class="qm-sub">Per-channel, before and after motion correction</h3>
@@ -624,6 +636,7 @@ function loadCarpetGvtd() {
     // is given, and handing it an <iframe> put a second one inside the first, where a
     // browser ignores it. Every other caller passes its container.
     _setIframeSrc("carpet-gvtd-panel", p.src, p.h || 600);
+    _attachSpanEditor();
   } else {
     panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
   }
@@ -946,6 +959,7 @@ function switchRun(idx) {
 fetch("/rate_config")
   .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
   .then(function(cfg) {
+    if (cfg && cfg.mark_spans && _DECISIONS) _startSpanEditor();
     if (!cfg || cfg.sci_threshold == null) return;
     _rateSciLine = cfg.sci_threshold;
     var p = document.getElementById("ch-decisions-rate-line");
@@ -1079,6 +1093,170 @@ function _cdScheduleSave() {
     .then(function(d) { if (d.status !== "success") console.warn("channel decisions save failed:", d); })
     .catch(function(e) { console.warn("channel decisions save error:", e); });
   }, 500);
+}
+
+// ─── bad stretches (nirspipe-rate raw --mark-spans) ───────────────────────────
+// Bands drawn on the motion panel's figure, which lives in its own iframe; the server
+// serves both from one origin, so the page reaches its Plotly directly. A stretch is
+// marked for the whole run, so a condition page never offers it.
+var _MARK_SPANS    = false;
+var _badSpans      = {};
+var _spanMode      = false;
+var _spanSync      = false;
+var _spanSaveTimer = null;
+var _SPAN_FILL     = "rgba(192,57,43,0.18)";
+var _SPAN_LINE     = {color: "rgba(192,57,43,0.7)", width: 1};
+
+function _carpetPlot() {
+  var iframe = document.querySelector("#carpet-gvtd-panel iframe");
+  var win = iframe && iframe.contentWindow;
+  var gd = win && win.document && win.document.querySelector(".plotly-graph-div");
+  return (gd && gd._fullLayout && win.Plotly) ? {win: win, gd: gd} : null;
+}
+
+// in time order, inside the recording, to the millisecond, as the server keeps them
+function _normSpans(spans, end) {
+  return spans.map(function(s) {
+    var a = Math.max(0, Math.min(s[0], s[1])), b = Math.min(end, Math.max(s[0], s[1]));
+    return [Math.round(a * 1000) / 1000, Math.round(b * 1000) / 1000];
+  }).filter(function(s) { return s[1] > s[0]; })
+    .sort(function(u, v) { return u[0] - v[0]; });
+}
+
+function _band(span) {
+  return {type: "rect", xref: "x", yref: "paper", x0: span[0], x1: span[1], y0: 0, y1: 1,
+          layer: "above", editable: true, fillcolor: _SPAN_FILL, line: _SPAN_LINE};
+}
+
+// the figure's own shapes come first and are not editable, so every shape after them is a band
+function _drawBands(p) {
+  var base = (p.gd.layout.shapes || []).slice(0, p.gd._nBase);
+  var spans = _badSpans[_RUN_LABELS[_run_idx]] || [];
+  _spanSync = true;
+  return p.win.Plotly.relayout(p.gd, {shapes: base.concat(spans.map(_band))})
+    .then(function() { _spanSync = false; }, function() { _spanSync = false; });
+}
+
+function _setSpans(spans) {
+  var p = _carpetPlot();
+  _badSpans[_RUN_LABELS[_run_idx]] = _normSpans(spans, p ? p.gd._spanEnd : Infinity);
+  if (p) _drawBands(p);
+  _buildSpanTable();
+  _spanScheduleSave();
+}
+
+// a drawn box or a moved edge: read every band back off the figure as full-height spans
+function _onCarpetRelayout(ev) {
+  if (_spanSync || !ev) return;
+  if (!Object.keys(ev).some(function(k) { return k.indexOf("shapes") === 0; })) return;
+  var p = _carpetPlot();
+  if (!p) return;
+  _setSpans((p.gd.layout.shapes || []).slice(p.gd._nBase).map(function(s) { return [s.x0, s.x1]; }));
+}
+
+function _setSpanMode(on) {
+  _spanMode = on;
+  var btn = document.getElementById("span-mode-btn");
+  if (btn) btn.textContent = on ? "Stop marking" : "Mark bad stretches";
+  var p = _carpetPlot();
+  if (!p) return;
+  p.win.Plotly.relayout(p.gd, on
+    ? {dragmode: "drawrect", newshape: {fillcolor: _SPAN_FILL, line: _SPAN_LINE, layer: "above"}}
+    : {dragmode: p.gd._dragmode0});
+}
+
+function _waitForCarpet(tries) {
+  var p = _carpetPlot();
+  if (!p) {
+    if (tries < 100) setTimeout(function() { _waitForCarpet(tries + 1); }, 100);
+    return;
+  }
+  if (!p.gd._spanHooked) {
+    p.gd._spanHooked = true;
+    p.gd._nBase = (p.gd.layout.shapes || []).length;
+    // the recording's length, read before any zoom narrows the axis
+    p.gd._spanEnd = ((p.gd.layout.xaxis || {}).range || [0, Infinity])[1];
+    p.gd._dragmode0 = p.gd.layout.dragmode || "zoom";
+    p.gd.on("plotly_relayout", _onCarpetRelayout);
+  }
+  _drawBands(p);
+  if (_spanMode) _setSpanMode(true);
+}
+
+function _attachSpanEditor() {
+  if (!_MARK_SPANS) return;
+  var iframe = document.querySelector("#carpet-gvtd-panel iframe");
+  if (!iframe) return;
+  if (!iframe._spanHooked) {
+    // a run switch loads another file into the same iframe
+    iframe._spanHooked = true;
+    iframe.addEventListener("load", function() { _waitForCarpet(0); });
+  }
+  _buildSpanTable();
+  _waitForCarpet(0);
+}
+
+function _buildSpanTable() {
+  var tbody = document.getElementById("span-tbody");
+  if (!tbody) return;
+  var spans = _badSpans[_RUN_LABELS[_run_idx]] || [];
+  tbody.innerHTML = spans.length ? "" :
+    "<tr><td colspan='4' style='color:#adb5bd;font-style:italic'>None marked</td></tr>";
+  spans.forEach(function(s, i) {
+    var tr = document.createElement("tr");
+    [0, 1].forEach(function(k) {
+      var td = document.createElement("td"), inp = document.createElement("input");
+      inp.type = "number"; inp.step = "any"; inp.min = "0"; inp.value = s[k];
+      inp.className = "span-input";
+      inp.addEventListener("change", function() {
+        var next = spans.map(function(t) { return t.slice(); });
+        next[i][k] = parseFloat(inp.value);
+        if (isFinite(next[i][k])) _setSpans(next); else _buildSpanTable();
+      });
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    var len = document.createElement("td");
+    len.textContent = (s[1] - s[0]).toFixed(1);
+    tr.appendChild(len);
+    var td = document.createElement("td"), del = document.createElement("button");
+    del.type = "button"; del.textContent = "Delete";
+    del.addEventListener("click", function() {
+      _setSpans(spans.filter(function(_, j) { return j !== i; }));
+    });
+    td.appendChild(del); tr.appendChild(td);
+    tbody.appendChild(tr);
+  });
+}
+
+function _spanScheduleSave() {
+  if (_spanSaveTimer) clearTimeout(_spanSaveTimer);
+  _spanSaveTimer = setTimeout(function() {
+    var status = document.getElementById("span-status");
+    fetch("/save_bad_spans", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(_badSpans),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (status) status.textContent = d.status === "success" ? "Saved." : "Not saved: " + d.message;
+    })
+    .catch(function(e) { if (status) status.textContent = "Not saved: " + e; });
+  }, 500);
+}
+
+function _startSpanEditor() {
+  fetch("/load_bad_spans")
+    .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
+    .then(function(data) {
+      _MARK_SPANS = true;
+      _badSpans = data || {};
+      _showSection("span-editor", true);
+      var btn = document.getElementById("span-mode-btn");
+      if (btn) btn.addEventListener("click", function() { _setSpanMode(!_spanMode); });
+      _attachSpanEditor();
+    })
+    .catch(function() {});
 }
 
 </script>
