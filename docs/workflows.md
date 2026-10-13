@@ -77,7 +77,7 @@ Bad channels are **marked, not removed or interpolated**. Three sources are unio
 - the channels named by `--bad-channels`, either as source-detector labels or as a table with optional `participant_id`, `session`, `task` and `run` columns ([Data preparation](data-preparation.md#tables-that-name-recordings));
 - the channels the recording's BIDS `channels.tsv` marks `bad` in its `status` column. The nearest `channels.tsv` is read, as BIDS inheritance allows, `status` is compared without regard to case, and a channel marked `good` is still screened like any other. `--ignore channel-status` turns this off. The `desc-sci` sidecar records them as `parameters.channels_tsv_bads`, and the report shows them as `BAD (manual)`.
 
-Naming either wavelength of a pair rejects the pair. When the listed channels leave no usable channel, the run stops. A window touching any `BAD_` span is not counted ([Excluded time](#excluded-time)), so the run has one channel set, chosen on the time it keeps. Writes `desc-sci`.
+Naming either wavelength of a pair rejects the pair. A pair in the table's `keep_channels` column leaves screening's rejections, not the other two sources; the `desc-sci` sidecar records it as `parameters.kept_channels` and the Methods name it. When the listed channels leave no usable channel, the run stops. A window touching any `BAD_` span is not counted ([Excluded time](#excluded-time)), so the run has one channel set, chosen on the time it keeps. Writes `desc-sci`.
 
 ### Motion correction
 

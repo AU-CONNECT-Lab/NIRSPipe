@@ -33,6 +33,8 @@ derivatives/nirspipe/
 ├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc cohort)
 ├── desc-subjects_qc.json                ← what each of its columns holds
 ├── desc-subjects_report.html            ← cohort page
+├── desc-ratedchannels_qc.tsv            ← nirspipe-rate export: the --bad-channels table
+├── desc-ratedpages_qc.tsv               ← nirspipe-rate export: every FINAL verdict, for reading
 ├── figures/                             ← the cohort page's figures
 ├── logs/
 │   ├── json/                            ← JSONL event stream, moved to archived/ once merged

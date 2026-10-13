@@ -104,7 +104,7 @@ Several flags take a table whose rows may apply to some recordings only: `--bad-
 - A recording gets the union of every row it matches.
 - A row that matches no recording, or a column the table does not define, stops the run before any subject starts, naming the line.
 
-For `--bad-channels`, the other column is `bad_channels`, holding source-detector labels such as `S1_D1,S2_D3`; naming either wavelength of a pair marks both.
+For `--bad-channels`, the other column is `bad_channels`, holding source-detector labels such as `S1_D1,S2_D3`; naming either wavelength of a pair marks both. An optional `keep_channels` column names pairs to keep although screening rejected them; `nirspipe-rate export` writes it from the pairs a reviewer rated good ([Rating](qc.md#rating)). A keep overrules screening only: `channels.tsv` and non-finite samples still mark the pair bad, with a warning, and a pair both marked bad and kept for one recording stops the run.
 
 ## Choosing stretches of a recording
 
