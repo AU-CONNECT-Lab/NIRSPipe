@@ -13,7 +13,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy import stats
 
-_REAL, _NULL, _INK = "#2c3e50", "#95a5a6", "#c0392b"
+from nirspipe.qc.figures.common.matrix_map import DIFFERENCE_SCALE, cell_values
+
+_REAL, _NULL = "#2c3e50", "#95a5a6"
 ALPHA = 0.05
 
 
@@ -108,8 +110,22 @@ def _significant(rows: pd.DataFrame, p_col: str) -> np.ndarray:
     return (rows[p_col] < ALPHA).to_numpy() if p_col in rows.columns else np.zeros(len(rows), bool)
 
 
+def _lift_panel(fig, z, marks, rows: list, cols: list, scale: dict, colorbar: "dict | None",
+                hover: str, col: int) -> None:
+    fig.add_trace(go.Heatmap(z=z, x=cols, y=rows, showscale=colorbar is not None,
+                             colorbar=colorbar or {}, xgap=1, ygap=1, **scale,
+                             hovertemplate=hover), row=1, col=col)
+    cell_values(fig, z, rows, cols, cmap=scale["colorscale"], vmin=scale["zmin"],
+                vmax=scale["zmax"], row=1, col=col, fmt="+.3f", marks=marks)
+    # square cells: each panel's y follows its own x
+    axis = "" if col == 1 else str(col)
+    fig.update_layout({f"xaxis{axis}": dict(constrain="domain", tickangle=-90),
+                       f"yaxis{axis}": dict(scaleanchor=f"x{axis}", constrain="domain",
+                                            autorange="reversed", showticklabels=col == 1)})
+
+
 def build_region_lift(cohort: pd.DataFrame, value_label: str, test: str = "paired") -> "go.Figure | None":
-    """Each region's lift over its null, a dot where ``test`` clears ``ALPHA``.
+    """Each region's lift over its null, printed in its cell, bold with a star where ``test`` clears ``ALPHA``.
 
     ::
 
@@ -127,44 +143,41 @@ def build_region_lift(cohort: pd.DataFrame, value_label: str, test: str = "paire
     lifts = np.abs(roi["lift"].to_numpy(dtype=float))
     lifts = lifts[np.isfinite(lifts)]
     reach = float(lifts.max()) if lifts.size and lifts.max() > 0 else 1.0
-    scale = dict(colorscale="RdBu_r", zmin=-reach, zmax=reach, zmid=0.0)
+    scale = dict(colorscale=DIFFERENCE_SCALE, zmin=-reach, zmax=reach, zmid=0.0)
     colorbar = dict(title=dict(text=f"lift ({value_label})", side="right"), thickness=12)
     if not crossed.empty:
         conditions = list(dict.fromkeys(crossed["condition"]))
         pairs = crossed["level"].str.split(">", expand=True)
         regions = list(dict.fromkeys(pairs[0].tolist() + pairs[1].tolist()))
         fig = make_subplots(rows=1, cols=len(conditions), subplot_titles=conditions,
-                            horizontal_spacing=0.04)
+                            horizontal_spacing=0.03)
         for c, cond in enumerate(conditions, start=1):
             part = crossed[crossed["condition"] == cond]
             a, b = part["level"].str.split(">", expand=True).T.to_numpy()
+            at = ([regions.index(x) for x in a], [regions.index(y) for y in b])
             z = np.full((len(regions), len(regions)), np.nan)
-            z[[regions.index(x) for x in a], [regions.index(y) for y in b]] = part["lift"]
-            fig.add_trace(go.Heatmap(z=z, x=regions, y=regions, showscale=c == 1,
-                                     colorbar=colorbar, **scale,
-                                     hovertemplate="%{y} > %{x}<br>lift %{z:.4f}<extra></extra>"),
-                          row=1, col=c)
-            hit = _significant(part, p_col)
-            fig.add_trace(go.Scatter(x=list(b[hit]), y=list(a[hit]), mode="markers",
-                                     showlegend=False, marker=dict(size=7, color=_INK),
-                                     hoverinfo="skip"), row=1, col=c)
-            fig.update_yaxes(autorange="reversed", showticklabels=c == 1, row=1, col=c)
-        height = 120 + 46 * len(regions)
+            z[at] = part["lift"].to_numpy(dtype=float)
+            marks = np.zeros(z.shape, bool)
+            marks[at] = _significant(part, p_col)
+            _lift_panel(fig, z, marks, regions, regions, scale, colorbar if c == 1 else None,
+                        "%{y} > %{x}<br>lift %{z:.4f}<extra></extra>", c)
+        fig.update_xaxes(title_text="second member's region", row=1, col=1)
+        fig.update_yaxes(title_text="first member's region", row=1, col=1)
+        n_cols = len(regions)
     else:
         part = roi[roi["pairings"] == "homologous"]
         conditions = list(dict.fromkeys(part["condition"]))
         regions = list(dict.fromkeys(part["level"]))
+        at = ([regions.index(x) for x in part["level"]],
+              [conditions.index(x) for x in part["condition"]])
         z = np.full((len(regions), len(conditions)), np.nan)
-        for _, row in part.iterrows():
-            z[regions.index(row["level"]), conditions.index(row["condition"])] = row["lift"]
-        fig = go.Figure(go.Heatmap(z=z, x=conditions, y=regions, colorbar=colorbar, **scale,
-                                   hovertemplate="%{y}, %{x}<br>lift %{z:.4f}<extra></extra>"))
-        hit = _significant(part, p_col)
-        fig.add_trace(go.Scatter(x=list(part["condition"][hit]), y=list(part["level"][hit]),
-                                 mode="markers", showlegend=False,
-                                 marker=dict(size=7, color=_INK), hoverinfo="skip"))
-        fig.update_yaxes(autorange="reversed")
-        height = 120 + 40 * len(regions)
-    fig.update_layout(height=max(height, 260), plot_bgcolor="white",
-                      margin=dict(l=90, r=20, t=50, b=40))
+        z[at] = part["lift"].to_numpy(dtype=float)
+        marks = np.zeros(z.shape, bool)
+        marks[at] = _significant(part, p_col)
+        fig = make_subplots(rows=1, cols=1)
+        _lift_panel(fig, z, marks, regions, conditions, scale, colorbar,
+                    "%{y}, %{x}<br>lift %{z:.4f}<extra></extra>", 1)
+        n_cols = len(conditions)
+    fig.update_layout(height=max(120 + 70 * max(len(regions), n_cols), 260), plot_bgcolor="white",
+                      margin=dict(l=110, r=20, t=50, b=110))
     return fig

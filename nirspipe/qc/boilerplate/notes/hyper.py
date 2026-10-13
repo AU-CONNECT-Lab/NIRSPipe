@@ -238,8 +238,8 @@ NOTES = {
         "above; right, both means with 95% intervals. The caption is the paired test, given "
         "from three occasions.",
     "groupnull.regions":
-        "Each region&rsquo;s lift, the real mean minus the null mean, on a scale centred on "
-        "zero. A dot marks the ones whose paired test is below {alpha} ({p_col}).",
+        "Each region&rsquo;s lift, the real mean minus the null mean, printed in its cell on a "
+        "scale centred on zero; bold with a star where its paired test is below {alpha} ({p_col}).",
 
     # ---- A dyad's window index ----
     "hyper_index.columns":

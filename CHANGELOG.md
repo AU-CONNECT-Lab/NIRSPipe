@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-hyper --config` reruns a dyad from its run record
 
 ### Changed
+- The group-test page's region matrices print every cell's lift, bold with a star where significant instead of a dot, in square cells
 - The per-trial panel scores 5 to 10 s trials on SCI and GVTD, rather than leaving them blank
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs
 - GUI command previews put each flag beside its values and quote paths for the chosen shell

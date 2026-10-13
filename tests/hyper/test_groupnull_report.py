@@ -99,13 +99,28 @@ def test_a_crossed_region_matrix_holds_each_pair_s_lift_where_it_belongs():
     assert heat[0].zmid == 0.0 and heat[0].zmax == pytest.approx(0.04)
 
 
-def test_dots_mark_the_paired_test_and_follow_the_corrected_p_when_there_is_one():
-    def dots(frame):
-        fig = build_region_lift(frame, "WTC")
-        return {(y, x) for t in fig.data if t.type == "scatter" for x, y in zip(t.x, t.y)}
+def _printed(fig, axis="x") -> dict:
+    """Each cell's printed value in one panel, keyed (row, column)."""
+    return {(y, x): s for t in fig.data if t.type == "scatter" and (t.xaxis or "x") == axis
+            for x, y, s in zip(t.x, t.y, t.text)}
 
-    assert dots(_cohort()) == {("L", "L"), ("L", "R"), ("R", "R")}
-    assert dots(_cohort(corrected=True)) == {("L", "L"), ("R", "R")}
+
+def test_stars_mark_the_paired_test_and_follow_the_corrected_p_when_there_is_one():
+    def starred(frame):
+        return {k for k, s in _printed(build_region_lift(frame, "WTC")).items() if s.endswith("*</b>")}
+
+    assert starred(_cohort()) == {("L", "L"), ("L", "R"), ("R", "R")}
+    assert starred(_cohort(corrected=True)) == {("L", "L"), ("R", "R")}
+
+
+def test_every_cell_prints_its_signed_lift_in_a_square_cell():
+    frame = _cohort()
+    # a lift that rounds to zero has no sign to print
+    frame.loc[(frame.level == "R>L") & (frame.condition == "ca"), "lift"] = -0.0002
+    fig = build_region_lift(frame, "WTC")
+    assert _printed(fig) == {("L", "L"): "<b>+.040*</b>", ("L", "R"): "<b>-.030*</b>",
+                             ("R", "L"): ".000", ("R", "R"): "<b>+.020*</b>"}
+    assert fig.layout.yaxis.scaleanchor == "x" and fig.layout.yaxis2.scaleanchor == "x2"
 
 
 def test_homologous_regions_alone_make_a_regions_by_conditions_grid():
@@ -113,8 +128,7 @@ def test_homologous_regions_alone_make_a_regions_by_conditions_grid():
     heat = [t for t in fig.data if t.type == "heatmap"]
     assert len(heat) == 1
     assert list(heat[0].x) == list(CONDITIONS) and list(heat[0].y) == ["L", "R"]
-    dots = [t for t in fig.data if t.type == "scatter"][0]
-    assert set(zip(dots.x, dots.y)) == {("ca", "L"), ("cb", "L")}
+    assert {k for k, s in _printed(fig).items() if s.endswith("*</b>")} == {("L", "ca"), ("L", "cb")}
 
 
 def test_no_region_rows_draw_no_region_matrix():

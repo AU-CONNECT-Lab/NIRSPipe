@@ -18,6 +18,8 @@ import plotly.graph_objects as go
 # An unsigned bounded quantity such as a coherence has none and takes a sequential scale.
 CORRELATION_SCALE = "RdBu_r"
 COHERENCE_SCALE = "viridis"
+# a difference such as real minus null is signed with a meaningful zero, as a correlation is
+DIFFERENCE_SCALE = CORRELATION_SCALE
 
 def scale_color(value: float, cmap: str, vmin: float, vmax: float) -> str:
     """The colour a scale gives one value, as ``rgb(r,g,b)``.
@@ -48,12 +50,13 @@ def kept_axes(mats) -> tuple[np.ndarray, np.ndarray]:
 
 
 def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
-                fmt: str = ".2f", strip_zero: bool = True) -> None:
+                fmt: str = ".2f", strip_zero: bool = True, marks=None) -> None:
     """Print every cell's value on the heatmap, in ink the cell's own colour can carry.
 
     ::
 
       a cell at .69 -> white text;  the same number at .12 -> black
+      fmt "+.3f", marks True at a cell of .0374 -> bold "+.037*"
 
     **Every cell gets its number**, so a matrix on a fixed scale whose values sit close
     together stays readable.
@@ -61,6 +64,9 @@ def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
     The ink is chosen from **the cell's own colour** and not from its value, so one rule
     serves sequential and diverging scales alike. Two text traces rather than one, because a
     heatmap takes a single ``textfont`` for the whole grid.
+
+    ``marks``, a boolean array shaped like ``z``, sets the marked cells' numbers in bold with
+    a star. A signed ``fmt`` prints a value that rounds to zero without its sign.
     """
     n = max(len(row_labels), len(col_labels), 1)
     size = float(np.clip(150.0 / n, 5.0, 14.0))
@@ -77,7 +83,10 @@ def cell_values(fig, z, row_labels, col_labels, *, cmap, vmin, vmax, row, col,
             xs.append(c)
             ys.append(r)
             text = f"{v:{fmt}}"
-            ts.append(text.replace("0.", ".") if strip_zero else text)
+            if fmt.startswith("+") and float(text) == 0:
+                text = f"{0.0:{fmt[1:]}}"
+            text = text.replace("0.", ".") if strip_zero else text
+            ts.append(f"<b>{text}*</b>" if marks is not None and marks[i, j] else text)
     for ink, (xs, ys, texts) in groups.items():
         if not xs:
             continue
