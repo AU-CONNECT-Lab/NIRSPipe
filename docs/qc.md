@@ -213,8 +213,8 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 | Shared usable time | The usable share per channel pair and condition, screened again on the aligned grid. |
 | Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present. With `--derivatives-dir`, each member after motion correction too. |
 | Where on the head | Each member's coupled-window share on the montage, and each window's SCI by slider. |
-| Member and dyad metrics | Each member's numbers side by side, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
-| Channel decisions | Each member's per-channel table side by side, with the rating decision. |
+| Member and dyad metrics | Each member's numbers side by side, its IMU summaries where the recording carries one, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
+| Channel decisions | Each member's per-channel table side by side, with the rating decision, and the pairs each member's `channels.tsv` marked bad. |
 
 ```{figure} figures/qc_dyad_usable.png
 :alt: Shared usable time of one dyad per channel pair over the recording
@@ -236,7 +236,7 @@ It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `de
 | Coherence matrices | HbO and HbR band means side by side, per channel and per region pairing. |
 | ISC | The correlation matrix and a connectivity circle of the pairings that stand out. |
 | All values | Every number behind the panels, one row per pairing, the whole run then each condition. |
-| Member metrics | Each member's quality numbers; on a condition page, that window's. |
+| Member metrics | Each member's quality numbers and IMU summaries; on a condition page, that window's. |
 | By condition | Each member's channel pairs in a grid: a **Run** row for the whole-run screening every coherence was computed on, and per condition an **In condition** row. |
 
 The dyad index, `group-<id>_desc-index_report.html`, lists every analysed window with its coherence, the share outside the cone of influence, the count past the null and the ISC, over the homologous pairs and over every crossed pairing. A cell more than 3.5 median absolute deviations from the dyad's other windows is marked. `nirspipe-hyper-groupnull` writes a page of its own per task at the tree root ([Hyperscanning](hyperscanning.md#above-the-channel-nirspipe-hyper-groupnull)).

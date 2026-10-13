@@ -258,13 +258,22 @@ def cmd_hyper_raw(
         raws_cw = load_group_raw_bids(bids_dir, members)
         tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
                      for sid, raw in raws_cw.items()} if layout is not None else {})
+        # the aux group rides only in the source file, on each member's own clock. A file
+        # that will not read costs the IMU rows and not the report
+        try:
+            member_imu = {sid: imu_traces(*read_aux_snirf(path_from(raw)))
+                          for sid, raw in raws_cw.items() if path_from(raw)}
+        except Exception:
+            logger.warning("%s: IMU could not be read; the report has no IMU rows",
+                           gid, exc_info=True)
+            member_imu = {}
         sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
                                          cardiac_l_freq, cardiac_h_freq,
                                          psp_threshold=psp_threshold,
                                          min_good_frac=min_good_frac,
                                          screen_scope=screen_scope,
                                          sep_bands=sep_bands, session=ses,
-                                         channels_tsv_bads=tsv_bads)
+                                         channels_tsv_bads=tsv_bads, imu=member_imu)
         raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
         if no_align:
             aligned_raws, offsets = trim_to_shortest(raws_haemo)
@@ -284,16 +293,11 @@ def cmd_hyper_raw(
         full_after = (load_group_stage(derivatives_dir, members, "motcorrected")
                       if derivatives_dir is not None else {})
         after_raws = align_like(full_after, aligned_raws) if full_after else {}
-        # the aux group rides only in the source file, on each member's own clock; it is
-        # moved by the same shift the intensity copy was cut by. A panel row, so a file that
-        # will not read costs the row and not the report
+        # the panel's IMU, moved by the same shift the intensity copy was cut by
         try:
-            imu = align_imu_like(
-                {sid: imu_traces(*read_aux_snirf(path_from(raw)))
-                 for sid, raw in raws_cw.items() if path_from(raw)},
-                raws_cw, aligned_raws)
+            imu = align_imu_like(member_imu, raws_cw, aligned_raws)
         except Exception:
-            logger.warning("%s: IMU could not be read; the motion panel has no IMU rows",
+            logger.warning("%s: IMU could not be aligned; the motion panel has no IMU rows",
                            gid, exc_info=True)
             imu = {}
         return build_hyper_report(

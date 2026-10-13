@@ -46,6 +46,7 @@ from nirspipe.qc.figures.common.provenance_figure import write_provenance
 from nirspipe.qc.figures.subject.sci_psp_panel import member_condition_heatmap
 from nirspipe.qc.figures.hyper.hyper_figures import _cond_colors
 from nirspipe.qc.hyper.hyper_raw_writer import _process_hyper_raw_group
+from nirspipe.qc.metrics import IMU_STAT_KEYS
 from nirspipe.qc.metrics._helpers import long_short_channels
 from nirspipe.qc.common.report_shell import (
     footer_vars,
@@ -285,13 +286,42 @@ def _text_row(label: str, texts: "list[str]") -> dict:
             "cells": [{"text": t, "cls": ""} for t in texts]}
 
 
+def imu_member_rows(
+    values: "dict[str, dict]", subject_ids: "list[str]", n_sets: int, condition: bool = False,
+) -> "list[dict]":
+    """The members' IMU summaries as registry rows, for :func:`member_metric_table`'s ``extra``.
+
+    ::
+
+      {"sub-01": {"gyro_speed_mean": 1.25}, "sub-02": {}}, n_sets 2
+      -> [{"key": "gyro_speed_mean", ..., "cells": ["1.25", "—", "", ""]}]
+
+    The sensor belongs to no channel set, so each value sits under the first set's columns
+    and the rest stay blank, as on the subject report. A sensor no member has gets no row.
+    """
+    rows = []
+    for key in IMU_STAT_KEYS:
+        found = [(values.get(sid) or {}).get(key) for sid in subject_ids]
+        if all(v is None for v in found):
+            continue
+        cells = [{"text": format_metric(key, v), "cls": "" if v is None else metric_class(key, v)}
+                 for v in found]
+        blank = [{"text": "", "cls": ""}] * (len(subject_ids) * (n_sets - 1))
+        rows.append({"key": key, "label": metric_label(key, condition=condition),
+                     "summary": metric_summary(key, condition),
+                     "key_metric": is_key_metric(key), "cells": cells + blank})
+    return rows
+
+
 def raw_member_rows(
     member_info: "list[dict]", motion: dict, subject_ids: "list[str]", sets: "list[str]",
+    imu: "dict[str, dict] | None" = None,
 ) -> "dict[str, list[dict]]":
     """The dyad raw page's own member rows, for :func:`member_metric_table`'s ``extra``.
 
     ``sets`` are the table's set headings; an empty list is an unsplit montage, whose one
-    column group reads every pair and the motion pass's only set.
+    column group reads every pair and the motion pass's only set. ``imu`` is each member's
+    scalars, of which the IMU summaries are printed.
     """
     info = {m["subject_id"]: m for m in member_info}
     keys = [s.lower() for s in sets] or ["all"]
@@ -324,6 +354,9 @@ def raw_member_rows(
             return f"{before:.2f}" if after is None else f"{before:.2f} → {after:.2f}"
         out["Motion"] = [_text_row("Mean GVTD (x own median)",
                                    [ratio(k, sid) for k in motion_keys for sid in subject_ids])]
+    imu_rows = imu_member_rows(imu or {}, subject_ids, len(keys))
+    if imu_rows:
+        out.setdefault("Motion", []).extend(imu_rows)
     return out
 
 
@@ -780,7 +813,7 @@ def build_hyper_report(
         subject_ids, member_sci_lines(sqm_data, subject_ids))
     member_table = member_metric_table(blocks, raw_member_rows(
         meta.get("member_info") or [], (meta.get("sqm") or {}).get("motion") or {},
-        subject_ids, [b["set"] for b in blocks if b["set"]]))
+        subject_ids, [b["set"] for b in blocks if b["set"]], imu=sqm_data))
 
     html = render(
         "hyper_report.html.j2",
@@ -1629,14 +1662,15 @@ def build_hyper_post_report(
     cond_status: dict = {}
     # the windows refused here are the ones blank in the quality table above as well
     refused_windows: dict = {}
+    # each member's record entry per window, which the IMU rows read as well
+    cond_entries: dict = {}
     with guard("Per-condition channel grid", errors, scope):
+        cond_entries = member_condition_entries(
+            subject_sqm or {}, subject_ids, cond_windows, offsets,
+            sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None,
+            refused=refused_windows)
         cond_status = condition_channel_status(
-            subject_sqm or {}, subject_ids,
-            member_condition_entries(
-                subject_sqm or {}, subject_ids, cond_windows, offsets,
-                sfreq=float(ref_raw.info["sfreq"]) if ref_raw is not None else None,
-                refused=refused_windows),
-            bad_channels)
+            subject_sqm or {}, subject_ids, cond_entries, bad_channels)
 
     def _condition_grid(pair: "tuple[str, str]", label: "str | None") -> dict:
         """A condition page's grid of that condition; the run page's of every condition."""
@@ -1737,6 +1771,13 @@ def build_hyper_post_report(
         member_rows = [_members_only(t, pair_ids)
                        for t in (run_metric_rows if label is None
                                  else cond_metric_rows.get(label, []))]
+        # the run's IMU summaries, or this window's from the same record entries as above
+        page_imu = ({sid: (subject_sqm or {}).get(sid) or {} for sid in pair_ids}
+                    if label is None else
+                    {sid: ((cond_entries.get(sid) or {}).get(label) or {}).get("scalars") or {}
+                     for sid in pair_ids})
+        imu_rows = imu_member_rows(page_imu, pair_ids, len(member_rows),
+                                   condition=label is not None)
         # One table per kind of pairing rather than one grid holding all three, so a table
         # carries only the columns it filled and the page has one level of nesting instead
         # of a scope inside a kind inside a grid.
@@ -1857,7 +1898,7 @@ def build_hyper_post_report(
             isc_roi_matrix=(isc_roi_matrices.get(pair) or {}).get(label) or {},
             isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
             isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
-            subject_metrics_rows=member_metric_table(member_rows),
+            subject_metrics_rows=member_metric_table(member_rows, {"Motion": imu_rows}),
             condition_grid=_condition_grid(pair, label) if pair else {},
         )
         out_path.write_text(html, encoding="utf-8")

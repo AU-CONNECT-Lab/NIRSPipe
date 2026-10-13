@@ -127,8 +127,12 @@ def compute_group_sqm_raw(
     screen_scope: str = "run",
     session: "str | None" = None,
     channels_tsv_bads: "dict[str, list[str]] | None" = None,
+    imu: "dict[str, dict] | None" = None,
 ) -> dict[str, dict]:
     """Compute raw-level SQM (SCI, bad channels) for each group member.
+
+    ``imu`` is each member's IMU traces on its own clock, summarised over its recording as
+    the subject record's ``imu`` section is.
 
     Writes two TSVs under group-{gid}/nirs/, where a subject's own tables sit:
       group-{gid}_task-{task}_desc-subject_qc.tsv: one row per subject (scalars)
@@ -141,7 +145,7 @@ def compute_group_sqm_raw(
     per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
     channel set as the same subject's numbers in the individual reports and in `nirspipe-hyper`.
     """
-    from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+    from nirspipe.qc.metrics import imu_section, resolve_cutoffs, screen_channels, screening_scores
     from nirspipe.qc.common.screen_scope import resolve_screen_scope
     from nirspipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
 
@@ -238,6 +242,14 @@ def compute_group_sqm_raw(
             logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)
             sections, sqm, _per_channel = {}, {}, {}
 
+        imu_sec: dict = {}
+        if (imu or {}).get(entry.subject_id):
+            try:
+                imu_sec = imu_section(imu[entry.subject_id], raw, sep_bands)
+            except Exception:
+                logger.warning("%s: IMU summary failed", entry.subject_id, exc_info=True)
+        sqm.update(imu_sec)
+
         # which channel set the row above describes, so a table read on its own says so
         sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
         sqm["sci_per_channel"] = sci_scores
@@ -266,6 +278,8 @@ def compute_group_sqm_raw(
             "n_bad_channels": len(bad_channels),
             **{k: v for k, v in sqm.items()
                if isinstance(v, (int, float)) and not isinstance(v, bool)},
+            # the unit each IMU number was read in, which differs between devices
+            **{k: v for k, v in imu_sec.items() if isinstance(v, str)},
         })
 
         for ch, sci_val in sci_cw.items():
@@ -370,6 +384,8 @@ def load_group_sqm(
             sqm.update(record.get("motion") or {})
             sqm.update(record.get("preproc") or {})
             sqm.update(record.get("preproc_long") or {})
+            # unsuffixed, as the subject report reads it: its keys collide with nothing
+            sqm.update(record.get("imu") or {})
             # the channel-by-window matrices a per-condition view selects columns from,
             # nested under one key so they cannot collide with a scalar name
             sqm["windowed"] = record.get("windowed") or {}
