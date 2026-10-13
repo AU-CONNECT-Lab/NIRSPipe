@@ -41,7 +41,9 @@ from nirspipe.qc.metrics._helpers import registration_offset, separation_orphans
 from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
-from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
+from nirspipe.qc.subject.trial_qc import (
+    MIN_SCI_TRIAL_S, MIN_TRIAL_S, score_trials, short_trial_counts, trial_windows,
+)
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans
@@ -697,11 +699,14 @@ def _process_run(
             windows = trial_windows(markers, epoch_tmin, epoch_tmax, float(raw.times[-1]))
             trial_rows = [(onset, lab, sqm) for (_, _, _, onset), lab, sqm in zip(
                 windows, labels, sqms)]
-            sfreq = float(raw.info["sfreq"])
-            short = sum(not trial_fits(sfreq, t0, t1) for _, t0, t1, _ in windows)
-            if short:
-                note(notes, label, section_note("caveat.short_trials", n=short,
-                                                total=len(windows), window=MIN_TRIAL_S))
+            partial, unscored = short_trial_counts(windows, float(raw.info["sfreq"]))
+            if partial:
+                note(notes, label, section_note("caveat.partial_trials", n=partial,
+                                                total=len(windows), floor=MIN_SCI_TRIAL_S,
+                                                window=MIN_TRIAL_S))
+            if unscored:
+                note(notes, label, section_note("caveat.short_trials", n=unscored,
+                                                total=len(windows), window=MIN_SCI_TRIAL_S))
             fig = trial_quality_heatmap(labels, sqms)
             if fig:
                 fname = fig_name("trialqc", suffix="qc")

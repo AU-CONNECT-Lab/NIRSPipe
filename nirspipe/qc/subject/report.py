@@ -133,7 +133,9 @@ from nirspipe.qc.common.report_shell import (
 )
 from nirspipe.qc.subject.record_io import read_record
 from nirspipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
-from nirspipe.qc.subject.trial_qc import MIN_TRIAL_S, score_trials, trial_fits, trial_windows
+from nirspipe.qc.subject.trial_qc import (
+    MIN_SCI_TRIAL_S, MIN_TRIAL_S, score_trials, short_trial_counts, trial_windows,
+)
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import span_kind
@@ -998,11 +1000,14 @@ def _section_trial_qc(
         # the onset beside each scored trial, so a condition page can take its own rows out
         # of this table rather than scoring the same windows a second time
         windows = trial_windows(markers, tmin, tmax, float(raw_intensity.times[-1]))
-        sfreq = float(raw_intensity.info["sfreq"])
-        short = sum(not trial_fits(sfreq, t0, t1) for _, t0, t1, _ in windows)
-        if short:
-            _note(notes, subject, section_note("caveat.short_trials", n=short,
-                                               total=len(windows), window=MIN_TRIAL_S))
+        partial, unscored = short_trial_counts(windows, float(raw_intensity.info["sfreq"]))
+        if partial:
+            _note(notes, subject, section_note("caveat.partial_trials", n=partial,
+                                               total=len(windows), floor=MIN_SCI_TRIAL_S,
+                                               window=MIN_TRIAL_S))
+        if unscored:
+            _note(notes, subject, section_note("caveat.short_trials", n=unscored,
+                                               total=len(windows), window=MIN_SCI_TRIAL_S))
         rows = [(onset, label, sqm)
                 for (_, _, _, onset), label, sqm in zip(windows, labels, sqms)]
         fig = trial_quality_heatmap(labels, sqms)

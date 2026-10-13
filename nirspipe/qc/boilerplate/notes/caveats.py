@@ -52,9 +52,12 @@ NOTES = {
         "because {reason}. The per-channel, carpet and layout figures show the continuous "
         "signal instead.",
     "caveat.short_trials":
-        "{n} of {total} trial windows are shorter than {window:g} s, the window the "
-        "per-trial CV, SNR and PSP need, so they are left unscored. Pass --epoch-tmin / "
-        "--epoch-tmax to score a fixed window from each onset.",
+        "{n} of {total} trial windows are shorter than {window:g} s, too short for an SCI, "
+        "so they are left unscored. Pass --epoch-tmin / --epoch-tmax to score a fixed window "
+        "from each onset.",
+    "caveat.partial_trials":
+        "{n} of {total} trial windows are {floor:g} to {window:g} s long, so they are scored "
+        "on SCI and GVTD only: CV, SNR and PSP need {window:g} s.",
     "caveat.block_design_trials":
         "no scored trial falls inside this window: the annotation that defines it is not "
         "one, and events with no duration are scored only with --epoch-tmin/--epoch-tmax",

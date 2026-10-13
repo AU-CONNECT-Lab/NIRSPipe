@@ -18,12 +18,16 @@ from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.trial_qc")
 
-# the heatmap's CV, SNR and PSP rows name this window, so a trial is scored only if it holds one
+# the heatmap's CV, SNR and PSP rows name this window, so a trial is scored in full only if it holds one
 MIN_TRIAL_S = max(CV_WINDOW_S, PSP_WINDOW_S)
+# below MIN_TRIAL_S a trial keeps the rows that read no fixed window; a whole-trial SCI still
+# ranks trials as a full window does from about here, and not much below
+MIN_SCI_TRIAL_S = 5.0
+SHORT_TRIAL_KEYS = ("sci_mean", "gvtd_filt_mean")
 
 
-def trial_fits(sfreq: float, t0: float, t1: float) -> bool:
-    """Whether the crop ``[t0, t1]`` holds one whole :data:`MIN_TRIAL_S` window.
+def trial_fits(sfreq: float, t0: float, t1: float, window_s: float = MIN_TRIAL_S) -> bool:
+    """Whether the crop ``[t0, t1]`` holds one whole ``window_s`` window.
 
     Counted the way MNE crops, to the nearest sample at each end::
 
@@ -31,7 +35,15 @@ def trial_fits(sfreq: float, t0: float, t1: float) -> bool:
         trial_fits(7.8125, 33.408, 34.408)  ->  False  (9 samples, 79 needed)
     """
     n = int(np.round(t1 * sfreq)) - int(np.round(t0 * sfreq)) + 1
-    return n >= _window_samples(MIN_TRIAL_S, sfreq)
+    return n >= _window_samples(window_s, sfreq)
+
+
+def short_trial_counts(windows: list[tuple[str, float, float, float]],
+                       sfreq: float) -> tuple[int, int]:
+    """How many trials are partly scored and how many unscored: ``1, 5, 8, 10 s at 10 Hz -> (2, 1)``."""
+    full = sum(trial_fits(sfreq, t0, t1) for _, t0, t1, _ in windows)
+    sci = sum(trial_fits(sfreq, t0, t1, MIN_SCI_TRIAL_S) for _, t0, t1, _ in windows)
+    return sci - full, len(windows) - sci
 
 
 def trial_windows(
@@ -89,19 +101,22 @@ def trial_sqm(raw, t0: float, t1: float,
     so that a trial's CV, SNR and spike count sit on the same scale as the recording-level
     numbers in the same report.
 
-    A trial shorter than one :data:`MIN_TRIAL_S` window is not scored and returns ``{}``,
-    drawn blank: its CV and SNR would be the whole crop's under a windowed label, and its SCI
-    a correlation over a heartbeat or two. No sliding-window series is attached, and a trial
-    shorter than two screening windows gets no coupled-window share, so its status row
-    screens nothing rather than rejecting everything.
+    A trial shorter than one :data:`MIN_TRIAL_S` window keeps only :data:`SHORT_TRIAL_KEYS`,
+    the rows that read no fixed window: its CV and SNR would be the whole crop's under a
+    windowed label. One shorter than :data:`MIN_SCI_TRIAL_S` returns ``{}``, drawn blank: its
+    SCI would be a correlation over a heartbeat or two. No sliding-window series is attached,
+    and a trial shorter than two screening windows gets no coupled-window share, so its
+    status row screens nothing rather than rejecting everything.
     """
     from nirspipe.qc.metrics import (
         compute_raw_sqm, compute_sci_scores, resolve_cutoffs, screen_channels,
         screening_scores,
     )
 
-    if not trial_fits(float(raw.info["sfreq"]), t0, t1):
+    sfreq = float(raw.info["sfreq"])
+    if not trial_fits(sfreq, t0, t1, MIN_SCI_TRIAL_S):
         return {}
+    keep = None if trial_fits(sfreq, t0, t1) else SHORT_TRIAL_KEYS
     seg = raw.copy().crop(tmin=t0, tmax=t1)
     sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
@@ -110,12 +125,13 @@ def trial_sqm(raw, t0: float, t1: float,
                               have={"sci": sci_scores}, cutoffs=cutoffs)
     bad, _ = screen_channels(scores, cutoffs)
     try:
-        return compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq,
-                               scores.get("good_frac"),
-                               ceiling=float(np.nanmax(raw.get_data())))
+        sqm = compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq,
+                              scores.get("good_frac"),
+                              ceiling=float(np.nanmax(raw.get_data())))
     except Exception as exc:
         logger.warning("trial SQM failed: %s", exc)
         return {}
+    return sqm if keep is None else {k: sqm[k] for k in keep if k in sqm}
 
 
 def score_trials(
