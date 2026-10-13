@@ -38,10 +38,12 @@ def _pairs(states: dict, wanted: str) -> list[str]:
 def channel_rows(trees: list[Path]) -> tuple[list[dict], list[str]]:
     """One ``--bad-channels`` row per rated run, and the pairs rated both ways for one recording.
 
-    ``{"sub-01_task-rest_run-01": {"S1_D1 hbo": "bad", "S2_D2 hbo": "good"}}`` in
-    ``sub-01_task-rest_desc-rawdecision_qc.json``
-        -> ``{"participant_id": "sub-01", "session": "", "task": "rest", "run": "01",
-              "bad_channels": "S1_D1", "keep_channels": "S2_D2"}``
+    ::
+
+      sub-01_task-rest_desc-rawdecision_qc.json:
+      {"sub-01_task-rest_run-01": {"S1_D1 hbo": "bad", "S2_D2 hbo": "good"}}
+      -> {"participant_id": "sub-01", "session": "", "task": "rest", "run": "01",
+          "bad_channels": "S1_D1", "keep_channels": "S2_D2"}
 
     A ``_hyper`` entry leaves ``run`` blank, so it holds for every run of that task and session.
     """
