@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - GUI Hyper Analysis page takes `--band-fmin/--band-fmax`; its WTC and ISC band fields override them
 - `nirspipe-qc hyper-raw` names each member's pairs that `channels.tsv` marked bad
 - Both dyad reports list each member's IMU summaries; `hyper-raw`'s `desc-subject_qc.tsv` carries them with their units
+- `nirspipe-hyper --config` reruns a dyad from its run record
 
 ### Changed
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs

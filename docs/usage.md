@@ -117,6 +117,13 @@ nirspipe /data/bids /data/out2 participant --config /data/out/sub-01/logs/sub-01
 
 Keys are flag names without the leading `--` and with hyphens turned into underscores, in the flag's own units. `[prep]` holds the preprocessing flags, the cardiac, respiration and separation bands among them; `[post]` holds `mode`, the postprocessing flags and `roi_mapping`; `[execution]` holds the selection (`participant_label`, `session_label`, `task_label`, `bids_filter_file`, `ignore`, `allow_cropped_input`). A key outside a section, an unknown section or key, or a value the flag would refuse stops the run before anything is read, naming the key. The input and output directories and the analysis level always come from the command line.
 
+`nirspipe-hyper --config` reads a dyad's run record, `group-<id>/logs/group-<id>_task-<task>.toml`, the same way: its `[hyper]` section, keyed by flag name, fills every setting the command line leaves out, and the directories and `--pairs-csv` come from the command line. A band or crossing the run took from `--band-fmin`/`--band-fmax` or `--channel-cross` follows them when one of those is typed over the record.
+
+```bash
+nirspipe-hyper /data/out /data/hyper2 group --pairs-csv pairs.csv \
+  --config /data/hyper/group-G01/logs/group-G01_task-hold.toml --band-fmin 0.05
+```
+
 ### Mode defaults
 
 Each post setting is taken from the first layer that has it: the command line, then `--config`, then the mode's defaults below, then the code default (mostly off). A preprocessing setting has no mode layer.

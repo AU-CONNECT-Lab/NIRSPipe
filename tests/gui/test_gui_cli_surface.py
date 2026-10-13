@@ -383,7 +383,9 @@ QC_NOT_EXPOSED = {
             "--wtc-cond-transform", "--wtc-cond-pad-s",
             # a batch filter for a BIDS App runner; the page already picks its dyads by
             # Group ID, and a subject filter on top would only hide rows of the CSV
-            "--participant-label", "--participant_label"},
+            "--participant-label", "--participant_label",
+            # reruns a dyad from its record on the command line; the page has no loader for it
+            "--config"},
     "band":  {"--verbose",
               # as above: the default, and the checkbox emits --no-wtc-mask-coi
               "--wtc-mask-coi"},

@@ -252,6 +252,7 @@ def cmd_run(
     check_only: bool, verbose: bool,
     participant_label: list[str] | None = None,
     band_fmin: "float | None" = None, band_fmax: "float | None" = None,
+    config: "Path | None" = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -898,6 +899,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "computed on, and stop. Nothing is written. Use it to look over a "
                           "cohort's channel budget before committing to a long run, such as "
                           "one with --wtc-phase-null.")
+    run.add_argument("--config", type=Path, default=None,
+                     help="A dyad's run record (logs/group-<id>_task-<task>.toml) or a file "
+                          "with its [hyper] section. Fills every setting the command line "
+                          "leaves out; the directories and --pairs-csv still come from the "
+                          "command line.")
     _shared.add_separation_bands(run, note="An override: the bands come from each member's "
                                  "record, and members prepped with different bands are "
                                  "refused. Use it only for records that carry none.")
@@ -1045,6 +1051,74 @@ COMMANDS = {
 }
 
 
+# [hyper] keys that describe the record's own run: inputs come from the command line, and the
+# separation bands (sep_*) are resolved from the members again
+_RECORD_ONLY = ("derivatives_dir", "pairs_csv", "check_only", "no_report")
+# a value the run resolved from another key, dropped when equal to it so that a source typed
+# over the record reaches it, as on a fresh command line
+_DERIVED_FROM = {"wtc_band_fmin": "band_fmin", "wtc_band_fmax": "band_fmax",
+                 "isc_fmin": "band_fmin", "isc_fmax": "band_fmax",
+                 "wtc_phase_null_cross": "wtc_channel_cross"}
+
+
+def read_hyper_config(path: Path) -> dict:
+    """--config as the [hyper] settings to fill in, plus the version that wrote it.
+
+    ::
+
+      [hyper] wtc_fmin = 0.02, band_fmin = 0.03, wtc_band_fmin = 0.03, pairs_csv = "..."
+      -> {"version": "0.68.0", "hyper": {"wtc_fmin": 0.02, "band_fmin": 0.03}}
+
+    A record's [environment] and [execution] describe its own run and are skipped. An
+    unknown key, an unknown section or a key outside any section is refused, since a
+    misspelt setting would otherwise drop out without a word.
+    """
+    from nirspipe.cli.run import _coerce
+    from nirspipe.utils import load_toml
+
+    raw = load_toml(path)
+    stray = [k for k, v in raw.items() if not isinstance(v, dict)]
+    if stray:
+        print(f"Error: {path}: {stray[0]} sits outside any section; --config takes a [hyper] "
+              "section keyed by flag name, as a run record does.", file=sys.stderr)
+        raise SystemExit(1)
+    unknown = sorted(set(raw) - {"hyper", "environment", "execution"})
+    if unknown:
+        print(f"Error: {path}: no section [{unknown[0]}]; expected [hyper].", file=sys.stderr)
+        raise SystemExit(1)
+    actions = {a.dest: a for a in _parsers()["nirspipe-hyper"]._actions if a.option_strings}
+    allowed = set(actions) - {"help", "version", "config", "verbose"}
+    settings = raw.get("hyper", {})
+    bad = [k for k in settings
+           if k not in allowed and k not in _RECORD_ONLY and not k.startswith("sep_")]
+    if bad:
+        print(f"Error: {path}: [hyper] has no setting {bad[0]!r}.", file=sys.stderr)
+        raise SystemExit(1)
+    taken = {k: _coerce(actions[k], k, v, path) for k, v in settings.items()
+             if k in allowed and k not in _RECORD_ONLY}
+    for key, source in _DERIVED_FROM.items():
+        if key in taken and source in taken and taken[key] == taken[source]:
+            del taken[key]
+    return {"version": raw.get("environment", {}).get("nirspipe_version"), "hyper": taken}
+
+
+def _apply_config(args: argparse.Namespace, argv: "list[str] | None") -> None:
+    """Fill what the command line left out from --config."""
+    config = read_hyper_config(args.config)
+    if config["version"] and config["version"] != __version__:
+        print(f"Warning: {args.config} was written by nirspipe {config['version']} and this is "
+              f"{__version__}; a setting whose meaning or default changed in between runs as "
+              "this version reads it.", file=sys.stderr)
+    # the flags actually typed, which argparse's own defaults would otherwise hide
+    quiet = _parsers()["nirspipe-hyper"]
+    for action in quiet._actions:
+        action.default = argparse.SUPPRESS
+    given = set(vars(quiet.parse_args(argv)))
+    for key, value in config["hyper"].items():
+        if key not in given:
+            setattr(args, key, value)
+
+
 def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None:
     """Parse one command's own argv and hand the rest to its implementation.
 
@@ -1052,6 +1126,8 @@ def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None
     runner expects, and `group` is its only value, so nothing downstream reads it.
     """
     args = _parsers()[prog].parse_args(argv)
+    if getattr(args, "config", None) is not None:
+        _apply_config(args, argv)
 
     for dest in require:
         if getattr(args, dest) is None:
