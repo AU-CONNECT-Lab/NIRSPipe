@@ -363,7 +363,7 @@ _REPLACE_WAIT_S = 0.05
 # human ratings and the channel decisions. A validator reads any such JSON as a sidecar
 # whose data file is missing. Named one by one, never `*.json`, so every real sidecar and
 # every table stays checked.
-JSON_ONLY_DESCS = ("sqm", "sqmraw", "rating", "rawrating", "rawdecision")
+JSON_ONLY_DESCS = ("sqm", "sqmraw", "rating", "rawrating", "rawdecision", "rawspans")
 _BIDSIGNORE = ("*.html", "logs", "figures",
                *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS))
 

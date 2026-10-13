@@ -16,11 +16,13 @@ logger = get_logger("qc.rating.export")
 
 CHANNELS_NAME = "desc-ratedchannels_qc.tsv"
 VERDICTS_NAME = "desc-ratedpages_qc.tsv"
+SPANS_NAME = "desc-ratedspans_qc.tsv"
 
 # the dyad viewer's key: one verdict for every run of the member's task and session
 HYPER_KEY = "_hyper"
 
 _CHANNEL_COLUMNS = ["participant_id", "session", "task", "run", "bad_channels", "keep_channels"]
+_SPAN_COLUMNS = ["participant_id", "session", "task", "run", "onset", "duration"]
 
 
 def _read(path: Path) -> dict:
@@ -88,6 +90,38 @@ def verdict_rows(trees: list[Path]) -> list[dict]:
                     rows.append({"page": data.get("stem") or path.stem, "key": key,
                                  "verdict": verdict, "note": notes.get(key, "")})
     return rows
+
+
+def span_rows(trees: list[Path]) -> tuple[list[dict], bool]:
+    """One ``--bad-spans`` row per marked stretch, and whether any span file was found.
+
+    ``{"sub-01_task-rest_run-01": [[12.0, 15.5]]}`` in ``sub-01_task-rest_desc-rawspans_qc.json``
+        -> ``{"participant_id": "sub-01", "session": "", "task": "rest", "run": "01",
+              "onset": 12.0, "duration": 3.5}``
+    """
+    rows, found = [], False
+    for tree in trees:
+        for path in sorted(tree.rglob("*_desc-rawspans_qc.json")):
+            found = True
+            base = {"participant_id": f"sub-{entity_of(path.name, 'sub')}",
+                    "session": entity_of(path.name, "ses") or "",
+                    "task": entity_of(path.name, "task") or ""}
+            for key, spans in _read(path).items():
+                for start, stop in spans:
+                    rows.append({**base, "run": entity_of(key, "run") or "",
+                                 "onset": start, "duration": round(stop - start, 3)})
+    return rows, found
+
+
+def export_spans(trees: list[Path], out_dir: Path) -> "Path | None":
+    """Write the marked stretches as a --bad-spans table, or nothing where none were ever marked."""
+    rows, found = span_rows(trees)
+    if not found:
+        return None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / SPANS_NAME
+    pd.DataFrame(rows, columns=_SPAN_COLUMNS).to_csv(path, sep="\t", index=False)
+    return path
 
 
 def export_ratings(trees: list[Path], out_dir: Path) -> tuple[Path, Path, list[str]]:

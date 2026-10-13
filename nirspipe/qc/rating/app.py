@@ -1,4 +1,5 @@
 import json
+import math
 import threading
 import time
 import webbrowser
@@ -9,7 +10,7 @@ import logging as _logging
 from flask import Flask, jsonify, request, send_from_directory
 
 from nirspipe.io.derivatives import channel_decisions_path, entity_of
-from nirspipe.io.naming import rating_path, report_name
+from nirspipe.io.naming import bad_spans_path, rating_path, report_name
 from nirspipe.qc.rating.export import HYPER_KEY
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.net import resolve_port
@@ -108,6 +109,25 @@ def _empty_body():
     return jsonify({"status": "fail", "message": "empty body"}), 400
 
 
+def _span_error(data) -> "str | None":
+    """Why a page's ``{run label: [[start, stop], ...]}`` cannot be saved, or None when it can."""
+    if not isinstance(data, dict):
+        return "expected {run label: [[start, stop], ...]}"
+    for key, spans in data.items():
+        # a span applies to the whole run, so only the run page may mark one
+        if entity_of(key, "cond"):
+            return f"{key}: spans are marked on the run page, not a condition page"
+        if not isinstance(spans, list):
+            return f"{key}: expected a list of [start, stop]"
+        for span in spans:
+            if (not isinstance(span, list) or len(span) != 2
+                    or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in span)):
+                return f"{key}: {span!r} is not [start, stop] in seconds"
+            if not 0 <= span[0] < span[1]:
+                return f"{key}: {span!r} needs 0 <= start < stop"
+    return None
+
+
 class FNIRSRatingApp:
     def __init__(self, output_dir: Path, subjects: list[str]):
         self.output_dir = output_dir
@@ -189,6 +209,9 @@ class _ReportViewer:
         self.app = Flask(__name__)
         self._setup_routes()
 
+    def _config(self) -> dict:
+        return {"sci_threshold": self.sci_threshold}
+
     def _setup_routes(self) -> None:
         app, tag = self.app, self.route_tag
 
@@ -201,7 +224,7 @@ class _ReportViewer:
         # a second SCI line to outline cells against; None leaves the run's own colours alone
         @app.route("/rate_config", methods=["GET"])
         def rate_config():
-            return jsonify({"sci_threshold": self.sci_threshold})
+            return jsonify(self._config())
 
         def load_ratings(stem=None):
             path = rating_path(self.output_dir, stem) if stem else self.ratings_path
@@ -241,11 +264,17 @@ class RawRatingApp(_ReportViewer):
     default_port = RAW_PORT
     log_name = "group_raw_ratings.jsonl"
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None,
+                 mark_spans: bool = False):
         run = {k: entity_of(html_path.stem, k) for k in ("sub", "task", "ses")}
         self.decisions_path = channel_decisions_path(
             output_dir, run["sub"], run["task"], run["ses"])
+        self.mark_spans = mark_spans
+        self.spans_path = bad_spans_path(output_dir, run["sub"], run["task"], run["ses"])
         super().__init__(html_path, output_dir, sci_threshold)
+
+    def _config(self) -> dict:
+        return {**super()._config(), "mark_spans": self.mark_spans}
 
     def _setup_decision_routes(self, app: Flask) -> None:
         @app.route("/load_channel_decisions", methods=["GET"])
@@ -259,6 +288,26 @@ class RawRatingApp(_ReportViewer):
                 return _empty_body()
             return _respond(lambda: _write_json(self.decisions_path, data),
                             "save_channel_decisions")
+
+        if not self.mark_spans:
+            return
+
+        @app.route("/load_bad_spans", methods=["GET"])
+        def load_bad_spans():
+            return jsonify(_read_json(self.spans_path))
+
+        @app.route("/save_bad_spans", methods=["POST"])
+        def save_bad_spans():
+            data = request.json
+            if data is None:
+                return _empty_body()
+            error = _span_error(data)
+            if error:
+                return jsonify({"status": "fail", "message": error}), 400
+            # millisecond seconds, in time order, so the file reads like the table it becomes
+            data = {key: sorted([round(a, 3), round(b, 3)] for a, b in spans)
+                    for key, spans in data.items()}
+            return _respond(lambda: _write_json(self.spans_path, data), "save_bad_spans")
 
 
 class HyperRatingApp(_ReportViewer):

@@ -29,7 +29,7 @@ def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | 
 def cmd_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, port: int | None,
+    sci_threshold: float, port: int | None, mark_spans: bool = False,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import RawRatingApp
@@ -47,7 +47,7 @@ def cmd_raw(
         raise SystemExit(1)
 
     print(f"Launching raw viewer: {html_path.name} ...")
-    RawRatingApp(html_path, output_dir, sci_threshold).run(port=port)
+    RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans).run(port=port)
 
 
 def cmd_hyper(
@@ -86,7 +86,7 @@ def cmd_hyper(
 
 def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
     """Write the rated channels as a --bad-channels table, and the FINAL verdicts as a list."""
-    from nirspipe.qc.rating.export import export_ratings
+    from nirspipe.qc.rating.export import export_ratings, export_spans
 
     try:
         channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0])
@@ -95,6 +95,10 @@ def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
         sys.exit(1)
     print(f"Channel decisions: {channels}")
     print(f"  pass it to nirspipe as --bad-channels {channels}")
+    spans = export_spans(trees, out_dir or trees[0])
+    if spans:
+        print(f"Marked bad stretches: {spans}")
+        print(f"  pass it to nirspipe as --bad-spans {spans}")
     print(f"FINAL verdicts (for reading; nothing reads them): {verdicts}")
     if conflicts:
         print("[warning] rated both bad and good for one recording; nirspipe will refuse "
@@ -134,6 +138,8 @@ def _build_parser() -> argparse.ArgumentParser:
                          "cells stay the run's own line. Off when not given.")
     pw.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5052, or the next free port above it.")
+    # withheld from --help until it is opened; marks bad stretches on the run page's motion panel
+    pw.add_argument("--mark-spans", action="store_true", help=argparse.SUPPRESS)
     pw.set_defaults(func=cmd_raw)
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")

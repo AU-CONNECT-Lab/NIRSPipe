@@ -202,6 +202,19 @@ def channel_decisions_path(output_dir, subject: str, task: "str | None" = None,
     return path
 
 
+def bad_spans_path(output_dir, subject: str, task: "str | None" = None,
+                   session: "str | None" = None):
+    """Where the raw QC page keeps the stretches a reviewer marked bad, per run.
+
+    ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawspans_qc.json``
+    """
+    path = derivative_path(output_dir, "qc", ".json",
+                           subject=str(subject).removeprefix("sub-"),
+                           session=session, task=task, desc="rawspans")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def parse_path(path) -> dict:
     """Read the entities back out of a name :func:`derivative_path` built.
 
