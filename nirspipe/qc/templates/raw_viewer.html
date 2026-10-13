@@ -74,9 +74,12 @@ select#run-select {
 /* under the second line nirspipe-rate was given, apart from the run's own red */
 .qm-table td.rate-low { outline:2px dashed var(--warn); outline-offset:-3px; }
 .cd-chip.cd-disabled { opacity:0.45; pointer-events:none; cursor:not-allowed; }
-.span-btn { margin:0.4rem 0.6rem 0.4rem 0; padding:0.2rem 0.7rem; font-size:0.8rem; cursor:pointer; }
-.span-table { width:auto; margin-top:0.3rem; }
-.span-input { width:6.5rem; font-size:0.8rem; }
+#span-editor { flex: 0 1 auto; max-height: 50%; overflow-y: auto; margin-top: 0.6rem; }
+.span-btn { margin:0.3rem 0.5rem 0.3rem 0; padding:0.15rem 0.6rem; font-size:0.78rem; cursor:pointer; }
+.span-table { border-collapse: collapse; font-size: 0.78rem; margin-top: 0.3rem; }
+.span-table th, .span-table td { padding: 0.15rem 0.35rem; text-align: left; }
+.span-input { width:5.5rem; font-size:0.78rem; }
+.span-del { font-size:0.72rem; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -202,6 +205,16 @@ select#run-select {
             <tbody id="mk-tbody"></tbody>
           </table>
         </div>
+        <div id="span-editor" style="display:none">
+          <p class="panel-head">Marked bad <span class="hint" id="span-count"></span></p>
+          <p class="qm-note">{{ section_note('raw.bad_spans') }}</p>
+          <button type="button" id="span-mode-btn" class="span-btn">Mark bad stretches</button>
+          <span id="span-status" class="hint"></span>
+          <table class="span-table">
+            <thead><tr><th>Start (s)</th><th>End (s)</th><th></th></tr></thead>
+            <tbody id="span-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -245,15 +258,6 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.motion') }} <span id="motion-roi-note"></span></p>
     <div id="carpet-gvtd-panel"></div>
-    <div id="span-editor" style="display:none">
-      <p class="qm-note">{{ section_note('raw.bad_spans') }}</p>
-      <button type="button" id="span-mode-btn" class="span-btn">Mark bad stretches</button>
-      <span id="span-status" class="qm-note"></span>
-      <table class="qm-table span-table">
-        <thead><tr><th>Start (s)</th><th>End (s)</th><th>Length (s)</th><th></th></tr></thead>
-        <tbody id="span-tbody"></tbody>
-      </table>
-    </div>
 
     <div id="motion-detail-block" style="display:none">
       <h3 class="qm-sub">Per-channel, before and after motion correction</h3>
@@ -508,6 +512,7 @@ function loadTimeSeries() {
         var tsCard = document.getElementById("ts-plot").closest(".card");
         _mkRO = new ResizeObserver(_syncMkHeight);
         _mkRO.observe(tsCard);
+        _attachSpanEditor();
       });
     document.getElementById("ts-plot").on("plotly_click", function(evt) {
       if (!evt.points || !evt.points[0]) return;
@@ -553,7 +558,11 @@ function _markerShapes() {
 }
 
 function refreshTsShapes() {
-  Plotly.relayout("ts-plot", { shapes: _bandShapes.concat(_markerShapesTS()) });
+  // a redraw of the bands is not an edit of them
+  _spanSync = true;
+  var done = function() { _spanSync = false; };
+  return Plotly.relayout("ts-plot", { shapes: _bandShapes.concat(_markerShapesTS(), _spanShapes()) })
+    .then(done, done);
 }
 
 function highlightTrace(chName) {
@@ -636,7 +645,6 @@ function loadCarpetGvtd() {
     // is given, and handing it an <iframe> put a second one inside the first, where a
     // browser ignores it. Every other caller passes its container.
     _setIframeSrc("carpet-gvtd-panel", p.src, p.h || 600);
-    _attachSpanEditor();
   } else {
     panel.innerHTML = '<span style="color:#adb5bd;font-style:italic;font-size:0.85rem;">No data</span>';
   }
@@ -1096,9 +1104,9 @@ function _cdScheduleSave() {
 }
 
 // ─── bad stretches (nirspipe-rate raw --mark-spans) ───────────────────────────
-// Bands drawn on the motion panel's figure, which lives in its own iframe; the server
-// serves both from one origin, so the page reaches its Plotly directly. A stretch is
-// marked for the whole run, so a condition page never offers it.
+// Bands drawn on the raw signal, after its condition bands and marker shapes, which are not
+// editable; so every shape past those is a band. A stretch is marked for the whole run, so a
+// condition page never offers it.
 var _MARK_SPANS    = false;
 var _badSpans      = {};
 var _spanMode      = false;
@@ -1107,11 +1115,18 @@ var _spanSaveTimer = null;
 var _SPAN_FILL     = "rgba(192,57,43,0.18)";
 var _SPAN_LINE     = {color: "rgba(192,57,43,0.7)", width: 1};
 
-function _carpetPlot() {
-  var iframe = document.querySelector("#carpet-gvtd-panel iframe");
-  var win = iframe && iframe.contentWindow;
-  var gd = win && win.document && win.document.querySelector(".plotly-graph-div");
-  return (gd && gd._fullLayout && win.Plotly) ? {win: win, gd: gd} : null;
+function _tsPlot() {
+  var gd = document.getElementById("ts-plot");
+  return (gd && gd._fullLayout) ? gd : null;
+}
+
+// the recording's last sample, off the traces rather than an axis a zoom may have narrowed
+function _tsEnd(gd) {
+  var end = 0;
+  (gd.data || []).forEach(function(t) {
+    if (t.x && t.x.length) end = Math.max(end, Number(t.x[t.x.length - 1]));
+  });
+  return end || Infinity;
 }
 
 // in time order, inside the recording, to the millisecond, as the server keeps them
@@ -1123,85 +1138,65 @@ function _normSpans(spans, end) {
     .sort(function(u, v) { return u[0] - v[0]; });
 }
 
-function _band(span) {
-  return {type: "rect", xref: "x", yref: "paper", x0: span[0], x1: span[1], y0: 0, y1: 1,
-          layer: "above", editable: true, fillcolor: _SPAN_FILL, line: _SPAN_LINE};
-}
-
-// the figure's own shapes come first and are not editable, so every shape after them is a band
-function _drawBands(p) {
-  var base = (p.gd.layout.shapes || []).slice(0, p.gd._nBase);
-  var spans = _badSpans[_RUN_LABELS[_run_idx]] || [];
-  _spanSync = true;
-  return p.win.Plotly.relayout(p.gd, {shapes: base.concat(spans.map(_band))})
-    .then(function() { _spanSync = false; }, function() { _spanSync = false; });
+function _spanShapes() {
+  if (!_MARK_SPANS) return [];
+  return (_badSpans[_RUN_LABELS[_run_idx]] || []).map(function(s) {
+    return {type: "rect", xref: "x", yref: "paper", x0: s[0], x1: s[1], y0: 0, y1: 1,
+            layer: "above", editable: true, fillcolor: _SPAN_FILL, line: _SPAN_LINE};
+  });
 }
 
 function _setSpans(spans) {
-  var p = _carpetPlot();
-  _badSpans[_RUN_LABELS[_run_idx]] = _normSpans(spans, p ? p.gd._spanEnd : Infinity);
-  if (p) _drawBands(p);
+  var gd = _tsPlot();
+  _badSpans[_RUN_LABELS[_run_idx]] = _normSpans(spans, gd ? _tsEnd(gd) : Infinity);
+  if (gd) refreshTsShapes();
   _buildSpanTable();
   _spanScheduleSave();
 }
 
 // a drawn box or a moved edge: read every band back off the figure as full-height spans
-function _onCarpetRelayout(ev) {
-  if (_spanSync || !ev) return;
+function _onTsRelayout(ev) {
+  if (_spanSync || !_MARK_SPANS || !ev) return;
   if (!Object.keys(ev).some(function(k) { return k.indexOf("shapes") === 0; })) return;
-  var p = _carpetPlot();
-  if (!p) return;
-  _setSpans((p.gd.layout.shapes || []).slice(p.gd._nBase).map(function(s) { return [s.x0, s.x1]; }));
+  var gd = _tsPlot();
+  if (!gd) return;
+  var nBase = _bandShapes.length + _markerShapesTS().length;
+  _setSpans((gd.layout.shapes || []).slice(nBase).map(function(s) { return [s.x0, s.x1]; }));
 }
 
 function _setSpanMode(on) {
   _spanMode = on;
   var btn = document.getElementById("span-mode-btn");
   if (btn) btn.textContent = on ? "Stop marking" : "Mark bad stretches";
-  var p = _carpetPlot();
-  if (!p) return;
-  p.win.Plotly.relayout(p.gd, on
+  var gd = _tsPlot();
+  if (!gd) return;
+  if (gd._dragmode0 === undefined) gd._dragmode0 = gd.layout.dragmode || "zoom";
+  Plotly.relayout(gd, on
     ? {dragmode: "drawrect", newshape: {fillcolor: _SPAN_FILL, line: _SPAN_LINE, layer: "above"}}
-    : {dragmode: p.gd._dragmode0});
+    : {dragmode: gd._dragmode0});
 }
 
-function _waitForCarpet(tries) {
-  var p = _carpetPlot();
-  if (!p) {
-    if (tries < 100) setTimeout(function() { _waitForCarpet(tries + 1); }, 100);
-    return;
-  }
-  if (!p.gd._spanHooked) {
-    p.gd._spanHooked = true;
-    p.gd._nBase = (p.gd.layout.shapes || []).length;
-    // the recording's length, read before any zoom narrows the axis
-    p.gd._spanEnd = ((p.gd.layout.xaxis || {}).range || [0, Infinity])[1];
-    p.gd._dragmode0 = p.gd.layout.dragmode || "zoom";
-    p.gd.on("plotly_relayout", _onCarpetRelayout);
-  }
-  _drawBands(p);
-  if (_spanMode) _setSpanMode(true);
-}
-
+// after each draw of the raw signal: a run switch draws a new figure without the bands
 function _attachSpanEditor() {
   if (!_MARK_SPANS) return;
-  var iframe = document.querySelector("#carpet-gvtd-panel iframe");
-  if (!iframe) return;
-  if (!iframe._spanHooked) {
-    // a run switch loads another file into the same iframe
-    iframe._spanHooked = true;
-    iframe.addEventListener("load", function() { _waitForCarpet(0); });
-  }
+  var gd = _tsPlot();
   _buildSpanTable();
-  _waitForCarpet(0);
+  if (!gd) return;
+  // a new draw drops its listeners, and removing first keeps a second call from doubling one
+  gd.removeListener("plotly_relayout", _onTsRelayout);
+  gd.on("plotly_relayout", _onTsRelayout);
+  refreshTsShapes();
+  if (_spanMode) _setSpanMode(true);
 }
 
 function _buildSpanTable() {
   var tbody = document.getElementById("span-tbody");
   if (!tbody) return;
   var spans = _badSpans[_RUN_LABELS[_run_idx]] || [];
+  var count = document.getElementById("span-count");
+  if (count) count.textContent = "(" + spans.length + ")";
   tbody.innerHTML = spans.length ? "" :
-    "<tr><td colspan='4' style='color:#adb5bd;font-style:italic'>None marked</td></tr>";
+    "<tr><td colspan='3' style='color:#adb5bd;font-style:italic'>None marked</td></tr>";
   spans.forEach(function(s, i) {
     var tr = document.createElement("tr");
     [0, 1].forEach(function(k) {
@@ -1215,11 +1210,8 @@ function _buildSpanTable() {
       });
       td.appendChild(inp); tr.appendChild(td);
     });
-    var len = document.createElement("td");
-    len.textContent = (s[1] - s[0]).toFixed(1);
-    tr.appendChild(len);
     var td = document.createElement("td"), del = document.createElement("button");
-    del.type = "button"; del.textContent = "Delete";
+    del.type = "button"; del.textContent = "Delete"; del.className = "span-del";
     del.addEventListener("click", function() {
       _setSpans(spans.filter(function(_, j) { return j !== i; }));
     });

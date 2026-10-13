@@ -104,9 +104,9 @@ NOTES = {
         "and HbO–HbR corr is before motion correction. Red rows are the run's rejections. A "
         "channel decision applies to the whole run, so it is made on the run page.",
     "raw.bad_spans":
-        "Marks stretches bad for the whole run. Switch marking on and drag along the panel "
-        "above; drag a band's edge to adjust it, or edit its times here. "
-        "<code>nirspipe-rate export</code> writes them as a <code>--bad-spans</code> table.",
+        "Bad for the whole run. Switch marking on and drag along the raw signal; drag a "
+        "band's edge to adjust it, or edit its times here. <code>nirspipe-rate export</code> "
+        "writes them as a <code>--bad-spans</code> table.",
     "raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
         "<code>nirspipe-rate raw</code>; red cells are under this run's screening line. The "
