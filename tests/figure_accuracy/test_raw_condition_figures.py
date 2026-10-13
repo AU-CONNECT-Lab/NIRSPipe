@@ -234,3 +234,18 @@ def test_the_run_page_draws_every_condition_s_grid_in_one_figure(raw_condition_r
     fig = one_figure(page.parent / src)
     labels = set(fig["layout"]["yaxis"]["ticktext"])
     assert set(BLOCKS) <= labels, labels
+
+
+# ---- channel decisions are the run page's ----
+
+def test_a_condition_page_rates_no_channel_and_the_run_page_still_does(raw_condition_run):
+    sub = raw_condition_run.out / "sub-01"
+    run_page = (sub / "sub-01_task-main_desc-raw_report.html").read_text(encoding="utf-8")
+    assert "<th>Decision</th>" in run_page
+    assert re.search(r"var _DECISIONS\s*=\s*true;", run_page)
+    for block in BLOCKS:
+        html = (sub / f"sub-01_task-main_cond-{block}_desc-raw_report.html").read_text(encoding="utf-8")
+        assert "<th>Decision</th>" not in html
+        # the page neither loads nor saves decisions, so a click cannot land under its own key
+        assert re.search(r"var _DECISIONS\s*=\s*false;", html)
+        assert section_note("raw.channel_table_condition") in html

@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - GUI Data Preparation's 3D fsaverage layout card; the 2D optode layout stays
+- Raw viewer condition pages lose their channel decision column; decisions apply to the whole run and are made on the run page
 
 ### Fixed
 - GUI number fields left values off their step grid out of the command, such as a 12 mm separation, 5 phase-null draws or a 0.01 Hz drift cutoff

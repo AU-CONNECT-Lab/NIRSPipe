@@ -99,6 +99,10 @@ NOTES = {
         "and HbO–HbR corr is before motion correction. Red rows were rejected: BAD for too few "
         "coupled windows, BAD (manual) by hand. Click a decision to cycle it; it saves "
         "automatically.",
+    "raw.channel_table_condition":
+        "One row per source-detector pair; SNR, CV, Spike and Saturated print both wavelengths, "
+        "and HbO–HbR corr is before motion correction. Red rows are the run's rejections. A "
+        "channel decision applies to the whole run, so it is made on the run page.",
     "raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
         "<code>nirspipe-rate raw</code>; red cells are under this run's screening line. The "

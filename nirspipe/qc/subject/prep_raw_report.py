@@ -1086,6 +1086,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
             wavelength_columns=WAVELENGTH_COLUMNS,
             **ctx["shell"],
             **_COND_CH_COLUMN_VARS,
+            decisions=False,
             bad_heading=section_note("summary.condition_failing"),
         )
         out.write_text(html, encoding="utf-8")
@@ -1208,6 +1209,7 @@ def build_prep_raw_report(
         wavelength_columns=WAVELENGTH_COLUMNS,
         **shell,
         **_CH_COLUMN_VARS,
+        decisions=True,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")
