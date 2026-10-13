@@ -31,6 +31,10 @@ A study usually moves down the table: convert with Recon, fix markers on Data Pr
 
 The screenshots on this page come from the [tutorial](tutorial.md) run through the GUI, its folder mapped to the drive `S:` so the paths stay short.
 
+## Fields and flags
+
+A field sets the flag named beside it in the tables below. What a flag does, its default and the values it takes are on the [Usage](usage.md) page, generated from each command's `--help`, and are not repeated here. The notes in the tables cover only what the page itself does: when a field is shown, what an empty field sends, and what the page starts with.
+
 ## When to use the GUI
 
 - **Use the GUI for:** looking at a recording, fixing markers, configuring a run without typing every flag, launching the raw reports and the analyses.
@@ -90,18 +94,20 @@ Type a subject ID into **Subject ID** (e.g. `11`) and click **Detect**. The **Ru
 
 ### Parameters
 
-| Field | Default | Notes |
-|-------|---------|-------|
-| **SCI threshold** | required | The SCI line a window has to clear, e.g. `0.8`. |
-| **SCI / PSP window (s)** | `10` | The window grid SCI and PSP are measured on. |
-| **PSP threshold** | `0.1` | The PSP line for the same window. A window counts as coupled only when it clears both lines. |
-| **Coupled windows** | `0.75` | Share of windows a channel has to be coupled in to be kept. This is what rejects. |
-| **Screening scope** | Whole run | Which windows count: the whole run, or the annotated task blocks only. |
-| **DPF** | required | Differential pathlength factor, used for the haemoglobin panels. |
-| **Cardiac band (Hz)** | required | The band SCI, PSP and cardiac power are measured in. Population-dependent. |
-| **Epoch window (s)** | -5 / 25 | Trial window for the epoch preview. |
-| **Separations (mm)** | `10` / `15` / off | Short, long and the upper long bound, the same split the pipeline uses. |
-| **Ignore channels.tsv status** | off | Off, the channels the recording's `channels.tsv` marks `bad` are rejected, as `nirspipe-qc prep-raw` and `nirspipe` reject them. |
+The page screens a loaded run as [`nirspipe-qc prep-raw`](usage.md#nirspipe-qc) does, and each field is one of its flags.
+
+| Field | CLI flag | Notes |
+|-------|----------|-------|
+| **SCI threshold** | `--sci-threshold` | Starts empty. |
+| **SCI / PSP window (s)** | `--window-length` | |
+| **PSP threshold** | `--psp-threshold` | |
+| **Coupled windows** | `--min-good-frac` | |
+| **Screening scope** | `--screen-scope` | |
+| **DPF** | `--dpf` | Used for the haemoglobin panels. |
+| **Cardiac band (Hz)** | `--cardiac-l-freq` / `--cardiac-h-freq` | |
+| **Epoch window (s)** | `--epoch-tmin` / `--epoch-tmax` | The epoch preview's window, -5 to 25 s until changed. |
+| **Separations (mm)** | `--short-max-dist` / `--long-min-dist` / `--long-max-dist` | |
+| **Ignore channels.tsv status** | `--ignore channel-status` | |
 
 The settings are read when a run is selected, and with the same settings the page rejects the same channels the raw report does. After changing a setting, select the run again to apply it.
 
@@ -349,28 +355,30 @@ Raw QC after `nirspipe-qc hyper-raw` on the tutorial's three dyads: the command 
 
 ### Scope
 
+The flags are [`nirspipe-qc`](usage.md#nirspipe-qc)'s.
+
 | Field | CLI flag | Notes |
 |-------|----------|-------|
 | **Command** | | *Subjects* builds `nirspipe-qc prep-raw`, *Dyads* builds `nirspipe-qc hyper-raw`. The sections below follow it. |
-| **BIDS directory** | first positional | The recordings. |
-| **Output directory** | second positional | Where the reports go: a raw QC tree of its own, or for dyads the `nirspipe-hyper` tree. |
-| **Subjects** | `--participant-label` | Space-separated. Required for subjects; for dyads it keeps only the groups holding one of them. |
-| **Session labels** / **Task labels** | `--session-label` / `--task-label` | Space-separated; empty takes every one. |
-| **ROI mapping** | `--roi-mapping` | Groups the motion carpet's rows by region. |
-| **Ignore channels.tsv status** | `--ignore channel-status` | Leaves the channels `channels.tsv` marks `bad` to screening. |
+| **BIDS directory** | first positional | |
+| **Output directory** | second positional | |
+| **Subjects** | `--participant-label` | Space-separated. |
+| **Session labels** / **Task labels** | `--session-label` / `--task-label` | Space-separated; empty sends nothing. |
+| **ROI mapping** | `--roi-mapping` | |
+| **Ignore channels.tsv status** | `--ignore channel-status` | |
 | **Skip BIDS validation** | `--skip-bids-validation` | |
 
 ### Screening
 
-| Field | CLI flag | Default | Notes |
-|-------|----------|---------|-------|
-| **SCI threshold** | `--sci-threshold` | required | |
-| **DPF** | `--dpf` | required | |
-| **Cardiac band (Hz)** | `--cardiac-l-freq` / `--cardiac-h-freq` | required | Population-dependent. Adult resting ~0.7 to 1.5. |
-| **PSP threshold** | `--psp-threshold` | `0.1` | |
-| **Coupled windows** | `--min-good-frac` | `0.75` | Share of windows a channel has to be coupled in. This is what rejects. |
-| **Screening scope** | `--screen-scope` | Whole run | |
-| **Separations (mm)** | `--short-max-dist` / `--long-min-dist` / `--long-max-dist` | `10` / `15` / off | |
+| Field | CLI flag | Notes |
+|-------|----------|-------|
+| **SCI threshold** | `--sci-threshold` | |
+| **DPF** | `--dpf` | |
+| **Cardiac band (Hz)** | `--cardiac-l-freq` / `--cardiac-h-freq` | |
+| **PSP threshold** | `--psp-threshold` | |
+| **Coupled windows** | `--min-good-frac` | |
+| **Screening scope** | `--screen-scope` | |
+| **Separations (mm)** | `--short-max-dist` / `--long-min-dist` / `--long-max-dist` | |
 
 ### Subject reports
 
@@ -378,9 +386,9 @@ Shown for *Subjects*.
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **SCI / PSP window (s)** | `--window-length` | Default 10. |
-| **Trial window (s)** | `--epoch-tmin` / `--epoch-tmax` | Both or neither; empty uses each event's own duration. |
-| **Motion correction preview** | `--motion-correction` | Draws the chosen correction beside the recording; nothing is written back. |
+| **SCI / PSP window (s)** | `--window-length` | |
+| **Trial window (s)** | `--epoch-tmin` / `--epoch-tmax` | |
+| **Motion correction preview** | `--motion-correction` | |
 | **Detection threshold (SD)** / **Wavelet IQR** | `--motion-std-thresh` / `--wavelet-iqr` | Shown for the methods that read them; the placeholder names the method's default. |
 | **Per-trial QC** | `--epoch-qc` | |
 | **One report per condition** | `--by-condition` | |
@@ -391,10 +399,10 @@ Shown for *Dyads*.
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Pairs CSV** | `--pairs-csv` | Required. See [the pairs file](data-preparation.md#pairs-file). |
-| **Group ID** | `--group-id` | Empty writes every group. |
-| **nirspipe derivatives** | `--derivatives-dir` | Optional. The individual pipeline's tree: the report draws the after-correction side from it, and `nirspipe-rate hyper` keeps each member's decisions there. |
-| **Window (s)** | `--tstart` / `--tend` | On the aligned clock; narrows the synchrony metrics only. |
+| **Pairs CSV** | `--pairs-csv` | See [the pairs file](data-preparation.md#pairs-file). |
+| **Group ID** | `--group-id` | |
+| **nirspipe derivatives** | `--derivatives-dir` | |
+| **Window (s)** | `--tstart` / `--tend` | |
 | **Z-score each channel** | `--normalize` | |
 | **No trigger alignment** | `--no-align` | |
 
@@ -421,12 +429,14 @@ The Analysis page set up as the tutorial's preprocessing step, after the run: th
 
 ### Scope
 
+The flags are [`nirspipe`](usage.md#nirspipe)'s.
+
 | Field | CLI flag | Notes |
 |-------|----------|-------|
 | **BIDS directory** | `bids_dir` (positional) | |
 | **Output directory** | `output_dir` (positional) | |
-| **Session label(s)** | `--session-label` | Space-separated; optional. |
-| **Task label(s)** | `--task-label` | Space-separated; optional. |
+| **Session label(s)** | `--session-label` | Space-separated. |
+| **Task label(s)** | `--task-label` | Space-separated. |
 | **Detect subjects** | `--participant-label` | Scans BIDS and lists the subjects; the selected ones become its values. |
 | **Run record** + **Load settings** | | Fills the form from a run record; see below. |
 
@@ -438,37 +448,37 @@ A setting the record holds that no field on this page can show (`--epoch-single-
 
 ### Preprocessing
 
-| Field | CLI flag | Default | Notes |
-|-------|----------|---------|-------|
-| **DPF** | `--dpf` | | Differential pathlength factor. Required. |
-| **SCI Threshold** | `--sci-threshold` | required | The SCI line a window has to clear to count as coupled, e.g. `0.8`. Starts empty. |
-| **PSP Threshold** | `--psp-threshold` | `0.1` | The PSP line for the same window. A window counts as coupled only when it clears both lines. |
-| **Coupled Windows** | `--min-good-frac` | `0.75` | Share of windows a channel has to be coupled in to be kept. This is the criterion that rejects. |
-| **Screening Scope** | `--screen-scope` | `run` | Which windows count toward it: the whole run, or the annotated task blocks only. |
-| **SCI / PSP Window (s)** | `--window-length` | `10` | The grid those series, and the screening count, are measured on. |
-| **Separations (mm)** | `--short-max-dist` / `--long-min-dist` / `--long-max-dist` | `10` / `15` / off | The bands the montage is split by. |
-| **Epoch tmin / tmax (s)** | `--epoch-tmin` / `--epoch-tmax` | -5 / 25 | Trial window for the report's epoch figures and per-trial scoring. Given together, or neither. |
-| **Trial Chunk (s)** | `--epoch-chunk-duration` | off | Cut each task annotation into trials this long before epoching, so a block design gets one trial per piece rather than one per block. |
-| **Censoring** (GVTD censoring) | `--gvtd-censor` | off | Annotate the frames GVTD flags as `BAD_gvtd`, measured on the long channels, the short channels or all of them. Nothing is cut. |
-| **Threshold (SD)** | `--gvtd-censor-n-std` | `10` | Left-tail SDs above the GVTD mode. Shown only when censoring is on. |
-| **Fill** | `--censor-fill` | `linear` | How the `BAD_gvtd` spans are filled before the bandpass: linear, cubic spline or Lomb-Scargle. Shown when censoring is on; sent only with a post mode. |
-| **Min kept time (s)** | `--min-time` | off | A run with less time outside the spans gets no FC or ALFF. Shown when censoring is on and the run writes FC or ALFF (`rest`, or **Connectivity** ticked). |
-| **Also write a mean-filled copy** | `--export-mean-filled` | off | `desc-meanfilled` beside the final residual, its `BAD_` frames at each channel's kept mean, for tools that ignore annotations; not for ALFF or a GLM. Shown with a post mode. |
-| **A QC page per condition** | `--by-condition` | off | One report page per annotated condition, sliced out of the run's own windows. |
-| **Motion Correction** | `--motion-correction` | `tddr` | `tddr` / `wavelet` / `tpca` / `spline` / `spline_sg` / `wavelet_tddr` / `spline_wavelet` / `none`. |
-| **Detection threshold (SD)** | `--motion-std-thresh` | per method | Shown for `spline` and `spline_wavelet`; the placeholder names the method's default. |
-| **Wavelet IQR** | `--wavelet-iqr` | per method | Shown for `wavelet`, `wavelet_tddr` and `spline_wavelet`; the placeholder names the method's default. |
-| **Cardiac Band (Hz)** | `--cardiac-l-freq` / `--cardiac-h-freq` | required | Population-dependent, no default. Adult ~`0.7`/`1.5`; higher for paediatric data. |
-| **Respiration Band (Hz)** | `--resp-l-freq` / `--resp-h-freq` | required | Population-dependent, no default. Adult ~`0.1`/`0.5`; higher for infants. |
+| Field | CLI flag | Notes |
+|-------|----------|-------|
+| **DPF** | `--dpf` | |
+| **SCI Threshold** | `--sci-threshold` | Starts empty. |
+| **PSP Threshold** | `--psp-threshold` | |
+| **Coupled Windows** | `--min-good-frac` | |
+| **Screening Scope** | `--screen-scope` | |
+| **SCI / PSP Window (s)** | `--window-length` | |
+| **Separations (mm)** | `--short-max-dist` / `--long-min-dist` / `--long-max-dist` | |
+| **Epoch tmin / tmax (s)** | `--epoch-tmin` / `--epoch-tmax` | |
+| **Trial Chunk (s)** | `--epoch-chunk-duration` | |
+| **Censoring** (GVTD censoring) | `--gvtd-censor` | |
+| **Threshold (SD)** | `--gvtd-censor-n-std` | Shown only when censoring is on. |
+| **Fill** | `--censor-fill` | Shown when censoring is on; sent only with a post mode. |
+| **Min kept time (s)** | `--min-time` | Shown when censoring is on and the run writes FC or ALFF (`rest`, or **Connectivity** ticked). |
+| **Also write a mean-filled copy** | `--export-mean-filled` | Shown with a post mode. |
+| **A QC page per condition** | `--by-condition` | |
+| **Motion Correction** | `--motion-correction` | |
+| **Detection threshold (SD)** | `--motion-std-thresh` | Shown for `spline` and `spline_wavelet`; the placeholder names the method's default. |
+| **Wavelet IQR** | `--wavelet-iqr` | Shown for `wavelet`, `wavelet_tddr` and `spline_wavelet`; the placeholder names the method's default. |
+| **Cardiac Band (Hz)** | `--cardiac-l-freq` / `--cardiac-h-freq` | Starts empty; the placeholders give the adult band, 0.7 to 2.0. |
+| **Respiration Band (Hz)** | `--resp-l-freq` / `--resp-h-freq` | Starts empty; the placeholders give the adult band, 0.1 to 0.5. |
 
 #### Channel and time tables
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Bad channels** | `--bad-channels` | Source-detector pairs separated by commas, or the path of a table. The export on [Raw QC](#rating-and-export) writes the table, including the channels a reviewer kept. |
-| **Keep spans** | `--keep-spans` | The path of a table of stretches to use. [Batch Prep](#keep-spans-table) writes one from condition names. |
-| **Keep spans from marker** | `--keep-spans-from` | Measures the keep-spans onsets from each recording's first marker of this name. Sent only with a keep-spans table. |
-| **Bad spans** | `--bad-spans` | The path of a table of corrupted stretches. |
+| **Bad channels** | `--bad-channels` | The export on [Raw QC](#rating-and-export) writes the table, including the channels a reviewer kept. |
+| **Keep spans** | `--keep-spans` | [Batch Prep](#keep-spans-table) writes one from condition names. |
+| **Keep spans from marker** | `--keep-spans-from` | Sent only with a keep-spans table. |
+| **Bad spans** | `--bad-spans` | |
 
 See [Excluded time](workflows.md#excluded-time) for what the spans do. The page has no switch for `--ignore`, so a run started here always marks bad the channels each recording's `channels.tsv` marks `bad`. Use the command line with `--ignore channel-status` to leave them to screening.
 
@@ -480,13 +490,13 @@ The filter, drift, HRF and noise-model fields start empty. An empty field passes
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Mode** | `--mode` | `none` skips postprocessing; otherwise `denoise` / `glm` / `rest`. |
-| **High-pass (Hz)** | `--high-pass` | Bandpass lower bound. Empty takes the mode's default, shown in grey in the field; `glm` fills none, since its drift basis detrends. |
-| **Low-pass (Hz)** | `--low-pass` | Bandpass upper bound. Empty takes the mode's default. |
-| **Filter** | `--filter-method` | Bandpass design: zero-phase Butterworth (`iir`) or hamming-windowed linear phase (`fir`). |
-| **Filter order** | `--filter-order` | Butterworth order, ignored by `fir`. |
-| **Resample (Hz)** | `--resample-sfreq` | Target sampling rate after filtering. |
-| **n_jobs** | `--n-jobs` | How many subjects run at once. Takes effect only when more than one subject is selected. |
+| **Mode** | `--mode` | |
+| **High-pass (Hz)** | `--high-pass` | |
+| **Low-pass (Hz)** | `--low-pass` | |
+| **Filter** | `--filter-method` | |
+| **Filter order** | `--filter-order` | |
+| **Resample (Hz)** | `--resample-sfreq` | |
+| **n_jobs** | `--n-jobs` | |
 
 #### Confound regression
 
@@ -494,12 +504,12 @@ Its own collapsible section, shown for **every** mode: `denoise`, `glm` and `res
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Drift Model** | `--drift-model` | `cosine` / `polynomial` / `none`. Empty takes the mode's default: cosine for `glm` and `rest`, none for `denoise`, where the bandpass already detrends. |
-| **Drift High-pass (Hz)** | `--drift-high-pass` | Cosine drift cutoff. Shown only for a cosine model, and not pre-filled: the value depends on your design. See below. |
-| **Drift Order** | `--drift-order` | Polynomial drift order. Shown only for a polynomial model. |
-| **Short Channel** | `--short-channel` | `none` / `mean` / `pca`. Honoured by every mode. |
-| **ROI Mapping** | `--roi-mapping` | JSON of ROI label to source-detector pairs ([format](data-preparation.md#roi-mapping-file)). Groups the stage carpet and enables the ROI and seed connectivity products, and ROI-level amplitude in rest mode. |
-| **Connectivity** | `--fc` | Also write what rest mode writes, from whatever the mode produced. Rest writes them anyway. |
+| **Drift Model** | `--drift-model` | |
+| **Drift High-pass (Hz)** | `--drift-high-pass` | Shown only for a cosine model, and not pre-filled: the value depends on your design. See below. |
+| **Drift Order** | `--drift-order` | Shown only for a polynomial model. |
+| **Short Channel** | `--short-channel` | |
+| **ROI Mapping** | `--roi-mapping` | See [the ROI mapping file](data-preparation.md#roi-mapping-file). |
+| **Connectivity** | `--fc` | |
 
 `--aux-regressors` and `--aux-channels` have no field on this page. They are experimental and withheld from the CLI's `--help`; reach for the command line if you want them.
 
@@ -509,11 +519,11 @@ Visible only when **Mode = glm**.
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **HRF Model** | `--hrf-model` | `spm` / `spm + derivative` / `glover` / `glover + derivative` / `fir`, and the dispersion variants. Empty takes `spm`, the `glm` default. |
-| **Noise Model** | `--noise-model` | Free text with a suggestion list, `ols` / `auto` / `arN` / `ar_irls`, the same values the command line takes. Empty takes the mode's default: `auto` for `glm`, `ols` for `rest` and `denoise`. The browser refuses what the CLI would, since the field carries the CLI's own pattern. The field is GLM-only, so a `denoise` or `rest` run launched from the page fits the CLI default. |
-| **Stim Duration (s)** | `--stim-dur` | Duration given to every annotation in the GLM design. A GLM needs this or an events table. |
-| **Events table** | `--events-path` | An `*_events.tsv` to build the design from instead of the annotations. Give this or a stim duration, not both. |
-| **Contrast file** | `--contrast-file` | A TOML of contrasts to compute after the fit. |
+| **HRF Model** | `--hrf-model` | |
+| **Noise Model** | `--noise-model` | Free text with a suggestion list. The browser refuses what the CLI would, since the field carries the CLI's own pattern. The field is GLM-only, so a `denoise` or `rest` run launched from the page fits the mode's default. |
+| **Stim Duration (s)** | `--stim-dur` | |
+| **Events table** | `--events-path` | |
+| **Contrast file** | `--contrast-file` | |
 
 See [Postprocessing](workflows.md#postprocessing) for the GLM details.
 
@@ -620,109 +630,107 @@ Every command gets `group` as its analysis level, after its directories.
 
 ### Dyad analysis
 
-Shown for `nirspipe-hyper`, and for `nirspipe-hyper-pairnull`, which reuses part of it. The full meaning of each option is in [Hyperscanning QC Report](qc.md#dyad-reports); this table is the field-to-flag map.
+Shown for `nirspipe-hyper`, and for `nirspipe-hyper-pairnull`, which reuses part of it. The flags are [`nirspipe-hyper`](usage.md#nirspipe-hyper)'s; what the outputs mean is in [Dyad reports](qc.md#dyad-reports).
 
 #### Inputs
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Source derivatives** | first positional | The tree `nirspipe` wrote, holding `sub-*/nirs/`. Required by `nirspipe-hyper` and `nirspipe-hyper-pairnull`, the two commands that open a member's recording, and must differ from the derivatives directory above. |
-| **Pairs CSV** | `--pairs-csv` | Required. |
-| **Group ID** | `--group-id` | Empty runs every group in the CSV. |
+| **Source derivatives** | first positional | Sent to `nirspipe-hyper` and `nirspipe-hyper-pairnull`, the two commands that open a member's recording. |
+| **Pairs CSV** | `--pairs-csv` | |
+| **Group ID** | `--group-id` | |
 | **Task label** | `--task-label` | Space-separated for several, all passed under the one flag. |
-| **Source stage** | `--desc` | Default `preproc`. The dropdown offers the haemoglobin stages only, because the earlier ones are refused. |
-| **ROI mapping** | `--roi-mapping` | Required by the ROI options. |
+| **Source stage** | `--desc` | The dropdown offers the haemoglobin stages only, because the earlier ones are refused. |
+| **ROI mapping** | `--roi-mapping` | |
 
 #### Coherence
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Frequency range (Hz)** | `--wtc-fmin` / `--wtc-fmax` | The axis the coherence is computed on. |
-| **Band (Hz)** | `--band-fmin` / `--band-fmax` | One band for both measures: the coherence averages over it, the correlation filters to it. |
-| **WTC band (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` | Coherence only, overriding **Band** for it. Empty takes **Band**, or the whole axis when that is empty too. |
-| **ISC band (Hz)** | `--isc-fmin` / `--isc-fmax` | Correlation only, overriding **Band** for it. Empty takes **Band**, or leaves the correlation on whatever the preprocessing passband held. |
-| **Chromophore** | `--wtc-chroma` | HbO and HbR by default, which costs exactly twice and is a consistency check rather than two results. |
-| **Min channels per ROI** | `--wtc-roi-min-channels` | Drops an ROI cell where either member keeps fewer channels than this. Empty means 1, so one surviving channel keeps a region. |
-| **Equal windows (s)** | `--wtc-window-s` | Empty leaves each condition as the unit. Set, every condition is cut into non-overlapping windows of this length. Needs per-condition results. |
-| **Prewhitening order (s)** | `--wtc-whiten` | Empty or 0 transforms the signals themselves. Set, every long channel is prewhitened with one autoregressive order of this many seconds before the coherence; the correlation keeps its own **Whitening order**. Passed to `nirspipe-hyper` only: `nirspipe-hyper-pairnull` reads it off the real tables. |
+| **Frequency range (Hz)** | `--wtc-fmin` / `--wtc-fmax` | |
+| **Band (Hz)** | `--band-fmin` / `--band-fmax` | |
+| **WTC band (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` | |
+| **ISC band (Hz)** | `--isc-fmin` / `--isc-fmax` | |
+| **Chromophore** | `--wtc-chroma` | |
+| **Min channels per ROI** | `--wtc-roi-min-channels` | |
+| **Equal windows (s)** | `--wtc-window-s` | |
+| **Prewhitening order (s)** | `--wtc-whiten` | Passed to `nirspipe-hyper` only: `nirspipe-hyper-pairnull` reads it off the real tables. |
 
 #### Coherence null
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Surrogates** | `--wtc-mc-count` | Runtime scales with it. |
-| **Seed** | `--wtc-seed` | Makes the significance contours reproducible. |
-| **Phase-null iterations** | `--wtc-phase-null` | Empty or 0 draws no null. Each iteration is a full WTC run, so this is the expensive half. |
+| **Surrogates** | `--wtc-mc-count` | |
+| **Seed** | `--wtc-seed` | |
+| **Phase-null iterations** | `--wtc-phase-null` | |
 
 #### Correlation
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **ISC threshold** | `--isc-threshold` | Empty picks the rule instead of a number: the surrogate's 95th percentile where a null was drawn, the strongest tenth where none was. |
-| **Prewhitening order (s)** | `--isc-whiten-s` | 0 correlates the signals themselves. A non-zero value correlates autoregressive residuals, one order in seconds for every channel of both members, and shrinks r markedly. |
-| **Max lag (s)** | `--isc-max-lag` | 0 correlates sample against sample. Larger searches that many seconds either way and keeps the strongest. |
-| **Null iterations** | `--isc-phase-null` | Ranks each correlation against phase-scrambled surrogates. Pair it with a max lag, which needs a null. |
+| **ISC threshold** | `--isc-threshold` | |
+| **Prewhitening order (s)** | `--isc-whiten-s` | |
+| **Max lag (s)** | `--isc-max-lag` | |
+| **Null iterations** | `--isc-phase-null` | |
 
 #### Options
 
-| Switch | CLI flag | Notes |
-|--------|----------|-------|
-| **Significance testing (slow)** | `--wtc-significance` | What the surrogate count is spent on. |
-| **Average the whole band (no COI mask)** | `--no-wtc-mask-coi` | Masking is the default, so this switch turns it off. |
-| **Cross channels between brains (slow)** | `--channel-cross` | |
-| **Cross channels for the null too (very slow)** | `--wtc-phase-null-cross` | Crossing squares the pair count, and the null pays that on every iteration. |
-| **Whole recording only (no per-condition results)** | `--no-by-condition` | Per-condition results are on by default. |
-| **Bad channels: union over runs** | `--bads-scope subject` | Off means `run`, this task's own rejections. |
-| **Save WTC maps (large)** | `--wtc-save-maps` | What `nirspipe-hyper-band` later reads. |
-| **Skip alignment** | `--no-align` | |
-| **Normalize recordings** | `--normalize` | |
-| **Check only (compute nothing)** | `--check-only` | Prints the channel budget each dyad would be measured on, then stops. |
+| Switch | CLI flag |
+|--------|----------|
+| **Significance testing (slow)** | `--wtc-significance` |
+| **Average the whole band (no COI mask)** | `--no-wtc-mask-coi` |
+| **Cross channels between brains (slow)** | `--channel-cross` |
+| **Cross channels for the null too (very slow)** | `--wtc-phase-null-cross` |
+| **Whole recording only (no per-condition results)** | `--no-by-condition` |
+| **Bad channels: union over runs** | `--bads-scope subject` |
+| **Save WTC maps (large)** | `--wtc-save-maps` |
+| **Skip alignment** | `--no-align` |
+| **Normalize recordings** | `--normalize` |
+| **Check only (compute nothing)** | `--check-only` |
 
 The page has no switch for `--no-report`; use the command line to skip the report.
 
 ### Re-paired null
 
-Shown for `nirspipe-hyper-pairnull`, together with the dyad analysis section, whose source derivatives, pairs CSV, group, task, ROI mapping and chromophore it reuses; the rest of that section is not passed. Pairs one member with people from the other groups who did the same task. Run it after `nirspipe-hyper`: the band, the mask, the frequency range, the window, the prewhitening, the source stage, the rejected channels, the ROI minimum and the crossing come off the tables `nirspipe-hyper` wrote, **not off this form**. A second `nirspipe-hyper` run afterwards draws each condition page's arrows and chords against this null.
+Shown for `nirspipe-hyper-pairnull`, together with the dyad analysis section, whose source derivatives, pairs CSV, group, task, ROI mapping and chromophore it reuses; the rest of that section is not passed. Run it after `nirspipe-hyper`: the band, the mask, the frequency range, the window, the prewhitening, the source stage, the rejected channels, the ROI minimum and the crossing come off the tables `nirspipe-hyper` wrote, **not off this form**. A second `nirspipe-hyper` run afterwards draws each condition page's arrows and chords against this null. The flags are [`nirspipe-hyper-pairnull`](usage.md#nirspipe-hyper-pairnull)'s.
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Stand-in pool** | `--wtc-pair-pool` | *Same position in the group* replaces a member only with another group's member at the same index, which keeps a role where the two members are not interchangeable and is the only safe pool where one person appears in several groups. *Any member of another group* doubles the pool and is refused where the pairs table shows anybody repeated. |
-| **Draw limit** | `--wtc-pair-max` | A ceiling rather than a count: the pool is finite, and leaving it empty uses every eligible stand-in, which is what gives the percentile its best resolution. |
-| **Homologous pairings only, even over a crossed table** | `--no-wtc-pair-cross` | Off, the null is crossed exactly when the real table is. On, it draws the homologous pairings only, which is cheaper and ranks a crossed table's diagonal. |
-
-The number of draws is the number of other groups, which is what limits how finely this can rank: G groups give G - 1 draws.
+| **Stand-in pool** | `--wtc-pair-pool` | *Same position in the group* is `position`, *Any member of another group* is `any`. |
+| **Draw limit** | `--wtc-pair-max` | |
+| **Homologous pairings only, even over a crossed table** | `--no-wtc-pair-cross` | |
 
 ### Null above the cell
 
-Shown for `nirspipe-hyper-groupnull`. Averages the channels before ranking, once per occasion and once over the cohort. It cannot say which channel, and in exchange it can say whether the pairing beats its null at all. It reads what `nirspipe-hyper-pairnull` and the phase-scrambled null wrote, and runs no transform. It reads the coherence and the correlation, each wherever its draws exist.
+Shown for `nirspipe-hyper-groupnull`. The flags are [its own](usage.md#nirspipe-hyper-groupnull).
 
 | Field | CLI flag | Notes |
 |-------|----------|-------|
-| **Task** | `--task-label` | Required. Which task's tables to read. |
-| **Chromophores** | `--chroma` | HbO, HbR or both, each into its own tables. None ticked reads every chromophore the draws hold. |
-| **Draws to read** | `--null` | *Re-paired*, *Phase-scrambled* or both, each into its own tables. None ticked reads every null whose draws are on disk. Both are read the same way above the cell; they differ only in what a draw is. |
-| **ROI mapping** | `--roi-mapping` | Given it, each region is reported as its own level beside the whole-brain mean. |
-| **Resamples** | `--n-resample` | Default 20000. Each picks one stand-in per occasion, so the finest *p* it can express is 1/(n+1). |
-| **Seed** | `--seed` | Makes the cohort *p* reproducible. |
-| **P correction** | `--p-correction` | *None* by default. The raw *p* is written either way; a method adds a corrected column beside it. |
-| **ISC test** | `--isc-test` | *Signed, two-sided* by default, which counts a negative correlation; *Magnitude* averages \|z\| and tests it above the null. The coherence is always tested above its null. |
+| **Task** | `--task-label` | |
+| **Chromophores** | `--chroma` | None ticked sends nothing, so every chromophore the draws hold is read. |
+| **Draws to read** | `--null` | None ticked sends nothing, so every null whose draws are on disk is read. |
+| **ROI mapping** | `--roi-mapping` | |
+| **Resamples** | `--n-resample` | |
+| **Seed** | `--seed` | |
+| **P correction** | `--p-correction` | |
+| **ISC test** | `--isc-test` | *Signed, two-sided* is `signed`, *Magnitude* is `magnitude`. |
 
 ### Re-average saved WTC maps
 
-Shown for `nirspipe-hyper-band`. Reads the maps a previous run saved and averages them over a different band, with no second wavelet transform.
+Shown for `nirspipe-hyper-band`. The flags are [its own](usage.md#nirspipe-hyper-band).
 
-| Field | CLI flag | Notes |
-|-------|----------|-------|
-| **New band (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` | Both required. Must lie inside the axis the saved maps were computed on. |
-| **Suffix** | `--wtc-suffix` | The value of the new tables' `band-` entity, letters and digits only, so they sit beside the originals. Defaults to the band, e.g. `0p05to0p2`. |
+| Field | CLI flag |
+|-------|----------|
+| **New band (Hz)** | `--wtc-band-fmin` / `--wtc-band-fmax` |
+| **Suffix** | `--wtc-suffix` |
 
 ### Analysis window
 
-Shown for `nirspipe-hyper`: restricts the synchrony metrics to one window of the aligned recording, so a baseline or a wrap-up segment can be left out of the coherence.
+Shown for `nirspipe-hyper`.
 
-| Field | CLI flag | Notes |
-|-------|----------|-------|
-| **Window (s)** | `--tstart` / `--tend` | Measured from the shared trigger, after alignment. Empty uses the whole recording. It selects rather than cuts: the transform runs over the whole recording and the window is read out of it. |
+| Field | CLI flag |
+|-------|----------|
+| **Window (s)** | `--tstart` / `--tend` |
 
 ### Run and report preview
 
