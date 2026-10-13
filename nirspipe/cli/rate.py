@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from nirspipe import __version__
+from nirspipe.exceptions import StageError
 
 from nirspipe.io.derivatives import group_label, subject_labels
 from nirspipe.io.naming import report_name
@@ -87,7 +88,11 @@ def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
     """Write the rated channels as a --bad-channels table, and the FINAL verdicts as a list."""
     from nirspipe.qc.rating.export import export_ratings
 
-    channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0])
+    try:
+        channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0])
+    except StageError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
     print(f"Channel decisions: {channels}")
     print(f"  pass it to nirspipe as --bad-channels {channels}")
     print(f"FINAL verdicts (for reading; nothing reads them): {verdicts}")

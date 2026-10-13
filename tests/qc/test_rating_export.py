@@ -3,8 +3,11 @@
 import json
 
 import pandas as pd
+import pytest
 
+from nirspipe.cli.rate import main as rate_main
 from nirspipe.cli.workflows import _bad_channels_for, _keep_channels_for
+from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import channel_decisions_path
 from nirspipe.io.naming import rating_path
 from nirspipe.pipeline.prep_pipeline import release_kept
@@ -97,3 +100,15 @@ def test_the_cli_writes_both_tables(tmp_path, capsys):
     assert "--bad-channels" in capsys.readouterr().out
     assert (tmp_path / "desc-ratedchannels_qc.tsv").exists()
     assert (tmp_path / "desc-ratedpages_qc.tsv").exists()
+
+
+def test_a_decision_saved_under_a_condition_page_s_key_is_refused(tmp_path, capsys):
+    key = "sub-01_task-rest_run-01_cond-alone"
+    _decisions(tmp_path, "01", "rest", {"sub-01_task-rest_run-01": {"S2_D2 hbo": "bad"},
+                                        key: {"S1_D1 hbo": "good"}})
+    with pytest.raises(StageError, match=key):
+        channel_rows([tmp_path])
+    with pytest.raises(SystemExit) as stop:
+        rate_main(["export", str(tmp_path)])
+    assert stop.value.code == 1
+    assert key in capsys.readouterr().err

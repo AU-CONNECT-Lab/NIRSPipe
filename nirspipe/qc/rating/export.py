@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
@@ -56,6 +57,11 @@ def channel_rows(trees: list[Path]) -> tuple[list[dict], list[str]]:
             data = {k: v for k, v in _read(path).items() if isinstance(v, dict)}
             hyper = data.get(HYPER_KEY, {})
             for key, states in data.items():
+                # only the run page may decide: a decision applies to the whole run
+                if key != HYPER_KEY and entity_of(key, "cond"):
+                    raise StageError(f"{path}: '{key}' was saved from a condition page, but a "
+                                     "channel decision applies to the whole run. Delete that "
+                                     "key and decide on the run page.")
                 bad, keep = _pairs(states, "bad"), _pairs(states, "good")
                 # a run's row and the dyad row both match that run, so they must agree
                 against = {} if key == HYPER_KEY else hyper
