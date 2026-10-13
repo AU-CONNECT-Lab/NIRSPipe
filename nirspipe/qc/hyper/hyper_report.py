@@ -819,6 +819,10 @@ def build_hyper_report(
         wavelength_columns=WAVELENGTH_COLUMNS,
         decision_rows_json=json.dumps(
             decision_rows(sqm_data, meta["subject_ids"]), default=str),
+        channels_tsv_notes=[
+            section_note("hyper_raw.channels_tsv", sid=sid, pairs=", ".join(pairs))
+            for sid in subject_ids
+            if (pairs := (sqm_data.get(sid) or {}).get("channels_tsv_pairs"))],
         blocks_json=json.dumps(meta.get("conditions") or {}),
         member_info_json=json.dumps(meta.get("member_info") or []),
         subject_metrics_rows=member_table,

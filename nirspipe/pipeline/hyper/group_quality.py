@@ -245,6 +245,7 @@ def compute_group_sqm_raw(
         sci_win = ((_per_channel or {}).get("raw") or {}).get("sci_win_per_channel") or {}
         sqm["sci_win_per_channel"] = _pairwise(sci_win)
         sqm["bad_channels"]    = bad_channels
+        sqm["channels_tsv_pairs"] = sorted({pair_of(c) for c in tsv_bads})
         sqm["screen_windows"]  = screen_windows
         sqm["screen_cutoffs"]  = dict(cutoffs)
         sqm["per_channel"]     = _per_channel or {}

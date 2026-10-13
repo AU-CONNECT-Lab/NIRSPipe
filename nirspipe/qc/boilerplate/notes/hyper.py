@@ -77,6 +77,9 @@ NOTES = {
         "tables. Red marks a pair that member rejected: BAD for too few coupled windows, BAD "
         "(manual) by hand. Click a decision to cycle it; it saves when the page is served by "
         "<code>nirspipe-rate hyper</code>.",
+    "hyper_raw.channels_tsv":
+        "{sid}: marked bad by the recording&rsquo;s BIDS channels.tsv, whatever the screening "
+        "found: {pairs}.",
     "hyper_raw.rate_sci_line":
         "SCI (10 s) cells outlined in orange are under {line}, the line given to "
         "<code>nirspipe-rate hyper</code>; red cells are under the screening line. The "

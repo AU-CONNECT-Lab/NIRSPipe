@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - GUI Batch Prep page takes `--skip-bids-validation`
 - GUI Hyper Analysis page takes `--band-fmin/--band-fmax`; its WTC and ISC band fields override them
+- `nirspipe-qc hyper-raw` names each member's pairs that `channels.tsv` marked bad
 
 ### Changed
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs

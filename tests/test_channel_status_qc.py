@@ -133,6 +133,17 @@ def test_hyper_raw_counts_and_records_the_listed_channels(hyper_raw):
     assert sidecar["parameters"]["channels_tsv_bads"] == {"sub-11": [LISTED, "S9_D9 760"]}
 
 
+def test_hyper_raw_names_the_listed_pairs_per_member(hyper_raw):
+    report = lambda out: next(out.rglob("*_desc-raw_report.html")).read_text(  # noqa: E731
+        encoding="utf-8")
+    listed = report(hyper_raw["listed"])
+    assert ("sub-11: marked bad by the recording&rsquo;s BIDS channels.tsv, whatever the "
+            "screening found: S1_D1.") in listed
+    assert "sub-12: marked bad" not in listed
+    assert "channels.tsv" not in report(hyper_raw["plain"])
+    assert "channels.tsv" not in report(hyper_raw["ignored"])
+
+
 def test_hyper_raw_ignoring_the_column_comes_out_bit_identical_to_no_column(hyper_raw):
     for pattern in ("*_qc.tsv", "*_qc.json"):
         _same_files(hyper_raw["plain"], hyper_raw["ignored"], pattern)

@@ -253,6 +253,7 @@
   <h3 class="step-title">Channel decisions</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_raw.channel_decisions') }}</p>
+    {% for note in channels_tsv_notes %}<p class="qm-note">{{ note }}</p>{% endfor %}
     <p class="qm-note" id="hyper-decisions-hint"></p>
     <p class="step-desc" id="hyper-decisions-rate-line" style="display:none"></p>
     <div id="hyper-decisions-tables"></div>
