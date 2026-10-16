@@ -66,6 +66,18 @@ def test_the_residual_keeps_the_state_and_adds_its_regression(run):
     assert FILTER_STATE | {"resample_sfreq"} | SEPARATION | {"noise_model", "drift_model"} <= set(params)
 
 
+def test_gvtd_censoring_records_the_bands_that_chose_its_channels(tmp_path):
+    bids, _ = make_fingerprint_dataset(tmp_path)
+    out = tmp_path / "out"
+    run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--gvtd-censor",
+                  "--short-max-dist", "9", "--participant-label", "01", "--no-report",
+                  "--skip-bids-validation"])
+    (sci,) = out.rglob("*_desc-sci_nirs.snirf")
+    params = _sidecar(sci)["parameters"]
+    assert {k: params[k] for k in SEPARATION} == {
+        "sep_short_max_mm": 9.0, "sep_long_min_mm": 15.0, "sep_long_max_mm": None}
+
+
 def test_no_sidecar_repeats_a_setting_under_a_second_name(run):
     _, _, files = run
     for stage, path in files.items():

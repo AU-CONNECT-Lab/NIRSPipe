@@ -377,7 +377,7 @@ def run_prep(
                     config.subject, config.gvtd_censor, config.gvtd_censor_n_std,
                     config.gvtd_min_epoch_s)
         from nirspipe.qc.metrics import gvtd_censor_spans
-        from nirspipe.qc.metrics._helpers import separation_bands
+        from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
         censor_spans, censor_metrics = gvtd_censor_spans(
             raw_od, n_std=config.gvtd_censor_n_std,
             min_epoch_s=config.gvtd_min_epoch_s,
@@ -410,7 +410,9 @@ def run_prep(
         # what the Methods sentence on GVTD censoring is written from
         **({"gvtd_censor": config.gvtd_censor,
             **{k: censor_metrics.get(k) for k in ("gvtd_censor_n_std", "gvtd_censor_min_epoch_s",
-                                                  "gvtd_censor_channel_set")}}
+                                                  "gvtd_censor_channel_set")},
+            # the bands decide which channels the censoring read
+            **bands_to_record(separation_bands(config))}
            if config.gvtd_censor else {}),
     })
 
