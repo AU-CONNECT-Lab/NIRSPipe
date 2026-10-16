@@ -43,51 +43,51 @@ The JSON holds the scalars. The arrays sit in tab-separated tables beside it, li
 
 Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the text the report shows when you hover that label and, where the code defines one, its formula. Each entry ends with how to read the value: higher is better, lower is better, best near a given value, or descriptive (no better end). The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
 
-Where each family is measured, and which of them act on the data:
+Each step of the pipeline, what is measured on it and the record section it lands in. Grey boxes are recorded and drawn and change nothing; the two red ones act on the data.
 
 ```mermaid
 flowchart TD
-    REC(["recording<br/><small>intensity and optical density</small>"])
-    SENSOR(["motion sensor<br/><small>where the recording has one</small>"])
+    REC(["recording<br/><small>raw intensity</small>"])
+    OD["optical density"]
+    SCR["channel screening<br/><small>SCI and PSP in every 10 s window</small>"]
+    MC["motion correction"]
+    BL["Beer-Lambert"]
+    POST["bandpass · resample · regression<br/><small>with --mode</small>"]
+    SQM(["quality record<br/><small>one per run, every section below</small>"])
+    REP["reports → nirspipe-rate"]
 
-    REC --> SCIPSP["SCI · PSP<br/><small>per 10 s window, cardiac band</small>"]
-    SCIPSP --> WIN{"coupled in at least<br/>--min-good-frac<br/>of its windows?"}
-    WIN -->|no| BAD(["bad channels"])
-    TABLE[/"--bad-channels table<br/>channels.tsv"/] -.->|"bad_channels add,<br/>keep_channels release"| BAD
-    REC --> LEVEL["CV · SNR · saturation · flat channels"]
+    REC --> OD --> SCR --> MC --> BL --> POST --> SQM --> REP
 
-    REC --> GVTD["GVTD · spikes"]
-    GVTD -.->|"--gvtd-censor"| SPANS(["BAD_ spans"])
-    MANUAL[/"--bad-spans"/] -.-> SPANS
-
-    REC --> MC["motion correction"]
-    MC --> FOOT["correction footprint<br/><small>and coupling again, after it</small>"]
-
-    SENSOR --> IMU["gyro speed · accel jerk"]
-
-    MC --> HB(["haemoglobin<br/><small>preproc · filtered · resampled · errts</small>"])
-    BAD -->|"left out"| HB
-    SPANS -->|"left out"| HB
-    HB --> PROC["HbO-HbR corr · GCOR · CNR<br/>band power · drift"]
-
-    SCIPSP & LEVEL & GVTD & FOOT & IMU & PROC --> SQM(["quality record"])
-    SQM --> REP["reports"]
-    REP --> RATE["nirspipe-rate<br/><small>channel decisions</small>"]
-    RATE -.->|"export, next run"| TABLE
+    REC -.- M1["<b>raw</b><br/>SCI · PSP · CV · SNR · saturation<br/>GVTD · spikes"]
+    SCR --> BAD(["bad channels<br/><small>coupled in fewer than --min-good-frac of windows</small>"])
+    TAB[/"--bad-channels table · channels.tsv<br/><small>the table nirspipe-rate export writes</small>"/] --> BAD
+    SPIN[/"--keep-spans · --bad-spans · --gvtd-censor"/] --> SPANS(["BAD_ spans<br/><small>left out of screening and every estimate</small>"])
+    MC -.- M2["<b>motion · motion_post</b><br/>correction footprint<br/>SCI · PSP · GVTD · spikes again"]
+    BL -.- M3["<b>preproc</b><br/>HbO-HbR corr · GCOR · CNR<br/>band power · drift"]
+    POST -.- M4["<b>filtered · resampled · errts</b><br/>HbO-HbR corr · GCOR · CNR"]
+    SENS(["motion sensor<br/><small>where the recording has one</small>"]) -.- M5["<b>imu</b><br/>gyro speed · accel jerk"]
 
     classDef od fill:#fdebd0,stroke:#e67e22
     classDef haemo fill:#fadbd8,stroke:#c0392b
     classDef side fill:#eaeded,stroke:#7f8c8d
     classDef derivative fill:#d6eaf8,stroke:#2874a6
     classDef acts fill:#ffffff,stroke:#c0392b,stroke-width:2px
-    class REC od
-    class HB haemo
-    class LEVEL,GVTD,FOOT,IMU,PROC side
+    class REC,OD od
+    class BL,POST haemo
+    class M1,M2,M3,M4,M5 side
     class SQM derivative
     class BAD,SPANS acts
 ```
 
-Grey boxes are descriptive: recorded and drawn, they change nothing. Channels are marked bad by the coupled-window share and by the channels you name; GVTD removes time only under `--gvtd-censor`.
+| Step | Measured there | Record section | Changes the data |
+|------|----------------|----------------|------------------|
+| Recording as it arrived | SCI, PSP, CV, SNR, saturation, GVTD, spikes ([coupling](#coupling-and-signal-level), [motion](#motion-from-the-optical-signal)) | `raw`, `raw_long`, `raw_short` | no |
+| Channel screening | Coupled-window share: SCI and PSP both clear their lines in a 10 s window | `raw` | marks channels bad, together with `--bad-channels` and `channels.tsv` |
+| Excluded time | `--keep-spans`, `--bad-spans`, `--gvtd-censor` | `excluded`, `censor` | leaves time out of every estimate |
+| Motion correction | [Correction footprint](#motion-correction-footprint); SCI, PSP, GVTD and spikes measured again | `motion`, `motion_post` | no |
+| Beer-Lambert | HbO-HbR correlation, GCOR, CNR, band power, drift ([processed signal](#processed-signal)) | `preproc` | no |
+| Bandpass, resample, regression | HbO-HbR correlation, GCOR, CNR | `filtered`, `resampled`, `errts` | no |
+| Motion sensor | Gyroscope speed, accelerometer jerk ([sensor](#motion-from-the-sensor)) | `imu` | no |
 
 ### Coupling and signal level
 
