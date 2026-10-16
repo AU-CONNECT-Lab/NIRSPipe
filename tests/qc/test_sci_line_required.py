@@ -50,12 +50,13 @@ def test_with_no_line_the_sci_cell_is_uncoloured_and_keeps_its_number():
 def test_the_rating_servers_hand_the_page_the_rater_s_line(tmp_path):
     html = tmp_path / "sub-01_task-rest_desc-raw_report.html"
     html.write_text("<html></html>", encoding="utf-8")
-    assert RawRatingApp(html, tmp_path).app.test_client().get("/rate_config").get_json() \
-        == {"sci_threshold": None}
-    assert RawRatingApp(html, tmp_path, 0.6).app.test_client().get("/rate_config").get_json() \
-        == {"sci_threshold": 0.6}
-    hyper = HyperRatingApp(html, tmp_path, ["01", "02"], 0.6)
-    assert hyper.app.test_client().get("/rate_config").get_json() == {"sci_threshold": 0.6}
+
+    def line(server):
+        return server.app.test_client().get("/rate_config").get_json()["sci_threshold"]
+
+    assert line(RawRatingApp(html, tmp_path)) is None
+    assert line(RawRatingApp(html, tmp_path, 0.6)) == 0.6
+    assert line(HyperRatingApp(html, tmp_path, ["01", "02"], 0.6)) == 0.6
 
 
 @pytest.mark.parametrize("command", ["prep-raw", "hyper-raw"])
