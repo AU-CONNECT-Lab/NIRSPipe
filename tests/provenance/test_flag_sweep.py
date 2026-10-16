@@ -7,10 +7,7 @@ the parameters of the stage sidecars named for the flag. A flag whose output doe
 needs an entry in ALLOWED_SAME saying why.
 """
 
-import gzip
-import hashlib
 import json
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,7 +21,7 @@ from nirspipe.cli import run as run_cli
 from tests._fingerprint import (AUX_FS, DURATION, EVENT_DURATION, fingerprint_raw,
                                 make_fingerprint_dataset)
 from tests._synth import _write_dataset_root, _write_subject
-from tests.figure_accuracy._payload import plotly_figures
+from tests.provenance._sweep import argv, moved, snapshot
 
 BASE = {"--dpf": ["5.8", "6.4"], "--sci-threshold": ["0.75"], "--psp-threshold": ["0.12"],
         "--min-good-frac": ["0.7"], "--cardiac-l-freq": ["0.8"], "--cardiac-h-freq": ["1.9"],
@@ -36,6 +33,7 @@ MODE = {"denoise": {"--mode": ["denoise"]},
                 "--drift-high-pass": ["0.008"], "--noise-model": ["ols"]},
         "rest": {"--mode": ["rest"]}}
 QUIET = ["--participant-label", "01", "--skip-bids-validation"]
+RECORD = {"prep": None, "post": None, "execution": ("ignore", "allow_cropped_input")}
 
 
 @dataclass(frozen=True)
@@ -110,12 +108,12 @@ CASES = {
     "short_channel": Case("denoise", SHORT, ("errts",)),
     "aux_regressors": Case("glm", AUX, ("errts", "design")),
     "aux_channels": Case("glm", {"--aux-channels": ["ACC_X"]}, ("errts", "design"), AUX),
-    "fc": Case("denoise", {"--fc": []}, ("relmat",)),
-    "min_time": Case("rest", {"--min-time": ["1000"]}, ("relmat",)),
+    "fc": Case("denoise", {"--fc": []}, ("pearson",)),
+    "min_time": Case("rest", {"--min-time": ["1000"]}, ("pearson",)),
     "events_path": Case("glm", {"--stim-dur": None, "--events-path": ["{events}"]},
                         ("errts", "design")),
     "contrast_file": Case("glm", {"--contrast-file": ["{contrast}"]}, ("contrast",)),
-    "roi_mapping": Case("rest", {"--roi-mapping": ["{roi}"]}, ("relmat",)),
+    "roi_mapping": Case("rest", {"--roi-mapping": ["{roi}"]}, ("pearson",)),
     "ignore": Case("denoise", {"--ignore": ["channel-status"]}, ("sci",)),
     "allow_cropped_input": Case("denoise", {"--allow-cropped-input": []}, ()),
 }
@@ -184,66 +182,6 @@ def inputs(tmp_path_factory):
 
 # ---- running and reading a run ----
 
-def _argv(settings: dict, paths: dict) -> list[str]:
-    out = []
-    for flag, values in settings.items():
-        if values is not None:
-            out += [flag, *(v.format(**paths) for v in values)]
-    return out
-
-
-def _snirf_digest(path: Path) -> str:
-    h = hashlib.sha1()
-    with h5py.File(path, "r") as handle:
-        def visit(name, item):
-            if isinstance(item, h5py.Dataset):
-                value = np.asarray(item[()])
-                h.update(name.encode())
-                h.update(repr(value.tolist()).encode() if value.dtype.kind in "OSU" else value.tobytes())
-        handle.visititems(visit)
-    return h.hexdigest()
-
-
-def _stage(name: str) -> str:
-    """``sub-01_task-x_desc-errts_nirs.json`` -> ``errts``; ``..._stat-pearson_relmat.json`` -> ``relmat``."""
-    stem = name.split(".")[0]
-    return stem.split("_desc-")[1].split("_")[0] if "_desc-" in stem else stem.rsplit("_", 1)[-1]
-
-
-def snapshot(out: Path) -> dict:
-    """What a run wrote: a digest per output file, the parameters per sidecar, the run record."""
-    sub = out / "sub-01"
-    outputs, params = {}, {}
-    for f in sorted(p for p in sub.rglob("*") if p.is_file()):
-        rel = f.relative_to(sub).as_posix()
-        if rel.startswith("logs/"):
-            continue
-        if rel.startswith("figures/"):
-            if f.suffix == ".html":
-                # plotly's div ids change from run to run; the drawn data does not
-                outputs[rel] = hashlib.sha1(json.dumps(
-                    [fig.get("data") for fig in plotly_figures(f)], sort_keys=True, default=str
-                ).encode()).hexdigest()
-            continue
-        if f.suffix == ".snirf":
-            outputs[rel] = _snirf_digest(f)
-        elif f.suffix == ".json":
-            data = json.loads(f.read_text(encoding="utf-8"))
-            data.pop("timestamp", None)
-            if "parameters" in data:
-                params.setdefault(_stage(f.name), {})[rel] = data.pop("parameters")
-            outputs[rel] = json.dumps(data, sort_keys=True, default=str)
-        elif f.suffix == ".gz":
-            outputs[rel] = hashlib.sha1(gzip.decompress(f.read_bytes())).hexdigest()
-        elif f.suffix != ".html":
-            outputs[rel] = hashlib.sha1(f.read_bytes()).hexdigest()
-    record = tomllib.loads((sub / "logs" / "sub-01.toml").read_text(encoding="utf-8"))
-    return {"outputs": outputs, "params": params,
-            "record": {**{f"{s}.{k}": v for s in ("prep", "post") for k, v in record.get(s, {}).items()},
-                       **{f"execution.{k}": record["execution"].get(k)
-                          for k in ("ignore", "allow_cropped_input")}}}
-
-
 @pytest.fixture(scope="module")
 def runs(inputs):
     """``(case) -> (base snapshot, changed snapshot)``, each base run once per configuration."""
@@ -253,8 +191,8 @@ def runs(inputs):
         out = inputs["root"] / name
         report = [] if case.report else ["--no-report"]
         run_cli.main([str(inputs["datasets"][case.dataset]), str(out), "participant",
-                      *_argv(settings, inputs["paths"]), *QUIET, *report])
-        return snapshot(out)
+                      *argv(settings, inputs["paths"]), *QUIET, *report])
+        return snapshot(out / "sub-01", out / "sub-01" / "logs" / "sub-01.toml", RECORD)
 
     def pair(key: str):
         case = CASES[key]
@@ -284,11 +222,9 @@ def _section(key: str) -> str:
     for k in CASES])
 def test_a_changed_setting_moves_the_output_and_the_record(runs, key):
     base, changed = runs(key)
-    moved = sorted(f for f in set(base["outputs"]) | set(changed["outputs"])
-                   if base["outputs"].get(f) != changed["outputs"].get(f))
     assert base["record"].get(f"{_section(key)}.{key}") != changed["record"].get(f"{_section(key)}.{key}")
     if key not in ALLOWED_SAME:
-        assert moved, "the record changed and no output did"
+        assert moved(base, changed), "the record changed and no output did"
     for stage in CASES[key].sidecars:
         assert base["params"].get(stage) != changed["params"].get(stage), \
             f"desc-{stage} changed nothing in its sidecar parameters"
