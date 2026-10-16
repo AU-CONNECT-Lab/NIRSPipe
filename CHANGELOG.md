@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `desc-sci` sidecars under `--gvtd-censor` record the separation bands that chose the censored channel set
+- GLM and residual sidecars list the events table and aux table they read in `Sources`; a table outside every linked dataset goes to `external_sources`
+- `desc-contrast` sidecars record each contrast's weights as `contrast_weights`
 - The group-test page's region matrices print every cell's lift, bold with a star where significant instead of a dot, in square cells
 - The per-trial panel scores 5 to 10 s trials on SCI and GVTD, rather than leaving them blank
 - GUI cardiac band fields suggest 2.0 Hz as the adult upper bound, matching the docs

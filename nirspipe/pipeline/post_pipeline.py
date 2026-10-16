@@ -27,7 +27,7 @@ from nirspipe.pipeline.denoise import (
     filter_description,
     resample,
 )
-from nirspipe.pipeline.glm import run_glm_pipeline, sole_regressor_channels
+from nirspipe.pipeline.glm import glm_inputs, run_glm_pipeline, sole_regressor_channels
 from nirspipe.exceptions import StageError
 from nirspipe.utils import is_marker
 from nirspipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
@@ -36,7 +36,7 @@ from nirspipe.utils.logging import get_logger
 from nirspipe import __version__
 from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
-    nirs_required_fields, require_nirs_fields,
+    nirs_required_fields, require_nirs_fields, split_sources,
 )
 from nirspipe.io.snirf import write_snirf
 from nirspipe.utils.spans import excluded_spans
@@ -377,7 +377,8 @@ def run_post(
             output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
+                          inputs=glm_inputs(config.events_path, aux_path))
 
         # FC on the task residual: the task is in the design matrix, so what correlates here
         # is what the model did not explain.
@@ -410,7 +411,8 @@ def run_post(
             source_path=rec.path_of(result),
             **rest_glm_kwargs,
         )
-        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
+        _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
+                          inputs=glm_inputs(None, aux_path))
 
         # ALFF/fALFF need a broadband residual: fALFF's denominator spans the full spectrum,
         # so its input must not be low-passed. Re-run the same confound regression on the
@@ -452,7 +454,8 @@ def run_post(
                          "high_pass": None, "low_pass": None,
                          "filter_method": None, "filter_order": None})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
-                                  rec=rec, source_entities=source_entities, known_spans=known_spans)
+                                  rec=rec, source_entities=source_entities, known_spans=known_spans,
+                                  inputs=glm_inputs(None, aux_path))
 
         alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
@@ -483,7 +486,8 @@ def run_post(
                 output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
             )
-            _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans)
+            _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
+                              inputs=glm_inputs(None, aux_path))
 
         # No ALFF, for glm's reason: the source is bandpassed and fALFF's denominator spans
         # the full spectrum, so the number would be ~1 by construction.
@@ -803,7 +807,7 @@ def _known_spans(source_path: Path | None) -> list[dict]:
 _RESTATED = ("l_freq", "h_freq", "sfreq")
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None) -> Path:
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None, inputs: "list[Path]" = ()) -> Path:
     entities = carry_entities(source_entities)
     entities["desc"] = desc
     lin = lineage_of(haemo)
@@ -839,12 +843,14 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
     write_snirf(haemo, out_path)
     sources = rec.sources_of(haemo)
+    linked, external = split_sources(inputs, out_path)
     write_sidecar_json(out_path, {
         **({"Description": description} if description else {}),
         **nirs_required_fields(haemo, read_json(Path(sources[0]).with_suffix(".json")) if sources else {}),
         "pipeline_version": __version__,
         "step": lin.step if lin else None,
-        "Sources": sources,
+        "Sources": sources + linked,
+        **({"external_sources": external} if external else {}),
         "parameters": parameters,
         "data": data_state(haemo),
         # read back by read_snirf: SNIRF itself cannot carry the marks

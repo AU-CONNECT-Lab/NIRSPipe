@@ -204,16 +204,40 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_step_sidecar(path: Path, step: str, source: "str | None", bads: "list[str]",
-                       excluded_spans: "list[dict] | None" = None, **params: Any) -> None:
-    """The sidecar of one post-stage output: the step, the file it came from, its settings, the bads."""
+                       excluded_spans: "list[dict] | None" = None,
+                       inputs: "Iterable[str | Path]" = (), **params: Any) -> None:
+    """The sidecar of one post-stage output: the step, the files it came from, its settings, the bads.
+
+    ``inputs`` are tables the step read beside ``source``, such as an events table.
+    """
+    linked, external = split_sources(inputs, path)
     write_sidecar_json(path, {
         "pipeline_version": __version__,
         "step": step,
-        "Sources": [source] if source else [],
+        "Sources": ([source] if source else []) + linked,
+        **({"external_sources": external} if external else {}),
         "parameters": params,
         "bad_channels": bads,
         **({"excluded_spans": excluded_spans} if excluded_spans is not None else {}),
     })
+
+
+def split_sources(paths: "Iterable[str | Path]", written: Path) -> tuple[list[str], list[str]]:
+    """Input files as BIDS URIs, and the absolute paths of those no linked dataset holds.
+
+    ``[<raw>/sub-01/nirs/sub-01_events.tsv, /home/me/design.tsv]``
+        -> ``(["bids:raw:sub-01/nirs/sub-01_events.tsv"], ["/home/me/design.tsv"])``
+
+    An input table may live anywhere, and a file outside every dataset has no BIDS URI;
+    its path is still recorded rather than the write refused.
+    """
+    linked, external = [], []
+    for path in paths:
+        try:
+            linked.append(to_bids_uri(path, written))
+        except StageError:
+            external.append(Path(path).resolve().as_posix())
+    return linked, external
 
 
 

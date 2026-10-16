@@ -567,7 +567,9 @@ def run_glm_pipeline(
 
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
-                          source_path=source_path, bads=list(haemo.info["bads"]),
+                          contrast_def=contrast_def, source_path=source_path,
+                          inputs=glm_inputs(events_path if not from_annotations else None, aux_path),
+                          bads=list(haemo.info["bads"]),
                           censored=~keep, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, drift_model=drift_model,
@@ -576,6 +578,11 @@ def run_glm_pipeline(
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, glm_est, dm, raw_resid
+
+
+def glm_inputs(events_path: "str | Path | None", aux_path: "str | Path | None") -> list[Path]:
+    """The tables a regression read besides the haemoglobin, for the Sources of what it writes."""
+    return [Path(p) for p in (events_path, aux_path) if p]
 
 
 def _glm_name(source_path: "str | None", suffix: str, **extra) -> str:
@@ -600,7 +607,9 @@ def _save_glm_outputs(
     design_matrix: pd.DataFrame,
     output_dir: Path,
     contrasts: dict[str, Any] | None = None,
+    contrast_def: dict[str, Any] | None = None,
     source_path: str | None = None,
+    inputs: "list[str | Path]" = (),
     bads: list[str] | None = None,
     censored: "np.ndarray | None" = None,
     **params: Any,
@@ -628,11 +637,11 @@ def _save_glm_outputs(
     # full length: the rows the fit left out are flagged, not removed
     flags = np.zeros(len(design_matrix), dtype=int) if censored is None else censored.astype(int)
     write_tsv(design_matrix.assign(censored=flags), dm_path)
-    write_step_sidecar(dm_path, "design_matrix", source_path, bads, **params)
+    write_step_sidecar(dm_path, "design_matrix", source_path, bads, inputs=inputs, **params)
 
     res_path = _named("nirsmap", desc="glm")
     write_tsv(_mark_bads(glm_est.to_dataframe()), res_path)
-    write_step_sidecar(res_path, "glm_fit", source_path, bads, **params)
+    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **params)
 
     if contrasts:
         frames = []
@@ -642,6 +651,8 @@ def _save_glm_outputs(
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")
         write_tsv(pd.concat(frames, ignore_index=True), con_path)
-        write_step_sidecar(con_path, "contrasts", source_path, bads, **params)
+        # the weights as the file gave them: the TSV names each contrast, nothing else does
+        write_step_sidecar(con_path, "contrasts", source_path, bads, inputs=inputs,
+                           contrast_weights=contrast_def, **params)
 
     logger.info("GLM outputs written to %s", output_dir)
