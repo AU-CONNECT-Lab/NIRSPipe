@@ -143,7 +143,11 @@ plain = "The relative phase was summarised by its circular mean over the band ce
 citations = []
 
 [hyper_isc]
-plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every retained long channel of one member and every retained long channel of another, separately for HbO and HbR {citations}.{options}"
+plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{options}"
+citations = ["TODO_ISC"]
+
+[hyper_isc_crossed]
+plain = "Inter-subject correlation (ISC) was computed as the Pearson correlation between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{options}"
 citations = ["TODO_ISC"]
 
 [hyper_phasenull]

@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-prep crop`, `align` and `edit-markers apply` failed file by file, rather than refusing, when the input was the folder they write
 - Run logs carried numpy divide and empty-slice warnings for a channel with no windowed SCI
 - GUI Batch Prep could write an older directory back over one typed straight after another
+- The dyad Methods' ISC sentence claimed every pairing and both chromophores under `--no-channel-cross` or `--wtc-chroma hbo`
 
 ## [0.68.0] - 2026-10-12
 

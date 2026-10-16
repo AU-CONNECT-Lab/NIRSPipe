@@ -85,8 +85,8 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
     if step in _ROI_STEPS:
         return "hyper_roi"
     if step in ("hyper_isc", "hyper_isc_pairs"):
-        # the same correlation as a matrix and as one row per pair
-        return "hyper_isc"
+        # the same correlation as a matrix and as one row per pair, paired as the coherence
+        return "hyper_isc_crossed" if params.get("channel_cross") else "hyper_isc"
     if step in ("alff", "alff_roi"):
         return "alff"
     if step in ("fc", "fc_roi", "fc_seed", "fisher_z"):
@@ -435,7 +435,9 @@ def _fill_phrase(method: Any) -> str:
 
 
 def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
-    """The correlation's optional steps, in the order they ran: whitening, band limit, lag."""
+    """Its chromophores, then the optional steps in the order they ran: whitening, band, lag."""
+    # the matrices record no chroma; the pair table beside them does, and the two merge
+    chroma = _series([_CHROMA_NAME.get(c, c) for c in params.get("chroma") or ["hbo", "hbr"]])
     before = []
     if params.get("isc_whiten_s"):
         before.append("prewhitened with an autoregressive model of order "
@@ -463,7 +465,7 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
                     "times against the second member's channels, each phase-randomised "
                     "independently, and was summarised by the mean and the 95th percentile of "
                     "the absolute correlation.")
-    return {"options": options}
+    return {"chroma": chroma, "options": options}
 
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """Fill a section's {slots} from a sidecar's parameters.
@@ -541,7 +543,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "min_time": _min_time_phrase(params, "Connectivity was")}
     if key in ("hyper_wtc", "hyper_wtc_crossed"):
         return _wtc_slots(params)
-    if key == "hyper_isc":
+    if key in ("hyper_isc", "hyper_isc_crossed"):
         return _isc_slots(params)
     if key == "hyper_phasenull":
         return _phasenull_slots(params)
@@ -621,7 +623,7 @@ STEP_SUMMARY = {
     "hyper_wtc_roihom_phasenull": "The null for that ROI mean, its iterations grouped into regions before they were summarised.",
     "hyper_wtc_roichan_phasenull": "The phase-scrambled null for the ROI x ROI coherence matrix, grouped into region pairs per iteration.",
     "hyper_wtc_bycondition_roichan_pairnull": "The re-paired null for each condition's ROI x ROI coherence matrix, grouped into region pairs per stand-in.",
-    "hyper_isc": "Correlation of each channel of one brain with each channel of the other.",
+    "hyper_isc": "Correlation of channels across the two brains, paired as the coherence: every pairing, or homologous ones.",
     "hyper_isc_roichan": "Channel-level correlations averaged within each ROI.",
     "hyper_isc_pairs": "The same correlations as one row per channel pair.",
     "hyper_merge": "Every dyad's table of one kind, merged into one, the dyad and the task kept as columns.",
@@ -1194,7 +1196,7 @@ def metric_rows(
 # Within one depth of the graph, the order sentences read in: a dyad's coherence and its
 # phase, its correlation, how both were grouped into regions, then its nulls; a run's
 # regression before ALFF and FC.
-_RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_roi": 2, "hyper_phasenull": 3,
+_RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_isc_crossed": 1, "hyper_roi": 2, "hyper_phasenull": 3,
          "hyper_pairnull": 4, "alff": 3, "fc": 4,
          "excluded_unselected": -1, "excluded_manual": -0.75, "gvtd_censoring": 0.5,
          "censor_fill": -0.5}

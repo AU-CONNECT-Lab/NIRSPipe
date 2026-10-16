@@ -399,7 +399,29 @@ def test_the_correlation_sentence_states_each_option_that_changed_it():
     assert "within ±2 s" in slots["options"]
     # the defaults change nothing, so they add nothing
     assert template_slots("hyper_isc", {"isc_band_hz": None, "isc_whiten_s": 0.0,
-                                        "isc_max_lag_s": 0.0}) == {"options": ""}
+                                        "isc_max_lag_s": 0.0})["options"] == ""
+
+
+@pytest.mark.parametrize("cross, key, pairs", [
+    (True, "hyper_isc_crossed", "every retained long channel of one member"),
+    (False, "hyper_isc", "homologous retained long channels"),
+])
+@pytest.mark.parametrize("chroma, named", [(["hbo"], "separately for HbO"),
+                                           (["hbo", "hbr"], "separately for HbO and HbR")])
+def test_the_correlation_sentence_names_the_pairing_and_chromophores_it_ran(
+        tmp_path, cross, key, pairs, chroma, named):
+    # the matrices record the crossing but no chroma; the pair table beside them records both
+    _sidecar(tmp_path, "group-G01_task-main_chromo-hbo_stat-isc_relmat", "hyper_isc",
+             sources=["/in.snirf"], channel_cross=cross)
+    _sidecar(tmp_path, "group-G01_task-main_stat-isc_relmat", "hyper_isc_pairs",
+             sources=["/in.snirf"], channel_cross=cross, chroma=chroma)
+
+    steps = dict(steps_from_sidecars(tmp_path))
+    assert list(steps) == [key]
+    assert f"separately for {steps[key]['chroma']}" == named
+    sentence = step_sentence("hyper_isc_pairs", {"channel_cross": cross, "chroma": chroma})
+    # no option was used, so the sentence ends on the chromophores
+    assert pairs in sentence and sentence.endswith(f"{named}.")
 
 
 @pytest.mark.parametrize("pad, said, unsaid", [
@@ -431,7 +453,8 @@ def test_the_hyper_sentences_all_exist():
     from nirspipe.qc.boilerplate.generate import _load_steps
 
     steps = _load_steps()
-    for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_isc"):
+    for key in ("hyper_alignment", "hyper_wtc", "hyper_wtc_crossed", "hyper_isc",
+                "hyper_isc_crossed"):
         assert key in steps, f"{key} has no prose"
         assert "{citations}" in steps[key]["plain"]
 
@@ -513,7 +536,7 @@ def test_a_dyad_reads_coherence_then_correlation_then_regions(tmp_path):
                  sources=["/deriv/sub-11_task-hold_desc-errts_nirs.snirf"], channel_cross=True)
 
     assert [k for k, _ in steps_from_sidecars(tmp_path, label="group-G1_task-hold")] == [
-        "hyper_wtc_crossed", "hyper_isc", "hyper_roi"]
+        "hyper_wtc_crossed", "hyper_isc_crossed", "hyper_roi"]
 
 
 @pytest.mark.parametrize("params, expected", [
@@ -624,7 +647,7 @@ def test_bad_channels_are_described_as_marked_and_a_glm_says_it_fitted_them():
                                               "min_good_frac": 0.75})
     assert "were marked as bad." in screening and "excluded" not in screening
     assert "fitted as well and flagged" in _load_steps_plain("glm")
-    for key in ("hyper_wtc", "hyper_wtc_crossed", "hyper_isc"):
+    for key in ("hyper_wtc", "hyper_wtc_crossed", "hyper_isc", "hyper_isc_crossed"):
         assert "retained long" in _load_steps_plain(key)
 
 

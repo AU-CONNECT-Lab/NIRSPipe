@@ -23,15 +23,12 @@ differs within a trio is source-detector separation, and a ``_long`` number is o
 compared against another ``_long`` one.
 
 **Split a new metric three ways unless it cannot be.** A short channel sees scalp rather
-than cortex, so an average over both sets describes neither. Two kinds of metric are the
-exception:
+than cortex, so an average over both sets describes neither. A metric taken across
+channels splits too: GVTD, the spike counts and the correction footprint are each a
+measurement of the set they are given, "at least a tenth of *these* channels" being a
+different question per set, and ``spike_count`` is printed beside its set's channel count.
+One kind of metric is the exception:
 
-    a sum over channels  ``spike_count``, which tracks how many channels a set has and
-                     nothing else. It is the only metric of the motion families that stays
-                     on ``all`` and ``long`` alone. GVTD, the spike frame counts and the
-                     correction footprint all split in full: each set is its own
-                     measurement rather than a regrouping of one, "at least a tenth of
-                     *these* channels" being a different question per set.
     not channel-based  ``pct_data_retained`` is a share of the recording's duration. It is
                      the same number for every channel set, so it stays on the whole-file
                      section alone (see ``_WHOLE_FILE_KEYS``); repeating it under ``_long``
