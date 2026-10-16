@@ -144,13 +144,14 @@ Every file has a JSON sidecar naming the step that produced it and the files it 
 | `TaskName`, `SamplingFrequency`, `NIRSChannelCount`, `NIRSSourceOptodeCount`, `NIRSDetectorOptodeCount` | On every derivative `_nirs.json`: the required fields of the raw sidecar. The rate and channel count describe the file itself |
 | `pipeline_version` | The package version that wrote the file |
 | `step` | The step that produced the file |
-| `Sources` | The files it was derived from, as BIDS URIs |
+| `Sources` | The files it was derived from, as BIDS URIs. A GLM output or residual also lists the events table (`--events-path`) and the aux table it read |
+| `external_sources` | An input table that sits in no linked dataset, by absolute path, since it has no BIDS URI |
 | `parameters` | The settings that step used, as resolved; a regressor that was asked for but could not be built is absent |
 | `data` | What the step left: `n_channels`, `n_bad`, `sfreq`, `duration_s` |
 | `bad_channels` | The channels marked bad in this file; SNIRF has no field for them |
 | `excluded_spans` | Every `BAD_` span the file carries, with its kind and source |
 
-Each stage records its own step's settings. The postprocessed stages also carry the filter state of their file (`high_pass`, `low_pass`, `filter_method`, `filter_order`, `censor_fill`, `resample_sfreq`) and the drift settings, so a later analysis can tell what band a residual still holds. The whole configuration is in the run record.
+Each stage records its own step's settings. The postprocessed stages also carry the filter state of their file (`high_pass`, `low_pass`, `filter_method`, `filter_order`, `censor_fill`, `resample_sfreq`) and the drift settings, so a later analysis can tell what band a residual still holds. The contrast table's sidecar carries the weights it was computed from (`contrast_weights`). The whole configuration is in the run record.
 
 | Stage (`desc-`) | Step |
 |-----------------|------|
