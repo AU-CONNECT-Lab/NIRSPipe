@@ -8,7 +8,7 @@ import pytest
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.isc import _isc_from_rows, compute_isc_pairs
 from nirspipe.pipeline.hyper.surrogate import _accumulate_null_hist
 from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
@@ -347,8 +347,7 @@ def test_a_re_paired_draw_excludes_the_real_union_and_the_stand_ins_corrupted_ti
 
 def _re_paired_isc_shares(tmp_path, monkeypatch, real_spans, stand_in_spans) -> dict:
     """One re-paired null against one stand-in: each condition's ISC ``n_valid_frac`` values."""
-    from nirspipe.pipeline import hyper
-    from nirspipe.pipeline.hyper import group_io, group_quality
+    from nirspipe.pipeline.hyper import alignment, group_io, group_quality
     from nirspipe.pipeline.hyper.pair_null import run_pair_null
 
     real = _dyad(real_spans)
@@ -364,7 +363,7 @@ def _re_paired_isc_shares(tmp_path, monkeypatch, real_spans, stand_in_spans) -> 
         e.subject_id: (real.get(e.subject_id) or stand_in).copy() for e in entries})
     monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
     monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
-    monkeypatch.setattr(hyper, "align_recordings",
+    monkeypatch.setattr(alignment, "align_recordings",
                         lambda raws, task: (raws, {s: 0.0 for s in raws}))
     run_pair_null("G1", "tap", group, {("G1", "tap", None): group, ("G2", "tap", None): others},
                   tmp_path, tmp_path, chroma=("hbo",))

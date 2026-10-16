@@ -18,9 +18,8 @@ import pandas as pd
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from nirspipe.io.derivatives import group_output_path, read_json
-from nirspipe.pipeline.hyper.group_io import (
-    GroupEntry, _for_task, _hyper_sidecar, _member_sqm_files,
-)
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_io import _for_task, _hyper_sidecar, _member_sqm_files
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
 from nirspipe.utils.lineage import path_from
 from nirspipe.utils.logging import get_logger

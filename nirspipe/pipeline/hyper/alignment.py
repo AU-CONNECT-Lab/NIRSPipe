@@ -16,8 +16,7 @@ import numpy as np
 from nirspipe.exceptions import AlignmentError
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.io.snirf import write_snirf
-from nirspipe.pipeline.hyper._helpers import _zscore_rows
-from nirspipe.utils import is_marker
+from nirspipe.utils import is_marker, zscore_rows
 from nirspipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.lineage import path_from
@@ -461,7 +460,7 @@ def normalize_raws(raws: dict[str, mne.io.Raw]) -> dict[str, mne.io.Raw]:
     result: dict[str, mne.io.Raw] = {}
     for sid, raw in raws.items():
         r = raw.copy()
-        r._data[:] = _zscore_rows(r.get_data())
+        r._data[:] = zscore_rows(r.get_data())
         # what a figure reads to label the traces z rather than a concentration
         result[sid] = restamp(r, normalized=True)
     return result

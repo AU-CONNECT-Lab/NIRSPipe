@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from nirspipe.exceptions import AlignmentError
-from nirspipe.pipeline.hyper import resolve_analysis_window
+from nirspipe.pipeline.hyper.alignment import resolve_analysis_window
 from nirspipe.pipeline.hyper.wtc import WTCResult, window_result
 
 

@@ -12,7 +12,8 @@ from nirspipe.io.derivatives import (
     group_report_dir,
     subject_report_dir,
 )
-from nirspipe.pipeline.hyper import GroupEntry, write_group_bads
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_quality import write_group_bads
 
 
 def _group(task="hold"):

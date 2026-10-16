@@ -375,8 +375,8 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
                                    "label2": ["S1_D1"], "coherence": [0.5],
                                    "n_valid_frac": [1.0]}))
 
-    monkeypatch.setattr("nirspipe.pipeline.hyper.compute_wtc_phase_null", _spy)
-    monkeypatch.setattr("nirspipe.pipeline.hyper._hyper_sidecar",
+    monkeypatch.setattr("nirspipe.pipeline.hyper.surrogate.compute_wtc_phase_null", _spy)
+    monkeypatch.setattr("nirspipe.pipeline.hyper.group_io._hyper_sidecar",
                         lambda *a, **k: None)
     monkeypatch.setattr("nirspipe.utils.lineage.path_from", lambda r: None)
     # both read the montage off the recordings, which these stubs do not have

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from nirspipe.io.naming import parse_path
-from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.qc.hyper.hyper_report import member_condition_entries
 
 SFREQ, DURATION, CROP = 5.0, 400.0, 20.0

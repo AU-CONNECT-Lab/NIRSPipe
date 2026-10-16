@@ -271,7 +271,7 @@ CONDITIONS = [("rest", 0.0, 180.0), ("task", 200.0, 380.0)]
 @pytest.fixture(scope="module")
 def report(tmp_path_factory):
     import mne
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     dyad = _dyad_lagged(LAG_S)

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from nirspipe.cli import run as run_cli
-from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
 from nirspipe.qc.metrics.windowed import (condition_window_means, coupled_mask_from_matrices,
                                           window_centers, windows_touching)

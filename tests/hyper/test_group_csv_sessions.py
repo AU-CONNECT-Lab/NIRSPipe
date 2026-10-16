@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import pytest
 
-from nirspipe.pipeline.hyper.group_io import parse_group_csv
+from nirspipe.io.groups import parse_group_csv
 
 SESSIONS = ("a", "b")
 TASK = "mixed"

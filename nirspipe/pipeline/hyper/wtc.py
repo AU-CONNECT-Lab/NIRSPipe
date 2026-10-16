@@ -28,7 +28,7 @@ from scipy.fft import next_fast_len
 from scipy.signal import convolve2d
 
 from nirspipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
-from nirspipe.utils import fisher_r_to_z
+from nirspipe.utils import cone_margin_s, fisher_r_to_z
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, frames_under
 
@@ -108,7 +108,7 @@ def _fft_length(n: int, dt: float, s_max: float) -> int:
 
     Padding stops the circular convolution wrapping the end of the record onto its start, so
     what it has to clear is how far the widest wavelet reaches in from an edge. That is
-    :func:`cone_margin_s` at the **largest computed scale**, which sits ``_SCALE_MARGIN``
+    :func:`~nirspipe.utils.cone_margin_s` at the **largest computed scale**, which sits ``_SCALE_MARGIN``
     scales below ``fmin`` rather than at it. The minimum keeps a recording shorter than its
     own padding from being transformed over more samples than pycwt would use.
     """
@@ -149,31 +149,6 @@ def _morlet():
             return convolve2d(T, _scale_window(dj)[:, None], "same")
 
     return _Morlet()
-
-
-def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
-    r"""Seconds of recording to keep either side of a window so its band is clear of the cone.
-
-    ::
-
-      cone_margin_s(0.06)  ->  47.1     cone_margin_s(0.02)  ->  141.4
-
-    A wavelet coefficient near the end of a series is computed partly against the padding
-    beyond it, and the cone of influence is where that contamination has decayed to
-    :math:`e^{-2}`. For the Morlet wavelet the cone reaches :math:`\sqrt{2}\,P` in from each
-    edge at period :math:`P`, so the lowest frequency a band mean uses, ``band_fmin``, is the
-    one that reaches furthest:
-
-    .. math::
-
-        \mathrm{margin} = \mathrm{factor} \times \frac{\sqrt{2}}{f_{\min}}
-
-    Returned in seconds, so a caller crops ``[t0 - margin, t1 + margin]`` and windows the
-    result back to ``[t0, t1]``.
-    """
-    if band_fmin <= 0:
-        raise ValueError(f"band_fmin must be positive, got {band_fmin}")
-    return float(factor) * np.sqrt(2.0) / float(band_fmin)
 
 
 def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tuple[float, int]:
@@ -479,7 +454,7 @@ def _wtc_over_pairs(
     ``axis`` is the montage's labels, rejections included, and is what the keys are drawn
     from: a label one member has no usable channel at gets its key with ``None`` behind it
     rather than no key at all, so every dyad's table has one shape (the ``exclude=[]`` rule
-    :func:`~nirspipe.io.snirf.long_channel_picks` documents). Left at None the keys come
+    :func:`~nirspipe.qc.metrics._helpers.long_channel_picks` documents). Left at None the keys come
     from the surviving channels, which is the shape a caller with no montage to hand can
     produce.
 

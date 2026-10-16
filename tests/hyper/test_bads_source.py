@@ -18,7 +18,8 @@ import json
 import pandas as pd
 import pytest
 
-from nirspipe.pipeline.hyper import GroupEntry, load_group_sqm
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_quality import load_group_sqm
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 
 BADS_TAP = ["S6_D5 760", "S6_D5 850"]

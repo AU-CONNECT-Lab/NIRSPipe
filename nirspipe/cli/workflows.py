@@ -16,7 +16,7 @@ from typing import Any
 import mne
 import numpy as np
 
-from nirspipe.cli import _shared
+from nirspipe.cli import _app_options
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               validate_bids)
@@ -32,7 +32,7 @@ from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils import job_db as _jdb
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
-from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
+from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
 from nirspipe.utils.spans import bad_spans, marker_onset
 from nirspipe import __version__
 
@@ -99,7 +99,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         roi_map=roi_map,
         roi_map_name=_roi_map_name(args),
         # the same bands prep split with, so the regression and the reports agree
-        **_shared.separation_bands_from_args(args),
+        **_app_options.separation_bands_from_args(args),
     )
 
 
@@ -264,7 +264,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                            for field, arg in _post_setting_args().items()
                            if post_sources[field] in ("config", "mode")]
 
-    roi_map = _shared.load_roi_mapping(args.get("roi_mapping"))
+    roi_map = _app_options.load_roi_mapping(args.get("roi_mapping"))
 
     tasks: list[str | None] = task_label if task_label else [None]
 
@@ -382,7 +382,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                                 qc_window_s=args.get("window_length", 10.0),
                                 # nothing on disk records them, so the record would otherwise
                                 # be split on the package defaults whatever this run was told
-                                sep_bands=_shared.resolved_separation_bands(args),
+                                sep_bands=_app_options.resolved_separation_bands(args),
                                 labels=set(prep_runs))
                     except Exception:
                         logger.error("sub-%s | SQM records failed", subject, exc_info=True)
@@ -784,7 +784,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         gvtd_censor=args.get("gvtd_censor"),
         gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
         gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
-        **_shared.separation_bands_from_args(args),
+        **_app_options.separation_bands_from_args(args),
         ignore=[_v(ig) for ig in (args.get("ignore") or [])],
     )
 

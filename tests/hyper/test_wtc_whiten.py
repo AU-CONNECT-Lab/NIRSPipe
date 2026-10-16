@@ -15,7 +15,7 @@ from scipy.signal import lfilter
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_order, whiten_raws
 from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 from tests.hyper.test_hyper_page_contract import DURATION, SFREQ, _raw

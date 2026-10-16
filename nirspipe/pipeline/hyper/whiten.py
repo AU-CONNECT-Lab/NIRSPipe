@@ -16,7 +16,7 @@ from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
 from nirspipe.exceptions import StageError
-from nirspipe.io.snirf import long_channel_picks
+from nirspipe.qc.metrics._helpers import long_channel_picks
 from nirspipe.pipeline.glm_censored import gap_ar_coefficients, kept_frames
 from nirspipe.pipeline.hyper._helpers import _shared_sfreq
 from nirspipe.utils.logging import get_logger

@@ -12,9 +12,10 @@ from dataclasses import replace
 from nirspipe import __version__
 
 from nirspipe.io.naming import report_name
+from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
 from nirspipe.utils.logging import get_logger, setup_logging
-from nirspipe.cli._shared import separation_bands_from_args
+from nirspipe.cli._app_options import separation_bands_from_args
 from nirspipe.qc.metrics._helpers import separation_bands
 
 setup_logging()
@@ -41,7 +42,7 @@ def cmd_prep_raw(
     wavelet_iqr: float | None = None,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
-    _shared.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
+    _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
@@ -62,7 +63,7 @@ def cmd_prep_raw(
     if (epoch_tmin is None) != (epoch_tmax is None):
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
         raise SystemExit(1)
-    roi_map = _shared.load_roi_mapping(roi_mapping)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
 
     layout = get_layout(bids_dir)
     sessions = session_label or [None]
@@ -218,19 +219,21 @@ def cmd_hyper_raw(
     })))
 
     from nirspipe.cli.hyper import _run_groups, _select_groups
-    from nirspipe.pipeline.hyper import (
+    from nirspipe.pipeline.hyper.group_io import (
         _raw_to_haemo,
+        load_group_raw_bids,
+        load_group_stage,
+    )
+    from nirspipe.pipeline.hyper.alignment import (
         align_imu_like,
         align_like,
         aligned_offsets,
         align_recordings,
-        compute_group_sqm_raw,
         crop_aligned_window,
-        load_group_raw_bids,
-        load_group_stage,
         normalize_raws,
         trim_to_shortest,
     )
+    from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
     from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
     from nirspipe.io.bids import channel_status_bads, get_layout
     from nirspipe.qc.hyper.hyper_report import build_hyper_report
@@ -249,7 +252,7 @@ def cmd_hyper_raw(
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: the motion panel shows the recordings before "
               "correction only.", file=sys.stderr)
-    roi_map = _shared.load_roi_mapping(roi_mapping)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
 
     # each member's channels.tsv, read off the BIDS tree its recording came from
     layout = None if "channel-status" in (ignore or []) else get_layout(bids_dir)
@@ -423,7 +426,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"nirspipe-qc {__version__}")
     sub = p.add_subparsers(required=True)
 
-    pr = sub.add_parser("prep-raw", parents=[_shared.screening()],
+    pr = sub.add_parser("prep-raw", parents=[_app_options.screening()],
                         help="Static raw QC report for a single participant.")
     pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     pr.add_argument("output_dir", type=Path, help="nirspipe derivatives directory")
@@ -447,7 +450,7 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--epoch-tmax", type=float, default=None,
                     help="Trial window end relative to event onset in s. Given together with "
                          "--epoch-tmin, or neither.")
-    _shared.add_separation_bands(pr)
+    _app_options.add_separation_bands(pr)
     pr.add_argument("--by-condition", action="store_true",
                     help="Also write one report per annotated condition, beside the run's "
                          "own, as <run>_cond-<condition>_desc-raw_report.html. Their numbers "
@@ -463,7 +466,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "recording before and after it. Nothing is written back and nothing "
                          "else runs, so screening and coupling still describe the recording as "
                          "delivered. Default none: report it uncorrected.")
-    _shared.add_motion_settings(pr)
+    _app_options.add_motion_settings(pr)
     _shared.add_skip_bids_validation(pr)
     _add_ignore(pr)
     pr.add_argument("--roi-mapping", type=Path, default=None,
@@ -472,9 +475,9 @@ def _build_parser() -> argparse.ArgumentParser:
     pr.set_defaults(func=cmd_prep_raw)
 
     hr = sub.add_parser("hyper-raw",
-                        parents=[_shared.pairs_selection(),
-                                 _shared.screening(),
-                                 _shared.alignment_window()],
+                        parents=[_app_options.pairs_selection(),
+                                 _app_options.screening(),
+                                 _app_options.alignment_window()],
                         help="Hyperscanning raw QC report from BIDS raw data.")
     hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
     hr.add_argument("output_dir", type=Path,
@@ -483,7 +486,7 @@ def _build_parser() -> argparse.ArgumentParser:
     hr.add_argument("analysis_level", choices=["group"],
                     help="Always `group`: every metric here needs both members present.")
     _add_dpf_and_cardiac(hr)
-    _shared.add_separation_bands(hr)
+    _app_options.add_separation_bands(hr)
     hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Session label(s) to process: a group's occasion where the group "
                          "CSV has one, else its session. A group-CSV row without either is "

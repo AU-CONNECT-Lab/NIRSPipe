@@ -280,7 +280,7 @@ def _haemo(seed: int):
 @pytest.fixture(scope="module")
 def real_tree(tmp_path_factory):
     """One dyad's real tables, crossed, as `nirspipe-hyper` writes them for the null to read."""
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("real")
@@ -342,7 +342,7 @@ def test_a_retyped_roi_minimum_that_differs_is_refused(real_tree, monkeypatch):
 
 
 def test_a_crossed_null_over_an_uncrossed_table_says_so(tmp_path, monkeypatch, caplog):
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
 
     _real_table(tmp_path, gid="G01", task="tap")
     group = [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]

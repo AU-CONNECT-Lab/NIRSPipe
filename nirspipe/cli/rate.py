@@ -56,7 +56,7 @@ def cmd_hyper(
     derivatives_dir: Path | None = None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
-    from nirspipe.pipeline.hyper import parse_group_csv
+    from nirspipe.io.groups import parse_group_csv
     from nirspipe.qc.rating.app import HyperRatingApp
 
     fname = report_name(group_label(group_id, task_label, session_label), desc="raw")

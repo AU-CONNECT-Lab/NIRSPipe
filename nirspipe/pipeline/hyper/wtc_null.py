@@ -75,7 +75,8 @@ def run_wtc_null(
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
     from nirspipe.io.derivatives import group_output_path
-    from nirspipe.pipeline.hyper import _hyper_sidecar, compute_wtc_phase_null
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+    from nirspipe.pipeline.hyper.surrogate import compute_wtc_phase_null
     from nirspipe.pipeline.hyper._helpers import _chroma_tuple
     from nirspipe.pipeline.hyper.whiten import whiten_raws
     from nirspipe.pipeline.hyper.wtc_store import level_params, save_null_levels
@@ -192,7 +193,8 @@ def write_wtc_null(
     written them, and are what gives the rows their ``percentile`` column. A tree without
     them still gets a null, just one nothing has been ranked against yet.
     """
-    from nirspipe.pipeline.hyper import _hyper_sidecar, alignment_params
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+    from nirspipe.pipeline.hyper.alignment import alignment_params
     from nirspipe.pipeline.hyper.wtc import wtc_grid_params
     from nirspipe.utils.lineage import paths_from
 

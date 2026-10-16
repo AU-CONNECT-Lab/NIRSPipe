@@ -23,7 +23,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path, occasion_label
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
-from nirspipe.pipeline.hyper.wtc import cone_margin_s
+from nirspipe.utils import cone_margin_s
 from nirspipe.io.tables import split_whole_run, write_tsv
 from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
@@ -414,11 +414,10 @@ def run_pair_null(
     step for the same reason: there is nothing to write between them, the table being ranked
     against is already on disk.
     """
-    from nirspipe.pipeline.hyper.group_io import load_group_haemo
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar, load_group_haemo
     from nirspipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
                                                    resolve_group_bands)
-    from nirspipe.pipeline.hyper import (_hyper_sidecar, align_recordings,
-                                                   alignment_params)
+    from nirspipe.pipeline.hyper.alignment import align_recordings, alignment_params
     from nirspipe.pipeline.hyper._helpers import long_axis_over
     from nirspipe.pipeline.hyper.wtc import wtc_grid_params
     from nirspipe.utils.lineage import paths_from
@@ -731,7 +730,7 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     ``path_of`` is the caller's namer, so these land under the same group and task its
     coherence tables do without this function knowing either.
     """
-    from nirspipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 
     keys = ["chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()

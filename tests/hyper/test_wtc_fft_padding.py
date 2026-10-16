@@ -22,6 +22,8 @@ from nirspipe.pipeline.hyper.wtc import (
     _prepare_channel,
     _trim_pair,
     _wavelet_grid,
+)
+from nirspipe.utils import (
     cone_margin_s,
 )
 

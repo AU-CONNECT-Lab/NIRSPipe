@@ -194,7 +194,7 @@ def load_run(run_path, sci_thresh, cardiac_l, cardiac_h, dpf,
     window_s   = float(window_s if window_s is not None else 10.0)
     ep_tmin    = float(epoch_tmin if epoch_tmin is not None else _EPOCH_TMIN)
     ep_tmax    = float(epoch_tmax if epoch_tmax is not None else _EPOCH_TMAX)
-    from nirspipe.cli._shared import separation_bands_from_args
+    from nirspipe.cli._app_options import separation_bands_from_args
     from nirspipe.qc.metrics._helpers import separation_bands
     try:
         sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({

@@ -176,12 +176,12 @@ def write_isc_matrix(
     ``step`` and ``index_label`` are what let this serve the ROI means of those matrices
     too, which are the same square shape over regions instead of channels.
 
-    ``align`` is what :func:`~nirspipe.pipeline.hyper.alignment_params` returned, so the
+    ``align`` is what :func:`~nirspipe.pipeline.hyper.alignment.alignment_params` returned, so the
     file says which alignment it got.
 
     A failure here costs the file and not the panel: the report is still readable without it.
     """
-    from nirspipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 
     try:
         tsv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -220,7 +220,7 @@ def run_hyper_post(
     ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
     the footer of the page this result is drawn on and not only the run log.
     """
-    from nirspipe.pipeline.hyper import _hyper_sidecar
+    from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
     # straight from the modules that define them, not the package re-exports
     from nirspipe.pipeline.hyper._helpers import long_axis_over
     from nirspipe.pipeline.hyper.wtc import (
@@ -351,7 +351,7 @@ def run_hyper_post(
 
         The alternative to reading the window out of the whole-run transform, for a caller
         who wants each condition transformed on its own. What the padding buys is the cone:
-        with a margin past :func:`~nirspipe.pipeline.hyper.wtc.cone_margin_s` it lands
+        with a margin past :func:`~nirspipe.utils.cone_margin_s` it lands
         outside the condition instead of eating its edges.
 
         ``cond_pad_s`` of 0 does cut to the boundaries.

@@ -18,11 +18,14 @@ from nirspipe.io.derivatives import (
 )
 from nirspipe.pipeline.hyper.hyper_post import HyperPostResult, HyperPostConfig, run_hyper_post
 from nirspipe.pipeline.hyper.wtc_null import write_wtc_null
-from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES, onset_residuals
-from nirspipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
-from nirspipe.pipeline.hyper import (
-    GroupEntry, alignment_params, unfiltered_stage_note, WTCResult, roi_maps_from_channels,
+from nirspipe.pipeline.hyper.alignment import (
+    _TRIGGER_JITTER_SAMPLES, alignment_params, onset_residuals,
 )
+from nirspipe.pipeline.hyper.isc import roi_mean_of_homologous_isc
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_io import unfiltered_stage_note
+from nirspipe.pipeline.hyper.wtc import WTCResult
+from nirspipe.pipeline.hyper.roi import roi_maps_from_channels
 from nirspipe.qc.common.channel_table import (
     WAVELENGTH_COLUMNS, channel_columns, channel_rows, format_rows, pair_rows, pair_wavelengths,
     roi_overlap_note,

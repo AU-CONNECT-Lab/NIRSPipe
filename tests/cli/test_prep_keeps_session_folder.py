@@ -3,7 +3,7 @@
 import pytest
 
 from nirspipe.cli import prep as prep_cli
-from nirspipe.pipeline.hyper import parse_group_csv
+from nirspipe.io.groups import parse_group_csv
 from tests._synth import make_hyper_dataset
 
 

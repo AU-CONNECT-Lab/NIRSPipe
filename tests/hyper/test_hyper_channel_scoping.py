@@ -23,8 +23,10 @@ import pytest
 
 from nirspipe.exceptions import MissingDerivativesError, StageError
 from nirspipe.io.derivatives import find_preproc_snirf
-from nirspipe.io.snirf import long_channel_picks, write_snirf
-from nirspipe.pipeline.hyper import GroupEntry, load_group_haemo
+from nirspipe.qc.metrics._helpers import long_channel_picks
+from nirspipe.io.snirf import write_snirf
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_io import load_group_haemo
 from nirspipe.pipeline.hyper._helpers import _shared_sfreq
 from nirspipe.pipeline.hyper.wtc import WTCResult, compute_wtc, wtc_band_mean
 from tests._synth import SHORT_DISTANCE, synth_raw
@@ -164,7 +166,7 @@ def test_isc_refuses_two_sampling_rates():
 
 def test_an_unrecorded_bandpass_is_flagged():
     """--desc defaults to preproc, which is Beer-Lambert output and carries its drift."""
-    from nirspipe.pipeline.hyper import unfiltered_stage_note
+    from nirspipe.pipeline.hyper.group_io import unfiltered_stage_note
     from nirspipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
@@ -177,7 +179,7 @@ def test_an_unrecorded_bandpass_is_flagged():
 
 
 def test_a_recorded_bandpass_is_not_flagged():
-    from nirspipe.pipeline.hyper import unfiltered_stage_note
+    from nirspipe.pipeline.hyper.group_io import unfiltered_stage_note
     from nirspipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
@@ -189,7 +191,7 @@ def test_a_recorded_bandpass_is_not_flagged():
 
 def test_one_filtered_member_is_still_flagged():
     """A dyad half filtered is worse than one not filtered at all, not better."""
-    from nirspipe.pipeline.hyper import unfiltered_stage_note
+    from nirspipe.pipeline.hyper.group_io import unfiltered_stage_note
     from nirspipe.utils.lineage import stamp
 
     raws = {"sub-A": _haemo("11"), "sub-B": _haemo("12")}
@@ -472,7 +474,7 @@ def test_the_roi_matrix_is_written_beside_the_channel_one(tmp_path):
 # ---- the quality record reaching the Raw ----
 
 def test_a_rejected_pair_is_marked_at_both_chromophores():
-    from nirspipe.pipeline.hyper import apply_group_bads
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads
 
     raw = _haemo("11")
     raws = {"sub-A": raw}
@@ -490,7 +492,7 @@ def test_a_rejected_pair_never_reaches_the_coherence():
     holds every label the montage has so two dyads that lost different channels still stack,
     and a reader can tell a blank cell from a channel that was never there.
     """
-    from nirspipe.pipeline.hyper import apply_group_bads
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads
 
     raws = {"sub-11": _haemo("11"), "sub-12": _haemo("12")}
     assert all(not r.info["bads"] for r in raws.values())          # the state on disk
@@ -505,7 +507,7 @@ def test_a_rejected_pair_never_reaches_the_coherence():
 
 
 def test_a_subject_with_nothing_rejected_keeps_every_channel():
-    from nirspipe.pipeline.hyper import apply_group_bads
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads
 
     raw = _haemo("11")
     apply_group_bads({"sub-A": raw}, {"sub-A": {"bad_channels": []}})

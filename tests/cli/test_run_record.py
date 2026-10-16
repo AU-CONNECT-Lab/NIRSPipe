@@ -152,7 +152,7 @@ def test_a_prep_only_run_has_no_post_section(prep_only_record):
 def group_record(tmp_path):
     import tomllib
 
-    from nirspipe.utils.run_record import write_group_run_record
+    from nirspipe.cli.run_record import write_group_run_record
 
     out = write_group_run_record(
         {"pairs_csv": tmp_path / "pairs.csv", "wtc_fmin": 0.004, "wtc_fmax": 0.2,

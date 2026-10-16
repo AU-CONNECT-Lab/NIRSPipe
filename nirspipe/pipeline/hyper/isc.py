@@ -20,10 +20,10 @@ import mne
 import numpy as np
 import pandas as pd
 
-from nirspipe.io.snirf import long_channel_picks
-from nirspipe.pipeline.hyper._helpers import _shared_sfreq, _zscore_rows, long_axis_over
+from nirspipe.qc.metrics._helpers import long_channel_picks
+from nirspipe.pipeline.hyper._helpers import _shared_sfreq, long_axis_over
 from nirspipe.pipeline.hyper.surrogate import phase_scramble
-from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of, zscore_rows
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, frames_under
 
@@ -36,7 +36,7 @@ def _masked_r(left: np.ndarray, right: np.ndarray, keep: "np.ndarray | None") ->
         left, right = left[:, keep], right[:, keep]
         if left.shape[1] < 2:
             return np.full((left.shape[0], right.shape[0]), np.nan)
-    return np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1], -1.0, 1.0)
+    return np.clip((zscore_rows(left) @ zscore_rows(right).T) / left.shape[1], -1.0, 1.0)
 
 
 def _isc_from_rows(
@@ -70,7 +70,7 @@ def _isc_from_rows(
         if keep is not None:
             isc_mat = _masked_r(data1, data2, keep)
             return isc_mat, np.zeros_like(isc_mat)
-        isc_mat = (_zscore_rows(data1) @ _zscore_rows(data2).T) / n
+        isc_mat = (zscore_rows(data1) @ zscore_rows(data2).T) / n
         np.clip(isc_mat, -1.0, 1.0, out=isc_mat)
         return isc_mat, np.zeros_like(isc_mat)
 
@@ -79,7 +79,7 @@ def _isc_from_rows(
         left  = data1[:, max(0, -shift): n - max(0, shift)]
         right = data2[:, max(0, shift): n - max(0, -shift)]
         if keep is None:
-            at_lag = np.clip((_zscore_rows(left) @ _zscore_rows(right).T) / left.shape[1],
+            at_lag = np.clip((zscore_rows(left) @ zscore_rows(right).T) / left.shape[1],
                              -1.0, 1.0)
         else:
             at_lag = _masked_r(left, right, keep[max(0, -shift): n - max(0, shift)]
@@ -248,7 +248,7 @@ def compute_isc(
     claims. Everything here is looked up by S-D label.
 
     Rejections arrive on ``raw.info["bads"]``, which is where
-    :func:`nirspipe.pipeline.hyper.load_group_haemo` puts them and the only place
+    :func:`nirspipe.pipeline.hyper.group_io.load_group_haemo` puts them and the only place
     the WTC path reads them from.
 
     Raises ValueError if the members were recorded at different sampling rates, which is

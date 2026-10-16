@@ -13,7 +13,9 @@ import pandas as pd
 import pytest
 
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.pipeline.hyper import GroupEntry, _hyper_sidecar, alignment_params
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
+from nirspipe.pipeline.hyper.alignment import alignment_params
 from nirspipe.pipeline.hyper.wtc import compute_wtc, wtc_grid_params
 from nirspipe.pipeline.hyper.wtc_store import (level_params, save_cond_null_levels,
                                                  save_null_levels)

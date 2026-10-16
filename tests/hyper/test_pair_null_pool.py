@@ -10,7 +10,7 @@ measured rather than declared by the caller.
 import pytest
 
 from nirspipe.exceptions import StageError
-from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.pair_null import partner_pool
 
 

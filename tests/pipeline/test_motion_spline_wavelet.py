@@ -12,7 +12,7 @@ import mne
 import numpy as np
 import pytest
 
-from nirspipe.cli import _shared
+from nirspipe.cli import _app_options
 from nirspipe.pipeline import motion
 from nirspipe.pipeline.motion import (
     _spline_motion_correct,
@@ -153,10 +153,10 @@ def test_left_unset_the_existing_methods_are_unchanged():
 
 def test_the_cli_check_exits_naming_the_flag(capsys):
     with pytest.raises(SystemExit) as stop:
-        _shared.check_motion_settings("tddr", None, 0.8)
+        _app_options.check_motion_settings("tddr", None, 0.8)
     assert stop.value.code == 1
     assert "--wavelet-iqr" in capsys.readouterr().err
-    _shared.check_motion_settings("spline_wavelet", 15.0, 0.5)
+    _app_options.check_motion_settings("spline_wavelet", 15.0, 0.5)
 
 
 # ---- The sidecar ----

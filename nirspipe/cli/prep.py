@@ -93,7 +93,7 @@ def cmd_crop(
                 print("[error] --margin auto requires --band-fmin (the lowest frequency the "
                       "analysis will average over).", file=sys.stderr)
                 raise SystemExit(1)
-            from nirspipe.pipeline.hyper.wtc import cone_margin_s
+            from nirspipe.utils import cone_margin_s
             margin = cone_margin_s(band_fmin)
         else:
             margin = float(margin_s)
@@ -127,9 +127,8 @@ def cmd_align(
     from nirspipe.exceptions import AlignmentError
     from nirspipe.io.derivatives import LINK_RAW, entity_of, write_dataset_description
     from nirspipe.io.snirf import read_snirf
-    from nirspipe.pipeline.hyper import (
-        align_recordings, member_snirfs, parse_group_csv, write_aligned_member,
-    )
+    from nirspipe.pipeline.hyper.alignment import align_recordings, write_aligned_member
+    from nirspipe.io.groups import member_snirfs, parse_group_csv
     from nirspipe.utils.snirf_prep import (
         deriv_nirs_dir, copy_dataset_root,
     )

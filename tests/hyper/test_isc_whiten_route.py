@@ -13,8 +13,8 @@ import pytest
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.io.snirf import long_channel_picks
-from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.qc.metrics._helpers import long_channel_picks
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from nirspipe.qc.hyper.hyper_report import build_hyper_post_report

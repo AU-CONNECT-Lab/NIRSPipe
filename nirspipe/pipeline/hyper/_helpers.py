@@ -8,7 +8,7 @@ import mne
 import numpy as np
 
 from nirspipe.utils import pair_of
-from nirspipe.io.snirf import long_channel_picks
+from nirspipe.qc.metrics._helpers import long_channel_picks
 
 
 def _shared_sfreq(raws: dict[str, mne.io.Raw]) -> float:
@@ -89,13 +89,6 @@ def long_axis_over(
             if label not in axis:
                 axis.append(label)
     return axis
-
-
-def _zscore_rows(x: np.ndarray) -> np.ndarray:
-    """Each row to zero mean and unit deviation, a flat row left alone rather than divided by 0."""
-    mu  = x.mean(axis=1, keepdims=True)
-    std = x.std(axis=1, keepdims=True)
-    return (x - mu) / np.where(std < 1e-12, 1.0, std)
 
 
 def _chroma_tuple(chroma, name: str) -> "tuple[str, ...]":

@@ -8,10 +8,10 @@ from pathlib import Path
 import mne
 
 from nirspipe.io.derivatives import bids_uris, group_data_dir, group_label, group_report_dir
-from nirspipe.pipeline.hyper import (
-    GroupEntry, alignment_params, onset_residuals,
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.alignment import (
+    _TRIGGER_JITTER_SAMPLES, alignment_params, onset_residuals,
 )
-from nirspipe.pipeline.hyper.alignment import _TRIGGER_JITTER_SAMPLES
 from nirspipe.qc.subject.sqm_record import record_path
 from nirspipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html, figure_namer,

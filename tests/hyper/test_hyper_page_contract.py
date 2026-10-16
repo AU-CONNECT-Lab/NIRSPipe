@@ -27,7 +27,7 @@ import pytest
 
 from nirspipe.io.naming import parse_path
 
-from nirspipe.pipeline.hyper import GroupEntry
+from nirspipe.io.groups import GroupEntry
 
 SFREQ, DURATION = 5.0, 400.0
 LABELS = ["S1_D1", "S2_D2", "S3_D3"]

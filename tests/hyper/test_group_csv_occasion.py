@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from nirspipe.exceptions import GroupCSVError
-from nirspipe.pipeline.hyper.group_io import parse_group_csv
+from nirspipe.io.groups import parse_group_csv
 
 TASK = "mixed"
 OCCASION = "7"

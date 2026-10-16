@@ -112,7 +112,7 @@ def test_the_error_names_the_chromophore_that_has_no_channel(dyad):
 @pytest.fixture(scope="module")
 def report(dyad, tmp_path_factory):
     """One report over both chromophores, with the maps archived and the channels crossed."""
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     out = tmp_path_factory.mktemp("chroma")
@@ -181,7 +181,7 @@ def test_the_isc_tables_stay_one_file_each(report):
 # ---- one chromophore only ----
 
 def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     build_hyper_post_report(
@@ -203,7 +203,7 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
 
 @pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     with pytest.raises(ValueError, match="wtc_chroma"):
@@ -314,7 +314,7 @@ def _report_by_condition(dyad, out, **extra):
     A window shorter than one cycle of `--wtc-fmin` is skipped, so at 0.02 Hz these have to
     be at least 50 s.
     """
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     marked = {sid: raw.copy() for sid, raw in dyad.items()}
@@ -427,7 +427,7 @@ def _js_var(html: str, name: str):
 
 
 def _page(dyad, where, chroma, **kwargs):
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     path = build_hyper_post_report(

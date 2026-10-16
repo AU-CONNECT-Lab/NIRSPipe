@@ -5,7 +5,7 @@ import json
 import pytest
 
 from nirspipe.cli import qc
-from nirspipe.pipeline import hyper as hyper_pkg
+from nirspipe.pipeline.hyper import group_io
 
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
 
@@ -17,7 +17,7 @@ def _generated_by(tree):
 
 @pytest.fixture
 def no_stage_reads(monkeypatch):
-    monkeypatch.setattr(hyper_pkg, "load_group_stage", lambda *a, **k: {})
+    monkeypatch.setattr(group_io, "load_group_stage", lambda *a, **k: {})
 
 
 def test_prep_raw_tree_lists_what_a_validator_skips(mini_bids, tmp_path):

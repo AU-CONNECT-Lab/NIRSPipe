@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from nirspipe import __version__
+from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
 from nirspipe.pipeline.censor_fill import (
     DEFAULT_CENSOR_FILL,
@@ -94,7 +95,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prep.add_argument("--dpf", nargs="+", type=float, action="extend",
                       help="Differential pathlength factor. One value or one per wavelength.")
     # no default: _LEVEL_REQUIRES makes it required at participant level
-    _shared.add_sci_threshold(prep)
+    _app_options.add_sci_threshold(prep)
 
     sel = p.add_argument_group("subject / session / task selection")
     sel.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
@@ -109,7 +110,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt = p.add_argument_group("preprocessing (optional)")
     prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
                           help="Motion correction method.")
-    _shared.add_motion_settings(prep_opt)
+    _app_options.add_motion_settings(prep_opt)
     prep_opt.add_argument("--bad-channels",
                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "
                                "every subject; or a table with a bad_channels column, rows "
@@ -147,10 +148,10 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Upper bound of respiration band in Hz (required at participant level; "
                                "population-dependent). Adult ~0.5; infants higher.")
     # the other screening line, optional unlike --sci-threshold
-    _shared.add_psp_threshold(prep_opt)
-    _shared.add_min_good_frac(prep_opt)
-    _shared.add_screen_scope(prep_opt)
-    _shared.add_separation_bands(prep_opt)
+    _app_options.add_psp_threshold(prep_opt)
+    _app_options.add_min_good_frac(prep_opt)
+    _app_options.add_screen_scope(prep_opt)
+    _app_options.add_separation_bands(prep_opt)
     prep_opt.add_argument("--window-length", type=float, default=10.0,
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
     prep_opt.add_argument("--epoch-tmin", type=float, default=None,
@@ -456,7 +457,7 @@ def main(argv: list[str] | None = None) -> None:
     _require(args, *_LEVEL_REQUIRES[level])
     _check_epoch_window(args)
     _check_keep_spans_from(args)
-    _shared.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)
+    _app_options.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)
     _check_dirs(args)
 
     from nirspipe.cli.workflows import run_group_level, run_participant_level

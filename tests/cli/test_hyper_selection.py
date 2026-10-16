@@ -2,7 +2,7 @@
 
 import pytest
 
-from nirspipe.cli import _shared
+from nirspipe.cli import _app_options
 from nirspipe.cli.hyper import _parsers, _select_groups
 
 
@@ -38,7 +38,7 @@ def test_unknown_participant_exits(pairs_csv, capsys):
 
 
 def test_participant_label_parses_both_spellings_and_strips_sub():
-    p = _shared.pairs_selection()
+    p = _app_options.pairs_selection()
     a = p.parse_args(["--pairs-csv", "x.csv", "--participant-label", "sub-01", "02"])
     b = p.parse_args(["--pairs-csv", "x.csv", "--participant_label", "01", "--participant_label", "02"])
     assert a.participant_label == b.participant_label == ["01", "02"]

@@ -30,8 +30,7 @@ import mne
 import numpy as np
 import pytest
 
-from nirspipe.cli._shared import separation_bands_from_args
-from nirspipe.io.snirf import has_short_channels, long_channel_picks
+from nirspipe.cli._app_options import separation_bands_from_args
 from nirspipe.qc.metrics._helpers import (
     _ORPHANS_WARNED,
     LONG_MAX_DIST,
@@ -39,6 +38,8 @@ from nirspipe.qc.metrics._helpers import (
     SHORT_MAX_DIST,
     bands_from_record,
     bands_to_record,
+    has_short_channels,
+    long_channel_picks,
     long_short_channels,
     separation_bands,
     validate_bands,
@@ -305,7 +306,7 @@ def test_the_writer_and_the_reader_share_one_set_of_keys():
 # bands again is an invitation to type a number that does not match the one on disk.
 
 def _dyad():
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     return [GroupEntry("G1", "sub-01", "tap"), GroupEntry("G1", "sub-02", "tap")]
 
 
@@ -316,7 +317,7 @@ def _sqm(*per_member):
 
 
 def test_agreeing_records_decide_the_bands():
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     bands = (0.012, 0.02, None)
     assert resolve_group_bands(_dyad(), _sqm(bands, bands)) == bands
 
@@ -325,14 +326,14 @@ def test_members_prepped_with_different_bands_are_refused():
     """Not reconciled: the bands also chose what short-channel regression removed from each
     member upstream, so a band taken from both would describe neither. Nothing is lost by
     refusing, since the homologous channel set already intersects by label."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     with pytest.raises(ValueError, match="different separation bands"):
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, None)))
 
 
 def test_the_refusal_names_both_members_and_their_bands():
     """A message saying only "they disagree" leaves the operator to grep two records."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     with pytest.raises(ValueError) as excinfo:
         resolve_group_bands(_dyad(), _sqm((0.01, 0.015, None), (0.012, 0.02, 0.055)))
     message = str(excinfo.value)
@@ -343,7 +344,7 @@ def test_the_refusal_names_both_members_and_their_bands():
 def test_an_unstamped_dyad_falls_back_to_the_defaults_with_a_warning(caplog):
     """Refusing an unstamped dyad outright would make it unanalysable, so it is a warning;
     the value is a guess and says so."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm(None, None)) == separation_bands()
     assert "no separation bands stamped" in caplog.text
@@ -353,7 +354,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
     """The other member's stamp is the best evidence available, so it is what gets applied,
     but the warning has to name that value rather than the package defaults, or a reader
     is told 10 mm was assumed while 12 mm was used."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     with caplog.at_level(logging.WARNING):
         assert resolve_group_bands(_dyad(), _sqm((0.012, 0.02, None), None)) == (0.012, 0.02, None)
     assert "sub-02 task-tap" in caplog.text
@@ -361,7 +362,7 @@ def test_an_unstamped_member_is_warned_with_the_bands_it_is_being_given(caplog):
 
 
 def test_a_flag_overrides_the_records_and_says_so(caplog):
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands),
@@ -373,7 +374,7 @@ def test_a_flag_overrides_the_records_and_says_so(caplog):
 def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default():
     """Capping the long band must not silently re-assert 10 / 15 mm on a dyad prepped at
     12 / 20 mm, which is what falling back to `separation_bands()` would do."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     bands = (0.012, 0.02, None)
     resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {"long_max_dist": 0.055})
     assert resolved == (0.012, 0.02, 0.055)
@@ -382,7 +383,7 @@ def test_a_flag_left_off_keeps_the_records_value_rather_than_the_package_default
 def test_an_override_of_only_none_values_is_not_an_override(caplog):
     """argparse hands over three Nones when no flag was given, which must not read as a
     request to force the package defaults."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     bands = (0.012, 0.02, None)
     with caplog.at_level(logging.WARNING):
         resolved = resolve_group_bands(_dyad(), _sqm(bands, bands), {
@@ -394,7 +395,7 @@ def test_an_override_of_only_none_values_is_not_an_override(caplog):
 def test_a_forced_band_is_still_validated():
     """The override merges with the records, so the pair it produces was never validated by
     the CLI: forcing a short edge past the records' long edge has to be caught here."""
-    from nirspipe.pipeline.hyper import resolve_group_bands
+    from nirspipe.pipeline.hyper.group_quality import resolve_group_bands
     bands = (0.012, 0.02, None)
     with pytest.raises(ValueError, match="overlap"):
         resolve_group_bands(_dyad(), _sqm(bands, bands), {"short_max_dist": 0.03})
@@ -509,17 +510,17 @@ def test_the_note_says_where_the_orphans_sit_and_which_bound_would_take_them():
 def test_a_config_toml_can_carry_the_separation_bands():
     """They have to be resolved before prep runs, because prep stamps them into the record
     and only the post config builder is handed the TOML."""
-    from nirspipe.cli import _shared
+    from nirspipe.cli import _app_options
 
-    assert _shared.SEPARATION_BAND_KEYS == ("short_max_dist", "long_min_dist", "long_max_dist")
+    assert _app_options.SEPARATION_BAND_KEYS == ("short_max_dist", "long_min_dist", "long_max_dist")
     args = {"short_max_dist": None, "long_min_dist": 16.0}
     toml = {"short_max_dist": 14.0, "long_min_dist": 25.0, "long_max_dist": 55.0}
-    for band in _shared.SEPARATION_BAND_KEYS:
+    for band in _app_options.SEPARATION_BAND_KEYS:
         if args.get(band) is None and toml.get(band) is not None:
             args[band] = toml[band]
     # the CLI value stands, the two absent ones come from the TOML
     assert args == {"short_max_dist": 14.0, "long_min_dist": 16.0, "long_max_dist": 55.0}
-    assert _shared.separation_bands_from_args(args) == {
+    assert _app_options.separation_bands_from_args(args) == {
         "short_max_dist": 0.014, "long_min_dist": 0.016, "long_max_dist": 0.055}
 
 
@@ -532,7 +533,7 @@ def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
     would, on a montage with no channel under 10 mm, describe a channel set the regression
     had not used.
     """
-    from nirspipe.cli import _shared
+    from nirspipe.cli import _app_options
     from nirspipe.qc.subject import sqm_record
 
     seen = {}
@@ -548,7 +549,7 @@ def test_the_record_is_split_on_the_run_s_own_bands(tmp_path, monkeypatch):
         cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_freq=0.5))
     monkeypatch.setattr(sqm_record, "_window_s", lambda _: 10.0)
 
-    bands = _shared.resolved_separation_bands({"short_max_dist": 14, "long_min_dist": 25,
+    bands = _app_options.resolved_separation_bands({"short_max_dist": 14, "long_min_dist": 25,
                                                "long_max_dist": None})
     sqm_record.build_sqm_records(tmp_path, sep_bands=bands)
 

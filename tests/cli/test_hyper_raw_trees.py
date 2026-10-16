@@ -6,7 +6,7 @@ import json
 import pytest
 
 from nirspipe.cli import qc
-from nirspipe.pipeline import hyper as hyper_pkg
+from nirspipe.pipeline.hyper import group_io
 
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
 
@@ -23,7 +23,7 @@ def stage_reads(monkeypatch):
     def _record(output_dir, group, desc):
         seen.append((output_dir, desc))
         return {}
-    monkeypatch.setattr(hyper_pkg, "load_group_stage", _record)
+    monkeypatch.setattr(group_io, "load_group_stage", _record)
     return seen
 
 

@@ -60,7 +60,7 @@ def test_the_windows_themselves_keep_every_label():
 
 
 def _dyad(tmp_path, descriptions):
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     raws = {sid: _raw(descriptions) for sid in ("sub-01", "sub-02")}

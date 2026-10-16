@@ -49,6 +49,38 @@ def fisher_r_to_z(r: Any) -> np.ndarray:
     return np.where(finite, np.arctanh(np.clip(np.where(finite, r, 0.0), -_R_CLIP, _R_CLIP)), np.nan)
 
 
+def zscore_rows(x: np.ndarray) -> np.ndarray:
+    """Each row to zero mean and unit deviation, a flat row left alone rather than divided by 0."""
+    mu  = x.mean(axis=1, keepdims=True)
+    std = x.std(axis=1, keepdims=True)
+    return (x - mu) / np.where(std < 1e-12, 1.0, std)
+
+
+def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:
+    r"""Seconds of recording to keep either side of a window so its band is clear of the cone.
+
+    ::
+
+      cone_margin_s(0.06)  ->  47.1     cone_margin_s(0.02)  ->  141.4
+
+    A wavelet coefficient near the end of a series is computed partly against the padding
+    beyond it, and the cone of influence is where that contamination has decayed to
+    :math:`e^{-2}`. For the Morlet wavelet the cone reaches :math:`\sqrt{2}\,P` in from each
+    edge at period :math:`P`, so the lowest frequency a band mean uses, ``band_fmin``, is the
+    one that reaches furthest:
+
+    .. math::
+
+        \mathrm{margin} = \mathrm{factor} \times \frac{\sqrt{2}}{f_{\min}}
+
+    Returned in seconds, so a caller crops ``[t0 - margin, t1 + margin]`` and windows the
+    result back to ``[t0, t1]``.
+    """
+    if band_fmin <= 0:
+        raise ValueError(f"band_fmin must be positive, got {band_fmin}")
+    return float(factor) * np.sqrt(2.0) / float(band_fmin)
+
+
 def bare_roi_map(roi_map: "dict[str, list[str]]") -> "dict[str, list[str]]":
     """ROI entries as S-D pairs: a trailing " hbo" / " hbr" is dropped, repeats collapse.
 

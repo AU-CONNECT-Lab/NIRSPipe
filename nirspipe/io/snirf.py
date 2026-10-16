@@ -145,37 +145,3 @@ def _patch_haemo_wavelengths(raw: mne.io.Raw) -> mne.io.Raw:
         elif ch_type == "hbr":
             ch["loc"][9] = 2.0
     return raw
-
-
-def has_short_channels(raw: mne.io.Raw, sep_bands=None) -> bool:
-    """Return True if the recording contains short-distance reference channels."""
-    from nirspipe.qc.metrics._helpers import long_short_channels
-
-    return bool(long_short_channels(raw, sep_bands)[1])
-
-
-def long_channel_picks(
-    raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads", sep_bands=None,
-) -> list[int]:
-    """Picks for one chromophore with short-distance reference channels dropped.
-
-    A 6-channel montage whose last pair is short ->
-        long_channel_picks(raw, "hbo") == [0, 1]   (the third hbo pick is gone)
-
-    Short channels sample scalp haemodynamics, so no inter-brain metric is computed on them.
-    Montages with no short channels lose nothing.
-
-    "Long" is the package's one separation rule,
-    :func:`~nirspipe.qc.metrics._helpers.separation_bands`, and a channel outside both
-    bands is in neither list; ``long_short_channels`` names such a channel in a warning.
-
-    ``exclude`` is pick_types', so rejected channels are dropped by default, which is what a
-    metric wants. ``exclude=[]`` keeps them, which is what the *axis* of a channel-by-channel
-    matrix wants: an axis over the montage rather than over the survivors gives every subject
-    and every dyad a matrix of one shape.
-    """
-    from nirspipe.qc.metrics._helpers import long_short_channels
-
-    long_names = set(long_short_channels(raw, sep_bands)[0])
-    return [p for p in mne.pick_types(raw.info, fnirs=ch_type, exclude=exclude)
-            if raw.ch_names[p] in long_names]

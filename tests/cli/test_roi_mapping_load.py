@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from nirspipe.cli._shared import load_roi_mapping
+from nirspipe.cli._app_options import load_roi_mapping
 
 
 def test_no_mapping_means_no_roi_map():

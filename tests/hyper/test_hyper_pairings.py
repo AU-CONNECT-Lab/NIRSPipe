@@ -74,7 +74,7 @@ def triad():
 
 def _run(members, where, **kwargs):
     """Build the post report over `members` and return the directory it wrote into."""
-    from nirspipe.pipeline.hyper import GroupEntry
+    from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     ids = list(members)

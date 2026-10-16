@@ -97,12 +97,12 @@ def test_the_null_can_be_set_either_way_on_its_own():
 # ---- what lands on disk ----
 
 def test_the_sidecar_records_the_iteration_count_and_the_shape(tmp_path, monkeypatch, make_raw):
-    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import surrogate
     from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31], "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
+    monkeypatch.setattr(surrogate, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
 
     # a real raw even though the WTC itself is stubbed: the sidecar reads the wavelet grid
     # off the recordings, so an empty map has no sampling rate to report
@@ -126,13 +126,13 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
     """One pass per chromophore, and the frame each returns is not the null's to
     change. Inserting the column in place would raise on the second pass as soon as
     two passes are handed the same object, which a cache or a stub does."""
-    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import surrogate
     from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
+    monkeypatch.setattr(surrogate, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
@@ -146,13 +146,13 @@ def test_the_null_tags_each_chromophore_without_mutating_the_frame(tmp_path, mon
 
 
 def test_one_chromophore_writes_one_set_of_rows(tmp_path, monkeypatch, make_raw):
-    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import surrogate
     from nirspipe.pipeline.hyper import wtc_null
 
     frame = pd.DataFrame({"sub1": ["a"], "sub2": ["b"], "label": ["S1_D1"],
                           "coherence": [0.3], "coherence_z": [0.31],
                           "n_valid_frac": [1.0]})
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
+    monkeypatch.setattr(surrogate, "compute_wtc_phase_null", lambda *a, **k: _null(frame))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(
@@ -289,11 +289,11 @@ def _null_frames():
 
 
 def _write_windowed_null(tmp_path, monkeypatch, make_raw):
-    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import surrogate
     from nirspipe.pipeline.hyper import wtc_null
 
     whole, by_cond = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null",
+    monkeypatch.setattr(surrogate, "compute_wtc_phase_null",
                         lambda *a, **k: _null(whole, [by_cond]))
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     return _draw_and_write(
@@ -340,11 +340,11 @@ def test_each_half_is_ranked_against_its_own_real_rows(tmp_path, monkeypatch, ma
 
 
 def test_no_windows_writes_no_condition_column(tmp_path, monkeypatch, make_raw):
-    import nirspipe.pipeline.hyper as hyper
+    from nirspipe.pipeline.hyper import surrogate
     from nirspipe.pipeline.hyper import wtc_null
 
     whole, _ = _null_frames()
-    monkeypatch.setattr(hyper, "compute_wtc_phase_null", lambda *a, **k: _null(whole))
+    monkeypatch.setattr(surrogate, "compute_wtc_phase_null", lambda *a, **k: _null(whole))
 
     raws = {"a": make_raw(n_ch=1), "b": make_raw(n_ch=1)}
     out = _draw_and_write(

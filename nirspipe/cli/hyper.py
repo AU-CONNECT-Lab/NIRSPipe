@@ -16,23 +16,23 @@ from pathlib import Path
 from datetime import datetime
 
 from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
+from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
 from nirspipe.io.naming import roi_map_name
 from nirspipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
 from nirspipe.qc.metrics import SCI_WINDOW_S
 from nirspipe.utils.logging import get_logger, setup_logging
 from nirspipe import __version__
-from nirspipe.cli._shared import separation_bands_from_args
+from nirspipe.cli._app_options import separation_bands_from_args
 from nirspipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
 from nirspipe.io.derivatives import (
     LINK_PREPROCESSED, entity_of, group_report_dir, read_json, write_bidsignore,
     write_dataset_description,
 )
-from nirspipe.io.snirf import long_channel_picks
-from nirspipe.pipeline.hyper import (
-    parse_group_csv, resolve_analysis_window, resolve_group_bands, write_group_bads,
-)
-from nirspipe.qc.metrics._helpers import bands_to_record
+from nirspipe.io.groups import parse_group_csv
+from nirspipe.pipeline.hyper.alignment import resolve_analysis_window
+from nirspipe.pipeline.hyper.group_quality import resolve_group_bands, write_group_bads
+from nirspipe.qc.metrics._helpers import bands_to_record, long_channel_picks
 
 setup_logging()
 
@@ -124,14 +124,18 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
     `passband_check` is the (fmin, fmax) a metric is about to ask for, checked against the
     bandpass the files record while the sidecars are still in hand.
     """
-    from nirspipe.pipeline.hyper import (
+    from nirspipe.pipeline.hyper.alignment import (
         align_recordings,
-        apply_group_bads,
-        load_group_haemo,
-        load_group_sqm,
-        warn_outside_passband,
         normalize_raws,
         trim_to_shortest,
+    )
+    from nirspipe.pipeline.hyper.group_quality import (
+        apply_group_bads,
+        load_group_sqm,
+    )
+    from nirspipe.pipeline.hyper.group_io import (
+        load_group_haemo,
+        warn_outside_passband,
     )
 
     raws = load_group_haemo(derivatives_dir, members, desc=desc)
@@ -285,7 +289,7 @@ def cmd_run(
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
     from nirspipe.qc.common.windows import condition_windows, split_windows
     from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
-    from nirspipe.utils.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
+    from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
 
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="nirspipe-hyper output",
@@ -320,7 +324,7 @@ def cmd_run(
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
 
-    roi_map = _shared.load_roi_mapping(roi_mapping)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
     # the seg- entity every ROI table takes, so one tree can hold two ROI definitions
     roi_name = roi_map_name(roi_mapping)
 
@@ -345,7 +349,7 @@ def cmd_run(
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
         if str(wtc_cond_pad_s).lower() == "auto":
-            from nirspipe.pipeline.hyper.wtc import cone_margin_s
+            from nirspipe.utils import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
             # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
             cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)
@@ -544,7 +548,7 @@ def cmd_group_null(
     from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
 
     setup_logging(verbose=verbose)
-    roi_map = _shared.load_roi_mapping(roi_mapping)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
     nulls = null or nulls_on_disk(output_dir, task)
     if not nulls:
         print(f"Error: no null draws for task {task} under {output_dir}. Run "
@@ -643,7 +647,7 @@ def cmd_pair_null(
     targets = _select_groups(pairs_csv, group_id, task_label, participant_label)
     all_groups = parse_group_csv(pairs_csv)
 
-    roi_map = _shared.load_roi_mapping(roi_mapping)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
 
     chroma = ("hbo", "hbr") if chroma == "both" else (chroma,)
     scope_tasks = sorted({key[1] for key in all_groups})
@@ -742,8 +746,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
 
     # the dyad selection and the alignment window are the same parameters `nirspipe-qc
     # hyper-raw` takes, so they are declared once for both scripts
-    pairs = _shared.pairs_selection()
-    window = _shared.alignment_window()
+    pairs = _app_options.pairs_selection()
+    window = _app_options.alignment_window()
 
     run = _command_parser(
         "nirspipe-hyper",
@@ -904,7 +908,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "with its [hyper] section. Fills every setting the command line "
                           "leaves out; the directories and --pairs-csv still come from the "
                           "command line.")
-    _shared.add_separation_bands(run, note="An override: the bands come from each member's "
+    _app_options.add_separation_bands(run, note="An override: the bands come from each member's "
                                  "record, and members prepped with different bands are "
                                  "refused. Use it only for records that carry none.")
 

@@ -11,7 +11,8 @@ import pytest
 from nirspipe.cli import qc as qc_cli
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.io.naming import parse_path
-from nirspipe.pipeline.hyper import GroupEntry, compute_group_sqm_raw, load_group_sqm
+from nirspipe.io.groups import GroupEntry
+from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw, load_group_sqm
 from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, format_metric
 from nirspipe.qc.hyper.hyper_report import imu_member_rows
 from tests._synth import make_hyper_dataset, synth_raw

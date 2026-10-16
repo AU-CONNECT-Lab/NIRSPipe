@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from nirspipe.pipeline.hyper import group_io, group_quality, pair_null
-from nirspipe.pipeline.hyper.group_io import GroupEntry
+from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.pair_null import _draw_condition_pairs
 
 FIXED = "sub-01G01"
