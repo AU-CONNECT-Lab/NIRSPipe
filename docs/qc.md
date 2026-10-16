@@ -35,13 +35,59 @@ The record is divided into sections, each named after the file it was measured o
 | `imu` | The motion sensor, where the recording carries one |
 | `excluded`, `censor`, `by_condition` | Present when the run had `BAD_` spans, ran `--gvtd-censor`, or ran `--by-condition` |
 
-Every family is written over all channels, the long ones and the short ones, so a metric is only ever compared with one measured on the same channel set. Metrics that aggregate across the montage (GVTD, the spike counts, the correction footprint) are not written for the short channels alone, and `pct_data_retained`, a share of the recording's duration, is one number for every set. Sections measured on intensity or optical density include rejected channels, the archival view of what was recorded; sections measured on haemoglobin exclude them, the view of what is analysed.
+Every family is written over all channels, the long ones and the short ones, so a metric is only ever compared with one measured on the same channel set. Metrics that aggregate across the montage (GVTD, the spike counts, the correction footprint) are measured on each set as a set of its own, short channels included, each against its own threshold, and `pct_data_retained`, a share of the recording's duration, is one number for every set. Sections measured on intensity or optical density include rejected channels, the archival view of what was recorded; sections measured on haemoglobin exclude them, the view of what is analysed.
 
 The JSON holds the scalars. The arrays sit in tab-separated tables beside it, listed under `data.tables`: the channel-by-window matrices (`stat-sci`, `stat-psp`, `stat-cv`), the per-window series (`stat-summary`) and the per-channel values (`desc-sqm_nirsmap.tsv`). A matrix has one row per window and one column per channel; row `i` is the window starting at `i * WindowLength` seconds, both given in its sidecar. `<run>_desc-channel_qc.tsv` beside it holds the per-channel metrics and verdicts, one row per channel.
 
 ## Metrics
 
 Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the text the report shows when you hover that label and, where the code defines one, its formula. Each entry ends with how to read the value: higher is better, lower is better, best near a given value, or descriptive (no better end). The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
+
+Where each family is measured, and which of them act on the data:
+
+```mermaid
+flowchart TD
+    REC(["recording<br/><small>intensity and optical density</small>"])
+    SENSOR(["motion sensor<br/><small>where the recording has one</small>"])
+
+    REC --> SCIPSP["SCI · PSP<br/><small>per 10 s window, cardiac band</small>"]
+    SCIPSP --> WIN{"coupled in at least<br/>--min-good-frac<br/>of its windows?"}
+    WIN -->|no| BAD(["bad channels"])
+    TABLE[/"--bad-channels table<br/>channels.tsv"/] -.->|"bad_channels add,<br/>keep_channels release"| BAD
+    REC --> LEVEL["CV · SNR · saturation · flat channels"]
+
+    REC --> GVTD["GVTD · spikes"]
+    GVTD -.->|"--gvtd-censor"| SPANS(["BAD_ spans"])
+    MANUAL[/"--bad-spans"/] -.-> SPANS
+
+    REC --> MC["motion correction"]
+    MC --> FOOT["correction footprint<br/><small>and coupling again, after it</small>"]
+
+    SENSOR --> IMU["gyro speed · accel jerk"]
+
+    MC --> HB(["haemoglobin<br/><small>preproc · filtered · resampled · errts</small>"])
+    BAD -->|"left out"| HB
+    SPANS -->|"left out"| HB
+    HB --> PROC["HbO-HbR corr · GCOR · CNR<br/>band power · drift"]
+
+    SCIPSP & LEVEL & GVTD & FOOT & IMU & PROC --> SQM(["quality record"])
+    SQM --> REP["reports"]
+    REP --> RATE["nirspipe-rate<br/><small>channel decisions</small>"]
+    RATE -.->|"export, next run"| TABLE
+
+    classDef od fill:#fdebd0,stroke:#e67e22
+    classDef haemo fill:#fadbd8,stroke:#c0392b
+    classDef side fill:#eaeded,stroke:#7f8c8d
+    classDef derivative fill:#d6eaf8,stroke:#2874a6
+    classDef acts fill:#ffffff,stroke:#c0392b,stroke-width:2px
+    class REC od
+    class HB haemo
+    class LEVEL,GVTD,FOOT,IMU,PROC side
+    class SQM derivative
+    class BAD,SPANS acts
+```
+
+Grey boxes are descriptive: recorded and drawn, they change nothing. Channels are marked bad by the coupled-window share and by the channels you name; GVTD removes time only under `--gvtd-censor`.
 
 ### Coupling and signal level
 
@@ -53,7 +99,7 @@ Sections `raw`, `raw_long` and `raw_short`; SCI and PSP also in `motion_post`. F
 
 ### Motion from the optical signal
 
-Sections `raw`, `raw_long` and `motion`, measured on optical density. The band-passed GVTD is the trace the reports draw and the threshold applies to; the unfiltered and variance-normalised ones are recorded for comparison and drawn nowhere. The unfiltered and band-passed GVTD also have per-window series (`*_per_window`). The spike counts are experimental.
+Sections `raw`, `raw_long`, `raw_short` and `motion`, measured on optical density. The band-passed GVTD is the trace the reports draw and the threshold applies to; the unfiltered and variance-normalised ones are recorded for comparison and drawn nowhere. The unfiltered and band-passed GVTD also have per-window series (`*_per_window`). The spike counts are experimental.
 
 ```{eval-rst}
 .. metric-reference:: motion
@@ -267,7 +313,7 @@ The GUI's Raw QC page prints these commands for the reports it wrote and runs `n
 
 The run report and the dyad analysis report carry a Methods paragraph ready to paste, with its references, as rendered text, plain text, Markdown and LaTeX. It is built from the provenance sidecars, so it describes the steps that ran with the values they ran with, and a step that was skipped leaves no sentence. A dyad's paragraph follows each member file's `Sources` back to the raw recording, so `--desc` decides what it describes. Each sentence names the method and the parameters a reader needs to reproduce it. `nirspipe-hyper-groupnull` writes its own paragraph beside its tables, in `logs/`. Raw reports carry none.
 
-> fNIRS data were processed using nirspipe v*X.Y.Z*. Raw intensity signals were converted to optical density (OD) using MNE-Python (Gramfort et al., 2013). Channels were screened in non-overlapping 10 s windows: a window counted as coupled when its scalp coupling index (SCI) was at least 0.8 and its peak spectral power (PSP) at least 0.1, both measured in the 0.7–1.5 Hz cardiac band (Pollonini et al., 2014). Channels coupled in fewer than 75% of their windows were marked as bad. Motion artifacts in the OD were corrected with temporal derivative distribution repair (TDDR) (Fishburn et al., 2019). Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law (Delpy et al., 1988; Cope & Delpy, 1988), using a differential pathlength factor (DPF) of 6. Data were bandpass filtered (0.01–0.5 Hz) using a zero-phase Butterworth filter (order 4, applied forward and backward). Finally, nuisance signals were removed by regressing an orthogonal basis spanning the retained short channels (HbO and HbR decomposed together) out of each channel in a model with no task regressors, fitted with ordinary least squares without prewhitening; all subsequent analysis used the residuals (Yücel et al., 2021).
+> fNIRS data were processed using NIRSPipe v*X.Y.Z*. Raw intensity signals were converted to optical density (OD) using MNE-Python (Gramfort et al., 2013). Channels were screened in non-overlapping 10 s windows: a window counted as coupled when its scalp coupling index (SCI) was at least 0.8 and its peak spectral power (PSP) at least 0.1, both measured in the 0.7–1.5 Hz cardiac band (Pollonini et al., 2014). Channels coupled in fewer than 75% of their windows were marked as bad. Motion artifacts in the OD were corrected with temporal derivative distribution repair (TDDR) (Fishburn et al., 2019). Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law (Delpy et al., 1988; Cope & Delpy, 1988), using a differential pathlength factor (DPF) of 6. Data were bandpass filtered (0.01–0.5 Hz) using a zero-phase Butterworth filter (order 4, applied forward and backward). Finally, nuisance signals were removed by regressing an orthogonal basis spanning the retained short channels (HbO and HbR decomposed together) out of each channel in a model with no task regressors, fitted with ordinary least squares without prewhitening; all subsequent analysis used the residuals (Yücel et al., 2021).
 
 The reference list comes from `nirspipe/qc/boilerplate/references.bib`. The hyperscanning sentences cite placeholder entries whose author reads `TODO-ADD-...`, so an unfinished citation is visible rather than missing.
 
