@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.69.0] - 2026-10-16
+
 ### Added
 - GUI Batch Prep page takes `--skip-bids-validation`
 - GUI Hyper Analysis page takes `--band-fmin/--band-fmax`; its WTC and ISC band fields override them
@@ -14,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-hyper --config` reruns a dyad from its run record
 - The cohort step writes `desc-subjects_nirsmap.tsv`, every run's per-channel quality values in one long table
 - `nirspipe-qc prep-raw --run-label` reports the chosen runs, each on a page of its own
+- The raw report maps each channel's signal and coupling on the head; clicking a channel opens it below
 
 ### Changed
 - `desc-sci` sidecars under `--gvtd-censor` record the separation bands that chose the censored channel set
