@@ -69,6 +69,7 @@
       preview.textContent = d.preview;
       say(d.error || "", d.error ? "bad" : "");
       if (stages && d.stages) drawStages(d.stages);
+      if (d.hints) applyHints(d.hints);
     });
   }
 
@@ -91,7 +92,8 @@
   }
 
   function summarise(group) {
-    var parts = Array.prototype.map.call(group.querySelectorAll(".field"), setting).filter(Boolean);
+    var parts = Array.prototype.map.call(group.querySelectorAll(".field:not(.inactive)"), setting)
+      .filter(Boolean);
     group.querySelector(".group-summary").textContent = parts.join(" · ");
   }
 
@@ -126,6 +128,57 @@
       saveFolds();
     });
   });
+
+  // ---- a command's hints: the defaults an empty field takes, the flags that do nothing as the
+  // form stands (the server leaves them out of the command too), suggestions and notes ----
+
+  var hintNotes = document.getElementById("hint-notes");
+
+  function applyHints(h) {
+    Array.prototype.forEach.call(form.querySelectorAll(".field"), function (field) {
+      var name = field.querySelector("label code").textContent;
+      field.classList.toggle("inactive", h.inactive.indexOf(name) >= 0);
+      var el = field.querySelector("[name]");
+      if (!el) return;
+      var text = h.placeholders[name];
+      if (el.tagName === "SELECT") {
+        var empty = el.querySelector("option[value='']");
+        if (!empty) return;
+        if (empty.dataset.text === undefined) empty.dataset.text = empty.textContent;
+        empty.textContent = !text ? empty.dataset.text
+          : text.indexOf("default") >= 0 ? text : "default (" + text + ")";
+      } else {
+        if (el.dataset.placeholder === undefined) el.dataset.placeholder = el.placeholder || "";
+        el.placeholder = text || el.dataset.placeholder;
+      }
+    });
+    Object.keys(h.suggestions).forEach(function (name) {
+      var el = form.elements[name];
+      if (!el || el.getAttribute("list")) return;
+      var list = document.createElement("datalist");
+      list.id = "suggest" + name;
+      h.suggestions[name].forEach(function (value) {
+        var option = document.createElement("option");
+        option.value = value;
+        list.appendChild(option);
+      });
+      form.appendChild(list);
+      el.setAttribute("list", list.id);
+    });
+    if (hintNotes) {
+      hintNotes.textContent = "";
+      h.notes.forEach(function (note) {
+        var p = document.createElement("p");
+        p.className = "hint-note " + note[1];
+        p.textContent = note[0];
+        hintNotes.appendChild(p);
+      });
+    }
+    groups.forEach(function (g) {
+      g.classList.toggle("all-inactive", !g.querySelector(".field:not(.inactive)"));
+      summarise(g);
+    });
+  }
 
   // ---- the BIDS and output folders follow from page to page; the last one typed wins ----
 

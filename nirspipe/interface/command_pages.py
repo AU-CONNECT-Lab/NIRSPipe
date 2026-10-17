@@ -17,6 +17,7 @@ from nirspipe.interface.forms import check, fields, form_values, required_first,
 from nirspipe.interface.prep_edit import EditViewer
 from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
 from nirspipe.interface.sidebar import FAMILIES, PAGES
+from nirspipe.interface import hints
 from nirspipe.interface.stages import pipeline_stages
 
 DEFAULT_SHELL = "powershell" if os.name == "nt" else "bash"
@@ -199,16 +200,19 @@ def blueprint(web) -> Blueprint:
     @bp.post("/preview/<prog>/<sub>/")
     def preview(prog, sub=None):
         parser, prefix, top = _resolve(prog, sub)
-        argv = to_argv(prefix, parser, request.form)
+        form, shown = hints.apply(prog, sub, request.form)
+        argv = to_argv(prefix, parser, form)
         return jsonify(preview=preview_text(argv, request.form.get("_shell", DEFAULT_SHELL)),
-                       error=check(top, argv[1:]),
-                       stages=pipeline_stages(request.form) if prog == "nirspipe" else None)
+                       error=check(top, argv[1:]), hints=shown,
+                       stages=pipeline_stages(form) if prog == "nirspipe" else None)
 
     @bp.post("/run/<prog>/")
     @bp.post("/run/<prog>/<sub>/")
     def run(prog, sub=None):
         parser, prefix, top = _resolve(prog, sub)
-        argv = to_argv(prefix, parser, request.form)
+        # the command the preview showed: a flag the form hides is not sent
+        form, _shown = hints.apply(prog, sub, request.form)
+        argv = to_argv(prefix, parser, form)
         error = check(top, argv[1:])
         if error:
             return jsonify(error=error), 400

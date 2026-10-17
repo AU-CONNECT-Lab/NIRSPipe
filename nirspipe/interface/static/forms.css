@@ -181,6 +181,29 @@
   white-space: nowrap;
 }
 
+/* ---- hints: a flag the form as it stands does not read is hidden, and so is a group of them ---- */
+
+.nform .field.inactive,
+.nform fieldset.all-inactive {
+  display: none;
+}
+
+.hint-notes:empty {
+  display: none;
+}
+
+.hint-note {
+  margin: 0.4rem 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  border-radius: 6px;
+}
+
+.hint-note.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
 @media (max-width: 720px) {
   .nform fieldset { grid-template-columns: 1fr; }
 }
