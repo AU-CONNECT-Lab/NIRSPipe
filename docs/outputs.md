@@ -22,7 +22,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 | `band-` | A re-averaged band from `nirspipe-hyper-band` |
 | `chan-`, `label-` | A channel or a region, in figure names |
 
-The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. An entity appears only where it tells two otherwise identical files apart. `group-`, `pair-`, `chromo-`, `chan-`, `agg-`, `band-`, `cond-`, `null-` and `stat-`, and the `relmat` and `nirsmap` suffixes, are this package's extensions to BIDS, declared in its own naming configuration. Each tree's `.bidsignore` exempts the reports, `logs/`, `figures/` and the JSON-only records, so every table stays visible to a validator.
+The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. An entity appears only where it tells two otherwise identical files apart. `group-`, `pair-`, `chromo-`, `chan-`, `agg-`, `band-`, `cond-`, `null-` and `stat-`, and the `relmat` and `nirsmap` suffixes, are this package's extensions to BIDS, declared in its own naming configuration. Each tree's `.bidsignore` exempts the reports, `logs/`, `figures/`, the Plotly.js copy and the JSON-only records, so every table stays visible to a validator.
 
 ## The `nirspipe` tree
 
@@ -30,6 +30,7 @@ The suffix says what a file holds: `nirs` a signal, `relmat` a relation between 
 derivatives/nirspipe/
 ├── dataset_description.json             ← links the input as raw under DatasetLinks and SourceDatasets
 ├── .bidsignore
+├── plotly-<version>.min.js             ← the reports' Plotly.js when the CDN does not load
 ├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc cohort)
 ├── desc-subjects_qc.json                ← what each of its columns holds
 ├── desc-subjects_report.html            ← cohort page
@@ -90,6 +91,7 @@ The dyad commands write a tree apart from the one `nirspipe` wrote. Its `dataset
 derivatives/nirspipe-hyper/
 ├── dataset_description.json
 ├── .bidsignore
+├── plotly-<version>.min.js
 ├── desc-groups_qc.tsv, desc-groups_report.html    ← nirspipe-qc cohort-hyper
 ├── stat-wtc_relmat.tsv, stat-isc_relmat.tsv, ...  ← nirspipe-hyper-merge, one per long-table kind
 ├── chromo-<c>_task-<t>_cond-all_null-<n>_stat-<s>_desc-{bycell,byoccasion,cohort}_relmat.tsv  ← nirspipe-hyper-groupnull
