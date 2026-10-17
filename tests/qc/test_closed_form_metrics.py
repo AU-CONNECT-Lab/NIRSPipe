@@ -46,6 +46,7 @@ from nirspipe.qc.metrics import (
     haemo_quality_metrics,
     long_short_channels,
 )
+from nirspipe.qc.metrics.haemo import _band_mean
 
 from tests._synth import synth_raw
 
@@ -558,6 +559,14 @@ def test_each_chromophore_is_summarised_on_its_own():
     for key in ("cardiac_band_power_hbo", "cardiac_band_frac_hbo",
                 "resp_band_power_hbo", "resp_band_frac_hbo"):
         assert_allclose(large[key], small[key], rtol=1e-12)
+
+
+def test_band_power_is_the_mean_density_of_every_channel_s_bins_inside_both_edges():
+    # the bins at 0.1, 0.2 and 0.3 Hz of both channels: (1 + 2 + 9 + 4 + 5 + 9) / 6
+    freqs = np.array([0.0, 0.1, 0.2, 0.3, 0.4])
+    psd = np.array([[100.0, 1.0, 2.0, 9.0, 100.0], [100.0, 4.0, 5.0, 9.0, 100.0]])
+    assert _band_mean(freqs, psd, 0.1, 0.3) == pytest.approx(5.0)
+    assert _band_mean(freqs, psd, 0.25, 0.28) is None
 
 
 # ---- low-frequency drift ----
