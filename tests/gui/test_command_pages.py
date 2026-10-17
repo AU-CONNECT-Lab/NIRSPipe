@@ -75,7 +75,19 @@ def test_a_rating_subcommand_opens_its_viewer_in_this_app(tmp_path):
     html.write_text("<html></html>", encoding="utf-8")
     [opened] = client.post("/run/nirspipe-rate/raw/", data=form).get_json()["opened"]
     assert client.get(opened["href"]).status_code == 200
-    assert client.get(f"{opened['href']}rate_config").get_json()["sci_threshold"] is None
+    config = client.get(f"{opened['href']}rate_config").get_json()
+    assert config["sci_threshold"] is None and config["mark_spans"] is True
+
+
+def test_the_raw_qc_rating_link_opens_a_viewer_that_marks_bad_stretches(tmp_path):
+    client = WebApp().flask.test_client()
+    html = tmp_path / "sub-01" / report_name("sub-01", desc="raw")
+    html.parent.mkdir(parents=True)
+    html.write_text("<html></html>", encoding="utf-8")
+
+    r = client.get("/rate/raw", query_string={"report": str(html), "tree": str(tmp_path)})
+    assert r.status_code == 302
+    assert client.get(r.location.rstrip("/") + "/rate_config").get_json()["mark_spans"] is True
 
 
 def test_the_command_list_links_every_command():

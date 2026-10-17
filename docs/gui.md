@@ -147,7 +147,7 @@ The **Raw QC** page writes the quality reports on the recordings as delivered: o
 Raw QC after `nirspipe-qc hyper-raw` on the tutorial's three dyads, with the newest dyad report below the form.
 ```
 
-After a prep-raw run, a **Rate** link per report opens it in the rating viewer in the app. The **rate-hyper** tab opens a dyad report, and **export** runs `nirspipe-rate export`, which writes the `--bad-channels` table for Analysis ([Rating](qc.md#rating)).
+After a prep-raw run, a **Rate** link per report opens it in the rating viewer in the app. There, bad stretches can be marked on the raw signal of a run page. The **rate-hyper** tab opens a dyad report, and **export** runs `nirspipe-rate export`, which writes the `--bad-channels` table for Analysis, and the `--bad-spans` table when stretches were marked ([Rating](qc.md#rating)).
 
 ## Analysis
 

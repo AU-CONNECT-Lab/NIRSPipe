@@ -14,11 +14,11 @@ from nirspipe.qc.rating.export import SPANS_NAME, export_spans
 RUN = "sub-01_ses-02_task-rest_run-01"
 
 
-def _viewer(tmp_path, mark_spans=True):
+def _viewer(tmp_path):
     html = tmp_path / "sub-01" / report_name("sub-01_ses-02_task-rest", desc="raw")
     html.parent.mkdir(parents=True, exist_ok=True)
     html.write_text("<html><head></head></html>", encoding="utf-8")
-    return RawRatingApp(html, tmp_path, mark_spans=mark_spans).app.test_client()
+    return RawRatingApp(html, tmp_path).app.test_client()
 
 
 def test_marked_stretches_are_saved_in_time_order_and_read_back(tmp_path):
@@ -48,18 +48,9 @@ def test_a_stretch_that_is_not_a_span_of_the_run_is_refused(tmp_path, payload):
     assert not bad_spans_path(tmp_path, "01", task="rest", session="02").exists()
 
 
-def test_without_the_switch_the_viewer_offers_no_spans(tmp_path):
-    client = _viewer(tmp_path, mark_spans=False)
-    assert client.get("/rate_config").json["mark_spans"] is False
-    assert client.post("/save_bad_spans", json={RUN: [[1.0, 2.0]]}).status_code in (404, 405)
-
-
-def test_the_switch_parses_and_stays_out_of_help(capsys):
-    args = _build_parser().parse_args(["raw", "out", "--participant-label", "01", "--mark-spans"])
-    assert args.mark_spans is True
+def test_the_old_switch_is_refused():
     with pytest.raises(SystemExit):
-        _build_parser().parse_args(["raw", "--help"])
-    assert "mark-spans" not in capsys.readouterr().out
+        _build_parser().parse_args(["raw", "out", "--participant-label", "01", "--mark-spans"])
 
 
 def test_the_exported_table_is_what_bad_spans_reads(tmp_path):

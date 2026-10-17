@@ -108,7 +108,7 @@ For `--bad-channels`, the other column is `bad_channels`, holding source-detecto
 
 ## Choosing stretches of a recording
 
-`--keep-spans` keeps only the listed stretches of each recording, and `--bad-spans` marks listed stretches as damaged ([Excluded time](workflows.md#excluded-time)). Both tables have `onset` and `duration` columns in seconds on the recording's own time axis, the axis of its `events.tsv` (not that of a cropped copy), plus the label columns above:
+`--keep-spans` keeps only the listed stretches of each recording, and `--bad-spans` marks listed stretches as damaged ([Excluded time](workflows.md#excluded-time)). Stretches can also be marked by eye on the raw report, and `nirspipe-rate export` writes them as a `--bad-spans` table ([Rating](qc.md#rating)). Both tables have `onset` and `duration` columns in seconds on the recording's own time axis, the axis of its `events.tsv` (not that of a cropped copy), plus the label columns above:
 
 ```
 participant_id	task	run	onset	duration

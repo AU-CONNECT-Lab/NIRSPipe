@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `nirspipe-rate raw` marks bad stretches on a run's raw signal; `nirspipe-rate export` writes them as a `--bad-spans` table
+
 ### Changed
 - `nirspipe-gui` is a new GUI: forms generated from each command, Data Preparation edits raw reports, rating built in; Dash and its four dependencies are gone
 - The raw report's Events column is as tall as the raw signal beside it and scrolls when longer

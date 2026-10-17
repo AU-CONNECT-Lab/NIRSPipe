@@ -45,6 +45,16 @@ def test_only_an_edit_viewer_asks_the_page_for_the_editor(tmp_path):
     assert rate.get("prep/edit.js").status_code == 404
 
 
+def test_the_edit_viewer_marks_no_bad_stretches(tmp_path):
+    report = _report(tmp_path)
+    edit = EditViewer(report, tmp_path, tmp_path / "bids").app.test_client()
+    rate = RawRatingApp(report, tmp_path).app.test_client()
+
+    assert edit.get("rate_config").get_json()["mark_spans"] is False
+    assert edit.post("save_bad_spans", json={}).status_code in (404, 405)
+    assert rate.get("rate_config").get_json()["mark_spans"] is True
+
+
 def test_the_raw_viewer_loads_the_editor_only_when_told_to():
     text = TEMPLATE.read_text(encoding="utf-8")
     assert 'editor.src = "prep/edit.js"' in text

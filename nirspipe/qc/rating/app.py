@@ -222,17 +222,16 @@ class RawRatingApp(_ReportViewer):
     default_port = RAW_PORT
     log_name = "group_raw_ratings.jsonl"
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None,
-                 mark_spans: bool = False):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
         run = {k: entity_of(html_path.stem, k) for k in ("sub", "task", "ses")}
         self.decisions_path = channel_decisions_path(
             output_dir, run["sub"], run["task"], run["ses"])
-        self.mark_spans = mark_spans
         self.spans_path = bad_spans_path(output_dir, run["sub"], run["task"], run["ses"])
         super().__init__(html_path, output_dir, sci_threshold)
 
     def _config(self) -> dict:
-        return {**super()._config(), "mark_spans": self.mark_spans}
+        # bad stretches are marked where decisions are made, never on a read-only page
+        return {**super()._config(), "mark_spans": self.rates}
 
     def _setup_decision_routes(self, app: Flask) -> None:
         @app.route("/load_channel_decisions", methods=["GET"])
@@ -246,9 +245,6 @@ class RawRatingApp(_ReportViewer):
                 return _empty_body()
             return _respond(lambda: _write_json(self.decisions_path, data),
                             "save_channel_decisions")
-
-        if not self.mark_spans:
-            return
 
         @app.route("/load_bad_spans", methods=["GET"])
         def load_bad_spans():

@@ -44,7 +44,7 @@ def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | 
 def open_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, mark_spans: bool = False,
+    sci_threshold: float,
 ) -> tuple:
     """(viewer, label, entry pages) for one raw report; exits when the report is missing."""
     from nirspipe.qc.rating.app import RawRatingApp
@@ -60,20 +60,19 @@ def open_raw(
     if not html_path.exists():
         print(f"Error: raw report not found: {html_path}", file=sys.stderr)
         raise SystemExit(1)
-    return (RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans),
+    return (RawRatingApp(html_path, output_dir, sci_threshold),
             html_path.stem, ("",))
 
 
 def cmd_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, port: int | None, mark_spans: bool = False,
+    sci_threshold: float, port: int | None,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import RAW_PORT
 
-    opened = open_raw(output_dir, participant_label, session_label, task_label,
-                      sci_threshold, mark_spans)
+    opened = open_raw(output_dir, participant_label, session_label, task_label, sci_threshold)
     print(f"Launching raw viewer: {opened[0].html_path.name} ...")
     _serve(opened, port, RAW_PORT, "nirspipe-rate raw")
 
@@ -164,7 +163,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Local server port. Default: 8765, or the next free port above it.")
     pr.set_defaults(func=cmd_rate)
 
-    pw = sub.add_parser("raw", help="Launch interactive raw QC viewer.")
+    pw = sub.add_parser("raw", help="Launch interactive raw QC viewer: rate sections, decide channels, mark bad stretches.")
     pw.add_argument("output_dir", type=Path, help="nirspipe output directory.")
     # one subject, not a list: the viewer opens one recording at a time
     pw.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
@@ -178,8 +177,6 @@ def _build_parser() -> argparse.ArgumentParser:
                          "cells stay the run's own line. Off when not given.")
     pw.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5052, or the next free port above it.")
-    # withheld from --help until it is opened; marks bad stretches on the run page's motion panel
-    pw.add_argument("--mark-spans", action="store_true", help=argparse.SUPPRESS)
     pw.set_defaults(func=cmd_raw)
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
