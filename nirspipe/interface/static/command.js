@@ -42,27 +42,91 @@
       .then(function (r) { return r.json(); });
   }
 
-  // levels left to right; a level of two runs both from the one before
+  // levels left to right; a level of two runs both from the one before. Drawn as SVG with the
+  // page's colours written into it, so the PNG download looks like the page without its CSS.
+  var SVG = "http://www.w3.org/2000/svg";
+
+  function svg(tag, attrs, parent) {
+    var el = document.createElementNS(SVG, tag);
+    Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(el);
+    return el;
+  }
+
   function drawStages(levels) {
+    var css = getComputedStyle(document.documentElement);
+    function token(name) { return css.getPropertyValue(name).trim(); }
+    var font = token("--font") || "sans-serif";
+    var measure = document.createElement("canvas").getContext("2d");
+    measure.font = "13px " + font;
+    var PAD = 10, BOX_H = 28, BOX_PAD = 12, GAP_Y = 8, ARROW = 34;
+    var widths = levels.map(function (level) {
+      return Math.max.apply(null, level.map(function (n) { return measure.measureText(n).width; })) + 2 * BOX_PAD;
+    });
+    var heights = levels.map(function (level) { return level.length * BOX_H + (level.length - 1) * GAP_Y; });
+    var width = widths.reduce(function (a, b) { return a + b; }, 0) + ARROW * (levels.length - 1) + 2 * PAD;
+    var height = Math.max.apply(null, heights) + 2 * PAD;
+    var mid = height / 2;
+
     stages.textContent = "";
+    var root = svg("svg", {xmlns: SVG, width: Math.ceil(width), height: height,
+                           viewBox: "0 0 " + Math.ceil(width) + " " + height,
+                           "font-family": font, "font-size": 13}, stages);
+    var defs = svg("defs", {}, root);
+    var head = svg("marker", {id: "stage-arrow", viewBox: "0 0 8 8", refX: 7, refY: 4,
+                              markerWidth: 8, markerHeight: 8, orient: "auto"}, defs);
+    svg("path", {d: "M0,0 L8,4 L0,8 z", fill: token("--faint")}, head);
+
+    var x = PAD;
     levels.forEach(function (level, i) {
       if (i) {
-        var arrow = document.createElement("span");
-        arrow.className = "arrow";
-        arrow.textContent = "→";
-        stages.appendChild(arrow);
+        svg("line", {x1: x + 3, y1: mid, x2: x + ARROW - 4, y2: mid, stroke: token("--faint"),
+                     "stroke-width": 1.5, "marker-end": "url(#stage-arrow)"}, root);
+        x += ARROW;
       }
-      var box = document.createElement("span");
-      box.className = "level";
+      var g = svg("g", {"class": "level"}, root);
+      var y = mid - heights[i] / 2;
       level.forEach(function (name) {
-        var chip = document.createElement("span");
-        chip.className = "stage";
-        chip.textContent = name;
-        box.appendChild(chip);
+        var box = svg("g", {"class": "stage"}, g);
+        svg("rect", {x: x, y: y, width: widths[i], height: BOX_H, rx: 6, fill: token("--accent-soft"),
+                     stroke: token("--rule")}, box);
+        svg("text", {x: x + widths[i] / 2, y: y + BOX_H / 2, "text-anchor": "middle",
+                     "dominant-baseline": "central", fill: token("--accent")}, box).textContent = name;
+        y += BOX_H + GAP_Y;
       });
-      stages.appendChild(box);
+      x += widths[i];
     });
+    var download = document.getElementById("stages-png");
+    if (download) download.hidden = false;
   }
+
+  // the drawing as a PNG at twice its size, on the page's background
+  function stagesPng() {
+    var root = stages.querySelector("svg");
+    if (!root) return;
+    var w = +root.getAttribute("width"), h = +root.getAttribute("height"), scale = 2;
+    var image = new Image();
+    image.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = getComputedStyle(document.body).backgroundColor || "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(function (blob) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "pipeline_stages.png";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(new XMLSerializer().serializeToString(root));
+  }
+  var stagesDownload = document.getElementById("stages-png");
+  if (stagesDownload) stagesDownload.addEventListener("click", stagesPng);
 
   function refresh() {
     post(form.dataset.preview).then(function (d) {

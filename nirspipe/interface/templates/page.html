@@ -19,6 +19,7 @@
 </form>
 {% for note in notes %}<p class="note">{{ note }}</p>{% endfor %}
 <div id="stages" class="stages" aria-label="stages this run goes through"></div>
+<p class="stages-tools"><button type="button" id="stages-png" hidden>Download PNG</button></p>
 {% endif %}
 {% include "_form.html" %}
 {% endblock %}

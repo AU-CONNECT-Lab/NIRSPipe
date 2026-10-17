@@ -244,31 +244,24 @@ button:disabled {
 }
 
 .stages {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.75rem 0 1.25rem;
+  margin: 0.75rem 0 0.25rem;
+  overflow-x: auto;
 }
 
-.stages .level {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0.25rem;
+/* drawn at its own size, scaled down to the column when the column is narrower */
+.stages svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
-.stages .stage {
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 0.2rem 0.55rem;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.82rem;
-  white-space: nowrap;
+.stages-tools {
+  margin: 0 0 1.25rem;
 }
 
-.stages .arrow {
-  color: var(--faint);
+.stages-tools button {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.7rem;
 }
 
 /* ---- Recon batch table ---- */
