@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.70.0] - 2026-10-17
+
 ### Added
 - `nirspipe-rate raw` marks bad stretches on a run's raw signal; `nirspipe-rate export` writes them as a `--bad-spans` table
 
