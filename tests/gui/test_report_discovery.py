@@ -6,20 +6,18 @@ the page, or a pattern that no longer matches its writer would be invisible.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import dash_bootstrap_components as dbc
 import pytest
 from dash import html
 
 from nirspipe.io.naming import derivative_path, report_name
-from nirspipe.interface.callbacks._cli_run import (
-    REPORT_PATTERNS, find_report, report_preview,
-)
+from nirspipe.interface.callbacks._cli_run import report_preview
+from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report
 
 # What each command actually writes. Built rather than spelled out, so this cannot agree
 # with REPORT_PATTERNS while both disagree with the writers.
 WRITTEN = {
+    "participant":  "sub-01/" + report_name("sub-01", desc="index"),
     "prep-raw":     "sub-01/" + report_name("sub-01_task-rest", desc="raw"),
     "hyper-raw":    "group-G1/" + report_name("group-G1_task-rest", desc="raw"),
     "run":          "group-G1/" + report_name("group-G1_task-rest"),

@@ -1,13 +1,33 @@
-// One command page: the preview follows the form, Run streams the output, Stop ends it.
+// One command page: the preview follows the form, Run streams the output, Stop ends it,
+// and a finished run shows the report it wrote. The form keeps its last values in this browser.
 (function () {
   var form = document.getElementById("command-form");
   var preview = document.getElementById("preview");
   var status = document.getElementById("status");
   var opened = document.getElementById("opened");
   var log = document.getElementById("log");
+  var report = document.getElementById("report");
   var stop = document.getElementById("stop");
+  var storeKey = "nirspipe-form:" + form.dataset.run;
   var stopUrl = null;
   var timer = null;
+
+  function remember() {
+    var values = {};
+    new FormData(form).forEach(function (v, k) { (values[k] = values[k] || []).push(v); });
+    try { localStorage.setItem(storeKey, JSON.stringify(values)); } catch (e) { /* private window */ }
+  }
+
+  function recall() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(storeKey) || "null"); } catch (e) { saved = null; }
+    if (!saved) return;
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (!el.name || !(el.name in saved)) return;
+      if (el.type === "checkbox") el.checked = saved[el.name].indexOf(el.value) >= 0;
+      else el.value = saved[el.name][0];
+    });
+  }
 
   function post(url) {
     return fetch(url, {method: "POST", body: new FormData(form)})
@@ -24,8 +44,9 @@
   // one request after typing pauses, not one per key
   form.addEventListener("input", function () {
     clearTimeout(timer);
-    timer = setTimeout(refresh, 250);
+    timer = setTimeout(function () { remember(); refresh(); }, 250);
   });
+  recall();
   refresh();
 
   function link(item) {
@@ -38,10 +59,29 @@
     opened.appendChild(li);
   }
 
+  function showReport(url) {
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      report.textContent = "";
+      if (!d.url) { report.textContent = d.message; return; }
+      var head = document.createElement("p");
+      var a = document.createElement("a");
+      a.href = d.url;
+      a.target = "_blank";
+      a.textContent = "Open in a new tab";
+      head.textContent = d.path + " ";
+      head.appendChild(a);
+      var frame = document.createElement("iframe");
+      frame.src = d.url;
+      report.appendChild(head);
+      report.appendChild(frame);
+    });
+  }
+
   function follow(d) {
     stopUrl = d.stop;
     log.hidden = false;
     log.textContent = "";
+    report.textContent = "";
     status.textContent = "Running.";
     if (stop) stop.disabled = false;
     var source = new EventSource(d.events);
@@ -55,11 +95,13 @@
         : end.stopped ? "Stopped." : "Failed (exit " + end.code + ").";
       if (stop) stop.disabled = true;
       source.close();
+      if (end.code === 0) showReport(d.report);
     });
   }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
+    remember();
     post(form.dataset.run).then(function (d) {
       if (d.error) { status.textContent = d.error; return; }
       if (d.opened) { status.textContent = "Opened:"; d.opened.forEach(link); return; }

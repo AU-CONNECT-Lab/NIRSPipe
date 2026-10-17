@@ -8,7 +8,7 @@ import dash_bootstrap_components as dbc
 from dash import html, no_update
 
 from nirspipe.interface import process_stream
-from nirspipe.interface.report_serve import report_url
+from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("interface.cli_run")
@@ -84,33 +84,6 @@ def poll_run_and_report(run_id, stored: dict | None):
     if returncode is None:
         return status, no_update, False, False, True
     return status, report_preview(stored) if returncode == 0 else None, True, True, False
-
-
-# The landing page each command writes, newest match wins. A command absent from this table
-# writes tables and no report; a command present here that produced nothing is a failure,
-# not a quiet "not found".
-REPORT_PATTERNS: dict[str, list[str]] = {
-    "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
-    "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],
-    # the dyad's landing page is its index, which `nirspipe-hyper` writes too; the task page is the
-    # fallback for a tree whose index failed. A bare `_task-*_report.html` glob would also
-    # match the per-condition and per-pairing pages, and those are not where to land
-    "run":          ["group-*/group-*_desc-index_report.html",
-                     "group-*/group-*_task-*_report.html"],
-    "index":        ["group-*/group-*_desc-index_report.html"],
-    "cohort":       ["desc-subjects_report.html"],
-    "cohort-hyper": ["desc-groups_report.html"],
-}
-
-
-def find_report(patterns: list[str], output_dir: Path) -> Path | None:
-    """The newest HTML matching what this command is known to write."""
-    candidates: list[Path] = []
-    for pattern in patterns:
-        candidates.extend(output_dir.glob(pattern))
-        if candidates:
-            break
-    return max(candidates, key=lambda p: p.stat().st_mtime) if candidates else None
 
 
 def report_preview(stored: dict | None):

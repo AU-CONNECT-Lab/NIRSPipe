@@ -11,7 +11,7 @@ import webbrowser
 from flask import Flask, render_template
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
-from nirspipe.interface import command_pages
+from nirspipe.interface import command_pages, report_serve
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.net import resolve_port
 
@@ -29,6 +29,7 @@ class WebApp:
         self.links: list[tuple[str, str]] = []
         self.flask.add_url_rule("/", "home", self._home)
         self.flask.register_blueprint(command_pages.blueprint(self))
+        report_serve.attach(self.flask)
 
     def mount(self, viewer: Flask, label: str, entries: "tuple[str, ...]" = ("",)) -> list[str]:
         """Serve viewer under ``/view/<token>/`` and return its entry pages' paths."""

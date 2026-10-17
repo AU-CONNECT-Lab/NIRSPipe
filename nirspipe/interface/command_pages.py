@@ -7,16 +7,32 @@ import io
 import json
 import os
 import time
+from pathlib import Path
 
-from flask import Blueprint, Response, abort, jsonify, render_template, request, url_for
+from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
 
 from nirspipe.interface import process_stream
 from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
 )
 from nirspipe.interface.forms import check, fields, to_argv
+from nirspipe.interface.sidebar import PAGES
+from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
 
 DEFAULT_SHELL = "powershell" if os.name == "nt" else "bash"
+
+# (prog, sub) -> the REPORT_PATTERNS entry for what it writes; nirspipe's depends on the level
+_REPORTS = {
+    ("nirspipe-qc", "prep-raw"): "prep-raw",
+    ("nirspipe-qc", "hyper-raw"): "hyper-raw",
+    ("nirspipe-qc", "cohort"): "cohort",
+    ("nirspipe-qc", "cohort-hyper"): "cohort-hyper",
+    ("nirspipe-hyper", None): "run",
+    ("nirspipe-hyper-index", None): "index",
+}
+
+# run id -> (what the run writes, where), read when the page asks for the report
+_RUNS: dict[str, tuple["str | None", "Path | None"]] = {}
 
 
 def _resolve(prog: str, sub: "str | None"):
@@ -30,6 +46,21 @@ def _resolve(prog: str, sub: "str | None"):
     if parser is None:
         abort(404)
     return parser, [prog, sub], top
+
+
+def _form(prog: str, sub: "str | None") -> dict:
+    """What the form template needs for one command."""
+    parser, prefix, _top = _resolve(prog, sub)
+    return dict(prefix=" ".join(prefix), description=parser.description or "",
+                groups=fields(parser), opens_viewer=(prog, sub) in VIEWERS, shell=DEFAULT_SHELL,
+                preview_url=url_for("commands.preview", prog=prog, sub=sub),
+                run_url=url_for("commands.run", prog=prog, sub=sub))
+
+
+def _report_key(prog: str, sub: "str | None", args) -> "str | None":
+    if prog == "nirspipe":
+        return "participant" if args.analysis_level == "participant" else "cohort"
+    return _REPORTS.get((prog, sub))
 
 
 def _open_viewer(web, top, argv: list[str]):
@@ -54,6 +85,10 @@ def _open_viewer(web, top, argv: list[str]):
 def blueprint(web) -> Blueprint:
     bp = Blueprint("commands", __name__)
 
+    @bp.app_context_processor
+    def sidebar():
+        return {"pages": PAGES}
+
     @bp.get("/commands/")
     def index():
         listed = []
@@ -65,14 +100,24 @@ def blueprint(web) -> Blueprint:
     @bp.get("/commands/<prog>/")
     @bp.get("/commands/<prog>/<sub>/")
     def form(prog, sub=None):
-        parser, prefix, _top = _resolve(prog, sub)
+        parser, _prefix, _top = _resolve(prog, sub)
         subs = list(subcommands(parser)) if sub is None else []
-        return render_template(
-            "command.html", prefix=" ".join(prefix), prog=prog, sub=sub, subs=subs,
-            description=parser.description or "", groups=fields(parser),
-            opens_viewer=(prog, sub) in VIEWERS, shell=DEFAULT_SHELL,
-            preview_url=url_for("commands.preview", prog=prog, sub=sub),
-            run_url=url_for("commands.run", prog=prog, sub=sub))
+        if subs:
+            return render_template("command.html", prog=prog, prefix=prog, subs=subs,
+                                   description=parser.description or "")
+        return render_template("command.html", prog=prog, subs=[], **_form(prog, sub))
+
+    def page_view(page, tab=None):
+        chosen = next((t for t in page.tabs if t.key == tab), None) if tab else None
+        if chosen is None:
+            return redirect(url_for(f"commands.{page.slug}", tab=page.tabs[0].key))
+        return render_template("page.html", page=page, tab=chosen, **_form(chosen.prog, chosen.sub))
+
+    for page in PAGES:
+        def view(tab=None, page=page):
+            return page_view(page, tab)
+        bp.add_url_rule(f"/{page.slug}/", page.slug, view)
+        bp.add_url_rule(f"/{page.slug}/<tab>/", page.slug, view)
 
     @bp.post("/preview/<prog>/")
     @bp.post("/preview/<prog>/<sub>/")
@@ -96,8 +141,12 @@ def blueprint(web) -> Blueprint:
             run_id = process_stream.start([executable(prog), *argv[1:]])
         except OSError as exc:
             return jsonify(error=f"could not launch {prog}: {exc}"), 500
+        args = top.parse_args(argv[1:])
+        output_dir = getattr(args, "output_dir", None)
+        _RUNS[run_id] = (_report_key(prog, sub, args), Path(output_dir) if output_dir else None)
         return jsonify(events=url_for("commands.events", run_id=run_id),
-                       stop=url_for("commands.stop", run_id=run_id))
+                       stop=url_for("commands.stop", run_id=run_id),
+                       report=url_for("commands.report", run_id=run_id))
 
     @bp.get("/runs/<run_id>/events")
     def events(run_id):
@@ -124,5 +173,18 @@ def blueprint(web) -> Blueprint:
     @bp.post("/runs/<run_id>/stop")
     def stop(run_id):
         return jsonify(stopped=process_stream.stop(run_id))
+
+    @bp.get("/runs/<run_id>/report")
+    def report(run_id):
+        key, output_dir = _RUNS.get(run_id, (None, None))
+        if key is None or output_dir is None:
+            return jsonify(message="This command writes tables, not a report.")
+        found = find_report(REPORT_PATTERNS[key], output_dir)
+        if found is None:
+            # known to write a page and did not: a pattern left behind by a rename would
+            # otherwise read as "nothing to show"
+            return jsonify(message=f"The run finished but its report is missing: looked for "
+                                   f"{', '.join(REPORT_PATTERNS[key])} under {output_dir}.")
+        return jsonify(url=report_url(found), path=str(found))
 
     return bp

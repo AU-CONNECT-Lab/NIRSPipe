@@ -7,13 +7,20 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
-<header>
-  <a class="brand" href="{{ url_for('home') }}">NIRSPipe</a>
-  <nav><a href="{{ url_for('commands.index') }}">Commands</a></nav>
-</header>
-<main>
-{% block main %}{% endblock %}
-</main>
+<div class="layout">
+  <nav class="sidebar">
+    <a class="brand" href="{{ url_for('home') }}">NIRSPipe</a>
+    <p class="nav-group">Batch</p>
+    {% for p in pages %}
+    <a href="{{ url_for('commands.' ~ p.slug) }}"{% if page is defined and page.slug == p.slug %} class="active"{% endif %}>{{ p.title }}</a>
+    {% endfor %}
+    <p class="nav-group">All</p>
+    <a href="{{ url_for('commands.index') }}">Commands</a>
+  </nav>
+  <main>
+  {% block main %}{% endblock %}
+  </main>
+</div>
 {% block scripts %}{% endblock %}
 </body>
 </html>
