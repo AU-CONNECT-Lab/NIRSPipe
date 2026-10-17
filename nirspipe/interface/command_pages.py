@@ -15,9 +15,10 @@ from nirspipe.interface import process_stream
 from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
 )
-from nirspipe.interface.forms import check, fields, to_argv
-from nirspipe.interface.sidebar import PAGES
+from nirspipe.interface.forms import check, fields, form_values, to_argv
 from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
+from nirspipe.interface.sidebar import PAGES
+from nirspipe.interface.stages import pipeline_stages
 
 DEFAULT_SHELL = "powershell" if os.name == "nt" else "bash"
 
@@ -54,7 +55,28 @@ def _form(prog: str, sub: "str | None") -> dict:
     return dict(prefix=" ".join(prefix), description=parser.description or "",
                 groups=fields(parser), opens_viewer=(prog, sub) in VIEWERS, shell=DEFAULT_SHELL,
                 preview_url=url_for("commands.preview", prog=prog, sub=sub),
-                run_url=url_for("commands.run", prog=prog, sub=sub))
+                run_url=url_for("commands.run", prog=prog, sub=sub), values={})
+
+
+def _record(path: str) -> "tuple[dict, list[str]]":
+    """The Analysis form's values from a run record, read as ``--config`` reads it, and what to say."""
+    from nirspipe import __version__
+    from nirspipe.cli.run import read_config
+
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            config = read_config(Path(path))
+    except SystemExit:
+        return {}, [err.getvalue().strip()]
+    except Exception as exc:
+        return {}, [f"Could not read {path}: {exc}"]
+    notes = [f"Loaded the settings of {Path(path).name}. The folders are not in a record: fill them."]
+    if config["version"] and config["version"] != __version__:
+        notes.append(f"Written by nirspipe {config['version']}; this is {__version__}, so a setting "
+                     "whose meaning or default changed runs as this version reads it.")
+    settings = {**config["prep"], **config["post"], **config["execution"]}
+    return form_values(parser_for("nirspipe"), settings), notes
 
 
 def _report_key(prog: str, sub: "str | None", args) -> "str | None":
@@ -111,7 +133,13 @@ def blueprint(web) -> Blueprint:
         chosen = next((t for t in page.tabs if t.key == tab), None) if tab else None
         if chosen is None:
             return redirect(url_for(f"commands.{page.slug}", tab=page.tabs[0].key))
-        return render_template("page.html", page=page, tab=chosen, **_form(chosen.prog, chosen.sub))
+        context = _form(chosen.prog, chosen.sub)
+        record = request.args.get("record", "").strip().strip('"')
+        notes = []
+        if record and chosen.prog == "nirspipe":
+            context["values"], notes = _record(record)
+        return render_template("page.html", page=page, tab=chosen, record=record, notes=notes,
+                               **context)
 
     for page in PAGES:
         def view(tab=None, page=page):
@@ -125,7 +153,8 @@ def blueprint(web) -> Blueprint:
         parser, prefix, top = _resolve(prog, sub)
         argv = to_argv(prefix, parser, request.form)
         return jsonify(preview=preview_text(argv, request.form.get("_shell", DEFAULT_SHELL)),
-                       error=check(top, argv[1:]))
+                       error=check(top, argv[1:]),
+                       stages=pipeline_stages(request.form) if prog == "nirspipe" else None)
 
     @bp.post("/run/<prog>/")
     @bp.post("/run/<prog>/<sub>/")

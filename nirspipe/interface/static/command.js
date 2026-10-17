@@ -8,6 +8,7 @@
   var log = document.getElementById("log");
   var report = document.getElementById("report");
   var stop = document.getElementById("stop");
+  var stages = document.getElementById("stages");
   var storeKey = "nirspipe-form:" + form.dataset.run;
   var stopUrl = null;
   var timer = null;
@@ -34,10 +35,33 @@
       .then(function (r) { return r.json(); });
   }
 
+  // levels left to right; a level of two runs both from the one before
+  function drawStages(levels) {
+    stages.textContent = "";
+    levels.forEach(function (level, i) {
+      if (i) {
+        var arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = "→";
+        stages.appendChild(arrow);
+      }
+      var box = document.createElement("span");
+      box.className = "level";
+      level.forEach(function (name) {
+        var chip = document.createElement("span");
+        chip.className = "stage";
+        chip.textContent = name;
+        box.appendChild(chip);
+      });
+      stages.appendChild(box);
+    });
+  }
+
   function refresh() {
     post(form.dataset.preview).then(function (d) {
       preview.textContent = d.preview;
       status.textContent = d.error || "";
+      if (stages && d.stages) drawStages(d.stages);
     });
   }
 
@@ -46,7 +70,8 @@
     clearTimeout(timer);
     timer = setTimeout(function () { remember(); refresh(); }, 250);
   });
-  recall();
+  // a form filled from a run record keeps those values over the remembered ones
+  if (form.dataset.prefilled) remember(); else recall();
   refresh();
 
   function link(item) {

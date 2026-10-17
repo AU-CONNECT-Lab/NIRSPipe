@@ -113,6 +113,27 @@ def to_argv(prefix: list[str], parser: argparse.ArgumentParser, form) -> list[st
     return [*prefix, *positionals, *options]
 
 
+def form_values(parser: argparse.ArgumentParser, settings: dict) -> "dict[str, list[str]]":
+    """Parsed settings, ``{dest: value}`` as a run record holds them, as the form's values."""
+    values = {}
+    for _title, group in fields(parser):
+        for field in group:
+            given = settings.get(field.action.dest)
+            if given is None or (field.kind == "switch" and not given):
+                continue
+            if field.kind == "switch":
+                values[field.name] = ["on"]
+            elif field.kind == "boolean":
+                values[field.name] = ["yes" if given else "no"]
+            elif field.kind == "choices":
+                values[field.name] = [str(v) for v in given]
+            elif field.kind == "list":
+                values[field.name] = [("\n" if field.per_line else " ").join(map(str, given))]
+            else:
+                values[field.name] = [str(given)]
+    return values
+
+
 def check(parser: argparse.ArgumentParser, args: list[str]) -> "str | None":
     """argparse's own complaint about ``args``, or None when the command line parses."""
     err = io.StringIO()

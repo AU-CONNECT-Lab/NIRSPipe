@@ -1,40 +1,40 @@
-{% macro control(f) -%}
+{% macro control(f, v) -%}
 {%- set id = "f" ~ f.name -%}
 {%- if f.kind == "switch" -%}
-<input type="checkbox" id="{{ id }}" name="{{ f.name }}" value="on">
+<input type="checkbox" id="{{ id }}" name="{{ f.name }}" value="on"{% if v %} checked{% endif %}>
 {%- elif f.kind == "boolean" -%}
 <select id="{{ id }}" name="{{ f.name }}">
   <option value="">default ({{ "on" if f.action.default else "off" }})</option>
-  <option value="yes">{{ f.name }}</option>
-  <option value="no">{{ f.negative }}</option>
+  <option value="yes"{% if "yes" in v %} selected{% endif %}>{{ f.name }}</option>
+  <option value="no"{% if "no" in v %} selected{% endif %}>{{ f.negative }}</option>
 </select>
 {%- elif f.kind == "choice" -%}
 <select id="{{ id }}" name="{{ f.name }}">
   {%- if not f.required %}<option value="">default{% if f.default %} ({{ f.default }}){% endif %}</option>{% endif %}
-  {%- for c in f.choices %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+  {%- for c in f.choices %}<option value="{{ c }}"{% if c in v %} selected{% endif %}>{{ c }}</option>{% endfor %}
 </select>
 {%- elif f.kind == "choices" -%}
 <span class="choices" id="{{ id }}">
-  {%- for c in f.choices %}<label><input type="checkbox" name="{{ f.name }}" value="{{ c }}"> {{ c }}</label>{% endfor -%}
+  {%- for c in f.choices %}<label><input type="checkbox" name="{{ f.name }}" value="{{ c }}"{% if c in v %} checked{% endif %}> {{ c }}</label>{% endfor -%}
 </span>
 {%- elif f.kind == "list" -%}
 <textarea id="{{ id }}" name="{{ f.name }}" rows="2"
-  placeholder="{{ 'one path per line' if f.per_line else 'separated by spaces' }}{% if f.default %}; default {{ f.default }}{% endif %}"></textarea>
+  placeholder="{{ 'one path per line' if f.per_line else 'separated by spaces' }}{% if f.default %}; default {{ f.default }}{% endif %}">{{ v[0] if v }}</textarea>
 {%- elif f.kind == "number" -%}
-<input type="number" step="any" id="{{ id }}" name="{{ f.name }}"{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
+<input type="number" step="any" id="{{ id }}" name="{{ f.name }}"{% if v %} value="{{ v[0] }}"{% endif %}{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
 {%- else -%}
-<input type="text" id="{{ id }}" name="{{ f.name }}"{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
+<input type="text" id="{{ id }}" name="{{ f.name }}"{% if v %} value="{{ v[0] }}"{% endif %}{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
 {%- endif -%}
 {%- endmacro %}
 
-<form id="command-form" data-preview="{{ preview_url }}" data-run="{{ run_url }}" autocomplete="off">
+<form id="command-form" data-preview="{{ preview_url }}" data-run="{{ run_url }}"{% if values %} data-prefilled="1"{% endif %} autocomplete="off">
   {% for title, group in groups %}
   <fieldset>
     <legend>{{ title }}</legend>
     {% for f in group %}
     <div class="field">
       <label for="f{{ f.name }}"><code>{{ f.name }}</code>{% if f.required %}<span class="required" title="required">*</span>{% endif %}</label>
-      <div class="control">{{ control(f) }}</div>
+      <div class="control">{{ control(f, values.get(f.name, [])) }}</div>
       {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
     </div>
     {% endfor %}
