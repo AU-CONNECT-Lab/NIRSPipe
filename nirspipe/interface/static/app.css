@@ -67,7 +67,8 @@ code {
 }
 
 main {
-  max-width: 1100px;
+  /* a long log line scrolls inside its box instead of widening the column */
+  min-width: 0;
   padding: 1.5rem 2rem 3rem;
 }
 
@@ -139,7 +140,7 @@ h1 {
   padding-left: 1.25rem;
 }
 
-/* ---- forms: label above control, help in full below, short fields two to a row ---- */
+/* ---- forms: label above control, help in full below, short fields as many to a row as fit ---- */
 
 fieldset {
   border: 0;
@@ -147,7 +148,7 @@ fieldset {
   margin: 0 0 0.5rem;
   padding: 0.75rem 0 0.5rem;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 0.9rem 1.5rem;
 }
 
