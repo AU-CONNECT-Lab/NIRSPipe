@@ -1,0 +1,11 @@
+<div class="actions">
+  <button type="submit">{{ "Open" if opens_viewer else "Run" }}</button>
+  {% if not opens_viewer %}<button type="button" id="stop" disabled>Stop</button>{% endif %}
+  <label class="shell">Command for
+    <select id="shell" name="_shell">
+      {% for s in ["powershell", "bash", "cmd"] %}
+      <option value="{{ s }}"{% if s == shell %} selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>

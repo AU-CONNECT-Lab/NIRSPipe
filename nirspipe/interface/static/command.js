@@ -24,7 +24,8 @@
     try { saved = JSON.parse(localStorage.getItem(storeKey) || "null"); } catch (e) { saved = null; }
     if (!saved) return;
     Array.prototype.forEach.call(form.elements, function (el) {
-      if (!el.name || !(el.name in saved)) return;
+      // a table of files is rebuilt from the folder each time, so its cells are not restored
+      if (!el.name || !(el.name in saved) || el.dataset.recall === "no") return;
       if (el.type === "checkbox") el.checked = saved[el.name].indexOf(el.value) >= 0;
       else el.value = saved[el.name][0];
     });
@@ -133,7 +134,7 @@
         : end.stopped ? "Stopped." : "Failed (exit " + end.code + ").";
       if (stop) stop.disabled = true;
       source.close();
-      if (end.code === 0) showReport(d.report);
+      if (end.code === 0 && d.report) showReport(d.report);
     });
   }
 

@@ -10,6 +10,8 @@ class Tab:
     key: str
     prog: str
     sub: "str | None" = None
+    # a page of its own instead of the command's generated form
+    template: "str | None" = None
 
 
 @dataclass(frozen=True)
@@ -20,7 +22,10 @@ class Page:
 
 
 PAGES = (
-    Page("recon", "Recon", (Tab("recon", "nirspipe-recon"),)),
+    Page("recon", "Recon", (
+        Tab("recon", "nirspipe-recon"),
+        Tab("batch", "nirspipe-recon", template="recon_batch.html"),
+    )),
     Page("batch-prep", "Batch Prep", (
         Tab("crop", "nirspipe-prep", "crop"),
         Tab("align", "nirspipe-prep", "align"),

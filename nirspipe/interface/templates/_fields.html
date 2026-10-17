@@ -1,0 +1,13 @@
+{% from "_controls.html" import control %}
+{% for title, group in groups %}
+<fieldset>
+  <legend>{{ title }}</legend>
+  {% for f in group %}
+  <div class="field">
+    <label for="f{{ f.name }}"><code>{{ f.name }}</code>{% if f.required %}<span class="required" title="required">*</span>{% endif %}</label>
+    <div class="control">{{ control(f, values.get(f.name, [])) }}</div>
+    {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</fieldset>
+{% endfor %}

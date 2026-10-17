@@ -258,3 +258,21 @@ button {
 .stages .arrow {
   color: #57606a;
 }
+
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1rem;
+}
+
+.rows th, .rows td {
+  border-bottom: 1px solid #eaeef2;
+  padding: 0.3rem 0.4rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.rows td:first-child {
+  font-family: ui-monospace, Consolas, monospace;
+  word-break: break-all;
+}

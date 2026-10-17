@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
 
-from nirspipe.interface import process_stream
+from nirspipe.interface import process_stream, recon_batch
 from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
 )
@@ -134,6 +134,13 @@ def blueprint(web) -> Blueprint:
         if chosen is None:
             return redirect(url_for(f"commands.{page.slug}", tab=page.tabs[0].key))
         context = _form(chosen.prog, chosen.sub)
+        if chosen.template:
+            folder = request.args.get("folder", "").strip().strip('"')
+            rows, found = recon_batch.detect(folder) if folder else ([], "")
+            context.update(groups=recon_batch.shared_groups(), folder=folder, rows=rows,
+                           found=found, preview_url=url_for("commands.recon_batch_preview"),
+                           run_url=url_for("commands.recon_batch_run"))
+            return render_template(chosen.template, page=page, tab=chosen, **context)
         record = request.args.get("record", "").strip().strip('"')
         notes = []
         if record and chosen.prog == "nirspipe":
@@ -146,6 +153,7 @@ def blueprint(web) -> Blueprint:
             return page_view(page, tab)
         bp.add_url_rule(f"/{page.slug}/", page.slug, view)
         bp.add_url_rule(f"/{page.slug}/<tab>/", page.slug, view)
+    recon_batch.register(bp, DEFAULT_SHELL)
 
     @bp.post("/preview/<prog>/")
     @bp.post("/preview/<prog>/<sub>/")

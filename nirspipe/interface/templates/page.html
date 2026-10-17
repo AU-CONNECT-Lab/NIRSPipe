@@ -10,6 +10,7 @@
 </nav>
 <p class="command-name"><code>{{ prefix }}</code></p>
 {% if description %}<p class="lede">{{ description }}</p>{% endif %}
+{% block command %}
 {% if tab.prog == "nirspipe" %}
 <form class="record" method="get">
   <label for="record">Run record</label>
@@ -20,6 +21,7 @@
 <div id="stages" class="stages" aria-label="stages this run goes through"></div>
 {% endif %}
 {% include "_form.html" %}
+{% endblock %}
 {% endblock %}
 
 {% block scripts %}<script src="{{ url_for('static', filename='command.js') }}"></script>{% endblock %}
