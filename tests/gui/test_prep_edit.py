@@ -10,7 +10,7 @@ import pandas as pd
 
 from nirspipe.interface import process_stream
 from nirspipe.interface.prep_edit import (
-    EditViewer, drift_hint, form_html, parse_rows, save_argv, selection,
+    EditViewer, command_argv, drift_hint, form_html, page_flags, parse_crop, parse_rows, selection,
 )
 from nirspipe.io.naming import report_name
 from nirspipe.qc.rating.app import RawRatingApp
@@ -60,7 +60,7 @@ def test_the_editor_files_are_served_beside_the_page_and_nothing_else(tmp_path):
 
 
 def test_the_form_leaves_out_what_the_page_fills():
-    html = form_html({"--skip-bids-validation": ["yes"]})
+    html = form_html("markers", {"--skip-bids-validation": ["yes"]})
 
     assert 'name="output_dir"' in html
     for filled in ("bids_dir", "--participant-label", "--run-label", "--tsv", "--shift",
@@ -94,8 +94,9 @@ def test_the_drift_hint_follows_the_slowest_repeat_and_skips_bad_spans():
 def test_the_save_command_is_the_form_plus_the_run_and_the_table(tmp_path):
     from werkzeug.datastructures import MultiDict
 
-    argv = save_argv(MultiDict({"output_dir": str(tmp_path / "out"), "--skip-bids-validation": "yes"}),
-                     tmp_path / "bids", "sub-01_task-tap_run-2", tmp_path / "events.tsv")
+    argv = command_argv("markers",
+                        MultiDict({"output_dir": str(tmp_path / "out"), "--skip-bids-validation": "yes"}),
+                        tmp_path / "bids", "sub-01_task-tap_run-2", {"tsv": str(tmp_path / "events.tsv")})
 
     assert argv[:5] == ["nirspipe-prep", "edit-markers", "apply", str(tmp_path / "bids"),
                         str(tmp_path / "out")]
@@ -117,12 +118,12 @@ def test_events_are_read_and_saved_through_nirspipe_prep(tmp_path):
     assert len(rows) > 1 and all(len(r) == 3 for r in rows)
 
     # argparse's own refusal, before anything runs
-    refused = client.post("prep/save", data={"_run": "sub-01_task-tapping", "_rows": "[]"})
+    refused = client.post("prep/run/markers", data={"_run": "sub-01_task-tapping", "_rows": "[]"})
     assert refused.status_code == 400 and "output_dir" in refused.get_json()["error"]
 
     rows[0][0] += 1.5
     rows[1][2] = "renamed"
-    saved = client.post("prep/save", data={
+    saved = client.post("prep/run/markers", data={
         "_run": "sub-01_task-tapping", "_rows": json.dumps(rows),
         "output_dir": str(out), "--skip-bids-validation": "yes"}).get_json()
     assert saved["command"].startswith("nirspipe-prep edit-markers apply")
@@ -139,7 +140,7 @@ def test_events_are_read_and_saved_through_nirspipe_prep(tmp_path):
 
 def test_a_run_the_label_cannot_place_is_refused(tmp_path):
     client = EditViewer(_report(tmp_path), tmp_path, tmp_path / "bids").app.test_client()
-    refused = client.post("prep/save", data={"_run": "nolabel", "_rows": "[]"})
+    refused = client.post("prep/run/markers", data={"_run": "nolabel", "_rows": "[]"})
     assert refused.status_code == 400
     assert "cannot tell the subject" in refused.get_json()["error"]
 
@@ -221,3 +222,68 @@ def test_data_preparation_heads_the_sidebar_on_its_own():
 
     assert FAMILIES == ("Interactive", "Batch")
     assert [p.slug for p in PAGES if p.family == "Interactive"] == ["data-prep"]
+
+
+def test_the_crop_form_leaves_out_the_span_and_the_stage():
+    html = form_html("crop", {})
+
+    for shown in ("output_dir", "--align", "--trigger-name", "--combine", "--margin", "--band-fmin"):
+        assert f'name="{shown}"' in html
+    for filled in ("bids_dir", "--participant-label", "--tmin", "--tmax", "--segments-path",
+                   "--input-desc"):
+        assert f'name="{filled}"' not in html
+
+
+def test_a_crop_is_one_stretch_or_segments_and_refused_with_what_is_wrong():
+    from werkzeug.datastructures import MultiDict
+
+    assert parse_crop(MultiDict({"_tmin": "10", "_tmax": ""})) == ({"tmin": 10.0}, None)
+    assert parse_crop(MultiDict({"_tmin": "", "_tmax": ""}))[1] == "give a start, an end or both"
+    assert parse_crop(MultiDict({"_tmin": "20", "_tmax": "10"}))[1] == "the start must come before the end"
+    assert parse_crop(MultiDict({"_tmin": "-1"}))[1] == "tmin must be 0 or more"
+    multi = {"_mode": "multi"}
+    assert parse_crop(MultiDict({**multi, "_segments": "[]"}))[1] == "add at least one segment"
+    assert parse_crop(MultiDict({**multi, "_segments": '[[5, 0, ""]]'}))[1].startswith("segment 1:")
+    assert parse_crop(MultiDict({**multi, "_segments": '[[5, 20, " a "]]'})) == ([[5.0, 20.0, "a"]], None)
+
+
+def test_segments_carry_a_task_column_only_when_one_is_named():
+    from werkzeug.datastructures import MultiDict
+
+    def table(segments):
+        flags, error = page_flags("crop", MultiDict({"_mode": "multi", "_segments": json.dumps(segments)}))
+        assert error is None
+        return pd.read_csv(flags["segments_path"], sep="\t")
+
+    assert list(table([[0, 10, ""], [20, 10, ""]]).columns) == ["onset", "duration"]
+    named = table([[0, 10, "a"], [20, 10, "b"]])
+    assert list(named.columns) == ["onset", "duration", "task"]
+    assert list(named["task"]) == ["a", "b"]
+
+
+def test_a_stretch_drawn_on_the_plot_is_cropped_by_nirspipe_prep(tmp_path):
+    import mne
+
+    bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",))
+    out = tmp_path / "out"
+    client = EditViewer(_report(tmp_path / "tree"), tmp_path / "tree", bids).app.test_client()
+
+    started = client.post("prep/run/crop", data={
+        "_run": "sub-01_task-tapping", "_mode": "single", "_tmin": "10", "_tmax": "100",
+        "output_dir": str(out), "--skip-bids-validation": "yes"}).get_json()
+    assert started["command"].startswith("nirspipe-prep crop")
+    assert "--tmin 10.0 --tmax 100.0" in started["command"]
+    lines, code = _wait(started["events"].split("/")[2])
+    assert code == 0, "\n".join(lines)
+
+    [written] = (out / "cropped").rglob("*_nirs.snirf")
+    raw = mne.io.read_raw_snirf(written, verbose="error")
+    assert abs(raw.times[-1] - 90) < 1
+
+
+def test_a_crop_without_a_span_is_refused_before_anything_runs(tmp_path):
+    client = EditViewer(_report(tmp_path), tmp_path, tmp_path / "bids").app.test_client()
+    refused = client.post("prep/run/crop", data={"_run": "sub-01_task-tapping", "_mode": "single"})
+    assert refused.status_code == 400
+    assert refused.get_json()["error"] == "give a start, an end or both"
+    assert client.post("prep/run/nothing", data={}).status_code == 404

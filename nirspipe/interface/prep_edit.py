@@ -1,4 +1,4 @@
-"""A raw viewer in edit mode: a run's events edited in a table, read and saved through ``nirspipe-prep``."""
+"""A raw viewer in edit mode: a run's events edited and the run cropped, read and written through ``nirspipe-prep``."""
 
 from __future__ import annotations
 
@@ -26,16 +26,24 @@ _HERE = Path(__file__).resolve().parent
 _JINJA = Environment(loader=FileSystemLoader(_HERE / "templates"), autoescape=select_autoescape())
 
 PREP = "nirspipe-prep"
-# the run's selection and the table come from the page; the one-step edits are the table's to make
-_FILLED = {"bids_dir", "participant_label", "session_label", "task_label", "run_label",
-           "tsv", "shift", "set_duration", "rename"}
+_SELECTION = {"bids_dir", "participant_label", "session_label", "task_label", "run_label"}
+# what the page runs: the subcommand under nirspipe-prep, and the flags the page fills itself
+ACTIONS = {
+    # the table is the edit, so the one-step edits it stands in for are left out
+    "markers": (("edit-markers", "apply"), _SELECTION | {"tsv", "shift", "set_duration", "rename"}),
+    # the span comes off the plot, and the page crops the recording it shows, not a processed stage
+    "crop": (("crop",), _SELECTION | {"tmin", "tmax", "segments_path", "input_desc"}),
+}
 _COLUMNS = ["onset", "duration", "trial_type"]
 # what the page loads from prep/, by the name it asks for
 _STATIC = {"edit.js": "prep_edit.js", "edit.css": "prep_edit.css", "forms.css": "forms.css"}
 
 
-def _apply_parser():
-    return subcommands(subcommands(parser_for(PREP))["edit-markers"])["apply"]
+def _parser(action: str):
+    parser = parser_for(PREP)
+    for name in ACTIONS[action][0]:
+        parser = subcommands(parser)[name]
+    return parser
 
 
 def selection(run_label: str) -> "dict[str, str]":
@@ -49,10 +57,11 @@ def _selection_argv(run_label: str) -> list[str]:
     return [token for flag, value in selection(run_label).items() for token in (flag, value)]
 
 
-def form_html(values: "dict[str, list[str]]") -> str:
-    """The apply form's fields, less the ones the page fills, as the command pages draw them."""
-    groups = [(title, [f for f in group if f.action.dest not in _FILLED])
-              for title, group in required_first(fields(_apply_parser()))]
+def form_html(action: str, values: "dict[str, list[str]]") -> str:
+    """An action's form, less the flags the page fills, as the command pages draw it."""
+    filled = ACTIONS[action][1]
+    groups = [(title, [f for f in group if f.action.dest not in filled])
+              for title, group in required_first(fields(_parser(action)))]
     groups = [(title, group) for title, group in groups if group]
     return _JINJA.get_template("_fields.html").render(groups=groups, values=values)
 
@@ -110,16 +119,79 @@ def drift_hint(rows: list[list]) -> "dict | None":
                               for name, gap in sorted(gaps.items(), key=lambda kv: -kv[1]))}
 
 
-def save_argv(form, bids_dir: Path, run_label: str, tsv: Path) -> list[str]:
-    """``nirspipe-prep edit-markers apply`` for one run: the form's flags plus what the page fills."""
-    parser = _apply_parser()
+def parse_crop(form) -> "tuple[dict | list | None, str | None]":
+    """One stretch as ``{"tmin", "tmax"}``, or segments as [onset, duration, task] rows, or what is wrong."""
+    if form.get("_mode") == "multi":
+        raw = _json_or_none(form.get("_segments"))
+        if not isinstance(raw, list) or not raw:
+            return None, "add at least one segment"
+        rows = []
+        for i, row in enumerate(raw, 1):
+            try:
+                onset, duration, task = float(row[0]), float(row[1]), str(row[2] or "").strip()
+            except (TypeError, ValueError, IndexError):
+                return None, f"segment {i}: onset and duration must be numbers"
+            if not (math.isfinite(onset) and math.isfinite(duration)) or onset < 0 or duration <= 0:
+                return None, f"segment {i}: the onset must be 0 or more and the duration more than 0"
+            rows.append([onset, duration, task])
+        return rows, None
+    span = {}
+    for key in ("tmin", "tmax"):
+        text = (form.get(f"_{key}") or "").strip()
+        if not text:
+            continue
+        try:
+            span[key] = float(text)
+        except ValueError:
+            return None, f"{key} must be a number"
+        if not math.isfinite(span[key]) or span[key] < 0:
+            return None, f"{key} must be 0 or more"
+    if not span:
+        return None, "give a start, an end or both"
+    if len(span) == 2 and span["tmin"] >= span["tmax"]:
+        return None, "the start must come before the end"
+    return span, None
+
+
+def _kept_file(name: str) -> Path:
+    # kept until the command has read it; the run is in the background
+    return Path(tempfile.mkdtemp(prefix="nirspipe_prep_")) / name
+
+
+def page_flags(action: str, form) -> "tuple[dict[str, str], str | None]":
+    """The flags the page fills for an action, by dest, with any table they name written to a file."""
+    if action == "markers":
+        rows, error = parse_rows(_json_or_none(form.get("_rows")))
+        if error:
+            return {}, error
+        tsv = _kept_file("events.tsv")
+        write_tsv(pd.DataFrame(rows, columns=_COLUMNS), tsv)
+        return {"tsv": str(tsv)}, None
+    crop, error = parse_crop(form)
+    if error:
+        return {}, error
+    if isinstance(crop, dict):
+        return {key: repr(value) for key, value in crop.items()}, None
+    table = pd.DataFrame(crop, columns=["onset", "duration", "task"])
+    # an unnamed segment takes the run's own task, so the column goes when nobody named one
+    if not table["task"].astype(bool).any():
+        table = table.drop(columns="task")
+    segments = _kept_file("segments.tsv")
+    write_tsv(table, segments)
+    return {"segments_path": str(segments)}, None
+
+
+def command_argv(action: str, form, bids_dir: Path, run_label: str, flags: "dict[str, str]") -> list[str]:
+    """The action's ``nirspipe-prep`` command for one run: the form's flags plus what the page fills."""
+    parser = _parser(action)
     names = {f.action.dest: f.name for _title, group in fields(parser) for f in group}
     merged = MultiDict(form)
     merged.setlist(names["bids_dir"], [str(bids_dir)])
-    merged.setlist(names["tsv"], [str(tsv)])
+    for dest, value in flags.items():
+        merged.setlist(names[dest], [value])
     for flag, value in selection(run_label).items():
         merged.setlist(flag, [value])
-    return to_argv([PREP, "edit-markers", "apply"], parser, merged)
+    return to_argv([PREP, *ACTIONS[action][0]], parser, merged)
 
 
 class EditViewer(RawRatingApp):
@@ -145,10 +217,12 @@ class EditViewer(RawRatingApp):
                 abort(404)
             return send_from_directory(_HERE / "static", _STATIC[name])
 
-        @app.get("/prep/form")
-        def prep_form():
-            # read just now from this tree, so validating it again only costs the save time
-            return form_html({"--skip-bids-validation": ["yes"]})
+        @app.get("/prep/form/<action>")
+        def prep_form(action):
+            if action not in ACTIONS:
+                abort(404)
+            # read just now from this tree, so validating it again only costs the run time
+            return form_html(action, {"--skip-bids-validation": ["yes"]})
 
         @app.get("/prep/events")
         def prep_events():
@@ -159,18 +233,17 @@ class EditViewer(RawRatingApp):
             rows, error = parse_rows((request.json or {}).get("rows"))
             return jsonify(hint=None if error else drift_hint(rows))
 
-        @app.post("/prep/save")
-        def prep_save():
-            rows, error = parse_rows(_json_or_none(request.form.get("_rows")))
-            if error:
-                return jsonify(error=error), 400
+        @app.post("/prep/run/<action>")
+        def prep_run(action):
+            if action not in ACTIONS:
+                abort(404)
             run_label = request.form.get("_run", "")
             if "--participant-label" not in selection(run_label):
                 return jsonify(error=f"cannot tell the subject from the run {run_label!r}"), 400
-            # kept until the command has read it; the run is in the background
-            tsv = Path(tempfile.mkdtemp(prefix="nirspipe_events_")) / "events.tsv"
-            write_tsv(pd.DataFrame(rows, columns=_COLUMNS), tsv)
-            argv = save_argv(request.form, self.bids_dir, run_label, tsv)
+            flags, error = page_flags(action, request.form)
+            if error:
+                return jsonify(error=error), 400
+            argv = command_argv(action, request.form, self.bids_dir, run_label, flags)
             error = check(parser_for(PREP), argv[1:])
             if error:
                 return jsonify(error=error), 400
