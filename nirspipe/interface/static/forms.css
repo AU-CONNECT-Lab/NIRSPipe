@@ -1,23 +1,60 @@
 /* Generated command forms, scoped to .nform so a page that has its own controls, a raw
-   viewer in edit mode, can take them in. Colours and type from the reports' tokens.css. */
+   viewer in edit mode, can take them in. Type and status colours from the reports' tokens.css. */
 
-/* ---- forms: label above control, help in a bubble, short fields as many to a row as fit ---- */
-
-.nform fieldset {
-  border: 0;
-  border-top: 1px solid var(--rule);
-  margin: 0 0 0.5rem;
-  padding: 0.75rem 0 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 0.9rem 1.5rem;
+/* the GUI's own colours, kept out of tokens.css so the reports do not change with them */
+:root {
+  --gui-canvas: #f4f6f8;
+  --gui-sidebar: #172029;
+  --gui-border: #e2e6eb;
+  --gui-border-strong: #cfd6de;
+  --gui-accent: #3a6ea5;
+  --gui-accent-dark: #315d8a;
+  --gui-accent-soft: rgba(58, 110, 165, 0.14);
+  --gui-go: #2f855a;
+  --gui-go-dark: #276749;
+  --gui-placeholder: #a5adb8;
+  --gui-stage-prep: #c76d1f;
+  --gui-stage-post: #3a6ea5;
+  --gui-stage-glm: #2f855a;
+  --gui-radius: 8px;
 }
 
+/* ---- each group a card: label above control, help in a bubble, short fields as many to a row as fit ---- */
+
+.nform fieldset {
+  min-width: 0;
+  margin: 0 0 1rem;
+  padding: 0 0.9rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.8rem 1.25rem;
+}
+
+/* floated, the legend is an ordinary grid item: a header bar inside the card, not a gap in its border */
 .nform legend {
+  float: left;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: auto;
+  margin: 0 -0.9rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--gui-border);
+  font-size: 0.72rem;
   font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0 0.5rem 0 0;
-  color: var(--ink);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nform fieldset.folding legend {
+  cursor: pointer;
+  user-select: none;
 }
 
 .nform .field.wide {
@@ -26,6 +63,7 @@
 
 .nform .field {
   position: relative;
+  min-width: 0;
 }
 
 .nform .field-head {
@@ -36,7 +74,8 @@
 }
 
 .nform .field label code {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 500;
   color: var(--muted);
 }
 
@@ -44,19 +83,21 @@
   width: 1.1rem;
   height: 1.1rem;
   padding: 0;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 50%;
   background: var(--surface);
   cursor: pointer;
   font-family: inherit;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 400;
   line-height: 1;
   color: var(--muted);
 }
 
 .nform .tip:hover, .nform .tip:focus {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--gui-accent);
+  border-color: var(--gui-accent);
+  background: var(--surface);
 }
 
 /* as wide as its field, so a bubble in the last column cannot run off the page */
@@ -73,7 +114,7 @@
   line-height: 1.45;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 6px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
@@ -90,17 +131,27 @@
 .nform input[type="text"], .nform input[type="number"], .nform select, .nform textarea {
   width: 100%;
   font: inherit;
-  font-size: 0.9rem;
-  padding: 0.35rem 0.5rem;
+  font-size: 0.88rem;
+  padding: 0.32rem 0.55rem;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 6px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.nform input::placeholder, .nform textarea::placeholder {
+  color: var(--gui-placeholder);
 }
 
 .nform input:focus, .nform select:focus, .nform textarea:focus {
-  outline: 2px solid var(--accent-soft);
-  border-color: var(--accent);
+  outline: none;
+  border-color: var(--gui-accent);
+  box-shadow: 0 0 0 3px var(--gui-accent-soft);
+}
+
+.nform input[type="checkbox"] {
+  accent-color: var(--gui-accent);
 }
 
 .nform textarea {
@@ -110,31 +161,48 @@
 .nform .choices label {
   margin-right: 1rem;
   white-space: nowrap;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
 }
 
-/* ---- a group folds from its legend; folded, it lists what is set in it ---- */
+/* ---- a group folds from its header; folded, it lists what is set in it ---- */
 
 .nform legend .fold {
+  flex: none;
   border: 0;
   background: none;
   padding: 0;
   font: inherit;
-  font-weight: 600;
-  color: var(--ink);
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
   cursor: pointer;
 }
 
-.nform legend .fold::before {
-  content: "▾";
-  display: inline-block;
-  width: 1rem;
-  color: var(--muted);
-  transition: transform 0.1s;
+.nform fieldset.folding legend:hover .fold {
+  color: var(--gui-accent);
+  background: none;
 }
 
-.nform fieldset.folded legend .fold::before {
+.nform fieldset.folding legend::after {
+  content: "\25BE";
+  margin-left: auto;
+  flex: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.nform fieldset.folded legend::after {
   transform: rotate(-90deg);
+}
+
+.nform fieldset.folded {
+  padding-bottom: 0;
+}
+
+.nform fieldset.folded legend {
+  border-bottom: 0;
 }
 
 .nform fieldset.folded > .field {
@@ -142,12 +210,16 @@
 }
 
 .nform .group-summary {
-  margin-left: 0.6rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--mono);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 400;
-  color: var(--muted);
-  word-break: break-all;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
 }
 
 .nform fieldset:not(.folded) .group-summary {
@@ -161,10 +233,10 @@
   padding: 0.05rem 0.6rem;
   font: inherit;
   font-size: 0.78rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 6px;
   background: var(--surface);
-  color: var(--ink);
+  color: var(--muted);
   cursor: pointer;
 }
 
@@ -192,15 +264,24 @@
   display: none;
 }
 
+.hint-notes {
+  margin-bottom: 1rem;
+}
+
+/* a quiet strip with a coloured edge, not a block of colour */
 .hint-note {
-  margin: 0.4rem 0;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.84rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--gui-border);
+  border-left: 3px solid var(--gui-accent);
   border-radius: 6px;
 }
 
 .hint-note.warn {
-  color: var(--warn);
+  border-left-color: var(--warn);
   background: var(--warn-soft);
 }
 

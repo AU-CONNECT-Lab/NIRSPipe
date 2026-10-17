@@ -1,6 +1,7 @@
-<div id="hint-notes" class="hint-notes" role="status"></div>
-<form id="command-form" class="nform" data-preview="{{ preview_url }}" data-run="{{ run_url }}" data-links="{{ links | default('rate') }}" data-subjects="{{ url_for('commands.subjects') }}"{% if values and not given %} data-prefilled="1"{% endif %}{% if given %} data-given="{{ given | join(' ') }}"{% endif %} autocomplete="off">
-  {% include "_fields.html" %}
+<form id="command-form" class="nform split" data-preview="{{ preview_url }}" data-run="{{ run_url }}" data-links="{{ links | default('rate') }}" data-subjects="{{ url_for('commands.subjects') }}"{% if values and not given %} data-prefilled="1"{% endif %}{% if given %} data-given="{{ given | join(' ') }}"{% endif %} autocomplete="off">
+  <div class="split-main">
+    {% include "_fields.html" %}
+  </div>
   {% include "_actions.html" %}
 </form>
 {% include "_output.html" %}

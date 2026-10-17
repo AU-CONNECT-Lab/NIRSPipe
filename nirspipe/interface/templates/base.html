@@ -9,22 +9,45 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='forms.css') }}">
 </head>
 <body>
-<div class="layout">
+<div class="layout" id="layout">
   <nav class="sidebar">
-    <a class="brand" href="{{ url_for('home') }}">NIRSPipe</a>
-    {% for family in families %}
-    <p class="nav-group">{{ family }}</p>
-    {% for p in pages if p.family == family %}
-    <a href="{{ url_for('commands.' ~ p.slug) }}"{% if page is defined and page.slug == p.slug %} class="active"{% endif %}>{{ p.title }}</a>
-    {% endfor %}
-    {% endfor %}
-    <p class="nav-group">All</p>
-    <a href="{{ url_for('commands.index') }}">Commands</a>
+    <div class="sidebar-inner">
+      <div class="sidebar-head">
+        <a class="brand" href="{{ url_for('home') }}">NIRSPipe<small>Interface</small></a>
+        <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="fold the sidebar" aria-expanded="true">&#9776;</button>
+      </div>
+      <div class="sidebar-nav">
+        {% for family in families %}
+        <p class="nav-group">{{ family }}</p>
+        {% for p in pages if p.family == family %}
+        <a href="{{ url_for('commands.' ~ p.slug) }}"{% if page is defined and page.slug == p.slug %} class="active"{% endif %}>{{ p.title }}</a>
+        {% endfor %}
+        {% endfor %}
+        <p class="nav-group">All</p>
+        <a href="{{ url_for('commands.index') }}">Commands</a>
+      </div>
+    </div>
   </nav>
   <main>
   {% block main %}{% endblock %}
   </main>
 </div>
+<script>
+// the sidebar folds to a strip and stays folded across pages
+(function () {
+  var layout = document.getElementById("layout"), toggle = document.getElementById("sidebar-toggle");
+  function set(folded) {
+    layout.classList.toggle("folded-nav", folded);
+    toggle.setAttribute("aria-expanded", String(!folded));
+  }
+  try { set(localStorage.getItem("nirspipe-sidebar") === "folded"); } catch (e) { /* private window */ }
+  toggle.addEventListener("click", function () {
+    var folded = !layout.classList.contains("folded-nav");
+    set(folded);
+    try { localStorage.setItem("nirspipe-sidebar", folded ? "folded" : ""); } catch (e) { /* private window */ }
+  });
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

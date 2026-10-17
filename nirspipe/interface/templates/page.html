@@ -8,18 +8,25 @@
   <a href="{{ url_for('commands.' ~ page.slug, tab=t.key) }}"{% if t.key == tab.key %} class="active"{% endif %}>{{ t.key }}</a>
   {% endfor %}
 </nav>
-<p class="command-name"><code>{{ prefix }}</code></p>
-{% if description %}<p class="lede">{{ description }}</p>{% endif %}
+<div class="page-head">
+  <p class="command-name"><code>{{ prefix }}</code></p>
+  {% if description %}<p class="lede">{{ description }}</p>{% endif %}
+</div>
 {% block command %}
 {% if tab.prog == "nirspipe" %}
-<form class="record nform" method="get">
-  <label for="record">Run record</label>
-  <input type="text" id="record" name="record" value="{{ record }}" placeholder="a run record or --config file (.toml)">
-  <button type="submit">Load into the form</button>
-</form>
-{% for note in notes %}<p class="note">{{ note }}</p>{% endfor %}
-<div id="stages" class="stages" aria-label="stages this run goes through"></div>
-<p class="stages-tools"><button type="button" id="stages-png" hidden>Download PNG</button></p>
+<section class="card">
+  <h2 class="card-head">Run record</h2>
+  <form class="record nform" method="get">
+    <label for="record">File</label>
+    <input type="text" id="record" name="record" value="{{ record }}" placeholder="a run record or --config file (.toml)">
+    <button type="submit">Load into the form</button>
+  </form>
+  {% for note in notes %}<p class="note">{{ note }}</p>{% endfor %}
+</section>
+<section class="card">
+  <h2 class="card-head">Stages <button type="button" id="stages-png" hidden>Download PNG</button></h2>
+  <div id="stages" class="stages" aria-label="stages this run goes through"></div>
+</section>
 {% endif %}
 {% include "_form.html" %}
 {% endblock %}

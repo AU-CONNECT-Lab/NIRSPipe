@@ -53,20 +53,39 @@
     return el;
   }
 
+  // every stage up to Beer-Lambert is preprocessing, the rest postprocessing, GLM its own
+  var FAMILIES = [["Preprocessing", "--gui-stage-prep"], ["Postprocessing", "--gui-stage-post"],
+                  ["GLM", "--gui-stage-glm"]];
+
+  function families(levels) {
+    var post = false;
+    return levels.map(function (level) {
+      return level.map(function (name) {
+        var f = post ? (name === "GLM" ? 2 : 1) : 0;
+        if (name === "Beer-Lambert Law") post = true;
+        return f;
+      });
+    });
+  }
+
   function drawStages(levels) {
     var css = getComputedStyle(document.documentElement);
     function token(name) { return css.getPropertyValue(name).trim(); }
     var font = token("--font") || "sans-serif";
     var measure = document.createElement("canvas").getContext("2d");
     measure.font = "13px " + font;
-    var PAD = 10, BOX_H = 28, BOX_PAD = 12, GAP_Y = 8, ARROW = 34;
+    var PAD = 10, BOX_H = 28, BOX_PAD = 12, GAP_Y = 8, ARROW = 34, KEY_H = 26, SWATCH = 12;
+    var kinds = families(levels);
+    var shown = FAMILIES.filter(function (f, k) {
+      return kinds.some(function (level) { return level.indexOf(k) >= 0; });
+    });
     var widths = levels.map(function (level) {
       return Math.max.apply(null, level.map(function (n) { return measure.measureText(n).width; })) + 2 * BOX_PAD;
     });
     var heights = levels.map(function (level) { return level.length * BOX_H + (level.length - 1) * GAP_Y; });
     var width = widths.reduce(function (a, b) { return a + b; }, 0) + ARROW * (levels.length - 1) + 2 * PAD;
-    var height = Math.max.apply(null, heights) + 2 * PAD;
-    var mid = height / 2;
+    var height = Math.max.apply(null, heights) + 2 * PAD + KEY_H;
+    var mid = KEY_H + (height - KEY_H) / 2;
 
     stages.textContent = "";
     var root = svg("svg", {xmlns: SVG, width: Math.ceil(width), height: height,
@@ -77,6 +96,16 @@
                               markerWidth: 8, markerHeight: 8, orient: "auto"}, defs);
     svg("path", {d: "M0,0 L8,4 L0,8 z", fill: token("--faint")}, head);
 
+    var kx = PAD;
+    var key = svg("g", {"class": "key", "font-size": 12}, root);
+    shown.forEach(function (f) {
+      svg("rect", {x: kx + 1, y: PAD + 1, width: SWATCH, height: SWATCH, rx: 3, fill: token("--surface"),
+                   stroke: token(f[1]), "stroke-width": 2}, key);
+      svg("text", {x: kx + SWATCH + 7, y: PAD + 1 + SWATCH / 2, "dominant-baseline": "central",
+                   fill: token("--muted")}, key).textContent = f[0];
+      kx += SWATCH + 7 + measure.measureText(f[0]).width + 22;
+    });
+
     var x = PAD;
     levels.forEach(function (level, i) {
       if (i) {
@@ -86,12 +115,12 @@
       }
       var g = svg("g", {"class": "level"}, root);
       var y = mid - heights[i] / 2;
-      level.forEach(function (name) {
+      level.forEach(function (name, j) {
         var box = svg("g", {"class": "stage"}, g);
-        svg("rect", {x: x, y: y, width: widths[i], height: BOX_H, rx: 6, fill: token("--accent-soft"),
-                     stroke: token("--rule")}, box);
+        svg("rect", {x: x + 1, y: y, width: widths[i] - 2, height: BOX_H, rx: 6, fill: token("--surface"),
+                     stroke: token(FAMILIES[kinds[i][j]][1]), "stroke-width": 1.5}, box);
         svg("text", {x: x + widths[i] / 2, y: y + BOX_H / 2, "text-anchor": "middle",
-                     "dominant-baseline": "central", fill: token("--accent")}, box).textContent = name;
+                     "dominant-baseline": "central", fill: token("--ink")}, box).textContent = name;
         y += BOX_H + GAP_Y;
       });
       x += widths[i];
@@ -100,7 +129,7 @@
     if (download) download.hidden = false;
   }
 
-  // the drawing as a PNG at twice its size, on the page's background
+  // the drawing as a PNG at twice its size, on its panel's background
   function stagesPng() {
     var root = stages.querySelector("svg");
     if (!root) return;
@@ -111,7 +140,7 @@
       canvas.width = w * scale;
       canvas.height = h * scale;
       var ctx = canvas.getContext("2d");
-      ctx.fillStyle = getComputedStyle(document.body).backgroundColor || "#fff";
+      ctx.fillStyle = getComputedStyle(stages).backgroundColor || "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
       canvas.toBlob(function (blob) {
@@ -158,7 +187,8 @@
   function summarise(group) {
     var parts = Array.prototype.map.call(group.querySelectorAll(".field:not(.inactive)"), setting)
       .filter(Boolean);
-    group.querySelector(".group-summary").textContent = parts.join(" · ");
+    var summary = group.querySelector(".group-summary");
+    summary.textContent = summary.title = parts.join(" · ");
   }
 
   function saveFolds() {
@@ -173,6 +203,7 @@
     var legend = group.querySelector("legend");
     var title = legend.textContent.trim();
     group.dataset.title = title;
+    group.classList.add("folding");
     legend.textContent = "";
     var toggle = document.createElement("button");
     toggle.type = "button";
@@ -186,7 +217,7 @@
     var folded = savedFolds ? savedFolds.indexOf(title) >= 0 : title !== "Required";
     group.classList.toggle("folded", folded);
     toggle.setAttribute("aria-expanded", String(!folded));
-    toggle.addEventListener("click", function () {
+    legend.addEventListener("click", function () {
       var now = group.classList.toggle("folded");
       toggle.setAttribute("aria-expanded", String(!now));
       saveFolds();

@@ -1,22 +1,25 @@
 {% extends "page.html" %}
 
 {% block command %}
-<p class="note">Open a raw report to edit its recording's events. Find the reports a Raw QC tree already holds, or make them below.</p>
-<form class="record nform" method="get">
-  <label for="tree">Raw QC tree</label>
-  <input type="text" id="tree" name="tree" value="{{ tree }}" placeholder="the output folder prep-raw wrote">
-  <label for="bids">BIDS dataset</label>
-  <input type="text" id="bids" name="bids" value="{{ bids }}" placeholder="the dataset it read">
-  <button type="submit">Find reports</button>
-</form>
-{% if find_note %}<p class="note">{{ find_note }}</p>{% endif %}
-{% if edit_links %}
-<ul class="edit-links">
-  {% for item in edit_links %}
-  <li><a href="{{ item.href }}" target="_blank">{{ item.label }}</a></li>
-  {% endfor %}
-</ul>
-{% endif %}
+<section class="card">
+  <h2 class="card-head">Find reports</h2>
+  <p class="note">Open a raw report to edit its recording's events. Find the reports a Raw QC tree already holds, or make them below.</p>
+  <form class="record nform" method="get">
+    <label for="tree">Raw QC tree</label>
+    <input type="text" id="tree" name="tree" value="{{ tree }}" placeholder="the output folder prep-raw wrote">
+    <label for="bids">BIDS dataset</label>
+    <input type="text" id="bids" name="bids" value="{{ bids }}" placeholder="the dataset it read">
+    <button type="submit">Find reports</button>
+  </form>
+  {% if find_note %}<p class="note">{{ find_note }}</p>{% endif %}
+  {% if edit_links %}
+  <ul class="edit-links">
+    {% for item in edit_links %}
+    <li><a href="{{ item.href }}" target="_blank">{{ item.label }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
 <h2 class="make">Make reports</h2>
 {% if given %}<p class="note">The edited recording's folder is filled in. Pick a new output folder, so the first report is kept.</p>{% endif %}
 {% include "_form.html" %}

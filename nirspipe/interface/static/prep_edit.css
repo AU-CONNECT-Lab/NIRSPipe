@@ -1,14 +1,19 @@
-/* The Edit events and Crop sections a raw viewer gains in the GUI's Data Preparation. Colours from the page's tokens. */
+/* The Edit events and Crop sections a raw viewer gains in the GUI's Data Preparation. Colours from the page's tokens and forms.css. */
 
 .pe-section button {
   font: inherit;
   font-size: 0.8rem;
   padding: 0.2rem 0.65rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 6px;
   background: var(--surface);
-  color: var(--ink);
+  color: var(--muted);
   cursor: pointer;
+}
+
+.pe-section button:hover:not(:disabled) {
+  background: #eef1f5;
+  color: var(--ink);
 }
 
 .pe-section button:disabled {
@@ -30,8 +35,14 @@
   width: 5.5rem;
   font: inherit;
   padding: 0.15rem 0.35rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--gui-border-strong);
   border-radius: 4px;
+}
+
+.pe-tools input:focus, .pe-table td input:focus {
+  outline: none;
+  border-color: var(--gui-accent);
+  box-shadow: 0 0 0 3px var(--gui-accent-soft);
 }
 
 .pe-gap {
@@ -41,8 +52,8 @@
 .pe-table-wrap {
   max-height: 22rem;
   overflow-y: auto;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
+  border: 1px solid var(--gui-border);
+  border-radius: var(--gui-radius);
 }
 
 .pe-table {
@@ -54,15 +65,17 @@
 .pe-table th {
   position: sticky;
   top: 0;
-  background: var(--surface-alt);
+  background: #f7f9fb;
+  color: var(--muted);
   text-align: left;
   font-weight: 600;
-  padding: 0.3rem 0.4rem;
+  padding: 0.35rem 0.4rem;
+  border-bottom: 1px solid var(--gui-border);
 }
 
 .pe-table td {
   padding: 0.15rem 0.4rem;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--gui-border);
   white-space: nowrap;
 }
 
@@ -76,14 +89,26 @@
   background: transparent;
 }
 
+.pe-table tbody tr:hover > td {
+  background: var(--gui-accent-soft);
+}
+
 .pe-table td input:hover, .pe-table td input:focus {
-  border-color: var(--rule);
+  border-color: var(--gui-border-strong);
   background: var(--surface);
 }
 
 .pe-table .pe-del {
   padding: 0 0.45rem;
   line-height: 1.4;
+  border-color: transparent;
+  background: transparent;
+}
+
+.pe-table .pe-del:hover:not(:disabled) {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-soft);
 }
 
 .pe-empty {
@@ -104,11 +129,17 @@
 }
 
 .pe-section .pe-go {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--gui-go);
+  border-color: var(--gui-go);
   color: #fff;
   font-weight: 600;
-  padding: 0.3rem 1.1rem;
+  padding: 0.3rem 1.2rem;
+}
+
+.pe-section .pe-go:hover:not(:disabled) {
+  background: var(--gui-go-dark);
+  border-color: var(--gui-go-dark);
+  color: #fff;
 }
 
 .pe-report {

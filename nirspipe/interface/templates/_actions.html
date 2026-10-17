@@ -1,11 +1,24 @@
-<div class="actions">
-  <button type="submit">{{ "Open" if opens_viewer else "Run" }}</button>
-  {% if not opens_viewer %}<button type="button" id="stop" disabled>Stop</button>{% endif %}
-  <label class="shell">Command for
-    <select id="shell" name="_shell">
-      {% for s in ["powershell", "bash", "cmd"] %}
-      <option value="{{ s }}"{% if s == shell %} selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-  </label>
-</div>
+<aside class="split-aside">
+  <section class="card run-card">
+    <h2 class="card-head">Run</h2>
+    <div class="actions">
+      <button type="submit" class="go">{{ "Open" if opens_viewer else "Run" }}</button>
+      {% if not opens_viewer %}<button type="button" id="stop" class="stop" disabled>Stop</button>{% endif %}
+    </div>
+    <p id="status" class="status" role="status"></p>
+    <ul id="opened" class="opened"></ul>
+    <pre id="log" class="log" hidden></pre>
+  </section>
+  <section class="card">
+    <h2 class="card-head">Command
+      <label class="shell">for
+        <select id="shell" name="_shell">
+          {% for s in ["powershell", "bash", "cmd"] %}
+          <option value="{{ s }}"{% if s == shell %} selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </h2>
+    <pre id="preview" class="preview"></pre>
+  </section>
+</aside>

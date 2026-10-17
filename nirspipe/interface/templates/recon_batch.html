@@ -1,31 +1,39 @@
 {% extends "page.html" %}
 
 {% block command %}
-<p class="note">One <code>nirspipe-recon</code> per SNIRF file in a folder, run one after another. A file without a subject or a task is left out.</p>
-<form class="record nform" method="get">
-  <label for="folder">Folder of SNIRF files</label>
-  <input type="text" id="folder" name="folder" value="{{ folder }}" placeholder="searched with its subfolders">
-  <button type="submit">Find files</button>
-</form>
-{% if found %}<p class="note">{{ found }}</p>{% endif %}
-<form id="command-form" class="nform" data-preview="{{ preview_url }}" data-run="{{ run_url }}" autocomplete="off">
-  {% include "_fields.html" %}
-  {% if rows %}
-  <table class="rows">
-    <thead><tr><th>File</th><th>subject</th><th>task</th><th>session</th><th>run</th></tr></thead>
-    <tbody>
-      {% for r in rows %}
-      <tr>
-        <td><input type="hidden" name="file" value="{{ r.file }}" data-recall="no">{{ r.name }}</td>
-        <td><input type="text" name="subject" value="{{ r.subject }}" data-recall="no" aria-label="subject for {{ r.name }}"></td>
-        <td><input type="text" name="task" value="" data-recall="no" aria-label="task for {{ r.name }}"></td>
-        <td><input type="text" name="session" value="" data-recall="no" aria-label="session for {{ r.name }}"></td>
-        <td><input type="text" name="run" value="" data-recall="no" aria-label="run for {{ r.name }}"></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+<section class="card">
+  <h2 class="card-head">SNIRF files</h2>
+  <p class="note">One <code>nirspipe-recon</code> per SNIRF file in a folder, run one after another. A file without a subject or a task is left out.</p>
+  <form class="record nform" method="get">
+    <label for="folder">Folder</label>
+    <input type="text" id="folder" name="folder" value="{{ folder }}" placeholder="searched with its subfolders">
+    <button type="submit">Find files</button>
+  </form>
+  {% if found %}<p class="note">{{ found }}</p>{% endif %}
+</section>
+<form id="command-form" class="nform split" data-preview="{{ preview_url }}" data-run="{{ run_url }}" autocomplete="off">
+  <div class="split-main">
+    {% include "_fields.html" %}
+    {% if rows %}
+    <section class="card">
+      <h2 class="card-head">Files</h2>
+      <table class="rows">
+        <thead><tr><th>File</th><th>subject</th><th>task</th><th>session</th><th>run</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td><input type="hidden" name="file" value="{{ r.file }}" data-recall="no">{{ r.name }}</td>
+            <td><input type="text" name="subject" value="{{ r.subject }}" data-recall="no" aria-label="subject for {{ r.name }}"></td>
+            <td><input type="text" name="task" value="" data-recall="no" aria-label="task for {{ r.name }}"></td>
+            <td><input type="text" name="session" value="" data-recall="no" aria-label="session for {{ r.name }}"></td>
+            <td><input type="text" name="run" value="" data-recall="no" aria-label="run for {{ r.name }}"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+  </div>
   {% include "_actions.html" %}
 </form>
 {% include "_output.html" %}
