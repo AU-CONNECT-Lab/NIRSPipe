@@ -103,8 +103,8 @@ def test_the_pair_table_carries_the_z_and_no_per_channel_order(dyad):
 
     assert len(frame) == len(names) ** 2
     assert list(frame.columns[:6]) == ["sub1", "sub2", "label", "label2", "r", "r_z"]
-    assert frame["r_z"].to_numpy() == pytest.approx(
-        np.arctanh(frame["r"].clip(-0.999999, 0.999999).to_numpy()), nan_ok=True)
+    # r_z is r's Fisher z, so tanh takes it back to r
+    assert np.tanh(frame["r_z"].to_numpy()) == pytest.approx(frame["r"].to_numpy(), nan_ok=True)
     assert not {"ar_order", "ar_order2", "percentile"} & set(frame.columns)
     # the frame is the matrix, read the other way round
     index = {n: i for i, n in enumerate(names)}
@@ -296,8 +296,7 @@ def test_every_surrogate_comes_back_as_rows_its_summary_was_taken_from(dyad):
     draws = kept[0]
     assert len(draws) == 7 * len(frame)
     assert set(draws["draw"]) == set(range(7))
-    assert draws["r_z"].to_numpy() == pytest.approx(
-        np.arctanh(draws["r"].clip(-0.999999, 0.999999).to_numpy()), nan_ok=True)
+    assert np.tanh(draws["r_z"].to_numpy()) == pytest.approx(draws["r"].to_numpy(), nan_ok=True)
     # the per-cell summary is what these rows give back
     p95 = (draws.assign(a=draws["r"].abs()).groupby(["label", "label2"])["a"]
            .quantile(0.95, interpolation="linear"))

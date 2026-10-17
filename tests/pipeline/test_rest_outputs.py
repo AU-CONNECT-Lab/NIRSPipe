@@ -162,8 +162,8 @@ def test_fisher_z_of_the_seed_map_keeps_every_column(rest_out, roi_map):
     z = pd.read_csv(_one(rest_out, "fcseedz"), sep="\t", index_col="roi")
 
     assert z.shape == seed.shape
-    assert np.allclose(z.to_numpy()[seed.notna().to_numpy()],
-                       np.arctanh(seed.to_numpy()[seed.notna().to_numpy()]))
+    assert np.allclose(np.tanh(z.to_numpy()[seed.notna().to_numpy()]),
+                       seed.to_numpy()[seed.notna().to_numpy()])
 
 
 # ---- the sidecar records what the map was ----

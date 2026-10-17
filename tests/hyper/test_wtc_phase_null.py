@@ -113,7 +113,7 @@ def test_the_cone_share_is_reported_even_when_it_is_not_applied():
 
 def test_the_band_mean_carries_its_fisher_z():
     df = wtc_band_mean(_result({"A": _map(0.6)}), 0.06, 0.15)
-    assert df["coherence_z"].iloc[0] == pytest.approx(np.arctanh(0.6))
+    assert df["coherence_z"].iloc[0] == pytest.approx(0.6931471805599453)   # ln(1.6 / 0.4) / 2
 
 
 def test_a_failed_pair_keeps_its_row_with_both_values_missing():
@@ -168,7 +168,7 @@ def test_the_roi_fisher_z_matches_the_roi_coherence_not_the_channel_average():
     df = wtc_band_mean(_result({"A1": _map(0.2), "A2": _map(0.8)}), 0.06, 0.15)
     out = roi_mean_of_channels(df, {"roiA": ["A1", "A2"]}, min_channels=2)
     assert out["coherence"].iloc[0] == pytest.approx(0.5)
-    assert out["coherence_z"].iloc[0] == pytest.approx(np.arctanh(0.5))
+    assert out["coherence_z"].iloc[0] == pytest.approx(0.5493061443340549)  # ln(1.5 / 0.5) / 2
 
 
 def test_the_roi_map_average_gives_the_number_the_roi_table_reports():

@@ -24,7 +24,7 @@ def test_the_summary_is_the_trace_statistics_over_the_stretch():
     t = np.arange(10.0)
     s = imu_scalars(_gyro(t, t), 2.0, 5.0)
     assert s["gyro_speed_mean"] == 3.5
-    assert_allclose(s["gyro_speed_p95"], np.percentile([2.0, 3.0, 4.0, 5.0], 95))
+    assert_allclose(s["gyro_speed_p95"], 4.85)          # rank 2.85 of 2, 3, 4, 5, interpolated
 
 
 def test_a_sensor_the_recording_lacks_is_none_not_zero():

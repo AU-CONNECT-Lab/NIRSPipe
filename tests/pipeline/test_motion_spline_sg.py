@@ -86,7 +86,8 @@ def test_the_snr_leaves_out_the_first_and_last_long_stretch():
     a, b, c = 10 + alternate, 4 + alternate, 0.5 + alternate
     x = np.r_[a, np.zeros(30), b, c]
     runs = [slice(0, 40), slice(40, 70), slice(70, 110), slice(110, 150)]   # 30 samples is 3 s
-    assert _spline_sg_snr(x, runs, SFREQ) == abs(b.mean()) / (b.std(ddof=1) + np.finfo(float).eps)
+    # b alone: mean 4 over its sample SD sqrt(40 / 39)
+    assert _spline_sg_snr(x, runs, SFREQ) == pytest.approx(3.9496835316262997)
     assert np.isnan(_spline_sg_snr(x, runs[:2], SFREQ))
 
 

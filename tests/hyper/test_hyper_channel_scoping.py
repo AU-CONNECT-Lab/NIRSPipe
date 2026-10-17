@@ -385,9 +385,9 @@ def test_the_roi_correlation_is_the_fisher_z_mean_of_its_channels():
     mat[np.ix_([0, 1], [0, 1])] = [[0.2, 0.4], [0.6, 0.95]]
     out, labels = _isc_roi(mat, min_channels=1)
 
-    z = np.arctanh(np.clip([0.2, 0.4, 0.6, 0.95], -0.999999, 0.999999))
     assert labels == ["L", "R"]
-    assert out[0, 0] == pytest.approx(float(np.tanh(z.mean())))
+    # the four z average to 0.7878, which tanh takes back to 0.6572
+    assert out[0, 0] == pytest.approx(0.6571764863211627)
     assert out[0, 0] > np.mean([0.2, 0.4, 0.6, 0.95])
 
 
@@ -441,8 +441,8 @@ def test_the_homologous_roi_correlation_averages_only_same_channel_pairs():
     np.fill_diagonal(mat, [0.2, 0.4, 0.1, 0.3])
     out, labels = roi_mean_of_homologous_isc(mat, ISC_LABELS, ISC_ROIS, min_channels=1)
 
-    z = np.arctanh([0.2, 0.4])
-    assert out[labels.index("L"), labels.index("L")] == pytest.approx(float(np.tanh(z.mean())))
+    # 0.2 and 0.4 alone: their z average to 0.3132, tanh 0.3033; the 0.9 cells would lift it
+    assert out[labels.index("L"), labels.index("L")] == pytest.approx(0.3033370452904235)
     assert np.isnan(out[labels.index("L"), labels.index("R")])
 
 

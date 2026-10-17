@@ -780,7 +780,7 @@ def test_a_negative_correlation_is_found_by_the_signed_test(tmp_path):
     write_group_null(tmp_path, "main", n_resample=2000, seed=1)
     out, side = _isc_cohort(tmp_path, "signed")
     whole = out[(out.granularity == "whole") & (out.test == "resample")].iloc[0]
-    assert whole.r_z == pytest.approx(np.arctanh(-0.4))
+    assert whole.r_z == pytest.approx(-0.42364893019360184)            # arctanh(-0.4)
     assert whole.p < 0.01
     assert side["parameters"]["isc_test"] == "signed"
     assert side["parameters"]["two_sided"] is True
@@ -798,7 +798,7 @@ def test_opposite_signs_cancel_when_signed_and_count_by_magnitude(tmp_path):
     def whole(t):
         return t[(t.granularity == "whole") & (t.test == "resample")].iloc[0]
     assert whole(signed).p > 0.2
-    assert whole(magnitude).abs_r_z == pytest.approx(np.arctanh(0.4))
+    assert whole(magnitude).abs_r_z == pytest.approx(0.42364893019360184)   # arctanh(0.4)
     assert whole(magnitude).p < 0.01
     assert side["parameters"]["two_sided"] is False
 
@@ -807,7 +807,7 @@ def test_the_whole_run_rows_take_no_part(tmp_path):
     _write_isc_tree(tmp_path, [0.2] * 4, whole_run_r=0.99)
     write_group_null(tmp_path, "main", n_resample=500, seed=1)
     out, _ = _isc_cohort(tmp_path, "signed")
-    assert out.r_z.iloc[0] == pytest.approx(np.arctanh(0.2))
+    assert out.r_z.iloc[0] == pytest.approx(0.2027325540540822)         # arctanh(0.2)
 
 
 def test_each_statistic_gets_its_own_methods_paragraph(tmp_path):
@@ -916,7 +916,7 @@ def test_the_isc_cells_include_each_region_corrected_apart_from_the_channels(tmp
     # "thin" has one channel per member, under the recorded minimum of two
     assert set(roi.label) == {"front", "back"}
     assert len(roi) == 2 * len(OCCASIONS) and set(roi.family) == {6}
-    assert roi.r_z.to_numpy() == pytest.approx(np.arctanh(-0.4))
+    assert roi.r_z.to_numpy() == pytest.approx(-0.42364893019360184)    # arctanh(-0.4)
     # beating all nine draws, two-sided
     assert roi.p.to_numpy() == pytest.approx(0.2)
     assert set(cells[cells.level == "channel"].family) == {12}
