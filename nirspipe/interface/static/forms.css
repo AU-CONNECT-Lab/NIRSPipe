@@ -73,7 +73,9 @@
   margin-bottom: 0.25rem;
 }
 
+/* the report a raw viewer serves sets no code font of its own */
 .nform .field label code {
+  font-family: var(--mono);
   font-size: 0.78rem;
   font-weight: 500;
   color: var(--muted);

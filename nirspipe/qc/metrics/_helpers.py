@@ -228,11 +228,6 @@ def usable_split(
                  for names in long_short_channels(raw, sep_bands))
 
 
-def has_short_channels(raw: mne.io.Raw, sep_bands=None) -> bool:
-    """Return True if the recording contains short-distance reference channels."""
-    return bool(long_short_channels(raw, sep_bands)[1])
-
-
 def long_channel_picks(
     raw: mne.io.Raw, ch_type: str = "hbo", exclude="bads", sep_bands=None,
 ) -> list[int]:

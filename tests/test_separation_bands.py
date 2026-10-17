@@ -38,7 +38,6 @@ from nirspipe.qc.metrics._helpers import (
     SHORT_MAX_DIST,
     bands_from_record,
     bands_to_record,
-    has_short_channels,
     long_channel_picks,
     long_short_channels,
     separation_bands,
@@ -397,15 +396,14 @@ def test_a_record_stamps_whether_it_carries_bands_at_all():
 # ---- One run, one split ----
 
 def test_the_analysis_paths_agree_with_the_split():
-    """`long_channel_picks` and `has_short_channels` read the same split as the reports,
+    """`long_channel_picks` reads the same split as the reports,
     so a 58 mm channel is never outside the montage in one half of the package and inside
     it in the other."""
     raw = _montage([8, 12, 30, 58], ch_type="hbo")
     for sep_bands in [None, (0.01, 0.015, 0.045), (0.014, 0.015, None)]:
-        long, short = long_short_channels(raw, sep_bands)
+        long, _ = long_short_channels(raw, sep_bands)
         picks = long_channel_picks(raw, "hbo", exclude=[], sep_bands=sep_bands)
         assert [raw.ch_names[p] for p in picks] == long
-        assert has_short_channels(raw, sep_bands) is bool(short)
 
 
 def test_a_positionless_montage_builds_no_short_channel_regressors():
@@ -420,7 +418,7 @@ def test_a_positionless_montage_builds_no_short_channel_regressors():
     raw = _montage([8, 30], ch_type="hbo", positioned=False)
     with pytest.raises(StageError, match="no channel at or under"):
         _short_channel_regressors(raw, "mean")
-    assert has_short_channels(raw) is False
+    assert long_short_channels(raw)[1] == []
 
 
 def test_the_refusal_names_the_shortest_channel_there_is():
