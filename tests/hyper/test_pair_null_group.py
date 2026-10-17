@@ -76,11 +76,10 @@ def test_a_real_value_below_its_draws_is_not_ranked_above_them():
 
 
 def test_the_lift_is_against_that_occasions_own_draw_mean():
-    draws = _draws()
-    out = by_occasion(draws, _real(0.40)).set_index("occasion")
-    for occ in OCCASIONS:
-        own = draws[draws.occasion == occ].groupby("draw").coherence.mean().mean()
-        assert out.loc[occ, "lift"] == pytest.approx(0.40 - own, abs=1e-9)
+    # draws centred on 0.30, 0.31 and 0.29: a lift off their pooled 0.30 would read 0.10 thrice
+    out = by_occasion(_draws_with_spread(0.02), _real(0.40)).set_index("occasion")
+    assert out.lift.to_dict() == pytest.approx({"G01": 0.10, "G03": 0.09, "G04": 0.11},
+                                               abs=1e-12)
 
 
 # ---- the cohort ----
