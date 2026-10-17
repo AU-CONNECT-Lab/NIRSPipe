@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- `nirspipe-gui` is a new GUI: forms generated from each command, Data Preparation edits raw reports, rating built in; Dash and its four dependencies are gone
+
 ## [0.69.0] - 2026-10-16
 
 ### Added

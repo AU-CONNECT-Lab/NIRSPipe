@@ -656,12 +656,11 @@ def format_rows(
       -> [{"name": "S1_D1 760", "status": "BAD", "status_cls": "bad",
            "sci_win": "0.412", "sci_win_cls": "bad", "corr": "\u2014", "corr_cls": "", ...}]
 
-    Formatting lives here rather than in each renderer because two of the three cannot use
-    the Python registry directly: the raw viewer prints in JavaScript and the GUI builds
-    Dash components, so both get their strings from here instead of reimplementing the
-    formats and the SCI cutoff. Classes are the subject report's ``.qm-table`` names
-    (``bad``/``good`` for status, ``bad`` for a below-threshold SCI, ``neg``/``pos`` for the
-    correlation's sign), so one stylesheet rule covers all three views.
+    Formatting lives here rather than in each renderer because the raw viewer prints in
+    JavaScript and cannot use the Python registry, so it gets its strings from here instead
+    of reimplementing the formats and the SCI cutoff. Classes are the subject report's
+    ``.qm-table`` names (``bad``/``good`` for status, ``bad`` for a below-threshold SCI,
+    ``neg``/``pos`` for the correlation's sign), so one stylesheet rule covers both views.
 
     ``sci_threshold`` is the run's own ``--sci-threshold``, not the registry's cutoff for
     the SCI mean: this column marks the channels that were actually pruned, so colouring it

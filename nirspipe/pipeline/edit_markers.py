@@ -46,7 +46,7 @@ def apply_markers_from_df(
 ) -> Path:
     """Read snirf_path, replace annotations with df, write to derivatives/marker_edited/.
 
-    Public entry point shared by the CLI (via apply_markers) and the interface callbacks.
+    What ``apply_markers`` runs once the table is settled.
     Returns the path to the written SNIRF.
     """
     stem = bids_stem(snirf_path)

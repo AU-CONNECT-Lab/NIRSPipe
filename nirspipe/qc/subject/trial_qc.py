@@ -2,8 +2,8 @@
 
 The recording-level metrics answer "was this run usable". They cannot answer "was trial 12
 usable", and a run whose mean SCI is 0.9 can still hold two trials where the cap moved. The
-raw QC viewer and the GUI's Data Prep page both show that per-trial view, and they score it
-here so the two cannot end up measuring different windows or different metrics.
+raw QC viewer and the subject report both show that per-trial view, and they score it here
+so the two cannot end up measuring different windows or different metrics.
 
 Nothing is persisted: a trial is not a BIDS entity, so a per-trial record has nowhere to live
 in the derivatives tree without colliding on filename.

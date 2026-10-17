@@ -489,7 +489,7 @@ def build_layout_figure(
                 hovertemplate="<b>%{text}</b><extra></extra>", showlegend=False,
             )
 
-        # trace 1 has to stay the channel scatter: the viewer and the Dash app both index it there
+        # trace 1 has to stay the channel scatter: the raw viewer's map clicks and highlight index it
         fig_2d = go.Figure(
             data=[
                 go.Scatter(x=lines_x, y=lines_y, mode="lines",
