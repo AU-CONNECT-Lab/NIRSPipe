@@ -40,6 +40,23 @@ def test_a_finished_run_links_the_report_it_wrote(tmp_path):
     assert client.get(found["url"]).get_data(as_text=True) == "<html>raw</html>"
 
 
+def test_a_raw_qc_run_links_each_recording_for_rating(tmp_path):
+    for subject in ("01", "02"):
+        page = tmp_path / f"sub-{subject}" / report_name(f"sub-{subject}_task-rest", desc="raw")
+        page.parent.mkdir(parents=True)
+        page.write_text("<html></html>", encoding="utf-8")
+    command_pages._RUNS["raw"] = ("prep-raw", tmp_path)
+    client = WebApp().flask.test_client()
+
+    rate = client.get("/runs/raw/report").get_json()["rate"]
+    assert [item["label"] for item in rate] == ["sub-01_task-rest", "sub-02_task-rest"]
+    first = client.get(rate[0]["href"])
+    assert first.status_code == 302
+    viewer = first.headers["Location"]
+    assert client.get(f"{viewer}rate_config").status_code == 200
+    assert client.get(rate[0]["href"]).headers["Location"] == viewer
+
+
 def test_a_missing_report_is_said_to_be_missing(tmp_path):
     command_pages._RUNS["empty"] = ("prep-raw", tmp_path)
     message = WebApp().flask.test_client().get("/runs/empty/report").get_json()["message"]

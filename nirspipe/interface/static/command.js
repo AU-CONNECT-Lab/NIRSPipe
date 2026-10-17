@@ -73,6 +73,19 @@
       var frame = document.createElement("iframe");
       frame.src = d.url;
       report.appendChild(head);
+      if (d.rate && d.rate.length) {
+        var rate = document.createElement("p");
+        rate.className = "rate-links";
+        rate.textContent = "Rate: ";
+        d.rate.forEach(function (item) {
+          var r = document.createElement("a");
+          r.href = item.href;
+          r.target = "_blank";
+          r.textContent = item.label;
+          rate.appendChild(r);
+        });
+        report.appendChild(rate);
+      }
       report.appendChild(frame);
     });
   }

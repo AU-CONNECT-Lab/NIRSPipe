@@ -209,3 +209,7 @@ button {
   border: 1px solid #d0d7de;
   border-radius: 6px;
 }
+
+.rate-links a {
+  margin-right: 1rem;
+}

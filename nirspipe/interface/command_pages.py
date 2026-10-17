@@ -185,6 +185,26 @@ def blueprint(web) -> Blueprint:
             # otherwise read as "nothing to show"
             return jsonify(message=f"The run finished but its report is missing: looked for "
                                    f"{', '.join(REPORT_PATTERNS[key])} under {output_dir}.")
-        return jsonify(url=report_url(found), path=str(found))
+        rate = []
+        if key == "prep-raw":
+            rate = [{"label": page.stem.removesuffix("_desc-raw_report"),
+                     "href": url_for("commands.rate_raw", report=str(page), tree=str(output_dir))}
+                    for page in sorted(output_dir.glob(REPORT_PATTERNS["prep-raw"][0]))]
+        return jsonify(url=report_url(found), path=str(found), rate=rate)
+
+    # (report, tree) -> its viewer's path, so a second click opens the same page
+    rated: dict[tuple[Path, Path], str] = {}
+
+    @bp.get("/rate/raw")
+    def rate_raw():
+        from nirspipe.qc.rating.app import RawRatingApp
+
+        report_path, tree = Path(request.args["report"]), Path(request.args["tree"])
+        if not report_path.is_file():
+            abort(404)
+        key = (report_path.resolve(), tree.resolve())
+        if key not in rated:
+            [rated[key]] = web.mount(RawRatingApp(report_path, tree).app, report_path.stem)
+        return redirect("/" + rated[key])
 
     return bp
