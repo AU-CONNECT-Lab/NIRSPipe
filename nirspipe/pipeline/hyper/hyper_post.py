@@ -26,6 +26,7 @@ from nirspipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
 from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from nirspipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
 from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
+from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
 from nirspipe.io.tables import join_whole_run, write_tsv
 
 logger = get_logger("pipeline.hyper_post")
@@ -316,13 +317,23 @@ def run_hyper_post(
         tables[tsv_path.name] = tsv_path
         return tsv_path
 
+    def _input_params() -> dict:
+        """What the coherence and the correlation alike were read from."""
+        return {
+            # --tstart/--tend, so a table of a stretch is not read as the whole recording
+            **({"analysis_window_s": [round(x, 3) for x in analysis_window]}
+               if analysis_window is not None else {}),
+            **({"desc": config.desc} if config.desc else {}),
+            **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
+            # the bands decide which channels are long, so which pairings exist
+            **bands_to_record(sep_bands or separation_bands()),
+        }
+
     def _wtc_params() -> dict:
         """What every WTC table and map records about how it was computed."""
         return dict(
             band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=wtc_mask_coi,
-            # --tstart/--tend, so a table of a stretch is not read as the whole recording
-            **({"analysis_window_s": [round(x, 3) for x in analysis_window]}
-               if analysis_window is not None else {}),
+            **_input_params(),
             # the window grid, without which the null cannot resolve the same one
             **({"wtc_window_s": round(float(config.wtc_window_s), 3)}
                if config.wtc_window_s else {}),
@@ -335,8 +346,6 @@ def run_hyper_post(
             # what the re-paired null and the Methods read back rather than take again
             channel_cross=bool(wtc_channel_cross),
             roi_min_channels=int(wtc_roi_min_channels),
-            **({"desc": config.desc} if config.desc else {}),
-            **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
             **wtc_grid_params(aligned_raws), **align_info, **_whiten_params(),
             excluded_spans_s=_member_spans(),
         )
@@ -794,6 +803,7 @@ def run_hyper_post(
                 "isc_phase_null_iter": isc_phase_null,
                 "channel_cross": bool(wtc_channel_cross),
                 "roi_min_channels": int(wtc_roi_min_channels),
+                **_input_params(),
                 "excluded_spans_s": _member_spans()}
 
     def _apply_pair_isc_levels(isc: dict, isc_levels: dict) -> dict:

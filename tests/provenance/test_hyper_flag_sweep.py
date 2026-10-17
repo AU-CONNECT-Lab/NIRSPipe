@@ -41,7 +41,7 @@ SHORT_AS_LONG = {"--short-max-dist": ["5"], "--long-min-dist": ["6"]}
 BOTH = ("wtc", "isc")
 
 HYPER = {
-    "normalize": Case({"--normalize": []}, BOTH),
+    "normalize": Case({"--normalize": []}),
     "no_align": Case({"--no-align": []}, BOTH),
     "tstart": Case({"--tstart": ["20"]}, BOTH),
     "tend": Case({"--tend": ["380"]}, BOTH),
@@ -63,10 +63,10 @@ HYPER = {
     "wtc_by_condition": Case({"--no-by-condition": []}, BOTH),
     "wtc_cond_transform": Case(COND_TRANSFORM, ("wtc",)),
     "wtc_cond_pad_s": Case({"--wtc-cond-pad-s": ["10"]}, ("wtc",), COND_TRANSFORM),
-    "wtc_limit_scales": Case({"--no-wtc-limit-scales": []}, ("wtc",)),
+    "wtc_limit_scales": Case({"--no-wtc-limit-scales": []}),
     "wtc_save_maps": Case({"--wtc-save-maps": []}),
     "wtc_phase_null": Case(PHASE_NULL, ("level",)),
-    "wtc_phase_null_cross": Case({"--no-wtc-phase-null-cross": []}, ("level",), PHASE_NULL),
+    "wtc_phase_null_cross": Case({"--no-wtc-phase-null-cross": []}, ("draws",), PHASE_NULL),
     "bads_scope": Case({"--bads-scope": ["subject"]}, BOTH),
     "isc_threshold": Case({"--isc-threshold": ["0.3"]}, report=True),
     "band_fmin": Case({"--band-fmin": ["0.04"]}, ("isc",)),
@@ -88,10 +88,11 @@ PAIRNULL = {
     "bads_scope": Case({"--bads-scope": ["subject"]}, refused=True),
     "chroma": Case({"--chroma": ["hbo"]}, BOTH),
     "wtc_pair_pool": Case({"--wtc-pair-pool": ["any"]}, BOTH),
-    "wtc_pair_max": Case({"--wtc-pair-max": ["1"]}, BOTH),
+    # two dyads leave one stand-in per member by position; any gives two to cap
+    "wtc_pair_max": Case({"--wtc-pair-max": ["1"]}, BOTH, {"--wtc-pair-pool": ["any"]}),
     "wtc_pair_cross": Case({"--no-wtc-pair-cross": []}, BOTH),
     "wtc_roi_min_channels": Case({"--wtc-roi-min-channels": ["2"]}, refused=True),
-    "wtc_limit_scales": Case({"--no-wtc-limit-scales": []}, ("wtc",)),
+    "wtc_limit_scales": Case({"--no-wtc-limit-scales": []}),
 }
 
 GROUPNULL = {
@@ -119,6 +120,11 @@ COMMANDS = {"nirspipe-hyper": HYPER, "nirspipe-hyper-pairnull": PAIRNULL,
 ALLOWED_SAME = {
     ("nirspipe-hyper", "bads_scope"): "differs from run only across cropped tasks; one run per member here",
     ("nirspipe-hyper", "wtc_save_maps"): "adds the maps beside the tables; the tables stay as they were",
+    ("nirspipe-hyper", "normalize"): "coherence and correlation do not change under a per-channel z-score",
+    ("nirspipe-hyper", "wtc_limit_scales"): "a speed option: the scales it skips lie outside the band",
+    ("nirspipe-hyper-pairnull", "wtc_limit_scales"): "a speed option, as in nirspipe-hyper",
+    ("nirspipe-hyper", "wtc_fmin"): "the band means read inside the band, which both axes cover",
+    ("nirspipe-hyper", "short_max_dist"): "a short channel and one in neither band are both left out",
 }
 
 BASE = {
@@ -232,7 +238,8 @@ def test_a_changed_setting_moves_the_output_and_the_record(runs, command, key):
 
 @pytest.mark.parametrize("command, key", [(c, k) for c, cases in COMMANDS.items()
                                           for k, case in cases.items() if case.refused])
-def test_a_setting_the_real_tables_fix_is_refused_when_it_differs(runs, command, key):
+def test_a_setting_the_real_tables_fix_is_refused_when_it_differs(runs, capsys, command, key):
     _, refused = runs
-    with pytest.raises((SystemExit, Exception)):
+    with pytest.raises(SystemExit):
         refused(command, key)
+    assert "disagrees with the real table" in capsys.readouterr().out

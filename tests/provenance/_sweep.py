@@ -70,6 +70,8 @@ def snapshot(root: Path, record: "Path | None" = None, sections: "dict | None" =
                 outputs[rel] = hashlib.sha1(json.dumps(
                     [fig.get("data") for fig in plotly_figures(f)], sort_keys=True, default=str
                 ).encode()).hexdigest()
+            elif in_figures and f.suffix == ".png" and "_desc-provenance" not in f.name:
+                outputs[rel] = hashlib.sha1(f.read_bytes()).hexdigest()
             continue
         if f.suffix == ".snirf":
             outputs[rel] = _snirf(f)

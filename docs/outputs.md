@@ -133,7 +133,7 @@ derivatives/nirspipe-hyper/
 
 `nirspipe-hyper-pairnull` writes beside them, all per condition window: `cond-all_null-pair_stat-wtc_relmat.tsv` and its region twins, `cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv`, the correlation's `cond-all_null-pair_stat-isc_relmat.tsv` and its draws, and the level `chromo-<c>_cond-all_null-pair_stat-wtc_desc-level_relmat.npz`. `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map.
 
-Every band-mean table's sidecar records the settings a later command reads back rather than takes again: the band, `mask_coi`, `channel_cross`, `roi_min_channels`, `desc`, `bads_scope`, the whitening, the conditions and each window's span (`conditions`, `condition_windows_s`), and the level the phase was gated by (`phase_level_source` for the whole recording, `phase_level_source_by_condition` per window). The correlation's sidecars record `isc_band_hz`, its whitening and `isc_max_lag_s`.
+Every band-mean table's sidecar records the settings a later command reads back rather than takes again: the band, `mask_coi`, `channel_cross`, `roi_min_channels`, `desc`, `bads_scope`, the whitening, the conditions and each window's span (`conditions`, `condition_windows_s`), and the level the phase was gated by (`phase_level_source` for the whole recording, `phase_level_source_by_condition` per window). The correlation's sidecars record `isc_band_hz`, its whitening and `isc_max_lag_s`, and the same `desc`, `bads_scope` and analysis window (`analysis_window_s`, from `--tstart`/`--tend`). Both record the separation bands the long channels were chosen by (`sep_short_max_mm`, `sep_long_min_mm`, `sep_long_max_mm`).
 
 ## Sidecars and provenance
 
