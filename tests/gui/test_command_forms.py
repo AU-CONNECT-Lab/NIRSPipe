@@ -11,14 +11,18 @@ from nirspipe.interface.commands import COMMANDS, parser_for, subcommands
 from nirspipe.interface.forms import _SKIPPED, check, fields, required_first, to_argv
 
 
+def _nested(prefix, parser, top):
+    subs = subcommands(parser)
+    if not subs:
+        yield " ".join(prefix), prefix, parser, top
+    for sub, child in subs.items():
+        yield from _nested([*prefix, sub], child, top)
+
+
 def _forms():
     for prog in COMMANDS:
         top = parser_for(prog)
-        subs = subcommands(top)
-        if not subs:
-            yield prog, [prog], top, top
-        for sub, parser in subs.items():
-            yield f"{prog} {sub}", [prog, sub], parser, top
+        yield from _nested([prog], top, top)
 
 
 FORMS = list(_forms())

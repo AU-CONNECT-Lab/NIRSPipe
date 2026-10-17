@@ -7,7 +7,7 @@
 {% if subs %}
 <ul class="subcommands">
   {% for s in subs %}
-  <li><a href="{{ url_for('commands.form', prog=prog, sub=s) }}">{{ s }}</a></li>
+  <li><a href="{{ url_for('commands.form', prog=prog, sub=s) }}">{{ s.split('/')[-1] }}</a></li>
   {% endfor %}
 </ul>
 {% else %}

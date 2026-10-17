@@ -11,7 +11,7 @@ from flask import Blueprint, Response, abort, jsonify, redirect, render_template
 
 from nirspipe.interface import process_stream, recon_batch
 from nirspipe.interface.commands import (
-    COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
+    COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommand, subcommands,
 )
 from nirspipe.interface.forms import check, fields, form_values, required_first, to_argv
 from nirspipe.interface.prep_edit import EditViewer
@@ -45,10 +45,10 @@ def _resolve(prog: str, sub: "str | None"):
     top = parser_for(prog)
     if sub is None:
         return top, [prog], top
-    parser = subcommands(top).get(sub)
+    parser = subcommand(top, sub)
     if parser is None:
         abort(404)
-    return parser, [prog, sub], top
+    return parser, [prog, *sub.split("/")], top
 
 
 def _form(prog: str, sub: "str | None") -> dict:
@@ -165,12 +165,12 @@ def blueprint(web) -> Blueprint:
         return render_template("commands.html", commands=listed)
 
     @bp.get("/commands/<prog>/")
-    @bp.get("/commands/<prog>/<sub>/")
+    @bp.get("/commands/<prog>/<path:sub>/")
     def form(prog, sub=None):
-        parser, _prefix, _top = _resolve(prog, sub)
-        subs = list(subcommands(parser)) if sub is None else []
+        parser, prefix, _top = _resolve(prog, sub)
+        subs = [f"{sub}/{s}" if sub else s for s in subcommands(parser)]
         if subs:
-            return render_template("command.html", prog=prog, prefix=prog, subs=subs,
+            return render_template("command.html", prog=prog, prefix=" ".join(prefix), subs=subs,
                                    description=parser.description or "")
         return render_template("command.html", prog=prog, subs=[], **_form(prog, sub))
 
@@ -197,7 +197,7 @@ def blueprint(web) -> Blueprint:
     recon_batch.register(bp, DEFAULT_SHELL)
 
     @bp.post("/preview/<prog>/")
-    @bp.post("/preview/<prog>/<sub>/")
+    @bp.post("/preview/<prog>/<path:sub>/")
     def preview(prog, sub=None):
         parser, prefix, top = _resolve(prog, sub)
         form, shown = hints.apply(prog, sub, request.form)
@@ -207,7 +207,7 @@ def blueprint(web) -> Blueprint:
                        stages=pipeline_stages(form) if prog == "nirspipe" else None)
 
     @bp.post("/run/<prog>/")
-    @bp.post("/run/<prog>/<sub>/")
+    @bp.post("/run/<prog>/<path:sub>/")
     def run(prog, sub=None):
         parser, prefix, top = _resolve(prog, sub)
         # the command the preview showed: a flag the form hides is not sent

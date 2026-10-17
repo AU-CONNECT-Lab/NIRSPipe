@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from nirspipe.interface import command_pages
-from nirspipe.interface.commands import COMMANDS, parser_for, subcommands
+from nirspipe.interface.commands import COMMANDS, parser_for, subcommand, subcommands
 from nirspipe.interface.server import WebApp
 from nirspipe.interface.sidebar import PAGES
 from nirspipe.io.naming import report_name
@@ -16,7 +16,9 @@ TABS = [(page, tab) for page in PAGES for tab in page.tabs]
 @pytest.mark.parametrize("page, tab", TABS, ids=[f"{p.slug}/{t.key}" for p, t in TABS])
 def test_every_tab_is_a_command_and_renders(page, tab):
     assert tab.prog in COMMANDS
-    assert tab.sub is None or tab.sub in subcommands(parser_for(tab.prog))
+    parser = parser_for(tab.prog) if tab.sub is None else subcommand(parser_for(tab.prog), tab.sub)
+    # a tab runs one command, so nothing is left to choose below it
+    assert parser is not None and (tab.template or not subcommands(parser))
     assert WebApp().flask.test_client().get(f"/{page.slug}/{tab.key}/").status_code == 200
 
 

@@ -43,6 +43,15 @@ def subcommands(parser: argparse.ArgumentParser) -> "dict[str, argparse.Argument
     return {}
 
 
+def subcommand(parser: argparse.ArgumentParser, sub: str) -> "argparse.ArgumentParser | None":
+    """The parser a subcommand path names, a nested one included: ``"edit-markers/apply"``."""
+    for name in sub.split("/"):
+        parser = subcommands(parser).get(name)
+        if parser is None:
+            return None
+    return parser
+
+
 def executable(prog: str) -> str:
     """The console script beside this interpreter, so the app needs no PATH set up; else the bare name."""
     return shutil.which(prog, path=str(Path(sys.executable).parent)) or prog
