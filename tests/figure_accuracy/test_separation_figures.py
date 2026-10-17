@@ -69,7 +69,7 @@ def test_the_mean_psd_groups_channels_as_the_channel_table_does(raw_sep):
 def test_the_run_page_table_and_its_separation_note_name_the_same_gap(prep_condition_run):
     run_page = prep_condition_run.report.read_text(encoding="utf-8")
     in_table = re.findall(r'class="ch-group">Neither range \(([^)]*)\)', run_page)
-    in_note = re.findall(r"the long and short ranges leave out \(([^)]*)\)", run_page)
+    in_note = re.findall(r"a separation neither range covers \(([^)]*)\)", run_page)
     assert len(in_table) == 1 and in_note == in_table, (in_table, in_note)
 
 

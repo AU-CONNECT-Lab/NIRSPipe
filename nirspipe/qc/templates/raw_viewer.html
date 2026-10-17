@@ -387,7 +387,6 @@ var _condColors = {};
 var _selectedMk = -1;
 var _selChannel = null;
 var _bandShapes = [];
-var _mkRO       = null;
 
 // channel decisions: fetched from /load_channel_decisions when served via nirspipe-rate raw
 var _isStaticCD     = true;
@@ -466,15 +465,6 @@ function hexToRgba(hex, alpha) {
   return "rgba(" + r + "," + g + "," + b + "," + alpha + ")";
 }
 
-function _syncMkHeight() {
-  var tsCard = document.getElementById("ts-plot").closest(".card");
-  var mkCard = document.getElementById("mk-card");
-  if (!tsCard || !mkCard) return;
-  var h = tsCard.offsetHeight;
-  if (h < 50) return;
-  mkCard.style.height = h + "px";
-}
-
 // ─── initial load ─────────────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", function() {
   loadSummary();
@@ -507,11 +497,6 @@ function loadTimeSeries() {
     Plotly.newPlot("ts-plot", data.figure.data, data.figure.layout,
                    { responsive: true, displayModeBar: true })
       .then(function() {
-        _syncMkHeight();
-        if (_mkRO) _mkRO.disconnect();
-        var tsCard = document.getElementById("ts-plot").closest(".card");
-        _mkRO = new ResizeObserver(_syncMkHeight);
-        _mkRO.observe(tsCard);
         _attachSpanEditor();
       });
     document.getElementById("ts-plot").on("plotly_click", function(evt) {
