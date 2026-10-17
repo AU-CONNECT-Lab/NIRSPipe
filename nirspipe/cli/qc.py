@@ -40,6 +40,7 @@ def cmd_prep_raw(
     roi_mapping: Path | None = None,
     motion_std_thresh: float | None = None,
     wavelet_iqr: float | None = None,
+    run_label: list[str] | None = None,
 ) -> None:
     """Generate static raw QC reports, one subject at a time."""
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
@@ -57,7 +58,7 @@ def cmd_prep_raw(
     })))
 
     from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
-    from nirspipe.io.derivatives import subject_report_dir
+    from nirspipe.io.derivatives import entity_of, subject_report_dir
     from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
 
     if (epoch_tmin is None) != (epoch_tmax is None):
@@ -78,6 +79,9 @@ def cmd_prep_raw(
             for task in tasks:
                 files = get_nirs_files(layout, subject=subject, session=session, task=task)
                 for f in files:
+                    run = entity_of(Path(f), "run")
+                    if run_label and run not in run_label:
+                        continue
                     entities = layout.parse_file_entities(str(f))
                     actual_ses = entities.get("session")
                     actual_task = entities.get("task")
@@ -97,16 +101,18 @@ def cmd_prep_raw(
                                               else channel_status_bads(layout, snirf_p)),
                     }
                     all_runs.append(run_dict)
-                    groups[(actual_ses, actual_task)].append(run_dict)
+                    # a chosen run gets a page of its own rather than replacing its task's page
+                    groups[(actual_ses, actual_task, run if run_label else None)].append(run_dict)
 
         if not all_runs:
             print(f"Error: no SNIRF files found for sub-{subject}.", file=sys.stderr)
             return 0
 
-        for (ses, task), group_runs in groups.items():
+        for (ses, task, run), group_runs in groups.items():
             name_parts = [f"sub-{subject}"]
             if ses:  name_parts.append(f"ses-{ses}")
             if task: name_parts.append(f"task-{task}")
+            if run:  name_parts.append(f"run-{run}")
             html_path = (subject_report_dir(output_dir, subject)
                          / report_name("_".join(name_parts), desc="raw"))
             print(f"Generating raw QC report: {html_path.name} ...")
@@ -438,6 +444,9 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Session label(s) to include.")
     pr.add_argument("--task-label", "--task_label",    nargs="+", action="extend", type=_shared.BidsLabel,
                     help="Task label(s) to include.")
+    pr.add_argument("--run-label", "--run_label", nargs="+", action="extend", type=_shared.BidsLabel,
+                    help="Run label(s) to include. Each chosen run gets a report of its own, named "
+                         "with its run, so the report holding all of a task's runs is kept.")
     _add_dpf_and_cardiac(pr)
     pr.add_argument("--window-length", type=float, default=10.0,
                     help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")

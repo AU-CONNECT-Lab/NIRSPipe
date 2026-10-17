@@ -694,8 +694,8 @@ def test_one_marker_edit_is_sent_at_a_time():
 # Both take a BIDS root, which is what separates them from the aggregate commands on the
 # Cohort Reports page.
 RAW_QC_NOT_EXPOSED = {
-    # the off spelling is the default, so a switch left off already says it
-    "prep-raw": {"--no-skip-bids-validation"},
+    # the off spelling is the default; --run-label postdates the Dash page and is on the generated form
+    "prep-raw": {"--no-skip-bids-validation", "--run-label"},
     "hyper-raw": {"--no-skip-bids-validation", "--no-normalize"},
 }
 
