@@ -36,6 +36,7 @@ REPORT_PATTERNS: dict[str, list[str]] = {
     "index":        ["group-*/group-*_desc-index_report.html"],
     "cohort":       ["desc-subjects_report.html"],
     "cohort-hyper": ["desc-groups_report.html"],
+    "groupnull":    ["task-*_desc-groupnull_report.html"],
 }
 
 

@@ -30,6 +30,7 @@ _REPORTS = {
     ("nirspipe-qc", "cohort-hyper"): "cohort-hyper",
     ("nirspipe-hyper", None): "run",
     ("nirspipe-hyper-index", None): "index",
+    ("nirspipe-hyper-groupnull", None): "groupnull",
 }
 
 # run id -> (what the run writes, where), read when the page asks for the report

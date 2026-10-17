@@ -21,6 +21,7 @@ WRITTEN = {
     "index":        "group-G1/" + report_name("group-G1", desc="index"),
     "cohort":       derivative_path("", "report", ".html", desc="subjects").name,
     "cohort-hyper": derivative_path("", "report", ".html", desc="groups").name,
+    "groupnull":    derivative_path("", "report", ".html", task="rest", desc="groupnull").name,
 }
 
 
