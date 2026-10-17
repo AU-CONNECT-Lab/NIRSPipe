@@ -1,11 +1,9 @@
 """The sidebar's pages: every tab is a real command, and a finished run finds the report it wrote."""
 
-import argparse
 from types import SimpleNamespace
 
 import pytest
 
-from nirspipe.cli.gui import _build_parser as gui_parser
 from nirspipe.interface import command_pages
 from nirspipe.interface.commands import COMMANDS, parser_for, subcommands
 from nirspipe.interface.server import WebApp
@@ -74,6 +72,12 @@ def test_nirspipe_lands_on_the_page_its_level_writes(level, key):
     assert command_pages._report_key("nirspipe", None, SimpleNamespace(analysis_level=level)) == key
 
 
-def test_the_new_app_switch_is_withheld_from_help():
-    action = next(a for a in gui_parser()._actions if "--new" in a.option_strings)
-    assert action.help == argparse.SUPPRESS
+def test_nirspipe_gui_opens_this_app_on_data_preparation(monkeypatch):
+    from nirspipe.cli import gui
+
+    opened = {}
+    monkeypatch.setattr(WebApp, "serve", lambda self, port, default, name, paths: opened.update(
+        port=port, default=default, paths=paths))
+    gui.main(["--port", "9100"])
+    assert opened == {"port": 9100, "default": gui.DEFAULT_PORT, "paths": ["data-prep/"]}
+    assert WebApp().flask.test_client().get("/data-prep/").status_code == 302

@@ -4,24 +4,22 @@ from __future__ import annotations
 
 import argparse
 
+DEFAULT_PORT = 8050
+
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-gui",
-        description="Dash-based GUI for interactive fNIRS data inspection and rating.",
+        description="Local web GUI: a page per command with its form, Data Preparation for "
+                    "editing a recording's events and crop, and the rating viewers.",
     )
     p.add_argument("--port", type=int, default=None,
-                   help="Local server port. Default: 8050, or the next free port above it.")
-    # withheld until the Flask app replaces the Dash one
-    p.add_argument("--new", action="store_true", help=argparse.SUPPRESS)
+                   help=f"Local server port. Default: {DEFAULT_PORT}, or the next free port above it.")
     return p
 
 
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
-    if args.new:
-        from nirspipe.interface.server import WebApp
-        WebApp().serve(args.port, 8050, "nirspipe-gui", [""])
-        return
-    from nirspipe.interface.app import launch as _launch
-    _launch(port=args.port)
+    from nirspipe.interface.server import WebApp
+    # the Interactive page first, where the sidebar starts
+    WebApp().serve(args.port, DEFAULT_PORT, "nirspipe-gui", ["data-prep/"])

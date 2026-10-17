@@ -30,11 +30,7 @@ dependencies = [
     "matplotlib>=3.8",    # every static QC panel; imported at module level
     "pillow>=10.0",       # stitches the rendered brain views side by side
     "joblib>=1.3",        # parallel dispatch (--n-jobs)
-    "flask>=3.0",         # nirspipe-rate viewer
-    "dash[ag-grid]>=2.16",
-    "dash-ag-grid>=33",     # Theming API; assets/interface.css styles it through --ag-*
-    "dash-bootstrap-components>=1.6",
-    "dash-cytoscape>=1.0",   # GUI Analysis-page DAG
+    "flask>=3.0",         # nirspipe-gui and the nirspipe-rate viewers
     "pycwt>=0.4",         # hyperscanning WTC (nirspipe-qc hyper-post)
     "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
     "tomli>=2.0; python_version < '3.11'",
@@ -72,7 +68,7 @@ where = ["."]
 include = ["nirspipe*"]
 
 [tool.setuptools.package-data]
-nirspipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/assets/*.css", "interface/templates/*.html", "interface/static/*.css", "interface/static/*.js"]
+nirspipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/templates/*.html", "interface/static/*.css", "interface/static/*.js"]
 
 [tool.ruff]
 line-length = 100

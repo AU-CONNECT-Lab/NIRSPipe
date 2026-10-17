@@ -6,12 +6,9 @@ the page, or a pattern that no longer matches its writer would be invisible.
 
 from __future__ import annotations
 
-import dash_bootstrap_components as dbc
 import pytest
-from dash import html
 
 from nirspipe.io.naming import derivative_path, report_name
-from nirspipe.interface.callbacks._cli_run import report_preview
 from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report
 
 # What each command actually writes. Built rather than spelled out, so this cannot agree
@@ -47,31 +44,3 @@ def test_the_pattern_finds_what_the_writer_writes(tmp_path, command):
 def test_nothing_is_found_in_an_empty_tree(tmp_path):
     for command, patterns in REPORT_PATTERNS.items():
         assert find_report(patterns, tmp_path) is None, command
-
-
-def test_a_command_that_writes_no_report_says_only_that(tmp_path):
-    panel = report_preview({"argv": ["nirspipe-hyper-merge"], "command": "merge",
-                            "output_dir": str(tmp_path)})
-    assert isinstance(panel, html.Small)
-    assert "tables" in panel.children
-
-
-def test_a_missing_report_is_a_warning_not_a_shrug(tmp_path):
-    panel = report_preview({"argv": ["nirspipe-qc", "prep-raw"], "command": "prep-raw",
-                            "output_dir": str(tmp_path)})
-    assert isinstance(panel, dbc.Alert), "a command that should have written a page did not"
-    assert panel.color == "warning"
-
-
-def test_the_report_is_linked_when_it_is_there(tmp_path):
-    written = tmp_path / WRITTEN["prep-raw"]
-    written.parent.mkdir(parents=True, exist_ok=True)
-    written.write_text("<html></html>", encoding="utf-8")
-
-    panel = report_preview({"argv": ["nirspipe-qc", "prep-raw"], "command": "prep-raw",
-                            "output_dir": str(tmp_path)})
-    assert not isinstance(panel, dbc.Alert)
-    header, frame = panel.children
-    link = header.children[1]
-    assert isinstance(frame, html.Iframe)
-    assert link.href == frame.src and link.target == "_blank"

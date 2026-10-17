@@ -253,22 +253,6 @@ def test_the_old_channel_set_argument_cannot_be_passed_by_position():
         gvtd_channel_picks(_montage([8, 30]), "long")
 
 
-def test_the_analysis_page_emits_the_flags():
-    """The GUI's command builder is a hand-written copy of the CLI surface; this is the
-    same contract `test_gui_cli_surface` holds for the postprocessing flags."""
-    from nirspipe.cli.run import _build_parser
-    from nirspipe.interface.callbacks.analysis_callbacks import _build_cli_args
-
-    base = dict(bids_dir="/b", output_dir="/o", subjects=["001"], dpf=6.0, sci_thresh=0.8,
-                cardiac_l=0.7, cardiac_h=2.0, resp_l=0.1, resp_h=0.5, post_mode="none")
-    argv = _build_cli_args({**base, "short_max_dist": 12, "long_max_dist": 55})
-    assert {"--short-max-dist", "--long-max-dist"} <= set(argv)
-    _build_parser().parse_args(argv[1:])          # raises SystemExit on an unknown flag
-
-    # and nothing at all when the boxes are empty, so the defaults are not overwritten
-    assert not [a for a in _build_cli_args(base) if "dist" in a]
-
-
 # ---- The stamp ----
 
 def test_the_record_round_trips_the_bands():

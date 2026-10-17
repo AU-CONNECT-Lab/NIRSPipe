@@ -86,6 +86,11 @@ def test_the_stages_follow_the_mode(form, last):
     assert pipeline_stages(MultiDict(form))[-1] == last
 
 
+def test_motion_correction_runs_on_optical_density_before_beer_lambert():
+    names = [name for level in pipeline_stages(MultiDict()) for name in level]
+    assert names.index("Optical Density") < names.index("Motion Correction") < names.index("Beer-Lambert Law")
+
+
 def test_only_the_analysis_preview_carries_stages():
     client = WebApp().flask.test_client()
     rest = client.post("/preview/nirspipe/", data={"--mode": "rest"}).get_json()

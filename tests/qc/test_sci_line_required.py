@@ -5,7 +5,8 @@ import pytest
 from nirspipe.cli import qc as qc_cli
 from nirspipe.cli import rate as rate_cli
 from nirspipe.cli.hyper import _parsers as hyper_parsers
-from nirspipe.interface.cli_args import missing_raw_qc
+from nirspipe.interface.commands import parser_for, subcommands
+from nirspipe.interface.forms import fields, required_first
 from nirspipe.qc.common.channel_table import format_rows
 from nirspipe.qc.rating.app import HyperRatingApp, RawRatingApp
 
@@ -61,8 +62,6 @@ def test_the_rating_servers_hand_the_page_the_rater_s_line(tmp_path):
 
 @pytest.mark.parametrize("command", ["prep-raw", "hyper-raw"])
 def test_the_gui_asks_for_the_line_before_running_a_raw_report(command):
-    opts = {"bids_dir": "/bids", "output_dir": "/out", "dpf": 6.0, "cardiac_l": 0.7,
-            "cardiac_h": 1.5, "subjects": "01", "pairs_csv": "p.csv"}
-    assert missing_raw_qc(command, opts) == "SCI threshold is required."
-    assert missing_raw_qc(command, dict(opts, sci_threshold=0.8)) is None
+    [(title, required), *_] = required_first(fields(subcommands(parser_for("nirspipe-qc"))[command]))
+    assert title == "Required" and "--sci-threshold" in [f.name for f in required]
 
