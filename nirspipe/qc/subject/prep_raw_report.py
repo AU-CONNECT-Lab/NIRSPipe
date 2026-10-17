@@ -20,7 +20,7 @@ from nirspipe.qc.subject.condition_views import (
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.common.figure_io import (
     _pair_fname, _save_figure_html, _save_multi_fig_html,
-    extract_markers, figure_namer, get_channel_pairs,
+    extract_markers, figure_namer, get_channel_pairs, plotly_script_tags,
 )
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from nirspipe.qc.common.channel_table import (
@@ -1093,6 +1093,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
             **_COND_CH_COLUMN_VARS,
             decisions=False,
             bad_heading=section_note("summary.condition_failing"),
+            plotly_tags=plotly_script_tags(out),
         )
         out.write_text(html, encoding="utf-8")
         logger.info("condition %s \u2192 %s", label, out.name)
@@ -1213,6 +1214,7 @@ def build_prep_raw_report(
         **shell,
         **_CH_COLUMN_VARS,
         decisions=True,
+        plotly_tags=plotly_script_tags(output_path),
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")

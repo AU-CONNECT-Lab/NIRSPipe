@@ -388,7 +388,7 @@ _REPLACE_WAIT_S = 0.05
 # whose data file is missing. Named one by one, never `*.json`, so every real sidecar and
 # every table stays checked.
 JSON_ONLY_DESCS = ("sqm", "sqmraw", "rating", "rawrating", "rawdecision", "rawspans")
-_BIDSIGNORE = ("*.html", "logs", "figures",
+_BIDSIGNORE = ("*.html", "logs", "figures", "plotly-*.min.js",
                *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS))
 
 

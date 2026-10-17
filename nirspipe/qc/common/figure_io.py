@@ -12,15 +12,46 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import re
 from pathlib import Path
 
 import mne
+from plotly.offline import get_plotlyjs, get_plotlyjs_version
 
 from nirspipe.utils import is_marker, pair_of
+from nirspipe.io.derivatives import _tree_root
 from nirspipe.io.naming import figure_name
 
-PLOTLY_CDN_URL = "https://cdn.plot.ly/plotly-3.5.0.min.js"
+# the plotly.js the installed plotly ships, so the figures' JSON and the library agree
+PLOTLY_JS_VERSION = get_plotlyjs_version()
+PLOTLY_CDN_URL = f"https://cdn.plot.ly/plotly-{PLOTLY_JS_VERSION}.min.js"
+PLOTLY_LOCAL_NAME = f"plotly-{PLOTLY_JS_VERSION}.min.js"
+
+
+def _write_local_plotly(target: Path) -> None:
+    if target.is_file():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # parallel subjects write the same file: each writes its own and the last rename wins
+    tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
+    tmp.write_text(get_plotlyjs(), encoding="utf-8")
+    os.replace(tmp, target)
+
+
+def plotly_script_tags(page: Path) -> str:
+    """Plotly.js from the CDN, then the tree's own copy for a page opened offline.
+
+    ``out/sub-01/figures/x.html`` -> the CDN tag, then ``../../plotly-3.5.0.min.js``
+    should the CDN not have loaded; that copy is written at ``out/`` on first use.
+    """
+    page = Path(page).resolve()
+    local = (_tree_root(page) or page.parent) / PLOTLY_LOCAL_NAME
+    _write_local_plotly(local)
+    rel = os.path.relpath(local, page.parent).replace(os.sep, "/")
+    return (f'<script src="{PLOTLY_CDN_URL}"></script>'
+            f"<script>window.Plotly||document.write('<script src=\"{rel}\"><\\/script>')</script>")
+
 
 # No scrollbar inside a figure's frame: even a transient one takes width off the figure, and
 # a figure that sets its height from its width comes out shorter.
@@ -132,7 +163,7 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
     )
     html = html.replace(
         "<head>",
-        f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n<script src="{PLOTLY_CDN_URL}"></script>\n{_RESIZE_JS}',
+        f'<head>\n<style>{_IFRAME_CSS}{extra_css}</style>\n{plotly_script_tags(path)}\n{_RESIZE_JS}',
         1,
     )
     if views:
@@ -157,7 +188,7 @@ def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) ->
     path.parent.mkdir(parents=True, exist_ok=True)
     head = (
         '<meta charset="UTF-8">'
-        f'<script src="{PLOTLY_CDN_URL}"></script>'
+        f'{plotly_script_tags(path)}'
         f'<style>*{{box-sizing:border-box;}}{_IFRAME_CSS}.pfig{{margin-bottom:2px;}}</style>'
         f'{_RESIZE_JS}'
     )
