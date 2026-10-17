@@ -9,6 +9,7 @@ from dataclasses import dataclass
 class Tab:
     key: str
     prog: str
+    # a nested subcommand as a path, "edit-markers/apply"
     sub: "str | None" = None
     # a page of its own instead of the command's generated form
     template: "str | None" = None
@@ -34,7 +35,7 @@ PAGES = (
     Page("batch-prep", "Batch Prep", (
         Tab("crop", "nirspipe-prep", "crop"),
         Tab("align", "nirspipe-prep", "align"),
-        Tab("edit-markers", "nirspipe-prep", "edit-markers"),
+        Tab("edit-markers", "nirspipe-prep", "edit-markers/apply"),
         Tab("keep-spans", "nirspipe-prep", "keep-spans"),
     )),
     Page("raw-qc", "Raw QC", (
