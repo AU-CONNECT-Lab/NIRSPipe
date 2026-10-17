@@ -66,6 +66,18 @@ def test_falff_stays_within_zero_and_one_on_noise():
     assert ((falff >= 0.0) & (falff <= 1.0)).all()
 
 
+# ---- the band: both edge bins in, ALFF the mean amplitude over them ----
+
+def test_alff_is_the_mean_amplitude_over_the_band_bins():
+    # a unit sine puts sqrt(1/2) in one bin; 0.01 to 0.08 Hz at 0.01 Hz per bin is 8 bins
+    assert _alff(_sine(F_IN)).alff[0] == pytest.approx(1 / (8 * np.sqrt(2)), rel=1e-9)
+
+
+@pytest.mark.parametrize("freq", [HIGH_PASS, LOW_PASS])
+def test_a_tone_on_either_band_edge_is_in_band(freq):
+    assert _alff(_sine(freq)).falff[0] == pytest.approx(1.0, abs=1e-6)
+
+
 # ---- scaling ----
 
 def test_alff_scales_linearly_with_amplitude():
@@ -127,8 +139,8 @@ def test_zalff_standardizes_by_the_population_standard_deviation():
     amps = (1.0, 2.0, 3.0, 5.0)
     df = compute_alff(_raw(np.vstack([_sine(F_IN, amp=a) for a in amps])),
                       low_pass=LOW_PASS, high_pass=HIGH_PASS)
-    expected = (df.alff - df.alff.mean()) / df.alff.std(ddof=0)
-    assert df.zalff.tolist() == pytest.approx(expected.tolist())
+    # ALFF is linear in amplitude: mean 11/4, population SD sqrt(35)/4
+    assert df.zalff.tolist() == pytest.approx((np.array([-7, -3, 1, 9]) / np.sqrt(35)).tolist())
 
 
 def test_a_single_channel_chromophore_yields_zero_zalff_rather_than_nan():

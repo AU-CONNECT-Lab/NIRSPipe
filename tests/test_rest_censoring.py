@@ -81,15 +81,16 @@ def test_lomb_scargle_with_gaps_is_scipys(n):
 
 # ---- without spans nothing moves ----
 
-def test_without_spans_alff_is_todays_periodogram_bit_for_bit():
-    raw = _raw(onsets=[50.0], durations=[0.0], descs=["tap"])
-    out = compute_alff(raw, low_pass=0.08, high_pass=0.01)
-    for i, ch in enumerate(raw.get_data()):
-        freqs, power = signal.periodogram(ch - np.nanmean(ch), SFREQ, scaling="spectrum")
-        amp = np.sqrt(power)
-        band = amp[(freqs >= 0.01) & (freqs <= 0.08)]
-        assert out["alff"].iloc[i] == np.nanmean(band)
-        assert out["falff"].iloc[i] == np.nansum(band) / np.nansum(amp[1:])
+def test_without_spans_alff_never_reaches_lomb_scargle(monkeypatch):
+    def refuse(*args, **kwargs):
+        raise AssertionError("lomb_scargle called")
+
+    monkeypatch.setattr("nirspipe.pipeline.restingstate.lomb_scargle", refuse)
+    compute_alff(_raw(onsets=[50.0], durations=[0.0], descs=["tap"]), low_pass=0.08,
+                 high_pass=0.01)
+    # the control: a spanned run does reach it, so the patch is the one compute_alff calls
+    with pytest.raises(AssertionError, match="lomb_scargle called"):
+        compute_alff(_spanned(), low_pass=0.08, high_pass=0.01)
 
 
 def test_without_spans_fc_is_todays_corrcoef_bit_for_bit():
