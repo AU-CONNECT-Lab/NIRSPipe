@@ -72,7 +72,7 @@ where = ["."]
 include = ["nirspipe*"]
 
 [tool.setuptools.package-data]
-nirspipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/assets/*.css"]
+nirspipe = ["data/*.json", "data/presets/*.toml", "qc/boilerplate/*.toml", "qc/boilerplate/*.bib", "qc/templates/*.html", "qc/templates/*.j2", "qc/templates/*.css", "interface/assets/*.css", "interface/templates/*.html", "interface/static/*.css"]
 
 [tool.ruff]
 line-length = 100

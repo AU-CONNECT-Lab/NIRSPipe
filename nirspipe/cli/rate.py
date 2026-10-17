@@ -14,16 +14,25 @@ from nirspipe.io.naming import report_name
 from nirspipe.cli import _shared
 
 
+def _serve(viewer, label: str, port: int | None, default_port: int, log_name: str,
+           entries: tuple[str, ...] = ("",)) -> None:
+    from nirspipe.interface.server import WebApp
+
+    web = WebApp()
+    web.serve(port, default_port, log_name, web.mount(viewer.app, label, entries))
+
+
 def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
     """Launch QC rating interface for nirspipe reports."""
-    from nirspipe.qc.rating.app import FNIRSRatingApp
+    from nirspipe.qc.rating.app import RATE_PORT, FNIRSRatingApp
 
     subjects = participant_label or subject_labels(output_dir)
     if not subjects:
         print("No subjects found in output directory.", file=sys.stderr)
         raise SystemExit(1)
 
-    FNIRSRatingApp(output_dir, subjects).run(port=port)
+    _serve(FNIRSRatingApp(output_dir, subjects), "Run reports", port, RATE_PORT, "nirspipe-rate",
+           tuple(f"sub-{subject}/" for subject in subjects))
 
 
 def cmd_raw(
@@ -47,7 +56,8 @@ def cmd_raw(
         raise SystemExit(1)
 
     print(f"Launching raw viewer: {html_path.name} ...")
-    RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans).run(port=port)
+    viewer = RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans)
+    _serve(viewer, html_path.stem, port, viewer.default_port, "nirspipe-rate raw")
 
 
 def cmd_hyper(
@@ -80,8 +90,9 @@ def cmd_hyper(
         print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
               "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
     print(f"Launching hyper viewer: {html_path.name} ...")
-    HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
-                   decisions_dir=derivatives_dir).run(port=port)
+    viewer = HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
+                            decisions_dir=derivatives_dir)
+    _serve(viewer, html_path.stem, port, viewer.default_port, "nirspipe-rate hyper")
 
 
 def cmd_export(trees: list[Path], out_dir: Path | None) -> None:

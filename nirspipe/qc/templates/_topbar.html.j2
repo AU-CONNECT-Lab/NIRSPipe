@@ -7,8 +7,8 @@
    Optional:
      nav_chip:              text shown in the right-hand identity chip
      rating_subject:        identifier passed back to the save endpoint
-     rating_save_endpoint:  POST URL for ratings (e.g. "/save_hyper_ratings")
-     rating_load_endpoint:  GET URL for existing ratings (e.g. "/load_ratings")
+     rating_save_endpoint:  POST URL for ratings, relative to the page (e.g. "save_hyper_ratings")
+     rating_load_endpoint:  GET URL for existing ratings, relative to the page (e.g. "load_ratings/<stem>")
      rating_pinned:         entries kept in a fixed block at the right edge (overall verdict)
    href defaults to "#<id>" and ratable to true, so callers that only pass {id, name}
    get a clickable anchor with a pill under it; href: false renders a plain label

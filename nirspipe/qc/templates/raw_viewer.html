@@ -123,8 +123,8 @@ select#run-select {
 {% set nav_chip = "sub-" ~ subject %}
 {% set rating_subject = stem %}
 {% set rating_pinned = [{"id": run_labels[0] ~ "_Final", "name": "FINAL", "href": "#Final"}] %}
-{% set rating_save_endpoint = "/save_raw_ratings" %}
-{% set rating_load_endpoint = "/load_raw_ratings/" ~ stem %}
+{% set rating_save_endpoint = "save_raw_ratings" %}
+{% set rating_load_endpoint = "load_raw_ratings/" ~ stem %}
 {% include "_topbar.html.j2" %}
 
 {# a titled band rather than the dashboard's sticky nav: this page is read top to bottom
@@ -964,7 +964,7 @@ function switchRun(idx) {
 }
 
 // a second SCI line, only when nirspipe-rate raw was given --sci-threshold
-fetch("/rate_config")
+fetch("rate_config")
   .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
   .then(function(cfg) {
     if (cfg && cfg.mark_spans && _DECISIONS) _startSpanEditor();
@@ -981,7 +981,7 @@ fetch("/rate_config")
   .catch(function() {});
 
 // Try to fetch existing channel decisions; failure → static (read-only) mode.
-if (_DECISIONS) fetch("/load_channel_decisions")
+if (_DECISIONS) fetch("load_channel_decisions")
   .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
   .then(function(data) {
     _isStaticCD  = false;
@@ -1092,7 +1092,7 @@ function _cdScheduleSave() {
   if (_isStaticCD) return;
   if (_cdSaveTimer) clearTimeout(_cdSaveTimer);
   _cdSaveTimer = setTimeout(function() {
-    fetch("/save_channel_decisions", {
+    fetch("save_channel_decisions", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(_chDecisions),
@@ -1224,7 +1224,7 @@ function _spanScheduleSave() {
   if (_spanSaveTimer) clearTimeout(_spanSaveTimer);
   _spanSaveTimer = setTimeout(function() {
     var status = document.getElementById("span-status");
-    fetch("/save_bad_spans", {
+    fetch("save_bad_spans", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(_badSpans),
@@ -1238,7 +1238,7 @@ function _spanScheduleSave() {
 }
 
 function _startSpanEditor() {
-  fetch("/load_bad_spans")
+  fetch("load_bad_spans")
     .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
     .then(function(data) {
       _MARK_SPANS = true;

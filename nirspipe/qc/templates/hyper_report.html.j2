@@ -46,8 +46,8 @@
 {% set nav_chip = "group-" ~ group_id %}
 {% set rating_subject = page_stem %}
 {% set rating_pinned = [{"id": "Final", "name": "FINAL", "href": "#Final"}] %}
-{% set rating_save_endpoint = "/save_hyper_ratings" %}
-{% set rating_load_endpoint = "/load_hyper_ratings/" ~ page_stem %}
+{% set rating_save_endpoint = "save_hyper_ratings" %}
+{% set rating_load_endpoint = "load_hyper_ratings/" ~ page_stem %}
 
 {# The dyad report reads as a document, so its header is a titled band rather than the
    sticky nav bar the dashboard reports carry. #}
@@ -432,7 +432,7 @@ function _set(id, text, cls) {
   var _WAVELENGTH_COLUMNS = window._WAVELENGTH_COLUMNS || [];
 
   // a second SCI line, only when nirspipe-rate hyper was given --sci-threshold
-  fetch("/rate_config")
+  fetch("rate_config")
     .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
     .then(function(cfg) {
       if (!cfg || cfg.sci_threshold == null) return;
@@ -447,7 +447,7 @@ function _set(id, text, cls) {
     })
     .catch(function() {});
 
-  fetch("/load_decisions")
+  fetch("load_decisions")
     .then(function(r) { if (!r.ok) throw new Error("load failed"); return r.json(); })
     .then(function(data) {
       _isStatic = false;
@@ -588,7 +588,7 @@ function _set(id, text, cls) {
     if (_isStatic) return;
     if (_hdTimer) clearTimeout(_hdTimer);
     _hdTimer = setTimeout(function() {
-      fetch("/save_hyper_decisions", {
+      fetch("save_hyper_decisions", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(_hyperDecisions),

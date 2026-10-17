@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 - Shorter `--help` texts on 34 options
 - `nirspipe-rate export` refuses a channel decision saved from a condition page, naming the file and key
 - Python API: hyperscanning names are imported from the module that defines them; `nirspipe.io.groups` reads the pairs CSV, `nirspipe.cli.run_record` writes run records
+- `nirspipe-rate` viewers run in one local web app; a report written before this version opens read-only there until it is regenerated
 
 ### Removed
 - GUI Data Preparation's 3D fsaverage layout card; the 2D optode layout stays

@@ -34,7 +34,7 @@ def test_each_page_rates_under_its_own_stem(condition_run):
     for page in pages:
         html = page.read_text(encoding="utf-8")
         assert f'var participantId = "{page.stem}"' in html
-        assert f'"/load_ratings/{page.stem}"' in html
+        assert f'"load_ratings/{page.stem}"' in html
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])

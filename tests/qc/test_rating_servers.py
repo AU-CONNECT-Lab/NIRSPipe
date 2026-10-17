@@ -10,28 +10,28 @@ from nirspipe.qc.rating.app import FNIRSRatingApp, HyperRatingApp, RawRatingApp
 def test_each_subject_page_keeps_its_own_rating_file(tmp_path):
     client = FNIRSRatingApp(tmp_path, ["01"]).app.test_client()
     run, cond = "sub-01_task-rest_report", "sub-01_task-rest_cond-a_report"
-    client.post("/save_ratings", json={"id": run, "ratings": {"Final": "good"}})
-    client.post("/save_ratings", json={"id": cond, "ratings": {"Final": "bad"}})
+    client.post("/sub-01/save_ratings", json={"id": run, "ratings": {"Final": "good"}})
+    client.post("/sub-01/save_ratings", json={"id": cond, "ratings": {"Final": "bad"}})
 
-    assert client.get(f"/load_ratings/{run}").get_json()["ratings"] == {"Final": "good"}
-    assert client.get(f"/load_ratings/{cond}").get_json()["ratings"] == {"Final": "bad"}
+    assert client.get(f"/sub-01/load_ratings/{run}").get_json()["ratings"] == {"Final": "good"}
+    assert client.get(f"/sub-01/load_ratings/{cond}").get_json()["ratings"] == {"Final": "bad"}
     assert rating_path(tmp_path, run).exists() and rating_path(tmp_path, cond).exists()
 
 
 def test_a_note_with_a_line_break_reads_back(tmp_path):
     client = FNIRSRatingApp(tmp_path, ["01"]).app.test_client()
     note = 'line one\nline "two" \\ end'
-    client.post("/save_ratings", json={"id": "sub-01_task-rest_report",
-                                       "ratings": {"Final": "good"}, "notes": {"Final": note}})
+    client.post("/sub-01/save_ratings", json={"id": "sub-01_task-rest_report",
+                                              "ratings": {"Final": "good"}, "notes": {"Final": note}})
 
-    loaded = client.get("/load_ratings/sub-01_task-rest_report")
+    loaded = client.get("/sub-01/load_ratings/sub-01_task-rest_report")
     assert loaded.status_code == 200
     assert loaded.get_json()["notes"] == {"Final": note}
 
 
 def test_a_save_without_a_page_id_is_refused(tmp_path):
     client = FNIRSRatingApp(tmp_path, ["01"]).app.test_client()
-    assert client.post("/save_ratings", json={"ratings": {"Final": "good"}}).status_code == 400
+    assert client.post("/sub-01/save_ratings", json={"ratings": {"Final": "good"}}).status_code == 400
 
 
 def test_the_raw_viewer_serves_the_files_beside_its_report(tmp_path):

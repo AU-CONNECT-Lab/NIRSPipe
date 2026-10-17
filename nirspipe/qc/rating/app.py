@@ -1,11 +1,7 @@
 import json
 import math
-import threading
-import time
-import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
-import logging as _logging
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -13,7 +9,6 @@ from nirspipe.io.derivatives import channel_decisions_path, entity_of
 from nirspipe.io.naming import bad_spans_path, rating_path, report_name
 from nirspipe.qc.rating.export import HYPER_KEY
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.net import resolve_port
 
 logger = get_logger("qc.rating")
 
@@ -25,35 +20,6 @@ HYPER_PORT = 5053
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-
-
-def _serve(app, port: "int | None", default_port: int, log_name: str, paths: list[str]) -> None:
-    """Run a Flask app on a daemon thread, open each path in the browser, then block until Ctrl+C."""
-    _logging.getLogger("werkzeug").setLevel(_logging.ERROR)
-    served = resolve_port(port or default_port, explicit=port is not None)
-    failures: list[OSError] = []
-
-    def _run():
-        try:
-            app.run(host="127.0.0.1", port=served, debug=False, use_reloader=False)
-        except OSError as err:      # the thread would otherwise die silently, leaving the wait loop below
-            failures.append(err)
-
-    threading.Thread(target=_run, daemon=True).start()
-    time.sleep(1.0)
-    if failures:
-        raise SystemExit(f"Could not serve on port {served}: {failures[0]}")
-    for path in paths:
-        url = f"http://localhost:{served}/{path}"
-        logger.info("opening %s", url)
-        webbrowser.open(url)
-
-    logger.info("%s on http://localhost:%d - Ctrl+C to stop", log_name, served)
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("shutting down")
 
 
 def _read_json(path: Path) -> dict:
@@ -135,21 +101,17 @@ class FNIRSRatingApp:
         self.app = Flask(__name__)
         self._setup_routes()
 
-    def _inject_base_href(self, html: str, subject: str) -> str:
-        """Inject <base href> so relative figure URLs resolve under /sub-<pid> route."""
-        base_tag = f'<base href="/sub-{subject}/">'
-        return html.replace("<head>", f"<head>\n{base_tag}", 1)
-
     def _setup_routes(self) -> None:
         app = self.app
 
-        @app.route("/sub-<pid>", strict_slashes=False)
+        # a folder URL, so the index's relative links and rating calls resolve under sub-<pid>/
+        @app.route("/sub-<pid>/")
         def participant(pid):
             html_file = (self.output_dir / f"sub-{pid}"
                          / report_name(f"sub-{pid}", desc="index"))
             if not html_file.exists():
                 return f"<h2>Report not found: {html_file}</h2>", 404
-            return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
+            return html_file.read_text(encoding="utf-8")
 
         # the subject index links the per-run reports next to it, which need a route of
         # their own to be reachable here. Only report pages: this is a path from the URL
@@ -160,7 +122,7 @@ class FNIRSRatingApp:
             html_file = self.output_dir / f"sub-{pid}" / report
             if not html_file.exists():
                 return f"<h2>Report not found: {html_file}</h2>", 404
-            return self._inject_base_href(html_file.read_text(encoding="utf-8"), pid)
+            return html_file.read_text(encoding="utf-8")
 
         @app.route("/sub-<pid>/figures/<path:filename>")
         def figures(pid, filename):
@@ -175,22 +137,18 @@ class FNIRSRatingApp:
             return send_from_directory(folder, filename)
 
         # the report page owns its own module list: only it knows which panels were drawn
-        @app.route("/load_ratings/<stem>", methods=["GET"])
-        def load_ratings(stem):
+        @app.route("/sub-<pid>/load_ratings/<stem>", methods=["GET"])
+        def load_ratings(pid, stem):
             return jsonify(_read_rating_file(rating_path(self.output_dir, stem)))
 
-        @app.route("/save_ratings", methods=["POST"])
-        def save_ratings():
+        @app.route("/sub-<pid>/save_ratings", methods=["POST"])
+        def save_ratings(pid):
             data = request.json
             if not data or not data.get("id"):
                 return jsonify({"status": "fail", "message": "Missing id"}), 400
             return _respond(
                 lambda: _save_ratings(self.output_dir, data["id"], data, "group_ratings.jsonl"),
                 f"save_ratings for {data['id']}")
-
-    def run(self, port: int | None = None) -> None:
-        _serve(self.app, port, RATE_PORT, "nirspipe-rate",
-               [f"sub-{subject}" for subject in self.subjects])
 
 
 class _ReportViewer:
@@ -252,9 +210,6 @@ class _ReportViewer:
 
     def _setup_decision_routes(self, app: Flask) -> None:
         raise NotImplementedError
-
-    def run(self, port: int | None = None) -> None:
-        _serve(self.app, port, self.default_port, f"nirspipe-rate {self.route_tag}", [""])
 
 
 class RawRatingApp(_ReportViewer):

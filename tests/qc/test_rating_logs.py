@@ -7,7 +7,7 @@ from nirspipe.qc.rating.app import FNIRSRatingApp, RawRatingApp
 
 def test_the_subject_rating_log_goes_under_logs(tmp_path):
     FNIRSRatingApp(tmp_path, ["01"]).app.test_client().post(
-        "/save_ratings", json={"id": "sub-01_task-rest_report", "ratings": {"carpet": "good"}})
+        "/sub-01/save_ratings", json={"id": "sub-01_task-rest_report", "ratings": {"carpet": "good"}})
     assert (tmp_path / "logs" / "group_ratings.jsonl").exists()
     assert not list(tmp_path.glob("*.jsonl"))
 
