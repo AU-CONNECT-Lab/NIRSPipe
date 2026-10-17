@@ -30,23 +30,23 @@ The `_nirs.json` sidecar needs at least `SamplingFrequency`, `NIRSChannelCount`,
 
 ## Converting raw SNIRF
 
-`nirspipe-recon` converts one raw SNIRF into the BIDS layout above, one file per call:
+`nirspipe-snirf2bids` converts one raw SNIRF into the BIDS layout above, one file per call:
 
 ```bash
-nirspipe-recon sub01_run1.snirf /data/bids --participant-label 01 --task-label tapping
+nirspipe-snirf2bids sub01_run1.snirf /data/bids --participant-label 01 --task-label tapping
 
 # with session and run
-nirspipe-recon sub01_ses1_run1.snirf /data/bids \
+nirspipe-snirf2bids sub01_ses1_run1.snirf /data/bids \
     --participant-label 01 --session-label wave1 --run-label 01 --task-label tapping
 
 # a folder of files
 for f in raw/*.snirf; do
     subj=$(basename "$f" .snirf | grep -oP 'sub\K\d+')
-    nirspipe-recon "$f" /data/bids --participant-label "$subj" --task-label tapping
+    nirspipe-snirf2bids "$f" /data/bids --participant-label "$subj" --task-label tapping
 done
 ```
 
-Channel types and optode positions are read from the SNIRF by MNE-BIDS. SNIRF does not record which space its optode coordinates were measured in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised against the nasion and preauricular points. BIDS has no group folders, so encode patient and control in the subject label if their IDs overlap. `nirspipe-recon` does not validate what it writes; `nirspipe` does at the start of a run. The GUI's Recon page converts a whole folder from one table ([GUI](gui.md)).
+Channel types and optode positions are read from the SNIRF by MNE-BIDS. SNIRF does not record which space its optode coordinates were measured in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised against the nasion and preauricular points. BIDS has no group folders, so encode patient and control in the subject label if their IDs overlap. `nirspipe-snirf2bids` does not validate what it writes; `nirspipe` does at the start of a run. The GUI's SNIRF to BIDS page converts a whole folder from one table ([GUI](gui.md)).
 
 ## Trees written by `nirspipe-prep`
 

@@ -28,9 +28,9 @@ PAGES = (
     Page("data-prep", "Data Preparation", (
         Tab("prep-raw", "nirspipe-qc", "prep-raw", template="data_prep.html"),
     ), family="Interactive"),
-    Page("recon", "Recon", (
-        Tab("recon", "nirspipe-recon"),
-        Tab("batch", "nirspipe-recon", template="recon_batch.html"),
+    Page("snirf2bids", "SNIRF to BIDS", (
+        Tab("snirf2bids", "nirspipe-snirf2bids"),
+        Tab("batch", "nirspipe-snirf2bids", template="snirf2bids_batch.html"),
     )),
     Page("batch-prep", "Batch Prep", (
         Tab("crop", "nirspipe-prep", "crop"),

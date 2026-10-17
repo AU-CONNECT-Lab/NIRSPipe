@@ -1,4 +1,4 @@
-"""nirspipe-recon CLI (argparse): convert raw snirf files to BIDS format."""
+"""nirspipe-snirf2bids CLI (argparse): convert raw snirf files to BIDS format."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from nirspipe.cli import _shared
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-recon",
+        prog="nirspipe-snirf2bids",
         description="Convert a raw snirf file to BIDS format (one subject at a time). "
-                    "For multiple subjects, loop over this command or use the GUI Recon page.",
+                    "For multiple subjects, loop over this command or use the GUI SNIRF to BIDS page.",
     )
-    p.add_argument("--version", action="version", version=f"nirspipe-recon {__version__}")
+    p.add_argument("--version", action="version", version=f"nirspipe-snirf2bids {__version__}")
     p.add_argument("input_file", type=Path, help="Input snirf file.")
     p.add_argument("bids_dir",   type=Path, help="Output BIDS dataset directory.")
     p.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,

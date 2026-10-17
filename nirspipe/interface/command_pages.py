@@ -9,7 +9,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
 
-from nirspipe.interface import process_stream, recon_batch
+from nirspipe.interface import process_stream, snirf2bids_batch
 from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommand, subcommands,
 )
@@ -94,12 +94,12 @@ def _edit_links(tree: Path, bids_dir: Path) -> list[dict]:
             for page in raw_reports(tree)]
 
 
-def _recon_context() -> dict:
+def _snirf2bids_context() -> dict:
     folder = request.args.get("folder", "").strip().strip('"')
-    rows, found = recon_batch.detect(folder) if folder else ([], "")
-    return dict(groups=required_first(recon_batch.shared_groups()), folder=folder, rows=rows,
-                found=found, preview_url=url_for("commands.recon_batch_preview"),
-                run_url=url_for("commands.recon_batch_run"))
+    rows, found = snirf2bids_batch.detect(folder) if folder else ([], "")
+    return dict(groups=required_first(snirf2bids_batch.shared_groups()), folder=folder, rows=rows,
+                found=found, preview_url=url_for("commands.snirf2bids_batch_preview"),
+                run_url=url_for("commands.snirf2bids_batch_run"))
 
 
 def _data_prep_context() -> dict:
@@ -122,7 +122,7 @@ def _data_prep_context() -> dict:
                 values=values, given=given)
 
 
-_TEMPLATE_CONTEXT = {"recon_batch.html": _recon_context, "data_prep.html": _data_prep_context}
+_TEMPLATE_CONTEXT = {"snirf2bids_batch.html": _snirf2bids_context, "data_prep.html": _data_prep_context}
 
 
 def _report_key(prog: str, sub: "str | None", args) -> "str | None":
@@ -195,7 +195,7 @@ def blueprint(web) -> Blueprint:
             return page_view(page, tab)
         bp.add_url_rule(f"/{page.slug}/", page.slug, view)
         bp.add_url_rule(f"/{page.slug}/<tab>/", page.slug, view)
-    recon_batch.register(bp, DEFAULT_SHELL)
+    snirf2bids_batch.register(bp, DEFAULT_SHELL)
 
     @bp.post("/preview/<prog>/")
     @bp.post("/preview/<prog>/<path:sub>/")

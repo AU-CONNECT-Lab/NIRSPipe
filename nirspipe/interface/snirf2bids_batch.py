@@ -1,4 +1,4 @@
-"""Recon over a folder: one ``nirspipe-recon`` per SNIRF file, run one after another under one Stop."""
+"""SNIRF to BIDS over a folder: one ``nirspipe-snirf2bids`` per SNIRF file, run one after another under one Stop."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from nirspipe.interface import process_stream
 from nirspipe.interface.commands import executable, parser_for, preview_text
 from nirspipe.interface.forms import check, fields, to_argv
 
-# what changes from file to file: the table's column -> the recon flag it fills
+# what changes from file to file: the table's column -> the snirf2bids flag it fills
 PER_FILE = {"file": "input_file", "subject": "--participant-label", "task": "--task-label",
             "session": "--session-label", "run": "--run-label"}
 
@@ -28,10 +28,10 @@ def detect(folder: str) -> "tuple[list[dict], str]":
 
 
 def shared_groups() -> list:
-    """The recon form's fields less the per-file ones, which the table holds."""
+    """The snirf2bids form's fields less the per-file ones, which the table holds."""
     per_file = set(PER_FILE.values())
     out = []
-    for title, group in fields(parser_for("nirspipe-recon")):
+    for title, group in fields(parser_for("nirspipe-snirf2bids")):
         kept = [f for f in group if f.name not in per_file]
         if kept:
             out.append((title, kept))
@@ -40,7 +40,7 @@ def shared_groups() -> list:
 
 def steps(form) -> "tuple[list[tuple[str, list[str]]], list[str], str | None]":
     """((header, argv) per file with a subject and a task, the files skipped, the first refusal)."""
-    parser = parser_for("nirspipe-recon")
+    parser = parser_for("nirspipe-snirf2bids")
     shared = MultiDict([(k, v) for k, v in form.items(multi=True) if k not in PER_FILE])
     columns = {key: form.getlist(key) for key in PER_FILE}
     built, skipped = [], []
@@ -53,7 +53,7 @@ def steps(form) -> "tuple[list[tuple[str, list[str]]], list[str], str | None]":
         merged = MultiDict(shared)
         for key, flag in PER_FILE.items():
             merged.add(flag, row[key])
-        argv = to_argv(["nirspipe-recon"], parser, merged)
+        argv = to_argv(["nirspipe-snirf2bids"], parser, merged)
         error = check(parser, argv[1:])
         if error:
             return [], skipped, f"{name}: {error}"
@@ -63,8 +63,8 @@ def steps(form) -> "tuple[list[tuple[str, list[str]]], list[str], str | None]":
 
 
 def register(bp, default_shell: str) -> None:
-    @bp.post("/recon/batch/preview")
-    def recon_batch_preview():
+    @bp.post("/snirf2bids/batch/preview")
+    def snirf2bids_batch_preview():
         built, skipped, error = steps(request.form)
         shell = request.form.get("_shell", default_shell)
         note = error or (f"Skipped, no subject or task: {', '.join(skipped)}" if skipped else None)
@@ -73,15 +73,15 @@ def register(bp, default_shell: str) -> None:
         return jsonify(preview="\n\n".join(preview_text(argv, shell) for _h, argv in built),
                        error=note)
 
-    @bp.post("/recon/batch/run")
-    def recon_batch_run():
+    @bp.post("/snirf2bids/batch/run")
+    def snirf2bids_batch_run():
         built, _skipped, error = steps(request.form)
         if error or not built:
             return jsonify(error=error or "Fill in subject and task for at least one file."), 400
-        exe = executable("nirspipe-recon")
+        exe = executable("nirspipe-snirf2bids")
         try:
             run_id = process_stream.start_each([(header, [exe, *argv[1:]]) for header, argv in built])
         except OSError as exc:
-            return jsonify(error=f"could not launch nirspipe-recon: {exc}"), 500
+            return jsonify(error=f"could not launch nirspipe-snirf2bids: {exc}"), 500
         return jsonify(events=url_for("commands.events", run_id=run_id),
                        stop=url_for("commands.stop", run_id=run_id))

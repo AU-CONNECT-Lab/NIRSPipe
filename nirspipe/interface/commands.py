@@ -11,7 +11,7 @@ from pathlib import Path
 
 # prog -> (module, function, key): the parser is built on first use, since some modules are slow to import
 COMMANDS: dict[str, tuple[str, str, "str | None"]] = {
-    "nirspipe-recon":           ("nirspipe.cli.recon", "_build_parser", None),
+    "nirspipe-snirf2bids":      ("nirspipe.cli.snirf2bids", "_build_parser", None),
     "nirspipe-prep":            ("nirspipe.cli.prep", "_build_parser", None),
     "nirspipe-qc":              ("nirspipe.cli.qc", "_build_parser", None),
     "nirspipe":                 ("nirspipe.cli.run", "_build_parser", None),

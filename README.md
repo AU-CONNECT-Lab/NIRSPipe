@@ -82,7 +82,7 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
 | Command | Purpose |
 |---------|---------|
 | `nirspipe` | Preprocessing and postprocessing (`participant`), cohort QC pages (`group`) |
-| `nirspipe-recon` | Convert a raw SNIRF file into BIDS |
+| `nirspipe-snirf2bids` | Convert a raw SNIRF file into BIDS |
 | `nirspipe-prep` | Crop, align dyads, edit markers, write span tables |
 | `nirspipe-qc` | Raw, dyad and cohort QC reports, provenance graphs |
 | `nirspipe-hyper` | Dyad wavelet coherence and inter-subject correlation, with a phase-scrambled null |

@@ -195,10 +195,10 @@ from nirspipe.cli import prep as prep_cli
 from nirspipe.cli import hyper as hyper_cli
 from nirspipe.cli import qc as qc_cli
 from nirspipe.cli import rate as rate_cli
-from nirspipe.cli import recon as recon_cli
+from nirspipe.cli import snirf2bids as snirf2bids_cli
 
 
-@pytest.mark.parametrize("mod", [db_cli, gui_cli, prep_cli, qc_cli, rate_cli, recon_cli])
+@pytest.mark.parametrize("mod", [db_cli, gui_cli, prep_cli, qc_cli, rate_cli, snirf2bids_cli])
 def test_help_exits_zero_all(mod):
     with pytest.raises(SystemExit) as e:
         mod._build_parser().parse_args(["--help"])
@@ -228,10 +228,10 @@ def test_db_merge_subcommand():
     assert args.db_path is None
 
 
-def test_recon_requires_subject_and_task():
+def test_snirf2bids_requires_subject_and_task():
     with pytest.raises(SystemExit):
-        recon_cli._build_parser().parse_args(["in.snirf", "/bids"])  # no participant/task
-    args = recon_cli._build_parser().parse_args(
+        snirf2bids_cli._build_parser().parse_args(["in.snirf", "/bids"])  # no participant/task
+    args = snirf2bids_cli._build_parser().parse_args(
         ["in.snirf", "/bids", "--participant-label", "01", "--task-label", "tap"])
     assert (args.participant_label, args.task_label, args.overwrite) == ("01", "tap", False)
 

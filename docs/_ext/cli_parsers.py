@@ -3,7 +3,7 @@
 import argparse
 import re
 
-from nirspipe.cli import db, gui, hyper, prep, qc, rate, recon, run
+from nirspipe.cli import db, gui, hyper, prep, qc, rate, run, snirf2bids
 
 
 def _rst(text):
@@ -38,8 +38,8 @@ def nirspipe():
     return _escaped(run._build_parser())
 
 
-def nirspipe_recon():
-    return _escaped(recon._build_parser())
+def nirspipe_snirf2bids():
+    return _escaped(snirf2bids._build_parser())
 
 
 def nirspipe_prep():

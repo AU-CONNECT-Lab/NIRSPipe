@@ -9,7 +9,7 @@ NIRSPipe is a set of command-line entry points. What each step does is described
 | Command | Purpose |
 |---------|---------|
 | [`nirspipe`](#nirspipe) | Preprocessing and postprocessing of a BIDS dataset (`participant`), or the cohort QC pages over its output (`group`) |
-| [`nirspipe-recon`](#nirspipe-recon) | Convert one raw SNIRF file into BIDS |
+| [`nirspipe-snirf2bids`](#nirspipe-snirf2bids) | Convert one raw SNIRF file into BIDS |
 | [`nirspipe-prep`](#nirspipe-prep) | Data preparation: crop, align dyads, edit markers, write span tables |
 | [`nirspipe-qc`](#nirspipe-qc) | Raw, dyad and cohort QC reports, and the provenance graphs |
 | [`nirspipe-hyper`](#nirspipe-hyper) | Dyad analysis: coherence, correlation, phase-scrambled null |
@@ -160,14 +160,14 @@ Written to `<run>_desc-contrast_nirsmap.tsv`, one row per contrast and channel.
 :prog: nirspipe
 ```
 
-## `nirspipe-recon`
+## `nirspipe-snirf2bids`
 
 Converts one raw SNIRF file per call ([Converting raw SNIRF](data-preparation.md#converting-raw-snirf)).
 
 ```{argparse}
 :module: cli_parsers
-:func: nirspipe_recon
-:prog: nirspipe-recon
+:func: nirspipe_snirf2bids
+:prog: nirspipe-snirf2bids
 ```
 
 ## `nirspipe-prep`

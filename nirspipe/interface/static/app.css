@@ -429,7 +429,7 @@ button:disabled {
   margin-right: 1rem;
 }
 
-/* ---- path finders: Analysis record, Recon folder, Data Preparation tree ---- */
+/* ---- path finders: Analysis record, SNIRF to BIDS folder, Data Preparation tree ---- */
 
 .record {
   display: flex;
@@ -468,7 +468,7 @@ button:disabled {
   padding: 0.15rem 0.7rem;
 }
 
-/* ---- Recon batch table ---- */
+/* ---- SNIRF to BIDS batch table ---- */
 
 .rows td:first-child {
   font-family: var(--mono);

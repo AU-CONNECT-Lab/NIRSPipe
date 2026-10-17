@@ -48,7 +48,7 @@ dev = [
 [project.scripts]
 nirspipe                 = "nirspipe.cli.run:main"
 nirspipe-prep            = "nirspipe.cli.prep:main"
-nirspipe-recon           = "nirspipe.cli.recon:main"
+nirspipe-snirf2bids      = "nirspipe.cli.snirf2bids:main"
 nirspipe-rate            = "nirspipe.cli.rate:main"
 nirspipe-qc              = "nirspipe.cli.qc:main"
 nirspipe-hyper           = "nirspipe.cli.hyper:main"

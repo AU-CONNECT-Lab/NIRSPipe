@@ -14,7 +14,7 @@ SHARED_PACKAGES = ("nirspipe", "nirspipe.cli", "nirspipe.pipeline", "nirspipe.pi
 SHARED = ("nirspipe.exceptions", "nirspipe.io", "nirspipe.utils", "nirspipe.cli._shared",
           "nirspipe.pipeline.hyper.alignment")
 DATA_PREPARATION = ("nirspipe.pipeline.crop", "nirspipe.pipeline.edit_markers",
-                    "nirspipe.pipeline.keep_spans", "nirspipe.cli.prep", "nirspipe.cli.recon")
+                    "nirspipe.pipeline.keep_spans", "nirspipe.cli.prep", "nirspipe.cli.snirf2bids")
 FRONT_END = ("nirspipe.interface", "nirspipe.qc.rating", "nirspipe.cli.gui", "nirspipe.cli.rate")
 ALLOWED = {
     "shared": {"shared"},

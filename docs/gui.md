@@ -20,7 +20,7 @@ The sidebar has two groups. **Interactive** holds Data Preparation, which opens 
 | Page | Tabs | Runs |
 |------|------|------|
 | **Data Preparation** | prep-raw | `nirspipe-qc prep-raw`, then the raw viewer's edit mode: `nirspipe-prep edit-markers apply` and `nirspipe-prep crop` |
-| **Recon** | recon, batch | `nirspipe-recon`, once per file on the batch tab |
+| **SNIRF to BIDS** | snirf2bids, batch | `nirspipe-snirf2bids`, once per file on the batch tab |
 | **Batch Prep** | crop, align, edit-markers, keep-spans | `nirspipe-prep` |
 | **Raw QC** | prep-raw, hyper-raw, rate-raw, rate-hyper, export | `nirspipe-qc prep-raw` / `hyper-raw`, the rating viewers, `nirspipe-rate export` |
 | **Analysis** | run | `nirspipe` |
@@ -29,7 +29,7 @@ The sidebar has two groups. **Interactive** holds Data Preparation, which opens 
 
 **Commands**, under **All**, lists every command and subcommand with a form for each, including the few no page has a tab for.
 
-A study usually moves down the table: convert with Recon, fix events on Data Preparation and roll the fix out with Batch Prep, write the raw reports on Raw QC and rate them, then run Analysis, Hyper Analysis and Cohort Reports. Channel decisions are taken in the rating viewers only; the other pages record none.
+A study usually moves down the table: convert with SNIRF to BIDS, fix events on Data Preparation and roll the fix out with Batch Prep, write the raw reports on Raw QC and rate them, then run Analysis, Hyper Analysis and Cohort Reports. Channel decisions are taken in the rating viewers only; the other pages record none.
 
 The screenshots on this page come from the [tutorial](tutorial.md) run through the GUI, its folder mapped to the drive `S:` so the paths stay short.
 
@@ -113,9 +113,9 @@ Both actions run on the shown recording alone: its subject, session, task and ru
 
 When either finishes, a link opens the `prep-raw` form on the tree it wrote, with the output folder cleared: pick a new one, since the edited recording's report has the same name as the first. The recordings in the BIDS dataset are never modified.
 
-## Recon
+## SNIRF to BIDS
 
-The **recon** tab is the `nirspipe-recon` form for one file. The **batch** tab converts a folder of SNIRF files, one `nirspipe-recon` per file.
+The **snirf2bids** tab is the `nirspipe-snirf2bids` form for one file. The **batch** tab converts a folder of SNIRF files, one `nirspipe-snirf2bids` per file.
 
 **Find files** searches the folder and its subfolders and lists each `.snirf` as a row. **subject** is guessed from the file name with everything but letters and digits removed; check it. **task** is required and starts empty; **session** and **run** are optional. The form above the table holds the flags every file shares: the output BIDS folder, `--optode-frame` and `--overwrite`.
 

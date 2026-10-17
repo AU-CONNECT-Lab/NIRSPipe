@@ -29,7 +29,7 @@ nirspipe/
 ├── cli/             ← argparse entry points, one file per command
 │   ├── run.py       ← nirspipe (participant / group)
 │   ├── workflows.py ← what a run walks: subject resolution, config merge, dispatch
-│   ├── recon.py, prep.py, qc.py, hyper.py, rate.py, gui.py, db.py
+│   ├── snirf2bids.py, prep.py, qc.py, hyper.py, rate.py, gui.py, db.py
 │
 ├── pipeline/        ← signal processing
 │   ├── prep_pipeline.py     (fixed-order preprocessing)
