@@ -758,6 +758,8 @@ def condition_payloads(
         d["carpet_gvtd"] = {}
         d["psd"] = {}
         d["evoked_topo"] = {}
+        # coloured by the run's SCI, which this condition's own numbers would contradict
+        d["layout"] = {}
 
         # the run's, until this page writes its own; carried over it would be every
         # condition's trials under one condition's heading

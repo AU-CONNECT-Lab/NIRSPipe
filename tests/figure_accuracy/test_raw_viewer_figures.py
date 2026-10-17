@@ -37,7 +37,40 @@ def test_the_run_page_draws_the_subject_report_s_brain_figure(raw_viewer_run, pa
     href = page[1]["figure_paths"]["brain_views"]["src"]
     assert href.endswith("_desc-rawbrainviews_nirs.png")
     assert (raw_viewer_run.out / "sub-01" / href).stat().st_size > 0
-    assert "layout" not in page[1]
+
+
+# ---- channel maps ----
+
+def test_the_optode_map_names_every_channel_and_greys_the_rejected_pair(raw_viewer_run, page):
+    dots = page[1]["layout"]["layout_2d_figure"]["data"][1]
+    truth = raw_viewer_run.truth
+    assert {name.rsplit(" ", 1)[0] for name in dots["customdata"]} == {p.name for p in truth.pairs}
+    bad = next(p for p in truth.pairs if p.bad).name
+    colours = dict(zip(dots["customdata"], dots["marker"]["color"]))
+    assert {c for n, c in colours.items() if n.startswith(bad + " ")} == {"#949e9f"}
+
+
+def test_each_topo_cell_holds_its_own_channel_s_traces(raw_viewer_run, page):
+    fig = page[1]["evoked_topo"]["figure"]
+    cells = {s["name"] for s in fig["layout"]["shapes"] if s.get("name")}
+    assert cells == {p.name for p in raw_viewer_run.truth.pairs}
+    for trace in fig["data"]:
+        assert len(set(trace["customdata"])) == 1 and trace["customdata"][0] in cells
+
+
+def test_the_topo_shows_the_response_where_the_recording_has_one(raw_viewer_run, page):
+    truth = raw_viewer_run.truth
+    rise = {}
+    for trace in page[1]["evoked_topo"]["figure"]["data"]:
+        pair = trace["customdata"][0]
+        if trace["line"]["dash"] != "solid" or truth.pair(pair).short or truth.pair(pair).bad:
+            continue
+        t, y = (np.asarray(v, dtype=float) for v in xy(trace))
+        rise[pair] = y[(t > 0) & (t <= EVENT_DURATION)].mean() - y[t < 0].mean()
+    responders = [p.name for p in truth.long_pairs if p.responds and p.name in rise]
+    quiet = [p.name for p in truth.long_pairs if not p.responds and p.name in rise]
+    assert responders and quiet
+    assert min(rise[p] for p in responders) > max(rise[p] for p in quiet)
 
 
 # ---- inline figures ----

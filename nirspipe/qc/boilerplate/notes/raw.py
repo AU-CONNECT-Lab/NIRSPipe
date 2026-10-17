@@ -27,8 +27,14 @@ NOTES = {
         "Short channels in blue, long in orange. Click a trace to select its channel and "
         "double-click to reset the view.",
     "raw.channel_detail":
-        "Pick a channel here or click its trace above to see its concentration after "
-        "Beer-Lambert and its spectrum.",
+        "Pick a channel on either map, in the list, or by its trace above to see its "
+        "concentration after Beer-Lambert and its spectrum.",
+    "raw.signal_topo":
+        "Each channel's HbO (solid) and HbR (dotted) where it sits on the head, averaged per "
+        "condition; a run without events shows the whole recording.",
+    "raw.layout_2d":
+        "Channels coloured by windowed SCI against the run's line, rejected ones grey; sources "
+        "are red squares, detectors blue circles.",
     "raw.channel_detail_picked":
         "{pair}: concentration, spectrum and epoch average, after Beer-Lambert.",
     "raw.psd":

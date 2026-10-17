@@ -545,7 +545,7 @@ def _process_run(
     fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
 
     # ── inline only: evoked topo ───────────────────────────────────────────────
-    # for the GUI's Data Prep page, which reads this result; the report does not draw it
+    # drawn beside the optode map above the channel picker; a click on either picks the channel
     evoked_topo_inline: dict = {}
     if raw_haemo is not None:
         with guard("Evoked topography", errors, label):
@@ -1188,8 +1188,6 @@ def build_prep_raw_report(
             if href:
                 d["figure_paths"]["brain_views"] = {"src": href}
             d["errors"] = list(d.get("errors") or []) + collapse_messages(brain_errors)
-        # the GUI's alone: the page shows the subject report's brain figure instead
-        d.pop("layout", None)
         static_data.append(d)
         if by_condition and ctx:
             with guard("Per-condition views", run_errors, label):

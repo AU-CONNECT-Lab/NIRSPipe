@@ -249,3 +249,9 @@ def test_a_condition_page_rates_no_channel_and_the_run_page_still_does(raw_condi
         # the page neither loads nor saves decisions, so a click cannot land under its own key
         assert re.search(r"var _DECISIONS\s*=\s*false;", html)
         assert section_note("raw.channel_table_condition") in html
+
+
+def test_a_condition_page_draws_no_channel_maps(raw_condition_run):
+    for block in _blocks(raw_condition_run):
+        data = _page(raw_condition_run, block)
+        assert not data.get("layout") and not data.get("evoked_topo")
