@@ -19,9 +19,14 @@ class Page:
     slug: str
     title: str
     tabs: "tuple[Tab, ...]"
+    # the sidebar heading it sits under: one recording looked at and edited, or commands run over many
+    family: str = "Batch"
 
 
 PAGES = (
+    Page("data-prep", "Data Preparation", (
+        Tab("prep-raw", "nirspipe-qc", "prep-raw", template="data_prep.html"),
+    ), family="Interactive"),
     Page("recon", "Recon", (
         Tab("recon", "nirspipe-recon"),
         Tab("batch", "nirspipe-recon", template="recon_batch.html"),
@@ -55,3 +60,5 @@ PAGES = (
         Tab("rate", "nirspipe-rate", "rate"),
     )),
 )
+
+FAMILIES = tuple(dict.fromkeys(p.family for p in PAGES))

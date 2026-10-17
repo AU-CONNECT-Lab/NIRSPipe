@@ -1,8 +1,10 @@
 """A raw viewer in edit mode: events read by edit-markers export, saved by edit-markers apply."""
 
 import json
+import re
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import pandas as pd
 
@@ -150,3 +152,72 @@ def test_event_names_are_read_as_written(tmp_path):
     events.write_text("onset\tduration\ttrial_type\n10\t5\t1\n50\t5\tn/a\n90\t5\t2\n", encoding="utf-8")
 
     assert [r[2] for r in read_events(bids, "sub-01_task-tapping")["rows"]] == ["1", "", "2"]
+
+
+def test_an_edit_viewer_rates_nothing(tmp_path):
+    client = EditViewer(_report(tmp_path), tmp_path, tmp_path / "bids").app.test_client()
+
+    assert client.post("save_raw_ratings", json={"id": "x"}).status_code != 200
+    assert client.post("save_channel_decisions", json={}).status_code != 200
+    assert client.get("load_channel_decisions").status_code != 200
+    assert client.get("load_raw_ratings").status_code != 200
+
+
+def _data_prep_tree(tree: Path) -> None:
+    for stem in ("sub-01_task-rest", "sub-02_task-rest"):
+        _report(tree, stem[4:6], "rest")
+    # a condition page is a slice of its run's and is not offered for editing
+    (tree / "sub-01" / report_name("sub-01_task-rest_cond-a", desc="raw")).write_text("<html></html>")
+
+
+def test_data_preparation_finds_a_trees_reports_and_opens_one_for_editing(tmp_path):
+    from nirspipe.interface.server import WebApp
+
+    tree, bids = tmp_path / "tree", tmp_path / "bids"
+    _data_prep_tree(tree)
+    client = WebApp().flask.test_client()
+
+    page = client.get("/data-prep/prep-raw/", query_string={"tree": str(tree), "bids": str(bids)})
+    html = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert "sub-01_task-rest</a>" in html and "sub-02_task-rest</a>" in html
+    assert "cond-a" not in html
+
+    href = re.search(r'<ul class="edit-links">\s*<li><a href="([^"]+)"', html).group(1).replace("&amp;", "&")
+    opened = client.get(href)
+    assert opened.status_code == 302
+    viewer = opened.headers["Location"]
+    assert client.get(f"{viewer}rate_config").get_json()["edit"] is True
+    assert client.get(href).headers["Location"] == viewer
+
+
+def test_data_preparation_says_what_it_could_not_find(tmp_path):
+    from nirspipe.interface.server import WebApp
+
+    client = WebApp().flask.test_client()
+    one = client.get("/data-prep/prep-raw/", query_string={"tree": str(tmp_path)}).get_data(as_text=True)
+    assert "Give both folders" in one
+    empty = client.get("/data-prep/prep-raw/",
+                       query_string={"tree": str(tmp_path), "bids": "x"}).get_data(as_text=True)
+    assert f"No raw reports under {tmp_path}" in empty
+
+
+def test_a_prep_raw_run_links_its_reports_for_editing_against_the_dataset_it_read(tmp_path):
+    from nirspipe.interface import command_pages
+    from nirspipe.interface.server import WebApp
+
+    tree = tmp_path / "tree"
+    _data_prep_tree(tree)
+    command_pages._RUNS["prep"] = ("prep-raw", tree)
+    command_pages._SOURCES["prep"] = tmp_path / "bids"
+
+    edit = WebApp().flask.test_client().get("/runs/prep/report").get_json()["edit"]
+    assert [item["label"] for item in edit] == ["sub-01_task-rest", "sub-02_task-rest"]
+    assert parse_qs(urlparse(edit[0]["href"]).query)["bids"] == [str(tmp_path / "bids")]
+
+
+def test_data_preparation_heads_the_sidebar_on_its_own():
+    from nirspipe.interface.sidebar import FAMILIES, PAGES
+
+    assert FAMILIES == ("Interactive", "Batch")
+    assert [p.slug for p in PAGES if p.family == "Interactive"] == ["data-prep"]

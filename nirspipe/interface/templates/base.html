@@ -12,9 +12,11 @@
 <div class="layout">
   <nav class="sidebar">
     <a class="brand" href="{{ url_for('home') }}">NIRSPipe</a>
-    <p class="nav-group">Batch</p>
-    {% for p in pages %}
+    {% for family in families %}
+    <p class="nav-group">{{ family }}</p>
+    {% for p in pages if p.family == family %}
     <a href="{{ url_for('commands.' ~ p.slug) }}"{% if page is defined and page.slug == p.slug %} class="active"{% endif %}>{{ p.title }}</a>
+    {% endfor %}
     {% endfor %}
     <p class="nav-group">All</p>
     <a href="{{ url_for('commands.index') }}">Commands</a>

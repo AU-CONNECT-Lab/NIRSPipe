@@ -105,18 +105,21 @@
       var frame = document.createElement("iframe");
       frame.src = d.url;
       report.appendChild(head);
-      if (d.rate && d.rate.length) {
-        var rate = document.createElement("p");
-        rate.className = "rate-links";
-        rate.textContent = "Rate: ";
-        d.rate.forEach(function (item) {
+      // Raw QC links its reports for rating, Data Preparation for editing
+      var kind = form.dataset.links || "rate";
+      var items = d[kind] || [];
+      if (items.length) {
+        var links = document.createElement("p");
+        links.className = "rate-links";
+        links.textContent = kind === "edit" ? "Edit events: " : "Rate: ";
+        items.forEach(function (item) {
           var r = document.createElement("a");
           r.href = item.href;
           r.target = "_blank";
           r.textContent = item.label;
-          rate.appendChild(r);
+          links.appendChild(r);
         });
-        report.appendChild(rate);
+        report.appendChild(links);
       }
       report.appendChild(frame);
     });

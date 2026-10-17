@@ -123,19 +123,22 @@ def save_argv(form, bids_dir: Path, run_label: str, tsv: Path) -> list[str]:
 
 
 class EditViewer(RawRatingApp):
-    """A raw report served for editing: ``rate_config`` says so, and the page loads the editor from ``prep/``."""
+    """A raw report served for editing: ``rate_config`` says so, and the page loads the editor from ``prep/``.
+
+    Ratings and channel decisions stay read-only here; they are made in ``nirspipe-rate``.
+    """
+
+    rates = False
 
     def __init__(self, html_path: Path, output_dir: Path, bids_dir: Path):
-        # read while the routes are set up, which the base constructor does
         self.bids_dir = Path(bids_dir)
         super().__init__(html_path, output_dir)
+        self._setup_prep_routes(self.app)
 
     def _config(self) -> dict:
         return {**super()._config(), "edit": True}
 
-    def _setup_decision_routes(self, app) -> None:
-        super()._setup_decision_routes(app)
-
+    def _setup_prep_routes(self, app) -> None:
         @app.get("/prep/<name>")
         def prep_static(name):
             if name not in _STATIC:

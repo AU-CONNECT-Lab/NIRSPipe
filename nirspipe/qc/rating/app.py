@@ -157,6 +157,8 @@ class _ReportViewer:
     route_tag: str
     default_port: int
     log_name: "str | None" = None
+    # False serves the page read-only for ratings and decisions, which only nirspipe-rate makes
+    rates: bool = True
 
     def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
         self.html_path     = html_path
@@ -197,10 +199,11 @@ class _ReportViewer:
             return _respond(lambda: _save_ratings(self.output_dir, stem, data, self.log_name),
                             f"save_{tag}_ratings")
 
-        app.add_url_rule(f"/load_{tag}_ratings", "load_ratings", load_ratings)
-        app.add_url_rule(f"/load_{tag}_ratings/<stem>", "load_ratings", load_ratings)
-        app.add_url_rule(f"/save_{tag}_ratings", "save_ratings", save_ratings, methods=["POST"])
-        self._setup_decision_routes(app)
+        if self.rates:
+            app.add_url_rule(f"/load_{tag}_ratings", "load_ratings", load_ratings)
+            app.add_url_rule(f"/load_{tag}_ratings/<stem>", "load_ratings", load_ratings)
+            app.add_url_rule(f"/save_{tag}_ratings", "save_ratings", save_ratings, methods=["POST"])
+            self._setup_decision_routes(app)
 
         # the page's hrefs, its sibling pages and the subject index included, are relative
         # to the report's own folder

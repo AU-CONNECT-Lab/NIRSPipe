@@ -14,8 +14,9 @@ from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
 )
 from nirspipe.interface.forms import check, fields, form_values, required_first, to_argv
+from nirspipe.interface.prep_edit import EditViewer
 from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
-from nirspipe.interface.sidebar import PAGES
+from nirspipe.interface.sidebar import FAMILIES, PAGES
 from nirspipe.interface.stages import pipeline_stages
 
 DEFAULT_SHELL = "powershell" if os.name == "nt" else "bash"
@@ -32,6 +33,8 @@ _REPORTS = {
 
 # run id -> (what the run writes, where), read when the page asks for the report
 _RUNS: dict[str, tuple["str | None", "Path | None"]] = {}
+# run id -> the BIDS dataset a prep-raw run read, which its reports are edited against
+_SOURCES: dict[str, Path] = {}
 
 
 def _resolve(prog: str, sub: "str | None"):
@@ -77,6 +80,44 @@ def _record(path: str) -> "tuple[dict, list[str]]":
     return form_values(parser_for("nirspipe"), settings), notes
 
 
+def raw_reports(tree: Path) -> list[Path]:
+    """A Raw QC tree's run pages; a condition page is a slice of one and edits nothing."""
+    return sorted(p for p in tree.glob(REPORT_PATTERNS["prep-raw"][0]) if "_cond-" not in p.name)
+
+
+def _edit_links(tree: Path, bids_dir: Path) -> list[dict]:
+    return [{"label": page.stem.removesuffix("_desc-raw_report"),
+             "href": url_for("commands.prep_edit", report=str(page), tree=str(tree), bids=str(bids_dir))}
+            for page in raw_reports(tree)]
+
+
+def _recon_context() -> dict:
+    folder = request.args.get("folder", "").strip().strip('"')
+    rows, found = recon_batch.detect(folder) if folder else ([], "")
+    return dict(groups=required_first(recon_batch.shared_groups()), folder=folder, rows=rows,
+                found=found, preview_url=url_for("commands.recon_batch_preview"),
+                run_url=url_for("commands.recon_batch_run"))
+
+
+def _data_prep_context() -> dict:
+    """The reports a Raw QC tree already holds, each linked to open for editing."""
+    tree = request.args.get("tree", "").strip().strip('"')
+    bids = request.args.get("bids", "").strip().strip('"')
+    found, note = [], ""
+    if tree or bids:
+        if not (tree and bids):
+            note = "Give both folders: the reports' tree and the BIDS dataset they were made from."
+        elif not Path(tree).is_dir():
+            note = f"No folder {tree}."
+        else:
+            found = _edit_links(Path(tree), Path(bids))
+            note = "" if found else f"No raw reports under {tree}."
+    return dict(tree=tree, bids=bids, edit_links=found, find_note=note, links="edit")
+
+
+_TEMPLATE_CONTEXT = {"recon_batch.html": _recon_context, "data_prep.html": _data_prep_context}
+
+
 def _report_key(prog: str, sub: "str | None", args) -> "str | None":
     if prog == "nirspipe":
         return "participant" if args.analysis_level == "participant" else "cohort"
@@ -107,7 +148,7 @@ def blueprint(web) -> Blueprint:
 
     @bp.app_context_processor
     def sidebar():
-        return {"pages": PAGES}
+        return {"pages": PAGES, "families": FAMILIES}
 
     @bp.get("/commands/")
     def index():
@@ -133,11 +174,7 @@ def blueprint(web) -> Blueprint:
             return redirect(url_for(f"commands.{page.slug}", tab=page.tabs[0].key))
         context = _form(chosen.prog, chosen.sub)
         if chosen.template:
-            folder = request.args.get("folder", "").strip().strip('"')
-            rows, found = recon_batch.detect(folder) if folder else ([], "")
-            context.update(groups=required_first(recon_batch.shared_groups()), folder=folder, rows=rows,
-                           found=found, preview_url=url_for("commands.recon_batch_preview"),
-                           run_url=url_for("commands.recon_batch_run"))
+            context.update(_TEMPLATE_CONTEXT[chosen.template]())
             return render_template(chosen.template, page=page, tab=chosen, **context)
         record = request.args.get("record", "").strip().strip('"')
         notes = []
@@ -179,6 +216,8 @@ def blueprint(web) -> Blueprint:
         args = top.parse_args(argv[1:])
         output_dir = getattr(args, "output_dir", None)
         _RUNS[run_id] = (_report_key(prog, sub, args), Path(output_dir) if output_dir else None)
+        if _RUNS[run_id][0] == "prep-raw":
+            _SOURCES[run_id] = Path(args.bids_dir)
         return jsonify(events=url_for("commands.events", run_id=run_id),
                        stop=url_for("commands.stop", run_id=run_id),
                        report=url_for("commands.report", run_id=run_id))
@@ -211,7 +250,8 @@ def blueprint(web) -> Blueprint:
             rate = [{"label": page.stem.removesuffix("_desc-raw_report"),
                      "href": url_for("commands.rate_raw", report=str(page), tree=str(output_dir))}
                     for page in sorted(output_dir.glob(REPORT_PATTERNS["prep-raw"][0]))]
-        return jsonify(url=report_url(found), path=str(found), rate=rate)
+        edit = _edit_links(output_dir, _SOURCES[run_id]) if run_id in _SOURCES else []
+        return jsonify(url=report_url(found), path=str(found), rate=rate, edit=edit)
 
     # (report, tree) -> its viewer's path, so a second click opens the same page
     rated: dict[tuple[Path, Path], str] = {}
@@ -227,5 +267,19 @@ def blueprint(web) -> Blueprint:
         if key not in rated:
             [rated[key]] = web.mount(RawRatingApp(report_path, tree).app, report_path.stem)
         return redirect("/" + rated[key])
+
+    # (report, tree, dataset) -> its edit viewer's path
+    edited: dict[tuple[Path, Path, Path], str] = {}
+
+    @bp.get("/prep/edit")
+    def prep_edit():
+        report_path = Path(request.args["report"])
+        tree, bids = Path(request.args["tree"]), Path(request.args["bids"])
+        if not report_path.is_file():
+            abort(404)
+        key = (report_path.resolve(), tree.resolve(), bids.resolve())
+        if key not in edited:
+            [edited[key]] = web.mount(EditViewer(report_path, tree, bids).app, f"Edit {report_path.stem}")
+        return redirect("/" + edited[key])
 
     return bp
