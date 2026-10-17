@@ -72,7 +72,8 @@ def _record(path: str) -> "tuple[dict, list[str]]":
         return {}, [err.getvalue().strip()]
     except Exception as exc:
         return {}, [f"Could not read {path}: {exc}"]
-    notes = [f"Loaded the settings of {Path(path).name}. The folders are not in a record: fill them."]
+    notes = [f"Loaded the settings of {Path(path).name}. A record holds no folders; the two below are "
+             "the ones last used on any page, so check them."]
     if config["version"] and config["version"] != __version__:
         notes.append(f"Written by nirspipe {config['version']}; this is {__version__}, so a setting "
                      "whose meaning or default changed runs as this version reads it.")
