@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-qc hyper-raw` names each member's pairs that `channels.tsv` marked bad
 - Both dyad reports list each member's IMU summaries; `hyper-raw`'s `desc-subject_qc.tsv` carries them with their units
 - `nirspipe-hyper --config` reruns a dyad from its run record
+- The cohort step writes `desc-subjects_nirsmap.tsv`, every run's per-channel quality values in one long table
 
 ### Changed
 - `desc-sci` sidecars under `--gvtd-censor` record the separation bands that chose the censored channel set
