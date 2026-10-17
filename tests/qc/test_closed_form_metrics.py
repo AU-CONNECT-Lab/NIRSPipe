@@ -89,13 +89,10 @@ def test_gcor_is_blind_to_channel_scale():
 # ---- SNR and CV ----
 
 def test_snr_and_cv_recover_mu_over_sigma():
-    # sample statistics, not population ones: compare against the realised mean and std of
-    # the draw rather than the 5.0 / 0.5 they were drawn from, or the test measures the RNG
-    rng = np.random.default_rng(5)
-    data = rng.normal(loc=5.0, scale=0.5, size=(3, 20000))
-    mu, sigma = data.mean(axis=1), data.std(axis=1)
-    assert_allclose(channel_snr(data), mu / sigma, rtol=1e-12)
-    assert_allclose(channel_cv(data), sigma / mu, rtol=1e-12)
+    # each row alternates mu - sigma and mu + sigma: its mean is mu and its population SD sigma
+    data = np.array([[4.0, 6.0, 4.0, 6.0], [1.0, 3.0, 1.0, 3.0], [9.0, 11.0, 9.0, 11.0]])
+    assert_allclose(channel_snr(data), [5.0, 2.0, 10.0], rtol=1e-12)
+    assert_allclose(channel_cv(data), [0.2, 0.5, 0.1], rtol=1e-12)
 
 
 def test_the_two_are_reciprocal():
@@ -362,7 +359,9 @@ def test_the_labels_survive():
 
 def test_the_shared_transform_works_elementwise_on_any_shape():
     r = np.array([[0.0, 0.5], [-0.5, 1.0]])
-    assert_allclose(fisher_r_to_z(r), np.arctanh(r.clip(-0.999999, 0.999999)))
+    # the values pinned above, 1 clipped as it is there
+    assert_allclose(fisher_r_to_z(r), [[0.0, 0.5493061443340549],
+                                       [-0.5493061443340549, 7.254328619247669]], atol=1e-12)
     assert fisher_r_to_z(0.5).shape == ()
 
 
@@ -657,12 +656,12 @@ def test_standardising_takes_the_loud_channel_out_of_the_global_value():
 
 
 def test_a_flat_channel_stays_zero_under_standardising():
-    data = np.zeros((2, 50))
-    data[0] = np.random.default_rng(21).normal(size=50)
-    d = np.diff(data[0])
+    # the other channel steps +5, -5 in turn, so standardised it is 1 in size at every sample
+    data = np.zeros((2, 51))
+    data[0] = 5.0 * (np.arange(51) % 2)
     g = gvtd_timetrace(data, SFREQ, standardize_channels=True)
     assert np.isfinite(g).all()
-    assert_allclose(g, np.abs(d / d.std()) / np.sqrt(2.0), rtol=1e-12)
+    assert_allclose(g, np.full(50, 1.0 / np.sqrt(2.0)), rtol=1e-12)
 
 
 def test_a_non_finite_sample_counts_as_zero_rather_than_poisoning_the_trace():
