@@ -75,6 +75,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
     {%- for label, value in nav_meta or [] %}{{ label }}: <b>{{ value }}</b> &bull; {% endfor -%}
     {{ run_date }}
     {%- if tsv_name %} &bull; <a href="{{ tsv_name }}" download>&#8681; {{ tsv_name }}</a>{% endif %}
+    {%- if channel_tsv_name %} &bull; <a href="{{ channel_tsv_name }}" download>&#8681; {{ channel_tsv_name }}</a>{% endif %}
   </span>
 </div>
 {% endblock %}

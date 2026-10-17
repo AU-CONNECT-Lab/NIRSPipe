@@ -242,4 +242,4 @@ def test_a_setting_the_real_tables_fix_is_refused_when_it_differs(runs, capsys, 
     _, refused = runs
     with pytest.raises(SystemExit):
         refused(command, key)
-    assert "disagrees with the real table" in capsys.readouterr().out
+    assert "disagrees with the real table" in capsys.readouterr().err

@@ -266,6 +266,30 @@ def test_every_cohort_column_is_described(tmp_path_factory):
     assert [c for c in columns if "Description" not in side.get(c, {})] == []
 
 
+def test_the_cohort_channel_table_stacks_every_runs_own_table(tmp_path_factory):
+    out = tmp_path_factory.mktemp("cohort_channels")
+    for subject in ("01", "02"):
+        _, nirs_dir = _run(out, subject=subject, post=False)
+        build_sqm_records(nirs_dir)
+    build_group_raw_report(out)
+
+    table = out / "desc-subjects_nirsmap.tsv"
+    cohort = pd.read_csv(table, sep="\t", dtype={"name": str})
+    side = json.loads(table.with_suffix(".json").read_text(encoding="utf-8"))
+    assert list(cohort.columns) == ["bids_name", "name", "section", "metric", "value"]
+    assert [c for c in cohort.columns if "Description" not in side.get(c, {})] == []
+    assert set(side["metric"]["Levels"]) == set(cohort["metric"])
+
+    for subject in ("01", "02"):
+        label = f"sub-{subject}_task-tapping"
+        own = pd.read_csv(out / f"sub-{subject}" / "nirs" / f"{label}_desc-sqm_nirsmap.tsv",
+                          sep="\t", dtype={"name": str})
+        mine = cohort[cohort["bids_name"] == label].drop(columns="bids_name")
+        merged = own.merge(mine, on=["name", "section", "metric"], suffixes=("", "_cohort"))
+        assert len(merged) == len(own)
+        assert np.allclose(merged["value"], merged["value_cohort"], equal_nan=True)
+
+
 # ---- The record on disk: scalars in the JSON, arrays in tables beside it ----
 
 _LABEL = "sub-01_task-tapping"

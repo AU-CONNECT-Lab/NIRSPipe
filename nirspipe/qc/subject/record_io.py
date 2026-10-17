@@ -95,7 +95,8 @@ def _summary_table(windowed: dict, label: str, desc: str, header: dict, imu: dic
     return {record_table_name(label, desc, "timeseries", statistic=SUMMARY_STAT): (frame, sidecar)}
 
 
-def _channel_table(per_channel: dict, label: str, desc: str, header: dict) -> dict:
+def channel_frame(per_channel: dict) -> pd.DataFrame:
+    """A record's ``per_channel`` maps as one long table, one row per channel and metric."""
     rows = [(name, section, metric, value)
             for section, metrics in per_channel.items()
             for metric, values in metrics.items()
@@ -105,13 +106,22 @@ def _channel_table(per_channel: dict, label: str, desc: str, header: dict) -> di
         if value is not None and not isinstance(value, (int, float, np.number)):
             raise ValueError(f"per_channel {section}.{metric} holds a {type(value).__name__} "
                              f"for {name}; the channel table takes one number per channel")
-    if not rows:
-        return {}
-    frame = pd.DataFrame(rows, columns=list(CHANNEL_COLUMNS))
+    return pd.DataFrame(rows, columns=list(CHANNEL_COLUMNS))
+
+
+def channel_columns(frame: pd.DataFrame) -> dict:
+    """Sidecar entries for a channel table, levels limited to those it holds."""
     columns = _described(RECORD_CHANNEL_COLUMNS, CHANNEL_COLUMNS)
     columns["section"]["Levels"] = _described_levels(RECORD_SECTIONS, frame["section"])
     columns["metric"]["Levels"] = _described_levels(RECORD_CHANNEL_METRICS, frame["metric"])
-    return {record_table_name(label, desc, "nirsmap"): (frame, {**header, **columns})}
+    return columns
+
+
+def _channel_table(per_channel: dict, label: str, desc: str, header: dict) -> dict:
+    frame = channel_frame(per_channel)
+    if frame.empty:
+        return {}
+    return {record_table_name(label, desc, "nirsmap"): (frame, {**header, **channel_columns(frame)})}
 
 
 def _described_levels(descriptions: dict, values: pd.Series) -> dict:

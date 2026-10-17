@@ -40,7 +40,7 @@ from nirspipe.qc.common.report_shell import (
 )
 from nirspipe.exceptions import StageError
 from nirspipe.io.naming import derivative_path
-from nirspipe.qc.subject.record_io import read_record
+from nirspipe.qc.subject.record_io import channel_columns, channel_frame, read_record
 from nirspipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
     POST_BANDPASS_HAEMO_STAGES,
@@ -220,6 +220,23 @@ def _collect_sqm(
             [d for d in SQM_DESCS if d in descs])
 
 
+def _write_channel_table(output_dir: Path, out_desc: str, full_rows: list[dict]) -> "Path | None":
+    """Every run's channel table stacked under a ``bids_name`` column; None when no run has one."""
+    frames = [channel_frame(row["per_channel"]).assign(bids_name=row["bids_name"])
+              for row in full_rows if isinstance(row.get("per_channel"), dict)]
+    frames = [f for f in frames if not f.empty]
+    if not frames:
+        return None
+    table = pd.concat(frames, ignore_index=True)
+    table = table[["bids_name", *(c for c in table.columns if c != "bids_name")]]
+    path = output_dir / derivative_path("", "nirsmap", ".tsv", desc=out_desc).name
+    write_tsv(table, path)
+    sidecar = {"bids_name": {"Description": COHORT_ID_COLUMN}, **channel_columns(table)}
+    path.with_suffix(".json").write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+    logger.info("channel TSV -> %s (rows=%d)", path, len(table))
+    return path
+
+
 def _headline_rows(df: pd.DataFrame) -> list[dict]:
     """One row per headline metric: the cohort's median and its range.
 
@@ -296,6 +313,7 @@ def _render_group(
     tsv_path.with_suffix(".json").write_text(
         json.dumps(_column_dictionary(df.columns), indent=2) + "\n", encoding="utf-8")
     logger.info("group TSV  -> %s (rows=%d, cols=%d)", tsv_path, len(df), len(df.columns))
+    channel_path = _write_channel_table(output_dir, out_desc, full_rows)
 
     metric_cols = [c for c in df.columns if c != "bids_name"]
 
@@ -415,6 +433,7 @@ def _render_group(
         figure_paths=figure_paths,
         box_panels=box_panels,
         tsv_name=tsv_path.name,
+        channel_tsv_name=channel_path.name if channel_path else None,
         table_columns=shown_cols,
         table_rows=df[shown_cols].values.tolist(),
         outliers=outliers,
