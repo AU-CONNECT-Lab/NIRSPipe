@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `nirspipe-gui` is a new GUI: forms generated from each command, Data Preparation edits raw reports, rating built in; Dash and its four dependencies are gone
+- The raw report's Events column is as tall as the raw signal beside it and scrolls when longer
+
+### Fixed
+- `desc-glm` and `desc-contrast` tables leave every statistic n/a for a short channel fitted against itself, as ALFF and FC already did
 
 ## [0.69.0] - 2026-10-16
 

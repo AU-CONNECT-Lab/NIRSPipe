@@ -170,7 +170,8 @@
     var input = document.createElement("input");
     input.type = type;
     if (type === "number") { input.step = "any"; input.min = "0"; }
-    input.value = value;
+    // shown to 0.1 ms; the row keeps the stored value until the cell is edited
+    input.value = type === "number" && isFinite(value) ? Math.round(value * 1e4) / 1e4 : value;
     input.dataset.i = i;
     input.dataset.k = k;
     var td = document.createElement("td");

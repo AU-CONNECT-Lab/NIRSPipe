@@ -34,6 +34,7 @@ select#run-select {
 .map-plot    { width: 100%; aspect-ratio: 700 / 760; }
 @media (max-width: 900px) {
   .row-main, .row-map { grid-template-columns: 1fr; }
+  #mk-card { contain: none; max-height: 24rem; }
 }
 
 /* buttons */
@@ -49,8 +50,10 @@ select#run-select {
 .btn-danger:hover  { background: var(--bad-soft); }
 .btn-active  { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-#mk-card { display: flex; flex-direction: column; overflow: hidden; }
-#mk-table-wrap { flex: 1; overflow-y: auto; }
+/* as tall as the plot beside it: sized as if empty, then stretched to the grid row */
+#mk-card { display: flex; flex-direction: column; overflow: hidden;
+           contain: size; align-self: stretch; }
+#mk-table-wrap { flex: 0 1 auto; min-height: 3rem; overflow-y: auto; }
 #mk-count { font-size: 0.75rem; color: var(--faint); }
 #marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
 #marker-table th, #marker-table td { padding: 0.22rem 0.45rem; }
