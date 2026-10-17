@@ -12,9 +12,9 @@ from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.isc import _isc_from_rows, compute_isc_pairs
 from nirspipe.pipeline.hyper.surrogate import _accumulate_null_hist
 from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
-from nirspipe.pipeline.hyper.wtc import (WTC_DJ, WTCResult, _morlet, _outside_coi,
-                                         _pair_from_prepared, _pairwise_wtc, _prepare_channel,
-                                         _scale_range, _trim_pair, _wavelet_grid, compute_wtc,
+from nirspipe.pipeline.hyper.wtc import (WTC_DJ, WTCResult, _morlet, _pair_from_prepared,
+                                         _pairwise_wtc, _prepare_channel, _scale_range,
+                                         _trim_pair, _wavelet_grid, compute_wtc,
                                          window_result, wtc_band_mean)
 from nirspipe.pipeline.hyper.wtc_store import load_wtc, save_wtc
 from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
@@ -84,18 +84,24 @@ def test_a_pairing_excludes_the_union_of_its_two_members_spans():
     assert mask.sum() == pytest.approx(80, abs=2)
 
 
+def _masked_map():
+    """A map at 0.5 whose excluded columns 3 to 5 hold 1.0, every cell clear of the cone."""
+    wtc = np.full((3, 10), 0.5)
+    excluded = np.zeros(10, bool)
+    excluded[3:6] = True
+    wtc[:, excluded] = 1.0
+    return WTCResult(pairs={("a", "b"): {"S1_D1": {"wtc": wtc, "coi": np.full(10, 1e6),
+                                                   "phase": np.zeros_like(wtc)}}},
+                     freqs=np.array([0.05, 0.10, 0.20]), times=np.arange(10.0),
+                     excluded={("a", "b"): excluded})
+
+
 def test_the_band_mean_leaves_out_excluded_columns():
-    result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
-    (pair_key, labels), = result.pairs.items()
-    kept = ~result.excluded[pair_key]
-    band = (result.freqs >= BAND[0]) & (result.freqs <= BAND[1])
-    table = wtc_band_mean(result, *BAND).set_index("label")
-    for label, data in labels.items():
-        cells = _outside_coi(result.freqs[band], data["coi"]) & kept[None, :]
-        wtc = np.asarray(data["wtc"], float)[band]
-        assert table.loc[label, "coherence"] == pytest.approx(wtc[cells].mean(), rel=1e-12)
-        assert table.loc[label, "n_valid_frac"] == pytest.approx(cells.mean(), rel=1e-12)
-        assert table.loc[label, "phase_n"] == cells.sum()
+    row = wtc_band_mean(_masked_map(), *BAND).iloc[0]
+    assert row["coherence"] == pytest.approx(0.5)
+    # 7 of 10 columns on the band's 2 rows
+    assert row["n_valid_frac"] == pytest.approx(0.7)
+    assert row["phase_n"] == 14
 
 
 def test_a_condition_window_and_saved_maps_keep_the_mask(tmp_path):
@@ -111,14 +117,9 @@ def test_a_condition_window_and_saved_maps_keep_the_mask(tmp_path):
 
 
 def test_the_null_histogram_counts_only_kept_cells():
-    result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
     hists: dict = {}
-    _accumulate_null_hist(hists, result, mask_coi=True)
-    (pair_key, labels), = result.pairs.items()
-    kept = ~result.excluded[pair_key]
-    for label, data in labels.items():
-        cells = _outside_coi(result.freqs, data["coi"]) & kept[None, :]
-        assert hists[(*pair_key, label)].sum() == cells.sum()
+    _accumulate_null_hist(hists, _masked_map(), mask_coi=True)
+    assert hists[("a", "b", "S1_D1")].sum() == 21           # 3 rows by 7 kept columns
 
 
 def test_a_condition_wholly_excluded_is_nan():
@@ -185,20 +186,12 @@ def test_without_a_silent_stretch_both_routes_return_pycwts_ratio_bit_for_bit():
 
 
 def test_the_null_histogram_skips_an_undefined_cell():
-    result = compute_wtc(_dyad(SPANS), fmin=0.02, fmax=0.2)
-    (pair_key, labels), = result.pairs.items()
-    kept = ~result.excluded[pair_key]
-    expected = {}
-    for label, data in labels.items():
-        cells = _outside_coi(result.freqs, data["coi"]) & kept[None, :]
-        (r1, c1), (r2, c2) = np.argwhere(cells)[:2]
-        data["wtc"] = np.array(data["wtc"], float)
-        data["wtc"][r1, c1], data["wtc"][r2, c2] = np.nan, np.inf
-        expected[label] = cells.sum() - 2
+    result = _masked_map()
+    wtc = result.pairs[("a", "b")]["S1_D1"]["wtc"]
+    wtc[0, 0], wtc[1, 1] = np.nan, np.inf                   # two of the 21 kept cells
     hists: dict = {}
     _accumulate_null_hist(hists, result, mask_coi=True)
-    for label, n in expected.items():
-        assert hists[(*pair_key, label)].sum() == n
+    assert hists[("a", "b", "S1_D1")].sum() == 19
 
 
 def test_an_undefined_cell_is_neither_valid_nor_a_phase_cell():
@@ -234,21 +227,17 @@ def test_the_correlation_is_pearson_over_kept_samples_whatever_lies_in_the_spans
 
 
 def test_a_lagged_pair_of_samples_drops_when_either_position_is_excluded():
+    # b trails a by 3 samples, and both carry garbage at every excluded frame
     rng = np.random.default_rng(3)
-    a, b = rng.standard_normal((2, 400)), rng.standard_normal((2, 400))
+    a = rng.standard_normal((2, 400))
+    b = np.roll(a, 3, axis=1)
     keep = np.ones(400, bool)
     keep[120:160] = keep[300:310] = False
+    for x in (a, b):
+        x[:, ~keep] = 50.0 * rng.standard_normal((2, (~keep).sum()))
     best, lag = _isc_from_rows(a, b, max_lag=5, keep=keep)
-    for i in range(2):
-        for j in range(2):
-            by_shift = {}
-            for s in range(-5, 6):
-                ia = np.arange(max(0, -s), 400 - max(0, s))
-                both = keep[ia] & keep[ia + s]
-                by_shift[s] = np.corrcoef(a[i, ia[both]], b[j, ia[both] + s])[0, 1]
-            s_best = max(by_shift, key=lambda s: abs(by_shift[s]))
-            assert best[i, j] == pytest.approx(by_shift[s_best], abs=1e-12)
-            assert lag[i, j] == s_best
+    assert np.diag(best) == pytest.approx([1.0, 1.0], abs=1e-12)
+    assert np.diag(lag).tolist() == [3.0, 3.0]
 
 
 # ---- whitening ----
