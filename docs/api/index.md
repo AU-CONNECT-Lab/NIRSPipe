@@ -63,7 +63,7 @@ nirspipe/
 │   ├── boilerplate/ ← Methods text, metric descriptions, references
 │   └── templates/   ← HTML templates
 │
-├── interface/       ← the Dash GUI
+├── interface/       ← the GUI
 ├── utils/           ← logging, run_record, job_db, lineage, spans, snirf_prep, net
 ├── data/            ← the BIDS entities and path patterns names are built from, mode presets
 └── exceptions.py    ← AlignmentError, GroupCSVError, MissingDerivativesError, StageError

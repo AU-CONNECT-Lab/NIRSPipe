@@ -50,11 +50,7 @@ deno install -A -g -n bids-validator jsr:@bids/validator
 | `pycwt` | ≥ 0.4 | Wavelet transform coherence for hyperscanning |
 | `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
 | `tomli` | ≥ 2.0 | TOML reader (Python < 3.11 only) |
-| `flask` | ≥ 3.0 | Rating viewer (`nirspipe-rate`) |
-| `dash` | ≥ 2.16 | GUI (`nirspipe-gui`) |
-| `dash-ag-grid` | ≥ 33 | GUI tables |
-| `dash-bootstrap-components` | ≥ 1.6 | GUI layout |
-| `dash-cytoscape` | ≥ 1.0 | GUI analysis graph |
+| `flask` | ≥ 3.0 | GUI (`nirspipe-gui`) and rating viewers (`nirspipe-rate`) |
 
 `tables` (PyTables) is not among them. The package writes no HDF5 file of its own beyond SNIRF; install it yourself to call `save()` on a GLM object the Python API returned.
 
