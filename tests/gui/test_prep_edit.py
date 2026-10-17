@@ -4,7 +4,7 @@ import json
 import re
 import time
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import pandas as pd
 
@@ -261,20 +261,28 @@ def test_segments_carry_a_task_column_only_when_one_is_named():
     assert list(named["task"]) == ["a", "b"]
 
 
-def test_a_stretch_drawn_on_the_plot_is_cropped_by_nirspipe_prep(tmp_path):
+def test_a_stretch_drawn_on_the_plot_is_cropped_and_links_a_report_of_the_result(tmp_path):
     import mne
+    from nirspipe.interface.server import WebApp
 
     bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",))
     out = tmp_path / "out"
-    client = EditViewer(_report(tmp_path / "tree"), tmp_path / "tree", bids).app.test_client()
+    report = _report(tmp_path / "tree")
+    client = WebApp().flask.test_client()
+    viewer = client.get("/prep/edit", query_string={
+        "report": str(report), "tree": str(tmp_path / "tree"), "bids": str(bids)}).headers["Location"]
 
-    started = client.post("prep/run/crop", data={
+    started = client.post(f"{viewer}prep/run/crop", data={
         "_run": "sub-01_task-tapping", "_mode": "single", "_tmin": "10", "_tmax": "100",
         "output_dir": str(out), "--skip-bids-validation": "yes"}).get_json()
     assert started["command"].startswith("nirspipe-prep crop")
     assert "--tmin 10.0 --tmax 100.0" in started["command"]
     lines, code = _wait(started["events"].split("/")[2])
     assert code == 0, "\n".join(lines)
+    link = urlparse(started["report"])
+    assert link.path == "/data-prep/prep-raw/"
+    assert parse_qs(link.query, keep_blank_values=True) == {"bids_dir": [str(out / "cropped")],
+                                                            "output_dir": [""]}
 
     [written] = (out / "cropped").rglob("*_nirs.snirf")
     raw = mne.io.read_raw_snirf(written, verbose="error")
@@ -287,3 +295,24 @@ def test_a_crop_without_a_span_is_refused_before_anything_runs(tmp_path):
     assert refused.status_code == 400
     assert refused.get_json()["error"] == "give a start, an end or both"
     assert client.post("prep/run/nothing", data={}).status_code == 404
+
+
+def test_the_report_link_fills_the_new_tree_and_clears_the_output_folder(tmp_path):
+    from nirspipe.interface.server import WebApp
+
+    html = WebApp().flask.test_client().get("/data-prep/prep-raw/", query_string={
+        "bids_dir": str(tmp_path / "out" / "marker_edited"), "output_dir": ""}).get_data(as_text=True)
+
+    assert f'name="bids_dir" value="{tmp_path / "out" / "marker_edited"}"' in html
+    assert 'data-given="bids_dir output_dir"' in html and "data-prefilled" not in html
+    assert "Pick a new output folder" in html
+
+
+def test_an_edit_viewer_opened_on_its_own_links_no_report_page(tmp_path):
+    from nirspipe.interface.prep_edit import report_link
+
+    argv = ["nirspipe-prep", "edit-markers", "apply", "bids", str(tmp_path / "o"), "--participant-label", "01",
+            "--tsv", "x.tsv"]
+    assert report_link("/p/", "markers", argv) == (
+        "/p/?" + urlencode({"bids_dir": str(tmp_path / "o" / "marker_edited"), "output_dir": ""}))
+    assert EditViewer(_report(tmp_path), tmp_path, tmp_path / "bids")._report_link("markers", argv) is None

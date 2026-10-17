@@ -36,12 +36,14 @@
       '<div class="pe-actions"><button type="submit" class="pe-go">' + label + '</button>' +
       '<button type="button" class="pe-stop" disabled>Stop</button>' +
       '<span class="pe-status" role="status"></span></div></form>' +
+      '<p class="pe-report" hidden><a target="_blank">Make a raw report of the new recording</a></p>' +
       '<pre class="pe-command" hidden></pre><pre class="pe-log" hidden></pre>';
     var form = holder.querySelector("form");
     var status = holder.querySelector(".pe-status");
     var stop = holder.querySelector(".pe-stop");
     var command = holder.querySelector(".pe-command");
     var log = holder.querySelector(".pe-log");
+    var report = holder.querySelector(".pe-report");
     var storeKey = "nirspipe-prep-" + action;
     var stopUrl = null;
 
@@ -80,6 +82,7 @@
       log.hidden = false;
       log.textContent = "";
       say("Running.", "");
+      report.hidden = true;
       stop.disabled = false;
       var source = new EventSource(d.events);
       source.onmessage = function (m) {
@@ -89,6 +92,11 @@
       source.addEventListener("end", function (m) {
         var end = JSON.parse(m.data);
         if (end.code === 0) say("Done.", "ok");
+        // this page shows the recording it was opened on; the new one needs its own report
+        if (end.code === 0 && d.report) {
+          report.querySelector("a").href = d.report;
+          report.hidden = false;
+        }
         else if (end.stopped) say("Stopped.", "warn");
         else say("Failed (exit " + end.code + ").", "bad");
         stop.disabled = true;

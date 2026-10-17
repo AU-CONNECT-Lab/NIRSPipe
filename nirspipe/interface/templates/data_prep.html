@@ -18,5 +18,6 @@
 </ul>
 {% endif %}
 <h2 class="make">Make reports</h2>
+{% if given %}<p class="note">The edited recording's folder is filled in. Pick a new output folder, so the first report is kept.</p>{% endif %}
 {% include "_form.html" %}
 {% endblock %}

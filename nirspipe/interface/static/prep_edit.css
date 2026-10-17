@@ -111,6 +111,11 @@
   padding: 0.3rem 1.1rem;
 }
 
+.pe-report {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
 .pe-status {
   font-size: 0.85rem;
   font-weight: 600;

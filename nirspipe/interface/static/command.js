@@ -77,8 +77,15 @@
     clearTimeout(timer);
     timer = setTimeout(function () { remember(); refresh(); }, 250);
   });
-  // a form filled from a run record keeps those values over the remembered ones
-  if (form.dataset.prefilled) remember(); else recall();
+  // a form filled from a run record keeps those values over the remembered ones; a link that
+  // gives some folders keeps those and takes the rest from memory
+  if (form.dataset.given) {
+    var given = {};
+    form.dataset.given.split(" ").forEach(function (n) { given[n] = form.elements[n].value; });
+    recall();
+    Object.keys(given).forEach(function (n) { form.elements[n].value = given[n]; });
+    remember();
+  } else if (form.dataset.prefilled) remember(); else recall();
   refresh();
 
   function link(item) {

@@ -100,7 +100,10 @@ def _recon_context() -> dict:
 
 
 def _data_prep_context() -> dict:
-    """The reports a Raw QC tree already holds, each linked to open for editing."""
+    """The reports a Raw QC tree already holds, each linked to open for editing; folders a link gave the form."""
+    # a finished edit links here with the tree it wrote and an empty output folder
+    given = [name for name in ("bids_dir", "output_dir") if name in request.args]
+    values = {name: [request.args[name]] for name in given}
     tree = request.args.get("tree", "").strip().strip('"')
     bids = request.args.get("bids", "").strip().strip('"')
     found, note = [], ""
@@ -112,7 +115,8 @@ def _data_prep_context() -> dict:
         else:
             found = _edit_links(Path(tree), Path(bids))
             note = "" if found else f"No raw reports under {tree}."
-    return dict(tree=tree, bids=bids, edit_links=found, find_note=note, links="edit")
+    return dict(tree=tree, bids=bids, edit_links=found, find_note=note, links="edit",
+                values=values, given=given)
 
 
 _TEMPLATE_CONTEXT = {"recon_batch.html": _recon_context, "data_prep.html": _data_prep_context}
@@ -279,7 +283,9 @@ def blueprint(web) -> Blueprint:
             abort(404)
         key = (report_path.resolve(), tree.resolve(), bids.resolve())
         if key not in edited:
-            [edited[key]] = web.mount(EditViewer(report_path, tree, bids).app, f"Edit {report_path.stem}")
+            viewer = EditViewer(report_path, tree, bids,
+                                report_page=url_for("commands.data-prep", tab="prep-raw"))
+            [edited[key]] = web.mount(viewer.app, f"Edit {report_path.stem}")
         return redirect("/" + edited[key])
 
     return bp

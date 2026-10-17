@@ -6,7 +6,9 @@ import json
 import math
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlencode
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,8 @@ from nirspipe.interface.commands import executable, parser_for, subcommands
 from nirspipe.interface.forms import check, fields, required_first, to_argv
 from nirspipe.io.derivatives import entity_of
 from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.pipeline.crop import _DERIV_NAME as CROPPED
+from nirspipe.pipeline.edit_markers import _DERIV_NAME as MARKER_EDITED
 from nirspipe.qc.rating.app import RawRatingApp
 from nirspipe.utils import NOT_MARKERS, is_marker
 
@@ -27,12 +31,21 @@ _JINJA = Environment(loader=FileSystemLoader(_HERE / "templates"), autoescape=se
 
 PREP = "nirspipe-prep"
 _SELECTION = {"bids_dir", "participant_label", "session_label", "task_label", "run_label"}
-# what the page runs: the subcommand under nirspipe-prep, and the flags the page fills itself
+
+
+@dataclass(frozen=True)
+class Action:
+    sub: "tuple[str, ...]"      # the subcommand under nirspipe-prep
+    filled: "set[str]"          # dests the page fills itself, left off the form
+    writes: str                 # the tree it writes under output_dir
+
+
 ACTIONS = {
     # the table is the edit, so the one-step edits it stands in for are left out
-    "markers": (("edit-markers", "apply"), _SELECTION | {"tsv", "shift", "set_duration", "rename"}),
+    "markers": Action(("edit-markers", "apply"), _SELECTION | {"tsv", "shift", "set_duration", "rename"},
+                      MARKER_EDITED),
     # the span comes off the plot, and the page crops the recording it shows, not a processed stage
-    "crop": (("crop",), _SELECTION | {"tmin", "tmax", "segments_path", "input_desc"}),
+    "crop": Action(("crop",), _SELECTION | {"tmin", "tmax", "segments_path", "input_desc"}, CROPPED),
 }
 _COLUMNS = ["onset", "duration", "trial_type"]
 # what the page loads from prep/, by the name it asks for
@@ -41,7 +54,7 @@ _STATIC = {"edit.js": "prep_edit.js", "edit.css": "prep_edit.css", "forms.css": 
 
 def _parser(action: str):
     parser = parser_for(PREP)
-    for name in ACTIONS[action][0]:
+    for name in ACTIONS[action].sub:
         parser = subcommands(parser)[name]
     return parser
 
@@ -59,7 +72,7 @@ def _selection_argv(run_label: str) -> list[str]:
 
 def form_html(action: str, values: "dict[str, list[str]]") -> str:
     """An action's form, less the flags the page fills, as the command pages draw it."""
-    filled = ACTIONS[action][1]
+    filled = ACTIONS[action].filled
     groups = [(title, [f for f in group if f.action.dest not in filled])
               for title, group in required_first(fields(_parser(action)))]
     groups = [(title, group) for title, group in groups if group]
@@ -191,7 +204,7 @@ def command_argv(action: str, form, bids_dir: Path, run_label: str, flags: "dict
         merged.setlist(names[dest], [value])
     for flag, value in selection(run_label).items():
         merged.setlist(flag, [value])
-    return to_argv([PREP, *ACTIONS[action][0]], parser, merged)
+    return to_argv([PREP, *ACTIONS[action].sub], parser, merged)
 
 
 class EditViewer(RawRatingApp):
@@ -202,13 +215,18 @@ class EditViewer(RawRatingApp):
 
     rates = False
 
-    def __init__(self, html_path: Path, output_dir: Path, bids_dir: Path):
+    def __init__(self, html_path: Path, output_dir: Path, bids_dir: Path, report_page: "str | None" = None):
         self.bids_dir = Path(bids_dir)
+        # the app's prep-raw form, which a finished run links to for a report of what it wrote
+        self.report_page = report_page
         super().__init__(html_path, output_dir)
         self._setup_prep_routes(self.app)
 
     def _config(self) -> dict:
         return {**super()._config(), "edit": True}
+
+    def _report_link(self, action: str, argv: list[str]) -> "str | None":
+        return report_link(self.report_page, action, argv) if self.report_page else None
 
     def _setup_prep_routes(self, app) -> None:
         @app.get("/prep/<name>")
@@ -252,7 +270,7 @@ class EditViewer(RawRatingApp):
             except OSError as exc:
                 return jsonify(error=f"could not launch {PREP}: {exc}"), 500
             return jsonify(events=f"prep/runs/{run_id}/events", stop=f"prep/runs/{run_id}/stop",
-                           command=" ".join(argv))
+                           command=" ".join(argv), report=self._report_link(action, argv))
 
         @app.get("/prep/runs/<run_id>/events")
         def prep_run_events(run_id):
@@ -265,6 +283,13 @@ class EditViewer(RawRatingApp):
         @app.post("/prep/runs/<run_id>/stop")
         def prep_run_stop(run_id):
             return jsonify(stopped=process_stream.stop(run_id))
+
+
+def report_link(page: str, action: str, argv: list[str]) -> str:
+    """The prep-raw form with the written tree as its dataset and no output folder, so the first report is kept."""
+    args = parser_for(PREP).parse_args(argv[1:])
+    written = Path(args.output_dir) / ACTIONS[action].writes
+    return f"{page}?{urlencode({'bids_dir': str(written), 'output_dir': ''})}"
 
 
 def _json_or_none(text: "str | None"):
