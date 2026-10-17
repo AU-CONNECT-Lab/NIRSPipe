@@ -85,7 +85,7 @@ def test_the_warning_names_the_channel_and_says_what_is_blanked(caplog):
     with caplog.at_level("WARNING"):
         _short_channel_regressors(raw, "mean")
     said = caplog.text
-    assert "S1_D1 hbo" in said and "ALFF and FC are left blank" in said
+    assert "S1_D1 hbo" in said and "GLM fit, ALFF and FC are left blank" in said
 
 
 def test_pca_names_every_good_short_channel_however_many_survive():
@@ -121,3 +121,46 @@ def test_a_chromophore_with_no_good_short_channel_builds_no_regressor_and_names_
     raw = _haemo([8.0, 30.0], bads=["S1_D1 hbr"])
     assert _short_channel_regressors(raw, strategy) == {}
     assert sole_regressor_channels(raw, strategy) == []
+
+
+# ---- the GLM tables ----
+
+def _glm_tables(tmp_path, strategy, bads):
+    from nirspipe.io.tables import read_table
+    from nirspipe.pipeline.glm import run_glm_pipeline
+
+    raw = _haemo([8.0, 8.5, 30.0], bads=bads)
+    raw.set_annotations(mne.Annotations([5.0, 25.0, 45.0], [5.0] * 3, ["tap"] * 3))
+    out = tmp_path / "sub-01" / "nirs"
+    out.mkdir(parents=True)
+    source = out / "sub-01_task-x_desc-filtered_nirs.snirf"
+    run_glm_pipeline(raw, stim_dur=5.0, hrf_model="spm", noise_model="ols",
+                     drift_model="polynomial", high_pass=None, drift_order=1,
+                     fir_delays=None, short_channel=strategy,
+                     contrast_def={"tap": {"tap": 1}},
+                     output_dir=str(out), source_path=str(source))
+    fit = read_table(out / "sub-01_task-x_desc-glm_nirsmap.tsv")
+    con = read_table(out / "sub-01_task-x_desc-contrast_nirsmap.tsv")
+    return fit, con
+
+
+def test_the_glm_tables_blank_a_channel_fitted_against_itself(tmp_path):
+    """One good short channel a chromophore: theta 1 on its own regressor, mse at round-off,
+    t in the billions. Its rows stay, so every subject's table has the same shape, with
+    every statistic n/a."""
+    fit, con = _glm_tables(tmp_path, "mean", ["S2_D2 hbo", "S2_D2 hbr"])
+    stats_fit = ["df", "mse", "p_value", "se", "t", "theta", "Significant"]
+    stats_con = ["effect", "p_value", "stat", "z_score", "Significant"]
+    for table, stats in ((fit, stats_fit), (con, stats_con)):
+        lone = table[table["ch_name"].isin(["S1_D1 hbo", "S1_D1 hbr"])]
+        assert len(lone) and lone[stats].isna().all().all()
+        # a rejected channel is flagged, not blanked; a long channel keeps its fit
+        for kept in ("S2_D2 hbo", "S3_D3 hbo"):
+            rows = table[table["ch_name"] == kept]
+            assert len(rows) and rows[stats].notna().all().all(), kept
+    assert set(fit["Condition"][fit["ch_name"] == "S1_D1 hbo"]) >= {"tap", "short_ch_hbo_mean"}
+
+
+def test_two_good_short_channels_keep_their_glm_rows(tmp_path):
+    fit, _ = _glm_tables(tmp_path, "mean", [])
+    assert fit[["theta", "t", "p_value"]].notna().all().all()

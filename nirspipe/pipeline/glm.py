@@ -94,14 +94,14 @@ def _short_channel_regressors(
     if strategy == "pca" and empty:
         logger.warning(
             "the pca regressor keeps every short-channel component, so it spans each good "
-            "short channel and their own residuals are empty: %s. Their ALFF and FC are "
-            "left blank; the long channels are unaffected.", ", ".join(empty))
+            "short channel and their own residuals are empty: %s. Their GLM fit, ALFF and FC "
+            "are left blank; the long channels are unaffected.", ", ".join(empty))
     else:
         for lone in empty:
             logger.warning(
                 "%s is the only short channel of its chromophore that passed screening, so "
                 "the regressor built from it is that channel; its own residual is therefore "
-                "empty and its ALFF and FC are left blank. Every other channel is "
+                "empty and its GLM fit, ALFF and FC are left blank. Every other channel is "
                 "unaffected.", lone)
     hbo_data = short.get_data(picks=good_hbo)  # (n_channels, n_times)
     hbr_data = short.get_data(picks=good_hbr)
@@ -570,6 +570,7 @@ def run_glm_pipeline(
                           contrast_def=contrast_def, source_path=source_path,
                           inputs=glm_inputs(events_path if not from_annotations else None, aux_path),
                           bads=list(haemo.info["bads"]),
+                          self_fitted=sole_regressor_channels(haemo, short_channel_used, sep_bands),
                           censored=~keep, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, drift_model=drift_model,
@@ -578,6 +579,24 @@ def run_glm_pipeline(
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, glm_est, dm, raw_resid
+
+
+_GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", "Detector",
+                             "Chroma", "ch_name", "bad"})
+
+
+def blank_self_fitted(df: pd.DataFrame, channels: "list[str]") -> pd.DataFrame:
+    """Every statistic of a channel fitted against a copy of itself set to n/a, rows kept."""
+    rows = df["ch_name"].isin(channels) if "ch_name" in df.columns else None
+    if rows is None or not rows.any():
+        return df
+    stats = [c for c in df.columns if c not in _GLM_ID_COLUMNS]
+    for col in stats:
+        # floats take n/a as they are; `Significant` is bool and needs room for it
+        if not pd.api.types.is_float_dtype(df[col]):
+            df[col] = df[col].astype(object)
+        df.loc[rows, col] = np.nan
+    return df
 
 
 def glm_inputs(events_path: "str | Path | None", aux_path: "str | Path | None") -> list[Path]:
@@ -611,6 +630,7 @@ def _save_glm_outputs(
     source_path: str | None = None,
     inputs: "list[str | Path]" = (),
     bads: list[str] | None = None,
+    self_fitted: "list[str]" = (),
     censored: "np.ndarray | None" = None,
     **params: Any,
 ) -> None:
@@ -621,7 +641,7 @@ def _save_glm_outputs(
         # than dropped: removing rows would change the shape group analysis expects
         if "ch_name" in df.columns:
             df["bad"] = df["ch_name"].isin(bads)
-        return df
+        return blank_self_fitted(df, self_fitted)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
