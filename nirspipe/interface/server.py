@@ -7,8 +7,9 @@ import threading
 import time
 import uuid
 import webbrowser
+from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
 from nirspipe.interface import command_pages, report_serve
@@ -16,6 +17,8 @@ from nirspipe.utils.logging import get_logger
 from nirspipe.utils.net import resolve_port
 
 logger = get_logger("interface.server")
+
+_REPORT_TEMPLATES = Path(__file__).resolve().parents[1] / "qc" / "templates"
 
 
 class WebApp:
@@ -28,6 +31,9 @@ class WebApp:
         self.flask.wsgi_app = self._dispatch
         self.links: list[tuple[str, str]] = []
         self.flask.add_url_rule("/", "home", self._home)
+        # the reports' own colours and type, so the app looks like the pages it frames
+        self.flask.add_url_rule("/tokens.css", "tokens",
+                                lambda: send_from_directory(_REPORT_TEMPLATES, "_tokens.css"))
         self.flask.register_blueprint(command_pages.blueprint(self))
         report_serve.attach(self.flask)
 

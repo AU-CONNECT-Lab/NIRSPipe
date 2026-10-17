@@ -76,6 +76,13 @@ def fields(parser: argparse.ArgumentParser) -> "list[tuple[str, list[Field]]]":
     return out
 
 
+def required_first(groups: list) -> list:
+    """The same fields with every required one moved into a first "Required" group."""
+    required = [f for _title, group in groups for f in group if f.required]
+    rest = [(title, [f for f in group if not f.required]) for title, group in groups]
+    return ([("Required", required)] if required else []) + [(t, g) for t, g in rest if g]
+
+
 def _items(field: Field, values: list[str]) -> list[str]:
     """A list box's values: one path per line, since a path may hold spaces; anything else split on whitespace too."""
     if field.kind == "choices":

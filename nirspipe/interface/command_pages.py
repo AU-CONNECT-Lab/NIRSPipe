@@ -15,7 +15,7 @@ from nirspipe.interface import process_stream, recon_batch
 from nirspipe.interface.commands import (
     COMMANDS, VIEWERS, executable, parser_for, preview_text, subcommands,
 )
-from nirspipe.interface.forms import check, fields, form_values, to_argv
+from nirspipe.interface.forms import check, fields, form_values, required_first, to_argv
 from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report, report_url
 from nirspipe.interface.sidebar import PAGES
 from nirspipe.interface.stages import pipeline_stages
@@ -53,7 +53,7 @@ def _form(prog: str, sub: "str | None") -> dict:
     """What the form template needs for one command."""
     parser, prefix, _top = _resolve(prog, sub)
     return dict(prefix=" ".join(prefix), description=parser.description or "",
-                groups=fields(parser), opens_viewer=(prog, sub) in VIEWERS, shell=DEFAULT_SHELL,
+                groups=required_first(fields(parser)), opens_viewer=(prog, sub) in VIEWERS, shell=DEFAULT_SHELL,
                 preview_url=url_for("commands.preview", prog=prog, sub=sub),
                 run_url=url_for("commands.run", prog=prog, sub=sub), values={})
 
@@ -137,7 +137,7 @@ def blueprint(web) -> Blueprint:
         if chosen.template:
             folder = request.args.get("folder", "").strip().strip('"')
             rows, found = recon_batch.detect(folder) if folder else ([], "")
-            context.update(groups=recon_batch.shared_groups(), folder=folder, rows=rows,
+            context.update(groups=required_first(recon_batch.shared_groups()), folder=folder, rows=rows,
                            found=found, preview_url=url_for("commands.recon_batch_preview"),
                            run_url=url_for("commands.recon_batch_run"))
             return render_template(chosen.template, page=page, tab=chosen, **context)

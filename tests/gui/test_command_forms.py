@@ -8,7 +8,7 @@ from werkzeug.datastructures import MultiDict
 
 from nirspipe.cli._shared import BidsLabel
 from nirspipe.interface.commands import COMMANDS, parser_for, subcommands
-from nirspipe.interface.forms import _SKIPPED, check, fields, to_argv
+from nirspipe.interface.forms import _SKIPPED, check, fields, required_first, to_argv
 
 
 def _forms():
@@ -99,3 +99,13 @@ def test_a_command_line_that_does_not_parse_is_named_by_argparse():
     parser = parser_for("nirspipe-qc")
     message = check(parser, ["prep-raw", "/bids", "/out", "--sci-threshold", "high"])
     assert message is not None and "--sci-threshold" in message
+
+
+def test_required_fields_lead_and_none_is_lost():
+    groups = fields(subcommands(parser_for("nirspipe-qc"))["prep-raw"])
+    ordered = required_first(groups)
+    assert ordered[0][0] == "Required"
+    assert all(f.required for f in ordered[0][1])
+    assert not any(f.required for _title, group in ordered[1:] for f in group)
+    every = [f.name for _title, group in groups for f in group]
+    assert sorted(f.name for _title, group in ordered for f in group) == sorted(every)

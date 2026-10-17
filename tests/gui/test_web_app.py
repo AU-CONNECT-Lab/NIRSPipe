@@ -69,3 +69,8 @@ def test_no_report_page_calls_an_endpoint_from_the_server_root():
     calls = {page.name: absolute.findall(page.read_text(encoding="utf-8"))
              for page in TEMPLATES.iterdir() if page.suffix in (".html", ".j2")}
     assert not {name: found for name, found in calls.items() if found}
+
+
+def test_the_app_wears_the_reports_tokens():
+    css = WebApp().flask.test_client().get("/tokens.css").get_data(as_text=True)
+    assert "--accent:" in css

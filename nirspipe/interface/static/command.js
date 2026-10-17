@@ -31,6 +31,12 @@
     });
   }
 
+  // tone is ok, warn or bad, coloured as the reports colour a verdict
+  function say(text, tone) {
+    status.textContent = text;
+    status.className = "status" + (tone ? " " + tone : "");
+  }
+
   function post(url) {
     return fetch(url, {method: "POST", body: new FormData(form)})
       .then(function (r) { return r.json(); });
@@ -61,7 +67,7 @@
   function refresh() {
     post(form.dataset.preview).then(function (d) {
       preview.textContent = d.preview;
-      status.textContent = d.error || "";
+      say(d.error || "", d.error ? "bad" : "");
       if (stages && d.stages) drawStages(d.stages);
     });
   }
@@ -121,7 +127,7 @@
     log.hidden = false;
     log.textContent = "";
     report.textContent = "";
-    status.textContent = "Running.";
+    say("Running.", "");
     if (stop) stop.disabled = false;
     var source = new EventSource(d.events);
     source.onmessage = function (m) {
@@ -130,8 +136,9 @@
     };
     source.addEventListener("end", function (m) {
       var end = JSON.parse(m.data);
-      status.textContent = end.code === 0 ? "Finished."
-        : end.stopped ? "Stopped." : "Failed (exit " + end.code + ").";
+      if (end.code === 0) say("Finished.", "ok");
+      else if (end.stopped) say("Stopped.", "warn");
+      else say("Failed (exit " + end.code + ").", "bad");
       if (stop) stop.disabled = true;
       source.close();
       if (end.code === 0 && d.report) showReport(d.report);
@@ -142,8 +149,8 @@
     e.preventDefault();
     remember();
     post(form.dataset.run).then(function (d) {
-      if (d.error) { status.textContent = d.error; return; }
-      if (d.opened) { status.textContent = "Opened:"; d.opened.forEach(link); return; }
+      if (d.error) { say(d.error, "bad"); return; }
+      if (d.opened) { say("Opened:", "ok"); d.opened.forEach(link); return; }
       follow(d);
     });
   });
