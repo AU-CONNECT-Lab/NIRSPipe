@@ -5,6 +5,20 @@ body {
   background: #ffffff;
 }
 
+header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: baseline;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #d0d7de;
+}
+
+header .brand {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
 main {
   max-width: 960px;
   margin: 0 auto;
@@ -23,4 +37,110 @@ h2 {
 
 a {
   color: #0b57d0;
+}
+
+.lede {
+  color: #57606a;
+}
+
+.commands dt {
+  font-family: ui-monospace, Consolas, monospace;
+  margin-top: 0.75rem;
+}
+
+.commands dd {
+  margin: 0.25rem 0 0 1rem;
+  color: #57606a;
+}
+
+.subcommands {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+fieldset {
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  margin: 0 0 1rem;
+  padding: 0.5rem 1rem 0.75rem;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) 1fr;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid #eaeef2;
+}
+
+.field:first-of-type {
+  border-top: 0;
+}
+
+.field .help {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.85rem;
+  color: #57606a;
+}
+
+.required {
+  color: #cf222e;
+  margin-left: 0.2rem;
+}
+
+input[type="text"], input[type="number"], select, textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.25rem 0.4rem;
+}
+
+.choices label {
+  margin-right: 1rem;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.actions .shell {
+  margin-left: auto;
+  color: #57606a;
+}
+
+.actions .shell select {
+  width: auto;
+}
+
+button {
+  font: inherit;
+  padding: 0.35rem 1rem;
+}
+
+.preview, .log {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.log {
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.status {
+  font-weight: 600;
 }

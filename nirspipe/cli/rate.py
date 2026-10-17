@@ -14,33 +14,39 @@ from nirspipe.io.naming import report_name
 from nirspipe.cli import _shared
 
 
-def _serve(viewer, label: str, port: int | None, default_port: int, log_name: str,
-           entries: tuple[str, ...] = ("",)) -> None:
+def _serve(opened: tuple, port: int | None, default_port: int, log_name: str) -> None:
     from nirspipe.interface.server import WebApp
 
+    viewer, label, entries = opened
     web = WebApp()
     web.serve(port, default_port, log_name, web.mount(viewer.app, label, entries))
 
 
-def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
-    """Launch QC rating interface for nirspipe reports."""
-    from nirspipe.qc.rating.app import RATE_PORT, FNIRSRatingApp
+def open_rate(output_dir: Path, participant_label: list[str] | None) -> tuple:
+    """(viewer, label, entry pages) for the run reports; exits when there is nothing to rate."""
+    from nirspipe.qc.rating.app import FNIRSRatingApp
 
     subjects = participant_label or subject_labels(output_dir)
     if not subjects:
         print("No subjects found in output directory.", file=sys.stderr)
         raise SystemExit(1)
+    return (FNIRSRatingApp(output_dir, subjects), "Run reports",
+            tuple(f"sub-{subject}/" for subject in subjects))
 
-    _serve(FNIRSRatingApp(output_dir, subjects), "Run reports", port, RATE_PORT, "nirspipe-rate",
-           tuple(f"sub-{subject}/" for subject in subjects))
+
+def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
+    """Launch QC rating interface for nirspipe reports."""
+    from nirspipe.qc.rating.app import RATE_PORT
+
+    _serve(open_rate(output_dir, participant_label), port, RATE_PORT, "nirspipe-rate")
 
 
-def cmd_raw(
+def open_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, port: int | None, mark_spans: bool = False,
-) -> None:
-    """Launch interactive raw QC viewer with section ratings and channel decisions."""
+    sci_threshold: float, mark_spans: bool = False,
+) -> tuple:
+    """(viewer, label, entry pages) for one raw report; exits when the report is missing."""
     from nirspipe.qc.rating.app import RawRatingApp
 
     name_parts = [f"sub-{participant_label}"]
@@ -54,18 +60,30 @@ def cmd_raw(
     if not html_path.exists():
         print(f"Error: raw report not found: {html_path}", file=sys.stderr)
         raise SystemExit(1)
-
-    print(f"Launching raw viewer: {html_path.name} ...")
-    viewer = RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans)
-    _serve(viewer, html_path.stem, port, viewer.default_port, "nirspipe-rate raw")
+    return (RawRatingApp(html_path, output_dir, sci_threshold, mark_spans=mark_spans),
+            html_path.stem, ("",))
 
 
-def cmd_hyper(
-    output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
-    session_label: str | None, sci_threshold: float, port: int | None,
-    derivatives_dir: Path | None = None,
+def cmd_raw(
+    output_dir: Path, participant_label: str,
+    session_label: str | None, task_label: str | None,
+    sci_threshold: float, port: int | None, mark_spans: bool = False,
 ) -> None:
-    """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
+    """Launch interactive raw QC viewer with section ratings and channel decisions."""
+    from nirspipe.qc.rating.app import RAW_PORT
+
+    opened = open_raw(output_dir, participant_label, session_label, task_label,
+                      sci_threshold, mark_spans)
+    print(f"Launching raw viewer: {opened[0].html_path.name} ...")
+    _serve(opened, port, RAW_PORT, "nirspipe-rate raw")
+
+
+def open_hyper(
+    output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
+    session_label: str | None, sci_threshold: float,
+    derivatives_dir: Path | None = None,
+) -> tuple:
+    """(viewer, label, entry pages) for one dyad's raw report; exits when it or the group is missing."""
     from nirspipe.io.groups import parse_group_csv
     from nirspipe.qc.rating.app import HyperRatingApp
 
@@ -85,14 +103,25 @@ def cmd_hyper(
         print(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", file=sys.stderr)
         raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
+    return (HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
+                           decisions_dir=derivatives_dir), html_path.stem, ("",))
 
+
+def cmd_hyper(
+    output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
+    session_label: str | None, sci_threshold: float, port: int | None,
+    derivatives_dir: Path | None = None,
+) -> None:
+    """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
+    from nirspipe.qc.rating.app import HYPER_PORT
+
+    opened = open_hyper(output_dir, group_id, task_label, pairs_csv, session_label,
+                        sci_threshold, derivatives_dir)
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
               "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
-    print(f"Launching hyper viewer: {html_path.name} ...")
-    viewer = HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
-                            decisions_dir=derivatives_dir)
-    _serve(viewer, html_path.stem, port, viewer.default_port, "nirspipe-rate hyper")
+    print(f"Launching hyper viewer: {opened[0].html_path.name} ...")
+    _serve(opened, port, HYPER_PORT, "nirspipe-rate hyper")
 
 
 def cmd_export(trees: list[Path], out_dir: Path | None) -> None:

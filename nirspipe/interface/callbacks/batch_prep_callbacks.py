@@ -9,7 +9,8 @@ from dash import Input, Output, State, callback, ctx, no_update
 
 from nirspipe.interface import process_stream
 from nirspipe.io.derivatives import subject_labels
-from nirspipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
+from nirspipe.interface.callbacks._cli_run import poll_run, start_run
+from nirspipe.interface.commands import preview_text
 from nirspipe.interface.cli_args import build_prep_args, missing_prep
 from nirspipe.interface.grid import rows_minus_clicked
 from nirspipe.utils.logging import get_logger

@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from nirspipe.interface.callbacks._cli_run import preview_text
+from nirspipe.interface.commands import preview_text
 
 _ARGVS = [
     ["nirspipe-qc", "prep-raw", "C:\\data\\bids", "C:\\out\\", "--sci-threshold", "0.8",

@@ -8,9 +8,8 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html
 
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import (
-    poll_run_and_report, preview_text, start_run,
-)
+from nirspipe.interface.callbacks._cli_run import poll_run_and_report, start_run
+from nirspipe.interface.commands import preview_text
 from nirspipe.interface.callbacks._sections import rng, separations, summary, value
 from nirspipe.interface.cli_args import build_raw_qc_args, missing_raw_qc
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS

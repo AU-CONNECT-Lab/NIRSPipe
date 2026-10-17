@@ -5,9 +5,8 @@ from __future__ import annotations
 from dash import Input, Output, State, callback
 
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import (
-    poll_run_and_report, preview_text, start_run,
-)
+from nirspipe.interface.callbacks._cli_run import poll_run_and_report, start_run
+from nirspipe.interface.commands import preview_text
 from nirspipe.interface.cli_args import build_qc_args, missing
 from nirspipe.utils.logging import get_logger
 

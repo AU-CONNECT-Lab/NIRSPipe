@@ -5,6 +5,7 @@ and the page reads that buffer on a timer, so a long command never freezes the p
 
     run_id = start(["nirspipe", "..."])
     lines, returncode = poll(run_id)     # returncode is None while it is still running
+    lines, nxt, returncode = read_from(run_id, 0)    # a stream asks from nxt next, so sends each line once
 
 start_each runs several commands one after another under one id, for a page that converts
 file by file.
@@ -120,6 +121,21 @@ def poll(run_id: str, tail: int = 200) -> tuple[list[str], int | None, int]:
         lines = list(run.lines)[-tail:]
         dropped = run.dropped
     return lines, returncode, dropped
+
+
+def read_from(run_id: str, start: int) -> tuple[list[str], int, int | None]:
+    """Lines from the ``start``-th printed on, the index to ask for next, and the exit code or None.
+
+    Raises KeyError for an id no run has. Lines already dropped from the scrollback are skipped.
+    """
+    with _lock:
+        run = _runs[run_id]
+    # the code before the lines: the reader appends every line before it sets the code
+    returncode = run.returncode
+    with run.lock:
+        lines = list(run.lines)[max(start - run.dropped, 0):]
+        total = run.dropped + len(run.lines)
+    return lines, total, returncode
 
 
 def stop(run_id: str) -> bool:

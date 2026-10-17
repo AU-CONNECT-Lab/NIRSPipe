@@ -9,7 +9,8 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State, callback, html
 
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import log_panel, poll_run, preview_text
+from nirspipe.interface.callbacks._cli_run import log_panel, poll_run
+from nirspipe.interface.commands import preview_text
 from nirspipe.interface.cli_args import build_recon_args
 
 

@@ -12,7 +12,8 @@ from dash import Input, Output, State, callback, html, no_update
 from nirspipe import __version__
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.interface import process_stream
-from nirspipe.interface.callbacks._cli_run import poll_run, preview_text, start_run
+from nirspipe.interface.callbacks._cli_run import poll_run, start_run
+from nirspipe.interface.commands import preview_text
 from nirspipe.interface.callbacks._sections import rng, separations, summary, value
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS

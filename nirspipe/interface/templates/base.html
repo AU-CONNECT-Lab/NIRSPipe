@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}NIRSPipe{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+<header>
+  <a class="brand" href="{{ url_for('home') }}">NIRSPipe</a>
+  <nav><a href="{{ url_for('commands.index') }}">Commands</a></nav>
+</header>
+<main>
+{% block main %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

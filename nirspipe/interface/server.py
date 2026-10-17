@@ -1,4 +1,4 @@
-"""The one local web app; each rating viewer is mounted at run time under ``/view/<token>/``."""
+"""The one local web app: command pages, and each rating viewer mounted at run time under ``/view/<token>/``."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import webbrowser
 from flask import Flask, render_template
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 
+from nirspipe.interface import command_pages
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.net import resolve_port
 
@@ -27,6 +28,7 @@ class WebApp:
         self.flask.wsgi_app = self._dispatch
         self.links: list[tuple[str, str]] = []
         self.flask.add_url_rule("/", "home", self._home)
+        self.flask.register_blueprint(command_pages.blueprint(self))
 
     def mount(self, viewer: Flask, label: str, entries: "tuple[str, ...]" = ("",)) -> list[str]:
         """Serve viewer under ``/view/<token>/`` and return its entry pages' paths."""

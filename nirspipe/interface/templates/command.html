@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ prefix }} · NIRSPipe{% endblock %}
+
+{% macro control(f) -%}
+{%- set id = "f" ~ f.name -%}
+{%- if f.kind == "switch" -%}
+<input type="checkbox" id="{{ id }}" name="{{ f.name }}" value="on">
+{%- elif f.kind == "boolean" -%}
+<select id="{{ id }}" name="{{ f.name }}">
+  <option value="">default ({{ "on" if f.action.default else "off" }})</option>
+  <option value="yes">{{ f.name }}</option>
+  <option value="no">{{ f.negative }}</option>
+</select>
+{%- elif f.kind == "choice" -%}
+<select id="{{ id }}" name="{{ f.name }}">
+  {%- if not f.required %}<option value="">default{% if f.default %} ({{ f.default }}){% endif %}</option>{% endif %}
+  {%- for c in f.choices %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+</select>
+{%- elif f.kind == "choices" -%}
+<span class="choices" id="{{ id }}">
+  {%- for c in f.choices %}<label><input type="checkbox" name="{{ f.name }}" value="{{ c }}"> {{ c }}</label>{% endfor -%}
+</span>
+{%- elif f.kind == "list" -%}
+<textarea id="{{ id }}" name="{{ f.name }}" rows="2"
+  placeholder="{{ 'one path per line' if f.per_line else 'separated by spaces' }}{% if f.default %}; default {{ f.default }}{% endif %}"></textarea>
+{%- elif f.kind == "number" -%}
+<input type="number" step="any" id="{{ id }}" name="{{ f.name }}"{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
+{%- else -%}
+<input type="text" id="{{ id }}" name="{{ f.name }}"{% if f.default %} placeholder="default {{ f.default }}"{% endif %}>
+{%- endif -%}
+{%- endmacro %}
+
+{% block main %}
+<h1><code>{{ prefix }}</code></h1>
+{% if description %}<p class="lede">{{ description }}</p>{% endif %}
+{% if subs %}
+<ul class="subcommands">
+  {% for s in subs %}
+  <li><a href="{{ url_for('commands.form', prog=prog, sub=s) }}">{{ s }}</a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<form id="command-form" data-preview="{{ preview_url }}" data-run="{{ run_url }}" autocomplete="off">
+  {% for title, group in groups %}
+  <fieldset>
+    <legend>{{ title }}</legend>
+    {% for f in group %}
+    <div class="field">
+      <label for="f{{ f.name }}"><code>{{ f.name }}</code>{% if f.required %}<span class="required" title="required">*</span>{% endif %}</label>
+      <div class="control">{{ control(f) }}</div>
+      {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+  <div class="actions">
+    <button type="submit">{{ "Open" if opens_viewer else "Run" }}</button>
+    {% if not opens_viewer %}<button type="button" id="stop" disabled>Stop</button>{% endif %}
+    <label class="shell">Command for
+      <select id="shell" name="_shell">
+        {% for s in ["powershell", "bash", "cmd"] %}
+        <option value="{{ s }}"{% if s == shell %} selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+</form>
+<pre id="preview" class="preview"></pre>
+<p id="status" class="status" role="status"></p>
+<ul id="opened" class="opened"></ul>
+<pre id="log" class="log" hidden></pre>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}{% if not subs %}<script src="{{ url_for('static', filename='command.js') }}"></script>{% endif %}{% endblock %}

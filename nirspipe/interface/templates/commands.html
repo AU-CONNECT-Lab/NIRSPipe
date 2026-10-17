@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Commands · NIRSPipe{% endblock %}
+{% block main %}
+<h1>Commands</h1>
+<dl class="commands">
+  {% for prog, description, subs in commands %}
+  <dt>{% if subs %}{{ prog }}{% else %}<a href="{{ url_for('commands.form', prog=prog) }}">{{ prog }}</a>{% endif %}</dt>
+  <dd>
+    {{ description }}
+    {% if subs %}
+    <ul class="subcommands">
+      {% for sub in subs %}
+      <li><a href="{{ url_for('commands.form', prog=prog, sub=sub) }}">{{ sub }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </dd>
+  {% endfor %}
+</dl>
+{% endblock %}

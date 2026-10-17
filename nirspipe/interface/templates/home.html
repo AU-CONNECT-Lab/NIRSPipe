@@ -1,24 +1,15 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NIRSPipe</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
-</head>
-<body>
-<main>
-  <h1>NIRSPipe</h1>
-  <h2>Open pages</h2>
-  {% if links %}
-  <ul>
-    {% for text, href in links %}
-    <li><a href="{{ href }}">{{ text }}</a></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p>Nothing is open yet.</p>
-  {% endif %}
-</main>
-</body>
-</html>
+{% extends "base.html" %}
+{% block main %}
+<h1>NIRSPipe</h1>
+<p><a href="{{ url_for('commands.index') }}">Run a command</a></p>
+<h2>Open pages</h2>
+{% if links %}
+<ul>
+  {% for text, href in links %}
+  <li><a href="{{ href }}">{{ text }}</a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Nothing is open yet.</p>
+{% endif %}
+{% endblock %}
