@@ -63,3 +63,11 @@ def test_the_app_serves_the_fallback_wherever_a_page_climbs_to():
         assert reply.status_code == 200, url
         assert reply.mimetype == "text/javascript"
         assert reply.data[:200].replace(b"\r\n", b"\n") == _BUNDLED.read_bytes()[:200].replace(b"\r\n", b"\n")
+
+
+def test_outside_a_dataset_the_copy_sits_beside_the_report_not_among_the_figures(tmp_path):
+    page = tmp_path / "figures" / "x.html"
+    page.parent.mkdir()
+    assert f'src="../{PLOTLY_LOCAL_NAME}"' in plotly_script_tags(page)
+    assert (tmp_path / PLOTLY_LOCAL_NAME).is_file()
+    assert not (page.parent / PLOTLY_LOCAL_NAME).exists()

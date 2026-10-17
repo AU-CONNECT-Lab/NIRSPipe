@@ -46,7 +46,9 @@ def plotly_script_tags(page: Path) -> str:
     should the CDN not have loaded; that copy is written at ``out/`` on first use.
     """
     page = Path(page).resolve()
-    local = (_tree_root(page) or page.parent) / PLOTLY_LOCAL_NAME
+    # outside a dataset, the folder of the report the page belongs to, never figures/
+    beside = page.parent.parent if page.parent.name == "figures" else page.parent
+    local = (_tree_root(page) or beside) / PLOTLY_LOCAL_NAME
     _write_local_plotly(local)
     rel = os.path.relpath(local, page.parent).replace(os.sep, "/")
     return (f'<script src="{PLOTLY_CDN_URL}"></script>'
