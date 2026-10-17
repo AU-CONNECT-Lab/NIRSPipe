@@ -113,6 +113,74 @@
   font-size: 0.9rem;
 }
 
+/* ---- a group folds from its legend; folded, it lists what is set in it ---- */
+
+.nform legend .fold {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.nform legend .fold::before {
+  content: "▾";
+  display: inline-block;
+  width: 1rem;
+  color: var(--muted);
+  transition: transform 0.1s;
+}
+
+.nform fieldset.folded legend .fold::before {
+  transform: rotate(-90deg);
+}
+
+.nform fieldset.folded > .field {
+  display: none;
+}
+
+.nform .group-summary {
+  margin-left: 0.6rem;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.nform fieldset:not(.folded) .group-summary {
+  display: none;
+}
+
+/* ---- Detect beside --participant-label, and the subjects it found ---- */
+
+.nform .detect {
+  margin-left: auto;
+  padding: 0.05rem 0.6rem;
+  font: inherit;
+  font-size: 0.78rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.nform .subject-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.nform .subject-picks label {
+  white-space: nowrap;
+}
+
 @media (max-width: 720px) {
   .nform fieldset { grid-template-columns: 1fr; }
 }

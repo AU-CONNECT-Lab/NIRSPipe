@@ -234,6 +234,22 @@ def blueprint(web) -> Blueprint:
             abort(404)
         return Response(stream, mimetype="text/event-stream", headers={"Cache-Control": "no-cache"})
 
+    @bp.get("/subjects")
+    def subjects():
+        """The subjects a BIDS folder holds, as ``nirspipe`` lists them when none is named."""
+        folder = request.args.get("bids_dir", "").strip().strip('"')
+        if not folder:
+            return jsonify(error="Fill the BIDS folder first.")
+        if not Path(folder).is_dir():
+            return jsonify(error=f"No folder {folder}.")
+        # pybids is slow to import, and only this button needs it
+        from nirspipe.io.bids import get_layout
+        try:
+            found = sorted(get_layout(Path(folder), validate=False).get_subjects())
+        except Exception as exc:
+            return jsonify(error=f"Could not read {folder}: {exc}")
+        return jsonify(subjects=found) if found else jsonify(error=f"No subjects in {folder}.")
+
     @bp.post("/runs/<run_id>/stop")
     def stop(run_id):
         return jsonify(stopped=process_stream.stop(run_id))

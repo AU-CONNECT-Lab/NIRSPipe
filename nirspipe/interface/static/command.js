@@ -72,20 +72,164 @@
     });
   }
 
+  // ---- groups fold; a folded one lists what is set inside it ----
+
+  var foldKey = storeKey + ":folded";
+  var groups = Array.prototype.slice.call(form.querySelectorAll("fieldset"));
+
+  // a field as it would read on the command line, or "" when it sends nothing
+  function setting(field) {
+    var name = field.querySelector("label code").textContent;
+    var kind = field.dataset.kind;
+    var inputs = Array.prototype.slice.call(field.querySelectorAll("[name]"));
+    if (kind === "switch") return inputs[0].checked ? name : "";
+    if (kind === "boolean") return inputs[0].value ? inputs[0].selectedOptions[0].textContent : "";
+    var values = kind === "choices"
+      ? inputs.filter(function (el) { return el.checked; }).map(function (el) { return el.value; })
+      : [inputs[0].value.trim().replace(/\s+/g, " ")].filter(Boolean);
+    return values.length ? name + " " + values.join(" ") : "";
+  }
+
+  function summarise(group) {
+    var parts = Array.prototype.map.call(group.querySelectorAll(".field"), setting).filter(Boolean);
+    group.querySelector(".group-summary").textContent = parts.join(" · ");
+  }
+
+  function saveFolds() {
+    var folded = groups.filter(function (g) { return g.classList.contains("folded"); })
+      .map(function (g) { return g.dataset.title; });
+    try { localStorage.setItem(foldKey, JSON.stringify(folded)); } catch (e) { /* private window */ }
+  }
+
+  var savedFolds = null;
+  try { savedFolds = JSON.parse(localStorage.getItem(foldKey) || "null"); } catch (e) { savedFolds = null; }
+  groups.forEach(function (group) {
+    var legend = group.querySelector("legend");
+    var title = legend.textContent.trim();
+    group.dataset.title = title;
+    legend.textContent = "";
+    var toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "fold";
+    toggle.textContent = title;
+    var summary = document.createElement("span");
+    summary.className = "group-summary";
+    legend.appendChild(toggle);
+    legend.appendChild(summary);
+    // first visit: what must be filled stays open, the rest folds
+    var folded = savedFolds ? savedFolds.indexOf(title) >= 0 : title !== "Required";
+    group.classList.toggle("folded", folded);
+    toggle.setAttribute("aria-expanded", String(!folded));
+    toggle.addEventListener("click", function () {
+      var now = group.classList.toggle("folded");
+      toggle.setAttribute("aria-expanded", String(!now));
+      saveFolds();
+    });
+  });
+
+  // ---- the BIDS and output folders follow from page to page; the last one typed wins ----
+
+  var SHARED = ["bids_dir", "output_dir"];
+  var sharedKey = "nirspipe-folders";
+
+  function sharedFolders() {
+    try { return JSON.parse(localStorage.getItem(sharedKey) || "{}"); } catch (e) { return {}; }
+  }
+
+  function shareFolder(el) {
+    if (SHARED.indexOf(el.name) < 0 || !el.value.trim()) return;
+    var saved = sharedFolders();
+    saved[el.name] = el.value.trim();
+    try { localStorage.setItem(sharedKey, JSON.stringify(saved)); } catch (e) { /* private window */ }
+  }
+
+  function takeFolders() {
+    var saved = sharedFolders();
+    SHARED.forEach(function (name) {
+      if (form.elements[name] && saved[name]) form.elements[name].value = saved[name];
+    });
+  }
+
+  // ---- Detect: the dataset's subjects, ticked into --participant-label ----
+
+  var labels = form.elements["--participant-label"];
+  if (labels && form.elements.bids_dir && form.dataset.subjects) {
+    var field = labels.closest(".field");
+    var detect = document.createElement("button");
+    detect.type = "button";
+    detect.className = "detect";
+    detect.textContent = "Detect";
+    field.querySelector(".field-head").appendChild(detect);
+    var picks = document.createElement("div");
+    picks.className = "subject-picks";
+    field.appendChild(picks);
+
+    function fill() {
+      labels.value = Array.prototype.filter.call(picks.querySelectorAll("input"), function (b) {
+        return b.checked;
+      }).map(function (b) { return b.value; }).join(" ");
+      labels.dispatchEvent(new Event("input", {bubbles: true}));
+    }
+    picks.addEventListener("change", fill);
+
+    detect.addEventListener("click", function () {
+      var url = form.dataset.subjects + "?bids_dir=" + encodeURIComponent(form.elements.bids_dir.value);
+      picks.textContent = "Reading the dataset.";
+      fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+        picks.textContent = "";
+        if (d.error) { picks.textContent = d.error; return; }
+        var typed = labels.value.split(/\s+/).filter(Boolean);
+        // what is already typed stays ticked; an empty box takes every subject
+        var ticked = typed.length ? typed : d.subjects;
+        d.subjects.forEach(function (s) {
+          var label = document.createElement("label");
+          var box = document.createElement("input");
+          box.type = "checkbox";
+          box.value = s;
+          box.checked = ticked.indexOf(s) >= 0;
+          label.appendChild(box);
+          label.appendChild(document.createTextNode(" " + s));
+          picks.appendChild(label);
+        });
+        fill();
+      });
+    });
+
+  }
+
   // one request after typing pauses, not one per key
-  form.addEventListener("input", function () {
+  form.addEventListener("input", function (e) {
+    shareFolder(e.target);
+    var group = e.target.closest("fieldset");
+    if (group) summarise(group);
     clearTimeout(timer);
     timer = setTimeout(function () { remember(); refresh(); }, 250);
   });
-  // a form filled from a run record keeps those values over the remembered ones; a link that
-  // gives some folders keeps those and takes the rest from memory
+  // remembered values first, then the folders the other pages last used; a form filled from a
+  // run record keeps its values, and a link that gives some folders keeps those
   if (form.dataset.given) {
     var given = {};
     form.dataset.given.split(" ").forEach(function (n) { given[n] = form.elements[n].value; });
     recall();
+    takeFolders();
     Object.keys(given).forEach(function (n) { form.elements[n].value = given[n]; });
     remember();
-  } else if (form.dataset.prefilled) remember(); else recall();
+  } else if (form.dataset.prefilled) {
+    takeFolders();
+    remember();
+  } else {
+    recall();
+    takeFolders();
+  }
+  groups.forEach(summarise);
+
+  // the Data Preparation finder reads the same two folders
+  var finder = {tree: "output_dir", bids: "bids_dir"};
+  Object.keys(finder).forEach(function (id) {
+    var box = document.getElementById(id);
+    var saved = sharedFolders()[finder[id]];
+    if (box && !box.value && saved) box.value = saved;
+  });
   refresh();
 
   function link(item) {

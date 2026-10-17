@@ -1,4 +1,4 @@
-<form id="command-form" class="nform" data-preview="{{ preview_url }}" data-run="{{ run_url }}" data-links="{{ links | default('rate') }}"{% if values and not given %} data-prefilled="1"{% endif %}{% if given %} data-given="{{ given | join(' ') }}"{% endif %} autocomplete="off">
+<form id="command-form" class="nform" data-preview="{{ preview_url }}" data-run="{{ run_url }}" data-links="{{ links | default('rate') }}" data-subjects="{{ url_for('commands.subjects') }}"{% if values and not given %} data-prefilled="1"{% endif %}{% if given %} data-given="{{ given | join(' ') }}"{% endif %} autocomplete="off">
   {% include "_fields.html" %}
   {% include "_actions.html" %}
 </form>
