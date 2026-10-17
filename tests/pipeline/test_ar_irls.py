@@ -39,8 +39,10 @@ def _task_design(n, sfreq=7.81, period=60.0, on=20.0):
 
 
 # ---- the order search, against statsmodels ----
+# a prime, a power of two and neither, since the autocovariance goes through a padded FFT
+@pytest.mark.parametrize("n", [997, 4096, 8000])
 @pytest.mark.parametrize("seed,truth", [(0, [0.6]), (1, [0.5, -0.3]), (2, [0.4, -0.2, 0.15])])
-def test_the_selected_coefficients_are_yule_walkers(seed, truth):
+def test_the_selected_coefficients_are_yule_walkers(seed, truth, n):
     """Whatever order BIC lands on, the coefficients at that order have to be the ones the
     standard solver gives. The Levinson recursion is here to deliver every order in one pass,
     not to estimate something different; if these disagree, the speed came from changing the
@@ -48,26 +50,12 @@ def test_the_selected_coefficients_are_yule_walkers(seed, truth):
 
     Comparing at the order `bic_ar_order` chose is what makes this a test of the function
     rather than of a recursion retyped into the test."""
-    x = _ar_series(np.random.default_rng(seed), 8000, truth)
+    x = _ar_series(np.random.default_rng(seed), n, truth)
     ours = bic_ar_order(x, pmax=20)
     assert ours.size >= 1, "BIC found no structure in a series that has some"
     theirs, _ = sm.regression.linear_model.yule_walker(x - x.mean(), order=ours.size,
                                                        method="mle")
     assert np.allclose(ours, theirs, atol=1e-10), f"{ours} vs {theirs}"
-
-
-def test_the_periodogram_autocovariance_equals_the_direct_one():
-    """The order search takes its autocovariance through an FFT rather than `np.correlate`'s
-    direct O(n^2) convolution; the two must give the same numbers."""
-    rng = np.random.default_rng(20)
-    for n in (997, 4096, 5000):                 # one prime, one power of two, one neither
-        x = _ar_series(rng, n, [0.6, -0.2])
-        x0 = x - x.mean()
-        direct = np.correlate(x0, x0, mode="full")[n - 1:n + 10] / n
-        size = 1 << int(np.ceil(np.log2(2 * n)))
-        spec = np.fft.rfft(x0, size)
-        fast = np.fft.irfft(spec * np.conj(spec), size)[:11] / n
-        assert np.allclose(direct, fast, atol=1e-12), f"n={n}"
 
 
 def test_bic_recovers_a_known_ar1():
