@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from nirspipe.qc.figures.subject.group_figures import SMOOTH_S, _robust_z, _smooth
 from tests._dyad_fingerprint import (BLOCKS, COHORT_ONLY, EXTRA_SPIKES, MEMBERS, NO_SHORT,
                                      OWN_SPIKE, SHARED_SPIKE, TASK)
 from tests.figure_accuracy._dyad import html_tables
@@ -25,14 +26,6 @@ def _figure(groups, desc):
 def _column(row_label: str, channel_set: str) -> str:
     stage, metric = row_label.rsplit(" ", 1)
     return f"{stage}_{metric}" if channel_set == "all" else f"{stage}_{channel_set}_{metric}"
-
-
-def _robust_z(values):
-    values = np.asarray(values, float)
-    finite = values[np.isfinite(values)]
-    median = np.median(finite)
-    mad = np.median(np.abs(finite - median))
-    return (values - median) / (1.4826 * mad if mad > 0 else np.std(finite))
 
 
 def test_every_strip_point_is_its_run_s_robust_distance_on_its_own_row(groups, cohort):
@@ -196,8 +189,6 @@ _GRID_ROWS = {"SCI (windowed)": "sci", "CV (windowed)": "cv"}
 def _own_series(groups, sid, key, channel_set):
     """One run's windowed series for one channel set, off its own record and the channel
     names the record stores beside each matrix, smoothed and sampled as the grid does."""
-    from nirspipe.qc.figures.subject.group_figures import SMOOTH_S, _smooth
-
     rec = groups.member_record(sid)
     windowed = rec["windowed"]
     times = np.asarray(windowed[f"{key}_window_times_s"], float)
