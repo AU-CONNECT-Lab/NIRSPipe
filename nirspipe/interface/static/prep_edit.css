@@ -1,0 +1,133 @@
+/* The Edit events section a raw viewer gains in the GUI's Data Preparation. Colours from the page's tokens. */
+
+#EditEvents button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+#EditEvents button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pe-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.pe-tools input {
+  width: 5.5rem;
+  font: inherit;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.pe-gap {
+  width: 0.8rem;
+}
+
+.pe-table-wrap {
+  max-height: 22rem;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.pe-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.pe-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-alt);
+  text-align: left;
+  font-weight: 600;
+  padding: 0.3rem 0.4rem;
+}
+
+.pe-table td {
+  padding: 0.15rem 0.4rem;
+  border-top: 1px solid var(--rule);
+  white-space: nowrap;
+}
+
+.pe-table td input[type="number"], .pe-table td input[type="text"] {
+  width: 100%;
+  min-width: 5rem;
+  font: inherit;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.pe-table td input:hover, .pe-table td input:focus {
+  border-color: var(--rule);
+  background: var(--surface);
+}
+
+.pe-table .pe-del {
+  padding: 0 0.45rem;
+  line-height: 1.4;
+}
+
+.pe-empty {
+  color: var(--faint);
+  font-style: italic;
+  text-align: center;
+}
+
+#EditEvents .nform {
+  margin-top: 0.75rem;
+}
+
+.pe-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+#EditEvents #pe-save {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.3rem 1.1rem;
+}
+
+.pe-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.pe-status.ok { color: var(--ok); }
+.pe-status.warn { color: var(--warn); }
+.pe-status.bad { color: var(--bad); }
+
+.pe-command, .pe-log {
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.pe-log {
+  max-height: 16rem;
+  overflow-y: auto;
+}

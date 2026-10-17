@@ -13,9 +13,11 @@ file by file.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import threading
+import time
 import uuid
 from collections import deque
 
@@ -136,6 +138,25 @@ def read_from(run_id: str, start: int) -> tuple[list[str], int, int | None]:
         lines = list(run.lines)[max(start - run.dropped, 0):]
         total = run.dropped + len(run.lines)
     return lines, total, returncode
+
+
+def sse(run_id: str):
+    """The run's lines as server-sent events, then an ``end`` event with its exit code. Raises KeyError at once for an unknown id."""
+    read_from(run_id, 0)
+
+    def stream():
+        seen = 0
+        while True:
+            lines, seen, code = read_from(run_id, seen)
+            for line in lines:
+                yield f"data: {json.dumps(line)}\n\n"
+            if code is not None:
+                end = {"code": code, "stopped": was_stopped(run_id)}
+                yield f"event: end\ndata: {json.dumps(end)}\n\n"
+                return
+            time.sleep(0.2)
+
+    return stream()
 
 
 def stop(run_id: str) -> bool:

@@ -86,7 +86,6 @@ h1 {
   .layout { grid-template-columns: 1fr; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--rule); }
   main { padding: 1rem; }
-  fieldset { grid-template-columns: 1fr; }
 }
 
 /* ---- tabs ---- */
@@ -138,114 +137,6 @@ h1 {
 .subcommands {
   margin: 0.25rem 0;
   padding-left: 1.25rem;
-}
-
-/* ---- forms: label above control, help in a bubble, short fields as many to a row as fit ---- */
-
-fieldset {
-  border: 0;
-  border-top: 1px solid var(--rule);
-  margin: 0 0 0.5rem;
-  padding: 0.75rem 0 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 0.9rem 1.5rem;
-}
-
-legend {
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0 0.5rem 0 0;
-  color: var(--ink);
-}
-
-.field.wide {
-  grid-column: 1 / -1;
-}
-
-.field {
-  position: relative;
-}
-
-.field-head {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.25rem;
-}
-
-.field label code {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.tip {
-  width: 1.1rem;
-  height: 1.1rem;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 0.7rem;
-  line-height: 1;
-  color: var(--muted);
-}
-
-.tip:hover, .tip:focus {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-/* as wide as its field, so a bubble in the last column cannot run off the page */
-.tip-body {
-  display: none;
-  position: absolute;
-  top: 1.7rem;
-  left: 0;
-  right: 0;
-  max-width: 40rem;
-  z-index: 10;
-  padding: 0.5rem 0.65rem;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-}
-
-.tip:hover + .tip-body, .tip:focus + .tip-body {
-  display: block;
-}
-
-.required {
-  color: var(--bad);
-  margin-left: 0.2rem;
-}
-
-input[type="text"], input[type="number"], select, textarea {
-  width: 100%;
-  font: inherit;
-  font-size: 0.9rem;
-  padding: 0.35rem 0.5rem;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-}
-
-input:focus, select:focus, textarea:focus {
-  outline: 2px solid var(--accent-soft);
-  border-color: var(--accent);
-}
-
-textarea {
-  resize: vertical;
-}
-
-.choices label {
-  margin-right: 1rem;
-  white-space: nowrap;
-  font-size: 0.9rem;
 }
 
 /* ---- run panel ---- */

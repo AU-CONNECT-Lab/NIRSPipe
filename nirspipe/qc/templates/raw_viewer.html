@@ -953,6 +953,12 @@ fetch("rate_config")
   .then(function(r) { if (!r.ok) throw new Error("no config"); return r.json(); })
   .then(function(cfg) {
     if (cfg && cfg.mark_spans && _DECISIONS) _startSpanEditor();
+    // the GUI's Data Preparation serves the editor beside the page; a report on its own has none
+    if (cfg && cfg.edit && _DECISIONS) {
+      var editor = document.createElement("script");
+      editor.src = "prep/edit.js";
+      document.body.appendChild(editor);
+    }
     if (!cfg || cfg.sci_threshold == null) return;
     _rateSciLine = cfg.sci_threshold;
     var p = document.getElementById("ch-decisions-rate-line");

@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import io
-import json
 import os
-import time
 from pathlib import Path
 
 from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, url_for
@@ -188,24 +186,10 @@ def blueprint(web) -> Blueprint:
     @bp.get("/runs/<run_id>/events")
     def events(run_id):
         try:
-            process_stream.read_from(run_id, 0)
+            stream = process_stream.sse(run_id)
         except KeyError:
             abort(404)
-
-        def stream():
-            seen = 0
-            while True:
-                lines, seen, code = process_stream.read_from(run_id, seen)
-                for line in lines:
-                    yield f"data: {json.dumps(line)}\n\n"
-                if code is not None:
-                    end = {"code": code, "stopped": process_stream.was_stopped(run_id)}
-                    yield f"event: end\ndata: {json.dumps(end)}\n\n"
-                    return
-                time.sleep(0.2)
-
-        return Response(stream(), mimetype="text/event-stream",
-                        headers={"Cache-Control": "no-cache"})
+        return Response(stream, mimetype="text/event-stream", headers={"Cache-Control": "no-cache"})
 
     @bp.post("/runs/<run_id>/stop")
     def stop(run_id):

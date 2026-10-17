@@ -12,7 +12,7 @@
 {% if description %}<p class="lede">{{ description }}</p>{% endif %}
 {% block command %}
 {% if tab.prog == "nirspipe" %}
-<form class="record" method="get">
+<form class="record nform" method="get">
   <label for="record">Run record</label>
   <input type="text" id="record" name="record" value="{{ record }}" placeholder="a run record or --config file (.toml)">
   <button type="submit">Load into the form</button>
