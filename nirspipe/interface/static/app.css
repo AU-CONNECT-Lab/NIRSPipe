@@ -140,7 +140,7 @@ h1 {
   padding-left: 1.25rem;
 }
 
-/* ---- forms: label above control, help in full below, short fields as many to a row as fit ---- */
+/* ---- forms: label above control, help in a bubble, short fields as many to a row as fit ---- */
 
 fieldset {
   border: 0;
@@ -163,8 +163,14 @@ legend {
   grid-column: 1 / -1;
 }
 
-.field label {
-  display: block;
+.field {
+  position: relative;
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin-bottom: 0.25rem;
 }
 
@@ -173,11 +179,42 @@ legend {
   color: var(--muted);
 }
 
-.field .help {
-  margin: 0.3rem 0 0;
-  font-size: 0.78rem;
+.tip {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.tip:hover, .tip:focus {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* as wide as its field, so a bubble in the last column cannot run off the page */
+.tip-body {
+  display: none;
+  position: absolute;
+  top: 1.7rem;
+  left: 0;
+  right: 0;
+  max-width: 40rem;
+  z-index: 10;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--faint);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.tip:hover + .tip-body, .tip:focus + .tip-body {
+  display: block;
 }
 
 .required {

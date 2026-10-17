@@ -4,9 +4,14 @@
   <legend>{{ title }}</legend>
   {% for f in group %}
   <div class="field {{ 'short' if f.kind in ('number', 'choice', 'boolean', 'switch') else 'wide' }}">
-    <label for="f{{ f.name }}"><code>{{ f.name }}</code>{% if f.required %}<span class="required" title="required">*</span>{% endif %}</label>
+    <div class="field-head">
+      <label for="f{{ f.name }}"><code>{{ f.name }}</code>{% if f.required %}<span class="required" title="required">*</span>{% endif %}</label>
+      {%- if f.help %}
+      <button type="button" class="tip" aria-label="help for {{ f.name }}" aria-describedby="h{{ f.name }}">?</button>
+      <span class="tip-body" id="h{{ f.name }}" role="tooltip">{{ f.help }}</span>
+      {%- endif %}
+    </div>
     <div class="control">{{ control(f, values.get(f.name, [])) }}</div>
-    {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
   </div>
   {% endfor %}
 </fieldset>
