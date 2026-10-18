@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Task GLM runs write a whitening diagnostic, and the report shows the residual spectrum against white noise and each channel's lag-1 autocorrelation
 - Prep writes each run's channel positions on fsaverage, `space-fsaverage_channels.tsv`, with how the optodes were placed in its sidecar
+- `nirspipe-hyper` writes each group's member channel positions on fsaverage, one table with a `subject_id` column
 
 ### Changed
 - Optodes are placed on fsaverage by the file's landmarks, else by the reading that fits the scalp; brain views follow the run's recorded placement

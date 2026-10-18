@@ -46,7 +46,7 @@ for f in raw/*.snirf; do
 done
 ```
 
-Channel types and optode positions are read from the SNIRF by MNE-BIDS. SNIRF does not record which space its optode coordinates were measured in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised against the nasion and preauricular points. BIDS has no group folders, so encode patient and control in the subject label if their IDs overlap. `nirspipe-snirf2bids` does not validate what it writes; `nirspipe` does at the start of a run. The GUI's SNIRF to BIDS page converts a whole folder from one table ([GUI](gui.md)).
+Channel types and optode positions are read from the SNIRF by MNE-BIDS. SNIRF does not record which space its optode coordinates were measured in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised against the nasion and preauricular points, and `mri` for positions already on a template brain (MNI or fsaverage), as many acquisition programs export them. The frame labels the BIDS files only: `nirspipe` places the optodes from the SNIRF itself ([Optode placement](workflows.md#optode-placement)). BIDS has no group folders, so encode patient and control in the subject label if their IDs overlap. `nirspipe-snirf2bids` does not validate what it writes; `nirspipe` does at the start of a run. The GUI's SNIRF to BIDS page converts a whole folder from one table ([GUI](gui.md)).
 
 ## Trees written by `nirspipe-prep`
 

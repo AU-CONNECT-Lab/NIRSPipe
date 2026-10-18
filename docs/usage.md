@@ -283,7 +283,7 @@ Starts the desktop interface and prints the address to open ([GUI](gui.md)).
 | Message | Cause and fix |
 |---------|---------------|
 | `... is not valid BIDS` | bids-validator found errors; the message lists them. Check `dataset_description.json`, the `sub-<label>/[ses-<label>/]nirs/` layout and the file names, or pass `--skip-bids-validation`. |
-| `fsaverage is needed to place the optodes on the brain` | MNE's fsaverage is downloaded the first time a brain figure is drawn, and this machine could not fetch it, usually for lack of internet access. The rest of the report is unaffected. |
+| `fsaverage is needed to place the optodes on the brain` | MNE's fsaverage is downloaded the first time it is needed, to place the optodes or to draw a brain figure, and this machine could not fetch it, usually for lack of internet access. Preprocessing goes on and writes `n/a` channel positions; the rest of the report is unaffected. |
 | `Spline correction needs at least 3.333 Hz` | Spline correction does not support recordings sampled below 10/3 Hz; choose another `--motion-correction`. |
 | Every channel marked bad | The `--sci-threshold` is too high for the data, or the cardiac band does not match the population's heart rate. |
 | `GroupCSVError` | The pairs file is missing `group_id`, `subject_id` or `task`, is empty, or has a group of one. |

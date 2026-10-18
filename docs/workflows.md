@@ -113,6 +113,12 @@ The corrected optical density is converted to HbO and HbR concentration changes 
 
 A SNIRF file may carry non-optical channels in its `aux` group, such as accelerometers, gyroscopes or a pulse trace. MNE does not read them, so preprocessing copies them from the input into `desc-aux_timeseries.tsv.gz`, at the rate they were recorded, with the recorded timestamps in a `time` column. No derivative SNIRF holds them, so this table is the only copy carried forward. The report draws the gyroscope and accelerometer rows on its motion figures from it, and `nirspipe-prep crop` carries the aux group into each segment it cuts.
 
+### Optode placement
+
+SNIRF does not record which space its optode coordinates are in, and a dataset's `_coordsystem.json` is not always right about it, so preprocessing places the optodes on fsaverage from the recording itself and writes the result once, as `space-fsaverage_channels.tsv`. When the file carries at least three landmarks named as in the 10-05 system (the nasion and preauricular points count), they are registered onto the same points on fsaverage by a rotation, a translation and one scale, and the result is kept when the optodes then lie within 5 mm of the fsaverage scalp (median over optodes). Otherwise the coordinates are read both as head frame and as already on fsaverage, and the reading that puts the optodes on the scalp is kept. A recording that no reading places gets `n/a` positions and a warning, and its brain figures draw the coordinates as they stand.
+
+The table holds one row per channel, at the midpoint of its source and detector, in fsaverage surface RAS (which is MNI305) and in mm. Its sidecar records which route placed the optodes, how close they came to the scalp, and the transform. Every later file of the run, the brain figures and the dyad tables take the placement from this record, and `nirspipe-prep crop` and `edit-markers` copy the source's landmarks into what they write.
+
 ## Postprocessing
 
 `--mode` picks the branch: `denoise`, `glm` or `rest`. The bandpass and the resampling are shared by all three, and each mode fills in its own defaults for the settings below, which `--config` and the command line override ([Mode defaults](usage.md#mode-defaults)). Postprocessing measures no quality metric of its own; the run's quality record gets one section per stage it wrote (`filtered`, `resampled`, `errts`).
