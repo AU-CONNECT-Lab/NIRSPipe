@@ -74,5 +74,9 @@ def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
     build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, dpf=[6.0],
                           sci_threshold=0.8)
 
+    from nirspipe.qc.common.figure_io import PLOTLY_LOCAL_NAME
+
     assert out.exists()
-    assert [q.name for q in tmp_path.iterdir() if q.is_file()] == []
+    # the Plotly fallback is the one file the tree root holds by design
+    assert [q.name for q in tmp_path.iterdir() if q.is_file()
+            and q.name != PLOTLY_LOCAL_NAME] == []
