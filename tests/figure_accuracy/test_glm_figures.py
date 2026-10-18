@@ -77,3 +77,26 @@ def test_only_the_responders_activate(glm_run, estimates):
 def test_the_correlation_panel_says_its_after_stage_is_the_glm_residual(glm_run):
     names = {t.get("name") for t in one_figure(glm_run.figure("hbohbrcorr"))["data"]}
     assert "after GLM (task removed)" in names and "after denoising" not in names
+
+
+# ---- whitening ----
+
+def test_the_whitening_spectrum_draws_the_table_written_to_disk(glm_run):
+    on_disk = pd.read_csv(glm_run.table("_stat-psd_desc-whitening_timeseries.tsv"), sep="\t")
+    traces = {t.get("name"): t for t in one_figure(glm_run.figure("whitening", suffix="nirsmap"))["data"]}
+    for chroma, label in (("hbo", "HbO"), ("hbr", "HbR")):
+        drawn = traces[f"{label} whitened"]
+        np.testing.assert_allclose(np.asarray(drawn["x"], float), on_disk["freq"], rtol=1e-12)
+        np.testing.assert_allclose(np.asarray(drawn["y"], float), on_disk[f"{chroma}_whitened"],
+                                   rtol=1e-12)
+
+
+def test_the_record_and_the_report_carry_the_low_band_power(glm_run):
+    channels = pd.read_csv(glm_run.table("_desc-whitening_nirsmap.tsv"), sep="\t")
+    good = channels[channels["long"] & ~channels["bad"]]
+    section = glm_run.record()["whitening"]
+    for chroma in ("hbo", "hbr"):
+        expected = good.loc[good["Chroma"] == chroma, "lowband_whitened"].median()
+        assert section[f"whitening_lowband_{chroma}"] == pytest.approx(expected)
+    html = glm_run.report.read_text(encoding="utf-8")
+    assert "GLM residual" in html and "Residual low-band power HbO" in html

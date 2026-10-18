@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Task GLM runs write a whitening diagnostic, and the report shows the residual spectrum against white noise and each channel's lag-1 autocorrelation
+
 ## [0.70.0] - 2026-10-17
 
 ### Added

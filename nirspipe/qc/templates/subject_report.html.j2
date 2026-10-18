@@ -440,6 +440,14 @@
       <p class="fig-path">{{ glm_activation_path }}</p>
     {% endif %}
 
+    {% if glm_whitening_path %}
+      <h3>Whitening</h3>
+      <p class="panel-note">{{ section_note('glm.whitening') }}</p>
+      <iframe class="plotly-frame" src="{{ glm_whitening_path }}" title="Whitening of the GLM residual"
+              style="height:{{ glm_whitening_h }}px"></iframe>
+      <p class="fig-path">{{ glm_whitening_path }}</p>
+    {% endif %}
+
   </div>
 </section>
 
@@ -636,6 +644,14 @@
     {{ span_row('spike_pct', 'Spike % (exp.)', with_count('spike_pct', spike_src), metric_class('spike_pct', sqm.get('spike_pct'))) }}
     {%- elif not sqm_split and not condition_label %}
     {{ span_row('spike_count', 'Spike count', mv('spike_count', sqm.get('spike_count')), metric_class('spike_count', sqm.get('spike_count'))) }}
+    {%- endif %}
+    {#- ---- what the GLM's noise model left behind, on a task run ---- -#}
+    {%- if sqm.get('whitening_lowband_hbo') is not none or sqm.get('whitening_lowband_hbr') is not none %}
+    {{ group_row('GLM residual', 'after whitening') }}
+    {%- for key in ('whitening_lowband_hbo', 'whitening_lowband_hbr') if sqm.get(key) is not none %}
+    {%- if sqm_split %}{{ long_row(key, metric_label(key), mv(key, sqm.get(key))) }}
+    {%- else %}{{ span_row(key, metric_label(key), mv(key, sqm.get(key))) }}{% endif %}
+    {%- endfor %}
     {%- endif %}
     </tbody>
   </table>

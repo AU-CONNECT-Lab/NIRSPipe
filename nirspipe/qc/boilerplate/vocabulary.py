@@ -603,6 +603,7 @@ STEP_SUMMARY = {
     "glm_fit": "Per-channel model fit; rejected channels are flagged, not dropped.",
     "contrasts": "Contrast estimates derived from the fitted model.",
     "glm_residuals": "What the model left behind, once the fitted signal was removed.",
+    "glm_whitening": "How white the fit's residual is after its noise model: spectrum and lag-1 autocorrelation.",
     "export_mean_filled": "The final residual with every BAD_ frame set to its channel's kept mean, for tools that ignore annotations; not for ALFF or a GLM.",
     "glm_residuals_broadband": "The same confound regression on data that skipped the bandpass, so fALFF keeps a full spectrum.",
     "alff": "Amplitude of low-frequency fluctuation, per channel.",
@@ -700,6 +701,8 @@ METRIC_SUMMARY = {
     "gvtd_pct_above_thresh": "Share of the recording with clear movement, above the applied GVTD threshold. Lower is better.",
     "gvtd_censor_pct": "Share of the recording marked BAD_gvtd by censoring; nothing was deleted. Lower is better.",
     "gvtd_censor_retained_s": "Seconds left after censoring, the time an analysis can actually use. Higher is better.",
+    "whitening_lowband_hbo": "Whitened GLM residual power at 0.01-0.1 Hz over white noise: above 1 inflates t, below 1 deflates it; aim for 1, so no better end.",
+    "whitening_lowband_hbr": "The same for HbR.",
     "spike_count": "Sudden jumps across all channels, on the motion-band derivative. Lower is better.",
     "spike_pct": "Spike samples as a share of all channel-samples. Experimental; lower is better.",
     "spike_num_frames": f"Frames where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental; lower is better.",
@@ -742,6 +745,7 @@ _STAGE_RAW = "Measured on the raw recording."
 _STAGE_MOTION = "Measured across motion correction."
 _STAGE_PREPROC = "Measured after Beer-Lambert, before filtering."
 _STAGE_BOTH = "Measured at each haemoglobin stage; the section says which."
+_STAGE_WHITENING = "Median over good long channels of the task GLM."
 # the one haemoglobin metric the raw viewer also measures, on its own Beer-Lambert
 _STAGE_BOTH_AND_RAW = (
     "Measured at each haemoglobin stage, unfiltered in the raw viewer; the section says which."
@@ -790,6 +794,8 @@ METRIC_STAGE = {
     **{k: _STAGE_PREPROC for k in _PREPROC_METRICS},
     **{k: _STAGE_BOTH for k in _BOTH_METRICS},
     "hbo_hbr_corr_mean": _STAGE_BOTH_AND_RAW,
+    "whitening_lowband_hbo": _STAGE_WHITENING,
+    "whitening_lowband_hbr": _STAGE_WHITENING,
 }
 
 def metric_summary(metric: str, condition: bool = False) -> str:
@@ -897,6 +903,7 @@ COHORT_SECTIONS = {
     **RECORD_SECTIONS,
     "censor": "From the GVTD censoring step.",
     "imu": "From the head-motion sensor, not the optical data.",
+    "whitening": "From the task GLM's residual after its noise model.",
     "excluded": "From the run's BAD_ spans: --keep-spans, --bad-spans, --gvtd-censor and any the input carried.",
 }
 COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
@@ -1009,6 +1016,10 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "gyro_speed_p95":          ("Gyroscope speed p95", "sig3", None, None),
     "accel_jerk_mean":         ("Accelerometer jerk mean", "sig3", None, None),
     "accel_jerk_p95":          ("Accelerometer jerk p95", "sig3", None, None),
+
+    # GLM residual: 1 is the target from both sides, so neither end is the better one here
+    "whitening_lowband_hbo":   ("Residual low-band power HbO", ".2f", None, None),
+    "whitening_lowband_hbr":   ("Residual low-band power HbR", ".2f", None, None),
 
     # time
     "pct_data_retained":       ("% data retained", "pct", (0.8, 0.6), _HIGHER),

@@ -177,6 +177,9 @@ NOTES = {
         "HbO betas on the surface, three views per condition, on one colour scale shared by "
         "every condition so a weak condition reads as weak. One model over the whole "
         "recording, so every condition rests on the same channels. Select a condition.",
+    "glm.whitening":
+        "The t values assume the whitened residual is white: a flat line at 1 and dots inside "
+        "the band. Power above 1 near the dashed design frequencies makes t too large.",
     "metrics.intro":
         "Hover a label for its definition. Bold labels are the ones that decide whether the run "
         "is usable. Where a cell holds two values, they are before and after a processing step.",

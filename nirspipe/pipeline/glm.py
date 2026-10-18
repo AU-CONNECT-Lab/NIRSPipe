@@ -19,6 +19,8 @@ from nirspipe.utils import is_marker
 from nirspipe.pipeline.glm_censored import (censor_summary, condition_columns, events_left,
                                            fit_censored, kept_frames, refuse_too_few_frames,
                                            silent_conditions)
+from nirspipe.pipeline.glm_whitening import (WHITENING_LOWBAND, WHITENING_PSD_SEGMENT_S,
+                                            whitening_tables)
 from nirspipe.utils.lineage import stamp
 from nirspipe.utils.spans import bad_spans
 from nirspipe.utils.logging import get_logger
@@ -565,13 +567,17 @@ def run_glm_pipeline(
                              f"because no kept frame carries any of their signal")
     contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
 
+    # only a task GLM's t values lean on the whitening being complete
+    whitening = (_whitening_of(glm_est, haemo, resid_data, keep, sep_bands, short_channel_used)
+                 if output_dir and conditions else None)
+
     if output_dir:
         _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
                           contrast_def=contrast_def, source_path=source_path,
                           inputs=glm_inputs(events_path if not from_annotations else None, aux_path),
                           bads=list(haemo.info["bads"]),
                           self_fitted=sole_regressor_channels(haemo, short_channel_used, sep_bands),
-                          censored=~keep, **censor_params,
+                          censored=~keep, whitening=whitening, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
@@ -579,6 +585,17 @@ def run_glm_pipeline(
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, glm_est, dm, raw_resid
+
+
+def _whitening_of(glm_est: Any, haemo: mne.io.Raw, residual: np.ndarray, keep: np.ndarray,
+                  sep_bands, short_channel) -> tuple[pd.DataFrame, pd.DataFrame]:
+    from nirspipe.qc.metrics._helpers import long_short_channels
+
+    return whitening_tables(
+        glm_est, residual, keep, float(haemo.info["sfreq"]), haemo.get_channel_types(),
+        long_channels=set(long_short_channels(haemo, sep_bands)[0]),
+        bads=set(haemo.info["bads"]),
+        self_fitted=set(sole_regressor_channels(haemo, short_channel, sep_bands)))
 
 
 _GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", "Detector",
@@ -632,6 +649,7 @@ def _save_glm_outputs(
     bads: list[str] | None = None,
     self_fitted: "list[str]" = (),
     censored: "np.ndarray | None" = None,
+    whitening: "tuple[pd.DataFrame, pd.DataFrame] | None" = None,
     **params: Any,
 ) -> None:
     bads = bads or []
@@ -674,5 +692,15 @@ def _save_glm_outputs(
         # the weights as the file gave them: the TSV names each contrast, nothing else does
         write_step_sidecar(con_path, "contrasts", source_path, bads, inputs=inputs,
                            contrast_weights=contrast_def, **params)
+
+    if whitening is not None:
+        spectrum_params = {**params, "whitening_lowband": list(WHITENING_LOWBAND),
+                           "whitening_psd_segment_s": WHITENING_PSD_SEGMENT_S}
+        for table, path in zip(whitening, (_named("nirsmap", desc="whitening"),
+                                           _named("timeseries", desc="whitening",
+                                                  statistic="psd"))):
+            write_tsv(table, path)
+            write_step_sidecar(path, "glm_whitening", source_path, bads, inputs=inputs,
+                               **spectrum_params)
 
     logger.info("GLM outputs written to %s", output_dir)

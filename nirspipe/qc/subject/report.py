@@ -63,6 +63,7 @@ from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.pipeline.motion import overmarked
 from nirspipe.qc.metrics.aggregate import in_analysis_band
 from nirspipe.io.naming import parse_path, report_name
+from nirspipe.io.tables import read_table
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -1395,9 +1396,9 @@ def _section_sqm(
         # `preproc` before `preproc_long`, so the long values win where they exist and the
         # whole-file ones the split does not carry (pct_data_retained) survive underneath
         # `motion_long` the same way: only its frame counts differ from `motion`
-        # `censor` and `imu` last and unsuffixed: their keys (gvtd_censor_*, gyro_speed_*,
-        # accel_jerk_*) collide with nothing
-        for key in (*keys, "motion_long", "preproc_long", "censor", "imu"):
+        # `censor`, `imu` and `whitening` last and unsuffixed: their keys (gvtd_censor_*,
+        # gyro_speed_*, accel_jerk_*, whitening_*) collide with nothing
+        for key in (*keys, "motion_long", "preproc_long", "censor", "imu", "whitening"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
         # The corrected side of the *same* channel set, suffixed rather than merged: it
@@ -1674,11 +1675,15 @@ def _section_glm(
     figures_dir: Path,
     fig_name,
     segments: "dict | None" = None,
+    nirs_dir: "Path | None" = None,
+    sqm_label: "str | None" = None,
 ) -> dict:
     glm_design_path = None
     glm_design_heatmap_path = None
     glm_activation_path = None
     glm_activation_conditions: list[dict] = []
+    glm_whitening_path = None
+    glm_whitening_h = 0
 
     conditions: list[str] = []
     if design_matrix is not None:
@@ -1734,11 +1739,29 @@ def _section_glm(
                 if glm_activation_conditions:
                     glm_activation_path = glm_activation_conditions[0]["path"]
 
+    # read back from the GLM step's tables: the whitened residual itself is never written
+    label = sqm_label or f"sub-{subject}"
+    if nirs_dir is not None and (nirs_dir / f"{label}_desc-whitening_nirsmap.tsv").exists():
+        with _guard("GLM whitening", errors, subject):
+            from nirspipe.qc.figures import design_peak_frequencies, whitening_figure
+            channels = read_table(nirs_dir / f"{label}_desc-whitening_nirsmap.tsv")
+            spectrum = read_table(nirs_dir / f"{label}_stat-psd_desc-whitening_timeseries.tsv")
+            band = _sidecar_of(nirs_dir, sqm_label, subject, "desc-whitening_nirsmap").get(
+                "parameters", {}).get("whitening_lowband")
+            peaks = (design_peak_frequencies(design_matrix, conditions)
+                     if design_matrix is not None else {})
+            fig = whitening_figure(spectrum, channels, peaks, tuple(band))
+            if fig is not None:
+                glm_whitening_path, glm_whitening_h = _save_plotly_html(
+                    fig, figures_dir / fig_name("whitening", suffix="nirsmap"))
+
     return {
         "glm_design_path": glm_design_path,
         "glm_design_heatmap_path": glm_design_heatmap_path,
         "glm_activation_path": glm_activation_path,
         "glm_activation_conditions": glm_activation_conditions,
+        "glm_whitening_path": glm_whitening_path,
+        "glm_whitening_h": glm_whitening_h,
     }
 
 
@@ -2075,7 +2098,8 @@ def build_subject_report(
         trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
                                               figures_dir, fig_name, notes)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
-                                     figures_dir, fig_name, segments=segments)
+                                     figures_dir, fig_name, segments=segments,
+                                     nirs_dir=nirs_dir, sqm_label=sqm_label)
     rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fig_name,
                                       fc_hbr_df=fc_hbr_df,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,

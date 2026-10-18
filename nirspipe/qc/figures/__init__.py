@@ -35,6 +35,7 @@ from nirspipe.qc.figures.subject.glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
     activation_brain_figure, activation_condition_figures, activation_panel,
     per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
+    design_peak_frequencies, whitening_figure,
 )
 from nirspipe.qc.figures.subject.correlation_panel import fit_js as hbo_hbr_fit_js
 from nirspipe.qc.figures.subject.correlation_panel import hbo_hbr_correlation_figure
@@ -85,6 +86,8 @@ __all__ = [
     "per_channel_hrf_figure",
     "design_matrix_heatmap",
     "glm_betas_figure",
+    "design_peak_frequencies",
+    "whitening_figure",
     "hbo_hbr_correlation_figure",
     "hbo_hbr_fit_js",
     "optode_layout_static",

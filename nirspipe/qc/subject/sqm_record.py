@@ -58,10 +58,12 @@ from typing import Any
 
 import mne
 import numpy as np
+import pandas as pd
 
 from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
 from nirspipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
+from nirspipe.io.tables import read_table
 from nirspipe.utils import is_optical_density
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, is_bad_span
@@ -108,7 +110,7 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
-OPTIONAL_SECTIONS = ("censor", "imu",
+OPTIONAL_SECTIONS = ("censor", "imu", "whitening",
                      # `nirspipe-qc prep-raw` only: its in-memory Beer-Lambert, before and after
                      # the correction it may run
                      "rawhaemo", "rawhaemo_long", "rawhaemo_short",
@@ -263,6 +265,25 @@ def _imu_slicer(imu: "dict | None"):
         return None
     from nirspipe.qc.metrics import imu_scalars
     return lambda t0, t1: imu_scalars(imu, t0, t1)
+
+
+def _whitening_section(stages: dict[str, Path]) -> dict[str, float]:
+    """Per chromophore, the median low-band power of the whitened residual over good long channels."""
+    any_stage = next(iter(stages.values()), None)
+    if any_stage is None:
+        return {}
+    label = any_stage.name[: any_stage.name.index("_desc-")]
+    path = any_stage.parent / f"{label}_desc-whitening_nirsmap.tsv"
+    if not path.exists():
+        return {}
+    table = read_table(path)
+    good = table[table["long"].astype(bool) & ~table["bad"].astype(bool)]
+    out = {}
+    for chroma, rows in good.groupby("Chroma"):
+        values = pd.to_numeric(rows["lowband_whitened"], errors="coerce").dropna()
+        if len(values):
+            out[f"whitening_lowband_{chroma}"] = float(values.median())
+    return out
 
 
 def _split_scalars(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1154,6 +1175,10 @@ def compute_run_sections(
             sections["imu"] = imu_section(imu, raw_intensity, sep_bands)
         except Exception:
             logger.warning("imu section failed", exc_info=True)
+
+    # the GLM step measured this on its whitened residual, which no file on disk holds
+    if whitening := _whitening_section(stages):
+        sections["whitening"] = whitening
 
     # written by the prep step rather than measured here: censoring is a decision the run
     # made, and re-deriving it would silently disagree with the marks already on the files

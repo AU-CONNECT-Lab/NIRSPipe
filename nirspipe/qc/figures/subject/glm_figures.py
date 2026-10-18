@@ -786,3 +786,95 @@ def glm_betas_figure(
     fig.suptitle(title, fontsize=11, y=1.01)
     plt.tight_layout()
     return fig_png_b64(fig)
+
+
+# ---- whitening diagnostic ----
+_WHITE_COLOR = "#555555"
+_BAND_FILL = "rgba(0,0,0,0.06)"
+
+
+def design_peak_frequencies(design_matrix: "pd.DataFrame", conditions: "list[str]") -> dict:
+    """Each condition regressor's strongest frequency, read off its periodogram.
+
+    ``{"tap": <15 s on, 30 s off>}`` -> ``{"tap": 0.0222}``, one cycle per 45 s.
+    """
+    times = np.asarray(design_matrix.index, float)
+    sfreq = 1.0 / float(np.median(np.diff(times)))
+    out = {}
+    for name in conditions:
+        x = design_matrix[name].to_numpy(float)
+        power = np.abs(np.fft.rfft(x - x.mean())) ** 2
+        freqs = np.fft.rfftfreq(len(x), 1.0 / sfreq)
+        if len(power) > 1 and power[1:].max() > 0:
+            out[name] = float(freqs[1 + int(np.argmax(power[1:]))])
+    return out
+
+
+def whitening_figure(spectrum: "pd.DataFrame", channels: "pd.DataFrame",
+                     design_freqs: dict, lowband: "tuple[float, float]") -> "go.Figure | None":
+    """The whitened residual's spectrum against white, then each channel's lag-1 autocorrelation."""
+    chromas = [(c, label, color) for c, label, color in
+               (("hbo", "HbO", HBO_COLOR), ("hbr", "HbR", HBR_COLOR))
+               if f"{c}_whitened" in spectrum.columns]
+    if not chromas or spectrum.empty:
+        return None
+    fig = make_subplots(rows=2, cols=1, vertical_spacing=0.16,
+                        subplot_titles=["Residual power relative to white noise",
+                                        "Lag-1 autocorrelation of the whitened residual"])
+    freqs = spectrum["freq"].to_numpy(float)
+    values = np.concatenate([spectrum[f"{c}_{kind}"].to_numpy(float)
+                             for c, _, _ in chromas for kind in ("whitened", "residual")])
+    values = values[np.isfinite(values) & (values > 0)]
+    lo, hi = float(values.min()), float(values.max())
+    fig.add_trace(go.Scatter(x=[lowband[0], lowband[1], lowband[1], lowband[0]],
+                             y=[lo, lo, hi, hi], fill="toself", fillcolor=_BAND_FILL,
+                             line=dict(width=0), hoverinfo="skip", showlegend=False),
+                  row=1, col=1)
+    fig.add_trace(go.Scatter(x=[freqs[0], freqs[-1]], y=[1.0, 1.0], mode="lines",
+                             line=dict(color=_WHITE_COLOR, width=1, dash="dot"),
+                             name="white", hoverinfo="skip"), row=1, col=1)
+    for name, f in design_freqs.items():
+        fig.add_trace(go.Scatter(x=[f, f], y=[lo, hi], mode="lines",
+                                 line=dict(color=_WHITE_COLOR, width=1, dash="dash"),
+                                 showlegend=False,
+                                 hovertemplate=f"{name}<br>{f:.4f} Hz<extra></extra>"),
+                      row=1, col=1)
+    for c, label, color in chromas:
+        fig.add_trace(go.Scatter(x=freqs, y=spectrum[f"{c}_residual"].to_numpy(float),
+                                 mode="lines", line=dict(color=color, width=1), opacity=0.45,
+                                 name=f"{label} before whitening",
+                                 hovertemplate=f"{label} before<br>%{{x:.4f}} Hz<br>%{{y:.3g}}<extra></extra>"),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=freqs, y=spectrum[f"{c}_whitened"].to_numpy(float),
+                                 mode="lines", line=dict(color=color, width=2),
+                                 name=f"{label} whitened",
+                                 hovertemplate=f"{label} whitened<br>%{{x:.4f}} Hz<br>%{{y:.3g}}<extra></extra>"),
+                      row=1, col=1)
+
+    good = channels[channels["long"].astype(bool) & ~channels["bad"].astype(bool)
+                    & channels["acf1_whitened"].notna()]
+    pairs = sorted({str(n).rsplit(" ", 1)[0] for n in good["ch_name"]})
+    if pairs:
+        n = int(good["n_samples"].median())
+        bound = 1.96 / np.sqrt(n)
+        fig.add_trace(go.Scatter(x=[pairs[0], pairs[-1], pairs[-1], pairs[0]],
+                                 y=[-bound, -bound, bound, bound], fill="toself",
+                                 fillcolor=_BAND_FILL, line=dict(width=0), hoverinfo="skip",
+                                 showlegend=False), row=2, col=1)
+        for c, label, color in chromas:
+            rows = good[good["Chroma"] == c]
+            fig.add_trace(go.Scatter(x=[str(v).rsplit(" ", 1)[0] for v in rows["ch_name"]],
+                                     y=rows["acf1_whitened"].to_numpy(float), mode="markers",
+                                     marker=dict(color=color, size=7), showlegend=False,
+                                     hovertemplate=f"%{{x}} {label}<br>%{{y:.3f}}<extra></extra>"),
+                          row=2, col=1)
+    fig.update_xaxes(type="log", title_text="Frequency (Hz)", gridcolor="#eeeeee", row=1, col=1)
+    fig.update_yaxes(type="log", title_text="Power / white", gridcolor="#eeeeee", row=1, col=1)
+    fig.update_xaxes(categoryorder="array", categoryarray=pairs, tickangle=-60, row=2, col=1)
+    fig.update_yaxes(title_text="lag-1 r", gridcolor="#eeeeee", zeroline=True,
+                     zerolinecolor="#999999", row=2, col=1)
+    fig.update_layout(height=720, margin=dict(l=70, r=30, t=60, b=90),
+                      plot_bgcolor="white", paper_bgcolor="white",
+                      legend=dict(font=dict(size=11), orientation="h",
+                                  x=1, xanchor="right", y=1.04, yanchor="bottom"))
+    return fig
