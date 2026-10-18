@@ -51,6 +51,7 @@ GROUPS = {
         "cardiac_band_frac_hbr", "resp_band_power_hbo", "resp_band_power_hbr",
         "resp_band_frac_hbo", "resp_band_frac_hbr", "pct_data_retained",
     ],
+    "whitening": ["whitening_lowband_hbo", "whitening_lowband_hbr"],
 }
 
 # the function under nirspipe.qc.metrics whose docstring holds the metric's formula or citation

@@ -61,10 +61,11 @@ flowchart TD
     REC -.- M1["<b>raw</b><br/>SCI · PSP · CV · SNR · saturation<br/>GVTD · spikes"]
     SCR --> BAD(["bad channels<br/><small>coupled in fewer than --min-good-frac of windows</small>"])
     TAB[/"--bad-channels table · channels.tsv<br/><small>the table nirspipe-rate export writes</small>"/] --> BAD
-    SPIN[/"--keep-spans · --bad-spans · --gvtd-censor"/] --> SPANS(["BAD_ spans<br/><small>left out of screening and every estimate</small>"])
+    SPIN[/"--keep-spans · --bad-spans · --gvtd-censor<br/><small>--bad-spans also as nirspipe-rate export writes it</small>"/] --> SPANS(["BAD_ spans<br/><small>left out of screening and every estimate</small>"])
     MC -.- M2["<b>motion · motion_post</b><br/>correction footprint<br/>SCI · PSP · GVTD · spikes again"]
     BL -.- M3["<b>preproc</b><br/>HbO-HbR corr · GCOR · CNR<br/>band power · drift"]
     POST -.- M4["<b>filtered · resampled · errts</b><br/>HbO-HbR corr · GCOR · CNR"]
+    POST -.- M6["<b>whitening</b><br/>whitened residual low-band power<br/><small>task GLM only</small>"]
     SENS(["motion sensor<br/><small>where the recording has one</small>"]) -.- M5["<b>imu</b><br/>gyro speed · accel jerk"]
 
     classDef od fill:#fdebd0,stroke:#e67e22
@@ -74,7 +75,7 @@ flowchart TD
     classDef acts fill:#ffffff,stroke:#c0392b,stroke-width:2px
     class REC,OD od
     class BL,POST haemo
-    class M1,M2,M3,M4,M5 side
+    class M1,M2,M3,M4,M5,M6 side
     class SQM derivative
     class BAD,SPANS acts
 ```
@@ -87,6 +88,7 @@ flowchart TD
 | Motion correction | [Correction footprint](#motion-correction-footprint); SCI, PSP, GVTD and spikes measured again | `motion`, `motion_post` | no |
 | Beer-Lambert | HbO-HbR correlation, GCOR, CNR, band power, drift ([processed signal](#processed-signal)) | `preproc` | no |
 | Bandpass, resample, regression | HbO-HbR correlation, GCOR, CNR | `filtered`, `resampled`, `errts` | no |
+| Task GLM | Low-band power of the whitened residual ([GLM residual](#glm-residual)) | `whitening` | no |
 | Motion sensor | Gyroscope speed, accelerometer jerk ([sensor](#motion-from-the-sensor)) | `imu` | no |
 
 ### Coupling and signal level
@@ -127,6 +129,14 @@ Sections `preproc`, `filtered`, `resampled` and `errts`; band power and drift in
 
 ```{eval-rst}
 .. metric-reference:: processed
+```
+
+### GLM residual
+
+Section `whitening`, only for a GLM fitted with conditions, whose t values assume the residual is white once the noise model has whitened it. Each run also writes the per-channel values (`desc-whitening_nirsmap.tsv`, with the lag-1 autocorrelation) and the residual spectrum (`stat-psd_desc-whitening_timeseries.tsv`), which the report draws in its GLM section.
+
+```{eval-rst}
+.. metric-reference:: whitening
 ```
 
 ```{footbibliography}
