@@ -11,6 +11,7 @@ import mne
 
 from nirspipe.io.auxiliary import write_aux_window
 from nirspipe.io.derivatives import dataset_root_of, entity_of, write_dataset_description
+from nirspipe.io.optode_space import copy_landmarks
 from nirspipe.io.snirf import write_snirf
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.utils.logging import get_logger
@@ -64,6 +65,7 @@ def apply_markers_from_df(
 
     out_snirf = out_nirs_dir / f"{stem}_nirs.snirf"
     write_snirf(raw, out_snirf)
+    copy_landmarks(snirf_path, out_snirf)
     # write_snirf goes through the Raw, which has nowhere to hold an aux channel, so the
     # output would carry none. Nothing is cut here, so the window is the whole recording.
     names = write_aux_window(snirf_path, out_snirf, [(0.0, float(raw.times[-1]))])

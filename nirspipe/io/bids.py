@@ -102,7 +102,8 @@ def write_bids_from_snirf(
     record it, so MNE reads them as "unknown" and mne-bids then writes no `_optodes.tsv` or
     `_coordsystem.json`, both of which BIDS requires: it will not guess a frame on the
     author's behalf. Pass "head" when the positions were digitised against the nasion and
-    the two preauricular points, "mri" when they are in a subject's MRI space.
+    the two preauricular points, "mri" when they already sit on a template brain: MNE reads
+    "mri" as fsaverage, not as the subject's own scan.
     """
     import mne
     import mne_bids

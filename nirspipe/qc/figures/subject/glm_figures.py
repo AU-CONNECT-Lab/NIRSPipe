@@ -293,7 +293,7 @@ def _save_glm_brain(
     # optodes into that frame rather than just relabelling them
     for idx in range(len(ea.ch_names)):
         loc = ea.info["chs"][idx]["loc"]
-        loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo.info).reshape(9)
+        loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo).reshape(9)
         ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
 
     subjects_dir = get_subjects_dir(raise_error=True)

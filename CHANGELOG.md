@@ -8,6 +8,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Task GLM runs write a whitening diagnostic, and the report shows the residual spectrum against white noise and each channel's lag-1 autocorrelation
+- Prep writes each run's channel positions on fsaverage, `space-fsaverage_channels.tsv`, with how the optodes were placed in its sidecar
+
+### Changed
+- Optodes are placed on fsaverage by the file's landmarks, else by the reading that fits the scalp; brain views follow the run's recorded placement
+
+### Fixed
+- Cropped and marker-edited recordings keep their source's probe landmarks
+- `nirspipe-snirf2bids --optode-frame mri` is documented as a template brain, which is how it is read, not the subject's own MRI
 
 ## [0.70.0] - 2026-10-17
 

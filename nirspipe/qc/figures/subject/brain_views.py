@@ -137,7 +137,7 @@ def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
 
     pair_ids = list(ends)
     flat = np.vstack([np.vstack(ends[p]) for p in pair_ids])
-    mni  = to_mni(flat, raw.info)
+    mni  = to_mni(flat, raw)
 
     groups: dict[str, list[np.ndarray]] = {}
     sources: dict[str, np.ndarray] = {}
@@ -230,7 +230,7 @@ def quality_brain_views(
     if not data_meshes:
         data_meshes = _channel_marker_meshes(
             ch_names,
-            to_mni(coords_head, raw.info if raw is not None else None),
+            to_mni(coords_head, raw),
             good_mask,
         )
 

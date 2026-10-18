@@ -17,6 +17,7 @@ from nirspipe.io.auxiliary import write_aux_window
 from nirspipe.io.derivatives import (bids_uris, data_state, dataset_root_of, entity_of,
                                        nirs_required_fields, read_json, require_nirs_fields,
                                        write_dataset_description, write_sidecar_json)
+from nirspipe.io.optode_space import copy_landmarks, copy_placement
 from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.utils.logging import get_logger
@@ -67,6 +68,7 @@ def _window(seg) -> tuple[float, float]:
 def _write_segment(raw_seg, out_snirf: Path, snirf_path: Path,
                    windows: list[tuple[float, float]]) -> None:
     write_snirf(raw_seg, out_snirf)
+    copy_landmarks(snirf_path, out_snirf)
     # write_snirf goes through the Raw, which has nowhere to hold an aux channel, so the
     # accelerometers have to be cut from the source and put back afterwards or a cropped
     # recording reaches postprocessing with no aux at all
@@ -238,6 +240,7 @@ def _crop_raw(
         # source stage over the whole recording, and this segment is neither
         if derivative:
             _write_crop_sidecar(out, seg, snirf_path, windows, analysis, margin_s)
+            copy_placement(snirf_path, out)
         else:
             _retitle_recording_sidecar(out, seg, snirf_path, windows, analysis, margin_s)
         return out

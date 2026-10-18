@@ -146,20 +146,20 @@ def test_the_superior_view_reads_like_the_flat_map_beside_it():
 
 
 def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_brain(monkeypatch):
-    from nirspipe.qc.figures.common import _brain_utils
+    from nirspipe.io import optode_space
 
     def offline(*a, **k):
         raise OSError("no network")
 
-    _brain_utils._head_to_mri.cache_clear()
-    monkeypatch.setattr(_brain_utils.mne.datasets, "fetch_fsaverage", offline)
+    optode_space.head_to_mri.cache_clear()
+    monkeypatch.setattr(optode_space.mne.datasets, "fetch_fsaverage", offline)
     raw, sci = _montage()
     try:
         with pytest.raises(RuntimeError, match="fsaverage"):
             bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci,
                                    sci_threshold=0.8)
     finally:
-        _brain_utils._head_to_mri.cache_clear()
+        optode_space.head_to_mri.cache_clear()
 
 
 def test_the_brain_is_lit_white_and_drawn_matte():

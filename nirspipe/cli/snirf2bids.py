@@ -30,10 +30,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-label", default=None, type=_shared.BidsLabel,
                    help="Run index, e.g. 01.")
     p.add_argument("--optode-frame", choices=["unknown", "head", "mri"], default="unknown",
-                   help="Space the SNIRF's optode coordinates were measured in. SNIRF does "
-                        "not record it, and without it no _optodes.tsv or _coordsystem.json "
-                        "is written, both of which BIDS requires. Use 'head' for positions "
-                        "digitised against the nasion and preauricular points.")
+                   help="Space of the SNIRF's optode coordinates, which SNIRF does not record; "
+                        "without it no _optodes.tsv or _coordsystem.json is written, both of "
+                        "which BIDS requires. 'head': digitised against the nasion and "
+                        "preauricular points. 'mri': already on a template brain (MNI or "
+                        "fsaverage), as many acquisition programs export them.")
     p.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return p
 
