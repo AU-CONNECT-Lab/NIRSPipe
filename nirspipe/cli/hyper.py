@@ -31,7 +31,8 @@ from nirspipe.io.derivatives import (
 )
 from nirspipe.io.groups import parse_group_csv
 from nirspipe.pipeline.hyper.alignment import resolve_analysis_window
-from nirspipe.pipeline.hyper.group_quality import resolve_group_bands, write_group_bads
+from nirspipe.pipeline.hyper.group_quality import (resolve_group_bands, write_group_bads,
+                                                   write_group_channel_coords)
 from nirspipe.qc.metrics._helpers import bands_to_record, long_channel_picks
 
 setup_logging()
@@ -373,6 +374,7 @@ def cmd_run(
             return None
         bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
         write_group_bads(output_dir, members, group_sqm, bads_scope, session=ses)
+        write_group_channel_coords(derivatives_dir, output_dir, members, desc, session=ses)
         # resolved here rather than twice downstream: the report and the null have to agree
         # on the windows or their tables cannot be subtracted row by row
         ref = next(iter(aligned_raws.values()), None)

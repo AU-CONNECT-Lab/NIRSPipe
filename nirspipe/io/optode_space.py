@@ -282,6 +282,12 @@ def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
     xyz = placement.apply(mid) if placement.placed else np.full((len(names), 3), np.nan)
     write_tsv(pd.DataFrame({"name": names, "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2]}),
               out_path)
+    write_coords_sidecar(out_path, sources, placement.to_json())
+    return Path(out_path)
+
+
+def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict) -> None:
+    """The JSON beside a channel position table: space, units, columns, and the placement record."""
     column = "Channel position on fsaverage: the midpoint of its source and detector"
     write_sidecar_json(Path(out_path), {
         "pipeline_version": __version__,
@@ -291,9 +297,8 @@ def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
         "NIRSCoordinateSystemDescription": "fsaverage surface RAS, which is MNI305",
         "NIRSCoordinateUnits": "mm",
         **{axis: {"Description": f"{column}, {axis} axis", "Units": "mm"} for axis in "xyz"},
-        "optode_placement": placement.to_json(),
+        "optode_placement": placement,
     })
-    return Path(out_path)
 
 
 def read_placement(run_file) -> Placement:

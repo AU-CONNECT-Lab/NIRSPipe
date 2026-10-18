@@ -221,3 +221,55 @@ def test_a_cropped_recording_keeps_the_landmarks_that_place_it(tmp_path):
     assert placement.method == "landmarks"
     cropped = mne.io.read_raw_snirf(str(out), verbose="error")
     np.testing.assert_allclose(_sources_mm(cropped, placement), _planted_sources(), atol=1e-6)
+
+
+# ---- the group copy ----
+
+def _member(derivs, subject, x, method="landmarks"):
+    """A member's preproc file and the record prep would leave beside it, hand-written."""
+    nirs = derivs / subject / "nirs"
+    nirs.mkdir(parents=True)
+    (nirs / f"{subject}_task-rest_desc-preproc_nirs.snirf").write_bytes(b"")
+    (nirs / f"{subject}_task-rest_space-fsaverage_channels.tsv").write_text(
+        f"name\tx\ty\tz\nS1_D1 hbo\t{x}\t2.0\t3.0\nS1_D1 hbr\t{x}\t2.0\t3.0\n")
+    (nirs / f"{subject}_task-rest_space-fsaverage_channels.json").write_text(json.dumps(
+        {"optode_placement": {"method": method, "landmarks_used": 3, "scalp_fit_mm": 1.0,
+                              "transform": np.eye(4).tolist(), "note": None}}))
+
+
+def test_a_group_table_keeps_each_members_positions_under_their_subject_id(tmp_path):
+    from nirspipe.io.groups import GroupEntry
+    from nirspipe.pipeline.hyper.group_quality import write_group_channel_coords
+
+    derivs, out = tmp_path / "derivatives", tmp_path / "hyper"
+    write_dataset_description(derivs)
+    write_dataset_description(out, source=derivs)
+    _member(derivs, "sub-01", 10.0)
+    _member(derivs, "sub-02", 12.5, method="mni")
+    group = [GroupEntry("G1", "sub-01", "rest"), GroupEntry("G1", "sub-02", "rest")]
+
+    path = write_group_channel_coords(derivs, out, group, "preproc")
+
+    assert path == out / "group-G1" / "nirs" / "group-G1_task-rest_space-fsaverage_channels.tsv"
+    table = read_table(path)
+    assert table.columns.tolist() == ["subject_id", "name", "x", "y", "z"]
+    assert table.set_index(["subject_id", "name"])["x"].to_dict() == {
+        ("sub-01", "S1_D1 hbo"): 10.0, ("sub-01", "S1_D1 hbr"): 10.0,
+        ("sub-02", "S1_D1 hbo"): 12.5, ("sub-02", "S1_D1 hbr"): 12.5}
+    side = json.loads(path.with_suffix(".json").read_text())
+    assert side["NIRSCoordinateSystem"] == "fsaverage"
+    assert {k: v["method"] for k, v in side["optode_placement"].items()} == {
+        "sub-01": "landmarks", "sub-02": "mni"}
+
+
+def test_a_group_with_a_member_from_an_older_tree_is_refused(tmp_path):
+    from nirspipe.io.groups import GroupEntry
+    from nirspipe.pipeline.hyper.group_quality import write_group_channel_coords
+
+    derivs = tmp_path / "derivatives"
+    _member(derivs, "sub-01", 10.0)
+    (derivs / "sub-02" / "nirs").mkdir(parents=True)
+    (derivs / "sub-02" / "nirs" / "sub-02_task-rest_desc-preproc_nirs.snirf").write_bytes(b"")
+    group = [GroupEntry("G1", "sub-01", "rest"), GroupEntry("G1", "sub-02", "rest")]
+    with pytest.raises(StageError, match="predates optode placement"):
+        write_group_channel_coords(derivs, tmp_path / "hyper", group, "preproc")

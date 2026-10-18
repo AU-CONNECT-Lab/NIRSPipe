@@ -17,13 +17,15 @@ import pandas as pd
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from nirspipe.io.derivatives import group_output_path, read_json
+from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
+from nirspipe.io.optode_space import (SPACE, channel_coords_path, read_placement,
+                                      write_coords_sidecar)
 from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.group_io import _for_task, _hyper_sidecar, _member_sqm_files
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
 from nirspipe.utils.lineage import path_from
 from nirspipe.utils.logging import get_logger
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import read_table, write_tsv
 
 logger = get_logger("pipeline.group_quality")
 
@@ -76,6 +78,40 @@ def write_group_bads(
     write_tsv(pd.DataFrame(rows, columns=columns), out_path)
     _hyper_sidecar(out_path, "hyper_bads", [], bads_scope=bads_scope)
     logger.info("excluded channels saved: %s (%d rows)", out_path, len(rows))
+    return out_path
+
+
+def write_group_channel_coords(
+    derivatives_dir: Path,
+    output_dir: Path,
+    group: list[GroupEntry],
+    desc: str,
+    session: "str | None" = None,
+) -> Path:
+    """Every member's channel positions on fsaverage in one table, with a subject_id column.
+
+    Kept per member, since two caps need not sit alike; a figure wanting one position per
+    channel averages the members. Each member's rows are prep's record for the run this
+    group reads, and a member whose tree predates that record is refused.
+
+    ::
+
+      sub-A rows S1_D1 hbo ... + sub-B rows S1_D1 hbo ...
+        -> group-G1_task-rest_space-fsaverage_channels.tsv: subject_id name x y z
+    """
+    frames, sources, placements = [], [], {}
+    for entry in group:
+        snirf = find_preproc_snirf(derivatives_dir, entry.subject_id, entry.task, desc=desc,
+                                   session=entry.session, run=entry.run)
+        placements[entry.subject_id] = read_placement(snirf).to_json()
+        record = channel_coords_path(snirf)
+        frames.append(read_table(record).assign(subject_id=entry.subject_id))
+        sources.append(record)
+    out_path = group_output_path(output_dir, group[0].group_id,
+                                 {"task": group[0].task, "space": SPACE}, "channels", ".tsv",
+                                 session=session)
+    write_tsv(pd.concat(frames)[["subject_id", "name", "x", "y", "z"]], out_path)
+    write_coords_sidecar(out_path, sources, placements)
     return out_path
 
 
