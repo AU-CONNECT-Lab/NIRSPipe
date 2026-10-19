@@ -11,8 +11,8 @@ from tests._fingerprint import CLI_ARGS, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
-    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, event_rows,
-    traces, xy,
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, brain_inputs, by_pair,
+    event_rows, pair_sci, traces, xy,
 )
 from tests.figure_accuracy.conftest import HAND_MARKED
 
@@ -40,7 +40,7 @@ def test_each_page_rates_under_its_own_stem(condition_run):
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])
-def test_a_page_opens_the_run_overview_on_its_window_and_maps_its_own_sci(condition_run, block):
+def test_a_page_opens_the_run_overview_on_its_window(condition_run, block):
     page = (condition_run.report.parent / f"sub-01_task-main_cond-{block}_report.html")
     src = re.search(r'src="figures/([^"#]*_desc-signal_nirs\.html)#([^"]+)"',
                     page.read_text(encoding="utf-8"))
@@ -50,15 +50,18 @@ def test_a_page_opens_the_run_overview_on_its_window_and_maps_its_own_sci(condit
     t0, t1, _ = _blocks(condition_run)[block]
     assert views[block]["x"] == pytest.approx([t0, t1])
 
-    dots = next(t for t in one_figure(_figure(condition_run, "optodemap", block))["data"]
-                if t.get("name") == "channels")
-    colours = {n.rsplit(" ", 1)[0]: c for n, c in zip(dots["customdata"], dots["marker"]["color"])}
+
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_page_s_brain_figure_grades_its_own_sci_over_the_run_s_rejections(condition_run, block):
+    sci, rejected = brain_inputs(condition_run)[block]
     truth = condition_run.truth
-    for dead in (p.name for p in truth.pairs if p.bad):
-        assert colours[dead] == "#e74c3c", (block, dead)
+    assert rejected >= {p.name for p in truth.pairs if p.bad}
     # the pair decoupled inside one block is coupled through the other
     pair, onset, _ = truth.block_bad
-    assert (colours[pair] != "#27ae60") == (t0 <= onset < t1), (block, pair, colours[pair])
+    t0, t1, _ = _blocks(condition_run)[block]
+    line = float(CLI_ARGS[CLI_ARGS.index("--sci-threshold") + 1])
+    assert (pair_sci(sci, pair) < line) == (t0 <= onset < t1), (block, pair_sci(sci, pair))
+    assert pair not in rejected
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])

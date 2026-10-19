@@ -604,7 +604,6 @@ def condition_payloads(
     sep_bands=None,
     has_spans: bool = False,
     remake_brain=None,
-    remake_layout=None,
     remake_head_slider=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
@@ -614,16 +613,15 @@ def condition_payloads(
     record with no such section gets no pages rather than a second copy of the numbers free
     to disagree with the first.
 
-    ``payload`` is the run's payload, whose parts that do not vary by condition (the optode
-    layout, the separation notes) are carried over untouched. A figure gets here one of
+    ``payload`` is the run's payload, whose parts that do not vary by condition (the
+    separation notes) are carried over untouched. A figure gets here one of
     three ways, and which one is a property of the figure:
 
     - **rewritten for the condition**: the SCI/PSP panel and the channel-quality grid. Both
       are handed their data and derive nothing from a recording, so a real slice is correct
       and ``save_figure`` writes each under a name carrying the condition's slug. The brain
-      figure too, through ``remake_brain``, and the clickable optode map through
-      ``remake_layout``, both graded by the condition's own SCI; and the head slider,
-      through ``remake_head_slider``, on the matrices cut to the condition's windows.
+      figure too, through ``remake_brain``, graded by the condition's own SCI; and the head
+      slider, through ``remake_head_slider``, on the matrices cut to the condition's windows.
     - **addressed at the condition's window**: the carpet, the per-channel detail and the
       per-channel motion figure. Each
       derives something run-wide from what it is handed, a filtered GVTD, a per-channel
@@ -761,11 +759,6 @@ def condition_payloads(
         # not read by the viewer and heavy to carry: it draws these from `figure_paths`
         d["carpet_gvtd"] = {}
         d["psd"] = {}
-        # redrawn on this condition's SCI: the run's colours would contradict its numbers
-        layout_fig = (remake_layout(sliced.get("sci_win_per_channel") or {})
-                      if remake_layout else None)
-        d["layout"] = ({"layout_2d_figure": layout_fig.to_dict()} if layout_fig is not None
-                       else {})
 
         # the run's, until this page writes its own; carried over it would be every
         # condition's trials under one condition's heading

@@ -217,14 +217,11 @@ select#run-select {
       <p class="qm-note">{{ section_note('quality.head_slider') }}</p>
       <div id="head-slider-plot"></div>
     </div>
-    {#- the subject report's brain views beside the clickable flat map, so a run reads the
-        same before the pipeline and after -#}
+    {#- the subject report's brain views and flat map, so a run reads the same before the
+        pipeline and after -#}
     <div id="Layout">
       <h3>Channel quality on the brain</h3>
-      <div class="panel-grid-2">
-        <img id="brain-views-img" class="responsive" alt="Brain views" />
-        <div id="layout2d-plot" class="map-plot"></div>
-      </div>
+      <img id="brain-views-img" class="responsive brain-views" alt="Brain views" />
       <p class="qm-note" id="brain-views-note"></p>
       <p class="fig-path" id="brain-views-path"></p>
     </div>
@@ -458,7 +455,6 @@ function hexToRgba(hex, alpha) {
 window.addEventListener("DOMContentLoaded", function() {
   loadSummary();
   loadChannelPicker();
-  loadChannelMaps();
   loadTimeSeries();
   loadPsdMean();
   loadTriggerTimeline();
@@ -595,59 +591,6 @@ function selectChannel(pair) {
   var paths = (_STATIC_DATA[_run_idx] || {}).figure_paths || {};
   var tmpl  = paths.ch_detail_template;
   if (tmpl) _setIframeSrc("detail-plot", tmpl.replace("{pair}", _pairFname(pair)), 900);
-  highlightChannelMaps(pair);
-}
-
-// ─── channel maps ─────────────────────────────────────────────────────────────
-// One more way into the channel detail: the optode map beside the brain views. Drawn at its
-// column's width; the .map-plot box keeps the figure's own proportions.
-function _mapLayout(layout) {
-  var lay = Object.assign({}, layout, {autosize: true});
-  delete lay.width;
-  delete lay.height;
-  return lay;
-}
-
-function loadChannelMaps() {
-  var run = _STATIC_DATA[_run_idx] || {};
-  var map = (run.layout || {}).layout_2d_figure;
-  var brain = (run.figure_paths || {}).brain_views;
-  // the map shares its row with the brain views, so the row shows while either has something
-  _showSection("Layout", !!map || !!(brain && brain.src));
-  // a run switch draws another montage, whose drawn state the highlight must start from
-  var div = document.getElementById("layout2d-plot");
-  Plotly.purge(div);
-  delete div._baseMarker;
-  div.style.display = map ? "" : "none";
-  if (map) {
-    Plotly.newPlot("layout2d-plot", map.data, _mapLayout(map.layout),
-                   {responsive: true, displayModeBar: false});
-    document.getElementById("layout2d-plot").on("plotly_click", function(evt) {
-      // the dots are the trace named "channels"; the others are optodes and the lines between them
-      var pt = evt.points && evt.points[0];
-      if (!(pt && pt.data.name === "channels" && pt.customdata)) return;
-      selectChannel(chPair(String(pt.customdata)));
-      // the detail is sections above this row
-      document.getElementById("ChannelDetail").scrollIntoView({behavior: "smooth", block: "start"});
-    });
-  }
-  if (_selChannel) highlightChannelMaps(_selChannel);
-}
-
-// the picked channel's dot enlarged; every other back as drawn
-function highlightChannelMaps(pair) {
-  var map = document.getElementById("layout2d-plot");
-  var at = (map && map.data) ? map.data.map(function(t) { return t.name; }).indexOf("channels") : -1;
-  var dots = at >= 0 ? map.data[at] : null;
-  if (dots && dots.customdata) {
-    if (!map._baseMarker) map._baseMarker = {size: dots.marker.size, width: dots.marker.line.width};
-    var base = map._baseMarker;
-    var on = dots.customdata.map(function(n) { return chPair(String(n)) === pair; });
-    Plotly.restyle(map, {
-      "marker.size": [on.map(function(x) { return x ? base.size * 1.5 : base.size; })],
-      "marker.line.width": [on.map(function(x) { return x ? 2 : base.width; })],
-    }, [at]);
-  }
 }
 
 // ─── Trigger Timeline ─────────────────────────────────────────────────────────
@@ -738,14 +681,11 @@ function loadHeadSlider() {
 function loadBrainViews() {
   var d = _STATIC_DATA[_run_idx] || {};
   var p = (d.figure_paths || {}).brain_views;
-  var src = (p && p.src) || "";
-  // the row itself is shown by loadChannelMaps, which knows about both figures
-  var img = document.getElementById("brain-views-img");
-  img.style.display = src ? "" : "none";
-  if (src) img.src = src;
-  document.getElementById("brain-views-path").textContent = src;
+  _showSection("Layout", !!(p && p.src));
+  if (!(p && p.src)) return;
+  document.getElementById("brain-views-img").src = p.src;
+  document.getElementById("brain-views-path").textContent = p.src;
   document.getElementById("brain-views-note").innerHTML = {{ section_note('quality.brain_views') | tojson }}
-    + ((d.layout || {}).layout_2d_figure ? " " + {{ section_note('raw.layout_2d') | tojson }} : "")
     + (d.condition_label ? " " + {{ section_note('quality.brain_views_condition') | tojson }} : "");
 }
 
@@ -991,7 +931,7 @@ function switchRun(idx) {
     if (sel) sel.value = "";
     document.getElementById("detail-placeholder").style.display = "flex";
     document.getElementById("detail-plot").style.display = "none";
-    loadSummary(); loadChannelPicker(); loadChannelMaps(); loadTimeSeries(); loadPsdMean();
+    loadSummary(); loadChannelPicker(); loadTimeSeries(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
     loadSciPsp(); loadHeadSlider(); loadBrainViews(); loadSqm(); loadChannelSummary();
     loadConditionSummary();

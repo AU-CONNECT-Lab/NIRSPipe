@@ -27,11 +27,8 @@ NOTES = {
         "Short channels in blue, long in orange. Click a trace to select its channel and "
         "double-click to reset the view.",
     "raw.channel_detail":
-        "Pick a channel by its trace above, in the list, or on the optode map under Signal "
-        "Quality to see its concentration after Beer-Lambert and its spectrum.",
-    "raw.layout_2d":
-        "On the optode map, sources are red squares and detectors blue circles; a click on a "
-        "channel's dot opens its detail above.",
+        "Pick a channel by its trace above or in the list to see its concentration after "
+        "Beer-Lambert and its spectrum.",
     "raw.channel_detail_picked":
         "{pair}: concentration, spectrum and epoch average, after Beer-Lambert.",
     "raw.psd":

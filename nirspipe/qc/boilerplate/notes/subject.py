@@ -49,8 +49,8 @@ NOTES = {
         "these are drawn on <code>desc-preproc</code>, after motion correction ({motion}) "
         "and Beer-Lambert with DPF {dpf}.</strong>",
     "channel_detail.picker":
-        "Pick a channel by its trace above, in the list, or on the optode map under Signal "
-        "Quality; its epoch average is in the epoch section. Pairs marked <em>(short)</em> are too shallow to reach cortex "
+        "Pick a channel by its trace above or in the list; its epoch average is in the epoch "
+        "section. Pairs marked <em>(short)</em> are too shallow to reach cortex "
         "and show scalp haemodynamics.",
     "steps.raw_quality":
         "SCI and PSP per channel and window on <code>desc-sci</code>, the optical density "

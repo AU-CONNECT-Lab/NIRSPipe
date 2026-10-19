@@ -207,21 +207,12 @@
       <p class="fig-path">{{ head_slider_path }}</p>
     {% endif %}
 
-    {% if brain_views_path or optode_map_path %}
+    {% if brain_views_path %}
       <h3>Channel quality on the brain</h3>
       <p class="panel-note">{{ section_note('quality.brain_views') }}
-        {%- if optode_map_path %} {{ section_note('raw.layout_2d') }}{% endif %}
         {%- if condition_label %} {{ section_note('quality.brain_views_condition') }}{% endif %}</p>
-      <div class="panel-grid-2">
-        {% if brain_views_path %}
-        <img class="responsive" src="{{ brain_views_path }}" alt="Brain views" />
-        {% endif %}
-        {% if optode_map_path %}
-        <iframe class="plotly-frame map-plot" src="{{ optode_map_path }}" title="Optode map"></iframe>
-        {% endif %}
-      </div>
-      {% if brain_views_path %}<p class="fig-path">{{ brain_views_path }}</p>{% endif %}
-      {% if optode_map_path %}<p class="fig-path">{{ optode_map_path }}</p>{% endif %}
+      <img class="responsive brain-views" src="{{ brain_views_path }}" alt="Brain views" />
+      <p class="fig-path">{{ brain_views_path }}</p>
     {% endif %}
 
   </div>
@@ -927,7 +918,7 @@ window.addEventListener("message", function(e) {
   });
 })();
 
-// a click on the raw signal or the optode map picks the channel the detail shows
+// a click on the raw signal picks the channel the detail shows
 window.addEventListener("message", function(e) {
   if (!e.data || e.data.type !== "pick-channel") return;
   var sel = document.getElementById("ch-det-select");

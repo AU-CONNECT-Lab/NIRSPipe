@@ -8,11 +8,12 @@ import numpy as np
 import pytest
 
 from nirspipe.qc.subject.record_io import read_record
-from tests._fingerprint import EVENT_ONSETS
+from tests._fingerprint import CLI_ARGS, EVENT_ONSETS
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures, plotly_frames
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
-    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, xy,
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, brain_inputs, by_pair,
+    pair_sci, xy,
 )
 
 TMIN, TMAX = -5.0, 25.0
@@ -70,17 +71,16 @@ def test_a_condition_page_header_counts_what_fails_on_its_own_stretch(raw_condit
 
 
 @pytest.mark.parametrize("block", BLOCKS)
-def test_the_condition_optode_map_is_coloured_by_the_condition_s_own_sci(raw_condition_run, block):
-    fig = _page(raw_condition_run, block)["layout"]["layout_2d_figure"]
-    dots = next(t for t in fig["data"] if t.get("name") == "channels")
-    colours = {name.rsplit(" ", 1)[0]: c for name, c in zip(dots["customdata"], dots["marker"]["color"])}
+def test_the_condition_brain_figure_grades_the_condition_s_own_sci(raw_condition_run, block):
+    sci, rejected = brain_inputs(raw_condition_run)[block]
     truth = raw_condition_run.truth
-    for dead in (p.name for p in truth.pairs if p.bad):
-        assert colours[dead] == "#e74c3c", (block, dead)
+    assert rejected >= {p.name for p in truth.pairs if p.bad}
     # the pair decoupled inside one block is coupled through the other
     pair, onset, _ = truth.block_bad
     t0, t1, _ = _blocks(raw_condition_run)[block]
-    assert (colours[pair] != "#27ae60") == (t0 <= onset < t1), (block, pair, colours[pair])
+    line = float(CLI_ARGS[CLI_ARGS.index("--sci-threshold") + 1])
+    assert (pair_sci(sci, pair) < line) == (t0 <= onset < t1), (block, pair_sci(sci, pair))
+    assert pair not in rejected
 
 
 @pytest.mark.parametrize("block", BLOCKS)
@@ -265,10 +265,10 @@ def test_a_condition_page_rates_no_channel_and_the_run_page_still_does(raw_condi
         assert section_note("raw.channel_table_condition") in html
 
 
-def test_a_condition_page_draws_its_own_optode_map_and_no_signal_topo(raw_condition_run):
+def test_a_condition_page_draws_its_own_brain_figure_and_no_signal_topo(raw_condition_run):
     for block in _blocks(raw_condition_run):
         data = _page(raw_condition_run, block)
-        assert data["layout"]["layout_2d_figure"]["data"]
+        assert f"_cond-{block}_" in data["figure_paths"]["brain_views"]["src"]
         assert not data.get("evoked_topo")
 
 

@@ -90,17 +90,12 @@ details[open] > summary::before { transform: rotate(90deg); }
 
 /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
 .panel-grid-2 {
-  display: grid; grid-template-columns: 3fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
-  align-items: center; max-width: 1200px;
+  display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
 }
-/* the optode map keeps the right column even when the 3D views beside it are missing */
-.panel-grid-2 > .map-plot { grid-column: 2; }
-@media (max-width: 900px) {
-  .panel-grid-2 { grid-template-columns: 1fr; }
-  .panel-grid-2 > .map-plot { grid-column: 1; }
-}
-/* the map figure's own width to height, so a column of any width shows the whole head */
-.map-plot { width: 100%; aspect-ratio: 700 / 760; }
+@media (max-width: 900px) { .panel-grid-2 { grid-template-columns: 1fr; } }
+
+/* the 3D views and the flat map, one picture: on a wide screen full width makes it huge */
+img.brain-views { max-width: 1200px; }
 
 /* ---- Raw Signal: the trace beside the events it carries, in both subject reports ---- */
 .row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }

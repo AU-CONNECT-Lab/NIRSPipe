@@ -56,6 +56,13 @@ def test_the_brain_views_grade_by_the_windowed_sci(denoise_run):
     assert kwargs["sci_scores"] != pytest.approx(raw["sci_per_channel"])
 
 
+def test_the_flat_map_beside_them_grades_the_same_sci_over_the_run_s_rejections(denoise_run):
+    args, kwargs = denoise_run.captured["optode_layout_static"]
+    raw = denoise_run.record()["per_channel"]["raw"]
+    assert args[1] == pytest.approx(raw["sci_win_per_channel"])
+    assert {c.rsplit(" ", 1)[0] for c in args[2]} == {p.name for p in denoise_run.truth.pairs if p.bad}
+
+
 def test_the_brain_views_place_each_channel_at_its_own_position_with_its_own_verdict(denoise_run):
     args, _ = denoise_run.captured["quality_brain_views"]
     names, coords, good = args[0], np.asarray(args[1], float), np.asarray(args[2], bool)

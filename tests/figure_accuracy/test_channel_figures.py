@@ -250,14 +250,8 @@ def test_each_overview_row_is_the_channel_it_is_labelled(denoise_run):
             assert which_pair(*xy(trace), truth) == pair.name, trace["name"]
 
 
-def test_the_optode_map_reddens_the_rejected_pair_and_both_panels_pick_a_channel(denoise_run):
-    path = denoise_run.figure("optodemap")
-    dots = next(t for t in one_figure(path)["data"] if t.get("name") == "channels")
-    bad = {p.name for p in denoise_run.truth.pairs if p.bad}
-    for name, colour in zip(dots["customdata"], dots["marker"]["color"]):
-        assert (colour == "#e74c3c") == (name.rsplit(" ", 1)[0] in bad), name
-    for figure in (path, denoise_run.figure("signal")):
-        assert "pick-channel" in figure.read_text(encoding="utf-8")
+def test_a_click_on_the_trace_overview_picks_any_pair(denoise_run):
+    assert "pick-channel" in denoise_run.figure("signal").read_text(encoding="utf-8")
     page = denoise_run.report.read_text(encoding="utf-8")
     assert all(f'data-pair="{pair.name}"' in page for pair in denoise_run.truth.pairs)
 

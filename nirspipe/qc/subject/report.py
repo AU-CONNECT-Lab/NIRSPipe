@@ -122,7 +122,6 @@ from nirspipe.qc.figures import (
     stage_metrics_figure,
     build_channel_figure,
     build_evoked_topo_figure,
-    build_layout_figure,
     build_motion_detail_figure,
     build_ts_figure,
     channel_quality_heatmap,
@@ -445,29 +444,17 @@ def _pair_label(pair: str, short: bool, rejected: bool) -> str:
 
 # ---- Raw Signal: the raw report's way into a channel ----
 
-# a click on a trace or on a channel's dot tells the page which pair to show in the channel
-# detail; the figures sit in frames, so the page hears it as a message
+# a click on a trace tells the page which pair to show in the channel detail; the figure
+# sits in a frame, so the page hears it as a message
 _PICK_CHANNEL_JS = (
     "<script>(function(){"
     "function hook(){var gd=document.querySelector('.plotly-graph-div');"
     "if(!gd||!gd.on){setTimeout(hook,100);return;}"
     "gd.on('plotly_click',function(evt){var pt=evt.points&&evt.points[0];if(!pt)return;"
-    "var name=String(pt.data.name==='channels'?pt.customdata:(pt.data.name||''));"
+    "var name=String(pt.data.name||'');"
     "if(name)window.parent.postMessage("
     "{type:'pick-channel',pair:name.replace(/\\s+\\S+$/,'')},'*');});}"
     "if(document.readyState==='complete')hook();else window.addEventListener('load',hook);"
-    "})();</script>"
-)
-
-# the map's frame takes its height from the column's width, so the figure follows the frame
-# rather than keeping the height it was written with
-_FILL_FRAME_JS = (
-    "<script>(function(){"
-    "function fit(){var gd=document.querySelector('.plotly-graph-div');"
-    "if(!gd||!gd.on){setTimeout(fit,100);return;}"
-    "gd.style.height=window.innerHeight+'px';Plotly.relayout(gd,{height:window.innerHeight});}"
-    "if(document.readyState==='complete')fit();else window.addEventListener('load',fit);"
-    "window.addEventListener('resize',fit);"
     "})();</script>"
 )
 
@@ -518,30 +505,6 @@ def _section_raw_overview(
         out["raw_overview_path"] = _fig_href(fname)
         out["raw_overview_markers"] = [
             {k: m[k] for k in ("description", "onset", "duration", "color")} for m in markers]
-    return out
-
-
-def _section_optode_map(
-    raw_intensity: mne.io.Raw,
-    bad_channels: list,
-    sci_scores: dict,
-    subject: str,
-    errors: list,
-    figures_dir: Path,
-    fig_name,
-    *,
-    sci_threshold: float,
-) -> dict:
-    """The raw report's clickable optode map: each channel's line and dot graded by ``sci_scores``."""
-    out = {"optode_map_path": None}
-    with _guard("Optode map", errors, subject):
-        fig = build_layout_figure(raw_intensity, set(bad_channels), sci_scores,
-                                  sci_threshold=sci_threshold)
-        if fig is not None:
-            fname = fig_name("optodemap")
-            _save_figure_html(fig, figures_dir / fname,
-                              extra_js=_PICK_CHANNEL_JS + _FILL_FRAME_JS)
-            out["optode_map_path"] = _fig_href(fname)
     return out
 
 
@@ -1802,12 +1765,8 @@ def _section_brain(
     ch_names_brain: list[str] | None = None,
     *,
     sci_threshold: float,
-    flat_map: bool = True,
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
-
-    ``flat_map=False`` draws the 3D views alone, for a page whose clickable map already shows
-    the flat one.
 
     ``fig_name`` names the file, so a per-condition page writes its own. Both figures colour a
     channel by its SCI against the run's line and mark the rejected ones, and a condition has
@@ -1827,10 +1786,9 @@ def _section_brain(
                                             sci_threshold=sci_threshold)
 
             optode_b64 = None
-            if flat_map:
-                with _guard("Optode flat map", errors, subject):
-                    optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
-                                                      sci_threshold=sci_threshold)
+            with _guard("Optode flat map", errors, subject):
+                optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
+                                                  sci_threshold=sci_threshold)
 
             if brain_b64 and optode_b64:
                 brain_pil = _PILImage.open(_io.BytesIO(base64.b64decode(brain_b64))).convert("RGBA")
@@ -2248,15 +2206,11 @@ def build_subject_report(
     # graded by the windowed SCI, as each condition page's copy of this figure is
     sci_win_scores    = (((record.get("per_channel") or {}).get("raw") or {})
                          .get("sci_win_per_channel") or {})
-    # the 3D views alone: the flat map beside them is the clickable one
     brain_vars        = _section_brain(
                             sci_win_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,
                             ch_names_brain=ch_names_brain,
-                            sci_threshold=resolve_cutoffs(config)["sci"], flat_map=False)
-    map_vars          = _section_optode_map(
-                            raw_intensity, bad_channels, sci_win_scores, subject, errors,
-                            figures_dir, fig_name, sci_threshold=resolve_cutoffs(config)["sci"])
+                            sci_threshold=resolve_cutoffs(config)["sci"])
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
@@ -2395,7 +2349,6 @@ def build_subject_report(
         **topomap_vars,
         **haemo_vars,
         **overview_vars,
-        **map_vars,
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
@@ -2428,7 +2381,7 @@ def build_subject_report(
             _write_condition_reports(
                 report_vars,
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
-                              topomap_vars, haemo_vars, overview_vars, map_vars,
+                              topomap_vars, haemo_vars, overview_vars,
                               channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, carpet_vars, cond_summary_vars,
@@ -2457,11 +2410,7 @@ def build_subject_report(
                 remake_brain=lambda cond_name, sci_pc: _section_brain(
                     sci_pc, bad_channels, coords_head, good_mask,
                     raw_intensity, subject, errors, figures_dir, cond_name,
-                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"],
-                    flat_map=False),
-                remake_optode_map=lambda cond_name, sci_pc: _section_optode_map(
-                    raw_intensity, bad_channels, sci_pc, subject, errors, figures_dir,
-                    cond_name, sci_threshold=resolve_cutoffs(config)["sci"]),
+                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"]),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda cond_name, span: _section_stage_carpets(
@@ -2769,7 +2718,6 @@ def _write_condition_reports(
     remake_sci=None,
     remake_motion=None,
     remake_brain=None,
-    remake_optode_map=None,
     remake_motion_detail=None,
     remake_denoise_carpet=None,
     remake_cropped=None,
@@ -2798,8 +2746,8 @@ def _write_condition_reports(
     - **rebuilt on a cropped copy**: the haemoglobin panels, the spectra, the per-channel
       detail, the epoch preview and the topography. Safe because none of them filters; see
       :func:`_cropped_sections`
-    - **rebuilt from the condition's own verdict**: the 3D quality views and the clickable
-      optode map, which carry that condition's SCI over the run's rejected channels
+    - **rebuilt from the condition's own verdict**: the 3D quality views and the optode flat
+      map beside them, which carry that condition's SCI over the run's rejected channels
 
     The trial half is a fifth way and the reason it took so long to build. Both panels have
     rows that are trials rather than windows, so they need the trials *inside* a condition,
@@ -2884,8 +2832,6 @@ def _write_condition_reports(
         # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
             panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {}))
-        if remake_optode_map is not None:
-            panels.update(remake_optode_map(cond_name, sliced.get("sci_win_per_channel") or {}))
         panels.update(_condition_overview(report_vars, slug, span))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))

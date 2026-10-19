@@ -14,10 +14,9 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report's corrected motion figure no longer repeats the IMU rows, which motion correction leaves unchanged
 - The dyad raw report's head slider draws each window's coupling verdict, then its SCI and PSP, each scaled on the run's own lines
 - The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
-- The raw report follows the subject report's section order, with its brain views under Signal Quality and the flat map drawn once, clickable
-- The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
+- The raw report follows the subject report's section order, with its brain views under Signal Quality
+- The raw report's clickable optode map is gone, leaving the flat map beside the brain views; that picture is at most 1200 px wide
 - The subject report's Raw Signal opens with the raw report's trace overview and event table; a click picks a channel or outlines an event
-- Both reports draw the clickable optode map beside the 3D brain views under Signal Quality
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 - Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
 - The raw and subject reports carry the dyad page's head slider: coupling, SCI and PSP on the head, window by window

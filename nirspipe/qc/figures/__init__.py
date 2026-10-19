@@ -1,7 +1,6 @@
 from nirspipe.qc.figures.subject.raw_figures import (
     build_ts_figure,
     build_channel_figure,
-    build_layout_figure,
     build_psd_mean_figure,
         build_epoch_preview_figure,
     build_trial_image_figure,
@@ -51,7 +50,6 @@ from nirspipe.qc.figures.subject.rest_figures import (
 __all__ = [
     "build_ts_figure",
     "build_channel_figure",
-    "build_layout_figure",
     "build_psd_mean_figure",
     "build_sci_psp_figure",
     "build_epoch_preview_figure",

@@ -138,6 +138,18 @@ _EVENT_ROW = re.compile(r'<tr data-x0="[^"]*" data-x1="[^"]*"\s+data-dur="[^"]*"
                         r'\s*<td>([^<]*)</td>\s*<td>([^<]*)</td>')
 
 
+def brain_inputs(run) -> dict:
+    """What each page's brain figure was drawn from, by condition (None for the run's page):
+    the SCI per channel and the rejected pairs."""
+    return {a[8].condition: (a[0], {c.rsplit(" ", 1)[0] for c in a[1]})
+            for a, _ in run.captured["_calls"]["_section_brain"]}
+
+
+def pair_sci(sci: dict, pair: str) -> float:
+    """A pair's SCI from a per-channel dict, its wavelengths averaged."""
+    return float(np.mean([v for k, v in sci.items() if k.rsplit(" ", 1)[0] == pair]))
+
+
 def event_rows(html: str) -> list[tuple[str, float, float]]:
     """A subject report's Raw Signal event table as printed: (description, onset, duration)."""
     return [(name, float(onset), float(dur)) for name, onset, dur in _EVENT_ROW.findall(html)]

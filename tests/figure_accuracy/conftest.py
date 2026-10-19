@@ -11,7 +11,7 @@ RAW_VIEWER_ARGS = [a for i, a in enumerate(CLI_ARGS)
 def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: bool = False,
                   blocks: bool = False, raw_viewer: bool = False, aux: bool = False) -> dict:
     """Run nirspipe, or nirspipe-qc prep-raw, on a fresh fingerprint dataset, recording what each
-    named figure builder was handed."""
+    named figure builder was handed: its last call by name, every call under ``"_calls"``."""
     import nirspipe.qc.figures as figures
     import nirspipe.qc.figures.common.provenance_figure as provenance
     from nirspipe.cli import qc as qc_cli
@@ -27,6 +27,7 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
     def spy(name, original):
         def wrapper(*a, **kw):
             captured[name] = (a, kw)
+            captured.setdefault("_calls", {}).setdefault(name, []).append((a, kw))
             return original(*a, **kw)
         return wrapper
 
@@ -65,7 +66,8 @@ def denoise_run(tmp_path_factory) -> Run:
     root = tmp_path_factory.mktemp("fingerprint")
     done = run_capturing(root, ["--mode", "denoise", "--short-channel", "mean",
                                 "--roi-mapping", _roi_file(root)],
-                         ("quality_brain_views", "provenance_figure", "_build_mne_report"))
+                         ("quality_brain_views", "optode_layout_static", "provenance_figure",
+                          "_build_mne_report"))
     return Run(root / "out", done["truth"], captured=done["captured"])
 
 
@@ -96,8 +98,8 @@ def condition_run(tmp_path_factory) -> Run:
     """The two-level design, blocks naming the conditions, through denoise with condition pages."""
     root = tmp_path_factory.mktemp("fingerprint_blocks")
     done = run_capturing(root, ["--mode", "denoise", "--short-channel", "mean", "--by-condition"],
-                         (), task="main", blocks=True)
-    return Run(root / "out", done["truth"], task="main")
+                         ("_section_brain",), task="main", blocks=True)
+    return Run(root / "out", done["truth"], task="main", captured=done["captured"])
 
 
 # a prep run with two settings off the defaults that every condition page has to carry
@@ -119,9 +121,9 @@ def prep_condition_run(tmp_path_factory) -> Run:
 def raw_condition_run(tmp_path_factory) -> Run:
     """The two-level design through nirspipe-qc prep-raw, with condition pages."""
     root = tmp_path_factory.mktemp("fingerprint_raw_blocks")
-    done = run_capturing(root, ["--participant-label", "01", "--epoch-qc", "--by-condition"], (),
-                         task="main", blocks=True, raw_viewer=True)
-    return Run(root / "out", done["truth"], task="main")
+    done = run_capturing(root, ["--participant-label", "01", "--epoch-qc", "--by-condition"],
+                         ("_section_brain",), task="main", blocks=True, raw_viewer=True)
+    return Run(root / "out", done["truth"], task="main", captured=done["captured"])
 
 
 # ---- the group commands, on the dyad fingerprint ----
@@ -188,8 +190,9 @@ def raw_viewer_run(tmp_path_factory) -> Run:
     """The task recording through nirspipe-qc prep-raw, with motion correction, trial scoring and the ROI map."""
     root = tmp_path_factory.mktemp("fingerprint_raw")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc",
-                                "--roi-mapping", _roi_file(root)], (), raw_viewer=True)
-    return Run(root / "out", done["truth"])
+                                "--roi-mapping", _roi_file(root)], ("_section_brain",),
+                         raw_viewer=True)
+    return Run(root / "out", done["truth"], captured=done["captured"])
 
 
 @pytest.fixture(scope="session")

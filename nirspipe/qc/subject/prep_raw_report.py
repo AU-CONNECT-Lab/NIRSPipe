@@ -204,7 +204,6 @@ def _process_run(
     from nirspipe.qc.figures import (
         build_channel_figure,
         build_epoch_preview_figure,
-        build_layout_figure,
         build_trial_image_by_condition,
         build_psd_mean_figure,
         build_sci_psp_figure,
@@ -426,15 +425,6 @@ def _process_run(
             "t_start":     t_start,
             "t_end":       t_end,
         }
-
-    # ── inline: layout figure (kept for click interactivity) ───────────────────
-    layout_inline: dict = {}
-    with guard("Optode layout", errors, label):
-        # graded by the windowed SCI against the run's own line, as the pipeline's flat map is
-        fig_2d = build_layout_figure(
-            raw, bad_channels, (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
-            sci_threshold=cutoffs["sci"])
-        layout_inline = {"layout_2d_figure": fig_2d.to_dict() if fig_2d else None}
 
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
@@ -763,7 +753,6 @@ def _process_run(
                       else section_note("raw.screened_every")),
         },
         "ts":           ts_inline,
-        "layout":       layout_inline,
         "carpet_gvtd":  carpet_inline,
         "sci_psp":          sci_psp_inline,
         "psd":              psd_inline,
@@ -828,9 +817,6 @@ def _process_run(
         "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
                                       sci_threshold=cutoffs["sci"]),
         "remake_head_slider": remake_head_slider,
-        # the clickable map on a condition's own SCI, as the brain views are drawn
-        "remake_layout": lambda sci: build_layout_figure(raw, bad_channels, sci,
-                                                         sci_threshold=cutoffs["sci"]),
         "sci_win_scores": (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
         "trial_images_by_condition": trial_img_by_cond,
         "sep_bands":     sep_bands,
@@ -884,8 +870,6 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
                  sci_threshold: float):
     """``(namer, SCI per channel, errors) -> href`` of the subject report's brain views.
 
-    The 3D views alone: the flat map beside them is the page's clickable one.
-
     The haemoglobin file's HbO channels place the channels, rejected ones included, as the
     pipeline places them for its own copy. A condition page hands in its own SCI and a namer
     carrying its slug; the rejections stay the run's.
@@ -904,7 +888,7 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
     def remake(namer, sci: dict, errors: list) -> "str | None":
         return _section_brain(sci, sorted(bad_channels), coords, good, raw, label, errors,
                               fig_dir, namer, ch_names_brain=names,
-                              sci_threshold=sci_threshold, flat_map=False)["brain_views_path"]
+                              sci_threshold=sci_threshold)["brain_views_path"]
 
     return remake
 
@@ -1096,7 +1080,6 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         remake_psd=ctx.get("remake_psd"), remake_epoch=ctx.get("remake_epoch"),
         remake_hbo_hbr_corr=ctx.get("remake_hbo_hbr_corr"),
         remake_brain=save_brain if remake_brain else None,
-        remake_layout=ctx.get("remake_layout"),
         remake_head_slider=save_head_slider if remake_slider else None,
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
