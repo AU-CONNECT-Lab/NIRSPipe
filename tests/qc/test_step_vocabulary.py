@@ -634,7 +634,7 @@ def test_the_spline_wavelet_sentence_states_the_order_and_both_steps():
     assert line.index("spline interpolation") < line.index("followed by wavelet filtering")
     for value in (f"within {motion.SPLINE_WAVELET_T_MOTION:g} s", "13 standard",
                   f"{motion.SPLINE_WAVELET_AMP_THRESH:g} in OD",
-                  f"{motion.SPLINE_T_MASK:g} s either side",
+                  f"{motion.SPLINE_WAVELET_T_MASK:g} s either side",
                   f"smoothing parameter {motion.SPLINE_P:g}", f"{motion.SPLINE_DT_SHORT:g} s windows",
                   f"N minus {motion.WAVELET_LOWEST_SCALE} levels", f"({motion.WAVELET})",
                   "0.8 interquartile"):

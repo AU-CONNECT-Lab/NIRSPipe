@@ -59,21 +59,22 @@ def test_it_takes_the_papers_detection_and_fence():
 
 def test_it_is_spline_at_its_thresholds_then_the_wavelet():
     raw = _raw(_stepped(2.0))
-    splined, _ = _spline_motion_correct(raw, t_motion=1.0, std_thresh=13.0, amp_thresh=0.4)
+    splined, _ = _spline_motion_correct(raw, t_motion=1.0, std_thresh=13.0, amp_thresh=0.4,
+                                        t_mask=1.0)
     expected = _wavelet_motion_correct(splined, iqr_factor=0.8).get_data()
     out = correct_motion(raw, method="spline_wavelet")
     assert stage_of(out) == "motcorrected"
     assert (out.get_data() == expected).all()
     # the order matters: the wavelet first gives a different signal
     reverse, _ = _spline_motion_correct(_wavelet_motion_correct(raw, iqr_factor=0.8),
-                                        t_motion=1.0, std_thresh=13.0, amp_thresh=0.4)
+                                        t_motion=1.0, std_thresh=13.0, amp_thresh=0.4, t_mask=1.0)
     assert not np.allclose(out.get_data(), reverse.get_data())
 
 
 def test_its_detection_marks_what_splines_own_misses():
     good = np.ones(N_CH, bool)
-    # a 0.3 step is about 18 SDs of the first difference, under 0.4 in OD
-    d = _stepped(0.3)
+    # a 0.22 step is about 15 SDs of the first difference, under 0.4 in OD
+    d = _stepped(0.22)
     assert not _spline_motion_mask(d, SFREQ, NAMES, good).any()
     assert _spline_motion_mask(d, SFREQ, NAMES, good, t_motion=1.0, std_thresh=13.0,
                                amp_thresh=0.4)[:, :2].any()
@@ -85,7 +86,7 @@ def test_its_detection_marks_what_splines_own_misses():
 def test_the_window_is_one_second_either_way():
     # 10 lags at 10 Hz see the step from 10 rows before it; 10 rows either side, then +1
     mask = _spline_motion_mask(_stepped(2.0), SFREQ, NAMES, np.ones(N_CH, bool), t_motion=1.0,
-                               std_thresh=13.0, amp_thresh=0.4)
+                               std_thresh=13.0, amp_thresh=0.4, t_mask=1.0)
     assert (np.flatnonzero(mask[:, 0]) == np.arange(2981, 3011)).all()
 
 

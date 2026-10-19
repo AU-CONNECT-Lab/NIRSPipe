@@ -58,7 +58,7 @@ CASES = {
     "dpf": Case("denoise", {"--dpf": ["6.0", "7.0"]}, ("preproc",)),
     "sci_threshold": Case("denoise", {"--sci-threshold": ["0.9"]}, ("sci",)),
     "motion_correction": Case("denoise", WAVELET, ("motcorrected",)),
-    "motion_std_thresh": Case("denoise", {"--motion-std-thresh": ["20"]}, ("motcorrected",), SPLINE),
+    "motion_std_thresh": Case("denoise", {"--motion-std-thresh": ["10"]}, ("motcorrected",), SPLINE),
     "wavelet_iqr": Case("denoise", {"--wavelet-iqr": ["0.8"]}, ("motcorrected",), WAVELET),
     "bad_channels": Case("denoise", {"--bad-channels": ["S1_D1"]}, ("sci",)),
     "keep_spans": Case("denoise", {"--keep-spans": ["{keep}"]}, ("sci",)),
