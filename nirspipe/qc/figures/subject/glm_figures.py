@@ -319,11 +319,11 @@ def _save_glm_brain(
     ax.axis('off')
     if title:
         ax.set_title(title, fontsize=16, pad=10)
-    plt.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
+    fig.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
     _add_shared_colorbar(fig, clim)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
+    fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
@@ -480,10 +480,10 @@ def activation_panel(
         ax.imshow(arr)
         ax.axis("off")
         ax.set_title(label, fontsize=13, pad=4)
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0.05)
+    fig_mpl.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0.05)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.05, dpi=dpi)
+    fig_mpl.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.05, dpi=dpi)
     plt.close(fig_mpl)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
@@ -699,7 +699,7 @@ def design_matrix_static_figure(
         fig.legend(handles=[Patch(color=SPAN_KIND_COLOR[k], alpha=0.18, label=SPAN_KIND_LABEL[k])
                             for k in kinds],
                    loc="upper right", fontsize=7, frameon=False, ncol=len(kinds))
-    plt.tight_layout()
+    fig.tight_layout()
 
     return fig_png_b64(fig)
 
@@ -781,10 +781,10 @@ def glm_betas_figure(
         if ax is axes[0]:
             ax.set_yticklabels(pair_names, fontsize=7)
         ax.set_title(lbl, fontsize=10, color=color)
-        plt.colorbar(im, ax=ax, shrink=0.7, label="β (theta)", pad=0.02)
+        fig.colorbar(im, ax=ax, shrink=0.7, label="β (theta)", pad=0.02)
 
     fig.suptitle(title, fontsize=11, y=1.01)
-    plt.tight_layout()
+    fig.tight_layout()
     return fig_png_b64(fig)
 
 

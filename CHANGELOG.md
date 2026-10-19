@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
+
 ## [0.71.0] - 2026-10-19
 
 ### Added
