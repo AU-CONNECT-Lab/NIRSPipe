@@ -50,14 +50,15 @@ NOTES = {
         "median, mean and SD, so a drop is movement removed.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: first each block&rsquo;s share "
-        "of coupled windows, then each window&rsquo;s SCI. Bars are long channels, ringed "
-        "discs short ones; light grey has no value.",
+        "of coupled windows, then window by window. Bars are long channels, ringed discs "
+        "short ones; light grey has no value.",
     "hyper_raw.head_by_condition":
         "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
         "in that member.",
     "hyper_raw.head_slider":
-        "One head per member, moved through the recording by the slider. Colour is the "
-        "window&rsquo;s SCI; the block the slider sits in is named above the heads.",
+        "A column per member, moved through the recording by the slider: whether each window "
+        "coupled, then its SCI and PSP, each scaled with its line mid-way. The block is named "
+        "above the heads.",
     "hyper_raw.comparable":
         "Downstream steps match channels by S-D label and assume one clock: an unmatched "
         "label becomes a blank row, different sampling rates are refused, and drift at the "

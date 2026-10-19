@@ -277,15 +277,15 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     ::
 
       -> {"t": (388,), "sci": (388,), "psp": (388,), "cv": (388,), "gvtd": (388,),
-          "per_pair_sci": {"S1_D1": (388,), ...}}
+          "per_pair_sci": {"S1_D1": (388,), ...}, "per_pair_psp": {"S1_D1": (388,), ...}}
 
     The three series are averaged over the same rows the carpet folds into pairs, off the
     same matrices its mask came from, so a dip in a line and a hole under it are one
     measurement and not two. GVTD is absent unless the member's record carried it; see
     :func:`coupled_grid`. A dyad window the member has no window for is NaN.
 
-    ``per_pair_sci`` keeps every pair separately, short ones included, because the head
-    figures colour one marker per channel and draw both separations.
+    ``per_pair_sci`` and ``per_pair_psp`` keep every pair separately, short ones included,
+    because the head figures colour one marker per channel and draw both separations.
 
     A channel undefined in a window (an intensity pinned at the device's ceiling has no
     pulse to correlate) is left out of that window's mean rather than voiding it.
@@ -307,16 +307,17 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     if gvtd is not None and len(gvtd) == len(sw["centers"]):
         out["gvtd"] = _take_windows(np.asarray(gvtd, dtype=float), idx, np.nan)
 
-    sci_m = sw.get("sci")
-    if sci_m is not None:
-        sci_m = _take_windows(np.asarray(sci_m, dtype=float), idx, np.nan)
-        by_pair: dict[str, list[int]] = {}
-        for i, name in enumerate(order):
-            by_pair.setdefault(pair_of(name), []).append(i)
-        # a pair is one SCI, stored once per wavelength; the mean over its rows is that
-        # number and not an average of two different ones
-        out["per_pair_sci"] = {pair: _channel_mean(sci_m[idx])
-                               for pair, idx in by_pair.items()}
+    by_pair: dict[str, list[int]] = {}
+    for i, name in enumerate(order):
+        by_pair.setdefault(pair_of(name), []).append(i)
+    for key in ("sci", "psp"):
+        m = sw.get(key)
+        if m is None:
+            continue
+        m = _take_windows(np.asarray(m, dtype=float), idx, np.nan)
+        # a pair is one SCI and one PSP, stored once per wavelength; the mean over its rows
+        # is that number and not an average of two different ones
+        out[f"per_pair_{key}"] = {pair: _channel_mean(m[at]) for pair, at in by_pair.items()}
     return out
 
 

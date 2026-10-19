@@ -3,7 +3,9 @@
 import json
 import os
 import re
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 from pathlib import Path
@@ -12,6 +14,11 @@ from typing import Any, Iterable
 from nirspipe.exceptions import MissingDerivativesError, StageError
 from nirspipe.utils.logging import get_logger
 from nirspipe import __version__
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 logger = get_logger("io.derivatives")
 
@@ -377,6 +384,42 @@ def find_preproc_snirf(
 _REPLACE_TRIES = 5
 _REPLACE_WAIT_S = 0.05
 
+# held for one read and one write of a small file, so a minute means a stuck holder
+_LOCK_TIMEOUT_S = 60.0
+# POSIX record locks belong to the process, so its threads also queue here
+_THREAD_LOCK = threading.Lock()
+
+
+@contextmanager
+def _exclusive(path: Path):
+    """Hold a lock on ``.<name>.lock`` beside ``path`` against every process and host sharing the tree.
+
+    The OS drops the lock when its holder dies, so a crashed run leaves nothing to clean up.
+    """
+    with _THREAD_LOCK, open(path.with_name(f".{path.name}.lock"), "a+b") as fh:
+        fh.seek(0)
+        if os.name == "nt":
+            deadline = time.monotonic() + _LOCK_TIMEOUT_S
+            while True:
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if time.monotonic() > deadline:
+                        raise StageError(f"{path} stayed locked by another run for "
+                                         f"{_LOCK_TIMEOUT_S:g} s.") from None
+                    time.sleep(_REPLACE_WAIT_S)
+        else:
+            fcntl.lockf(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fh.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.lockf(fh, fcntl.LOCK_UN)
+
 
 # What a reader should not hold against the tree: the reports and their figures are for
 # people, and BIDS says nothing about either.
@@ -539,9 +582,9 @@ def write_dataset_description(
     """Write dataset_description.json for the derivatives dataset.
 
     Every run writes this, so two started against one output directory write the same path.
-    The content is fixed for one run: a run that finds it already correct leaves it alone,
-    which is what keeps concurrent runs off each other rather than the rename. Where it does
-    have to be written it goes to a temporary first, since the plain write truncates and a
+    Reading what is there and writing the merge happen under one lock, or two runs adding
+    different links would each write back only their own. Where it does have to be written
+    it goes to a temporary first, since the plain write truncates and a
     reader in between sees an empty file and reports the tree as bad BIDS. A reader can still
     be told the path is busy at the instant it flips, which Windows offers no way around, but
     that is a retry rather than a tree that looks invalid.
@@ -562,48 +605,49 @@ def write_dataset_description(
     }
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"
-    existing = read_json(path)
-    links = dict(existing.get("DatasetLinks") or {})
-    sources = list(existing.get("SourceDatasets") or [])
-    if source is not None:
-        source = Path(source)
-        if link is None:
-            kind = read_json(source / "dataset_description.json").get("DatasetType")
-            link = LINK_PREPROCESSED if kind == "derivative" else LINK_RAW
-        value = _link_value(source, output_dir)
-        if links.get(link, value) != value:
-            raise StageError(
-                f"{path} links {link!r} to {links[link]}, and this run reads {source}. The "
-                "Sources already written there resolve through that link; write this run "
-                "into a new output directory.")
-        links[link] = value
-        # one entry per source tree, however its URL was spelled when it was written
-        sources = [s for s in sources
-                   if _link_target(output_dir, str(s.get("URL", ""))) != source.resolve()]
-        sources.append(_source_dataset(source, value))
-    if links:
-        desc["DatasetLinks"] = links
-    if sources:
-        desc["SourceDatasets"] = sources
-    text = json.dumps(desc, indent=2)
-    try:
-        if path.read_text() == text:
-            return
-    except OSError:
-        pass
-
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
-    try:
-        tmp.write_text(text)
-        for attempt in range(_REPLACE_TRIES):
-            try:
-                os.replace(tmp, path)
+    with _exclusive(path):
+        existing = read_json(path)
+        links = dict(existing.get("DatasetLinks") or {})
+        sources = list(existing.get("SourceDatasets") or [])
+        if source is not None:
+            source = Path(source)
+            if link is None:
+                kind = read_json(source / "dataset_description.json").get("DatasetType")
+                link = LINK_PREPROCESSED if kind == "derivative" else LINK_RAW
+            value = _link_value(source, output_dir)
+            if links.get(link, value) != value:
+                raise StageError(
+                    f"{path} links {link!r} to {links[link]}, and this run reads {source}. The "
+                    "Sources already written there resolve through that link; write this run "
+                    "into a new output directory.")
+            links[link] = value
+            # one entry per source tree, however its URL was spelled when it was written
+            sources = [s for s in sources
+                       if _link_target(output_dir, str(s.get("URL", ""))) != source.resolve()]
+            sources.append(_source_dataset(source, value))
+        if links:
+            desc["DatasetLinks"] = links
+        if sources:
+            desc["SourceDatasets"] = sources
+        text = json.dumps(desc, indent=2)
+        try:
+            if path.read_text() == text:
                 return
-            except PermissionError:
-                if attempt == _REPLACE_TRIES - 1:
-                    raise
-                time.sleep(_REPLACE_WAIT_S)
-    finally:
-        # a successful replace has already consumed it; anything else must not leave it behind
-        tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
+        try:
+            tmp.write_text(text)
+            for attempt in range(_REPLACE_TRIES):
+                try:
+                    os.replace(tmp, path)
+                    return
+                except PermissionError:
+                    if attempt == _REPLACE_TRIES - 1:
+                        raise
+                    time.sleep(_REPLACE_WAIT_S)
+        finally:
+            # a successful replace has already consumed it; anything else must not leave it behind
+            tmp.unlink(missing_ok=True)
 

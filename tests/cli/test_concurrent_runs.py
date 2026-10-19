@@ -11,6 +11,7 @@ reproduce.
 from __future__ import annotations
 
 import json
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -26,6 +27,14 @@ WORKERS = 8
 def _write_description(output_dir: str) -> str:
     write_dataset_description(Path(output_dir))
     return "ok"
+
+
+def _link_at(output_dir: str, source: str, link: str, start: float) -> str:
+    # every worker starts its read-merge-write at the same instant, where the race was
+    while time.time() < start:
+        pass
+    write_dataset_description(Path(output_dir), source=Path(source), link=link)
+    return link
 
 
 def _read_description_repeatedly(output_dir: str, times: int) -> list[str]:
@@ -85,8 +94,30 @@ def test_no_temporary_files_are_left_behind(tmp_path):
     with ProcessPoolExecutor(max_workers=WORKERS) as pool:
         for f in [pool.submit(_write_description, str(out)) for _ in range(WORKERS * 2)]:
             f.result()
-    leftovers = [p.name for p in out.iterdir() if p.name != "dataset_description.json"]
+    kept = {"dataset_description.json", ".dataset_description.json.lock"}
+    leftovers = [p.name for p in out.iterdir() if p.name not in kept]
     assert not leftovers, f"temp files survived: {leftovers}"
+
+
+def test_tools_writing_links_at_once_keep_every_link(tmp_path):
+    """Each writer adds its own link to what is there; none may drop another's."""
+    links = [f"source{i}" for i in range(WORKERS)]
+    for name in links:
+        (tmp_path / name).mkdir()
+    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
+        # warm the workers, so the spawn and import time is not inside the race window
+        for f in [pool.submit(_write_description, str(tmp_path / "warm")) for _ in range(WORKERS)]:
+            f.result()
+        for attempt in range(3):
+            out = tmp_path / f"derivatives{attempt}"
+            start = time.time() + 1.0
+            futures = [pool.submit(_link_at, str(out), str(tmp_path / name), name, start)
+                       for name in links]
+            for f in futures:
+                f.result()
+            written = json.loads((out / "dataset_description.json").read_text(encoding="utf-8"))
+            assert sorted(written["DatasetLinks"]) == sorted(links)
+            assert len(written["SourceDatasets"]) == WORKERS
 
 
 if __name__ == "__main__":

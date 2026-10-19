@@ -51,3 +51,11 @@ def one_figure(path: Path) -> dict:
     figures = plotly_figures(path)
     assert len(figures) == 1, f"{Path(path).name}: {len(figures)} plots, expected one"
     return figures[0]
+
+
+def plotly_frames(path: Path) -> dict[float, dict]:
+    """The file's animation frames, keyed by their name read as a number."""
+    text = Path(path).read_text(encoding="utf-8")
+    match = re.search(r"Plotly\.addFrames\(\s*'[^']+'\s*,\s*", text)
+    frames, _ = _DECODER.raw_decode(text, match.end())
+    return {float(f["name"]): f for f in _decode(frames)}

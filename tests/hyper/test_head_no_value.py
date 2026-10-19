@@ -17,7 +17,7 @@ def test_the_slider_draws_a_channel_with_no_value_grey_in_every_frame():
     gone = geo["long"]["names"][0]
     sci[gone] = np.array([np.nan, 0.9, np.nan])        # saturated in the first and last window
     fig = build_head_slider({"A": geo}, ["A"], {"t": t, "pairs": pairs},
-                            {"A": {"per_pair_sci": sci}}, step=1)
+                            {"A": {"per_pair_sci": sci}}, cutoffs={"sci": 0.8}, step=1)
 
     grey = [i for i, tr in enumerate(fig.data)
              if isinstance(getattr(tr.marker, "color", None), str) and tr.marker.color == BLANK_COLOR]

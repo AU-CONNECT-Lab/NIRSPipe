@@ -8,7 +8,7 @@ from mne.preprocessing.nirs import beer_lambert_law
 
 from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, own_freq
 from tests.figure_accuracy._dyad import js_var
-from tests.figure_accuracy._payload import one_figure, plotly_figures
+from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
 from tests.figure_accuracy._read import share_at, traces, xy
 
 GROUPS = ("G01", "G02")
@@ -217,6 +217,51 @@ def test_the_group_record_counts_every_pair(groups, group):
 @pytest.mark.parametrize("desc", ["rawusable", "rawheadcond", "rawheadslider"])
 def test_the_panels_on_the_shared_screening_grid_are_drawn(groups, group, desc):
     assert groups.figure(group, f"desc-{desc}_nirs.html").exists()
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_head_slider_loses_each_planted_decoupling_in_its_coupled_row(groups, group):
+    from tests._dyad_fingerprint import CONDITION_FAILING
+    from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
+    path = groups.figure(group, "desc-rawheadslider_nirs.html")
+    fig, frames = one_figure(path), plotly_frames(path)
+    layout = fig["layout"]
+    titled = sorted((k for k in layout if k.startswith("yaxis") and layout[k].get("title")),
+                    key=lambda k: int(k[5:] or 1))
+    assert [layout[k]["title"]["text"] for k in titled] == ["Coupled", "SCI", "PSP"]
+
+    def heads(sid, pair):
+        """The member's coloured traces that draw ``pair``, top row first."""
+        found = [(int((tr.get("yaxis") or "y")[1:] or 1), i) for i, tr in enumerate(fig["data"])
+                 if (tr.get("hovertemplate") or "").startswith(f"<b>{sid}</b>")
+                 and "colorscale" in (tr.get("marker") or {})
+                 and pair in list(tr.get("text") or [])]
+        return [i for _, i in sorted(found)]
+
+    def colours(c, trace):
+        frame = frames[c]
+        return frame["data"][frame["traces"].index(trace)]
+
+    half = SCREEN_WINDOW_S / 2
+    for m in groups.truth.group(group):
+        if m.subject not in CONDITION_FAILING:
+            continue
+        pair, onset, span = CONDITION_FAILING[m.subject]
+        coupled, sci, _psp = heads(m.sid, pair)
+        at = [k for k, name in enumerate(fig["data"][coupled]["text"]) if name == pair]
+        inside = [c for c in frames if c - half >= onset and c + half <= onset + span]
+        assert inside, (m.sid, pair)
+        for c in inside:
+            row = colours(c, coupled)
+            assert np.all(np.asarray(row["marker"]["color"], float)[at] == 0.0), (m.sid, c)
+            assert {row["customdata"][k] for k in at} == {"no"}, (m.sid, c)
+            # the planted anti-phase pulse drives the pair's SCI far under any line
+            assert np.all(np.asarray(colours(c, sci)["marker"]["color"], float)[at] < 0.5)
+        if pair != m.rejected:
+            outside = [c for c in frames if c + half < onset or c - half > onset + span]
+            kept = [np.all(np.asarray(colours(c, coupled)["marker"]["color"], float)[at] == 1.0)
+                    for c in outside]
+            assert np.mean(kept) > 0.8, (m.sid, np.mean(kept))
 
 
 def _carpet(groups, group):

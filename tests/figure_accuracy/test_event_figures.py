@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from tests._fingerprint import EVENT_DURATION, EVENT_ONSETS, RESPONSE_AMP
-from tests.figure_accuracy._payload import _DECODER, _decode, one_figure, plotly_figures
+from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
 from tests.figure_accuracy._read import traces, xy
 from tests.figure_accuracy.conftest import ROI_MAP
 
@@ -56,17 +56,10 @@ def test_the_grand_mean_carries_the_responders_share_of_the_response(denoise_run
     assert y.max() == pytest.approx(share * RESPONSE_AMP * 1e6, rel=0.25)
 
 
-def _frames(path):
-    text = path.read_text(encoding="utf-8")
-    match = re.search(r"Plotly\.addFrames\(\s*'[^']+'\s*,\s*", text)
-    frames, _ = _DECODER.raw_decode(text, match.end())
-    return {float(f["name"]): f for f in _decode(frames)}
-
-
 def test_the_evoked_map_colours_each_pair_by_its_own_response(denoise_run, evoked):
     path = denoise_run.figure("evokedtopo", suffix="nirsmap")
     fig = one_figure(path)
-    frames = _frames(path)
+    frames = plotly_frames(path)
     average = evoked.average(picks="all")
     long_hbo = next(i for i, t in enumerate(fig["data"]) if "text" in t and (t.get("xaxis") or "x") == "x")
     names = list(fig["data"][long_hbo]["text"])

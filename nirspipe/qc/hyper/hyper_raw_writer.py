@@ -234,7 +234,7 @@ def _process_hyper_raw_group(
             _safe_save("head_by_condition", "headcond", build_head_by_condition,
                        geo, subject_ids, grid, conditions)
             _safe_save("head_slider", "headslider", build_head_slider,
-                       geo, subject_ids, grid, series, conditions)
+                       geo, subject_ids, grid, series, conditions, cutoffs)
 
     ch_pairs: list[str] = get_channel_pairs(first_raw) if first_raw else []
     if not ch_pairs:
