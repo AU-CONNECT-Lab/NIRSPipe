@@ -16,7 +16,7 @@ from typing import Any
 import mne
 import numpy as np
 
-from nirspipe.cli import _app_options
+from nirspipe.cli import _app_options, _shared
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               validate_bids)
@@ -417,20 +417,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
             finally:
                 write_run_outcome(sub_dir, subject, status, time.monotonic() - t0, error)
 
-    # threads, not processes: one `failed` list stays shared
-    n_jobs = max(1, int(args.get("n_jobs") or 1))
-    if n_jobs > 1 and len(participant_label) > 1:
-        from joblib import Parallel, delayed
-        from threadpoolctl import threadpool_limits
-        # one BLAS thread per job, or the jobs oversubscribe the cores
-        logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
-                    len(participant_label), n_jobs)
-        with threadpool_limits(limits=1):
-            Parallel(n_jobs=n_jobs, prefer="threads")(
-                delayed(_one)(subject) for subject in participant_label)
-    else:
-        for subject in participant_label:
-            _one(subject)
+    nprocs = args.get("nprocs")
+    if nprocs:
+        jobs, blas = _shared.split_cpus(nprocs, len(participant_label))
+        logger.info("%d subject(s) within %d cores: %d at once, %d BLAS thread(s) each",
+                    len(participant_label), nprocs, jobs, blas)
+    _shared.map_subjects(_one, participant_label, nprocs)
 
     _log_run_notes(run_notes)
     if failed:

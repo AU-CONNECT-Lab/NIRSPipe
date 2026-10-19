@@ -14,20 +14,16 @@ from nirspipe.utils.logging import get_logger
 logger = get_logger("cli.prep")
 
 
-def _run_parallel(fn, subjects: list[str], n_jobs: int, **kwargs) -> list[tuple]:
-    """Run fn(sub, **kwargs) for each subject, return list of (sub, ok, msg)."""
-    from joblib import Parallel, delayed
-
+def _run_parallel(fn, subjects: list[str], nprocs: int | None) -> list[tuple]:
+    """Run fn(sub) for each subject, return list of (sub, ok, msg)."""
     def _one(sub):
         try:
-            result = fn(sub, **kwargs)
+            result = fn(sub)
             return sub, True, str(result)
         except Exception as exc:
             return sub, False, str(exc)
 
-    return Parallel(n_jobs=n_jobs, prefer="threads")(
-        delayed(_one)(sub) for sub in subjects
-    )
+    return _shared.map_subjects(_one, subjects, nprocs)
 
 
 def _report(results: list[tuple]) -> None:
@@ -47,7 +43,7 @@ def cmd_crop(
     session_label: str | None, task_label: str | None, run_label: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
-    n_jobs: int, skip_bids_validation: bool, margin_s: str | None = None,
+    nprocs: int | None, skip_bids_validation: bool, margin_s: str | None = None,
     band_fmin: float | None = None,
 ) -> None:
     """Crop SNIRFs and write to derivatives/cropped/."""
@@ -112,7 +108,7 @@ def cmd_crop(
             margin_s=margin,
         )
 
-    _report(_run_parallel(_crop_one, participant_label, n_jobs))
+    _report(_run_parallel(_crop_one, participant_label, nprocs))
 
 
 def cmd_align(
@@ -184,7 +180,7 @@ def cmd_align(
 def cmd_markers_export(
     bids_dir: Path, out_dir: Path, participant_label: list[str],
     session_label: str | None, task_label: str | None, run_label: str | None,
-    n_jobs: int, skip_bids_validation: bool,
+    nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
     """Export events.tsv(s) to out_dir for manual editing."""
     _shared.refuse_output_in_input(bids_dir, out_dir, "nirspipe-prep")
@@ -200,14 +196,14 @@ def cmd_markers_export(
             validate=True,
         )
 
-    _report(_run_parallel(_export_one, participant_label, n_jobs))
+    _report(_run_parallel(_export_one, participant_label, nprocs))
 
 
 def cmd_markers_apply(
     bids_dir: Path, output_dir: Path, participant_label: list[str],
     session_label: str | None, task_label: str | None, run_label: str | None,
     tsv: Path | None, shift: float | None, set_duration: float | None,
-    rename: list[str] | None, n_jobs: int, skip_bids_validation: bool,
+    rename: list[str] | None, nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
     """Apply marker edits to runs and write to derivatives/marker_edited/."""
     from nirspipe.pipeline.edit_markers import _DERIV_NAME as writes
@@ -232,13 +228,13 @@ def cmd_markers_apply(
             validate=True,
         )
 
-    _report(_run_parallel(_apply_one, participant_label, n_jobs))
+    _report(_run_parallel(_apply_one, participant_label, nprocs))
 
 
 def cmd_keep_spans(
     bids_dir: Path, out_tsv: Path, participant_label: list[str],
     session_label: str | None, task_label: str | None, run_label: str | None,
-    conditions: list[str], duration: float | None, n_jobs: int, skip_bids_validation: bool,
+    conditions: list[str], duration: float | None, nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
     """Write a --keep-spans table holding every occurrence of the named conditions."""
     if duration is not None and duration <= 0:
@@ -262,7 +258,7 @@ def cmd_keep_spans(
         return f"{len(rows[sub])} span(s)"
 
     # nothing is written unless every subject's rows were found
-    _report(_run_parallel(_spans_one, participant_label, n_jobs))
+    _report(_run_parallel(_spans_one, participant_label, nprocs))
     table = pd.DataFrame([row for sub in participant_label for row in rows[sub]])
     labels = [c for c in ("participant_id", "session", "task", "run") if c in table.columns]
     out_tsv.parent.mkdir(parents=True, exist_ok=True)
@@ -280,7 +276,7 @@ def _add_selection(sp) -> None:
                     help="Task label.")
     sp.add_argument("--run-label", "--run_label", default=None, type=_shared.BidsLabel,
                     help="Run label.")
-    _shared.add_n_jobs(sp)
+    _shared.add_nprocs(sp)
     _shared.add_skip_bids_validation(sp)
 
 

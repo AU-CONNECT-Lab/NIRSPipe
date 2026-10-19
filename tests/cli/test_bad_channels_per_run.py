@@ -19,7 +19,7 @@ def test_a_task_row_reaches_only_that_task(mini_bids, tmp_path):
     args = dict(
         analysis_level="participant", session_label=None, task_label=None,
         bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
-        ignore=None, n_jobs=1, no_report=True, mode=None,
+        ignore=None, nprocs=None, no_report=True, mode=None,
         dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr",
         cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5,
         bad_channels=str(table),

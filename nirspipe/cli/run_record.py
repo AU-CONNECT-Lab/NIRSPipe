@@ -166,7 +166,7 @@ def write_run_record(
         "bids_filter_file": (Path(args["bids_filter_file"]).resolve().as_posix()
                              if args.get("bids_filter_file") else None),
         "analysis_level": _unwrap(args.get("analysis_level"), "participant"),
-        "n_jobs": args.get("n_jobs", 1),
+        "nprocs": args.get("nprocs"),
         "skip_bids_validation": args.get("skip_bids_validation", False),
         "ignore": [_unwrap(ig) for ig in (args.get("ignore") or [])],
         "allow_cropped_input": args.get("allow_cropped_input", False),

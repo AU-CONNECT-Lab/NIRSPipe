@@ -62,7 +62,42 @@ def add_skip_bids_validation(container) -> None:
         help="Do not check the input with bids-validator.")
 
 
-def add_n_jobs(container) -> None:
-    """``--n-jobs``, parallel subjects; --nprocs / --n_cpus are what the BIDS Apps interface calls it."""
-    container.add_argument("--n-jobs", "--n_jobs", "--nprocs", "--n_cpus", dest="n_jobs",
-                           type=int, default=1, help="Parallel subject jobs.")
+def _positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
+    return value
+
+
+def add_nprocs(container) -> None:
+    """``--nprocs``, the cores a command may use in all, spelled as the BIDS Apps interface spells it."""
+    container.add_argument(
+        "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=_positive_int, default=None,
+        help="CPU cores to use in all. Up to this many subjects run at once and spare cores go "
+             "to each subject's numerics. Omit to run one subject at a time on every core.")
+
+
+def split_cpus(nprocs: int | None, n_subjects: int) -> tuple[int, int | None]:
+    """(subjects at once, BLAS threads each) within ``nprocs`` cores; None leaves BLAS unlimited.
+
+    Example: ``split_cpus(8, 3) == (3, 2)``, ``split_cpus(4, 10) == (4, 1)``.
+    """
+    if nprocs is None:
+        return 1, None
+    jobs = max(1, min(nprocs, n_subjects))
+    return jobs, max(1, nprocs // jobs)
+
+
+def map_subjects(fn, subjects: list[str], nprocs: int | None) -> list:
+    """``fn(subject)`` for every subject on threads within ``nprocs`` cores, in subject order."""
+    from contextlib import nullcontext
+
+    from joblib import Parallel, delayed
+    from threadpoolctl import threadpool_limits
+
+    jobs, blas = split_cpus(nprocs, len(subjects))
+    # threads, not processes, so a caller's shared lists and logs stay shared
+    with threadpool_limits(limits=blas) if blas else nullcontext():
+        if jobs == 1:
+            return [fn(subject) for subject in subjects]
+        return Parallel(n_jobs=jobs, prefer="threads")(delayed(fn)(s) for s in subjects)

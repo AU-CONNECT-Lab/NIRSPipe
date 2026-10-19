@@ -1,6 +1,6 @@
 """One bad recording must not strand the subjects queued behind it, serial or parallel.
 
-A failure is logged and the loop moves on to the next subject. With `--n-jobs` the same
+A failure is logged and the loop moves on to the next subject. With `--nprocs` the same
 loop runs several subjects at once, which is only safe if each one's log goes to its own
 file: `setup_logging` replaces the root handlers, so a shared log would be taken over by the
 next subject.
@@ -15,7 +15,7 @@ from nirspipe.cli.workflows import run_participant_level
 _ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
     bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
-    ignore=None, n_jobs=1, no_report=True, dry_run=False,
+    ignore=None, nprocs=None, no_report=True, dry_run=False,
     dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr",
     cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5,
     mode="denoise", high_pass=0.01, low_pass=0.5,
@@ -67,10 +67,10 @@ def parallel_attempted(mini_bids, tmp_path, monkeypatch):
     monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _boom)
     out = tmp_path / "out"
     args = {**_ARGS, "bids_dir": mini_bids, "output_dir": out,
-            "participant_label": ["01", "02"], "n_jobs": 2}
+            "participant_label": ["01", "02"], "nprocs": 2}
 
     original = sys.argv
-    sys.argv = ["nirspipe", str(mini_bids), str(out), "participant", "--n-jobs", "2"]
+    sys.argv = ["nirspipe", str(mini_bids), str(out), "participant", "--nprocs", "2"]
     try:
         with pytest.raises(SystemExit):
             run_participant_level(args)

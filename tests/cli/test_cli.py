@@ -91,7 +91,7 @@ def test_defaults_preserved():
     assert args.motion_correction == "tddr"
     # None, so a --config or mode value is not shadowed; the config builder supplies 1
     assert args.drift_order is None
-    assert args.n_jobs == 1
+    assert args.nprocs is None
     assert args.combine_runs is None
     assert args.no_report is False
     assert args.participant_label is None

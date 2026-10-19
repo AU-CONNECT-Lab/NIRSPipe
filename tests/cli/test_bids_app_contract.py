@@ -17,7 +17,7 @@ REQUIRED = ["--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
 
 _ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
-    bids_filter_file=None, work_dir=None, verbose=False, ignore=None, n_jobs=1,
+    bids_filter_file=None, work_dir=None, verbose=False, ignore=None, nprocs=None,
     no_report=True, dry_run=True, dpf=[6.0, 6.0], sci_threshold=0.8,
     motion_correction="tddr", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
     resp_l_freq=0.2, resp_h_freq=0.5,

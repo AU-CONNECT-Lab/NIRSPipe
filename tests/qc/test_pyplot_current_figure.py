@@ -1,4 +1,4 @@
-"""Figures are drawn on threads under --n-jobs, so no package code may act on pyplot's shared current figure."""
+"""Figures are drawn on threads under --nprocs, so no package code may act on pyplot's shared current figure."""
 
 from __future__ import annotations
 
