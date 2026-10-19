@@ -1620,8 +1620,12 @@ def _section_brain(
     ch_names_brain: list[str] | None = None,
     *,
     sci_threshold: float,
+    flat_map: bool = True,
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
+
+    ``flat_map=False`` draws the 3D views alone, for a page whose clickable map already shows
+    the flat one.
 
     ``fig_name`` names the file, so a per-condition page writes its own. Both figures colour a
     channel by its SCI against the run's line and mark the rejected ones, and a condition has
@@ -1641,9 +1645,10 @@ def _section_brain(
                                             sci_threshold=sci_threshold)
 
             optode_b64 = None
-            with _guard("Optode flat map", errors, subject):
-                optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
-                                                  sci_threshold=sci_threshold)
+            if flat_map:
+                with _guard("Optode flat map", errors, subject):
+                    optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
+                                                      sci_threshold=sci_threshold)
 
             if brain_b64 and optode_b64:
                 brain_pil = _PILImage.open(_io.BytesIO(base64.b64decode(brain_b64))).convert("RGBA")

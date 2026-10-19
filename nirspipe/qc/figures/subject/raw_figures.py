@@ -466,17 +466,23 @@ def build_layout_figure(
             if group:
                 opt_xy.update(zip(group, _project(np.array(list(group.values())))))
 
-        lines_x, lines_y = [], []
-        for s_name, d_name in pairs:
-            if s_name in opt_xy and d_name in opt_xy:
-                lines_x += [float(opt_xy[s_name][0]), float(opt_xy[d_name][0]), None]
-                lines_y += [float(opt_xy[s_name][1]), float(opt_xy[d_name][1]), None]
-
+        # the brain views' colours: rejected red whatever its SCI, the rest graded on the line
         marker_colors_2d = [
-            "#949e9f" if n in bad_channels
-            else sci_color(sci_scores.get(n), sci_threshold)
+            sci_color(sci_scores.get(n), sci_threshold, rejected=n in bad_channels)
             for n in names_2d
         ]
+        pair_colour = {}
+        for n, colour in zip(names_2d, marker_colors_2d):
+            pair_colour.setdefault(pair_of(n), colour)
+
+        # each source-detector line in its channel's colour, one trace per colour
+        lines: dict[str, tuple[list, list]] = {}
+        for s_name, d_name in pairs:
+            if s_name in opt_xy and d_name in opt_xy:
+                xs, ys = lines.setdefault(pair_colour.get(f"{s_name}_{d_name}", "#bdc3c7"),
+                                          ([], []))
+                xs += [float(opt_xy[s_name][0]), float(opt_xy[d_name][0]), None]
+                ys += [float(opt_xy[s_name][1]), float(opt_xy[d_name][1]), None]
 
         def _optode_trace(names, color, symbol):
             return go.Scatter(
@@ -489,13 +495,14 @@ def build_layout_figure(
                 hovertemplate="<b>%{text}</b><extra></extra>", showlegend=False,
             )
 
-        # trace 1 has to stay the channel scatter: the raw viewer's map clicks and highlight index it
+        # the raw viewer's map clicks and highlight find the channel dots by the name "channels"
         fig_2d = go.Figure(
             data=[
-                go.Scatter(x=lines_x, y=lines_y, mode="lines",
-                           line=dict(color="#bdc3c7", width=2),
-                           hoverinfo="skip", showlegend=False),
+                *(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color=colour, width=3),
+                             hoverinfo="skip", showlegend=False)
+                  for colour, (xs, ys) in lines.items()),
                 go.Scatter(x=pos2d[:, 0].tolist(), y=pos2d[:, 1].tolist(), mode="markers",
+                           name="channels",
                            marker=dict(size=10, color=marker_colors_2d, opacity=0.9,
                                        line=dict(width=0.8, color="#555")),
                            customdata=names_2d,

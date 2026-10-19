@@ -70,6 +70,17 @@ def test_a_condition_page_header_counts_what_fails_on_its_own_stretch(raw_condit
 
 
 @pytest.mark.parametrize("block", BLOCKS)
+def test_the_condition_optode_map_is_coloured_by_the_condition_s_own_sci(raw_condition_run, block):
+    fig = _page(raw_condition_run, block)["layout"]["layout_2d_figure"]
+    dots = next(t for t in fig["data"] if t.get("name") == "channels")
+    failing = _failing_in(raw_condition_run, block)
+    for name, colour in zip(dots["customdata"], dots["marker"]["color"]):
+        pair = name.rsplit(" ", 1)[0]
+        # under the line on this stretch, or rejected by the run: red or amber, never green
+        assert (colour != "#27ae60") == (pair in failing), (block, name, colour)
+
+
+@pytest.mark.parametrize("block", BLOCKS)
 def test_the_sci_panel_holds_the_condition_s_windows_and_only_those(raw_condition_run, block):
     t0, t1, _ = _blocks(raw_condition_run)[block]
     windowed = read_record(raw_condition_run.nirs / "sub-01_task-main_desc-sqmraw_qc.json")["windowed"]

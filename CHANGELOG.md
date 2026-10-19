@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 - With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
+- Runs writing into one output tree at once could drop each other's `DatasetLinks`, and dyad QC reading that tree then failed
 
 ## [0.71.0] - 2026-10-19
 

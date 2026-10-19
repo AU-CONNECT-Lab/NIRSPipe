@@ -33,8 +33,8 @@ NOTES = {
         "Each channel's HbO (solid) and HbR (dotted) where it sits on the head, averaged per "
         "condition; a run without events shows the whole recording.",
     "raw.layout_2d":
-        "Channels coloured by windowed SCI against the run's line, rejected ones grey; sources "
-        "are red squares, detectors blue circles.",
+        "Each channel's line and dot coloured by windowed SCI against the run's line, rejected "
+        "ones red; sources are red squares, detectors blue circles.",
     "raw.channel_detail_picked":
         "{pair}: concentration, spectrum and epoch average, after Beer-Lambert.",
     "raw.psd":

@@ -831,6 +831,9 @@ def _process_run(
         # drawn by the page writer, not here: the GUI shares this function and shows no copy
         "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
                                       sci_threshold=cutoffs["sci"]),
+        # the clickable map on a condition's own SCI, as the brain views are drawn
+        "remake_layout": lambda sci: build_layout_figure(raw, bad_channels, sci,
+                                                         sci_threshold=cutoffs["sci"]),
         "sci_win_scores": (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
         "trial_images_by_condition": trial_img_by_cond,
         "sep_bands":     sep_bands,
@@ -882,7 +885,9 @@ def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method, bad_pairs):
 
 def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
                  sci_threshold: float):
-    """``(namer, SCI per channel, errors) -> href`` of the subject report's brain figure.
+    """``(namer, SCI per channel, errors) -> href`` of the subject report's brain views.
+
+    The 3D views alone: the flat map is the page's clickable one, beside the channel picker.
 
     The haemoglobin file's HbO channels place the channels, rejected ones included, as the
     pipeline places them for its own copy. A condition page hands in its own SCI and a namer
@@ -902,7 +907,7 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
     def remake(namer, sci: dict, errors: list) -> "str | None":
         return _section_brain(sci, sorted(bad_channels), coords, good, raw, label, errors,
                               fig_dir, namer, ch_names_brain=names,
-                              sci_threshold=sci_threshold)["brain_views_path"]
+                              sci_threshold=sci_threshold, flat_map=False)["brain_views_path"]
 
     return remake
 
@@ -1058,6 +1063,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         remake_psd=ctx.get("remake_psd"), remake_epoch=ctx.get("remake_epoch"),
         remake_hbo_hbr_corr=ctx.get("remake_hbo_hbr_corr"),
         remake_brain=save_brain if remake_brain else None,
+        remake_layout=ctx.get("remake_layout"),
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
         sep_bands=ctx.get("sep_bands"),

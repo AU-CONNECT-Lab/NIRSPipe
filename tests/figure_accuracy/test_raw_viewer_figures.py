@@ -41,13 +41,33 @@ def test_the_run_page_draws_the_subject_report_s_brain_figure(raw_viewer_run, pa
 
 # ---- channel maps ----
 
-def test_the_optode_map_names_every_channel_and_greys_the_rejected_pair(raw_viewer_run, page):
-    dots = page[1]["layout"]["layout_2d_figure"]["data"][1]
+def test_the_optode_map_names_every_channel_and_reddens_the_rejected_pair(raw_viewer_run, page):
+    fig = page[1]["layout"]["layout_2d_figure"]
+    dots = next(t for t in fig["data"] if t.get("name") == "channels")
     truth = raw_viewer_run.truth
     assert {name.rsplit(" ", 1)[0] for name in dots["customdata"]} == {p.name for p in truth.pairs}
     bad = next(p for p in truth.pairs if p.bad).name
     colours = dict(zip(dots["customdata"], dots["marker"]["color"]))
-    assert {c for n, c in colours.items() if n.startswith(bad + " ")} == {"#949e9f"}
+    assert {c for n, c in colours.items() if n.startswith(bad + " ")} == {"#e74c3c"}
+    assert {c for n, c in colours.items() if not n.startswith(bad + " ")} == {"#27ae60"}
+
+
+def test_each_optode_line_wears_its_channel_s_colour(raw_viewer_run, page):
+    fig = page[1]["layout"]["layout_2d_figure"]
+    optodes = {name: (x, y) for t in fig["data"] if t.get("mode") == "markers+text"
+               for name, x, y in zip(t["text"], t["x"], t["y"])}
+    lines = {}
+    for t in fig["data"]:
+        if t.get("mode") != "lines":
+            continue
+        xs, ys = list(t["x"]), list(t["y"])
+        # segments are written source, detector, gap
+        for k in range(0, len(xs), 3):
+            lines[(xs[k], ys[k], xs[k + 1], ys[k + 1])] = t["line"]["color"]
+    for pair in raw_viewer_run.truth.pairs:
+        s, d = pair.name.split("_")
+        drawn = lines[(*optodes[s], *optodes[d])]
+        assert drawn == ("#e74c3c" if pair.bad else "#27ae60"), pair.name
 
 
 def test_each_topo_cell_holds_its_own_channel_s_traces(raw_viewer_run, page):
