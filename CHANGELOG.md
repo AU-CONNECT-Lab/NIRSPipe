@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Breaking**: `--n-jobs` becomes `--nprocs`, the cores a command may use in all; subjects share them and run records store `nprocs`
+
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 
