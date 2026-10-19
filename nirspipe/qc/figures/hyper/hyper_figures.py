@@ -676,8 +676,8 @@ def build_motion_panel(
     has_cond = bool(conditions)
     has_spikes = bool(spans_both)
     # the one record of movement not taken off the optical data, so it sits above the GVTD
-    # rows; the same in both stages, since a correction does not change how anyone moved
-    imu_rows = motion.get("imu") or {}
+    # rows; before only, since a correction does not change how anyone moved
+    imu_rows = (motion.get("imu") or {}) if stage == "before" else {}
     n_rows = int(has_cond) + len(imu_rows) + len(sets) + int(has_spikes) + len(carpets)
 
     # the spike strip sits directly under the condition bar, above the traces, as one band

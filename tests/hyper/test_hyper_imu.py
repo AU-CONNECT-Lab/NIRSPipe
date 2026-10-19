@@ -99,6 +99,23 @@ def test_the_panel_draws_the_imu_above_the_gvtd_rows(members):
     assert int(imu_axis.split()[0][1:] or 1) < int(gvtd_axis.split()[0][1:] or 1)
 
 
+def test_the_corrected_figure_leaves_the_imu_to_the_uncorrected_one(members):
+    raws, aligned = members
+    imu = align_imu_like({sid: _imu(120.0) for sid in raws}, raws, aligned)
+    intensity = align_like(raws, aligned)
+    corrected = {sid: mne.preprocessing.nirs.optical_density(r.copy(), verbose=False)
+                 for sid, r in intensity.items()}
+    motion = motion_series(intensity, corrected, list(SHIFTS), imu=imu)
+    assert motion["stages"] == ["before", "after"]
+
+    def labels(stage):
+        return [str(a.text) for a in build_motion_panel(motion, stage).layout.annotations]
+
+    assert any("gyroscope" in text for text in labels("before"))
+    assert not any("gyroscope" in text or text.startswith("median") for text in labels("after"))
+    assert any("GVTD" in text for text in labels("after"))
+
+
 def test_no_imu_draws_no_row(members):
     raws, aligned = members
     motion = motion_series(align_like(raws, aligned), None, list(SHIFTS))

@@ -46,8 +46,8 @@ NOTES = {
         "On each carpet the long rows are grouped by ROI, coloured by the outer strip and "
         "named in the legend.",
     "hyper_raw.motion_after":
-        "The same rows after motion correction, scaled by the <em>uncorrected</em> median, "
-        "mean and SD, so a drop is movement removed.",
+        "The GVTD rows and carpets after motion correction, scaled by the <em>uncorrected</em> "
+        "median, mean and SD, so a drop is movement removed.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: first each block&rsquo;s share "
         "of coupled windows, then each window&rsquo;s SCI. Bars are long channels, ringed "
