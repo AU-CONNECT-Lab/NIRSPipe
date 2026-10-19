@@ -41,8 +41,9 @@ def cmd_prep_raw(
     motion_std_thresh: float | None = None,
     wavelet_iqr: float | None = None,
     run_label: list[str] | None = None,
+    nprocs: int | None = None,
 ) -> None:
-    """Generate static raw QC reports, one subject at a time."""
+    """Generate static raw QC reports, one per subject."""
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
     if not skip_bids_validation:
@@ -149,17 +150,17 @@ def cmd_prep_raw(
         return len(all_runs)
 
     # one subject's failure must not take the rest of the batch with it
-    n_runs, failed = 0, []
-    for subject in participant_label:
+    def isolated(subject: str) -> int:
         try:
-            found = one_subject(subject)
-            if not found:
-                failed.append(subject)
-            n_runs += found
+            return one_subject(subject)
         except Exception as exc:
             logger.exception("sub-%s | raw QC failed", subject)
             print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
-            failed.append(subject)
+            return 0
+
+    found = _shared.map_subjects(isolated, participant_label, nprocs)
+    n_runs = sum(found)
+    failed = [subject for subject, n in zip(participant_label, found) if not n]
 
     print(f"Done. {n_runs} run(s) processed over {len(participant_label)} subject(s).")
     if failed:
@@ -477,6 +478,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "delivered. Default none: report it uncorrected.")
     _app_options.add_motion_settings(pr)
     _shared.add_skip_bids_validation(pr)
+    _shared.add_nprocs(pr)
     _add_ignore(pr)
     pr.add_argument("--roi-mapping", type=Path, default=None,
                     help="JSON file mapping ROI labels to lists of channel names. Groups the "

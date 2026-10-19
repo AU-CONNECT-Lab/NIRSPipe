@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+import threading
 from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,9 +18,27 @@ logger = get_logger("io.bids")
 _VALIDATOR_INSTALL = "deno install -A -g -n bids-validator jsr:@bids/validator"
 
 
+class _SerialLayout:
+    """A BIDSLayout whose calls take turns: its database session is not safe across threads."""
+
+    def __init__(self, layout: BIDSLayout):
+        self._layout = layout
+        self._lock = threading.RLock()
+
+    def __getattr__(self, name: str):
+        attr = getattr(self._layout, name)
+        if not callable(attr):
+            return attr
+
+        def serial(*args, **kwargs):
+            with self._lock:
+                return attr(*args, **kwargs)
+        return serial
+
+
 def get_layout(bids_dir: Path, validate: bool = True) -> BIDSLayout:
-    """Return a pybids BIDSLayout for the dataset."""
-    return BIDSLayout(str(bids_dir), validate=validate)
+    """Return a pybids BIDSLayout for the dataset, safe to query from parallel subjects."""
+    return _SerialLayout(BIDSLayout(str(bids_dir), validate=validate))
 
 
 def _validator_command() -> "list[str] | None":

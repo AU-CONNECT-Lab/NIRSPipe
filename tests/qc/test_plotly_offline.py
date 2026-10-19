@@ -71,3 +71,40 @@ def test_outside_a_dataset_the_copy_sits_beside_the_report_not_among_the_figures
     assert f'src="../{PLOTLY_LOCAL_NAME}"' in plotly_script_tags(page)
     assert (tmp_path / PLOTLY_LOCAL_NAME).is_file()
     assert not (page.parent / PLOTLY_LOCAL_NAME).exists()
+
+
+def test_parallel_subjects_writing_the_copy_at_once_all_succeed(tmp_path, monkeypatch):
+    import threading
+
+    from nirspipe.qc.common import figure_io
+
+    real = figure_io.get_plotlyjs
+    for attempt in range(5):
+        # every thread is held until all have passed the exists-check, where the race was
+        barrier = threading.Barrier(4)
+
+        def held_plotlyjs():
+            try:
+                barrier.wait(timeout=1)
+            except threading.BrokenBarrierError:
+                pass
+            return real()
+
+        monkeypatch.setattr(figure_io, "get_plotlyjs", held_plotlyjs)
+        target = tmp_path / str(attempt) / PLOTLY_LOCAL_NAME
+        errors = []
+
+        def write():
+            try:
+                figure_io._write_local_plotly(target)
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=write) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert errors == []
+        assert target.read_bytes().replace(b"\r\n", b"\n") == _BUNDLED.read_bytes().replace(b"\r\n", b"\n")
+        assert not list(target.parent.glob("*.tmp"))

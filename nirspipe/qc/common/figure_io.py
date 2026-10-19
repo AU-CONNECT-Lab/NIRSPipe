@@ -14,7 +14,9 @@ import io
 import json
 import os
 import re
+import threading
 from pathlib import Path
+from uuid import uuid4
 
 import mne
 from plotly.offline import get_plotlyjs, get_plotlyjs_version
@@ -29,14 +31,26 @@ PLOTLY_CDN_URL = f"https://cdn.plot.ly/plotly-{PLOTLY_JS_VERSION}.min.js"
 PLOTLY_LOCAL_NAME = f"plotly-{PLOTLY_JS_VERSION}.min.js"
 
 
+# subjects on threads share one pid, so they take turns at the copy
+_LOCAL_PLOTLY_LOCK = threading.Lock()
+
+
 def _write_local_plotly(target: Path) -> None:
-    if target.is_file():
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # parallel subjects write the same file: each writes its own and the last rename wins
-    tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
-    tmp.write_text(get_plotlyjs(), encoding="utf-8")
-    os.replace(tmp, target)
+    with _LOCAL_PLOTLY_LOCK:
+        if target.is_file():
+            return
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(f"{target.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
+        try:
+            tmp.write_text(get_plotlyjs(), encoding="utf-8")
+            try:
+                os.replace(tmp, target)
+            except PermissionError:
+                # Windows refuses the rename while another process's identical copy is open
+                if not target.is_file():
+                    raise
+        finally:
+            tmp.unlink(missing_ok=True)
 
 
 def plotly_script_tags(page: Path) -> str:
