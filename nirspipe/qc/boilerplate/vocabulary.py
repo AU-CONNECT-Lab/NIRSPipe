@@ -494,7 +494,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"t_motion": f"{motion.SPLINE_WAVELET_T_MOTION:g}",
                 "std_thresh": _recorded(params, "motion_std_thresh"),
                 "amp_thresh": f"{motion.SPLINE_WAVELET_AMP_THRESH:g}",
-                "t_mask": f"{motion.SPLINE_T_MASK:g}", "p": f"{motion.SPLINE_P:g}",
+                "t_mask": f"{motion.SPLINE_WAVELET_T_MASK:g}", "p": f"{motion.SPLINE_P:g}",
                 "dt_short": f"{motion.SPLINE_DT_SHORT:g}", "dt_long": f"{motion.SPLINE_DT_LONG:g}",
                 "wavelet": motion.WAVELET, "iqr_factor": _recorded(params, "wavelet_iqr"),
                 "lowest_scale": f"{motion.WAVELET_LOWEST_SCALE}"}

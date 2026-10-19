@@ -53,8 +53,8 @@ def _raw(d: np.ndarray, sfreq: float = SFREQ) -> mne.io.Raw:
 def test_it_takes_the_papers_detection_and_fence():
     assert (motion.SPLINE_WAVELET_T_MOTION, motion.SPLINE_WAVELET_AMP_THRESH) == (1.0, 0.4)
     assert (motion.SPLINE_WAVELET_STD_THRESH, motion.SPLINE_WAVELET_IQR_FACTOR) == (13.0, 0.8)
-    # the mask margin and the smoothing are spline's own
-    assert (motion.SPLINE_T_MASK, motion.SPLINE_P) == (1.0, 0.99)
+    # the mask margin is its own, the smoothing spline's
+    assert (motion.SPLINE_WAVELET_T_MASK, motion.SPLINE_P) == (1.0, 0.99)
 
 
 def test_it_is_spline_at_its_thresholds_then_the_wavelet():
@@ -105,7 +105,7 @@ def test_it_refuses_below_the_splines_rate():
 
 @pytest.mark.parametrize("method, expected", [
     ("spline_wavelet", {"motion_std_thresh": 13.0, "wavelet_iqr": 0.8}),
-    ("spline", {"motion_std_thresh": 50.0}),
+    ("spline", {"motion_std_thresh": 20.0}),
     ("wavelet", {"wavelet_iqr": 1.5}),
     ("wavelet_tddr", {"wavelet_iqr": 1.5}),
     ("tddr", {}), ("tpca", {}), ("spline_sg", {}), ("none", {}),

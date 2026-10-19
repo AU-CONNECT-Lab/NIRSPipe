@@ -16,7 +16,11 @@ from scipy.interpolate import CubicSpline, make_smoothing_spline
 from scipy.optimize import minimize
 
 from nirspipe.pipeline.motion import (
+    SPLINE_AMP_THRESH,
     SPLINE_P,
+    SPLINE_STD_THRESH,
+    SPLINE_T_MASK,
+    SPLINE_T_MOTION,
     _smoothing_spline,
     _spline_correct,
     _spline_motion_correct,
@@ -31,7 +35,7 @@ from nirspipe.utils.lineage import lineage_of, stage_of
 from tests._synth import synth_raw
 
 SFREQ = 10.0
-N_T = 6000               # long enough that one step does not inflate its own SD past 50 SDs
+N_T = 6000               # long enough that one step does not inflate its own SD past 20 SDs
 N_CH = 6
 NAMES = [f"S{i // 2 + 1}_D1 {760 if i % 2 == 0 else 850}" for i in range(N_CH)]
 STEP_AT = 3000
@@ -56,11 +60,15 @@ def _raw(d: np.ndarray, bads: tuple[int, ...] = (), sfreq: float = SFREQ) -> mne
 
 # ---- Detection ----
 
+def test_detection_defaults_are_the_published_comparisons():
+    assert (SPLINE_T_MOTION, SPLINE_STD_THRESH, SPLINE_AMP_THRESH, SPLINE_T_MASK) == (0.5, 20.0, 0.5, 2.0)
+
+
 def test_a_step_marks_its_pair_with_the_published_window():
-    # 5-sample change window, 10 samples either side: rows 2995..2999 see the step, widened
-    # to 2985..3009, and a row marks the sample after it
+    # 5-sample change window, 20 samples either side: rows 2995..2999 see the step, widened
+    # to 2975..3019, and a row marks the sample after it
     mask = _spline_motion_mask(_stepped(2.0), SFREQ, NAMES, np.ones(N_CH, bool))
-    assert (np.flatnonzero(mask[:, 0]) == np.arange(2986, 3011)).all()
+    assert (np.flatnonzero(mask[:, 0]) == np.arange(2976, 3021)).all()
     assert (mask[:, 1] == mask[:, 0]).all()
     assert not mask[:, 2:].any()
 
@@ -73,12 +81,20 @@ def test_a_bad_wavelength_still_feeds_its_pairs_detection():
     assert mask[:, 1].any()
 
 
-def test_detection_takes_fifty_sds_where_tpca_takes_twenty():
-    # a 0.7 step is about 42 SDs of this channel's first difference
-    d = _stepped(0.7)
+def test_the_sd_rule_marks_twenty_sds_below_the_amplitude_rule():
+    # first-difference SD about 0.015: a 0.4 step is about 27 SDs, a 0.2 step about 14
     good = np.ones(N_CH, bool)
-    assert _tpca_motion_mask(d, SFREQ, good).any()
-    assert not _spline_motion_mask(d, SFREQ, NAMES, good).any()
+    assert _spline_motion_mask(_stepped(0.4), SFREQ, NAMES, good).any()
+    assert not _spline_motion_mask(_stepped(0.2), SFREQ, NAMES, good).any()
+
+
+def test_half_an_od_unit_marks_where_tpca_needs_five():
+    # first-difference SD about 0.043, so a 0.7 step is about 16 SDs: only the amplitude rule
+    d = 3 * _quiet()
+    d[STEP_AT:, 0] += 0.7
+    good = np.ones(N_CH, bool)
+    assert _spline_motion_mask(d, SFREQ, NAMES, good).any()
+    assert not _tpca_motion_mask(d, SFREQ, good).any()
 
 
 def test_a_record_never_starts_in_motion():

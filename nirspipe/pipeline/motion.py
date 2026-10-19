@@ -255,10 +255,10 @@ def _tpca_motion_correct(raw_od: mne.io.Raw) -> tuple[mne.io.Raw, dict[str, Any]
 # changes by more than SPLINE_STD_THRESH SDs of its first difference or by more than
 # SPLINE_AMP_THRESH in OD
 SPLINE_T_MOTION = 0.5
-SPLINE_STD_THRESH = 50.0
-SPLINE_AMP_THRESH = 5.0
+SPLINE_STD_THRESH = 20.0
+SPLINE_AMP_THRESH = 0.5
 # seconds marked either side of a detected sample
-SPLINE_T_MASK = 1.0
+SPLINE_T_MASK = 2.0
 # smoothing parameter of the cubic smoothing spline, on time in seconds
 SPLINE_P = 0.99
 # rejoining averages a whole stretch shorter than SPLINE_DT_SHORT s, SPLINE_DT_SHORT s of one
@@ -269,7 +269,8 @@ SPLINE_DT_LONG = 3.0
 
 def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str], good: np.ndarray,
                         t_motion: float = SPLINE_T_MOTION, std_thresh: float = SPLINE_STD_THRESH,
-                        amp_thresh: float = SPLINE_AMP_THRESH) -> np.ndarray:
+                        amp_thresh: float = SPLINE_AMP_THRESH,
+                        t_mask: float = SPLINE_T_MASK) -> np.ndarray:
     """Motion samples per channel, time x channels, detected per source-detector pair.
 
     Both wavelengths of a pair take the pair's mask, and both feed its detection even when
@@ -279,7 +280,7 @@ def _spline_motion_mask(d: np.ndarray, sfreq: float, ch_names: list[str], good: 
     mask = np.zeros(d.shape, bool)
     for pair in dict.fromkeys(pairs[good]):
         cols = pairs == pair
-        rows = _motion_mask(d[:, cols], sfreq, t_motion, std_thresh, amp_thresh, SPLINE_T_MASK)
+        rows = _motion_mask(d[:, cols], sfreq, t_motion, std_thresh, amp_thresh, t_mask)
         mask[:, cols & good] = rows[:, None]
     return mask
 
@@ -375,7 +376,8 @@ def _spline_correct(y: np.ndarray, t_inc: np.ndarray, t: np.ndarray, sfreq: floa
 
 def _spline_motion_correct(raw_od: mne.io.Raw, t_motion: float = SPLINE_T_MOTION,
                            std_thresh: float = SPLINE_STD_THRESH,
-                           amp_thresh: float = SPLINE_AMP_THRESH) -> tuple[mne.io.Raw, dict[str, Any]]:
+                           amp_thresh: float = SPLINE_AMP_THRESH,
+                           t_mask: float = SPLINE_T_MASK) -> tuple[mne.io.Raw, dict[str, Any]]:
     """Spline motion correction (Scholkmann 2010), channel by channel in OD space.
 
     Detect with _spline_motion_mask, then _spline_correct every good channel with motion.
@@ -390,7 +392,8 @@ def _spline_motion_correct(raw_od: mne.io.Raw, t_motion: float = SPLINE_T_MOTION
     raw = raw_od.copy()
     d = raw.get_data().T
     good = ~np.isin(raw.ch_names, raw.info["bads"])
-    motion = _spline_motion_mask(d, sfreq, raw.ch_names, good, t_motion, std_thresh, amp_thresh)
+    motion = _spline_motion_mask(d, sfreq, raw.ch_names, good, t_motion, std_thresh, amp_thresh,
+                                 t_mask)
     out = d.copy()
     n_segments = 0
     for ch in np.flatnonzero(motion.any(axis=0)):
@@ -613,6 +616,7 @@ def spline_sg_cutoff(sfreq: float = 10.0) -> float:
 
 SPLINE_WAVELET_T_MOTION = 1.0
 SPLINE_WAVELET_AMP_THRESH = 0.4
+SPLINE_WAVELET_T_MASK = 1.0
 # what --motion-std-thresh and --wavelet-iqr default to under this method
 SPLINE_WAVELET_STD_THRESH = 13.0
 SPLINE_WAVELET_IQR_FACTOR = 0.8
@@ -691,7 +695,7 @@ def correct_motion(raw_od: mne.io.Raw, method: MotionMethod | None = None,
     elif method == "spline_wavelet":
         splined, params["spline_wavelet"] = _spline_motion_correct(
             raw_od, t_motion=SPLINE_WAVELET_T_MOTION, std_thresh=std_thresh,
-            amp_thresh=SPLINE_WAVELET_AMP_THRESH)
+            amp_thresh=SPLINE_WAVELET_AMP_THRESH, t_mask=SPLINE_WAVELET_T_MASK)
         corrected = _wavelet_motion_correct(splined, iqr_factor=iqr_factor)
     elif method == "none":
         corrected = raw_od

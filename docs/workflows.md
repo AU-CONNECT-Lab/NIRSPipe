@@ -96,6 +96,10 @@ Motion artifacts are corrected in optical density, before the conversion to haem
 
 `--motion-std-thresh` and `--wavelet-iqr` set the spline detection threshold and the wavelet fence of the methods that use them; their per-method defaults are in [Usage](usage.md#nirspipe). The detection threshold is measured against each channel's sample-to-sample change, so the same value marks more of a faster recording; when `spline` or `spline_wavelet` marks over 10% of the samples, the log warns and the report adds a note.
 
+The methods differ in how much of the response they keep, not only in how much noise they remove. `tddr` weighs every sample's derivative by a robust weight below one, not only the outlying ones, so a small slow response comes out smaller even in a recording without motion; `wavelet_tddr` and `spline_wavelet` shrink it at least as much, `wavelet` less. Response amplitudes are comparable only between recordings corrected with the same method, so a study comparing conditions or groups should correct all of its data one way.
+
+`spline_sg` ends with a Savitzky-Golay smoothing that low-passes every channel near 0.1 Hz. An AR noise model fitted after it fits the smoothing rather than the noise, as after a `--low-pass`: the GLM's betas hold but its t values come out anti-conservative. Before a GLM with an AR noise model, prefer another method, or use `--noise-model ols` and treat the t values as uncalibrated.
+
 Writes `desc-motcorrected`. The before-and-after comparison the report draws is described in [QC](qc.md#motion-correction-footprint).
 
 ```{figure} figures/motion_gvtd_carpet.png
