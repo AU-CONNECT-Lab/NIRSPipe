@@ -23,14 +23,17 @@ def raw():
     return synth_raw("01", "hold", duration=20.0, motion_onset=None)
 
 
-def test_a_bad_channel_stays_on_the_2d_map_and_is_drawn_grey(raw):
+def test_a_bad_channel_stays_on_the_2d_map_and_is_drawn_red_line_and_dot(raw):
     bad = raw.ch_names[0]
     raw.info["bads"] = [bad]
     fig_2d = build_layout_figure(raw, {bad}, {}, sci_threshold=0.8)
-    channels = fig_2d.data[1]
+    channels = next(t for t in fig_2d.data if t.name == "channels")
 
     assert bad in list(channels.customdata)
-    assert channels.marker.color[list(channels.customdata).index(bad)] == "#949e9f"
+    assert channels.marker.color[list(channels.customdata).index(bad)] == "#e74c3c"
+    # with no SCI to grade the rest, the rejected pair's line is the one red line
+    reds = [t for t in fig_2d.data if t.mode == "lines" and t.line.color == "#e74c3c"]
+    assert len(reds) == 1 and len(reds[0].x) == 3
 
 
 def test_channel_colours_follow_the_long_short_split(raw):
