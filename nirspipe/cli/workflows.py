@@ -7,7 +7,6 @@ Does no signal processing itself.
 
 import json
 import sys
-import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -30,11 +29,9 @@ from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
-from nirspipe.utils import job_db as _jdb
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
 from nirspipe.utils.spans import bad_spans, marker_onset
-from nirspipe import __version__
 
 logger = get_logger("cli.workflows")
 
@@ -144,7 +141,7 @@ def _resolve_post_settings(args: dict[str, Any],
             sources[field] = "default"
     sources["roi_map_name"] = "cli" if args.get("roi_mapping") else "default"
 
-    # one resolved set for every reader, the database included
+    # one resolved set for every reader
     for arg in [*setting_args.values(), "contrast_file"]:
         if args.get(arg) is None and layered.get(arg) is not None:
             args[arg] = layered[arg]
@@ -250,7 +247,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         logger.debug("loaded post settings from %s", args["config"])
 
     # folded into args before anything reads them: prep stamps the separation bands, and the
-    # database and the report read the cutoffs straight off args
+    # report reads the cutoffs straight off args
     toml, post_sources = _resolve_post_settings(args, config_toml)
     cfg_high_pass = args.get("high_pass")
     cfg_low_pass  = args.get("low_pass")
@@ -268,231 +265,171 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     tasks: list[str | None] = task_label if task_label else [None]
 
-    db_path = output_dir / "logs" / "nirspipe.db"
-    execution_id = _jdb.log_execution(
-        db_path=db_path,
-        command_line=" ".join(sys.argv),
-        nirspipe_version=__version__,
-        input_dir=str(bids_dir),
-        output_dir=str(output_dir),
-        subjects=participant_label,
-        work_dir=str(work_dir) if work_dir else None,
-        session_labels=session_label,
-        task_labels=task_label,
-        mode=_v(args["mode"]) if args.get("mode") else None,
-        dry_run=args.get("dry_run", False),
-    )
-
     run_notes: list[tuple[str, str]] = []
     failed: list[str] = []
 
-    try:
-        def _one(subject: str) -> None:
-            sub_timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
-            sub_dir = output_dir / f"sub-{subject}"
-            log_file = sub_dir / "logs" / f"sub-{subject}.log"
-            with thread_log_file(log_file), _isolate(subject, failed):
-                logger.info("sub-%s | starting", subject)
-                # built here purely to record what will be used; the loops below build their own
-                # per-session copies. Resolving now keeps the record even if the run then fails.
-                write_run_record(
-                    args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
-                    prep_config=_make_prep_config(subject, None, args),
-                    post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
-                                 if args.get("mode") else None),
-                    post_sources=post_sources,
-                )
+    def _one(subject: str) -> None:
+        sub_timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
+        sub_dir = output_dir / f"sub-{subject}"
+        log_file = sub_dir / "logs" / f"sub-{subject}.log"
+        with thread_log_file(log_file), _isolate(subject, failed):
+            logger.info("sub-%s | starting", subject)
+            # built here purely to record what will be used; the loops below build their own
+            # per-session copies. Resolving now keeps the record even if the run then fails.
+            write_run_record(
+                args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
+                prep_config=_make_prep_config(subject, None, args),
+                post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
+                             if args.get("mode") else None),
+                post_sources=post_sources,
+            )
 
-                # The record is the whole point of a dry run, and it is on disk by here.
-                # Stopping before log_run_start keeps the database free of runs that never
-                # happened.
-                if args.get("dry_run"):
-                    logger.info("sub-%s | dry run: wrote the record, processed nothing", subject)
-                    return
+            # The record is the whole point of a dry run, and it is on disk by here.
+            if args.get("dry_run"):
+                logger.info("sub-%s | dry run: wrote the record, processed nothing", subject)
+                return
 
-                _jdb.log_run_start(
-                    db_path, execution_id, subject,
-                    sci_threshold=args["sci_threshold"],
-                    dpf=args["dpf"],
-                    motion_correction=_v(args["motion_correction"]),
-                    mode=_v(args["mode"]) if args.get("mode") else None,
-                    high_pass=cfg_high_pass,
-                    low_pass=cfg_low_pass,
-                    hrf_model=_v(args.get("hrf_model")),
-                )
+            # keyed by BIDS run stem: every QC figure is per run, so the report loop below
+            # needs each run's own prep output rather than whichever finished last
+            prep_runs: dict[str, tuple] = {}
+            try:
+                sessions: list[str | None] = session_label if session_label else [None]
 
-                t0 = time.monotonic()
-                subject_status = "SUCCESS"
-                subject_error: str | None = None
-                # keyed by BIDS run stem: every QC figure is per run, so the report loop below
-                # needs each run's own prep output rather than whichever finished last
-                prep_runs: dict[str, tuple] = {}
-                try:
-                    sessions: list[str | None] = session_label if session_label else [None]
+                for session in sessions:
+                    for task in tasks:
+                        files = get_nirs_files(
+                            layout, subject=subject, session=session,
+                            task=task, filter_file=bids_filter_file,
+                        )
 
-                    for session in sessions:
-                        for task in tasks:
-                            files = get_nirs_files(
-                                layout, subject=subject, session=session,
-                                task=task, filter_file=bids_filter_file,
-                            )
-
-                            if not files:
-                                label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
-                                logger.warning("no snirf files found for %s, skipping", label)
-                                continue
-
-                            for snirf_path in files:
-                                src_entities = layout.parse_file_entities(str(snirf_path))
-                                # the file's own session, which --session-label only filters on;
-                                # without it the outputs of a session tree lose their ses- level
-                                prep_config = _make_prep_config(
-                                    subject, src_entities.get("session") or session, args,
-                                    entities=src_entities,
-                                    channels_tsv_bads=(
-                                        [] if "channel-status" in (args.get("ignore") or [])
-                                        else channel_status_bads(layout, snirf_path)))
-                                logger.info("processing: %s", snirf_path)
-                                try:
-                                    raw = read_snirf(snirf_path)
-                                    result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path,
-                                                      source_metadata=layout.get_metadata(str(snirf_path)))
-                                    logger.info("finished prep: %s", snirf_path.name)
-                                    prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
-                                except Exception:
-                                    logger.exception("prep failed for %s", snirf_path)
-                                    raise
-
-                    post_runs: dict[str, dict] = {}
-                    if args.get("mode") is not None:
-                        post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
-
-                    # one SQM record per run, written once both passes have finished so the
-                    # post-Beer-Lambert sections can measure the files post actually produced.
-                    # The database takes one row per section.
-                    from nirspipe.qc.subject.record_io import read_record
-                    from nirspipe.qc.subject.sqm_record import SECTIONS, build_sqm_records, entities_of
-                    try:
-                        # one nirs/ per session the runs came from
-                        sqm_paths = []
-                        for ses in sorted({entity_of(label, "ses") or "" for label in prep_runs}):
-                            sqm_paths += build_sqm_records(
-                                sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
-                                bids_root=bids_dir,
-                                qc_window_s=args.get("window_length", 10.0),
-                                # nothing on disk records them, so the record would otherwise
-                                # be split on the package defaults whatever this run was told
-                                sep_bands=_app_options.resolved_separation_bands(args),
-                                labels=set(prep_runs))
-                    except Exception:
-                        logger.error("sub-%s | SQM records failed", subject, exc_info=True)
-                        sqm_paths = []
-                    for path in sqm_paths:
-                        logger.info("sub-%s | SQM record -> %s", subject, path.name)
-                        # the record is on disk either way; only the database rows are at risk here
-                        try:
-                            record = read_record(path)
-                            ents = entities_of(path.stem)
-                            for section in SECTIONS:
-                                if record.get(section):
-                                    _jdb.log_sqm(db_path, execution_id, subject, section,
-                                                 record[section], session=ents["ses"],
-                                                 bids_task=ents["task"])
-                        except Exception:
-                            logger.warning("sub-%s | SQM database rows failed for %s",
-                                           subject, path.name, exc_info=True)
-
-                    # one report per run: the figures, the provenance graph and the metrics all
-                    # describe a single recording, so a subject holding five tasks gets five
-                    for label, (raw, result, run_prep_config) in prep_runs.items():
-                        # rendered before the report, which embeds it: every sidecar it scans is
-                        # on disk by now, and --no-report still leaves the diagram behind
-                        provenance_path = None
-                        try:
-                            from nirspipe.qc.figures.common.provenance_figure import write_provenance
-                            from nirspipe.qc.common.figure_io import figure_namer
-                            # the run's own nirs/, session level included; the figure stays
-                            # beside the subject's reports
-                            ses = entity_of(label, "ses")
-                            for path in write_provenance(
-                                sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
-                                sub_dir / "figures",
-                                figure_namer(label), label=label,
-                                title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
-                            ):
-                                logger.info("sub-%s | provenance -> %s", subject, path)
-                                if path.suffix == ".png":
-                                    provenance_path = f"figures/{path.name}"
-                        except Exception:
-                            logger.warning("%s | provenance graph failed", label, exc_info=True)
-
-                        if args.get("no_report"):
+                        if not files:
+                            label = f"sub-{subject}" + (f" ses-{session}" if session else "") + (f" task-{task}" if task else "")
+                            logger.warning("no snirf files found for %s, skipping", label)
                             continue
-                        post = post_runs.get(label, {})
-                        # extend rather than +=: inside the per-subject function that is a
-                        # rebind, which makes the name local and unreadable, and several
-                        # subjects may be appending at once
-                        run_notes.extend([(label, n) for n in _emit_subject_report(
-                            subject, sub_dir, raw, result, run_prep_config, args,
-                            post.get("glm_est"), post.get("design_matrix"),
-                            alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
-                            fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
-                            fc_roi=post.get("fc_roi") or {},
-                            high_pass=cfg_high_pass, low_pass=cfg_low_pass,
-                            after_haemo=post.get("denoised"),
-                            roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
-                            roi_map_name=_roi_map_name(args),
-                            filled_settings=filled_settings,
-                        ) or []])
 
-                    if not args.get("no_report") and prep_runs:
-                        from nirspipe.qc.subject.subject_index import write_subject_index
-                        try:
-                            write_subject_index(subject, sub_dir, " ".join(sys.argv),
-                                                mode=_v(args["mode"]) if args.get("mode") else None)
-                        except Exception:
-                            logger.warning("sub-%s | run index failed", subject, exc_info=True)
+                        for snirf_path in files:
+                            src_entities = layout.parse_file_entities(str(snirf_path))
+                            # the file's own session, which --session-label only filters on;
+                            # without it the outputs of a session tree lose their ses- level
+                            prep_config = _make_prep_config(
+                                subject, src_entities.get("session") or session, args,
+                                entities=src_entities,
+                                channels_tsv_bads=(
+                                    [] if "channel-status" in (args.get("ignore") or [])
+                                    else channel_status_bads(layout, snirf_path)))
+                            logger.info("processing: %s", snirf_path)
+                            try:
+                                raw = read_snirf(snirf_path)
+                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path,
+                                                  source_metadata=layout.get_metadata(str(snirf_path)))
+                                logger.info("finished prep: %s", snirf_path.name)
+                                prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)
+                            except Exception:
+                                logger.exception("prep failed for %s", snirf_path)
+                                raise
 
-                # recorded rather than raised, so one bad recording does not strand the batch
-                except Exception as exc:
-                    subject_status = "FAILED"
-                    subject_error = str(exc)
-                    logger.exception("sub-%s | failed", subject)
-                    print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
-                    failed.append(subject)
-                finally:
-                    _jdb.log_run_end(
-                        db_path, execution_id, subject,
-                        status=subject_status,
-                        error_msg=subject_error,
-                        duration_seconds=time.monotonic() - t0,
-                    )
+                post_runs: dict[str, dict] = {}
+                if args.get("mode") is not None:
+                    post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
 
-        # threads, not processes: one execution_id and one `failed` list stay shared
-        n_jobs = max(1, int(args.get("n_jobs") or 1))
-        if n_jobs > 1 and len(participant_label) > 1:
-            from joblib import Parallel, delayed
-            from threadpoolctl import threadpool_limits
-            # one BLAS thread per job, or the jobs oversubscribe the cores
-            logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
-                        len(participant_label), n_jobs)
-            with threadpool_limits(limits=1):
-                Parallel(n_jobs=n_jobs, prefer="threads")(
-                    delayed(_one)(subject) for subject in participant_label)
-        else:
-            for subject in participant_label:
-                _one(subject)
+                # one SQM record per run, written once both passes have finished so the
+                # post-Beer-Lambert sections can measure the files post actually produced.
+                from nirspipe.qc.subject.sqm_record import build_sqm_records
+                try:
+                    # one nirs/ per session the runs came from
+                    sqm_paths = []
+                    for ses in sorted({entity_of(label, "ses") or "" for label in prep_runs}):
+                        sqm_paths += build_sqm_records(
+                            sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
+                            bids_root=bids_dir,
+                            qc_window_s=args.get("window_length", 10.0),
+                            # nothing on disk records them, so the record would otherwise
+                            # be split on the package defaults whatever this run was told
+                            sep_bands=_app_options.resolved_separation_bands(args),
+                            labels=set(prep_runs))
+                except Exception:
+                    logger.error("sub-%s | SQM records failed", subject, exc_info=True)
+                    sqm_paths = []
+                for path in sqm_paths:
+                    logger.info("sub-%s | SQM record -> %s", subject, path.name)
 
-        _jdb.update_execution(db_path, execution_id, "FAILED" if failed else "COMPLETED")
-        _log_run_notes(run_notes)
-        if failed:
-            print(f"{len(failed)} of {len(participant_label)} subject(s) failed: "
-                  f"{', '.join(failed)}", file=sys.stderr)
-            raise SystemExit(1)
+                # one report per run: the figures, the provenance graph and the metrics all
+                # describe a single recording, so a subject holding five tasks gets five
+                for label, (raw, result, run_prep_config) in prep_runs.items():
+                    # rendered before the report, which embeds it: every sidecar it scans is
+                    # on disk by now, and --no-report still leaves the diagram behind
+                    provenance_path = None
+                    try:
+                        from nirspipe.qc.figures.common.provenance_figure import write_provenance
+                        from nirspipe.qc.common.figure_io import figure_namer
+                        # the run's own nirs/, session level included; the figure stays
+                        # beside the subject's reports
+                        ses = entity_of(label, "ses")
+                        for path in write_provenance(
+                            sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
+                            sub_dir / "figures",
+                            figure_namer(label), label=label,
+                            title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
+                        ):
+                            logger.info("sub-%s | provenance -> %s", subject, path)
+                            if path.suffix == ".png":
+                                provenance_path = f"figures/{path.name}"
+                    except Exception:
+                        logger.warning("%s | provenance graph failed", label, exc_info=True)
 
-    except Exception:
-        _jdb.update_execution(db_path, execution_id, "FAILED")
-        raise
+                    if args.get("no_report"):
+                        continue
+                    post = post_runs.get(label, {})
+                    # extend rather than +=: inside the per-subject function that is a
+                    # rebind, which makes the name local and unreadable, and several
+                    # subjects may be appending at once
+                    run_notes.extend([(label, n) for n in _emit_subject_report(
+                        subject, sub_dir, raw, result, run_prep_config, args,
+                        post.get("glm_est"), post.get("design_matrix"),
+                        alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
+                        fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
+                        fc_roi=post.get("fc_roi") or {},
+                        high_pass=cfg_high_pass, low_pass=cfg_low_pass,
+                        after_haemo=post.get("denoised"),
+                        roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
+                        roi_map_name=_roi_map_name(args),
+                        filled_settings=filled_settings,
+                    ) or []])
+
+                if not args.get("no_report") and prep_runs:
+                    from nirspipe.qc.subject.subject_index import write_subject_index
+                    try:
+                        write_subject_index(subject, sub_dir, " ".join(sys.argv),
+                                            mode=_v(args["mode"]) if args.get("mode") else None)
+                    except Exception:
+                        logger.warning("sub-%s | run index failed", subject, exc_info=True)
+
+            # recorded rather than raised, so one bad recording does not strand the batch
+            except Exception as exc:
+                logger.exception("sub-%s | failed", subject)
+                print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
+                failed.append(subject)
+
+    # threads, not processes: one `failed` list stays shared
+    n_jobs = max(1, int(args.get("n_jobs") or 1))
+    if n_jobs > 1 and len(participant_label) > 1:
+        from joblib import Parallel, delayed
+        from threadpoolctl import threadpool_limits
+        # one BLAS thread per job, or the jobs oversubscribe the cores
+        logger.info("%d subjects over %d parallel jobs, one BLAS thread each",
+                    len(participant_label), n_jobs)
+        with threadpool_limits(limits=1):
+            Parallel(n_jobs=n_jobs, prefer="threads")(
+                delayed(_one)(subject) for subject in participant_label)
+    else:
+        for subject in participant_label:
+            _one(subject)
+
+    _log_run_notes(run_notes)
+    if failed:
+        print(f"{len(failed)} of {len(participant_label)} subject(s) failed: "
+              f"{', '.join(failed)}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 @contextmanager
@@ -500,8 +437,8 @@ def _isolate(subject: str, failed: list[str]):
     """Record a subject's failure instead of raising it, so the rest of the batch still runs.
 
     The inner ``try`` around the pipeline itself already does this for anything the stages
-    raise; this covers the run record and the database call that sit outside
-    it, which would otherwise end the batch. A subject that failed inside is not listed twice.
+    raise; this covers the run record that sits outside it, which would otherwise end the
+    batch. A subject that failed inside is not listed twice.
     """
     try:
         yield

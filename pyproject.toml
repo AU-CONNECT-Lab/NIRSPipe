@@ -58,7 +58,6 @@ nirspipe-hyper-band      = "nirspipe.cli.hyper:main_band"
 nirspipe-hyper-index     = "nirspipe.cli.hyper:main_index"
 nirspipe-hyper-merge     = "nirspipe.cli.hyper:main_merge"
 nirspipe-gui             = "nirspipe.cli.gui:main"
-nirspipe-log             = "nirspipe.cli.db:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "nirspipe.__version__"}

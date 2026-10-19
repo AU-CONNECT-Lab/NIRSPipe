@@ -1,29 +1,22 @@
 """What happens when several workers process one dataset into one output tree at once.
 
-A batch runs for hours, and a sharing violation or a locked database near the end of one
-costs more than these tests do.
+A batch runs for hours, and a sharing violation near the end of one costs more than these
+tests do.
 
 Real processes, not threads. The Windows failure these guard against is a file being opened
 for writing by one process while another holds it, which threads inside one interpreter do not
 reproduce.
-
-Two things need **no** guard, and the tests say why: per-run JSONL is written to a path
-keyed by execution id, so parallel workers
-never share a file, and an execution id carries the pid, so two started in the same
-millisecond still differ.
 """
 
 from __future__ import annotations
 
 import json
-import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import pytest
 
 from nirspipe.io.derivatives import write_dataset_description
-from nirspipe.utils import job_db
 
 WORKERS = 8
 
@@ -51,22 +44,6 @@ def _read_description_repeatedly(output_dir: str, times: int) -> list[str]:
         except json.JSONDecodeError:
             bad.append(text[:80])
     return bad
-
-
-def _log_one_execution(db_path: str, subject: str) -> int:
-    db = Path(db_path)
-    execution_id = job_db.log_execution(
-        db, command_line=f"nirspipe ... {subject}", nirspipe_version="test",
-        input_dir="in", output_dir="out", subjects=[subject],
-    )
-    job_db.log_run_start(db, execution_id, subject, bids_task="rest")
-    job_db.log_run_end(db, execution_id, subject, status="COMPLETED")
-    job_db.update_execution(db, execution_id, "COMPLETED")
-    return execution_id
-
-
-def _merge(db_path: str) -> tuple[int, int]:
-    return job_db.merge_jsonl(Path(db_path))
 
 
 # ---- dataset_description.json ----
@@ -110,86 +87,6 @@ def test_no_temporary_files_are_left_behind(tmp_path):
             f.result()
     leftovers = [p.name for p in out.iterdir() if p.name != "dataset_description.json"]
     assert not leftovers, f"temp files survived: {leftovers}"
-
-
-# ---- job database ----
-
-def test_parallel_workers_do_not_share_a_jsonl_file(tmp_path):
-    """Why the run phase needs no lock: the path carries the execution id."""
-    db = tmp_path / "logs" / "pipeline.db"
-    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
-        futures = [pool.submit(_log_one_execution, str(db), f"{i:03d}") for i in range(WORKERS)]
-        ids = [f.result() for f in futures]
-
-    assert len(set(ids)) == len(ids), "two parallel workers were given one execution id"
-    run_files = list((db.parent / "json" / "_runs").glob("*.jsonl"))
-    assert len(run_files) == WORKERS, "workers shared a run file"
-    for path in run_files:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            json.loads(line)  # a line interleaved by another writer would not parse
-
-
-def test_every_parallel_worker_survives_the_merge(tmp_path):
-    db = tmp_path / "logs" / "pipeline.db"
-    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
-        futures = [pool.submit(_log_one_execution, str(db), f"{i:03d}") for i in range(WORKERS)]
-        ids = {f.result() for f in futures}
-
-    job_db.merge_jsonl(db)
-    conn = sqlite3.connect(db)
-    try:
-        merged = {row[0] for row in conn.execute("SELECT execution_id FROM pipeline_executions")}
-        runs = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
-    finally:
-        conn.close()
-    assert merged == ids, "a worker's execution did not reach the database"
-    assert runs == WORKERS
-
-
-def test_concurrent_merges_do_not_report_a_locked_database(tmp_path):
-    """What WAL and the busy timeout are for. Without them this is "database is locked"."""
-    db = tmp_path / "logs" / "pipeline.db"
-    for i in range(WORKERS):
-        _log_one_execution(str(db), f"{i:03d}")
-
-    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
-        futures = [pool.submit(_merge, str(db)) for _ in range(WORKERS)]
-        # an OperationalError would surface here
-        merged = [f.result()[0] for f in as_completed(futures)]
-    # one _pipeline and one _runs file per worker, each merged by exactly one of the merges
-    assert sum(merged) == WORKERS * 2
-
-
-def test_merge_is_idempotent(tmp_path):
-    """Several merges racing must not multiply the rows, or a study's counts are wrong."""
-    db = tmp_path / "logs" / "pipeline.db"
-    for i in range(WORKERS):
-        _log_one_execution(str(db), f"{i:03d}")
-
-    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
-        for f in [pool.submit(_merge, str(db)) for _ in range(WORKERS)]:
-            f.result()
-
-    conn = sqlite3.connect(db)
-    try:
-        executions = conn.execute("SELECT COUNT(*) FROM pipeline_executions").fetchone()[0]
-        runs = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
-    finally:
-        conn.close()
-    assert executions == WORKERS
-    assert runs == WORKERS
-
-
-def test_wal_is_actually_on(tmp_path):
-    # WAL is one PRAGMA; without this the tests above could pass by luck on a fast machine
-    db = tmp_path / "logs" / "pipeline.db"
-    _log_one_execution(str(db), "001")
-    job_db.merge_jsonl(db)
-    conn = sqlite3.connect(db)
-    try:
-        assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
-    finally:
-        conn.close()
 
 
 if __name__ == "__main__":

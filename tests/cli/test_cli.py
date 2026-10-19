@@ -189,7 +189,6 @@ def test_console_script_entry_point():
 
 # ── other commands: parser smoke + dispatch ──────────────────────────────────
 
-from nirspipe.cli import db as db_cli
 from nirspipe.cli import gui as gui_cli
 from nirspipe.cli import prep as prep_cli
 from nirspipe.cli import hyper as hyper_cli
@@ -198,7 +197,7 @@ from nirspipe.cli import rate as rate_cli
 from nirspipe.cli import snirf2bids as snirf2bids_cli
 
 
-@pytest.mark.parametrize("mod", [db_cli, gui_cli, prep_cli, qc_cli, rate_cli, snirf2bids_cli])
+@pytest.mark.parametrize("mod", [gui_cli, prep_cli, qc_cli, rate_cli, snirf2bids_cli])
 def test_help_exits_zero_all(mod):
     with pytest.raises(SystemExit) as e:
         mod._build_parser().parse_args(["--help"])
@@ -220,12 +219,6 @@ def test_the_dyad_analysis_left_nirspipe_qc():
     sub = next(a for a in qc_cli._build_parser()._actions if isinstance(a, argparse._SubParsersAction))
     gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(sub.choices)
     assert not gone, f"nirspipe-qc still carries {sorted(gone)}"
-
-
-def test_db_merge_subcommand():
-    args = db_cli._build_parser().parse_args(["merge", "/out"])
-    assert args.func is db_cli.cmd_merge
-    assert args.db_path is None
 
 
 def test_snirf2bids_requires_subject_and_task():
@@ -335,7 +328,7 @@ def test_rate_subcommands():
 
 
 def test_missing_subcommand_errors():
-    for mod in (prep_cli, qc_cli, rate_cli, db_cli):
+    for mod in (prep_cli, qc_cli, rate_cli):
         with pytest.raises(SystemExit):
             mod._build_parser().parse_args([])
 

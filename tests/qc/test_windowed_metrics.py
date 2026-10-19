@@ -122,25 +122,6 @@ def test_the_window_is_recorded_even_when_every_series_fails(od_raw):
     assert "sci_per_window" not in sqm
 
 
-def test_an_older_database_gains_the_columns_it_is_missing(tmp_path):
-    import sqlite3
-
-    from nirspipe.utils import job_db
-
-    db = tmp_path / "runs.db"
-    # the schema as the previous version left it: everything but the newest column
-    previous = job_db._SCHEMA.replace("    qc_window_s                 REAL,\n", "")
-    assert previous != job_db._SCHEMA
-    with sqlite3.connect(db) as old:
-        old.executescript(previous)
-
-    conn = job_db._get_conn(db)
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(sqm)")}
-    conn.close()
-
-    assert set(job_db._SQM_COLS) <= cols
-
-
 # ---- the heatmap gets one x value per column ----
 def test_window_centers_collapses_start_end_pairs():
     from nirspipe.qc.metrics.windowed import window_centers as _window_centers

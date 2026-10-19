@@ -22,7 +22,6 @@ COMMANDS: dict[str, tuple[str, str, "str | None"]] = {
     "nirspipe-hyper-index":     ("nirspipe.cli.hyper", "_parsers", "nirspipe-hyper-index"),
     "nirspipe-hyper-merge":     ("nirspipe.cli.hyper", "_parsers", "nirspipe-hyper-merge"),
     "nirspipe-rate":            ("nirspipe.cli.rate", "_build_parser", None),
-    "nirspipe-log":             ("nirspipe.cli.db", "_build_parser", None),
 }
 
 # subcommands that open a page in this app rather than run as a process
