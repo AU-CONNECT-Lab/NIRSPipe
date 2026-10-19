@@ -50,6 +50,7 @@ from nirspipe.qc.subject.sqm_record import (
     SQM_DESCS,
     fill_skipped_long_sections,
 )
+from nirspipe.utils import load_toml
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.tables import write_tsv
 
@@ -290,6 +291,39 @@ def _summary_meta(df: pd.DataFrame, metric_cols: list[str], descs: list[str]) ->
     return meta
 
 
+def unfinished_subjects(output_dir: Path) -> list[dict]:
+    """Subjects whose last `nirspipe` run failed or never wrote its outcome, from their run records.
+
+    ::
+
+        sub-01/logs/sub-01.toml  [outcome] status = "failed"   ->  listed, with its error
+        sub-02/logs/sub-02.toml  [outcome] status = "success"  ->  left out
+        sub-03/logs/sub-03.toml  no [outcome] (killed)         ->  listed as unfinished
+    """
+    rows: list[dict] = []
+    for path in sorted(output_dir.glob("sub-*/logs/sub-*.toml")):
+        try:
+            record = load_toml(path)
+        except Exception:
+            logger.warning("unreadable run record %s", path, exc_info=True)
+            continue
+        execution = record.get("execution", {})
+        # a dry run stops before processing, so it has nothing to finish
+        if execution.get("dry_run"):
+            continue
+        outcome = record.get("outcome", {})
+        status = outcome.get("status", "unfinished")
+        if status == "success":
+            continue
+        rows.append({
+            "subject": path.stem,
+            "status": status,
+            "error": outcome.get("error"),
+            "started": execution.get("run_timestamp"),
+        })
+    return rows
+
+
 def _render_group(
     output_dir: Path,
     out_desc: str,
@@ -298,6 +332,7 @@ def _render_group(
     full_rows: list[dict],
     descs: list[str] | None = None,
     template_name: str = "group_report.html.j2",
+    unfinished: list[dict] | None = None,
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
 
@@ -422,7 +457,9 @@ def _render_group(
         title=title,
         n_rows=len(df),
         n_metrics=len(metric_cols),
-        summary_meta=_summary_meta(df, metric_cols, descs or []),
+        summary_meta=_summary_meta(df, metric_cols, descs or [])
+                     + ([("Subjects not finished", len(unfinished))] if unfinished else []),
+        unfinished=unfinished or [],
         headline_rows=_headline_rows(df) if not df.empty else [],
         small_cohort=0 < len(df) < SMALL_COHORT_N,
         score_threshold=SCORE_THRESHOLD,
@@ -450,12 +487,14 @@ def _build_group(
     out_desc: str,
     title: str,
     template_name: str = "group_report.html.j2",
+    unfinished: list[dict] | None = None,
 ) -> Path | None:
     """Glob SQM JSONs and render group report; None when there are none."""
     df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
     if df.empty:
         return None
-    return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name)
+    return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name,
+                         unfinished)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
@@ -473,5 +512,6 @@ def build_group_raw_report(output_dir: Path) -> Path | None:
         output_dir, entity_glob="sub-*",
         out_desc="subjects",
         title="Cohort QC (individual subjects)",
+        unfinished=unfinished_subjects(output_dir),
     )
 

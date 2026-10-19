@@ -302,6 +302,10 @@ NOTES = {
         "it last.",
 
     # ---- Cohort report ----
+    "group.unfinished":
+        "The last <code>nirspipe</code> run of these subjects failed, or was stopped before it "
+        "ended. Any rows of theirs below may come from an earlier run. Details are in "
+        "<code>sub-&lt;label&gt;/logs/</code>.",
     "group.small_cohort":
         "Only {n} runs, too few for boxes, robust z-scores and the outlier rule to mean much; "
         "read the panels as the runs' own values side by side.",

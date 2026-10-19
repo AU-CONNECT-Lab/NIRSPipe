@@ -57,6 +57,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
    belongs on the run it is about. The sections follow the body, so a cohort with no
    conditions is not offered an entry for them. #}
 {% set _sections = [("Overview", "Overview"), ("Distributions", "Distributions")] %}
+{% if unfinished %}{% set _sections = [("Unfinished", "Not finished")] + _sections %}{% endif %}
 {% if conditions %}
   {% set _ = _sections.append(("Conditions", "By condition")) %}
   {% set _ = _sections.append(("ConditionMatrix", "Run × condition")) %}
@@ -111,6 +112,22 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
   {% endif %}
   {% if small_cohort %}<p class="qm-note">{{ small_caveat }}</p>{% endif %}
 </div>
+{% endif %}
+
+{% if unfinished %}
+<section id="Unfinished" class="step">
+  <h3 class="step-title">Subjects that did not finish</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('group.unfinished') }}</p>
+    <table class="qm-table qm-flat">
+      <tr><th>Subject</th><th>Status</th><th>Started</th><th>Error</th></tr>
+      {%- for row in unfinished %}
+      <tr><td>{{ row.subject }}</td><td class="bad">{{ row.status }}</td>
+          <td>{{ row.started or "&mdash;" }}</td><td>{{ row.error | e if row.error else "&mdash;" }}</td></tr>
+      {%- endfor %}
+    </table>
+  </div>
+</section>
 {% endif %}
 
 {% if figure_paths.strip %}
