@@ -94,9 +94,6 @@ details[open] > summary::before { transform: rotate(90deg); }
 }
 @media (max-width: 900px) { .panel-grid-2 { grid-template-columns: 1fr; } }
 
-/* the 3D views and the flat map, one picture: on a wide screen full width makes it huge */
-img.brain-views { max-width: 1200px; }
-
 /* ---- Raw Signal: the trace beside the events it carries, in both subject reports ---- */
 .row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
 .row-main { grid-template-columns: 3fr 1fr; align-items: start; }
