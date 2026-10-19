@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - The dyad raw report's corrected motion figure no longer repeats the IMU rows, which motion correction leaves unchanged
 - The dyad raw report's head slider draws each window's coupling verdict, then its SCI and PSP, each scaled on the run's own lines
 - The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
+- The raw report follows the subject report's section order, with its brain views under Signal Quality and the flat map drawn once, clickable
+- The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
