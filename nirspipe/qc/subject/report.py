@@ -459,6 +459,18 @@ _PICK_CHANNEL_JS = (
     "})();</script>"
 )
 
+# the map's frame takes its height from the column's width, so the figure follows the frame
+# rather than keeping the height it was written with
+_FILL_FRAME_JS = (
+    "<script>(function(){"
+    "function fit(){var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on){setTimeout(fit,100);return;}"
+    "gd.style.height=window.innerHeight+'px';Plotly.relayout(gd,{height:window.innerHeight});}"
+    "if(document.readyState==='complete')fit();else window.addEventListener('load',fit);"
+    "window.addEventListener('resize',fit);"
+    "})();</script>"
+)
+
 _OVERVIEW_MAX_PTS = 4000
 
 
@@ -503,14 +515,14 @@ def _section_optode_map(
     sci_threshold: float,
 ) -> dict:
     """The raw report's clickable optode map: each channel's line and dot graded by ``sci_scores``."""
-    out = {"optode_map_path": None, "optode_map_h": 0}
+    out = {"optode_map_path": None}
     with _guard("Optode map", errors, subject):
         fig = build_layout_figure(raw_intensity, set(bad_channels), sci_scores,
                                   sci_threshold=sci_threshold)
         if fig is not None:
             fname = fig_name("optodemap")
-            out["optode_map_h"] = _save_figure_html(fig, figures_dir / fname,
-                                                    extra_js=_PICK_CHANNEL_JS)
+            _save_figure_html(fig, figures_dir / fname,
+                              extra_js=_PICK_CHANNEL_JS + _FILL_FRAME_JS)
             out["optode_map_path"] = _fig_href(fname)
     return out
 
@@ -2212,7 +2224,7 @@ def build_subject_report(
     # graded by the windowed SCI, as each condition page's copy of this figure is
     sci_win_scores    = (((record.get("per_channel") or {}).get("raw") or {})
                          .get("sci_win_per_channel") or {})
-    # the 3D views alone: the flat map is the clickable one in the Raw Signal section
+    # the 3D views alone: the flat map beside them is the clickable one
     brain_vars        = _section_brain(
                             sci_win_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,

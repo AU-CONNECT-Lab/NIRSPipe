@@ -129,14 +129,6 @@
     <p class="fig-path">{{ raw_overview_path }}</p>
     {% endif %}
 
-    {% if optode_map_path %}
-    <h3>Optode map</h3>
-    <p class="panel-note">{{ section_note('raw.layout_2d') }}</p>
-    <iframe class="plotly-frame" src="{{ optode_map_path }}" title="Optode map"
-            style="height:{{ optode_map_h }}px; max-width:640px"></iframe>
-    <p class="fig-path">{{ optode_map_path }}</p>
-    {% endif %}
-
     {% if channel_pairs %}
     <h3>Per-channel HbO / HbR &amp; PSD</h3>
     <p class="panel-note">{% if channel_detail_stage == 'desc-preproc' %}{{ section_note('steps.raw_signal_fallback',
@@ -182,12 +174,21 @@
       <p class="fig-path">{{ head_slider_path }}</p>
     {% endif %}
 
-    {% if brain_views_path %}
+    {% if brain_views_path or optode_map_path %}
       <h3>Channel quality on the brain</h3>
       <p class="panel-note">{{ section_note('quality.brain_views') }}
+        {%- if optode_map_path %} {{ section_note('raw.layout_2d') }}{% endif %}
         {%- if condition_label %} {{ section_note('quality.brain_views_condition') }}{% endif %}</p>
-      <img class="responsive" src="{{ brain_views_path }}" alt="Brain views" />
-      <p class="fig-path">{{ brain_views_path }}</p>
+      <div class="panel-grid-2">
+        {% if brain_views_path %}
+        <img class="responsive" src="{{ brain_views_path }}" alt="Brain views" />
+        {% endif %}
+        {% if optode_map_path %}
+        <iframe class="plotly-frame map-plot" src="{{ optode_map_path }}" title="Optode map"></iframe>
+        {% endif %}
+      </div>
+      {% if brain_views_path %}<p class="fig-path">{{ brain_views_path }}</p>{% endif %}
+      {% if optode_map_path %}<p class="fig-path">{{ optode_map_path }}</p>{% endif %}
     {% endif %}
 
   </div>

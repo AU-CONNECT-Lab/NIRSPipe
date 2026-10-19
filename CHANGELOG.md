@@ -16,7 +16,8 @@ All notable changes to this project will be documented in this file.
 - The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
 - The raw report follows the subject report's section order, with its brain views under Signal Quality and the flat map drawn once, clickable
 - The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
-- The subject report's Raw Signal opens with the raw report's trace overview and clickable optode map; its brain views drop the flat map
+- The subject report's Raw Signal opens with the raw report's trace overview; a click on a trace picks the channel's detail
+- Both reports draw the clickable optode map beside the 3D brain views under Signal Quality
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 - Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
 - The raw and subject reports carry the dyad page's head slider: coupling, SCI and PSP on the head, window by window

@@ -29,11 +29,8 @@ select#run-select {
 .row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
 .row-detail  { grid-template-columns: 1fr; }
 .row-psd-ep  { grid-template-columns: 1fr; }
-.row-map     { grid-template-columns: 1fr 1fr; align-items: start; }
-/* the figures' own width to height, so a column of any width shows the whole head */
-.map-plot    { width: 100%; aspect-ratio: 700 / 760; }
 @media (max-width: 900px) {
-  .row-main, .row-map { grid-template-columns: 1fr; }
+  .row-main { grid-template-columns: 1fr; }
 }
 
 /* buttons */
@@ -224,14 +221,6 @@ select#run-select {
   <h3 class="step-title">Per-channel Signals</h3>
   <div class="details-body">
     <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
-    {#- the evoked curves by position are the subject report's, drawn on the processed signal -#}
-    <div class="row row-map" id="channel-maps">
-      <div id="layout2d-panel">
-        <p class="panel-head">Optode map</p>
-        <p class="qm-note">{{ section_note('raw.layout_2d') }}</p>
-        <div id="layout2d-plot" class="map-plot"></div>
-      </div>
-    </div>
     <select class="ch-select" id="ch-detail-select"
             onchange="selectChannel(this.value)"></select>
     <div id="detail-placeholder">pick a channel to view HbO &amp; HbR</div>
@@ -250,11 +239,14 @@ select#run-select {
       <p class="qm-note">{{ section_note('quality.head_slider') }}</p>
       <div id="head-slider-plot"></div>
     </div>
-    {#- the subject report's brain views, so a run reads the same before the pipeline and
-        after; its flat map is the clickable one beside the channel picker -#}
+    {#- the subject report's brain views beside the clickable flat map, so a run reads the
+        same before the pipeline and after -#}
     <div id="Layout">
       <h3>Channel quality on the brain</h3>
-      <img id="brain-views-img" class="responsive" alt="Brain views" />
+      <div class="panel-grid-2">
+        <img id="brain-views-img" class="responsive" alt="Brain views" />
+        <div id="layout2d-plot" class="map-plot"></div>
+      </div>
       <p class="qm-note" id="brain-views-note"></p>
       <p class="fig-path" id="brain-views-path"></p>
     </div>
@@ -629,8 +621,8 @@ function selectChannel(pair) {
 }
 
 // ─── channel maps ─────────────────────────────────────────────────────────────
-// One more way into the panel below: the optode map. Drawn at its column's width; the
-// .map-plot box keeps the figure's own proportions.
+// One more way into the channel detail: the optode map beside the brain views. Drawn at its
+// column's width; the .map-plot box keeps the figure's own proportions.
 function _mapLayout(layout) {
   var lay = Object.assign({}, layout, {autosize: true});
   delete lay.width;
@@ -641,18 +633,24 @@ function _mapLayout(layout) {
 function loadChannelMaps() {
   var run = _STATIC_DATA[_run_idx] || {};
   var map = (run.layout || {}).layout_2d_figure;
-  document.getElementById("channel-maps").style.display = map ? "" : "none";
+  var brain = (run.figure_paths || {}).brain_views;
+  // the map shares its row with the brain views, so the row shows while either has something
+  _showSection("Layout", !!map || !!(brain && brain.src));
   // a run switch draws another montage, whose drawn state the highlight must start from
   var div = document.getElementById("layout2d-plot");
   Plotly.purge(div);
   delete div._baseMarker;
+  div.style.display = map ? "" : "none";
   if (map) {
     Plotly.newPlot("layout2d-plot", map.data, _mapLayout(map.layout),
                    {responsive: true, displayModeBar: false});
     document.getElementById("layout2d-plot").on("plotly_click", function(evt) {
       // the dots are the trace named "channels"; the others are optodes and the lines between them
       var pt = evt.points && evt.points[0];
-      if (pt && pt.data.name === "channels" && pt.customdata) selectChannel(chPair(String(pt.customdata)));
+      if (!(pt && pt.data.name === "channels" && pt.customdata)) return;
+      selectChannel(chPair(String(pt.customdata)));
+      // the detail is sections above this row
+      document.getElementById("ChannelDetail").scrollIntoView({behavior: "smooth", block: "start"});
     });
   }
   if (_selChannel) highlightChannelMaps(_selChannel);
@@ -762,11 +760,14 @@ function loadHeadSlider() {
 function loadBrainViews() {
   var d = _STATIC_DATA[_run_idx] || {};
   var p = (d.figure_paths || {}).brain_views;
-  _showSection("Layout", !!(p && p.src));
-  if (!(p && p.src)) return;
-  document.getElementById("brain-views-img").src = p.src;
-  document.getElementById("brain-views-path").textContent = p.src;
+  var src = (p && p.src) || "";
+  // the row itself is shown by loadChannelMaps, which knows about both figures
+  var img = document.getElementById("brain-views-img");
+  img.style.display = src ? "" : "none";
+  if (src) img.src = src;
+  document.getElementById("brain-views-path").textContent = src;
   document.getElementById("brain-views-note").innerHTML = {{ section_note('quality.brain_views') | tojson }}
+    + ((d.layout || {}).layout_2d_figure ? " " + {{ section_note('raw.layout_2d') | tojson }} : "")
     + (d.condition_label ? " " + {{ section_note('quality.brain_views_condition') | tojson }} : "");
 }
 

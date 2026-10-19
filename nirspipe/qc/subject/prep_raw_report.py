@@ -884,7 +884,7 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
                  sci_threshold: float):
     """``(namer, SCI per channel, errors) -> href`` of the subject report's brain views.
 
-    The 3D views alone: the flat map is the page's clickable one, beside the channel picker.
+    The 3D views alone: the flat map beside them is the page's clickable one.
 
     The haemoglobin file's HbO channels place the channels, rejected ones included, as the
     pipeline places them for its own copy. A condition page hands in its own SCI and a namer

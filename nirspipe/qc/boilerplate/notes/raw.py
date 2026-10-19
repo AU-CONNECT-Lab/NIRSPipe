@@ -27,11 +27,11 @@ NOTES = {
         "Short channels in blue, long in orange. Click a trace to select its channel and "
         "double-click to reset the view.",
     "raw.channel_detail":
-        "Pick a channel on the map, in the list, or by its trace above to see its "
-        "concentration after Beer-Lambert and its spectrum.",
+        "Pick a channel by its trace above, in the list, or on the optode map under Signal "
+        "Quality to see its concentration after Beer-Lambert and its spectrum.",
     "raw.layout_2d":
-        "Each channel's line and dot coloured by windowed SCI against the run's line, rejected "
-        "ones red; sources are red squares, detectors blue circles.",
+        "On the optode map, sources are red squares and detectors blue circles; a click on a "
+        "channel's dot opens its detail above.",
     "raw.channel_detail_picked":
         "{pair}: concentration, spectrum and epoch average, after Beer-Lambert.",
     "raw.psd":
