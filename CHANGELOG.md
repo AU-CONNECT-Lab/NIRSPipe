@@ -6,14 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-10-19
+
 ### Added
 - Task GLM runs write a whitening diagnostic, and the report shows the residual spectrum against white noise and each channel's lag-1 autocorrelation
 - Prep writes each run's channel positions on fsaverage, `space-fsaverage_channels.tsv`, with how the optodes were placed in its sidecar
 - `nirspipe-hyper` writes each group's member channel positions on fsaverage, one table with a `subject_id` column
+- Each subject's run record ends with an `[outcome]` section: status, finish time, duration and the error's first line
+- The cohort page lists the subjects whose last `nirspipe` run failed or was stopped
 
 ### Changed
 - `--motion-correction spline` detects motion at 20 SDs, 0.5 OD and a 2 s margin by default, replacing 50 SDs, 5 OD and 1 s
 - Optodes are placed on fsaverage by the file's landmarks, else by the reading that fits the scalp; brain views follow the run's recorded placement
+
+### Removed
+- **Breaking**: `nirspipe-log`, the SQLite run database and the `logs/json/` event stream; run records and logs carry what they held
 
 ### Fixed
 - Cropped and marker-edited recordings keep their source's probe landmarks
