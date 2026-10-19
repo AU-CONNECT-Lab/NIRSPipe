@@ -390,8 +390,6 @@ def _pair_label(pair: str, short: bool, rejected: bool) -> str:
 
 # ---- Raw Signal: the raw report's way into a channel ----
 
-# a click on a trace or on a channel's dot tells the page which pair to show in the detail
-# below; the figures sit in frames, so the page hears it as a message
 _PICK_CHANNEL_JS = (
     "<script>(function(){"
     "function hook(){var gd=document.querySelector('.plotly-graph-div');"
@@ -399,10 +397,18 @@ _PICK_CHANNEL_JS = (
     "gd.on('plotly_click',function(evt){var pt=evt.points&&evt.points[0];if(!pt)return;"
     "var name=String(pt.data.name==='channels'?pt.customdata:(pt.data.name||''));"
     "if(name)window.parent.postMessage("
-    "{type:'pick-channel',pair:name.replace(/\\s+\\S+$/,'')},'*');});}"
+    "{type:'pick-channel',target:'__TARGET__',pair:name.replace(/\\s+\\S+$/,'')},'*');});}"
     "if(document.readyState==='complete')hook();else window.addEventListener('load',hook);"
     "})();</script>"
 )
+
+
+def _pick_channel_js(target: str) -> str:
+    """A click on a trace or a channel's dot asks the page to show that pair in picker ``target``.
+
+    The figures sit in frames, so the page hears it as a message.
+    """
+    return _PICK_CHANNEL_JS.replace("__TARGET__", target)
 
 _OVERVIEW_MAX_PTS = 4000
 
@@ -430,7 +436,7 @@ def _section_raw_overview(
                  for label, t0, t1 in condition_spans or []}
         fname = fig_name("signal")
         out["raw_overview_h"] = _save_figure_html(fig, figures_dir / fname,
-                                                  extra_js=_PICK_CHANNEL_JS,
+                                                  extra_js=_pick_channel_js("detail"),
                                                   views=views or None)
         out["raw_overview_path"] = _fig_href(fname)
     return out
@@ -455,16 +461,54 @@ def _section_optode_map(
         if fig is not None:
             fname = fig_name("optodemap")
             out["optode_map_h"] = _save_figure_html(fig, figures_dir / fname,
-                                                    extra_js=_PICK_CHANNEL_JS)
+                                                    extra_js=_pick_channel_js("detail"))
             out["optode_map_path"] = _fig_href(fname)
     return out
 
 
+def _section_processed_overview(
+    stages: tuple,
+    bad_channels: list,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+    sep_bands=None,
+    condition_spans: "list[tuple[str, float, float]] | None" = None,
+) -> dict:
+    """The denoising carpet's stage as traces, every HbO and HbR row stacked; a click opens
+    that channel's spectrum by stage.
+
+    ``stages`` is what :func:`_carpet_stages` returns, so the traces and the carpet are one
+    stage. One file for the run and its conditions, as the raw overview is.
+    """
+    out = {"processed_overview_path": None, "processed_overview_h": 0,
+           "processed_overview_stage": ""}
+    (label, raw), = stages[0]
+    with _guard("Denoised signal overview", errors, subject):
+        rejected = {pair_of(ch) for ch in bad_channels}
+        fig = build_ts_figure(raw, markers_on_data_axis(raw),
+                              {ch for ch in raw.ch_names if pair_of(ch) in rejected},
+                              _OVERVIEW_MAX_PTS, sep_bands)[0]
+        views = {_pair_fname(name): {"x": [float(t0), float(t1)]}
+                 for name, t0, t1 in condition_spans or []}
+        fname = fig_name("signalstage")
+        out["processed_overview_h"] = _save_figure_html(fig, figures_dir / fname,
+                                                        extra_js=_pick_channel_js("psd"),
+                                                        views=views or None)
+        out["processed_overview_path"] = _fig_href(fname)
+        out["processed_overview_stage"] = label
+    return out
+
+
 def _condition_overview(run_vars: dict, slug: str) -> dict:
-    """The run's raw signal overview, addressed at one condition's window."""
-    path = run_vars.get("raw_overview_path")
-    return {"raw_overview_path": f"{path}#{slug}" if path else None,
-            "raw_overview_h": run_vars.get("raw_overview_h")}
+    """The run's two signal overviews, addressed at one condition's window."""
+    out = {"processed_overview_stage": run_vars.get("processed_overview_stage") or ""}
+    for key in ("raw_overview", "processed_overview"):
+        path = run_vars.get(f"{key}_path")
+        out[f"{key}_path"] = f"{path}#{slug}" if path else None
+        out[f"{key}_h"] = run_vars.get(f"{key}_h")
+    return out
 
 
 def _section_channel_detail(
@@ -2108,6 +2152,11 @@ def build_subject_report(
                                          subject, errors, figures_dir, fig_name,
                                          raw_gvtd_after=raw_after_motion,
                                          gvtd_blocks=gvtd_blocks)
+    processed_vars = _section_processed_overview(
+                            carpet_stages, bad_channels, subject, errors, figures_dir, fig_name,
+                            sep_bands=sep_bands,
+                            condition_spans=_record_windows(record.get("by_condition") or {})
+                            if by_condition else [])
     # the trial window every epoch figure averages over. None on the config means the
     # report's own default, so an unset flag draws exactly what it always drew
     epoch_tmin = _EPOCH_TMIN if getattr(config, "epoch_tmin", None) is None else config.epoch_tmin
@@ -2293,6 +2342,7 @@ def build_subject_report(
         **haemo_vars,
         **overview_vars,
         **map_vars,
+        **processed_vars,
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
@@ -2326,7 +2376,7 @@ def build_subject_report(
                 report_vars,
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
                               topomap_vars, haemo_vars, overview_vars, map_vars,
-                              channel_det_vars, psd_det_vars,
+                              processed_vars, channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, carpet_vars, cond_summary_vars,
                               excluded_vars),

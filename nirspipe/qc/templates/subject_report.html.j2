@@ -255,6 +255,15 @@
         <p class="fig-path">{{ panel.path }}</p>
       {% endfor %}
     {% endif %}
+
+    {% if processed_overview_path %}
+      <h3>Signal after denoising</h3>
+      <p class="step-desc">{{ section_note('haemo.processed_signal', stage=processed_overview_stage) }}</p>
+      <iframe class="plotly-frame" src="{{ processed_overview_path }}"
+              title="Signal after denoising, every channel"
+              style="height:{{ processed_overview_h }}px"></iframe>
+      <p class="fig-path">{{ processed_overview_path }}</p>
+    {% endif %}
   </div>
 </section>
 
@@ -290,10 +299,10 @@
     {% if psd_detail_pairs %}
     <h3>Per-channel PSD by stage</h3>
     <p class="panel-note">{{ section_note('psd_detail.picker') }}</p>
-    <select class="ch-select"
+    <select id="psd-det-select" class="ch-select"
             onchange="document.getElementById('psd-det-frame').src=this.value">
       {% for ch in psd_detail_pairs %}
-      <option value="{{ ch.path }}">{{ ch.label or ch.pair }}</option>
+      <option value="{{ ch.path }}" data-pair="{{ ch.pair }}">{{ ch.label or ch.pair }}</option>
       {% endfor %}
     </select>
     <iframe id="psd-det-frame" class="plotly-frame"
@@ -856,15 +865,18 @@ window.addEventListener("message", function(e) {
   }
 });
 
-// a click on the raw signal or the optode map picks the channel the detail below shows
+// a click on a signal overview or the optode map picks the channel a picker shows: the raw
+// ones drive the channel detail, the denoised one the spectrum by stage
+var _PICKERS = {detail: ["ch-det-select", "ch-det-frame"], psd: ["psd-det-select", "psd-det-frame"]};
 window.addEventListener("message", function(e) {
   if (!e.data || e.data.type !== "pick-channel") return;
-  var sel = document.getElementById("ch-det-select");
+  var ids = _PICKERS[e.data.target];
+  var sel = ids && document.getElementById(ids[0]);
   if (!sel) return;
   for (var i = 0; i < sel.options.length; i++) {
     if (sel.options[i].getAttribute("data-pair") !== e.data.pair) continue;
     sel.selectedIndex = i;
-    var frame = document.getElementById("ch-det-frame");
+    var frame = document.getElementById(ids[1]);
     frame.src = sel.options[i].value;
     frame.scrollIntoView({behavior: "smooth", block: "nearest"});
     return;

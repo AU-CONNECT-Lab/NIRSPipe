@@ -260,3 +260,14 @@ def test_the_optode_map_reddens_the_rejected_pair_and_both_panels_pick_a_channel
         assert "pick-channel" in figure.read_text(encoding="utf-8")
     page = denoise_run.report.read_text(encoding="utf-8")
     assert all(f'data-pair="{pair.name}"' in page for pair in denoise_run.truth.pairs)
+
+
+def test_the_denoised_overview_draws_haemoglobin_and_picks_a_spectrum(denoise_run):
+    path = denoise_run.figure("signalstage")
+    names = [t["name"] for t in one_figure(path)["data"]]
+    kept = {p.name for p in denoise_run.truth.pairs if not p.bad}
+    assert {n.rsplit(" ", 1)[0] for n in names} >= kept
+    assert {n.rsplit(" ", 1)[1] for n in names} == {"hbo", "hbr"}
+    assert "target:'psd'" in path.read_text(encoding="utf-8")
+    page = denoise_run.report.read_text(encoding="utf-8")
+    assert 'id="psd-det-select"' in page and path.name in page
