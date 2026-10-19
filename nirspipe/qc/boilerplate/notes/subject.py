@@ -131,6 +131,8 @@ NOTES = {
     "psd_detail.picker":
         "Select a channel. A short channel's page has no residual row: as a regressor, its "
         "residual is zero.",
+    "epoch.skipped":
+        "Not drawn: {reason}.",
     "epoch.timeline":
         "Every event on one axis, a row per condition plus one for all. It shows what the "
         "averages below cannot: a condition that stopped partway through, or a block started "

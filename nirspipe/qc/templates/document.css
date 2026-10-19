@@ -91,7 +91,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
 .panel-grid-2 {
   display: grid; grid-template-columns: 3fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
-  align-items: center;
+  align-items: center; max-width: 1200px;
 }
 /* the optode map keeps the right column even when the 3D views beside it are missing */
 .panel-grid-2 > .map-plot { grid-column: 2; }
@@ -101,6 +101,24 @@ details[open] > summary::before { transform: rotate(90deg); }
 }
 /* the map figure's own width to height, so a column of any width shows the whole head */
 .map-plot { width: 100%; aspect-ratio: 700 / 760; }
+
+/* ---- Raw Signal: the trace beside the events it carries, in both subject reports ---- */
+.row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
+.row-main { grid-template-columns: 3fr 1fr; align-items: start; }
+@media (max-width: 900px) { .row-main { grid-template-columns: 1fr; } }
+.panel-head { font-size: 0.9rem; font-weight: 600; color: var(--ink); margin: 0 0 0.3rem; }
+/* as tall as the plot beside it: sized as if empty, then stretched to the grid row */
+#mk-card { display: flex; flex-direction: column; overflow: hidden;
+           contain: size; align-self: stretch; }
+#mk-table-wrap { flex: 0 1 auto; min-height: 3rem; overflow-y: auto; }
+@media (max-width: 900px) { #mk-card { contain: none; max-height: 24rem; } }
+#mk-count { font-size: 0.75rem; color: var(--faint); }
+#marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
+#marker-table th, #marker-table td { padding: 0.22rem 0.45rem; }
+#marker-table th { background: var(--surface); position: sticky; top: 0; }
+#marker-table tbody tr { cursor: pointer; }
+#marker-table tbody tr.mk-selected > td { background: var(--accent-soft); }
+.mk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 
 /* ---- quantitative metrics ---- */
 .qm-box { margin-bottom: 1.5rem; }

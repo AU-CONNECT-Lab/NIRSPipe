@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
 - The raw report follows the subject report's section order, with its brain views under Signal Quality and the flat map drawn once, clickable
 - The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
-- The subject report's Raw Signal opens with the raw report's trace overview; a click on a trace picks the channel's detail
+- The subject report's Raw Signal opens with the raw report's trace overview and event table; a click picks a channel or outlines an event
 - Both reports draw the clickable optode map beside the 3D brain views under Signal Quality
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 - Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 - With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
 - Runs writing into one output tree at once could drop each other's `DatasetLinks`, and dyad QC reading that tree then failed
+- A subject report whose epoch preview is skipped says why, instead of claiming the run has no events
 
 ## [0.71.0] - 2026-10-19
 

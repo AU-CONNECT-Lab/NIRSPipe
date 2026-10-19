@@ -11,7 +11,8 @@ from tests._fingerprint import CLI_ARGS, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
-    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, traces, xy,
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, event_rows,
+    traces, xy,
 )
 from tests.figure_accuracy.conftest import HAND_MARKED
 
@@ -58,6 +59,17 @@ def test_a_page_opens_the_run_overview_on_its_window_and_maps_its_own_sci(condit
     # the pair decoupled inside one block is coupled through the other
     pair, onset, _ = truth.block_bad
     assert (colours[pair] != "#27ae60") == (t0 <= onset < t1), (block, pair, colours[pair])
+
+
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_page_lists_the_events_that_start_in_its_block(condition_run, block):
+    page = condition_run.report.parent / f"sub-01_task-main_cond-{block}_report.html"
+    t0, t1, _ = _blocks(condition_run)[block]
+    inside = sorted(e for e in condition_run.truth.events if t0 <= e[0] <= t1)
+    rows = event_rows(page.read_text(encoding="utf-8"))
+    assert [(name, on) for name, on, _ in rows] == [(name, pytest.approx(on, abs=0.01))
+                                                     for on, _, name in inside]
+    assert rows[0][0] == block
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])

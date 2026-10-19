@@ -471,6 +471,22 @@ _FILL_FRAME_JS = (
     "})();</script>"
 )
 
+# a row of the page's event table outlines that event's span on the trace, or clears it; the
+# span is drawn over the figure's own shading, so the base shapes are kept from the first call
+_HIGHLIGHT_SPAN_JS = (
+    "<script>(function(){var base=null;"
+    "function rgba(h,a){return 'rgba('+parseInt(h.slice(1,3),16)+','+parseInt(h.slice(3,5),16)"
+    "+','+parseInt(h.slice(5,7),16)+','+a+')';}"
+    "window.addEventListener('message',function(e){"
+    "if(!e.data||e.data.type!=='highlight-span')return;"
+    "var gd=document.querySelector('.plotly-graph-div');if(!gd||!gd.layout)return;"
+    "if(base===null)base=(gd.layout.shapes||[]).slice();var s=e.data.span;"
+    "Plotly.relayout(gd,{shapes:s?base.concat([{type:'rect',xref:'x',yref:'paper',x0:s[0],"
+    "x1:s[1],y0:0,y1:1,fillcolor:rgba(s[2],0.14),line:{width:1.2,color:s[2]},layer:'below'}])"
+    ":base});});"
+    "})();</script>"
+)
+
 _OVERVIEW_MAX_PTS = 4000
 
 
@@ -487,19 +503,21 @@ def _section_raw_overview(
     """Every channel's raw intensity stacked, the raw report's opening figure; a click picks one.
 
     One file for the run and its conditions, each condition picked by URL fragment, as the
-    carpet is.
+    carpet is. ``raw_overview_markers`` is the event table beside it, coloured as its spans.
     """
-    out = {"raw_overview_path": None, "raw_overview_h": 0}
+    out = {"raw_overview_path": None, "raw_overview_h": 0, "raw_overview_markers": []}
     with _guard("Raw signal overview", errors, subject):
-        fig = build_ts_figure(raw_intensity, markers_on_data_axis(raw_intensity),
-                              set(bad_channels), _OVERVIEW_MAX_PTS, sep_bands)[0]
+        fig, markers = build_ts_figure(raw_intensity, markers_on_data_axis(raw_intensity),
+                                       set(bad_channels), _OVERVIEW_MAX_PTS, sep_bands)[:2]
         views = {_pair_fname(label): {"x": [float(t0), float(t1)]}
                  for label, t0, t1 in condition_spans or []}
         fname = fig_name("signal")
         out["raw_overview_h"] = _save_figure_html(fig, figures_dir / fname,
-                                                  extra_js=_PICK_CHANNEL_JS,
+                                                  extra_js=_PICK_CHANNEL_JS + _HIGHLIGHT_SPAN_JS,
                                                   views=views or None)
         out["raw_overview_path"] = _fig_href(fname)
+        out["raw_overview_markers"] = [
+            {k: m[k] for k in ("description", "onset", "duration", "color")} for m in markers]
     return out
 
 
@@ -527,11 +545,17 @@ def _section_optode_map(
     return out
 
 
-def _condition_overview(run_vars: dict, slug: str) -> dict:
-    """The run's raw signal overview, addressed at one condition's window."""
+def _condition_overview(run_vars: dict, slug: str, span: "tuple[float, float]") -> dict:
+    """The run's raw signal overview, addressed at one condition's window.
+
+    The event table keeps the events starting inside the window, as the raw report's
+    condition pages do.
+    """
     path = run_vars.get("raw_overview_path")
     return {"raw_overview_path": f"{path}#{slug}" if path else None,
-            "raw_overview_h": run_vars.get("raw_overview_h")}
+            "raw_overview_h": run_vars.get("raw_overview_h"),
+            "raw_overview_markers": [m for m in run_vars.get("raw_overview_markers") or []
+                                     if span[0] <= m["onset"] <= span[1]]}
 
 
 def _section_channel_detail(
@@ -2250,7 +2274,8 @@ def build_subject_report(
 
     if epoch_skip is not None:
         _note(notes, subject, section_note("caveat.epoch_skipped", reason=epoch_skip))
-        epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
+        epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0,
+                            "epoch_skip_reason": epoch_skip}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
         topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0,
                             "signal_topo_path": None, "signal_topo_h": 0}
@@ -2628,8 +2653,9 @@ def _cropped_sections(
     # one condition, so a design of one block per condition leaves it a single event and
     # nothing here to average
     epoch_src = crop(epoch_haemo, epoch_pad) or haemo
-    if _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax,
-                        single_trial=epoch_single_trial) is None:
+    out["epoch_skip_reason"] = _no_epoch_reason(epoch_src, epoch_tmin, epoch_tmax,
+                                                single_trial=epoch_single_trial)
+    if out["epoch_skip_reason"] is None:
         out.update(_section_epoch_preview(epoch_src, subject, errors,
                                           figures_dir, fig_name, epoch_tmin=epoch_tmin,
                                           epoch_tmax=epoch_tmax,
@@ -2860,7 +2886,7 @@ def _write_condition_reports(
             panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {}))
         if remake_optode_map is not None:
             panels.update(remake_optode_map(cond_name, sliced.get("sci_win_per_channel") or {}))
-        panels.update(_condition_overview(report_vars, slug))
+        panels.update(_condition_overview(report_vars, slug, span))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))
         if remake_denoise_carpet is not None:

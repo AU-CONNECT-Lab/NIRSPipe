@@ -124,8 +124,41 @@
     {#- the raw report's opening panels, so a run reads the same before the pipeline and after -#}
     {% if raw_overview_path %}
     <p class="step-desc">{{ section_note('raw.signal') }}</p>
-    <iframe class="plotly-frame" src="{{ raw_overview_path }}" title="Raw intensity, every channel"
-            style="height:{{ raw_overview_h }}px"></iframe>
+    <div class="row row-main">
+      <div>
+        <p class="panel-head">Raw signal</p>
+        <iframe id="raw-overview-frame" class="plotly-frame" src="{{ raw_overview_path }}"
+                title="Raw intensity, every channel" style="height:{{ raw_overview_h }}px"></iframe>
+      </div>
+      <div id="mk-card">
+        <p class="panel-head">Events <span class="hint" id="mk-count">
+          {%- if raw_overview_markers %}({{ raw_overview_markers | length }}){% endif %}</span></p>
+        <div id="mk-table-wrap">
+          <table id="marker-table">
+            <colgroup>
+              <col style="width:45%"/>
+              <col style="width:28%"/>
+              <col style="width:27%"/>
+            </colgroup>
+            <thead><tr>
+              <th>Description</th><th>Onset (s)</th><th>Dur (s)</th>
+            </tr></thead>
+            <tbody>
+              {% for m in raw_overview_markers %}
+              <tr data-x0="{{ m.onset }}" data-x1="{{ m.onset + m.duration }}"
+                  data-dur="{{ m.duration }}" data-color="{{ m.color }}">
+                <td><span class="mk-dot" style="background:{{ m.color }}"></span>{{ m.description }}</td>
+                <td>{{ '%.3f' | format(m.onset) }}</td>
+                <td>{{ '%.2f' | format(m.duration) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="3" style="color:#adb5bd;font-style:italic;text-align:center">No events</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     <p class="fig-path">{{ raw_overview_path }}</p>
     {% endif %}
 
@@ -332,7 +365,9 @@
       <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>
       <p class="fig-path">{{ epoch_preview_path }}</p>
     {% else %}
-      <div class="placeholder">No stimulus events found, so the epoch preview is not available.</div>
+      <div class="placeholder">
+        {%- if epoch_skip_reason %}{{ section_note('epoch.skipped', reason=epoch_skip_reason) }}
+        {%- else %}Figure generation failed; see Errors section.{% endif %}</div>
     {% endif %}
 
     {% if evoked_topomap_path %}
@@ -874,6 +909,23 @@ window.addEventListener("message", function(e) {
     }
   }
 });
+
+// a click on an event outlines its span on the raw signal, as on the raw report; again clears
+// it. Spans under 0.1 s are not drawn there either, so they only mark the row
+(function() {
+  var frame = document.getElementById("raw-overview-frame");
+  var picked = null;
+  document.querySelectorAll("#marker-table tbody tr[data-x0]").forEach(function(tr) {
+    tr.addEventListener("click", function() {
+      if (picked) picked.classList.remove("mk-selected");
+      picked = (picked === tr) ? null : tr;
+      if (picked) picked.classList.add("mk-selected");
+      var d = picked && picked.dataset;
+      frame.contentWindow.postMessage({type: "highlight-span",
+        span: d && +d.dur > 0.1 ? [+d.x0, +d.x1, d.color] : null}, "*");
+    });
+  });
+})();
 
 // a click on the raw signal or the optode map picks the channel the detail shows
 window.addEventListener("message", function(e) {

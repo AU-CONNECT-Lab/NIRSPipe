@@ -21,17 +21,9 @@ select#run-select {
   padding: 0.2rem 0.4rem; background: var(--surface); color: var(--ink);
 }
 
-/* grids. The panels that sit side by side stay side by side, unboxed, so the page reads
-   as a document the way the subject report does. */
-.row { display: grid; gap: 1.25rem; margin-bottom: 0.5rem; }
-.panel-head { font-size: 0.9rem; font-weight: 600; color: var(--ink); margin: 0 0 0.3rem; }
-.panel-head .hint { font-weight: 400; }
-.row-main    { grid-template-columns: 3fr 1fr; align-items: start; }
+/* grids; .row and .row-main, the trace beside its events, are document.css's */
 .row-detail  { grid-template-columns: 1fr; }
 .row-psd-ep  { grid-template-columns: 1fr; }
-@media (max-width: 900px) {
-  .row-main { grid-template-columns: 1fr; }
-}
 
 /* buttons */
 .btn {
@@ -46,20 +38,6 @@ select#run-select {
 .btn-danger:hover  { background: var(--bad-soft); }
 .btn-active  { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
-/* as tall as the plot beside it: sized as if empty, then stretched to the grid row */
-#mk-card { display: flex; flex-direction: column; overflow: hidden;
-           contain: size; align-self: stretch; }
-#mk-table-wrap { flex: 0 1 auto; min-height: 3rem; overflow-y: auto; }
-@media (max-width: 900px) {
-  #mk-card { contain: none; max-height: 24rem; }
-}
-#mk-count { font-size: 0.75rem; color: var(--faint); }
-#marker-table { border-collapse: collapse; width: 100%; font-size: 0.80rem; table-layout: fixed; }
-#marker-table th, #marker-table td { padding: 0.22rem 0.45rem; }
-#marker-table th { background: var(--surface); position: sticky; top: 0; }
-#marker-table tbody tr { cursor: pointer; }
-#marker-table tbody tr.mk-selected > td { background: var(--accent-soft); }
-.mk-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 
 /* detail panel placeholder */
 #detail-placeholder {

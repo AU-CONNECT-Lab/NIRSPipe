@@ -12,7 +12,7 @@ from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CLI_ARGS, EVENT_DURATION, HBR_FREQ, SFREQ
 from tests.figure_accuracy._payload import one_figure, plotly_figures
-from tests.figure_accuracy._read import share_at, traces, which_pair, xy
+from tests.figure_accuracy._read import event_rows, share_at, traces, which_pair, xy
 
 
 def _arg(flag):
@@ -260,6 +260,15 @@ def test_the_optode_map_reddens_the_rejected_pair_and_both_panels_pick_a_channel
         assert "pick-channel" in figure.read_text(encoding="utf-8")
     page = denoise_run.report.read_text(encoding="utf-8")
     assert all(f'data-pair="{pair.name}"' in page for pair in denoise_run.truth.pairs)
+
+
+def test_the_event_table_lists_every_planted_event_beside_a_trace_that_outlines_one(denoise_run):
+    rows = event_rows(denoise_run.report.read_text(encoding="utf-8"))
+    planted = sorted(denoise_run.truth.events)
+    assert [name for name, _, _ in rows] == [name for _, _, name in planted]
+    assert [(on, dur) for _, on, dur in rows] == pytest.approx([(on, dur) for on, dur, _ in planted],
+                                                                abs=0.01)
+    assert "highlight-span" in denoise_run.figure("signal").read_text(encoding="utf-8")
 
 
 # ---- signal by position, on the processed epochs ----

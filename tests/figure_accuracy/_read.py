@@ -131,3 +131,13 @@ def slider_row_titles(figure: dict) -> list[str]:
     layout = figure["layout"]
     titled = [k for k in layout if k.startswith("yaxis") and (layout[k].get("title") or {}).get("text")]
     return [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]
+
+
+_EVENT_ROW = re.compile(r'<tr data-x0="[^"]*" data-x1="[^"]*"\s+data-dur="[^"]*" data-color="[^"]*">'
+                        r'\s*<td><span class="mk-dot"[^>]*></span>([^<]*)</td>'
+                        r'\s*<td>([^<]*)</td>\s*<td>([^<]*)</td>')
+
+
+def event_rows(html: str) -> list[tuple[str, float, float]]:
+    """A subject report's Raw Signal event table as printed: (description, onset, duration)."""
+    return [(name, float(onset), float(dur)) for name, onset, dur in _EVENT_ROW.findall(html)]
