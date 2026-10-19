@@ -46,22 +46,25 @@ def slider():
     return _slider(LINES)
 
 
-def _row_titles(fig) -> list[str]:
+def _titles(fig) -> tuple[list[str], list[str]]:
+    """Column titles left to right, row names top down."""
     layout = fig.layout.to_plotly_json()
+    columns = [a["text"] for a in sorted(layout["annotations"], key=lambda a: a["x"]) if a["text"]]
     titled = [k for k in layout if k.startswith("yaxis") and layout[k].get("title")]
-    return [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]
+    rows = [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]
+    return columns, rows
 
 
 def _coloured(fig, row: int, col: int) -> int:
-    """The trace carrying the colours of the head at (row, col)."""
+    """The trace carrying the colours of the head at (row, col): a member's row, a number's column."""
     axis = fig.get_subplot(row, col).xaxis.plotly_name.replace("axis", "")
     return next(i for i, tr in enumerate(fig.data)
                 if tr.xaxis == axis and tr.marker.colorscale is not None)
 
 
-def test_the_rows_read_coupled_then_sci_then_psp(slider):
+def test_each_member_is_a_row_reading_coupled_then_sci_then_psp(slider):
     fig, _, _ = slider
-    assert _row_titles(fig) == ["Coupled", "SCI", "PSP"]
+    assert _titles(fig) == (["Coupled", "SCI", "PSP"], SIDS)
 
 
 def test_a_moved_window_is_not_coupled_while_its_sci_stays_over_the_line(slider):
@@ -71,24 +74,24 @@ def test_a_moved_window_is_not_coupled_while_its_sci_stays_over_the_line(slider)
     at = int(np.sum(per_pair[:first]))
     other = at + int(per_pair[first])           # the next pair's first marker, never moved
     frame = fig.frames[MOVED]
-    for row, (in_moved, elsewhere) in {1: (0.0, 1.0), 2: (0.95, 0.9), 3: (0.02, 0.5)}.items():
-        for col, sid in enumerate(SIDS, start=1):
+    for col, (in_moved, elsewhere) in {1: (0.0, 1.0), 2: (0.95, 0.9), 3: (0.02, 0.5)}.items():
+        for row, sid in enumerate(SIDS, start=1):
             i = _coloured(fig, row, col)
             colour = np.asarray(frame.data[list(frame.traces).index(i)].marker.color)
-            assert colour[at] == pytest.approx(in_moved, abs=1e-6), (row, sid)
-            assert colour[other] == pytest.approx(elsewhere, abs=1e-6), (row, sid)
+            assert colour[at] == pytest.approx(in_moved, abs=1e-6), (col, sid)
+            assert colour[other] == pytest.approx(elsewhere, abs=1e-6), (col, sid)
     words = frame.data[list(frame.traces).index(_coloured(fig, 1, 1))].customdata
     assert (words[at], words[other]) == ("no", "yes")
 
 
 def test_sci_and_psp_are_scaled_with_the_run_s_lines_mid_way(slider):
     fig, _, _ = slider
-    sci = fig.data[_coloured(fig, 2, 1)].marker
-    psp = fig.data[_coloured(fig, 3, 1)].marker
+    sci = fig.data[_coloured(fig, 1, 2)].marker
+    psp = fig.data[_coloured(fig, 1, 3)].marker
     assert (sci.cmin, sci.cmax) == pytest.approx((0.4, 1.0))
     assert (psp.cmin, psp.cmax) == pytest.approx((0.0, 0.3))
 
 
-def test_a_number_with_no_line_gets_no_row():
+def test_a_number_with_no_line_gets_no_column():
     fig, _, _ = _slider({"sci": 0.7})
-    assert _row_titles(fig) == ["Coupled", "SCI"]
+    assert _titles(fig)[0] == ["Coupled", "SCI"]

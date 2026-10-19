@@ -9,7 +9,7 @@ from mne.preprocessing.nirs import beer_lambert_law
 from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, own_freq
 from tests.figure_accuracy._dyad import js_var
 from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
-from tests.figure_accuracy._read import share_at, traces, xy
+from tests.figure_accuracy._read import share_at, slider_layout, traces, xy
 
 GROUPS = ("G01", "G02")
 
@@ -225,13 +225,12 @@ def test_the_head_slider_loses_each_planted_decoupling_in_its_coupled_row(groups
     from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
     path = groups.figure(group, "desc-rawheadslider_nirs.html")
     fig, frames = one_figure(path), plotly_frames(path)
-    layout = fig["layout"]
-    titled = sorted((k for k in layout if k.startswith("yaxis") and layout[k].get("title")),
-                    key=lambda k: int(k[5:] or 1))
-    assert [layout[k]["title"]["text"] for k in titled] == ["Coupled", "SCI", "PSP"]
+    columns, rows = slider_layout(fig)
+    assert columns == ["Coupled", "SCI", "PSP"]
+    assert sorted(rows) == sorted(m.sid for m in groups.truth.group(group))
 
     def heads(sid, pair):
-        """The member's coloured traces that draw ``pair``, top row first."""
+        """The member's coloured traces that draw ``pair``, left to right along its row."""
         found = [(int((tr.get("yaxis") or "y")[1:] or 1), i) for i, tr in enumerate(fig["data"])
                  if (tr.get("hovertemplate") or "").startswith(f"<b>{sid}</b>")
                  and "colorscale" in (tr.get("marker") or {})

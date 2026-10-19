@@ -271,10 +271,10 @@ def _coupled_words(values: np.ndarray, per_pair) -> np.ndarray:
 
 def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
                  cutoffs: dict) -> list[tuple]:
-    """The slider's rows, top down: (label, colour bar title, {sid: {pair: series}}, cmin, cmax).
+    """The slider's numbers, left to right: (label, colour bar title, {sid: {pair: series}}, cmin, cmax).
 
     Coupled is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
-    the subject report's SCI/PSP strip follows. A row with no data or no line is left out.
+    the subject report's SCI/PSP strip follows. A number with no data or no line is left out.
     """
     rows = []
     ok = grid.get("ok") or {}
@@ -304,16 +304,16 @@ def build_head_slider(
     cutoffs: "dict[str, float] | None" = None,
     step: int = 3,
 ) -> "go.Figure | None":
-    """A column of heads per member, or the one subject's, the slider running the whole recording.
+    """A row of heads per member, or the one subject's, the slider running the whole recording.
 
-    The instantaneous view, in rows read top down: whether the window coupled, the mask the
-    screening counts, then SCI and PSP, the two numbers that build it, each on a scale centred
-    on its line in ``cutoffs``. Every frame names the block it lands in, so a position on the
+    The instantaneous view, in columns read left to right: whether the window coupled, the
+    mask the screening counts, then SCI and PSP, the two numbers that build it, each on a
+    scale centred on its line in ``cutoffs``. Every frame names the block it lands in, so a position on the
     slider says what was being done and not only when. ``conditions`` is ``{name: (t0, t1)}``,
     or a list of ``(name, (t0, t1))`` where a condition recurs.
 
-    ``step`` decimates the frames. Each one carries a colour per marker per member per row, so
-    the page grows with the frame count.
+    ``step`` decimates the frames. Each one carries a colour per marker per head, so the page
+    grows with the frame count.
     """
     if not geo_by_sub:
         return None
@@ -345,48 +345,52 @@ def build_head_slider(
                     x=0.5, xanchor="center", y=0.98, yanchor="top",
                     font=dict(size=13, color="#34495e"))
 
-    n_rows, n_cols = len(rows), len(subject_ids)
+    # members in rows, as the per-block heads above put them, so one subject is one row
+    n_rows, n_cols = len(subject_ids), len(rows)
     fig = make_subplots(rows=n_rows, cols=n_cols,
-                        subplot_titles=list(subject_ids) + [""] * (n_cols * (n_rows - 1)),
-                        horizontal_spacing=0.04, vertical_spacing=0.05)
+                        subplot_titles=[row[0] for row in rows] + [""] * (n_cols * (n_rows - 1)),
+                        horizontal_spacing=0.07, vertical_spacing=0.05)
     drawn: list[tuple] = []
-    for ri, (label, title, values, cmin, cmax) in enumerate(rows, start=1):
-        # one colour bar per row, beside the last member's head
-        domain = fig.get_subplot(ri, 1).yaxis.domain
-        bar = dict(y=(domain[0] + domain[1]) / 2, yanchor="middle",
-                   len=0.9 * (domain[1] - domain[0]))
+    for mi, (label, title, values, cmin, cmax) in enumerate(rows, start=1):
+        # one colour bar per number, right of its column and as tall as the members; the
+        # column title already names it
+        x_dom = fig.get_subplot(1, mi).xaxis.domain
+        top = fig.get_subplot(1, mi).yaxis.domain[1]
+        bottom = fig.get_subplot(n_rows, mi).yaxis.domain[0]
+        bar = dict(x=x_dom[1] + 0.004, xanchor="left", y=(top + bottom) / 2, yanchor="middle",
+                   len=0.8 * (top - bottom), title=dict(text=""))
         if label == "Coupled":
             bar.update(tickvals=[0, 1], ticktext=["no", "yes"])
-        for ci, sid in enumerate(subject_ids, start=1):
+        for ri, sid in enumerate(subject_ids, start=1):
             geo = geo_by_sub.get(sid)
             if geo is None or sid not in values:
                 continue
-            head_ground(fig, geo, ri, ci)
+            head_ground(fig, geo, ri, mi)
             for scope in ("long", "short"):
                 if scope not in geo:
                     continue
                 per_pair = geo[scope]["per_pair"]
                 vals = pair_values(geo, scope, values[sid], lambda v, k=frames_at[0]: v[k])
-                i = head_glyph(fig, geo, scope, vals, ri, ci, title, cmin, cmax,
-                                bar=bar if (ci == n_cols and scope == "long") else False,
+                i = head_glyph(fig, geo, scope, vals, ri, mi, title, cmin, cmax,
+                                bar=bar if (ri == n_rows and scope == "long") else False,
                                 colorscale=HEAD_SCALE, sid=sid)
                 if label == "Coupled":
                     fig.data[i].update(
                         customdata=_coupled_words(vals, per_pair),
                         hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>coupled: "
                                       "%{customdata}<extra></extra>")
-                j = _blank_twin(fig, i, sid, ri, ci)
+                j = _blank_twin(fig, i, sid, ri, mi)
                 size = float(fig.data[i].marker.size)
                 shown, blank = _split_sizes(np.repeat(vals, per_pair), size)
                 fig.data[i].marker.size, fig.data[j].marker.size = shown, blank
-                drawn.append((ri, sid, scope, i, j, size))
+                drawn.append((mi, sid, scope, i, j, size))
     if not drawn:
         return None
 
     def frame_data(k: int) -> list:
         data = []
-        for ri, sid, scope, _i, _j, size in drawn:
-            label, values = rows[ri - 1][0], rows[ri - 1][2]
+        for mi, sid, scope, _i, _j, size in drawn:
+            label, values = rows[mi - 1][0], rows[mi - 1][2]
             per_pair = geo_by_sub[sid][scope]["per_pair"]
             per_channel = pair_values(geo_by_sub[sid], scope, values[sid],
                                        lambda v, kk=k: v[kk])
@@ -404,10 +408,10 @@ def build_head_slider(
                  layout=dict(title=caption(k)))
         for k in frames_at
     ]
-    head_axes(fig, geo_by_sub, n_rows, n_cols, row_labels=[row[0] for row in rows])
+    head_axes(fig, geo_by_sub, n_rows, n_cols, row_labels=list(subject_ids))
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     fig.update_layout(
-        height=230 * n_rows + 154, plot_bgcolor="white", showlegend=False,
+        height=280 * n_rows + 154, plot_bgcolor="white", showlegend=False,
         # the left margin holds the row names, as on the per-block heads
         margin=dict(l=84, r=78, t=78, b=76),
         title=caption(frames_at[0]),

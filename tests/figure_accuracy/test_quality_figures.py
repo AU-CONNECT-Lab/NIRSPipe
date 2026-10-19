@@ -8,7 +8,7 @@ import pytest
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from tests._fingerprint import CLI_ARGS
 from tests.figure_accuracy._payload import one_figure, plotly_frames
-from tests.figure_accuracy._read import by_pair, slider_row_titles
+from tests.figure_accuracy._read import by_pair, slider_layout
 
 PASS_COLOUR, FAIL_COLOUR = "#C5E0B3", "#F8786E"
 SCI, PSP = f"SCI ({SCI_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)"
@@ -146,7 +146,7 @@ def test_the_report_table_heads_both_sci_columns_with_their_estimator(denoise_ru
 def test_the_head_slider_reads_coupled_sci_psp_and_never_couples_the_dead_pair(denoise_run):
     path = denoise_run.figure("headslider")
     fig, frames = one_figure(path), plotly_frames(path)
-    assert slider_row_titles(fig) == ["Coupled", "SCI", "PSP"]
+    assert slider_layout(fig) == (["Coupled", "SCI", "PSP"], ["sub-01"])
     dead = next(p for p in denoise_run.truth.pairs if p.bad).name
     i = next(i for i, t in enumerate(fig["data"])
              if "coupled:" in (t.get("hovertemplate") or "") and dead in list(t.get("text") or []))

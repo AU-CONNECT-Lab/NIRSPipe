@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Breaking**: `--n-jobs` becomes `--nprocs`, the cores a command may use in all; subjects share them and run records store `nprocs`
 - The dyad raw report's corrected motion figure no longer repeats the IMU rows, which motion correction leaves unchanged
-- The dyad raw report's head slider draws each window's coupling verdict, then its SCI and PSP, each scaled on the run's own lines
+- The dyad raw report's head slider gives each member a row: the window's coupling verdict, then its SCI and PSP, each scaled on the run's own lines
 - The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
 - The raw report follows the subject report's section order, with its brain views under Signal Quality
 - The raw report's clickable optode map is gone, leaving the flat map beside the brain views

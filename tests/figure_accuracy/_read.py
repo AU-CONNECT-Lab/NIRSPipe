@@ -126,11 +126,14 @@ def _check_condition_grid(cells, run, block, hand=()):
     assert seen == {"Status", "Coupled"}
 
 
-def slider_row_titles(figure: dict) -> list[str]:
-    """A head slider's row names, top row first."""
+def slider_layout(figure: dict) -> tuple[list[str], list[str]]:
+    """A head slider's column titles left to right and its row names top down."""
     layout = figure["layout"]
+    columns = [a["text"] for a in sorted(layout.get("annotations") or [], key=lambda a: a["x"])
+               if a.get("text")]
     titled = [k for k in layout if k.startswith("yaxis") and (layout[k].get("title") or {}).get("text")]
-    return [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]
+    rows = [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]
+    return columns, rows
 
 
 _EVENT_ROW = re.compile(r'<tr data-x0="[^"]*" data-x1="[^"]*"\s+data-dur="[^"]*" data-color="[^"]*">'

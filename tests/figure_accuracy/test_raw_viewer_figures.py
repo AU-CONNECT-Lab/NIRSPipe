@@ -15,7 +15,7 @@ from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
 from tests.figure_accuracy._read import (
-    brain_inputs, by_pair, pair_sci, share_at, slider_row_titles, traces, which_pair, xy,
+    brain_inputs, by_pair, pair_sci, share_at, slider_layout, traces, which_pair, xy,
 )
 
 
@@ -246,4 +246,4 @@ def test_the_run_page_carries_the_head_slider(raw_viewer_run, page):
     src = page[1]["figure_paths"]["head_slider"]["src"]
     assert src.endswith("_desc-rawheadslider_nirs.html")
     fig = one_figure(raw_viewer_run.out / "sub-01" / src)
-    assert slider_row_titles(fig) == ["Coupled", "SCI", "PSP"]
+    assert slider_layout(fig) == (["Coupled", "SCI", "PSP"], ["sub-01"])

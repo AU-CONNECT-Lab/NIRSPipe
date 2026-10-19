@@ -61,9 +61,9 @@ NOTES = {
         "SCI against the run&rsquo;s line. Screening counts coupled windows, so a channel "
         "can be dropped at a high SCI.",
     "quality.head_slider":
-        "The panel above on the head, moved through the recording by the slider: whether each "
-        "window coupled, then its SCI and PSP, each scaled with its line mid-way. The event "
-        "the slider sits in is named above the heads.",
+        "The panel above on the head, moved through the recording by the slider: left to right, "
+        "whether each window coupled, then its SCI and PSP, each scaled with its line mid-way. "
+        "The event the slider sits in is named above the heads.",
     "quality.brain_views_condition":
         "These views and the optode map grade this condition&rsquo;s own SCI; only what the "
         "run rejected is drawn rejected.",

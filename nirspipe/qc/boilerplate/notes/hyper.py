@@ -56,9 +56,9 @@ NOTES = {
         "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
         "in that member.",
     "hyper_raw.head_slider":
-        "A column per member, moved through the recording by the slider: whether each window "
-        "coupled, then its SCI and PSP, each scaled with its line mid-way. The block is named "
-        "above the heads.",
+        "A row per member, moved through the recording by the slider: left to right, whether "
+        "each window coupled, then its SCI and PSP, each scaled with its line mid-way. The "
+        "block is named above the heads.",
     "hyper_raw.comparable":
         "Downstream steps match channels by S-D label and assume one clock: an unmatched "
         "label becomes a blank row, different sampling rates are refused, and drift at the "
