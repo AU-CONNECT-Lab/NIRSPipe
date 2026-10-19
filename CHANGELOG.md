@@ -18,7 +18,6 @@ All notable changes to this project will be documented in this file.
 - The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
 - The subject report's Raw Signal opens with the raw report's trace overview and clickable optode map; its brain views drop the flat map
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
-- The subject report draws the denoised carpet's stage as stacked traces too; a click opens that channel's spectrum by stage
 - Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
 - The raw and subject reports carry the dyad page's head slider: coupling, SCI and PSP on the head, window by window
 

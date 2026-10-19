@@ -101,10 +101,6 @@ NOTES = {
     "carpet.glm":
         "On a GLM run this is the residual, with the task model and confounds removed: what "
         "the model left unexplained, not the data the betas came from.",
-    "haemo.processed_signal":
-        "The carpet's stage, <code>{stage}</code>, as traces: each channel z-scored and "
-        "stacked, so steps and spikes left after denoising show as shapes. Click a trace for "
-        "its spectrum by stage.",
     "carpet.condition":
         "The z-scoring is the whole recording&rsquo;s, so every condition&rsquo;s carpet "
         "shares one greyscale: dark is above the channel&rsquo;s run mean, light below, and "
