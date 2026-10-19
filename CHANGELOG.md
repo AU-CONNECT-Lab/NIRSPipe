@@ -6,11 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `nirspipe-qc prep-raw` takes `--nprocs` and reports several subjects at once
+
 ### Changed
 - **Breaking**: `--n-jobs` becomes `--nprocs`, the cores a command may use in all; subjects share them and run records store `nprocs`
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
+- With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
 
 ## [0.71.0] - 2026-10-19
 
