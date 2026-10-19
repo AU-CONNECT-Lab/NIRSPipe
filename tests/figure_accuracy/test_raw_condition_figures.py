@@ -73,11 +73,14 @@ def test_a_condition_page_header_counts_what_fails_on_its_own_stretch(raw_condit
 def test_the_condition_optode_map_is_coloured_by_the_condition_s_own_sci(raw_condition_run, block):
     fig = _page(raw_condition_run, block)["layout"]["layout_2d_figure"]
     dots = next(t for t in fig["data"] if t.get("name") == "channels")
-    failing = _failing_in(raw_condition_run, block)
-    for name, colour in zip(dots["customdata"], dots["marker"]["color"]):
-        pair = name.rsplit(" ", 1)[0]
-        # under the line on this stretch, or rejected by the run: red or amber, never green
-        assert (colour != "#27ae60") == (pair in failing), (block, name, colour)
+    colours = {name.rsplit(" ", 1)[0]: c for name, c in zip(dots["customdata"], dots["marker"]["color"])}
+    truth = raw_condition_run.truth
+    for dead in (p.name for p in truth.pairs if p.bad):
+        assert colours[dead] == "#e74c3c", (block, dead)
+    # the pair decoupled inside one block is coupled through the other
+    pair, onset, _ = truth.block_bad
+    t0, t1, _ = _blocks(raw_condition_run)[block]
+    assert (colours[pair] != "#27ae60") == (t0 <= onset < t1), (block, pair, colours[pair])
 
 
 @pytest.mark.parametrize("block", BLOCKS)
@@ -262,7 +265,8 @@ def test_a_condition_page_rates_no_channel_and_the_run_page_still_does(raw_condi
         assert section_note("raw.channel_table_condition") in html
 
 
-def test_a_condition_page_draws_no_channel_maps(raw_condition_run):
+def test_a_condition_page_draws_its_own_optode_map_and_no_signal_topo(raw_condition_run):
     for block in _blocks(raw_condition_run):
         data = _page(raw_condition_run, block)
-        assert not data.get("layout") and not data.get("evoked_topo")
+        assert data["layout"]["layout_2d_figure"]["data"]
+        assert not data.get("evoked_topo")
