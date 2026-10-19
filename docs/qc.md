@@ -95,6 +95,8 @@ flowchart TD
 
 Sections `raw`, `raw_long` and `raw_short`; SCI and PSP also in `motion_post`. For coupling, read the windowed SCI: it is the estimate screening counts on, and the whole-run value can disagree with it. `n_long_channels` and `n_short_channels` give the size of the split; both zero means the recording has no registered optode positions.
 
+SNR is the mean of the raw intensity over its standard deviation, labelled μ/σ: a linear ratio and the reciprocal of CV, so its line of 20 is CV's 5%. Written in decibels, 20 log10(μ/σ), as some papers report it, 20 is about 26 dB.
+
 ```{eval-rst}
 .. metric-reference:: coupling
 ```
@@ -154,12 +156,12 @@ A run with `BAD_` spans gets an **Excluded** section: the kept seconds, the span
 
 ### Preprocessing
 
-- **Raw signal.** A per-channel selector with each channel's HbO/HbR trace, spectrum and epoch average. Every pair is listed, tagged `(rejected)`, `(short)` or `(short, rejected)`. Long traces are thinned for display by keeping each stretch's lowest and highest sample, so the cardiac pulse draws as a band rather than folding into a slow wave.
-- **Signal quality.** Windowed SCI and PSP heatmaps (channels by time) with each channel's mean beside them, against the run's own lines, measured on `desc-sci`. Then the brain views and the optode flat map, coloured by windowed SCI.
+- **Raw signal.** Every channel's raw intensity stacked, each row z-scored, with the condition blocks shaded; then the optode map, each channel's source-detector line and dot coloured by windowed SCI against the run's line, rejected channels red. A click on a trace or a dot picks that channel in the selector below, which shows its HbO/HbR trace and spectrum on `desc-sci`. Every pair is listed, tagged `(rejected)`, `(short)` or `(short, rejected)`. Long traces are thinned for display by keeping each stretch's lowest and highest sample, so the cardiac pulse draws as a band rather than folding into a slow wave.
+- **Signal quality.** Windowed SCI, PSP and CV heatmaps (channels by time) with each channel's mean beside them, against the run's own lines, measured on `desc-sci`. SCI and PSP compare a pair's two wavelengths, so they get a row per source-detector pair; CV gets a row per wavelength. A pair whose two SCI or PSP rows ever differ is drawn a row each and named under Errors & Warnings. Below, the same windows on the head: a slider steps through the recording, with a row for whether each window coupled and rows for its SCI and its PSP, each scaled with its line at mid-scale. Then the 3D brain views, coloured by windowed SCI.
 - **Motion.** The motion-band GVTD trace above a carpet of the optical density (each row detrended and z-scored; each column the largest \|z\| of its stretch, so a short burst is not lost). Before and after correction share one scale and one threshold line. Spike segments are shaded on the trace; where the recording carries an IMU, a gyroscope row and an accelerometer row sit above it, the only motion record not taken from the optical data. With `--roi-mapping` the long rows are grouped by region. A per-channel selector shows one channel's derivative and its optical density before and after, with every `BAD_` span shaded by kind. A zoom compares the longest detected segments before and after correction.
-- **HbO / HbR.** The HbO–HbR correlation matrices and each pair's r, on `desc-preproc` and again after denoising. Rejected pairs are kept but ranked apart: independent noise at the two wavelengths converts to anticorrelated HbO and HbR, so a dead channel would otherwise rank with the best. Then a carpet of the last haemoglobin stage, HbO above HbR, each channel detrended and z-scored.
+- **HbO / HbR.** The HbO–HbR correlation matrices and each pair's r, on `desc-preproc` and again after denoising. Rejected pairs are kept but ranked apart: independent noise at the two wavelengths converts to anticorrelated HbO and HbR, so a dead channel would otherwise rank with the best. Then a carpet of the last haemoglobin stage, HbO above HbR, each channel detrended and z-scored, and the same stage as stacked traces, where steps and spikes left after denoising show as shapes; a click on a trace opens that channel's spectrum by stage.
 - **Spectra by stage.** The mean spectrum over the long channels for `desc-preproc` and for the last stage the run wrote, with the cardiac and respiration bands, the Mayer wave and the filter cutoffs marked, and a per-channel selector. A run that high-passed notes that the first and last period of the cutoff are partly the filter settling.
-- **Epoch preview** (task data). An event timeline, one row per condition; the grand-average HbO and HbR per condition, baseline-corrected, with short channels dotted; channel maps of the condition average along each source-detector path, stepped through the epoch by a slider, short channels in their own row with their share of the long row's peak; and single-trial images per region and per channel. Skipped, with the reason, when nothing can be averaged: no events, no window that fits, or no condition that repeats (`--epoch-single-trial` waives the last).
+- **Epoch preview** (task data). An event timeline, one row per condition; the grand-average HbO and HbR per condition, baseline-corrected, with short channels dotted; channel maps of the condition average along each source-detector path, stepped through the epoch by a slider, short channels in their own row with their share of the long row's peak; the same averages as curves, each channel's HbO and HbR at its place on the head; and single-trial images per region and per channel. Skipped, with the reason, when nothing can be averaged: no events, no window that fits, or no condition that repeats (`--epoch-single-trial` waives the last).
 
 ### Postprocessing
 
@@ -188,7 +190,7 @@ The run summary of one run. A cell with an arrow holds the value before and afte
 
 No other metric is coloured: uncoloured means no cutoff was applied, not that the metric passed. None of the averages rejects anything; rejection is per channel, by the screening.
 
-**Per-channel table.** One row per source-detector pair: status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel coupled in too few windows and `BAD (manual)` for one rejected by hand.
+**Per-channel table.** One row per source-detector pair: status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR μ/σ (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel coupled in too few windows and `BAD (manual)` for one rejected by hand.
 
 ### Quality Figures
 
@@ -217,6 +219,8 @@ A condition page is a view of the run, not a second measurement: its numbers are
 `nirspipe-qc prep-raw` reports on raw recordings without running the pipeline: it screens the channels with the same criteria and draws the recording, one page per session and task, for as many subjects as you name. It writes the raw sections of the quality record, a per-channel table and the subject index, and takes the same screening and separation flags as `nirspipe`; pass what the run was preprocessed with, or the two reports describe different montages. Its figures share the subject's `figures/` folder with a `raw` prefix on `desc-`.
 
 Its run summary is the same one table, grouped Optical density, Motion and Haemoglobin, the haemoglobin rows from its own Beer-Lambert conversion of the unfiltered recording. `--motion-correction` runs a correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening still describes the recording as delivered; pass the pipeline's method to read the values the run report will show. `--epoch-qc` adds the per-trial section, and `--by-condition` one page per condition. It writes no Methods paragraph, since it describes a recording rather than an analysis.
+
+The page reads in the run report's order: the raw signal beside its events, each channel's detail under the optode map, signal quality with the slider and the brain views, motion, the HbO–HbR correlation, the mean spectrum, then the events and epochs. On a condition page the optode map and the slider are drawn again on that condition's own windows.
 
 ## Cohort reports
 
@@ -268,8 +272,8 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 | Alignment | Each member's offset onto the shared clock, and each block's onset difference from the first member, red beyond two samples. |
 | Per-channel signals | Both members' traces and spectra, one channel at a time. |
 | Shared usable time | The usable share per channel pair and condition, screened again on the aligned grid. |
-| Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present. With `--derivatives-dir`, each member after motion correction too. |
-| Where on the head | Each member's coupled-window share on the montage, and each window's SCI by slider. |
+| Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present, above the uncorrected rows only, since a correction leaves them unchanged. With `--derivatives-dir`, each member after motion correction too. |
+| Where on the head | Each member's coupled-window share on the montage per block, then a slider through the recording: whether each window coupled, its SCI and its PSP. |
 | Member and dyad metrics | Each member's numbers side by side, its IMU summaries where the recording carries one, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
 | Channel decisions | Each member's per-channel table side by side, with the rating decision, and the pairs each member's `channels.tsv` marked bad. |
 
