@@ -173,6 +173,15 @@
       <div class="placeholder">SCI/PSP panel not available.</div>
     {% endif %}
 
+    {% if head_slider_path %}
+      <h3>On the head, window by window</h3>
+      <p class="panel-note">{{ section_note('quality.head_slider') }}</p>
+      <iframe class="plotly-frame" src="{{ head_slider_path }}"
+              title="Coupling, SCI and PSP on the head, window by window"
+              style="height:{{ head_slider_h }}px"></iframe>
+      <p class="fig-path">{{ head_slider_path }}</p>
+    {% endif %}
+
     {% if brain_views_path %}
       <h3>Channel quality on the brain</h3>
       <p class="panel-note">{{ section_note('quality.brain_views') }}

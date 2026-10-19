@@ -22,8 +22,8 @@ from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from nirspipe.qc.figures.common.head_map import (
-    BLANK_COLOR, head_axes as _head_axes, head_ground as _head_ground,
-    head_glyph as _head_glyph,
+    BLANK_COLOR, HEAD_SCALE, build_head_slider, head_axes as _head_axes,
+    head_ground as _head_ground, head_glyph as _head_glyph, pair_values,
 )
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.utils.logging import get_logger
@@ -841,40 +841,9 @@ def _margin_label(fig, row: int, text: str) -> None:
 # Figure: where on the head
 # ---------------------------------------------------------------------------
 
-_HEAD_SCALE = [[0.0, _BAD_COLOR], [0.5, _MIX_COLOR], [1.0, _GOOD_COLOR]]
-
-
-def _pair_values(geo, scope, by_pair: dict, reduce_fn) -> "np.ndarray":
-    """One value per channel this head draws, NaN where the dyad grid has no such pair."""
-    return np.array([reduce_fn(by_pair[name]) if name in by_pair else np.nan
-                     for name in geo[scope]["names"]])
-
-
 # a channel with no value there, e.g. an intensity pinned at the device's ceiling, which has
 # no pulse to correlate; the subject maps' light grey rather than Plotly's default black
 _NO_VALUE = BLANK_COLOR
-
-
-def _blank_twin(fig, i: int, sid: str, row: int, col: int) -> int:
-    """A grey copy of marker trace ``i`` for the markers with no value; returns its index.
-
-    The slider swaps one colour array per frame, so the markers with no value cannot be a
-    trace of their own: both traces keep every marker and :func:`_split_sizes` hides each
-    marker in the trace it does not belong to.
-    """
-    src = fig.data[i]
-    fig.add_trace(go.Scatter(
-        x=src.x, y=src.y, mode="markers", text=src.text, showlegend=False,
-        marker=dict(color=_NO_VALUE, symbol=src.marker.symbol, line=dict(width=0)),
-        hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>no value<extra></extra>",
-    ), row=row, col=col)
-    return len(fig.data) - 1
-
-
-def _split_sizes(values: np.ndarray, size: float) -> "tuple[np.ndarray, np.ndarray]":
-    """Marker sizes for a coloured trace and its grey twin, so each marker shows in one."""
-    finite = np.isfinite(values)
-    return np.where(finite, size, 0.0), np.where(finite, 0.0, size)
 
 
 def build_head_by_condition(
@@ -907,173 +876,16 @@ def build_head_by_condition(
             for scope in ("long", "short"):
                 if scope not in geo:
                     continue
-                vals = _pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
+                vals = pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
                 _head_glyph(fig, geo, scope, vals, ri, ci, "Coupled<br>windows", 0.0, 1.0,
                             bar=(ri == 1 and ci == len(names) and scope == "long"),
-                            colorscale=_HEAD_SCALE, sid=sid, blank_color=_NO_VALUE)
+                            colorscale=HEAD_SCALE, sid=sid, blank_color=_NO_VALUE)
     _head_axes(fig, geo_by_sub, len(subject_ids), len(names), row_labels=subject_ids)
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
     # a head per member per block, so the grid is as wide as the blocks and only as tall as
     # the members; the height is what decides how big each head is drawn
     fig.update_layout(height=230 * len(subject_ids) + 46, plot_bgcolor="white",
                       showlegend=False, margin=dict(l=104, r=78, t=46, b=14))
-    return fig
-
-
-def _coupled_words(values: np.ndarray, per_pair) -> np.ndarray:
-    """``yes`` or ``no`` per marker, the hover of a row whose colour is a pass or a fail."""
-    return np.repeat(np.where(np.asarray(values) >= 0.5, "yes", "no"), per_pair)
-
-
-def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
-                 cutoffs: dict) -> list[tuple]:
-    """The slider's rows, top down: (label, colour bar title, {sid: {pair: series}}, cmin, cmax).
-
-    Coupled is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
-    the subject report's SCI/PSP strip follows. A row with no data or no line is left out.
-    """
-    rows = []
-    ok = grid.get("ok") or {}
-    coupled = {sid: dict(zip(grid["pairs"], np.asarray(ok[sid], dtype=float)))
-               for sid in subject_ids if sid in ok}
-    if coupled:
-        rows.append(("Coupled", "Coupled", coupled, 0.0, 1.0))
-    window = f"<br>({SCREEN_WINDOW_S:g} s)"
-    for label, line in (("SCI", cutoffs.get("sci")), ("PSP", cutoffs.get("psp"))):
-        key = f"per_pair_{label.lower()}"
-        values = {sid: series_by_sub[sid][key] for sid in subject_ids
-                  if (series_by_sub.get(sid) or {}).get(key) is not None}
-        if line is None or not values:
-            continue
-        line = float(line)
-        cmin, cmax = (2 * line - 1.0, 1.0) if label == "SCI" else (0.0, 2 * line)
-        rows.append((label, label + window, values, cmin, cmax))
-    return rows
-
-
-def build_head_slider(
-    geo_by_sub: dict,
-    subject_ids: list[str],
-    grid: dict,
-    series_by_sub: dict,
-    conditions: "dict | None" = None,
-    cutoffs: "dict[str, float] | None" = None,
-    step: int = 3,
-) -> "go.Figure | None":
-    """A column of heads per member, the slider running the whole recording on the shared clock.
-
-    The instantaneous view, in rows read top down: whether the window coupled, the mask the
-    per-block heads and the usable-time carpet count, then SCI and PSP, the two numbers that
-    build it, each on a scale centred on its line in ``cutoffs``. Every frame names the block
-    it lands in, so a position on the slider says what the dyad was doing and not only when.
-
-    ``step`` decimates the frames. Each one carries a colour per marker per member per row, so
-    the page grows with the frame count.
-    """
-    if not geo_by_sub:
-        return None
-    t = np.asarray(grid["t"], dtype=float)
-    frames_at = list(range(0, len(t), max(1, step)))
-    if not frames_at:
-        return None
-    conditions = conditions or {}
-    rows = _slider_rows(grid, series_by_sub, subject_ids, cutoffs or {})
-    if not rows:
-        return None
-
-    def task_at(when: float) -> str:
-        for name, (a, b) in conditions.items():
-            if a <= when <= b:
-                return name
-        return "between blocks"
-
-    def caption(k: int) -> dict:
-        """The block the slider sits in, as the figure's title.
-
-        A frame that hands back ``layout.annotations`` overwrites the layout's own array
-        **by index**, so a one-element caption lands on subplot title 0 and the real caption,
-        sitting at index 2, never updates: the first head loses its name and the caption is
-        frozen at the first frame. A title has no index to collide with.
-        """
-        return dict(text=f"<b>{task_at(t[k])}</b>"
-                         f"<span style='color:#8a949e'> &nbsp;t = {t[k]:.0f} s</span>",
-                    x=0.5, xanchor="center", y=0.98, yanchor="top",
-                    font=dict(size=13, color="#34495e"))
-
-    n_rows, n_cols = len(rows), len(subject_ids)
-    fig = make_subplots(rows=n_rows, cols=n_cols,
-                        subplot_titles=list(subject_ids) + [""] * (n_cols * (n_rows - 1)),
-                        horizontal_spacing=0.04, vertical_spacing=0.05)
-    drawn: list[tuple] = []
-    for ri, (label, title, values, cmin, cmax) in enumerate(rows, start=1):
-        # one colour bar per row, beside the last member's head
-        domain = fig.get_subplot(ri, 1).yaxis.domain
-        bar = dict(y=(domain[0] + domain[1]) / 2, yanchor="middle",
-                   len=0.9 * (domain[1] - domain[0]))
-        if label == "Coupled":
-            bar.update(tickvals=[0, 1], ticktext=["no", "yes"])
-        for ci, sid in enumerate(subject_ids, start=1):
-            geo = geo_by_sub.get(sid)
-            if geo is None or sid not in values:
-                continue
-            _head_ground(fig, geo, ri, ci)
-            for scope in ("long", "short"):
-                if scope not in geo:
-                    continue
-                per_pair = geo[scope]["per_pair"]
-                vals = _pair_values(geo, scope, values[sid], lambda v, k=frames_at[0]: v[k])
-                i = _head_glyph(fig, geo, scope, vals, ri, ci, title, cmin, cmax,
-                                bar=bar if (ci == n_cols and scope == "long") else False,
-                                colorscale=_HEAD_SCALE, sid=sid)
-                if label == "Coupled":
-                    fig.data[i].update(
-                        customdata=_coupled_words(vals, per_pair),
-                        hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>coupled: "
-                                      "%{customdata}<extra></extra>")
-                j = _blank_twin(fig, i, sid, ri, ci)
-                size = float(fig.data[i].marker.size)
-                shown, blank = _split_sizes(np.repeat(vals, per_pair), size)
-                fig.data[i].marker.size, fig.data[j].marker.size = shown, blank
-                drawn.append((ri, sid, scope, i, j, size))
-    if not drawn:
-        return None
-
-    def frame_data(k: int) -> list:
-        data = []
-        for ri, sid, scope, _i, _j, size in drawn:
-            label, values = rows[ri - 1][0], rows[ri - 1][2]
-            per_pair = geo_by_sub[sid][scope]["per_pair"]
-            per_channel = _pair_values(geo_by_sub[sid], scope, values[sid],
-                                       lambda v, kk=k: v[kk])
-            markers = np.repeat(per_channel, per_pair)
-            shown, blank = _split_sizes(markers, size)
-            coloured = go.Scatter(marker=dict(color=markers.astype(np.float32), size=shown))
-            if label == "Coupled":
-                coloured.customdata = _coupled_words(per_channel, per_pair)
-            data += [coloured, go.Scatter(marker=dict(size=blank))]
-        return data
-
-    fig.frames = [
-        go.Frame(name=f"{t[k]:.0f}", data=frame_data(k),
-                 traces=[x for *_r, i, j, _z in drawn for x in (i, j)],
-                 layout=dict(title=caption(k)))
-        for k in frames_at
-    ]
-    _head_axes(fig, geo_by_sub, n_rows, n_cols, row_labels=[row[0] for row in rows])
-    fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(
-        height=230 * n_rows + 154, plot_bgcolor="white", showlegend=False,
-        # the left margin holds the row names, as on the per-block heads
-        margin=dict(l=84, r=78, t=78, b=76),
-        title=caption(frames_at[0]),
-        sliders=[dict(active=0, y=0, yanchor="top", pad=dict(t=30, b=4),
-                      currentvalue=dict(visible=False), font=dict(size=9),
-                      steps=[dict(method="animate", label=fr.name,
-                                  args=[[fr.name],
-                                        dict(mode="immediate",
-                                             frame=dict(duration=0, redraw=True),
-                                             transition=dict(duration=0))])
-                             for fr in fig.frames])])
     return fig
 
 

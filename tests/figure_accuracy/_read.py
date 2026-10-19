@@ -124,3 +124,10 @@ def _check_condition_grid(cells, run, block, hand=()):
             assert (colour == _BAD_COLOR) == (name in uncoupled), (block, channel, value)
             seen.add(metric)
     assert seen == {"Status", "Coupled"}
+
+
+def slider_row_titles(figure: dict) -> list[str]:
+    """A head slider's row names, top row first."""
+    layout = figure["layout"]
+    titled = [k for k in layout if k.startswith("yaxis") and (layout[k].get("title") or {}).get("text")]
+    return [layout[k]["title"]["text"] for k in sorted(titled, key=lambda k: int(k[5:] or 1))]

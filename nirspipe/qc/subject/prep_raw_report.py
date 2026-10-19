@@ -38,6 +38,7 @@ from nirspipe.qc.metrics import (
     screen_channels, screening_scores,
 )
 from nirspipe.qc.metrics._helpers import registration_offset, separation_orphans
+from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
@@ -505,6 +506,14 @@ def _process_run(
         figure_paths["sci_psp"] = {"src": f"figures/{fname}", "h": h}
         sci_psp_inline = {"figure": fig.to_dict()}
 
+    # ── file: head slider ──────────────────────────────────────────────────────
+    # the subject report's own, off the same matrices as the panel above
+    remake_head_slider = _head_slider_maker(raw, series, list(sci_scores), cutoffs, sep_bands,
+                                            run["label"], fig_dir)
+    slider = remake_head_slider(fig_name, None, errors)
+    if slider:
+        figure_paths["head_slider"] = slider
+
     # ── file: PSD mean ─────────────────────────────────────────────────────────
     psd_inline: dict = {}
     with guard("PSD", errors, label):
@@ -818,6 +827,7 @@ def _process_run(
         # drawn by the page writer, not here: the GUI shares this function and shows no copy
         "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
                                       sci_threshold=cutoffs["sci"]),
+        "remake_head_slider": remake_head_slider,
         # the clickable map on a condition's own SCI, as the brain views are drawn
         "remake_layout": lambda sci: build_layout_figure(raw, bad_channels, sci,
                                                          sci_threshold=cutoffs["sci"]),
@@ -895,6 +905,35 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
         return _section_brain(sci, sorted(bad_channels), coords, good, raw, label, errors,
                               fig_dir, namer, ch_names_brain=names,
                               sci_threshold=sci_threshold, flat_map=False)["brain_views_path"]
+
+    return remake
+
+
+def _head_slider_maker(raw, series: dict, channels: list, cutoffs: dict, sep_bands,
+                       label: str, fig_dir: Path):
+    """``(namer, window, errors) -> {"src", "h"}`` of the head slider, or None.
+
+    ``window`` cuts the stored matrices to one condition's windows, as the SCI/PSP panel's
+    condition copy is cut; None keeps the whole run.
+    """
+    # imported where used, as every reach into the subject report module here is
+    from nirspipe.qc.subject.report import _section_head_slider
+
+    def remake(namer, window, errors: list) -> "dict | None":
+        sci, psp, times = (series.get(k) for k in ("sci_matrix", "psp_matrix", "sci_times"))
+        if sci is None or psp is None or times is None:
+            return None
+        sci, psp, times = np.asarray(sci), np.asarray(psp), np.asarray(times)
+        if window is not None:
+            keep = _in_scope(window_centers(times), [window])
+            if not keep.any():
+                return None
+            sci, psp, times = sci[:, keep], psp[:, keep], times[keep]
+        out = _section_head_slider(raw, sci, psp, channels, times, cutoffs, sep_bands,
+                                   label.split("_")[0].removeprefix("sub-"), errors, fig_dir,
+                                   namer)
+        return ({"src": out["head_slider_path"], "h": out["head_slider_h"]}
+                if out["head_slider_path"] else None)
 
     return remake
 
@@ -1026,13 +1065,20 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         return {"src": f"figures/{fname}", "h": h}
 
     remake_brain = ctx.get("remake_brain")
-    brain_errors: "dict[str, list]" = {}
+    remake_slider = ctx.get("remake_head_slider")
+    # what the remade panels failed at, per condition page
+    panel_errors: "dict[str, list]" = {}
 
     def save_brain(slug: str, sci: dict) -> "dict | None":
         """One condition's brain figure, graded by its own SCI over the run's rejections."""
         href = remake_brain(figure_namer(run_label, slug, prefix="raw"), sci,
-                            brain_errors.setdefault(slug, []))
+                            panel_errors.setdefault(slug, []))
         return {"src": href} if href else None
+
+    def save_head_slider(slug: str, window) -> "dict | None":
+        """One condition's head slider, on the run's matrices cut to its windows."""
+        return remake_slider(figure_namer(run_label, slug, prefix="raw"), window,
+                             panel_errors.setdefault(slug, []))
 
     def save_stack(panel: str, slug: str, name: str, figs) -> "dict | None":
         """The same, for a panel whose file holds several figures of one channel."""
@@ -1051,6 +1097,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         remake_hbo_hbr_corr=ctx.get("remake_hbo_hbr_corr"),
         remake_brain=save_brain if remake_brain else None,
         remake_layout=ctx.get("remake_layout"),
+        remake_head_slider=save_head_slider if remake_slider else None,
         trial_images=ctx.get("trial_images_by_condition"),
         save_stack=save_stack,
         sep_bands=ctx.get("sep_bands"),
@@ -1068,8 +1115,8 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
                            "earlier one; no page for it", run_label, label, slug)
             continue
         written.add(slug)
-        if brain_errors.get(slug):
-            view["errors"] = list(view.get("errors") or []) + collapse_messages(brain_errors[slug])
+        if panel_errors.get(slug):
+            view["errors"] = list(view.get("errors") or []) + collapse_messages(panel_errors[slug])
         out = output_path.with_name(condition_page_name(run_label, label, desc="raw"))
         view_label = f"{run_label}_cond-{slug}"
         # the run page's one table, built here from the condition's own set tables

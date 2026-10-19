@@ -245,6 +245,11 @@ select#run-select {
   <div class="details-body">
     <p class="step-desc">{{ section_note('raw.sci_psp') }}</p>
     <div id="sci-psp-plot"></div>
+    <div id="HeadSlider">
+      <h3>On the head, window by window</h3>
+      <p class="qm-note">{{ section_note('quality.head_slider') }}</p>
+      <div id="head-slider-plot"></div>
+    </div>
     {#- the subject report's brain views, so a run reads the same before the pipeline and
         after; its flat map is the clickable one beside the channel picker -#}
     <div id="Layout">
@@ -491,6 +496,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadMotionDetail();
   loadHbCorr();
   loadSciPsp();
+  loadHeadSlider();
   loadBrainViews();
   loadSqm();
   loadChannelSummary();
@@ -744,6 +750,12 @@ function loadSciPsp() {
   var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).sci_psp;
   _showSection("SciPsp", !!(p && p.src));
   if (p && p.src) _setIframeSrc("sci-psp-plot", p.src, p.h || 400);
+}
+
+function loadHeadSlider() {
+  var p = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).head_slider;
+  _showSection("HeadSlider", !!(p && p.src));
+  if (p && p.src) _setIframeSrc("head-slider-plot", p.src, p.h || 600);
 }
 
 // ─── brain views ──────────────────────────────────────────────────────────────
@@ -1002,7 +1014,8 @@ function switchRun(idx) {
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadChannelMaps(); loadTimeSeries(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
-    loadSciPsp(); loadBrainViews(); loadSqm(); loadChannelSummary(); loadConditionSummary();
+    loadSciPsp(); loadHeadSlider(); loadBrainViews(); loadSqm(); loadChannelSummary();
+    loadConditionSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();
     if (window.qcShowGroup) window.qcShowGroup(_run_idx);

@@ -14,7 +14,9 @@ from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
-from tests.figure_accuracy._read import by_pair, share_at, traces, which_pair, xy
+from tests.figure_accuracy._read import (
+    by_pair, share_at, slider_row_titles, traces, which_pair, xy,
+)
 
 
 def _arg(flag):
@@ -259,3 +261,10 @@ def test_the_decoupled_trial_has_the_lowest_sci(raw_viewer_run):
             sci[trial] = float(value)
     dead = next(t for t in sci if f"_{raw_viewer_run.truth.dead_trial:g}s_" in t)
     assert min(sci, key=sci.get) == dead
+
+
+def test_the_run_page_carries_the_head_slider(raw_viewer_run, page):
+    src = page[1]["figure_paths"]["head_slider"]["src"]
+    assert src.endswith("_desc-rawheadslider_nirs.html")
+    fig = one_figure(raw_viewer_run.out / "sub-01" / src)
+    assert slider_row_titles(fig) == ["Coupled", "SCI", "PSP"]

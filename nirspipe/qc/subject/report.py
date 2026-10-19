@@ -91,7 +91,7 @@ from nirspipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from nirspipe.qc.metrics import (
-    CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks,
+    CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks, long_short_channels,
     registration_offset, separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
@@ -143,7 +143,11 @@ from nirspipe.qc.subject.trial_qc import (
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import span_kind
-from nirspipe.qc.metrics.windowed import _in_scope, window_centers
+from nirspipe.qc.metrics.windowed import (
+    _in_scope, coupled_mask_from_matrices, window_centers,
+)
+from nirspipe.qc.metrics.hyper import coupled_grid, member_series
+from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
 from nirspipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_label, metric_summary, with_unit,
 )
@@ -358,7 +362,57 @@ def _section_sci(
         )
 
     return {"sci_psp_panel_path": sci_psp_panel_path, "sci_psp_panel_h": sci_psp_panel_h,
-            "cv_threshold": CV_PASS}
+            "cv_threshold": CV_PASS,
+            **_section_head_slider(raw_intensity, sci_scores_matrix, psp_scores_matrix,
+                                   ch_names, sci_win_times, cutoffs, separation_bands(config),
+                                   subject, errors, figures_dir, fig_name)}
+
+
+def _section_head_slider(
+    raw_intensity: mne.io.Raw,
+    sci_matrix: "np.ndarray | None",
+    psp_matrix: "np.ndarray | None",
+    channels: list,
+    times: "np.ndarray | None",
+    cutoffs: dict,
+    sep_bands,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+) -> dict:
+    """The dyad page's head slider for one subject: whether each window coupled, then its SCI
+    and PSP, on the head, window by window.
+
+    Read off the stored matrices, cut to a condition's windows when they are, through the dyad
+    page's own grid for a dyad of one, so the two pages cannot count a window differently.
+    """
+    out = {"head_slider_path": None, "head_slider_h": 0}
+    if sci_matrix is None or psp_matrix is None or times is None or not len(channels):
+        return out
+    with _guard("Head slider", errors, subject):
+        mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, cutoffs["sci"], cutoffs["psp"])
+        if mask is None:
+            return out
+        sid = f"sub-{subject}"
+        sqm = {sid: {"screen_windows": {"mask": mask, "centers": window_centers(times),
+                                        "sci": sci_matrix, "psp": psp_matrix,
+                                        "channel_order": list(channels)}}}
+        grid = coupled_grid(sqm, [sid], {})
+        long_names, _ = long_short_channels(raw_intensity, sep_bands)
+        geo = head_geometry(raw_intensity, list(dict.fromkeys(pair_of(n) for n in long_names))
+                            or grid["pairs"]) if grid is not None else None
+        if geo is None:
+            return out
+        spans = [(m["description"], (m["onset"], m["onset"] + m["duration"]))
+                 for m in markers_on_data_axis(raw_intensity) if m["duration"] > 0]
+        fig = build_head_slider({sid: geo}, [sid], grid, {sid: member_series(sqm, sid, grid)},
+                                spans, cutoffs)
+        if fig is not None:
+            fname = fig_name("headslider")
+            out["head_slider_h"] = _save_figure_html(fig, figures_dir / fname)
+            out["head_slider_path"] = _fig_href(fname)
+    return out
 
 
 def _uncorrected_haemo(

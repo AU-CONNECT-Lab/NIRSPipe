@@ -605,6 +605,7 @@ def condition_payloads(
     has_spans: bool = False,
     remake_brain=None,
     remake_layout=None,
+    remake_head_slider=None,
 ) -> "list[tuple[str, dict]]":
     """One viewer payload per condition, read out of the quality record.
 
@@ -621,7 +622,8 @@ def condition_payloads(
       are handed their data and derive nothing from a recording, so a real slice is correct
       and ``save_figure`` writes each under a name carrying the condition's slug. The brain
       figure too, through ``remake_brain``, and the clickable optode map through
-      ``remake_layout``, both graded by the condition's own SCI.
+      ``remake_layout``, both graded by the condition's own SCI; and the head slider,
+      through ``remake_head_slider``, on the matrices cut to the condition's windows.
     - **addressed at the condition's window**: the carpet, the per-channel detail and the
       per-channel motion figure. Each
       derives something run-wide from what it is handed, a filtered GVTD, a per-channel
@@ -792,6 +794,10 @@ def condition_payloads(
                     paths[key] = saved
                 else:
                     paths.pop(key, None)
+            paths.pop("head_slider", None)
+            slider = remake_head_slider(slug, window) if remake_head_slider else None
+            if slider:
+                paths["head_slider"] = slider
             trial = _condition_trial_figure(trial_rows, window, slug, save_figure)
             paths.pop("trial_qc", None)
             d["trial_qc"] = {}

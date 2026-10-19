@@ -9,7 +9,7 @@ import pytest
 
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import EVENT_ONSETS
-from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
+from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures, plotly_frames
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
     _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, xy,
@@ -270,3 +270,13 @@ def test_a_condition_page_draws_its_own_optode_map_and_no_signal_topo(raw_condit
         data = _page(raw_condition_run, block)
         assert data["layout"]["layout_2d_figure"]["data"]
         assert not data.get("evoked_topo")
+
+
+@pytest.mark.parametrize("block", BLOCKS)
+def test_a_condition_head_slider_steps_through_its_own_windows_only(raw_condition_run, block):
+    t0, t1, _ = _blocks(raw_condition_run)[block]
+    src = _page(raw_condition_run, block)["figure_paths"]["head_slider"]["src"]
+    assert f"_cond-{block}_" in src
+    frames = plotly_frames(raw_condition_run.out / "sub-01" / src)
+    # frame names are window centres rounded to the second
+    assert frames and all(t0 - 1 <= centre <= t1 + 1 for centre in frames), sorted(frames)
