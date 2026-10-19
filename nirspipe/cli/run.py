@@ -342,7 +342,7 @@ _CONFIG_EXTRA = {"prep": (), "post": ("roi_mapping",)}
 _EXECUTION_KEYS = ("participant_label", "session_label", "task_label", "bids_filter_file",
                    "ignore", "allow_cropped_input")
 # describe the run that wrote the record rather than set the next one
-_RECORD_ONLY = ("environment", "post_sources")
+_RECORD_ONLY = ("environment", "post_sources", "outcome")
 
 
 def config_keys() -> dict[str, tuple[str, ...]]:

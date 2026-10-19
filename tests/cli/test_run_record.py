@@ -75,7 +75,7 @@ def prep_only_record(mini_bids, tmp_path_factory):
 
 
 def test_record_has_the_expected_sections(record):
-    assert set(record) == {"environment", "execution", "prep", "post", "post_sources"}
+    assert set(record) == {"environment", "execution", "prep", "post", "post_sources", "outcome"}
 
 
 @pytest.mark.parametrize("field, expected", [

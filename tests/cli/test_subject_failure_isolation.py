@@ -92,3 +92,69 @@ def test_each_subject_keeps_its_own_log(parallel_attempted):
         text = log.read_text(encoding="utf-8")
         assert f"sub-{sub} | starting" in text
         assert f"sub-{other} |" not in text
+
+
+# ---- each subject's run record ends with how it went ----
+
+@pytest.fixture
+def mixed_outcome(mini_bids, tmp_path, monkeypatch):
+    """sub-01's prep raises, sub-02's runs for real; returns the output tree."""
+    from nirspipe.cli import workflows
+
+    real_prep = workflows.run_prep
+
+    def _fail_one(raw, config, *args, **kwargs):
+        if config.subject == "01":
+            raise RuntimeError("synthetic prep failure\nsecond line of the message")
+        return real_prep(raw, config, *args, **kwargs)
+
+    monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _fail_one)
+    out = tmp_path / "out"
+    args = {**_ARGS, "bids_dir": mini_bids, "output_dir": out, "participant_label": ["01", "02"]}
+
+    original = sys.argv
+    sys.argv = ["nirspipe", str(mini_bids), str(out), "participant"]
+    try:
+        with pytest.raises(SystemExit):
+            run_participant_level(args)
+    finally:
+        sys.argv = original
+    return out
+
+
+def _outcome(out, sub):
+    from nirspipe.utils import load_toml
+    return load_toml(out / f"sub-{sub}" / "logs" / f"sub-{sub}.toml").get("outcome")
+
+
+def test_a_failed_subject_records_the_first_line_of_its_error(mixed_outcome):
+    outcome = _outcome(mixed_outcome, "01")
+    assert outcome["status"] == "failed"
+    assert outcome["error"] == "RuntimeError: synthetic prep failure"
+    assert outcome["duration_s"] >= 0
+
+
+def test_a_finished_subject_records_success_and_no_error(mixed_outcome):
+    outcome = _outcome(mixed_outcome, "02")
+    assert outcome["status"] == "success"
+    assert "error" not in outcome
+
+
+def test_a_record_with_an_outcome_still_reads_back_as_config(mixed_outcome):
+    from nirspipe.cli.run import read_config
+
+    settings = read_config(mixed_outcome / "sub-01" / "logs" / "sub-01.toml")
+    assert settings["prep"]["sci_threshold"] == 0.8
+
+
+def test_a_dry_run_record_has_no_outcome(mini_bids, tmp_path):
+    out = tmp_path / "out"
+    args = {**_ARGS, "bids_dir": mini_bids, "output_dir": out, "participant_label": ["01"],
+            "dry_run": True}
+    original = sys.argv
+    sys.argv = ["nirspipe", str(mini_bids), str(out), "participant", "--dry-run"]
+    try:
+        run_participant_level(args)
+    finally:
+        sys.argv = original
+    assert _outcome(out, "01") is None

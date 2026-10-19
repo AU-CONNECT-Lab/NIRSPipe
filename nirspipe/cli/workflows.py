@@ -7,6 +7,7 @@ Does no signal processing itself.
 
 import json
 import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,8 @@ from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
-from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT, write_run_record
+from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, error_line, write_run_outcome,
+                                     write_run_record)
 from nirspipe.utils.spans import bad_spans, marker_onset
 
 logger = get_logger("cli.workflows")
@@ -292,6 +294,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
             # keyed by BIDS run stem: every QC figure is per run, so the report loop below
             # needs each run's own prep output rather than whichever finished last
             prep_runs: dict[str, tuple] = {}
+            t0 = time.monotonic()
+            status, error = "success", None
             try:
                 sessions: list[str | None] = session_label if session_label else [None]
 
@@ -406,9 +410,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
             # recorded rather than raised, so one bad recording does not strand the batch
             except Exception as exc:
+                status, error = "failed", error_line(exc)
                 logger.exception("sub-%s | failed", subject)
                 print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
                 failed.append(subject)
+            finally:
+                write_run_outcome(sub_dir, subject, status, time.monotonic() - t0, error)
 
     # threads, not processes: one `failed` list stays shared
     n_jobs = max(1, int(args.get("n_jobs") or 1))

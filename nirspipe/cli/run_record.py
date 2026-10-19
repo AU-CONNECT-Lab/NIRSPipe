@@ -136,6 +136,7 @@ def write_run_record(
       [prep]:        preprocessing flags as resolved, keyed and scaled as typed
       [post]:        postprocessing flags as resolved (only with --mode)
       [post_sources]: which layer set each [post] value: cli, config, mode or default
+      [outcome]:     success or failed, appended by write_run_outcome when the subject ends
 
     [execution] answers "what was run"; [prep]/[post] answer "what was used" and are what
     --config reads back, so the record reruns its run. A post setting the mode would fill
@@ -197,10 +198,33 @@ def write_run_record(
                 **{k: post_sources[_FIELD_OF.get(k, k)] for k, v in post.items()
                    if v is not None and _FIELD_OF.get(k, k) in post_sources}}))
 
-    base = sub_dir if sub_dir is not None else output_dir
-    out = base / "logs" / f"sub-{subject}.toml"
+    out = record_path(sub_dir if sub_dir is not None else output_dir, subject)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(sections), encoding="utf-8")
+
+
+def record_path(sub_dir: Path, subject: str) -> Path:
+    return sub_dir / "logs" / f"sub-{subject}.toml"
+
+
+def error_line(exc: BaseException) -> str:
+    """An exception as one line: its type and the first line of its message."""
+    lines = str(exc).strip().splitlines()
+    return f"{type(exc).__name__}: {lines[0]}" if lines else type(exc).__name__
+
+
+def write_run_outcome(sub_dir: Path, subject: str, status: str, duration_s: float,
+                      error: str | None = None) -> None:
+    """Append [outcome] to the subject's run record; a record without one never finished."""
+    out = record_path(sub_dir, subject)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("a", encoding="utf-8") as f:
+        f.write("\n" + _section("outcome", {
+            "status": status,
+            "finished": datetime.now().isoformat(timespec="seconds"),
+            "duration_s": round(duration_s, 1),
+            "error": error,
+        }))
 
 
 def write_group_run_record(
