@@ -73,7 +73,7 @@ Then the cohort pages, which need no preprocessing flag:
 nirspipe /data/bids /data/derivatives group
 ```
 
-`--dry-run` resolves the settings, writes each subject's run record and stops. `--n-jobs 4` runs four subjects at once. One subject failing does not end a batch: the failed subjects are named at the end and the command exits non-zero.
+`--dry-run` resolves the settings, writes each subject's run record and stops. `--nprocs 4` lets the run use four cores: four subjects at once, or fewer subjects with the spare cores going to each one's numerics. One subject failing does not end a batch: the failed subjects are named at the end and the command exits non-zero.
 
 ## Conventions
 
@@ -82,7 +82,7 @@ nirspipe /data/bids /data/derivatives group
 - **Tables** you supply are read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed ([Table files](data-preparation.md#table-files)).
 - **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep`, `nirspipe-qc prep-raw` and `hyper-raw`) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
 - **Output directories.** A command that writes a tree stops when its output directory is its input directory; `nirspipe-prep crop --input-desc` is the exception.
-- **Parallelism.** `--n-jobs` runs subjects on threads, each held to one BLAS thread. `nirspipe ... participant` and the `nirspipe-prep` subcommands `crop`, `edit-markers` and `keep-spans` take it.
+- **Parallelism.** `--nprocs` (also `--n_cpus`) is the number of cores a command may use in all. Subjects run on threads, as many at once as there are cores or subjects, and the cores left over are shared out as BLAS threads. Without it, subjects run one at a time and BLAS uses every core. `nirspipe ... participant`, `nirspipe-qc prep-raw` and the `nirspipe-prep` subcommands `crop`, `edit-markers` and `keep-spans` take it.
 
 ## Configuration file
 

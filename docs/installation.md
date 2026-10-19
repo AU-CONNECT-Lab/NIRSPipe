@@ -45,7 +45,7 @@ deno install -A -g -n bids-validator jsr:@bids/validator
 | `matplotlib` | ≥ 3.8 | Static QC panels |
 | `pillow` | ≥ 10.0 | Stitches the rendered brain views side by side |
 | `jinja2` | ≥ 3.1 | HTML report templates |
-| `joblib` | ≥ 1.3 | Parallel `--n-jobs` dispatch |
+| `joblib` | ≥ 1.3 | Parallel `--nprocs` dispatch |
 | `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
 | `pycwt` | ≥ 0.4 | Wavelet transform coherence for hyperscanning |
 | `bibtexparser` | ≥ 2.0.0b1 | Methods citations |

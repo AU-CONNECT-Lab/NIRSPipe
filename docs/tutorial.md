@@ -58,7 +58,7 @@ nirspipe timed/marker_edited derivatives participant \
     --high-pass 0.01 --low-pass none \
     --resample-sfreq 5 \
     --by-condition --fc --roi-mapping roi.json \
-    --skip-bids-validation --n-jobs 3
+    --skip-bids-validation --nprocs 3
 ```
 
 About 2.5 minutes. Three settings are specific to this dataset:
