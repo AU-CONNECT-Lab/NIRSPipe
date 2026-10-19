@@ -90,7 +90,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 
 /* ---- two-column panel grid (e.g. heatmap + optode) ---- */
 .panel-grid-2 {
-  display: grid; grid-template-columns: 2fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
+  display: grid; grid-template-columns: 3fr 1fr; gap: 0.75rem; margin-top: 0.75rem;
   align-items: center;
 }
 /* the optode map keeps the right column even when the 3D views beside it are missing */
