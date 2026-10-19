@@ -44,7 +44,7 @@ def test_rows_are_grouped_by_metric_then_condition():
     assert headings == [f"<b>{m}</b>" for m in
                         ("Status", "Coupled", f"SCI ({SCI_WINDOW_S:g} s)",
                          f"CV ({CV_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)",
-                         f"SNR ({CV_WINDOW_S:g} s)")]
+                         f"SNR μ/σ ({CV_WINDOW_S:g} s)")]
 
 
 def test_every_cell_matches_the_condition_pages_own_grid():

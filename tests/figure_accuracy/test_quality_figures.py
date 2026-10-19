@@ -12,7 +12,7 @@ from tests.figure_accuracy._read import by_pair
 
 PASS_COLOUR, FAIL_COLOUR = "#C5E0B3", "#F8786E"
 SCI, PSP = f"SCI ({SCI_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)"
-CV, SNR = f"CV ({CV_WINDOW_S:g} s)", f"SNR ({CV_WINDOW_S:g} s)"
+CV, SNR = f"CV ({CV_WINDOW_S:g} s)", f"SNR μ/σ ({CV_WINDOW_S:g} s)"
 
 
 def _arg(flag):

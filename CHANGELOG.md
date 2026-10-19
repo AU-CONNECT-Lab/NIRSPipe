@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The raw report follows the subject report's section order, with its brain views under Signal Quality and the flat map drawn once, clickable
 - The raw report's clickable optode map colours each channel's line by SCI and rejected channels red; condition pages draw it on their own SCI
 - The subject report's Raw Signal opens with the raw report's trace overview and clickable optode map; its brain views drop the flat map
+- SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure

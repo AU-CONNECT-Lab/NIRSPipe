@@ -23,7 +23,7 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
       "snr_pass_rate", "pct_data_retained"]),
     ("Peak spectral power", ["psp_mean"]),
     ("Coefficient of variation", ["cv_mean", "cv_mean_760", "cv_mean_850"]),
-    ("Intensity SNR", ["snr_mean"]),
+    ("Intensity SNR (μ/σ)", ["snr_mean"]),
     ("Mean amplitude", ["mean_amp_mean"]),
     ("Saturated share (0-1)", ["saturated_pct"]),
     ("Saturated channels", ["n_saturated_channels"]),
@@ -587,7 +587,7 @@ def build_condition_timeline(
 # `scalars` block.
 _CONDITION_METRICS = [
     ("sci_win_mean", f"SCI ({SCI_WINDOW_S:g} s)"), ("psp_mean", f"PSP ({PSP_WINDOW_S:g} s)"),
-    ("cv_mean", f"CV ({CV_WINDOW_S:g} s)"), ("snr_mean", f"SNR ({CV_WINDOW_S:g} s)"),
+    ("cv_mean", f"CV ({CV_WINDOW_S:g} s)"), ("snr_mean", f"SNR μ/σ ({CV_WINDOW_S:g} s)"),
     ("gvtd_filt_mean", _GVTD_LABEL), ("gvtd_pct_above_thresh", "GVTD above threshold"),
     ("gyro_speed_mean", "Motion sensor: gyroscope speed"),
 ]

@@ -141,7 +141,7 @@ def test_the_condition_panels_name_the_window_the_runs_were_measured_in(groups, 
     window = groups.member_record("sub-01")["windowed"]["qc_window_s"]
     titles = [a["text"] for a in one_figure(_figure(groups, desc))["layout"]["annotations"]]
     for title in titles:
-        if title.split(" (")[0] in ("SCI", "PSP", "CV", "SNR"):
+        if title.split(" (")[0] in ("SCI", "PSP", "CV", "SNR μ/σ"):
             assert f"({window:g} s)" in title, title
 
 

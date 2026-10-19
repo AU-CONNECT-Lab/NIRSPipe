@@ -655,7 +655,7 @@ METRIC_SUMMARY = {
 
     # raw intensity
     "cv_mean": f"Noise relative to brightness (SD / mean) of the raw intensity, in {CV_WINDOW_S:g} s windows. Lower is better.",
-    "snr_mean": f"Mean / SD of the raw intensity, in {CV_WINDOW_S:g} s windows. Higher is better.",
+    "snr_mean": f"Mean over SD (μ/σ) of the raw intensity in {CV_WINDOW_S:g} s windows, a linear ratio, not dB. Higher is better.",
     "snr_pass_rate": "Share of channels whose SNR clears the per-channel line. Higher is better.",
     "n_flat_channels": "Channels with no variation at all. Zero is best.",
     "mean_amp_mean": "Average light level reaching the detectors. Descriptive: use it to spot unusually dim channels.",
@@ -958,7 +958,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
-    "snr_mean":                (f"Mean SNR ({CV_WINDOW_S:g} s)", ".1f", None, _HIGHER),
+    "snr_mean":                (f"Mean SNR μ/σ ({CV_WINDOW_S:g} s)", ".1f", None, _HIGHER),
     "snr_pass_rate":           ("SNR pass rate", "pct", None, _HIGHER),
     "n_flat_channels":         ("Flat channels", "d", (1, 2), _LOWER),
     "mean_amp_mean":           ("Mean amplitude", "sig3", None, None),

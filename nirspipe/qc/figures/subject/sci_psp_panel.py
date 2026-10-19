@@ -73,7 +73,7 @@ def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_fra
         (f"SCI ({SCI_WINDOW_S:g} s)", "sci_per_ch", ".3f", lambda v: v >= sci_thresh),
         (f"CV ({CV_WINDOW_S:g} s)",   "cv_per_ch",  ".3f", lambda v: v <= cv_thresh),
         (f"PSP ({PSP_WINDOW_S:g} s)", "psp_per_ch", ".3f", lambda v: v >= psp_thresh),
-        (f"SNR ({CV_WINDOW_S:g} s)",  "snr_per_ch", ".1f", lambda v: v >= snr_thresh),
+        (f"SNR μ/σ ({CV_WINDOW_S:g} s)", "snr_per_ch", ".1f", lambda v: v >= snr_thresh),
     ]
 
 
@@ -180,12 +180,13 @@ def channel_quality_heatmap(
             showgrid=False, zeroline=False,
         ),
         plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=70, r=20, t=20, b=100),
+        # wide enough for the longest row name, SNR μ/σ's
+        margin=dict(l=92, r=20, t=20, b=100),
         height=260,
     )
     if _long_short_divider(fig, split_at, n_ch):
         # the extra top margin is what the raised labels sit in
-        fig.update_layout(margin=dict(l=70, r=20, t=52, b=100))
+        fig.update_layout(margin=dict(l=92, r=20, t=52, b=100))
     return fig
 
 
@@ -257,7 +258,7 @@ def condition_quality_heatmap(
                            text=f"<b>{metric}</b>", showarrow=False,
                            font=dict(size=10, color=AXIS_TEXT_COLOR))
     n_rows = len(specs) * depth
-    left = max(70, 7 * max(len(label) for label, _ in conditions) + 20)
+    left = max(92, 7 * max(len(label) for label, _ in conditions) + 20)
     top_px = 52 if _long_short_divider(fig, first.get("split_at"), n_ch) else 20
     fig.update_layout(
         xaxis=_channel_xaxis(ch_names),
@@ -361,7 +362,7 @@ _TRIAL_METRICS = [
     ("sci_mean",               "SCI (trial)"),
     ("psp_mean",               f"PSP ({PSP_WINDOW_S:g} s)"),
     ("cv_mean",                f"CV ({CV_WINDOW_S:g} s)"),
-    ("snr_mean",               f"SNR ({CV_WINDOW_S:g} s)"),
+    ("snr_mean",               "SNR μ/σ"),
     ("gvtd_filt_mean",         "GVTD"),
     ("channel_retention_rate", "Retention"),
 ]
@@ -654,7 +655,7 @@ def build_sci_psp_figure(
     if cv_matrix is not None and cv_win_times is not None:
         rows.append(("CV", f"CV ({windows})", "Row mean", ch_names, cv_matrix, cv_win_times,
                      _row_mean(cv_matrix), cv_threshold, False,
-                     "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
+                     "CV=%{z:.4f}<br>SNR μ/σ=%{customdata:.1f}",
                      (0.0, 2 * cv_threshold)))
 
     n_rows = len(rows)

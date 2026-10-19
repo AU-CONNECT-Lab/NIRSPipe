@@ -557,7 +557,7 @@
           ('sci_mean', 'Mean SCI (whole run)'),
           ('good_frac_mean', 'Coupled windows'),
           ('psp_mean', 'Mean PSP (%g s windows)'|format(psp_window_s)),
-          ('snr_mean', 'Mean SNR (intensity, %g s)'|format(cv_window_s)),
+          ('snr_mean', 'Mean SNR μ/σ (intensity, %g s)'|format(cv_window_s)),
           ('cv_mean', 'Mean CV (intensity, %g s)'|format(cv_window_s))] %}
     {{ span_row(key, text, mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
     {%- endfor %}

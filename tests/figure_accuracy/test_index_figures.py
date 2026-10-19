@@ -10,7 +10,7 @@ from tests.figure_accuracy._read import _failing_in
 from tests.figure_accuracy.conftest import HAND_MARKED
 
 # a condition's windowed values are columns of the run's --window-length grid, and say so
-PANELS = {"SCI": "sci_win_mean", "PSP": "psp_mean", "CV": "cv_mean", "SNR": "snr_mean"}
+PANELS = {"SCI": "sci_win_mean", "PSP": "psp_mean", "CV": "cv_mean", "SNR μ/σ": "snr_mean"}
 
 
 def _grid(run) -> str:

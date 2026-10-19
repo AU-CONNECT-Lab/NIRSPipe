@@ -105,7 +105,7 @@ def _names(label: str) -> dict[str, str]:
 # measurement down its length either way, which is what the whole-run row is built to keep.
 _COND_COLUMNS = (
     ("SCI (10 s)",      "sci_win_mean",            "{:.3f}"),
-    ("SNR",             "snr_mean",                "{:.0f}"),
+    ("SNR μ/σ",         "snr_mean",                "{:.0f}"),
     (with_unit("gvtd_filt_mean", f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
      "gvtd_filt_mean", partial(format_metric, "gvtd_filt_mean")),
     ("GVTD above thr.", "gvtd_pct_above_thresh",   "{:.1%}"),

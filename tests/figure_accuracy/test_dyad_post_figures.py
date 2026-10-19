@@ -449,7 +449,7 @@ def test_the_quality_table_prints_each_member_s_own_record(groups, scope):
 def test_a_condition_table_names_the_grid_its_windowed_values_were_cut_from(groups, scope):
     window = groups.member_record("sub-01")["windowed"]["qc_window_s"]
     head = list(_quality(groups.page("G01", cond=scope), "Long").values())[0]
-    for name in ("SCI", "PSP", "CV", "SNR"):
+    for name in ("SCI", "PSP", "CV", "SNR μ/σ"):
         label = next(k for k in head if k.startswith(f"Mean {name} ("))
         assert f"({window:g} s)" in label, label
 
