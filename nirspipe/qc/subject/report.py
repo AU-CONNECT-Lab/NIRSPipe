@@ -1752,6 +1752,9 @@ def _section_condition_summary(
     return {"condition_summary_path": path, "condition_summary_h": h}
 
 
+_FLAT_MAP_HEIGHT = 0.8   # the flat map's height as a share of the 3D render's
+
+
 def _section_brain(
     sci_scores: dict,
     bad_channels: list,
@@ -1794,11 +1797,14 @@ def _section_brain(
                 brain_pil = _PILImage.open(_io.BytesIO(base64.b64decode(brain_b64))).convert("RGBA")
                 opt_pil   = _PILImage.open(_io.BytesIO(base64.b64decode(optode_b64))).convert("RGBA")
                 h = brain_pil.height
-                opt_w = int(opt_pil.width * h / opt_pil.height)
-                opt_pil = opt_pil.resize((opt_w, h), _PILImage.LANCZOS)
+                # the 3D render leaves blank bands above and below the brains, so a flat map
+                # at its full height reads larger than them
+                opt_h = int(h * _FLAT_MAP_HEIGHT)
+                opt_w = int(opt_pil.width * opt_h / opt_pil.height)
+                opt_pil = opt_pil.resize((opt_w, opt_h), _PILImage.LANCZOS)
                 out = _PILImage.new("RGBA", (brain_pil.width + opt_w, h), (255, 255, 255, 255))
                 out.paste(brain_pil, (0, 0))
-                out.paste(opt_pil, (brain_pil.width, 0))
+                out.paste(opt_pil, (brain_pil.width, (h - opt_h) // 2))
                 buf = _io.BytesIO()
                 out.convert("RGB").save(buf, format="PNG", optimize=True)
                 buf.seek(0)

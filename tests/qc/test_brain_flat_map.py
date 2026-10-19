@@ -16,9 +16,9 @@ from tests._synth import synth_raw
 RED, GREEN = "#e74c3c", "#27ae60"
 
 
-def _png_b64(width: int) -> str:
+def _png_b64(width: int, colour: str = "white") -> str:
     buf = io.BytesIO()
-    Image.new("RGB", (width, 40), "white").save(buf, format="PNG")
+    Image.new("RGB", (width, 40), colour).save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
 
@@ -28,10 +28,10 @@ def raw():
     return fingerprint_raw("01", "tapping")[0]
 
 
-def test_the_flat_map_sits_beside_the_views(tmp_path, monkeypatch):
+def test_the_flat_map_sits_beside_the_views_at_four_fifths_of_their_height(tmp_path, monkeypatch):
     raw = synth_raw("01", "tapping")
     monkeypatch.setattr(report, "quality_brain_views", lambda *a, **k: _png_b64(120))
-    monkeypatch.setattr(report, "optode_layout_static", lambda *a, **k: _png_b64(40))
+    monkeypatch.setattr(report, "optode_layout_static", lambda *a, **k: _png_b64(40, "black"))
     names = [n for n in raw.ch_names if n.endswith("760")]
     coords = np.array([raw.info["chs"][raw.ch_names.index(n)]["loc"][:3] for n in names])
     errors = []
@@ -40,8 +40,11 @@ def test_the_flat_map_sits_beside_the_views(tmp_path, monkeypatch):
                                 figure_namer("sub-01_task-tapping"), ch_names_brain=names,
                                 sci_threshold=0.8)
     assert errors == []
-    png = tmp_path / out["brain_views_path"].rsplit("/", 1)[-1]
-    assert Image.open(png).size == (160, 40)
+    png = Image.open(tmp_path / out["brain_views_path"].rsplit("/", 1)[-1]).convert("L")
+    # a 40 x 40 map scaled to 32 x 32 beside the 120 x 40 views, 4 px of white above and below
+    assert png.size == (152, 40)
+    dark = np.argwhere(np.asarray(png) < 128)
+    assert (dark.min(axis=0).tolist(), dark.max(axis=0).tolist()) == ([4, 120], [35, 151])
 
 
 def _drawn_lines(raw, sci, rejected, monkeypatch) -> dict:
