@@ -246,26 +246,16 @@ def test_every_cli_offers_every_method():
                                 "spline_wavelet", "none"}
 
 
-def _gui_motion_dropdown() -> str:
-    # read rather than import: pages/analysis.py calls dash.register_page() at module level,
-    # which raises outside a running app
-    from pathlib import Path
-
-    import nirspipe
-    src = (Path(nirspipe.__file__).parent / "interface" / "pages" / "analysis.py"
-           ).read_text(encoding="utf-8")
-    assert '"an-motion-correction"' in src
-    # the motion-correction dropdown alone: the censor fill offers a spline of its own
-    dropdown = src[src.index('"an-motion-correction"'):]
-    return dropdown[:dropdown.index("clearable")]
-
-
 def test_gui_offers_exactly_the_cli_choices():
     import re
 
     from nirspipe.cli.run import _MOTION_CHOICES
+    from nirspipe.interface.server import WebApp
 
-    assert re.findall(r'"value": "(\w+)"', _gui_motion_dropdown()) == _MOTION_CHOICES
+    html = WebApp().flask.test_client().get("/analysis/run/").get_data(as_text=True)
+    dropdown = re.search(r'<select id="[^"]*" name="--motion-correction">(.*?)</select>', html, re.S)
+    assert dropdown, "no --motion-correction dropdown on the Analysis page"
+    assert re.findall(r'<option value="(\w+)"', dropdown.group(1)) == _MOTION_CHOICES
 
 
 @requires_pywt
