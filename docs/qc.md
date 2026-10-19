@@ -41,7 +41,7 @@ The JSON holds the scalars. The arrays sit in tab-separated tables beside it, li
 
 ## Metrics
 
-Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the text the report shows when you hover that label and, where the code defines one, its formula. Each entry ends with how to read the value: higher is better, lower is better, best near a given value, or descriptive (no better end). The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
+Every metric the record keeps is listed below with the label the report prints, the keys it is stored under, the text the report shows when you hover that label and, where the code defines one, its formula. Variants of one quantity (mean and 95th percentile, HbO and HbR, a count and its share) share an entry, one line per key. Each metric's text ends with how to read the value: higher is better, lower is better, best near a given value, or descriptive (no better end). The report colours five of them, and none of them rejects anything: rejection is per channel, by the screening ([Quality Metrics](#quality-metrics)).
 
 Each step of the pipeline, what is measured on it and the record section it lands in. Grey boxes are recorded and drawn and change nothing; the two red ones act on the data.
 

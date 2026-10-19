@@ -23,35 +23,44 @@ from nirspipe.qc.boilerplate.vocabulary import (
 
 logger = logging.getLogger(__name__)
 
-# one heading of the page each; within a group, the order of METRIC_SUMMARY
+# one heading of the page each; a (label, keys) item is one entry for the variants of one quantity
 GROUPS = {
     "coupling": [
         "sci_mean", "sci_win_mean", "channel_retention_rate", "psp_mean", "good_frac_mean",
         "cp_mean", "cv_mean", "snr_mean", "snr_pass_rate", "n_flat_channels", "mean_amp_mean",
-        "n_saturated_channels", "saturated_pct", "ch_dist_mean", "ch_dist_min", "ch_dist_max",
+        ("Saturation", ["n_saturated_channels", "saturated_pct"]),
+        ("Source-detector separation", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
     ],
     "motion": [
-        "gvtd_mean", "gvtd_p95", "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_vstd_mean",
-        "gvtd_vstd_p95", "gvtd_thresh", "gvtd_thresh_applied", "gvtd_num_above_thresh",
-        "gvtd_pct_above_thresh", "gvtd_censor_pct", "gvtd_censor_retained_s",
-        "spike_count", "spike_pct", "spike_num_frames", "spike_pct_frames",
+        ("GVTD", ["gvtd_filt_mean", "gvtd_filt_p95", "gvtd_mean", "gvtd_p95",
+                  "gvtd_vstd_mean", "gvtd_vstd_p95"]),
+        ("GVTD threshold", ["gvtd_thresh", "gvtd_thresh_applied"]),
+        ("GVTD above threshold", ["gvtd_pct_above_thresh", "gvtd_num_above_thresh"]),
+        ("GVTD censoring", ["gvtd_censor_pct", "gvtd_censor_retained_s"]),
+        ("Spikes", ["spike_count", "spike_pct", "spike_num_frames", "spike_pct_frames"]),
     ],
     "correction": [
-        "motion_corrected_frac_mean", "motion_corrected_num", "motion_corrected_pct",
-        "motion_corrected_n_segments",
+        "motion_corrected_frac_mean",
+        ("Corrected frames", ["motion_corrected_num", "motion_corrected_pct",
+                              "motion_corrected_n_segments"]),
     ],
     "imu": [
-        "gyro_speed_mean", "gyro_speed_p95", "accel_jerk_mean", "accel_jerk_p95",
-        "gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho",
+        ("Gyroscope speed", ["gyro_speed_mean", "gyro_speed_p95"]),
+        ("Accelerometer jerk", ["accel_jerk_mean", "accel_jerk_p95"]),
+        ("Agreement with GVTD", ["gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho"]),
     ],
     "processed": [
-        "hbo_hbr_corr_mean", "cnr_hbo_mean", "cnr_hbr_mean", "cnr_n_epochs", "gcor_hbo",
-        "gcor_hbr", "lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr",
-        "cardiac_band_power_hbo", "cardiac_band_power_hbr", "cardiac_band_frac_hbo",
-        "cardiac_band_frac_hbr", "resp_band_power_hbo", "resp_band_power_hbr",
-        "resp_band_frac_hbo", "resp_band_frac_hbr", "pct_data_retained",
+        "hbo_hbr_corr_mean",
+        ("CNR", ["cnr_hbo_mean", "cnr_hbr_mean", "cnr_n_epochs"]),
+        ("Global correlation", ["gcor_hbo", "gcor_hbr"]),
+        ("Low-frequency drift", ["lowfreq_drift_amplitude_hbo", "lowfreq_drift_amplitude_hbr"]),
+        ("Cardiac band power", ["cardiac_band_power_hbo", "cardiac_band_power_hbr"]),
+        ("Cardiac band share", ["cardiac_band_frac_hbo", "cardiac_band_frac_hbr"]),
+        ("Respiration band power", ["resp_band_power_hbo", "resp_band_power_hbr"]),
+        ("Respiration band share", ["resp_band_frac_hbo", "resp_band_frac_hbr"]),
+        "pct_data_retained",
     ],
-    "whitening": ["whitening_lowband_hbo", "whitening_lowband_hbr"],
+    "whitening": [("Residual low-band power", ["whitening_lowband_hbo", "whitening_lowband_hbr"])],
 }
 
 # the function under nirspipe.qc.metrics whose docstring holds the metric's formula or citation
@@ -60,7 +69,7 @@ DEFINED_IN = {
     "cp_mean": "coupling._cardiac_power_metrics",
     "cv_mean": "coupling.channel_cv",
     "snr_mean": "coupling.channel_snr",
-    "gvtd_mean": "gvtd.gvtd_timetrace",
+    "gvtd_filt_mean": "gvtd.gvtd_timetrace",
     "gvtd_thresh": "gvtd.gvtd_threshold",
     "hbo_hbr_corr_mean": "haemo.haemo_quality_metrics",
     "cnr_hbo_mean": "haemo._cnr_metrics",
@@ -134,33 +143,55 @@ def colouring(key):
     return f"The report colours it green below {_number(key, cut[0])} and red at {_number(key, cut[1])} or above."
 
 
-def entry(key, bib_keys):
-    """One definition-list item of reST: label and keys, definition, formula, better end."""
+def keys_of(item):
+    return [item] if isinstance(item, str) else item[1]
+
+
+def name(key):
     label = metric_label(key)
     codes = ", ".join(f"``{k}``" for k in (key, PER_CHANNEL.get(key)) if k)
-    term = codes if label == key else f"**{_rst(label)}** ({codes})"
-    # the hover text: its first sentence defines, the rest says which end is better
-    summary = METRIC_SUMMARY[key]
-    sentence = first_sentence(summary)
-    rest = summary[len(sentence):].strip()
-    body = [_rst(sentence)]
-    if key in DEFINED_IN:
-        formula, cites = definition(DEFINED_IN[key])
-        missing = [c for c in cites if c not in bib_keys]
-        if missing:
-            logger.warning(f"metric_docs: {key} cites {', '.join(missing)}, which references.bib lacks; left out")
-        kept = [c for c in cites if c in bib_keys]
-        if kept:
-            body[0] += f" :footcite:`{','.join(kept)}`"
-        if formula:
-            body += ["", *formula]
-    if tail := " ".join(filter(None, (_rst(rest), colouring(key)))):
-        body += ["", tail]
+    return codes if label == key else f"**{_rst(label)}** ({codes})"
+
+
+def formula_of(keys, bib_keys):
+    """(formula lines, footcite role) of the first key that has a defining function."""
+    key = next((k for k in keys if k in DEFINED_IN), None)
+    if key is None:
+        return [], ""
+    formula, cites = definition(DEFINED_IN[key])
+    missing = [c for c in cites if c not in bib_keys]
+    if missing:
+        logger.warning(f"metric_docs: {key} cites {', '.join(missing)}, which references.bib lacks; left out")
+    kept = [c for c in cites if c in bib_keys]
+    return formula, f" :footcite:`{','.join(kept)}`" if kept else ""
+
+
+def entry(item, bib_keys):
+    """One definition-list item of reST: a metric's definition, formula and better end, or one bullet per variant."""
+    keys = keys_of(item)
+    formula, cite = formula_of(keys, bib_keys)
+    if isinstance(item, str):
+        # the hover text: its first sentence defines, the rest says which end is better
+        summary = METRIC_SUMMARY[item]
+        sentence = first_sentence(summary)
+        rest = summary[len(sentence):].strip()
+        term, body = name(item), [_rst(sentence) + cite]
+        tail = [" ".join(filter(None, (_rst(rest), colouring(item))))]
+    else:
+        # each variant keeps its own hover text whole, so "the same at the 95th percentile" reads on from the line above
+        term = f"**{_rst(item[0])}**"
+        body = [f"- {name(k)}. " + " ".join(filter(None, (_rst(METRIC_SUMMARY[k]), colouring(k))))
+                for k in keys]
+        body[0] += cite
+        tail = []
+    for block in (formula, tail):
+        if any(line.strip() for line in block):
+            body += ["", *block]
     return [term, *(f"   {line}" if line.strip() else "" for line in body), ""]
 
 
 def group_lines(group, bib_keys):
-    return [line for key in GROUPS[group] for line in entry(key, bib_keys)]
+    return [line for item in GROUPS[group] for line in entry(item, bib_keys)]
 
 
 _BIB_KEYS = set()
@@ -189,7 +220,7 @@ def _on_builder_inited(app):
     # bibtex resolves its files against the conf directory, which a directive cannot reach
     _BIB_KEYS.update(bib_keys_of(Path(app.confdir) / p for p in app.config.bibtex_bibfiles))
     # a metric added to the vocabulary without a group would be missing from the page unnoticed
-    grouped = [key for keys in GROUPS.values() for key in keys]
+    grouped = [key for items in GROUPS.values() for item in items for key in keys_of(item)]
     missing = [key for key in METRIC_SUMMARY if key not in grouped]
     unknown = [key for key in grouped if key not in METRIC_SUMMARY]
     if missing:
