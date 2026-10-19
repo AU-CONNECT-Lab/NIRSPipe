@@ -70,29 +70,6 @@ def test_each_optode_line_wears_its_channel_s_colour(raw_viewer_run, page):
         assert drawn == ("#e74c3c" if pair.bad else "#27ae60"), pair.name
 
 
-def test_each_topo_cell_holds_its_own_channel_s_traces(raw_viewer_run, page):
-    fig = page[1]["evoked_topo"]["figure"]
-    cells = {s["name"] for s in fig["layout"]["shapes"] if s.get("name")}
-    assert cells == {p.name for p in raw_viewer_run.truth.pairs}
-    for trace in fig["data"]:
-        assert len(set(trace["customdata"])) == 1 and trace["customdata"][0] in cells
-
-
-def test_the_topo_shows_the_response_where_the_recording_has_one(raw_viewer_run, page):
-    truth = raw_viewer_run.truth
-    rise = {}
-    for trace in page[1]["evoked_topo"]["figure"]["data"]:
-        pair = trace["customdata"][0]
-        if trace["line"]["dash"] != "solid" or truth.pair(pair).short or truth.pair(pair).bad:
-            continue
-        t, y = (np.asarray(v, dtype=float) for v in xy(trace))
-        rise[pair] = y[(t > 0) & (t <= EVENT_DURATION)].mean() - y[t < 0].mean()
-    responders = [p.name for p in truth.long_pairs if p.responds and p.name in rise]
-    quiet = [p.name for p in truth.long_pairs if not p.responds and p.name in rise]
-    assert responders and quiet
-    assert min(rise[p] for p in responders) > max(rise[p] for p in quiet)
-
-
 # ---- inline figures ----
 
 def test_each_raw_signal_row_is_the_channel_it_is_labelled(raw_viewer_run, page):

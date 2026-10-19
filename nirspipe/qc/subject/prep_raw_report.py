@@ -203,7 +203,6 @@ def _process_run(
     from nirspipe.qc.figures import (
         build_channel_figure,
         build_epoch_preview_figure,
-        build_evoked_topo_figure,
         build_layout_figure,
         build_trial_image_by_condition,
         build_psd_mean_figure,
@@ -545,17 +544,6 @@ def _process_run(
     fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
     fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
 
-    # ── inline only: evoked topo ───────────────────────────────────────────────
-    # drawn beside the optode map above the channel picker; a click on either picks the channel
-    evoked_topo_inline: dict = {}
-    if raw_haemo is not None:
-        with guard("Evoked topography", errors, label):
-            fig = build_evoked_topo_figure(
-                raw_haemo, markers, _MAX_TS_PTS, fig_tmin, fig_tmax,
-            )
-            if fig:
-                evoked_topo_inline = {"figure": fig.to_dict()}
-
     # ── file: grand mean ───────────────────────────────────────────────────────
     # One row per condition, every kept long channel averaged with the short ones dotted.
     if raw_haemo is not None:
@@ -767,7 +755,6 @@ def _process_run(
         },
         "ts":           ts_inline,
         "layout":       layout_inline,
-        "evoked_topo":  evoked_topo_inline,
         "carpet_gvtd":  carpet_inline,
         "sci_psp":          sci_psp_inline,
         "psd":              psd_inline,

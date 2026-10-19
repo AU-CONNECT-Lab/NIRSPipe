@@ -121,6 +121,7 @@ from nirspipe.qc.figures import (
     denoise_stage_panels,
     stage_metrics_figure,
     build_channel_figure,
+    build_evoked_topo_figure,
     build_layout_figure,
     build_motion_detail_figure,
     build_ts_figure,
@@ -1261,7 +1262,8 @@ def _section_evoked_topomap(
     epoch_tmax: float = 25.0,
     sep_bands=None,
 ) -> dict:
-    """The evoked response per channel, long and short rows, with a time slider.
+    """The evoked response per channel on the head: as colours stepped through the epoch by a
+    slider, long and short rows, and as each channel's HbO and HbR curves at its place.
 
     ``sep_bands`` has to be the run's own separations: the short row is only a contamination
     check if it holds the channels the regression treated as short.
@@ -1275,7 +1277,16 @@ def _section_evoked_topomap(
             path, h = _save_plotly_html(
                 fig, figures_dir / fig_name("evokedtopo", suffix="nirsmap"),
                 extra_css=CENTER_FIGURE_CSS)
-    return {"evoked_topomap_path": path, "evoked_topomap_h": h}
+    topo_path, topo_h = None, 0
+    with _guard("Signal by position", errors, subject):
+        fig = build_evoked_topo_figure(raw_haemo, markers_on_data_axis(raw_haemo),
+                                       _OVERVIEW_MAX_PTS, epoch_tmin, epoch_tmax)
+        if fig is not None:
+            topo_path, topo_h = _save_plotly_html(
+                fig, figures_dir / fig_name("signaltopo", suffix="nirsmap"),
+                extra_css=CENTER_FIGURE_CSS)
+    return {"evoked_topomap_path": path, "evoked_topomap_h": h,
+            "signal_topo_path": topo_path, "signal_topo_h": topo_h}
 
 
 def _section_trial_image(
@@ -2224,7 +2235,8 @@ def build_subject_report(
         _note(notes, subject, section_note("caveat.epoch_skipped", reason=epoch_skip))
         epoch_vars       = {"epoch_preview_path": None, "epoch_preview_h": 0}
         trial_image_vars = {"trial_image_pairs": [], "trial_image_roi_pairs": []}
-        topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0}
+        topomap_vars     = {"evoked_topomap_path": None, "evoked_topomap_h": 0,
+                            "signal_topo_path": None, "signal_topo_h": 0}
         trial_qc_vars    = {"trial_qc_path": None, "trial_qc_h": 0, "trial_qc_window": "",
                             "trial_qc_rows": []}
     else:
@@ -2611,7 +2623,8 @@ def _cropped_sections(
                                            epoch_tmax=epoch_tmax, sep_bands=sep_bands))
     else:
         out.update({"epoch_preview_path": None, "epoch_preview_h": 0,
-                    "evoked_topomap_path": None, "evoked_topomap_h": 0})
+                    "evoked_topomap_path": None, "evoked_topomap_h": 0,
+                    "signal_topo_path": None, "signal_topo_h": 0})
     return out
 
 

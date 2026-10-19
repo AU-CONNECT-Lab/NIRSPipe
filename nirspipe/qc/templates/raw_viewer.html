@@ -224,12 +224,8 @@ select#run-select {
   <h3 class="step-title">Per-channel Signals</h3>
   <div class="details-body">
     <p class="step-desc" id="detail-title">{{ section_note('raw.channel_detail') }}</p>
+    {#- the evoked curves by position are the subject report's, drawn on the processed signal -#}
     <div class="row row-map" id="channel-maps">
-      <div id="topo-panel">
-        <p class="panel-head">Signal by position</p>
-        <p class="qm-note">{{ section_note('raw.signal_topo') }}</p>
-        <div id="topo-plot" class="map-plot"></div>
-      </div>
       <div id="layout2d-panel">
         <p class="panel-head">Optode map</p>
         <p class="qm-note">{{ section_note('raw.layout_2d') }}</p>
@@ -627,8 +623,8 @@ function selectChannel(pair) {
 }
 
 // ─── channel maps ─────────────────────────────────────────────────────────────
-// Two more ways into the panel below: the signal laid out on the head, and the optode map.
-// Drawn at their column's width; the .map-plot box keeps the figures' own proportions.
+// One more way into the panel below: the optode map. Drawn at its column's width; the
+// .map-plot box keeps the figure's own proportions.
 function _mapLayout(layout) {
   var lay = Object.assign({}, layout, {autosize: true});
   delete lay.width;
@@ -637,29 +633,13 @@ function _mapLayout(layout) {
 }
 
 function loadChannelMaps() {
-  var run  = _STATIC_DATA[_run_idx] || {};
-  var topo = (run.evoked_topo || {}).figure;
-  var map  = (run.layout || {}).layout_2d_figure;
-  document.getElementById("topo-panel").style.display = topo ? "" : "none";
-  document.getElementById("layout2d-panel").style.display = map ? "" : "none";
-  document.getElementById("channel-maps").style.display = (topo || map) ? "" : "none";
+  var run = _STATIC_DATA[_run_idx] || {};
+  var map = (run.layout || {}).layout_2d_figure;
+  document.getElementById("channel-maps").style.display = map ? "" : "none";
   // a run switch draws another montage, whose drawn state the highlight must start from
-  ["topo-plot", "layout2d-plot"].forEach(function(id) {
-    var div = document.getElementById(id);
-    Plotly.purge(div);
-    delete div._baseShapes;
-    delete div._baseMarker;
-  });
-  if (topo) {
-    // plotly's axis drag handles cover cells this small, so a neighbour's would take the click
-    Plotly.newPlot("topo-plot", topo.data, _mapLayout(topo.layout),
-                   {responsive: true, displayModeBar: false, showAxisDragHandles: false});
-    document.getElementById("topo-plot").on("plotly_click", function(evt) {
-      // the clicked trace's own channel, not the nearest point, which may sit in the next cell
-      var cd = evt.points && evt.points[0] && evt.points[0].data.customdata;
-      if (cd && cd.length) selectChannel(String(cd[0]));
-    });
-  }
+  var div = document.getElementById("layout2d-plot");
+  Plotly.purge(div);
+  delete div._baseMarker;
   if (map) {
     Plotly.newPlot("layout2d-plot", map.data, _mapLayout(map.layout),
                    {responsive: true, displayModeBar: false});
@@ -672,17 +652,8 @@ function loadChannelMaps() {
   if (_selChannel) highlightChannelMaps(_selChannel);
 }
 
-// the picked channel's cell outlined and its dot enlarged; every other back as drawn
+// the picked channel's dot enlarged; every other back as drawn
 function highlightChannelMaps(pair) {
-  var topo = document.getElementById("topo-plot");
-  if (topo && topo.layout && topo.layout.shapes) {
-    if (!topo._baseShapes) topo._baseShapes = topo.layout.shapes;
-    Plotly.relayout(topo, {shapes: topo._baseShapes.map(function(s) {
-      if (s.name !== pair) return s;
-      return Object.assign({}, s, {line: {color: "#f39c12", width: 2.5},
-                                   fillcolor: "rgba(243,156,18,0.12)"});
-    })});
-  }
   var map = document.getElementById("layout2d-plot");
   var at = (map && map.data) ? map.data.map(function(t) { return t.name; }).indexOf("channels") : -1;
   var dots = at >= 0 ? map.data[at] : null;

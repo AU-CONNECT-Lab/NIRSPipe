@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - The subject report's Raw Signal opens with the raw report's trace overview and clickable optode map; its brain views drop the flat map
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 - The subject report draws the denoised carpet's stage as stacked traces too; a click opens that channel's spectrum by stage
+- Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure

@@ -759,7 +759,6 @@ def condition_payloads(
         # not read by the viewer and heavy to carry: it draws these from `figure_paths`
         d["carpet_gvtd"] = {}
         d["psd"] = {}
-        d["evoked_topo"] = {}
         # redrawn on this condition's SCI: the run's colours would contradict its numbers
         layout_fig = (remake_layout(sliced.get("sci_win_per_channel") or {})
                       if remake_layout else None)
@@ -771,7 +770,6 @@ def condition_payloads(
         d["trial_images"] = []
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
-        paths.pop("evoked_topo", None)
         paths.pop("hbo_hbr_corr", None)
         for key in ("carpet", "ch_detail_template", "motion_detail_template"):
             entry_path = paths.get(key)

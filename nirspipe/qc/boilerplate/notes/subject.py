@@ -147,6 +147,9 @@ NOTES = {
         "The condition-averaged response along each channel&rsquo;s path, a head per "
         "condition, one second per slider step. Short channels have their own row: one as "
         "strong as the long row means part of the response is scalp signal.",
+    "epoch.signal_by_position":
+        "The same averages as curves: each channel's HbO (solid) and HbR (dotted) at its "
+        "place on the head, one colour per condition.",
     "epoch.trial_image_roi":
         "Per ROI, HbO channels averaged first, then each trial a row, on the bandpassed "
         "signal before confound regression; runs with enough trials are smoothed across "

@@ -10,7 +10,7 @@ from nirspipe.qc.boilerplate.vocabulary import display_value
 from nirspipe.qc.figures.common._utils import PSD_NFFT
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
 from nirspipe.qc.subject.record_io import read_record
-from tests._fingerprint import CLI_ARGS, HBR_FREQ, SFREQ
+from tests._fingerprint import CLI_ARGS, EVENT_DURATION, HBR_FREQ, SFREQ
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy
 
@@ -271,3 +271,28 @@ def test_the_denoised_overview_draws_haemoglobin_and_picks_a_spectrum(denoise_ru
     assert "target:'psd'" in path.read_text(encoding="utf-8")
     page = denoise_run.report.read_text(encoding="utf-8")
     assert 'id="psd-det-select"' in page and path.name in page
+
+
+# ---- signal by position, on the processed epochs ----
+
+def test_each_topo_cell_holds_its_own_channel_s_traces(denoise_run):
+    fig = one_figure(denoise_run.figure("signaltopo", suffix="nirsmap"))
+    cells = {s["name"] for s in fig["layout"]["shapes"] if s.get("name")}
+    assert cells == {p.name for p in denoise_run.truth.pairs}
+    for trace in fig["data"]:
+        assert len(set(trace["customdata"])) == 1 and trace["customdata"][0] in cells
+
+
+def test_the_topo_shows_the_response_where_the_recording_has_one(denoise_run):
+    truth = denoise_run.truth
+    rise = {}
+    for trace in one_figure(denoise_run.figure("signaltopo", suffix="nirsmap"))["data"]:
+        pair = trace["customdata"][0]
+        if trace["line"]["dash"] != "solid" or truth.pair(pair).short or truth.pair(pair).bad:
+            continue
+        t, y = (np.asarray(v, dtype=float) for v in xy(trace))
+        rise[pair] = y[(t > 0) & (t <= EVENT_DURATION)].mean() - y[t < 0].mean()
+    responders = [p.name for p in truth.long_pairs if p.responds and p.name in rise]
+    quiet = [p.name for p in truth.long_pairs if not p.responds and p.name in rise]
+    assert responders and quiet
+    assert min(rise[p] for p in responders) > max(rise[p] for p in quiet)

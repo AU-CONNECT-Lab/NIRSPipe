@@ -342,6 +342,15 @@
     <p class="fig-path">{{ evoked_topomap_path }}</p>
     {% endif %}
 
+    {% if signal_topo_path %}
+    <h3>Signal by position</h3>
+    <p class="panel-note">{{ section_note('epoch.signal_by_position') }}</p>
+    <iframe class="plotly-frame" src="{{ signal_topo_path }}"
+            title="Each channel's evoked HbO and HbR at its place on the head"
+            style="height:{{ signal_topo_h }}px"></iframe>
+    <p class="fig-path">{{ signal_topo_path }}</p>
+    {% endif %}
+
     {% if trial_image_roi_pairs %}
     <h3>Trial image: ROI (channel-averaged)</h3>
     <p class="panel-note">{{ section_note('epoch.trial_image_roi') }}</p>
