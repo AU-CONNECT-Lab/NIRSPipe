@@ -348,6 +348,7 @@ def _section_sci(
             cv_matrix=cv_scores_matrix,
             cv_win_times=cv_win_times,
             window_s=(windowed or {}).get("qc_window_s"),
+            warn=errors,
         )
         sci_psp_panel_path, sci_psp_panel_h = _save_plotly_html(
             fig, figures_dir / fig_name("scipsp")

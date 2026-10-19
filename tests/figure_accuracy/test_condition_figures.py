@@ -10,7 +10,7 @@ from tests._fingerprint import CLI_ARGS, EVENT_ONSETS, RESPONSE_AMP
 from tests.figure_accuracy._payload import one_figure, plotly_figures
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
-    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, traces, xy,
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, traces, xy,
 )
 from tests.figure_accuracy.conftest import HAND_MARKED
 
@@ -90,8 +90,9 @@ def test_the_sci_panel_holds_the_condition_s_windows_and_only_those(condition_ru
     centres = np.asarray(windowed["sci_times"], float).mean(axis=1) \
         if np.ndim(windowed["sci_times"]) == 2 else np.asarray(windowed["sci_times"], float)
     columns = [int(np.argmin(np.abs(centres - c))) for c in x]
-    np.testing.assert_allclose(np.asarray(heat["z"], float),
-                               np.asarray(windowed["sci_matrix"], float)[:, columns],
+    pairs, matrix = by_pair(windowed["sci_channels"], windowed["sci_matrix"])
+    assert list(heat["y"]) == pairs
+    np.testing.assert_allclose(np.asarray(heat["z"], float), matrix[:, columns],
                                rtol=1e-5, equal_nan=True)
 
 

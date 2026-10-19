@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `--n-jobs` becomes `--nprocs`, the cores a command may use in all; subjects share them and run records store `nprocs`
 - The dyad raw report's corrected motion figure no longer repeats the IMU rows, which motion correction leaves unchanged
 - The dyad raw report's head slider draws each window's coupling verdict, then its SCI and PSP, each scaled on the run's own lines
+- The windowed SCI and PSP heatmaps draw one row per source-detector pair and name every row; CV keeps one per wavelength
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure

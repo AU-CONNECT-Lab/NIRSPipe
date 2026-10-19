@@ -2,6 +2,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from nirspipe.qc.figures.common.motion_panel import _px_rows
 from nirspipe.qc.metrics import CV_PASS, PSP_PASS, SNR_PASS
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS
@@ -10,6 +11,7 @@ from nirspipe.utils.logging import get_logger
 
 from nirspipe.qc.figures.common._utils import AXIS_TEXT_COLOR
 from nirspipe.qc.boilerplate.vocabulary import higher_is_better, format_metric
+from nirspipe.utils import pair_of
 
 logger = get_logger("qc.figures.sci_psp")
 
@@ -499,6 +501,36 @@ def lollipop_scores_figure(
 # Here rather than with the raw-intensity figures: only the subject pages draw it,
 # and the lollipop it ends with is this module's.
 
+# the pitch of one strip row, and the tallest a strip grows to keep every row named
+_STRIP_ROW_PX = 13
+_STRIP_MAX_PX = 1000
+
+
+def _per_pair(names: list[str], matrix) -> "tuple[list[str], np.ndarray, list[str]]":
+    """One row per source-detector pair, for a number measured on the pair, not a wavelength.
+
+    SCI and PSP compare a pair's two wavelengths, so both rows should carry one number. A
+    pair whose rows disagree keeps a row per wavelength and is named in the third item::
+
+      _per_pair(["S1_D1 760", "S1_D1 850"], [[0.9, 0.2], [0.9, 0.2]])
+          ->  (["S1_D1"], [[0.9, 0.2]], [])
+    """
+    rows: dict[str, list[int]] = {}
+    for i, name in enumerate(names):
+        rows.setdefault(pair_of(name), []).append(i)
+    m = np.asarray(matrix, dtype=float)
+    labels, kept, differ = [], [], []
+    for pair, at in rows.items():
+        if all(np.array_equal(m[at[0]], m[k], equal_nan=True) for k in at[1:]):
+            labels.append(pair)
+            kept.append(m[at[0]])
+        else:
+            differ.append(pair)
+            labels += [names[k] for k in at]
+            kept += [m[k] for k in at]
+    return labels, np.array(kept), differ
+
+
 def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
@@ -514,6 +546,7 @@ def build_sci_psp_figure(
     cv_win_times: np.ndarray | None = None,
     cv_threshold: float = CV_PASS,
     window_s: float | None = None,
+    warn: "list[str] | None" = None,
 ) -> go.Figure:
     """Channel quality over time: one heatmap row per metric, its channel mean beside it.
 
@@ -523,6 +556,10 @@ def build_sci_psp_figure(
     CV carries SNR rather than getting a row of its own: the record stores SNR as 1/CV
     exactly, so a second row would be the same numbers reflected, and the hover prints both.
     CV is also the one row where low is good, which is why it takes the reversed scale.
+
+    SCI and PSP get a row per source-detector pair, since both compare the pair's two
+    wavelengths; CV is measured on each wavelength and keeps a row for each. A pair whose two
+    SCI or PSP rows disagree is drawn a row per wavelength and said so in ``warn``.
 
     The lollipop beside each row is that row averaged along time, so the dot and the strip
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
@@ -541,25 +578,45 @@ def build_sci_psp_figure(
         and has_psp
     )
 
+    bad_pairs = {pair_of(ch) for ch in bad_channels}
+
+    def _fold(metric: str, matrix) -> "tuple[list[str], np.ndarray]":
+        labels, folded, differ = _per_pair(ch_names, matrix)
+        if differ:
+            message = (f"{metric} differs between the wavelengths of {', '.join(differ)}, "
+                       "so those pairs are drawn a row per wavelength")
+            logger.warning(message)
+            if warn is not None:
+                warn.append(f"SCI/PSP panel: {message}")
+        return labels, folded
+
     if not has_matrices:
+        labels, sci_col = _fold("SCI", sci_arr[:, None])
+        psp_col = None
+        if has_psp:
+            psp_labels, psp_col = _fold("PSP", psp_arr[:, None])
+            if psp_labels != labels:
+                # the two lollipops share one axis, so a pair split in either is split in both
+                labels, sci_col, psp_col = ch_names, sci_arr[:, None], psp_arr[:, None]
+        sci_vals = sci_col[:, 0]
         sci_colors = [
-            "#e74c3c" if ch in bad_channels
-            else ("#27ae60" if sci_scores.get(ch, 0.0) >= sci_threshold else "#f39c12")
-            for ch in ch_names
+            "#e74c3c" if pair_of(name) in bad_pairs
+            else ("#27ae60" if v >= sci_threshold else "#f39c12")
+            for name, v in zip(labels, sci_vals)
         ]
         if not has_psp:
-            return lollipop_scores_figure(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
-        psp_colors = ["#27ae60" if psp_per_channel.get(ch, 0.0) >= psp_threshold
-                      else "#e74c3c" for ch in ch_names]
-        fig_sci = lollipop_scores_figure(ch_names, sci_arr, sci_colors, sci_threshold, "SCI")
-        fig_psp = lollipop_scores_figure(ch_names, psp_arr,  psp_colors, psp_threshold, "PSP")
-        n_ch = len(ch_names)
+            return lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
+        psp_vals = psp_col[:, 0]
+        psp_colors = ["#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals]
+        fig_sci = lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
+        fig_psp = lollipop_scores_figure(labels, psp_vals, psp_colors, psp_threshold, "PSP")
+        n_ch = len(labels)
         combined = make_subplots(rows=1, cols=2, shared_yaxes=True,
                                  horizontal_spacing=0.08, subplot_titles=["SCI", "PSP"])
         for t in fig_sci.data: combined.add_trace(t, row=1, col=1)
         for t in fig_psp.data: combined.add_trace(t, row=1, col=2)
         combined.update_yaxes(tickvals=[i * _SPACING for i in range(n_ch)],
-                               ticktext=ch_names, autorange="reversed",
+                               ticktext=labels, autorange="reversed",
                                tickfont=dict(size=9), row=1, col=1)
         combined.update_yaxes(autorange="reversed", showticklabels=False, row=1, col=2)
         combined.update_layout(height=min(max(300, n_ch * 14 + 100), 700),
@@ -584,35 +641,41 @@ def build_sci_psp_figure(
 
     # this grid follows --window-length, not the 10 s the per-channel tables are pinned to
     windows = f"{window_s:g} s windows" if window_s else "windowed"
+    sci_names, sci_rows = _fold("SCI", sci_matrix)
+    psp_names, psp_rows = _fold("PSP", psp_matrix)
     rows = [
-        ("SCI", f"SCI ({windows})", "Row mean", sci_matrix, sci_win_times,
-         _row_mean(sci_matrix), sci_threshold, True, "SCI=%{z:.3f}",
+        ("SCI", f"SCI ({windows})", "Row mean", sci_names, sci_rows, sci_win_times,
+         _row_mean(sci_rows), sci_threshold, True, "SCI=%{z:.3f}",
          (2 * sci_threshold - 1.0, 1.0)),
-        ("PSP", f"PSP ({windows})", "Row mean", psp_matrix, psp_win_times,
-         _row_mean(psp_matrix), psp_threshold, True, "PSP=%{z:.3f}",
+        ("PSP", f"PSP ({windows})", "Row mean", psp_names, psp_rows, psp_win_times,
+         _row_mean(psp_rows), psp_threshold, True, "PSP=%{z:.3f}",
          (0.0, 2 * psp_threshold)),
     ]
     if cv_matrix is not None and cv_win_times is not None:
-        rows.append(("CV", f"CV ({windows})", "Row mean", cv_matrix, cv_win_times,
+        rows.append(("CV", f"CV ({windows})", "Row mean", ch_names, cv_matrix, cv_win_times,
                      _row_mean(cv_matrix), cv_threshold, False,
                      "CV=%{z:.4f}<br>SNR=%{customdata:.1f}",
                      (0.0, 2 * cv_threshold)))
 
-    n_ch   = len(ch_names)
     n_rows = len(rows)
-    row_h  = min(max(220, n_ch * 14 + 80), 480)
+    # each strip as tall as its own rows need to all be named, up to a cap where plotly
+    # names every other one; the gap above each strip holds its title
+    heights = [min(max(220, _STRIP_ROW_PX * len(row[3]) + 60), _STRIP_MAX_PX) for row in rows]
+    gap_px = 45
+    vspace = gap_px / (sum(heights) + gap_px * (n_rows - 1))
+    row_heights, total_px = _px_rows(heights, vspace, chrome_px=90)
 
     fig = make_subplots(
         rows=n_rows, cols=2,
         shared_yaxes=True,
         column_widths=[0.875, 0.125],
-        row_heights=[1.0 / n_rows] * n_rows,
-        vertical_spacing=0.06,
+        row_heights=row_heights,
+        vertical_spacing=vspace,
         horizontal_spacing=0.02,
         subplot_titles=[t for row in rows for t in (row[1], row[2])],
     )
 
-    for i, (name, _heat_title, _mean_title, matrix, win_times, means,
+    for i, (name, _heat_title, _mean_title, labels, matrix, win_times, means,
             threshold, higher_better, hover, zrange) in enumerate(rows, start=1):
         centers = window_centers(win_times)
         z = np.asarray(matrix, dtype=float)
@@ -622,13 +685,14 @@ def build_sci_psp_figure(
         if not higher_better:
             with np.errstate(divide="ignore", invalid="ignore"):
                 customdata = np.where(z > 0, 1.0 / z, np.nan)
+        domain = fig.get_subplot(i, 1).yaxis.domain
         fig.add_trace(go.Heatmap(
-            z=z, x=centers.tolist(), y=ch_names,
+            z=z, x=centers.tolist(), y=labels,
             customdata=customdata,
             colorscale="RdYlGn" if higher_better else "RdYlGn_r",
             zmin=zrange[0], zmax=zrange[1],
-            colorbar=dict(title=name, thickness=10,
-                          len=0.88 / n_rows, y=1.0 - (i - 0.5) / n_rows, x=1.01),
+            colorbar=dict(title=name, thickness=10, x=1.01, yanchor="middle",
+                          y=(domain[0] + domain[1]) / 2, len=0.95 * (domain[1] - domain[0])),
             hovertemplate="Ch: %{y}<br>t=%{x:.1f}s<br>" + hover + "<extra></extra>",
             name=name,
         ), row=i, col=1)
@@ -636,8 +700,8 @@ def build_sci_psp_figure(
         # the screening verdict only colours the row it is read off; the others colour
         # against their own cutoff, so a channel rejected on SCI is not painted red in CV
         colors = []
-        for ch, v in zip(ch_names, means):
-            if name == "SCI" and ch in bad_channels:
+        for label, v in zip(labels, means):
+            if name == "SCI" and pair_of(label) in bad_pairs:
                 colors.append("#e74c3c")
             elif not np.isfinite(v):
                 colors.append("#D3D3D3")
@@ -647,13 +711,13 @@ def build_sci_psp_figure(
                 colors.append("#f39c12" if higher_better else "#e74c3c")
 
         lx, ly = [], []
-        for ch, v in zip(ch_names, means):
+        for label, v in zip(labels, means):
             lx += [0.0, float(v) if np.isfinite(v) else 0.0, None]
-            ly += [ch, ch, None]
+            ly += [label, label, None]
         fig.add_trace(go.Scatter(x=lx, y=ly, mode="lines",
                                  line=dict(color="#aaa", width=1.2),
                                  showlegend=False, hoverinfo="skip"), row=i, col=2)
-        fig.add_trace(go.Scatter(x=np.asarray(means, dtype=float).tolist(), y=ch_names,
+        fig.add_trace(go.Scatter(x=np.asarray(means, dtype=float).tolist(), y=labels,
                                  mode="markers",
                                  marker=dict(size=7, color=colors,
                                              line=dict(width=0.5, color="#333")),
@@ -663,12 +727,14 @@ def build_sci_psp_figure(
                       line_width=1, row=i, col=2)
 
         fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), row=i, col=1)
+        if _STRIP_ROW_PX * len(labels) + 60 <= _STRIP_MAX_PX:
+            fig.update_yaxes(tickmode="array", tickvals=labels, ticktext=labels, row=i, col=1)
         fig.update_yaxes(autorange="reversed", showticklabels=False, row=i, col=2)
 
     fig.update_xaxes(title_text="Time (s)", gridcolor="#eee", row=n_rows, col=1)
     fig.update_xaxes(title_text="Score", row=n_rows, col=2)
     fig.update_layout(
-        height=row_h * n_rows + 80,
+        height=total_px,
         margin=dict(l=120, r=110, t=50, b=40),
         plot_bgcolor="white", paper_bgcolor="white",
     )

@@ -8,6 +8,7 @@ import pytest
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from tests._fingerprint import CLI_ARGS
 from tests.figure_accuracy._payload import one_figure
+from tests.figure_accuracy._read import by_pair
 
 PASS_COLOUR, FAIL_COLOUR = "#C5E0B3", "#F8786E"
 SCI, PSP = f"SCI ({SCI_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)"
@@ -38,8 +39,12 @@ def _heatmap(fig, name):
 def test_each_heatmap_is_the_record_matrix_under_the_record_channel_names(record, scipsp, name, key):
     windowed = record["windowed"]
     heat = _heatmap(scipsp, name)
-    assert list(heat["y"]) == list(windowed[f"{key}_channels"])
-    np.testing.assert_allclose(np.asarray(heat["z"], float), np.asarray(windowed[f"{key}_matrix"], float),
+    names, matrix = windowed[f"{key}_channels"], windowed[f"{key}_matrix"]
+    if key != "cv":
+        # a pair measure: a row per pair, its two wavelengths agreeing in the record
+        names, matrix = by_pair(names, matrix)
+    assert list(heat["y"]) == list(names)
+    np.testing.assert_allclose(np.asarray(heat["z"], float), np.asarray(matrix, float),
                                rtol=1e-5, equal_nan=True)
 
 

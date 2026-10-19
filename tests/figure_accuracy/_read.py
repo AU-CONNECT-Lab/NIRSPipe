@@ -19,6 +19,18 @@ def xy(trace: dict) -> tuple[np.ndarray, np.ndarray]:
     return trace.get("x0", 0.0) + trace.get("dx", 1.0) * np.arange(len(y)), y
 
 
+def by_pair(channels, matrix) -> tuple[list[str], np.ndarray]:
+    """A record's per-wavelength rows as one row per pair, once the two rows are seen to agree."""
+    rows: dict[str, list[int]] = {}
+    for i, name in enumerate(channels):
+        rows.setdefault(name.rsplit(" ", 1)[0], []).append(i)
+    m = np.asarray(matrix, float)
+    for pair, at in rows.items():
+        for k in at[1:]:
+            np.testing.assert_array_equal(m[k], m[at[0]], err_msg=pair)
+    return list(rows), m[[at[0] for at in rows.values()]]
+
+
 def traces(figure: dict, name: str | None = None, axis: str | None = None) -> list[dict]:
     return [t for t in figure["data"]
             if (name is None or t.get("name") == name)

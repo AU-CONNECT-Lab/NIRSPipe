@@ -14,7 +14,7 @@ from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
-from tests.figure_accuracy._read import share_at, traces, which_pair, xy
+from tests.figure_accuracy._read import by_pair, share_at, traces, which_pair, xy
 
 
 def _arg(flag):
@@ -164,10 +164,9 @@ def test_the_sci_panel_draws_the_record_and_the_run_s_lines(raw_viewer_run):
     record = read_record(raw_viewer_run.nirs / "sub-01_task-tapping_desc-sqmraw_qc.json")
     fig = one_figure(raw_viewer_run.figure("rawscipsp"))
     heat = next(t for t in fig["data"] if t["type"] == "heatmap" and t["name"] == "SCI")
-    assert list(heat["y"]) == list(record["windowed"]["sci_channels"])
-    np.testing.assert_allclose(np.asarray(heat["z"], float),
-                               np.asarray(record["windowed"]["sci_matrix"], float),
-                               rtol=1e-5, equal_nan=True)
+    pairs, matrix = by_pair(record["windowed"]["sci_channels"], record["windowed"]["sci_matrix"])
+    assert list(heat["y"]) == pairs
+    np.testing.assert_allclose(np.asarray(heat["z"], float), matrix, rtol=1e-5, equal_nan=True)
     lines = {s["xref"]: s["x0"] for s in fig["layout"]["shapes"] if s["type"] == "line"}
     assert lines["x2"] == pytest.approx(_arg("--sci-threshold"))
     assert lines["x4"] == pytest.approx(_arg("--psp-threshold"))

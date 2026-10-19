@@ -12,7 +12,7 @@ from tests._fingerprint import EVENT_ONSETS
 from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
 from nirspipe.qc.boilerplate.notes import section_note
 from tests.figure_accuracy._read import (
-    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, xy,
+    _blocks, _check_condition_grid, _failing_in, _grid, _trial_panel, by_pair, xy,
 )
 
 TMIN, TMAX = -5.0, 25.0
@@ -80,9 +80,9 @@ def test_the_sci_panel_holds_the_condition_s_windows_and_only_those(raw_conditio
     times = np.asarray(windowed["sci_times"], float)
     centres = times.mean(axis=1) if times.ndim == 2 else times
     columns = [int(np.argmin(np.abs(centres - c))) for c in x]
-    rows = [list(windowed["sci_channels"]).index(name) for name in heat["y"]]
-    np.testing.assert_allclose(np.asarray(heat["z"], float),
-                               np.asarray(windowed["sci_matrix"], float)[np.ix_(rows, columns)],
+    pairs, matrix = by_pair(windowed["sci_channels"], windowed["sci_matrix"])
+    rows = [pairs.index(name) for name in heat["y"]]
+    np.testing.assert_allclose(np.asarray(heat["z"], float), matrix[np.ix_(rows, columns)],
                                rtol=1e-5, equal_nan=True)
 
 
