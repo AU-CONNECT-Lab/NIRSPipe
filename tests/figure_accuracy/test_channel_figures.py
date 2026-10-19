@@ -11,7 +11,7 @@ from nirspipe.qc.figures.common._utils import PSD_NFFT
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_timetrace
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CLI_ARGS, HBR_FREQ, SFREQ
-from tests.figure_accuracy._payload import plotly_figures
+from tests.figure_accuracy._payload import one_figure, plotly_figures
 from tests.figure_accuracy._read import share_at, traces, which_pair, xy
 
 
@@ -37,9 +37,13 @@ def test_every_pair_has_a_page_and_a_rejected_one_says_so(denoise_run, desc):
     for pair in denoise_run.truth.pairs:
         path = denoise_run.figure(desc, chan=_fname(pair.name))
         assert path.exists(), path.name
-        option = re.search(rf'<option value="figures/{re.escape(path.name)}">([^<]*)</option>', html)
+        option = re.search(rf'<option value="figures/{re.escape(path.name)}"[^>]*>([^<]*)</option>',
+                           html)
         assert option, path.name
         assert ("rejected" in option.group(1)) == pair.bad, option.group(1)
+        if desc == "detail":
+            # what a click on the overview or the map is matched against
+            assert f'data-pair="{pair.name}"' in option.group(0), option.group(0)
 
 
 def test_the_detail_series_is_haemoglobin_from_the_od_before_motion_correction(denoise_run, details):
@@ -231,3 +235,28 @@ def test_the_motion_figure_names_the_band_it_filtered_in(denoise_run):
     notes = [a.get("text") or "" for a in fig["layout"].get("annotations", [])]
     assert f"GVTD {band}" in names, names
     assert f"{pair} 760, {band}" in notes, notes
+
+# ---- the raw report's opening panels, on the pipeline page ----
+
+def test_each_overview_row_is_the_channel_it_is_labelled(denoise_run):
+    truth = denoise_run.truth
+    fig = one_figure(denoise_run.figure("signal"))
+    assert {t["name"].rsplit(" ", 1)[0] for t in fig["data"]} == {p.name for p in truth.pairs}
+    for trace in fig["data"]:
+        pair = truth.pair(trace["name"].rsplit(" ", 1)[0])
+        if pair.bad:
+            assert trace["line"]["color"] == "#b2bec3", trace["name"]
+        elif not pair.short:
+            assert which_pair(*xy(trace), truth) == pair.name, trace["name"]
+
+
+def test_the_optode_map_reddens_the_rejected_pair_and_both_panels_pick_a_channel(denoise_run):
+    path = denoise_run.figure("optodemap")
+    dots = next(t for t in one_figure(path)["data"] if t.get("name") == "channels")
+    bad = {p.name for p in denoise_run.truth.pairs if p.bad}
+    for name, colour in zip(dots["customdata"], dots["marker"]["color"]):
+        assert (colour == "#e74c3c") == (name.rsplit(" ", 1)[0] in bad), name
+    for figure in (path, denoise_run.figure("signal")):
+        assert "pick-channel" in figure.read_text(encoding="utf-8")
+    page = denoise_run.report.read_text(encoding="utf-8")
+    assert all(f'data-pair="{pair.name}"' in page for pair in denoise_run.truth.pairs)

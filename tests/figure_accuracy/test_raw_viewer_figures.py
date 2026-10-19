@@ -128,7 +128,8 @@ def test_the_picker_names_each_pair_as_the_pipeline_report_does(raw_viewer_run, 
     assert list(page[1]["channel_pairs"]) == [p.name for p in raw_viewer_run.truth.pairs]
     for pair in raw_viewer_run.truth.pairs:
         path = denoise_run.figure("detail", chan=_fname(pair.name))
-        option = re.search(rf'<option value="figures/{re.escape(path.name)}">([^<]*)</option>', html)
+        option = re.search(rf'<option value="figures/{re.escape(path.name)}"[^>]*>([^<]*)</option>',
+                           html)
         assert labels[pair.name] == option.group(1)
         assert ("rejected" in labels[pair.name]) == pair.bad, labels[pair.name]
 

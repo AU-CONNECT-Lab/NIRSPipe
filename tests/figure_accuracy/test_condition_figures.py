@@ -1,5 +1,6 @@
 """Each condition page draws its own condition: its window, its trials, its verdict."""
 
+import json
 import re
 
 import mne
@@ -35,6 +36,28 @@ def test_each_page_rates_under_its_own_stem(condition_run):
         html = page.read_text(encoding="utf-8")
         assert f'var participantId = "{page.stem}"' in html
         assert f'"load_ratings/{page.stem}"' in html
+
+
+@pytest.mark.parametrize("block", ["ca", "cb"])
+def test_a_page_opens_the_run_overview_on_its_window_and_maps_its_own_sci(condition_run, block):
+    page = (condition_run.report.parent / f"sub-01_task-main_cond-{block}_report.html")
+    src = re.search(r'src="figures/([^"#]*_desc-signal_nirs\.html)#([^"]+)"',
+                    page.read_text(encoding="utf-8"))
+    assert src and src.group(2) == block
+    html = (condition_run.figures / src.group(1)).read_text(encoding="utf-8")
+    views = json.loads(re.search(r"window\.__COND_VIEWS__=(\{.*?\});</script>", html, re.S).group(1))
+    t0, t1, _ = _blocks(condition_run)[block]
+    assert views[block]["x"] == pytest.approx([t0, t1])
+
+    dots = next(t for t in one_figure(_figure(condition_run, "optodemap", block))["data"]
+                if t.get("name") == "channels")
+    colours = {n.rsplit(" ", 1)[0]: c for n, c in zip(dots["customdata"], dots["marker"]["color"])}
+    truth = condition_run.truth
+    for dead in (p.name for p in truth.pairs if p.bad):
+        assert colours[dead] == "#e74c3c", (block, dead)
+    # the pair decoupled inside one block is coupled through the other
+    pair, onset, _ = truth.block_bad
+    assert (colours[pair] != "#27ae60") == (t0 <= onset < t1), (block, pair, colours[pair])
 
 
 @pytest.mark.parametrize("block", ["ca", "cb"])

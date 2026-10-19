@@ -49,9 +49,9 @@ NOTES = {
         "these are drawn on <code>desc-preproc</code>, after motion correction ({motion}) "
         "and Beer-Lambert with DPF {dpf}.</strong>",
     "channel_detail.picker":
-        "Select a channel for its HbO/HbR and PSD; its epoch average is in the epoch "
-        "section. Pairs marked <em>(short)</em> are too shallow to reach cortex and show "
-        "scalp haemodynamics.",
+        "Pick a channel on the map, by its trace above or in the list; its epoch average is "
+        "in the epoch section. Pairs marked <em>(short)</em> are too shallow to reach cortex "
+        "and show scalp haemodynamics.",
     "steps.raw_quality":
         "SCI and PSP per channel and window on <code>desc-sci</code>, the optical density "
         "before motion correction; CV on the raw intensity over the same windows, where low "
@@ -61,8 +61,8 @@ NOTES = {
         "SCI against the run&rsquo;s line. Screening counts coupled windows, so a channel "
         "can be dropped at a high SCI.",
     "quality.brain_views_condition":
-        "Both maps grade this condition&rsquo;s own SCI; only what the run rejected is drawn "
-        "rejected.",
+        "These views and the optode map grade this condition&rsquo;s own SCI; only what the "
+        "run rejected is drawn rejected.",
     "steps.motion_correction":
         "Method: <strong>{method}</strong>. Reported GVTD covers the "
         "<strong>{gvtd_set}</strong> channels, the set the analysis uses; the panel draws a "

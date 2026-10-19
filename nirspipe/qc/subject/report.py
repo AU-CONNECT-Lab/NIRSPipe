@@ -121,7 +121,9 @@ from nirspipe.qc.figures import (
     denoise_stage_panels,
     stage_metrics_figure,
     build_channel_figure,
+    build_layout_figure,
     build_motion_detail_figure,
+    build_ts_figure,
     channel_quality_heatmap,
     condition_quality_heatmap,
     alff_topo_figure,
@@ -145,7 +147,7 @@ from nirspipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_label, metric_summary, with_unit,
 )
 from nirspipe.qc.common.record_views import condition_verdict_view
-from nirspipe.qc.common.windows import refuse_colliding_labels
+from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from nirspipe.qc.subject.condition_views import (
     condition_view_table, carpet_view_table, slice_record, with_condition_corr,
 )
@@ -384,6 +386,85 @@ def _uncorrected_haemo(
 def _pair_label(pair: str, short: bool, rejected: bool) -> str:
     tags = [tag for tag, on in (("short", short), ("rejected", rejected)) if on]
     return f"{pair} ({', '.join(tags)})" if tags else pair
+
+
+# ---- Raw Signal: the raw report's way into a channel ----
+
+# a click on a trace or on a channel's dot tells the page which pair to show in the detail
+# below; the figures sit in frames, so the page hears it as a message
+_PICK_CHANNEL_JS = (
+    "<script>(function(){"
+    "function hook(){var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on){setTimeout(hook,100);return;}"
+    "gd.on('plotly_click',function(evt){var pt=evt.points&&evt.points[0];if(!pt)return;"
+    "var name=String(pt.data.name==='channels'?pt.customdata:(pt.data.name||''));"
+    "if(name)window.parent.postMessage("
+    "{type:'pick-channel',pair:name.replace(/\\s+\\S+$/,'')},'*');});}"
+    "if(document.readyState==='complete')hook();else window.addEventListener('load',hook);"
+    "})();</script>"
+)
+
+_OVERVIEW_MAX_PTS = 4000
+
+
+def _section_raw_overview(
+    raw_intensity: mne.io.Raw,
+    bad_channels: list,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+    sep_bands=None,
+    condition_spans: "list[tuple[str, float, float]] | None" = None,
+) -> dict:
+    """Every channel's raw intensity stacked, the raw report's opening figure; a click picks one.
+
+    One file for the run and its conditions, each condition picked by URL fragment, as the
+    carpet is.
+    """
+    out = {"raw_overview_path": None, "raw_overview_h": 0}
+    with _guard("Raw signal overview", errors, subject):
+        fig = build_ts_figure(raw_intensity, markers_on_data_axis(raw_intensity),
+                              set(bad_channels), _OVERVIEW_MAX_PTS, sep_bands)[0]
+        views = {_pair_fname(label): {"x": [float(t0), float(t1)]}
+                 for label, t0, t1 in condition_spans or []}
+        fname = fig_name("signal")
+        out["raw_overview_h"] = _save_figure_html(fig, figures_dir / fname,
+                                                  extra_js=_PICK_CHANNEL_JS,
+                                                  views=views or None)
+        out["raw_overview_path"] = _fig_href(fname)
+    return out
+
+
+def _section_optode_map(
+    raw_intensity: mne.io.Raw,
+    bad_channels: list,
+    sci_scores: dict,
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+    *,
+    sci_threshold: float,
+) -> dict:
+    """The raw report's clickable optode map: each channel's line and dot graded by ``sci_scores``."""
+    out = {"optode_map_path": None, "optode_map_h": 0}
+    with _guard("Optode map", errors, subject):
+        fig = build_layout_figure(raw_intensity, set(bad_channels), sci_scores,
+                                  sci_threshold=sci_threshold)
+        if fig is not None:
+            fname = fig_name("optodemap")
+            out["optode_map_h"] = _save_figure_html(fig, figures_dir / fname,
+                                                    extra_js=_PICK_CHANNEL_JS)
+            out["optode_map_path"] = _fig_href(fname)
+    return out
+
+
+def _condition_overview(run_vars: dict, slug: str) -> dict:
+    """The run's raw signal overview, addressed at one condition's window."""
+    path = run_vars.get("raw_overview_path")
+    return {"raw_overview_path": f"{path}#{slug}" if path else None,
+            "raw_overview_h": run_vars.get("raw_overview_h")}
 
 
 def _section_channel_detail(
@@ -1991,6 +2072,12 @@ def build_subject_report(
     sci_vars          = _section_sci(
                             raw_intensity, sci_scores, bad_channels, config,
                             windowed_section, subject, errors, figures_dir, fig_name)
+    # the raw report's opening figure, drawn before --epoch-chunk-duration cuts the events
+    overview_vars     = _section_raw_overview(
+                            raw_intensity, bad_channels, subject, errors, figures_dir, fig_name,
+                            sep_bands=sep_bands,
+                            condition_spans=_record_windows(record.get("by_condition") or {})
+                            if by_condition else [])
     motion_vars       = _section_motion(
                             raw_long, raw_gvtd, gvtd_set, gvtd_blocks,
                             sci_scores, config, segments, subject, errors,
@@ -2060,11 +2147,15 @@ def build_subject_report(
     # graded by the windowed SCI, as each condition page's copy of this figure is
     sci_win_scores    = (((record.get("per_channel") or {}).get("raw") or {})
                          .get("sci_win_per_channel") or {})
+    # the 3D views alone: the flat map is the clickable one in the Raw Signal section
     brain_vars        = _section_brain(
                             sci_win_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,
                             ch_names_brain=ch_names_brain,
-                            sci_threshold=resolve_cutoffs(config)["sci"])
+                            sci_threshold=resolve_cutoffs(config)["sci"], flat_map=False)
+    map_vars          = _section_optode_map(
+                            raw_intensity, bad_channels, sci_win_scores, subject, errors,
+                            figures_dir, fig_name, sci_threshold=resolve_cutoffs(config)["sci"])
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
@@ -2200,6 +2291,8 @@ def build_subject_report(
         **trial_image_vars,
         **topomap_vars,
         **haemo_vars,
+        **overview_vars,
+        **map_vars,
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
@@ -2232,7 +2325,8 @@ def build_subject_report(
             _write_condition_reports(
                 report_vars,
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
-                              topomap_vars, haemo_vars, channel_det_vars, psd_det_vars,
+                              topomap_vars, haemo_vars, overview_vars, map_vars,
+                              channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, carpet_vars, cond_summary_vars,
                               excluded_vars),
@@ -2260,7 +2354,11 @@ def build_subject_report(
                 remake_brain=lambda cond_name, sci_pc: _section_brain(
                     sci_pc, bad_channels, coords_head, good_mask,
                     raw_intensity, subject, errors, figures_dir, cond_name,
-                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"]),
+                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"],
+                    flat_map=False),
+                remake_optode_map=lambda cond_name, sci_pc: _section_optode_map(
+                    raw_intensity, bad_channels, sci_pc, subject, errors, figures_dir,
+                    cond_name, sci_threshold=resolve_cutoffs(config)["sci"]),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda cond_name, span: _section_stage_carpets(
@@ -2566,6 +2664,7 @@ def _write_condition_reports(
     remake_sci=None,
     remake_motion=None,
     remake_brain=None,
+    remake_optode_map=None,
     remake_motion_detail=None,
     remake_denoise_carpet=None,
     remake_cropped=None,
@@ -2584,17 +2683,18 @@ def _write_condition_reports(
     - **read from the record**: the scalar panel and the channel table. The SCI/PSP/CV panel
       still cuts the stored matrices to this condition's columns, being a figure over the
       same windows those scalars were averaged over
-    - **measured over the run, narrowed to the condition**: the GVTD carpet, the per-channel
-      motion figures and the denoising carpet. Each derives something run-wide from what it
-      is handed -- a filtered GVTD, a threshold, a per-channel z-scale -- so a cut recording
-      would give every condition a scale no other condition could be read against. The
-      per-channel motion figures are narrowed without being written again: the run's file
-      holds every condition's window and this page links to one by URL fragment
+    - **measured over the run, narrowed to the condition**: the raw signal overview, the GVTD
+      carpet, the per-channel motion figures and the denoising carpet. Each derives something
+      run-wide from what it is handed -- a filtered GVTD, a threshold, a per-channel z-scale --
+      so a cut recording would give every condition a scale no other condition could be read
+      against. The overview and the per-channel motion figures are narrowed without being
+      written again: the run's file holds every condition's window and this page links to one
+      by URL fragment
     - **rebuilt on a cropped copy**: the haemoglobin panels, the spectra, the per-channel
       detail, the epoch preview and the topography. Safe because none of them filters; see
       :func:`_cropped_sections`
-    - **rebuilt from the condition's own verdict**: the 3D quality views and the optode flat
-      map, which carry that condition's SCI and its own rejected channels
+    - **rebuilt from the condition's own verdict**: the 3D quality views and the clickable
+      optode map, which carry that condition's SCI over the run's rejected channels
 
     The trial half is a fifth way and the reason it took so long to build. Both panels have
     rows that are trials rather than windows, so they need the trials *inside* a condition,
@@ -2679,6 +2779,9 @@ def _write_condition_reports(
         # run's files carry every condition's window and this page addresses one by fragment
         if remake_brain is not None:
             panels.update(remake_brain(cond_name, sliced.get("sci_win_per_channel") or {}))
+        if remake_optode_map is not None:
+            panels.update(remake_optode_map(cond_name, sliced.get("sci_win_per_channel") or {}))
+        panels.update(_condition_overview(report_vars, slug))
         if remake_motion_detail is not None:
             panels.update(remake_motion_detail(slug))
         if remake_denoise_carpet is not None:
