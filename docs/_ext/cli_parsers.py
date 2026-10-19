@@ -3,7 +3,7 @@
 import argparse
 import re
 
-from nirspipe.cli import db, gui, hyper, prep, qc, rate, run, snirf2bids
+from nirspipe.cli import gui, hyper, prep, qc, rate, run, snirf2bids
 
 
 def _rst(text):
@@ -81,6 +81,3 @@ def nirspipe_rate():
 def nirspipe_gui():
     return _escaped(gui._build_parser())
 
-
-def nirspipe_log():
-    return _escaped(db._build_parser())

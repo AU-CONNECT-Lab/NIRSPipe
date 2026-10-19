@@ -20,7 +20,6 @@ NIRSPipe is a set of command-line entry points. What each step does is described
 | [`nirspipe-hyper-merge`](#nirspipe-hyper-merge) | Concatenate the per-dyad long tables into one table per kind |
 | [`nirspipe-rate`](#nirspipe-rate) | Rating viewers for the QC reports |
 | [`nirspipe-gui`](#nirspipe-gui) | The desktop interface |
-| [`nirspipe-log`](#nirspipe-log) | Merge the run logs into a SQLite database |
 
 ## Examples
 
@@ -264,16 +263,6 @@ Starts the desktop interface and prints the address to open ([GUI](gui.md)).
 :module: cli_parsers
 :func: nirspipe_gui
 :prog: nirspipe-gui
-```
-
-## `nirspipe-log`
-
-`merge` adds every finished run's logs to `OUTPUT_DIR/logs/nirspipe.db` and archives them; `rebuild` writes a new, timestamped database from every log and leaves the existing one alone. See [Event stream and database](outputs.md#event-stream-and-database).
-
-```{argparse}
-:module: cli_parsers
-:func: nirspipe_log
-:prog: nirspipe-log
 ```
 
 ## Troubleshooting

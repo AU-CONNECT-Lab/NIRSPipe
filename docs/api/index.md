@@ -20,7 +20,7 @@ _generated/nirspipe.io/nirspipe.io
 _generated/nirspipe.qc/nirspipe.qc
 ```
 
-`nirspipe.utils` (logging, run records, the event stream and database) is internal; its user-facing surface is `nirspipe-log`. The command-line front-end (`nirspipe.cli`) and the GUI (`nirspipe.interface`) build on these subpackages and are documented as commands in [Usage](../usage.md) and [GUI](../gui.md). The API is not yet stable.
+`nirspipe.utils` (logging, lineage, spans) is internal. The command-line front-end (`nirspipe.cli`) and the GUI (`nirspipe.interface`) build on these subpackages and are documented as commands in [Usage](../usage.md) and [GUI](../gui.md). The API is not yet stable.
 
 ## Package layout
 
@@ -64,7 +64,7 @@ nirspipe/
 │   └── templates/   ← HTML templates
 │
 ├── interface/       ← the GUI
-├── utils/           ← logging, run_record, job_db, lineage, spans, snirf_prep, net
+├── utils/           ← logging, lineage, spans, snirf_prep, net
 ├── data/            ← the BIDS entities and path patterns names are built from, mode presets
 └── exceptions.py    ← AlignmentError, GroupCSVError, MissingDerivativesError, StageError
 ```
@@ -76,4 +76,4 @@ nirspipe/
 | `pipeline/` | All signal processing. Writes the stage files; owns no report or database writes. |
 | `qc/` | Quality records, metrics, reports, rating, Methods text. Reads the pipeline's outputs. |
 | `interface/` | The GUI. Builds commands; runs no preprocessing in its own process. |
-| `utils/` | Logging, run records, the event stream and database, span handling. |
+| `utils/` | Logging, lineage, span handling. |

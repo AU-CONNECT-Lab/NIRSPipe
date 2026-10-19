@@ -226,6 +226,7 @@ Its run summary is the same one table, grouped Optical density, Motion and Haemo
 
 | Panel | Shows |
 |-------|-------|
+| Not finished | Only when some subject's last `nirspipe` run failed or was stopped: the subject, its status, when it started and the first line of its error, read from its run record. |
 | Overview | One row per metric, one dot per run at its robust z: its distance from the cohort median in units of 1.4826 × MAD. |
 | Distributions | Metrics split into charts by scale, each point a run; clicking a point opens its report. |
 | By condition | Where the records carry conditions: each metric per condition, one line per run, and a run-by-condition matrix of robust z. |

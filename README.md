@@ -89,7 +89,6 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
 | `nirspipe-hyper-pairnull`, `-groupnull`, `-band`, `-index`, `-merge` | The re-paired null, cohort tests, re-banding, the dyad index, merged tables |
 | `nirspipe-rate` | Rating viewers for the QC reports |
 | `nirspipe-gui` | Desktop interface |
-| `nirspipe-log` | Merge the run logs into a SQLite database |
 
 Every flag is listed in [Usage](docs/usage.md).
 

@@ -37,10 +37,7 @@ derivatives/nirspipe/
 ├── desc-ratedchannels_qc.tsv            ← nirspipe-rate export: the --bad-channels table
 ├── desc-ratedpages_qc.tsv               ← nirspipe-rate export: every FINAL verdict, for reading
 ├── figures/                             ← the cohort page's figures
-├── logs/
-│   ├── json/                            ← JSONL event stream, moved to archived/ once merged
-│   ├── backup/                          ← database copies, one per merge (last 10)
-│   └── nirspipe.db                      ← SQLite, after nirspipe-log merge
+├── logs/                                ← the rating viewers' saved verdicts
 └── sub-<label>/
     ├── sub-<label>_desc-index_report.html          ← index over the subject's runs
     ├── <run>_report.html                           ← run report
@@ -187,12 +184,13 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 |-------|--------|------|-----|
 | Live log | Text | `sub-<label>/logs/sub-<label>.log` | Following a run; `--verbose` adds debug output |
 | Run record | TOML | `sub-<label>/logs/sub-<label>.toml` | What a subject was run with, and rerunning it |
-| Event stream | JSONL | `logs/json/<category>/*.jsonl` | Machines; the source of the database |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
 
 ### Run record
 
 Each subject's run record is written at the start of its run, with four sections: `[environment]` (package, Python and dependency versions, platform), `[execution]` (the verbatim command, paths, labels and switches), `[prep]` and `[post]` (every setting as resolved, keyed by flag name in the flag's units), and `[post_sources]`, naming for every post setting the layer it came from: `cli`, `config`, `mode` or `default`. Tables are written as typed, with absolute paths, so a record reads from anywhere. A post setting the run switched off is written `"none"`.
+
+When the subject ends, an `[outcome]` section is appended: `status` (`success` or `failed`), `finished`, `duration_s` and, for a failure, the first line of the `error`; the full traceback is in the live log. A record without `[outcome]` belongs to a run that was stopped before it ended. The cohort page lists every subject whose last run did not succeed.
 
 ```toml
 [execution]
@@ -222,34 +220,3 @@ drift_high_pass = "cli"
 ```
 
 A run record is a config file: `--config` on it reruns the run it records ([Configuration file](usage.md#configuration-file)).
-
-### Event stream and database
-
-Every significant event is appended, and flushed to disk, to a JSONL file under `logs/json/`, one category per folder: `_pipeline/` (one file per invocation: its start and its final status), `_runs/` (each subject's start and end, status and duration), `_sqm/` (one event per section of each quality record, with its scalars) and `_outputs/` (captured subprocess output). A killed job still leaves a complete record up to its last write.
-
-`nirspipe-log merge OUTPUT_DIR` inserts every finished invocation's events into a SQLite database, `logs/nirspipe.db`, and moves the merged files to an `archived/` folder beside them, so a second merge adds nothing. An invocation still running is left for later. Before writing, the merge copies the database to `logs/backup/` and keeps the last 10 copies. `nirspipe-log rebuild OUTPUT_DIR` builds a new, timestamped database from every log, archived ones included, and leaves the existing one untouched, which is the way back from a merge that went wrong. The database is downstream of the JSONL files: deleting `logs/json/` loses those events for good.
-
-| Table | One row per |
-|-------|-------------|
-| `pipeline_executions` | `nirspipe` invocation: command, version, paths, labels, mode, status |
-| `runs` | subject and invocation: start and end, status, error, duration, key settings |
-| `sqm` | subject, invocation, run and record section (`checkpoint`): the scalar quality metrics |
-| `command_outputs` | captured subprocess: command, the last 50 lines of stdout and stderr, exit code |
-
-The `sqm` table holds a fixed set of scalar columns; per-channel values, windowed series, the correction footprint and the experimental metrics stay in the quality record. Every query should filter on `checkpoint`, since a run contributes one row per section:
-
-```sql
-SELECT pe.execution_time, sqm.sci_mean, sqm.channel_retention_rate, sqm.gvtd_filt_mean
-  FROM sqm
-  JOIN pipeline_executions pe USING (execution_id)
- WHERE sqm.subject = '01'
-   AND sqm.checkpoint = 'raw'
- ORDER BY pe.execution_time;
-```
-
-```sql
-SELECT subject, status, error_msg, duration_seconds
-  FROM runs
- WHERE execution_id = (SELECT MAX(execution_id) FROM pipeline_executions)
- ORDER BY subject;
-```

@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-hyper` writes each group's member channel positions on fsaverage, one table with a `subject_id` column
 
 ### Changed
+- `--motion-correction spline` detects motion at 20 SDs, 0.5 OD and a 2 s margin by default, replacing 50 SDs, 5 OD and 1 s
 - Optodes are placed on fsaverage by the file's landmarks, else by the reading that fits the scalp; brain views follow the run's recorded placement
 
 ### Fixed
