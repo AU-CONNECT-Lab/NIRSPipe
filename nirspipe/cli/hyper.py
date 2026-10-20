@@ -11,9 +11,16 @@ only the dyad tree (`<output> group`).
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from contextlib import nullcontext
+from functools import partial
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
+
+from threadpoolctl import threadpool_limits
 
 from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
 from nirspipe.cli import _app_options
@@ -21,12 +28,12 @@ from nirspipe.cli import _shared
 from nirspipe.io.naming import roi_map_name
 from nirspipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
 from nirspipe.qc.metrics import SCI_WINDOW_S
-from nirspipe.utils.logging import get_logger, setup_logging
+from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe import __version__
 from nirspipe.cli._app_options import separation_bands_from_args
 from nirspipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
 from nirspipe.io.derivatives import (
-    LINK_PREPROCESSED, entity_of, group_report_dir, read_json, write_bidsignore,
+    LINK_PREPROCESSED, entity_of, group_label, group_report_dir, read_json, write_bidsignore,
     write_dataset_description,
 )
 from nirspipe.io.groups import parse_group_csv
@@ -76,36 +83,84 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
     return groups
 
 
-def _run_groups(groups: dict, process) -> None:
-    """Run process(gid, task, session, members) -> report_path per group, tally ok/fail, exit non-zero on failure."""
-    print(f"Processing {len(groups)} group session(s)...")
-    n_ok = n_fail = 0
-    for (gid, task, ses), members in groups.items():
-        print(f"  -> {gid}/{f'ses-{ses}/' if ses else ''}{task} ({len(members)} subjects)")
+def _group_outcome(process, key: tuple, members: list,
+                   log_file: "Path | None") -> "tuple[bool, str | None]":
+    """One group's run as (succeeded, its output path or the line naming the failure)."""
+    gid, task, ses = key
+    with thread_log_file(log_file) if log_file is not None else nullcontext():
         try:
-            report_path = process(gid, task, ses, members)
-            if report_path is not None:
-                print(f"     report -> {report_path}")
-            n_ok += 1
+            path = process(gid, task, ses, members)
+            return True, (str(path) if path is not None else None)
         except MissingDerivativesError as exc:
-            print(f"     [skip] {exc}", file=sys.stderr)
-            n_fail += 1
+            return False, f"[skip] {exc}"
         except AlignmentError as exc:
             # never a silent fallback: trimming is only right when the members started together
-            print(f"     [skip] alignment failed: {exc} If the members started recording at "
-                  "the same moment (a task without triggers), --no-align trims every "
-                  "recording to the shortest instead; it assumes simultaneous starts.",
-                  file=sys.stderr)
-            n_fail += 1
+            return False, (f"[skip] alignment failed: {exc} If the members started recording "
+                           "at the same moment (a task without triggers), --no-align trims "
+                           "every recording to the shortest instead; it assumes simultaneous "
+                           "starts.")
         except StageError as exc:
-            print(f"     [error] {exc}", file=sys.stderr)
-            n_fail += 1
+            return False, f"[error] {exc}"
         except Exception as exc:
             logger.exception("group %s task %s failed", gid, task)
-            print(f"     [error] unexpected error: {exc}", file=sys.stderr)
-            n_fail += 1
+            return False, f"[error] unexpected error: {exc}"
 
-    print(f"\nDone: {n_ok} succeeded, {n_fail} failed.")
+
+# held for the worker's life: threadpoolctl lifts its limits when the object goes
+_WORKER_BLAS = None
+
+
+def _init_group_worker(blas: "int | None", verbose: bool) -> None:
+    global _WORKER_BLAS
+    setup_logging(verbose=verbose)
+    if blas:
+        _WORKER_BLAS = threadpool_limits(limits=blas)
+
+
+def _run_groups(groups: dict, process, nprocs: "int | None" = None, verbose: bool = False,
+                log_file=None, what: str = "report") -> None:
+    """Run process(gid, task, session, members) -> output path per group, logging each to log_file(key); exit non-zero on failure."""
+    jobs, blas = _shared.split_cpus(nprocs, len(groups))
+    print(f"Processing {len(groups)} group session(s)"
+          + (f", {jobs} at once..." if jobs > 1 else "..."))
+
+    def _name(key, members):
+        gid, task, ses = key
+        return f"{gid}/{f'ses-{ses}/' if ses else ''}{task} ({len(members)} subjects)"
+
+    def _report(ok, text, prefix):
+        if ok:
+            if text is not None:
+                print(f"{prefix}{what} -> {text}", flush=True)
+        else:
+            print(f"{prefix}{text}", file=sys.stderr, flush=True)
+        return 0 if ok else 1
+
+    logs = {key: (log_file(key) if log_file else None) for key in groups}
+    n_fail = 0
+    if jobs == 1:
+        with threadpool_limits(limits=blas) if blas else nullcontext():
+            for key, members in groups.items():
+                print(f"  -> {_name(key, members)}", flush=True)
+                n_fail += _report(*_group_outcome(process, key, members, logs[key]), "     ")
+    else:
+        # processes, not threads: matplotlib holds the GIL while it rasterises. So `process`
+        # has to pickle, a module-level function or a partial of one
+        with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("spawn"),
+                                 initializer=_init_group_worker,
+                                 initargs=(blas, verbose)) as pool:
+            futures = {pool.submit(_group_outcome, process, key, members, logs[key]): key
+                       for key, members in groups.items()}
+            for future in as_completed(futures):
+                key = futures[future]
+                try:
+                    outcome = future.result()
+                except Exception as exc:
+                    # the worker itself died, or its result would not pickle
+                    outcome = (False, f"[error] worker failed: {exc!r}")
+                n_fail += _report(*outcome, f"  {_name(key, groups[key])}: ")
+
+    print(f"\nDone: {len(groups) - n_fail} succeeded, {n_fail} failed.")
     if n_fail > 0:
         raise SystemExit(1)
 
@@ -234,6 +289,140 @@ def _warn_band_mismatch(isc_band, wtc_band_fmin, wtc_band_fmax) -> None:
             isc_band[0], isc_band[1], wtc_band_fmin, wtc_band_fmax)
 
 
+def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
+    """One dyad of `nirspipe-hyper`: align, null, report, run record. ``s`` is the run's settings."""
+    from nirspipe.cli.run_record import write_group_run_record
+    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
+    from nirspipe.qc.common.windows import condition_windows, split_windows
+    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
+
+    aligned_raws, offsets, group_sqm = _load_aligned_group(
+        s.derivatives_dir, members, task, s.desc, s.no_align, s.normalize, s.bads_scope,
+        passband_check=(s.wtc_fmin, s.wtc_fmax), scope_tasks=s.scope_tasks)
+    analysis_window = resolve_analysis_window(aligned_raws, s.tstart, s.tend)
+    sep_bands = resolve_group_bands(members, group_sqm, s.bands_override)
+    _quality_summary(aligned_raws, group_sqm, sep_bands)
+    if s.check_only:
+        return None
+    bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
+    write_group_bads(s.output_dir, members, group_sqm, s.bads_scope, session=ses)
+    write_group_channel_coords(s.derivatives_dir, s.output_dir, members, s.desc, session=ses)
+    # resolved here rather than twice downstream: the report and the null have to agree
+    # on the windows or their tables cannot be subtracted row by row
+    ref = next(iter(aligned_raws.values()), None)
+    cond_windows = (condition_windows(ref, min_duration=1.0 / s.wtc_fmin)
+                    if s.wtc_by_condition and ref is not None else [])
+    if analysis_window is not None:
+        # a condition outside the analysis window has nothing in it to report, and one
+        # straddling an edge would be reported as a full block while only part of it
+        # was read. Dropped rather than clipped, so no page claims a span it did not get
+        lo, hi = analysis_window
+        inside = [w for w in cond_windows if w[1] >= lo and w[2] <= hi]
+        if len(inside) != len(cond_windows):
+            dropped = [w[0] for w in cond_windows if w not in inside]
+            print(f"     [info] {len(dropped)} condition(s) outside "
+                  f"--tstart/--tend: {', '.join(dropped)}")
+        cond_windows = inside
+    if s.wtc_window_s and cond_windows:
+        # equal-length windows replace the conditions as the unit of analysis; the null
+        # resolves the same grid off the same reference
+        cond_windows, _ = split_windows(cond_windows, s.wtc_window_s)
+        if not cond_windows:
+            print(f"     [warn] --wtc-window-s {s.wtc_window_s}: no condition is long "
+                  "enough for one window, so there is nothing per condition to report",
+                  file=sys.stderr)
+    # Before the report, not after: the level the phase arrows are drawn against comes
+    # out of the surrogates, and the figures are built inside the report. The report
+    # writes the table this returns, once the real band means it is ranked against exist.
+    nulls = run_wtc_null(
+        group_id=gid,
+        task=task,
+        aligned_raws=aligned_raws,
+        output_dir=s.output_dir,
+        n_iter=s.wtc_phase_null,
+        wtc_fmin=s.wtc_fmin,
+        wtc_fmax=s.wtc_fmax,
+        band_fmin=s.wtc_band_fmin,
+        band_fmax=s.wtc_band_fmax,
+        seed=s.wtc_seed,
+        cross=s.wtc_phase_null_cross,
+        limit_scales=s.wtc_limit_scales,
+        mask_coi=s.wtc_mask_coi,
+        chroma=s.chroma,
+        sep_bands=sep_bands,
+        windows=cond_windows,
+        analysis_window=analysis_window,
+        whiten_s=s.wtc_whiten,
+        session=ses,
+        # an ROI level only where the null crosses as the real maps do: a crossed (R, R)
+        # map and an uncrossed R average different pairings
+        roi_map=s.roi_map if s.wtc_phase_null_cross == s.wtc_channel_cross else None,
+        roi_map_name=s.roi_name,
+        roi_min_channels=s.wtc_roi_min_channels,
+    ) if s.wtc_phase_null else None
+
+    report_path = build_hyper_post_report(
+        group_id=gid,
+        task=task,
+        session=ses,
+        group=members,
+        aligned_raws=aligned_raws,
+        offsets=offsets,
+        output_dir=s.output_dir,
+        roi_map=s.roi_map,
+        roi_map_name=s.roi_name,
+        bad_channels=bad_channels,
+        subject_sqm=group_sqm,
+        wtc_fmin=s.wtc_fmin,
+        wtc_fmax=s.wtc_fmax,
+        wtc_band_fmin=s.wtc_band_fmin,
+        wtc_band_fmax=s.wtc_band_fmax,
+        wtc_significance=s.wtc_significance,
+        wtc_seed=s.wtc_seed,
+        wtc_mc_count=s.wtc_mc_count,
+        wtc_channel_cross=s.wtc_channel_cross,
+        wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window_s,
+        wtc_cond_pad_s=s.cond_pad,
+        cond_windows=cond_windows,
+        wtc_limit_scales=s.wtc_limit_scales,
+        wtc_save_maps=s.wtc_save_maps,
+        wtc_mask_coi=s.wtc_mask_coi,
+        wtc_roi_min_channels=s.wtc_roi_min_channels,
+        wtc_arrow_min=s.wtc_arrow_min,
+        wtc_chroma=s.chroma,
+        wtc_whiten_s=s.wtc_whiten,
+        wtc_nulls=nulls,
+        wtc_phase_null=s.wtc_phase_null,
+        wtc_phase_null_cross=s.wtc_phase_null_cross,
+        isc_threshold=s.isc_threshold,
+        isc_whiten_s=s.isc_whiten_s,
+        isc_max_lag_s=s.isc_max_lag,
+        isc_phase_null=s.isc_phase_null,
+        isc_band=s.isc_band,
+        no_report=s.no_report,
+        sep_bands=sep_bands,
+        analysis_window=analysis_window,
+        desc=s.desc,
+        bads_scope=s.bads_scope,
+    )
+    try:
+        # the resolved bands under the keys the SQM record stamps them with, so the two
+        # can be compared directly; run_args holds only the flags as typed. An absent
+        # upper bound drops out, TOML having no null and the writer skipping None
+        # throughout, so absent here means off rather than unrecorded
+        record = write_group_run_record(
+            {**s.run_args, **bands_to_record(sep_bands)},
+            gid, task, s.timestamp, s.output_dir,
+            group_report_dir(s.output_dir, gid),
+            members=[e.subject_id for e in members], session=ses,
+        )
+        logger.info("group-%s | run record -> %s", gid, record)
+    except Exception:
+        logger.warning("group-%s | run record failed", gid, exc_info=True)
+
+    return report_path
+
+
 def cmd_run(
     derivatives_dir: Path, output_dir: Path,
     pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
@@ -257,7 +446,7 @@ def cmd_run(
     check_only: bool, verbose: bool,
     participant_label: list[str] | None = None,
     band_fmin: "float | None" = None, band_fmax: "float | None" = None,
-    config: "Path | None" = None,
+    config: "Path | None" = None, nprocs: "int | None" = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -287,10 +476,7 @@ def cmd_run(
         "long_max_dist": long_max_dist,
     })
 
-    from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
-    from nirspipe.qc.common.windows import condition_windows, split_windows
-    from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
-    from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT, write_group_run_record
+    from nirspipe.cli.run_record import RUN_TIMESTAMP_FORMAT
 
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="nirspipe-hyper output",
@@ -363,143 +549,23 @@ def cmd_run(
     elif str(wtc_cond_pad_s).lower() != "auto":
         logger.warning("--wtc-cond-pad-s is ignored without --wtc-cond-transform")
 
-    def _process(gid, task, ses, members):
-        aligned_raws, offsets, group_sqm = _load_aligned_group(
-            derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
-            passband_check=(wtc_fmin, wtc_fmax), scope_tasks=scope_tasks)
-        analysis_window = resolve_analysis_window(aligned_raws, tstart, tend)
-        sep_bands = resolve_group_bands(members, group_sqm, bands_override)
-        _quality_summary(aligned_raws, group_sqm, sep_bands)
-        if check_only:
-            return None
-        bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
-        write_group_bads(output_dir, members, group_sqm, bads_scope, session=ses)
-        write_group_channel_coords(derivatives_dir, output_dir, members, desc, session=ses)
-        # resolved here rather than twice downstream: the report and the null have to agree
-        # on the windows or their tables cannot be subtracted row by row
-        ref = next(iter(aligned_raws.values()), None)
-        cond_windows = (condition_windows(ref, min_duration=1.0 / wtc_fmin)
-                        if wtc_by_condition and ref is not None else [])
-        if analysis_window is not None:
-            # a condition outside the analysis window has nothing in it to report, and one
-            # straddling an edge would be reported as a full block while only part of it
-            # was read. Dropped rather than clipped, so no page claims a span it did not get
-            lo, hi = analysis_window
-            inside = [w for w in cond_windows if w[1] >= lo and w[2] <= hi]
-            if len(inside) != len(cond_windows):
-                dropped = [w[0] for w in cond_windows if w not in inside]
-                print(f"     [info] {len(dropped)} condition(s) outside "
-                      f"--tstart/--tend: {', '.join(dropped)}")
-            cond_windows = inside
-        if wtc_window_s and cond_windows:
-            # equal-length windows replace the conditions as the unit of analysis; the null
-            # resolves the same grid off the same reference
-            cond_windows, _ = split_windows(cond_windows, wtc_window_s)
-            if not cond_windows:
-                print(f"     [warn] --wtc-window-s {wtc_window_s}: no condition is long "
-                      "enough for one window, so there is nothing per condition to report",
-                      file=sys.stderr)
-        # Before the report, not after: the level the phase arrows are drawn against comes
-        # out of the surrogates, and the figures are built inside the report. The report
-        # writes the table this returns, once the real band means it is ranked against exist.
-        nulls = run_wtc_null(
-            group_id=gid,
-            task=task,
-            aligned_raws=aligned_raws,
-            output_dir=output_dir,
-            n_iter=wtc_phase_null,
-            wtc_fmin=wtc_fmin,
-            wtc_fmax=wtc_fmax,
-            band_fmin=wtc_band_fmin,
-            band_fmax=wtc_band_fmax,
-            seed=wtc_seed,
-            cross=wtc_phase_null_cross,
-            limit_scales=wtc_limit_scales,
-            mask_coi=wtc_mask_coi,
-            chroma=chroma,
-            sep_bands=sep_bands,
-            windows=cond_windows,
-            analysis_window=analysis_window,
-            whiten_s=wtc_whiten,
-            session=ses,
-            # an ROI level only where the null crosses as the real maps do: a crossed (R, R)
-            # map and an uncrossed R average different pairings
-            roi_map=roi_map if wtc_phase_null_cross == wtc_channel_cross else None,
-            roi_map_name=roi_name,
-            roi_min_channels=wtc_roi_min_channels,
-        ) if wtc_phase_null else None
-
-        report_path = build_hyper_post_report(
-            group_id=gid,
-            task=task,
-            session=ses,
-            group=members,
-            aligned_raws=aligned_raws,
-            offsets=offsets,
-            output_dir=output_dir,
-            roi_map=roi_map,
-            roi_map_name=roi_name,
-            bad_channels=bad_channels,
-            subject_sqm=group_sqm,
-            wtc_fmin=wtc_fmin,
-            wtc_fmax=wtc_fmax,
-            wtc_band_fmin=wtc_band_fmin,
-            wtc_band_fmax=wtc_band_fmax,
-            wtc_significance=wtc_significance,
-            wtc_seed=wtc_seed,
-            wtc_mc_count=wtc_mc_count,
-            wtc_channel_cross=wtc_channel_cross,
-            wtc_by_condition=wtc_by_condition, wtc_window_s=wtc_window_s,
-            wtc_cond_pad_s=cond_pad,
-            cond_windows=cond_windows,
-            wtc_limit_scales=wtc_limit_scales,
-            wtc_save_maps=wtc_save_maps,
-            wtc_mask_coi=wtc_mask_coi,
-            wtc_roi_min_channels=wtc_roi_min_channels,
-            wtc_arrow_min=wtc_arrow_min,
-            wtc_chroma=chroma,
-            wtc_whiten_s=wtc_whiten,
-            wtc_nulls=nulls,
-            wtc_phase_null=wtc_phase_null,
-            wtc_phase_null_cross=wtc_phase_null_cross,
-            isc_threshold=isc_threshold,
-            isc_whiten_s=isc_whiten_s,
-            isc_max_lag_s=isc_max_lag,
-            isc_phase_null=isc_phase_null,
-            isc_band=isc_band,
-            no_report=no_report,
-            sep_bands=sep_bands,
-            analysis_window=analysis_window,
-            desc=desc,
-            bads_scope=bads_scope,
-        )
-        try:
-            # the resolved bands under the keys the SQM record stamps them with, so the two
-            # can be compared directly; run_args holds only the flags as typed. An absent
-            # upper bound drops out, TOML having no null and the writer skipping None
-            # throughout, so absent here means off rather than unrecorded
-            record = write_group_run_record(
-                {**run_args, **bands_to_record(sep_bands)},
-                gid, task, timestamp, output_dir,
-                group_report_dir(output_dir, gid),
-                members=[e.subject_id for e in members], session=ses,
-            )
-            logger.info("group-%s | run record -> %s", gid, record)
-        except Exception:
-            logger.warning("group-%s | run record failed", gid, exc_info=True)
-
-        return report_path
-
     if wtc_phase_null:
         logger.info("phase-scrambled null requested: %d full WTC runs per dyad, on top of the real one",
                     wtc_phase_null)
-    _run_groups(groups, _process)
+    settings = SimpleNamespace(
+        **run_args, run_args=run_args, chroma=chroma, cond_pad=cond_pad,
+        bands_override=bands_override, roi_map=roi_map, roi_name=roi_name,
+        scope_tasks=scope_tasks, isc_band=isc_band, timestamp=timestamp)
+    _run_groups(groups, partial(_run_one_group, settings), nprocs, verbose,
+                log_file=None if check_only else (
+                    lambda key: group_report_dir(output_dir, key[0]) / "logs"
+                    / f"{group_label(*key)}.log"))
     if check_only:
         return
 
     # The index is rebuilt for every dyad this run touched, reading the tables rather than
     # anything held in memory, so a dyad whose other tasks were analysed in an earlier run
-    # still lists them. Not built inside `_process`, which would rewrite it once per task
+    # still lists them. Not built inside `_run_one_group`, which would rewrite it once per task
     # from a tree missing the tasks still to come.
     from nirspipe.qc.hyper.hyper_index import write_hyper_index
 
@@ -910,6 +976,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "with its [hyper] section. Fills every setting the command line "
                           "leaves out; the directories and --pairs-csv still come from the "
                           "command line.")
+    _shared.add_nprocs(run, unit="group")
     _app_options.add_separation_bands(run, note="An override: the bands come from each member's "
                                  "record, and members prepped with different bands are "
                                  "refused. Use it only for records that carry none.")
@@ -1031,6 +1098,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in nirspipe-hyper.")
+    _shared.add_nprocs(pair, unit="group")
 
     merge = _command_parser(
         "nirspipe-hyper-merge", reads_subjects=False, parents=[common],

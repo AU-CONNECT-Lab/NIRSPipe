@@ -261,10 +261,11 @@ def write_group_run_record(
         **({"session_label": session} if session else {}),
         "task_label": task,
         "participant_label": list(members or []),
+        "nprocs": args.get("nprocs"),
         **({"config": _fwd(args["config"])} if args.get("config") else {}),
     }
 
-    skip = {"func", "output_dir", "verbose", "config"}
+    skip = {"func", "output_dir", "verbose", "config", "nprocs"}
     hyper = {k: (list(v) if isinstance(v, tuple) else v)
              for k, v in args.items()
              if k not in skip and not isinstance(v, dict)}

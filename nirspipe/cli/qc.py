@@ -7,10 +7,13 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import replace
+from functools import lru_cache, partial
+from types import SimpleNamespace
+from uuid import uuid4
 
 from nirspipe import __version__
 
-from nirspipe.io.derivatives import read_dataset_description
+from nirspipe.io.derivatives import group_label, group_report_dir, read_dataset_description
 from nirspipe.io.naming import report_name
 from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
@@ -175,6 +178,106 @@ def _generated_by(tree: Path) -> set[str]:
     return {str(e.get("Name", "")) for e in desc.get("GeneratedBy") or [] if isinstance(e, dict)}
 
 
+@lru_cache(maxsize=1)
+def _bids_layout(bids_dir: Path, run_id: str):
+    """The BIDS layout of one run, built once per process, so each worker indexes the dataset once."""
+    from nirspipe.io.bids import get_layout
+    return get_layout(bids_dir)
+
+
+def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
+    """One dyad of `nirspipe-qc hyper-raw`: quality record and raw report. ``s`` is the run's settings."""
+    from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
+    from nirspipe.io.bids import channel_status_bads
+    from nirspipe.pipeline.hyper.alignment import (
+        align_imu_like,
+        align_like,
+        aligned_offsets,
+        align_recordings,
+        crop_aligned_window,
+        normalize_raws,
+        trim_to_shortest,
+    )
+    from nirspipe.pipeline.hyper.group_io import (
+        _raw_to_haemo,
+        load_group_raw_bids,
+        load_group_stage,
+    )
+    from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
+    from nirspipe.qc.hyper.hyper_report import build_hyper_report
+    from nirspipe.utils.lineage import path_from
+
+    # each member's channels.tsv, read off the BIDS tree its recording came from
+    layout = _bids_layout(s.bids_dir, s.run_id) if s.read_channel_status else None
+    raws_cw = load_group_raw_bids(s.bids_dir, members)
+    tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
+                 for sid, raw in raws_cw.items()} if layout is not None else {})
+    # the aux group rides only in the source file, on each member's own clock. A file
+    # that will not read costs the IMU rows and not the report
+    try:
+        member_imu = {sid: imu_traces(*read_aux_snirf(path_from(raw)))
+                      for sid, raw in raws_cw.items() if path_from(raw)}
+    except Exception:
+        logger.warning("%s: IMU could not be read; the report has no IMU rows",
+                       gid, exc_info=True)
+        member_imu = {}
+    sqm_data = compute_group_sqm_raw(members, raws_cw, s.sci_threshold, s.output_dir,
+                                     s.cardiac_l_freq, s.cardiac_h_freq,
+                                     psp_threshold=s.psp_threshold,
+                                     min_good_frac=s.min_good_frac,
+                                     screen_scope=s.screen_scope,
+                                     sep_bands=s.sep_bands, session=ses,
+                                     channels_tsv_bads=tsv_bads, imu=member_imu)
+    raws_haemo = {sid: _raw_to_haemo(r, s.dpf) for sid, r in raws_cw.items()}
+    if s.no_align:
+        aligned_raws, offsets = trim_to_shortest(raws_haemo)
+    else:
+        aligned_raws, offsets = align_recordings(raws_haemo, task)
+    aligned_raws = crop_aligned_window(aligned_raws, s.tstart, s.tend)
+    # --tstart moves the shared clock's zero, so each member's crop point moves with it
+    offsets = aligned_offsets(raws_haemo, aligned_raws)
+    if s.normalize:
+        aligned_raws = normalize_raws(aligned_raws)
+    # the motion panel needs optical density, which the haemoglobin conversion above
+    # has already left behind, so the intensity copy is cut to the same window rather
+    # than aligned a second time. The corrected file is whatever the member's own
+    # `nirspipe` run left in the tree --derivatives-dir names, and is simply absent for
+    # a member who has not been through one.
+    intensity_raws = align_like(raws_cw, aligned_raws)
+    full_after = (load_group_stage(s.derivatives_dir, members, "motcorrected")
+                  if s.derivatives_dir is not None else {})
+    after_raws = align_like(full_after, aligned_raws) if full_after else {}
+    # the panel's IMU, moved by the same shift the intensity copy was cut by
+    try:
+        imu = align_imu_like(member_imu, raws_cw, aligned_raws)
+    except Exception:
+        logger.warning("%s: IMU could not be aligned; the motion panel has no IMU rows",
+                       gid, exc_info=True)
+        imu = {}
+    return build_hyper_report(
+        group_id=gid,
+        task=task,
+        group=members,
+        sqm_data=sqm_data,
+        aligned_raws=aligned_raws,
+        offsets=offsets,
+        raw_raws=raws_haemo,
+        intensity_raws=intensity_raws,
+        after_raws=after_raws,
+        imu=imu,
+        # the uncut recordings, so the motion panel filters before it cuts
+        full_raws=raws_cw,
+        full_after=full_after,
+        output_dir=s.output_dir,
+        sep_bands=s.sep_bands,
+        session=ses,
+        sci_threshold=s.sci_threshold,
+        cardiac_l_freq=s.cardiac_l_freq,
+        cardiac_h_freq=s.cardiac_h_freq,
+        roi_map=s.roi_map,
+    )
+
+
 def cmd_hyper_raw(
     bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
@@ -189,6 +292,7 @@ def cmd_hyper_raw(
     roi_mapping: Path | None = None,
     participant_label: list[str] | None = None,
     ignore: list[str] | None = None,
+    nprocs: int | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-hyper")
@@ -223,25 +327,6 @@ def cmd_hyper_raw(
     })))
 
     from nirspipe.cli.hyper import _run_groups, _select_groups
-    from nirspipe.pipeline.hyper.group_io import (
-        _raw_to_haemo,
-        load_group_raw_bids,
-        load_group_stage,
-    )
-    from nirspipe.pipeline.hyper.alignment import (
-        align_imu_like,
-        align_like,
-        aligned_offsets,
-        align_recordings,
-        crop_aligned_window,
-        normalize_raws,
-        trim_to_shortest,
-    )
-    from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
-    from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
-    from nirspipe.io.bids import channel_status_bads, get_layout
-    from nirspipe.qc.hyper.hyper_report import build_hyper_report
-    from nirspipe.utils.lineage import path_from
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
     if session_label:
@@ -258,79 +343,16 @@ def cmd_hyper_raw(
               "correction only.", file=sys.stderr)
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
-    # each member's channels.tsv, read off the BIDS tree its recording came from
-    layout = None if "channel-status" in (ignore or []) else get_layout(bids_dir)
-
-    def _process(gid, task, ses, members):
-        raws_cw = load_group_raw_bids(bids_dir, members)
-        tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
-                     for sid, raw in raws_cw.items()} if layout is not None else {})
-        # the aux group rides only in the source file, on each member's own clock. A file
-        # that will not read costs the IMU rows and not the report
-        try:
-            member_imu = {sid: imu_traces(*read_aux_snirf(path_from(raw)))
-                          for sid, raw in raws_cw.items() if path_from(raw)}
-        except Exception:
-            logger.warning("%s: IMU could not be read; the report has no IMU rows",
-                           gid, exc_info=True)
-            member_imu = {}
-        sqm_data = compute_group_sqm_raw(members, raws_cw, sci_threshold, output_dir,
-                                         cardiac_l_freq, cardiac_h_freq,
-                                         psp_threshold=psp_threshold,
-                                         min_good_frac=min_good_frac,
-                                         screen_scope=screen_scope,
-                                         sep_bands=sep_bands, session=ses,
-                                         channels_tsv_bads=tsv_bads, imu=member_imu)
-        raws_haemo = {sid: _raw_to_haemo(r, dpf) for sid, r in raws_cw.items()}
-        if no_align:
-            aligned_raws, offsets = trim_to_shortest(raws_haemo)
-        else:
-            aligned_raws, offsets = align_recordings(raws_haemo, task)
-        aligned_raws = crop_aligned_window(aligned_raws, tstart, tend)
-        # --tstart moves the shared clock's zero, so each member's crop point moves with it
-        offsets = aligned_offsets(raws_haemo, aligned_raws)
-        if normalize:
-            aligned_raws = normalize_raws(aligned_raws)
-        # the motion panel needs optical density, which the haemoglobin conversion above
-        # has already left behind, so the intensity copy is cut to the same window rather
-        # than aligned a second time. The corrected file is whatever the member's own
-        # `nirspipe` run left in the tree --derivatives-dir names, and is simply absent for
-        # a member who has not been through one.
-        intensity_raws = align_like(raws_cw, aligned_raws)
-        full_after = (load_group_stage(derivatives_dir, members, "motcorrected")
-                      if derivatives_dir is not None else {})
-        after_raws = align_like(full_after, aligned_raws) if full_after else {}
-        # the panel's IMU, moved by the same shift the intensity copy was cut by
-        try:
-            imu = align_imu_like(member_imu, raws_cw, aligned_raws)
-        except Exception:
-            logger.warning("%s: IMU could not be aligned; the motion panel has no IMU rows",
-                           gid, exc_info=True)
-            imu = {}
-        return build_hyper_report(
-            group_id=gid,
-            task=task,
-            group=members,
-            sqm_data=sqm_data,
-            aligned_raws=aligned_raws,
-            offsets=offsets,
-            raw_raws=raws_haemo,
-            intensity_raws=intensity_raws,
-            after_raws=after_raws,
-            imu=imu,
-            # the uncut recordings, so the motion panel filters before it cuts
-            full_raws=raws_cw,
-            full_after=full_after,
-            output_dir=output_dir,
-            sep_bands=sep_bands,
-            session=ses,
-            sci_threshold=sci_threshold,
-            cardiac_l_freq=cardiac_l_freq,
-            cardiac_h_freq=cardiac_h_freq,
-            roi_map=roi_map,
-        )
-
-    _run_groups(groups, _process)
+    settings = SimpleNamespace(
+        bids_dir=bids_dir, output_dir=output_dir, derivatives_dir=derivatives_dir,
+        read_channel_status="channel-status" not in (ignore or []), run_id=uuid4().hex,
+        sci_threshold=sci_threshold, cardiac_l_freq=cardiac_l_freq,
+        cardiac_h_freq=cardiac_h_freq, psp_threshold=psp_threshold,
+        min_good_frac=min_good_frac, screen_scope=screen_scope, sep_bands=sep_bands, dpf=dpf,
+        no_align=no_align, normalize=normalize, tstart=tstart, tend=tend, roi_map=roi_map)
+    _run_groups(groups, partial(_raw_one_group, settings), nprocs,
+                log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
+                / f"{group_label(*key)}_desc-raw.log")
 
 
 def cmd_group_raw(output_dir: Path) -> None:
@@ -501,6 +523,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "read once per listed session.")
     _shared.add_skip_bids_validation(hr)
     _add_ignore(hr)
+    _shared.add_nprocs(hr, unit="group")
     hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The nirspipe tree holding each member's sub-<id>/nirs/ stages. The "
                          "motion panel draws its after-correction side from desc-motcorrected "

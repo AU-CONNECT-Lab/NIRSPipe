@@ -69,12 +69,12 @@ def _positive_int(text: str) -> int:
     return value
 
 
-def add_nprocs(container) -> None:
+def add_nprocs(container, unit: str = "subject") -> None:
     """``--nprocs``, the cores a command may use in all, spelled as the BIDS Apps interface spells it."""
     container.add_argument(
         "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=_positive_int, default=None,
-        help="CPU cores to use in all. Up to this many subjects run at once and spare cores go "
-             "to each subject's numerics. Omit to run one subject at a time on every core.")
+        help=f"CPU cores to use in all. Up to this many {unit}s run at once and spare cores go "
+             f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core.")
 
 
 def split_cpus(nprocs: int | None, n_subjects: int) -> tuple[int, int | None]:
