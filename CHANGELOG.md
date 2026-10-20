@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `nirspipe-qc prep-raw` takes `--nprocs` and reports several subjects at once
+- `nirspipe-hyper`, `nirspipe-hyper-pairnull` and `nirspipe-qc hyper-raw` take `--nprocs` and run several groups at once, each in its own process
+- Each dyad command writes a log per group under `group-<id>/logs/`
 
 ### Changed
 - **Breaking**: `--n-jobs` becomes `--nprocs`, the cores a command may use in all; subjects share them and run records store `nprocs`

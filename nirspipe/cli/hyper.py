@@ -683,6 +683,19 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
         print(f"no coherence tables under {output_dir}; run `nirspipe-hyper` first")
 
 
+def _pair_null_one_group(s: SimpleNamespace, gid, task, ses, members):
+    """One target of `nirspipe-hyper-pairnull`, its stand-ins drawn from every group of the table."""
+    from nirspipe.pipeline.hyper.pair_null import run_pair_null
+
+    return run_pair_null(
+        gid, task, members, s.all_groups, s.derivatives_dir, s.output_dir,
+        pool=s.wtc_pair_pool, n_max=s.wtc_pair_max, desc=s.desc,
+        bads_scope=s.bads_scope, scope_tasks=s.scope_tasks, chroma=s.chroma,
+        cross=s.wtc_pair_cross, limit_scales=s.wtc_limit_scales,
+        roi_map=s.roi_map, roi_map_name=s.roi_name,
+        roi_min_channels=s.wtc_roi_min_channels, session=ses)
+
+
 def cmd_pair_null(
     derivatives_dir: Path,
     output_dir: Path,
@@ -700,10 +713,9 @@ def cmd_pair_null(
     wtc_limit_scales: bool,
     verbose: bool,
     participant_label: list[str] | None = None,
+    nprocs: int | None = None,
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
-    from nirspipe.pipeline.hyper.pair_null import run_pair_null
-
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="nirspipe-hyper output",
                               generated_by="nirspipe-hyper", source=derivatives_dir,
@@ -720,26 +732,15 @@ def cmd_pair_null(
     chroma = ("hbo", "hbr") if chroma == "both" else (chroma,)
     scope_tasks = sorted({key[1] for key in all_groups})
 
-    failures = 0
-    for (gid, task, ses), members in targets.items():
-        # flushed, or it interleaves with the stderr line naming the failure it belongs to
-        print(f"  -> {gid}/{f'ses-{ses}/' if ses else ''}{task}", flush=True)
-        try:
-            path = run_pair_null(
-                gid, task, members, all_groups, derivatives_dir, output_dir,
-                pool=wtc_pair_pool, n_max=wtc_pair_max, desc=desc,
-                bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
-                cross=wtc_pair_cross, limit_scales=wtc_limit_scales,
-                roi_map=roi_map, roi_map_name=roi_map_name(roi_mapping),
-                roi_min_channels=wtc_roi_min_channels, session=ses)
-            print(f"     pair null -> {path}")
-        except Exception as exc:
-            print(f"     [error] {exc}", file=sys.stderr)
-            failures += 1
-
-    if failures:
-        print(f"\n{failures} group(s) failed", file=sys.stderr)
-        raise SystemExit(1)
+    settings = SimpleNamespace(
+        all_groups=all_groups, derivatives_dir=derivatives_dir, output_dir=output_dir,
+        wtc_pair_pool=wtc_pair_pool, wtc_pair_max=wtc_pair_max, desc=desc,
+        bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
+        wtc_pair_cross=wtc_pair_cross, wtc_limit_scales=wtc_limit_scales, roi_map=roi_map,
+        roi_name=roi_map_name(roi_mapping), wtc_roi_min_channels=wtc_roi_min_channels)
+    _run_groups(targets, partial(_pair_null_one_group, settings), nprocs, verbose,
+                log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
+                / f"{group_label(*key)}_null-pair.log", what="pair null")
     # a closing hint must not decide the exit code
     try:
         _merge_reminder(output_dir)
