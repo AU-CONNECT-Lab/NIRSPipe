@@ -421,6 +421,30 @@ def _exclusive(path: Path):
                 fcntl.lockf(fh, fcntl.LOCK_UN)
 
 
+def read_dataset_description(root: Path) -> dict[str, Any]:
+    """``root``'s dataset_description.json, or {} when absent or not JSON.
+
+    Another run can be replacing the file at the instant it is opened, which Windows reports
+    as a permission error; that is retried, never read as an empty description, since an empty
+    one has no links and every Sources URI of the run would then be refused.
+    """
+    path = Path(root) / "dataset_description.json"
+    for attempt in range(_REPLACE_TRIES):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except PermissionError:
+            if attempt == _REPLACE_TRIES - 1:
+                raise
+            time.sleep(_REPLACE_WAIT_S)
+            continue
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
 # What a reader should not hold against the tree: the reports and their figures are for
 # people, and BIDS says nothing about either.
 #
@@ -487,7 +511,7 @@ def _link_target(root: Path, value: str) -> Path:
 
 def _linked_roots(root: Path) -> dict[str, Path]:
     """``{"": root, name: linked dataset}``, from root's DatasetLinks."""
-    links = read_json(root / "dataset_description.json").get("DatasetLinks") or {}
+    links = read_dataset_description(root).get("DatasetLinks") or {}
     return {"": root.resolve(), **{name: _link_target(root, value)
                                    for name, value in links.items()}}
 
@@ -562,10 +586,7 @@ def _source_dataset(source: Path, url: str) -> dict:
     wrote it, which is the thing a reader cannot recover from the dyad tables themselves.
     """
     entry: dict = {"URL": url}
-    try:
-        desc = json.loads((source / "dataset_description.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return entry
+    desc = read_dataset_description(source)
     made_by = (desc.get("GeneratedBy") or [{}])[0]
     if made_by.get("Version"):
         entry["Version"] = made_by["Version"]
@@ -606,13 +627,13 @@ def write_dataset_description(
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "dataset_description.json"
     with _exclusive(path):
-        existing = read_json(path)
+        existing = read_dataset_description(output_dir)
         links = dict(existing.get("DatasetLinks") or {})
         sources = list(existing.get("SourceDatasets") or [])
         if source is not None:
             source = Path(source)
             if link is None:
-                kind = read_json(source / "dataset_description.json").get("DatasetType")
+                kind = read_dataset_description(source).get("DatasetType")
                 link = LINK_PREPROCESSED if kind == "derivative" else LINK_RAW
             value = _link_value(source, output_dir)
             if links.get(link, value) != value:

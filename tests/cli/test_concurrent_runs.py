@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import to_bids_uri, write_dataset_description
 
 WORKERS = 8
 
@@ -35,6 +36,32 @@ def _link_at(output_dir: str, source: str, link: str, start: float) -> str:
         pass
     write_dataset_description(Path(output_dir), source=Path(source), link=link)
     return link
+
+
+def _add_links(output_dir: str, sources: list[str], start: float) -> int:
+    # each link is new, so every write changes the file and replaces it
+    while time.time() < start:
+        pass
+    for source in sources:
+        write_dataset_description(Path(output_dir), source=Path(source), link=Path(source).name)
+    return len(sources)
+
+
+def _resolve_raw_until(output_dir: str, raw: str, start: float, stop_file: str) -> list[str]:
+    """Name a raw file by its BIDS URI while others add links, and report every failure."""
+    written = Path(output_dir) / "sub-01" / "sub-01_desc-x_nirs.json"
+    target = Path(raw) / "sub-01" / "nirs" / "sub-01_nirs.snirf"
+    while time.time() < start:
+        pass
+    failed = []
+    while not Path(stop_file).exists():
+        try:
+            uri = to_bids_uri(target, written)
+            if uri != "bids:raw:sub-01/nirs/sub-01_nirs.snirf":
+                failed.append(uri)
+        except StageError as exc:
+            failed.append(str(exc)[:80])
+    return failed
 
 
 def _read_description_repeatedly(output_dir: str, times: int) -> list[str]:
@@ -97,6 +124,40 @@ def test_no_temporary_files_are_left_behind(tmp_path):
     kept = {"dataset_description.json", ".dataset_description.json.lock"}
     leftovers = [p.name for p in out.iterdir() if p.name not in kept]
     assert not leftovers, f"temp files survived: {leftovers}"
+
+
+def test_links_resolve_while_other_runs_rewrite_the_description(tmp_path):
+    """A run naming its sources reads the links while another run is replacing the file.
+
+    The reader may meet the instant of the replace and the writer may meet an open reader;
+    neither is allowed to fail or to read the links as absent.
+    """
+    out = tmp_path / "derivatives"
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    write_dataset_description(out, source=raw, link="raw")
+    n_writers, n_links = 4, 30
+    sources = [[str(tmp_path / f"src{w}_{i}") for i in range(n_links)] for w in range(n_writers)]
+    for group in sources:
+        for s in group:
+            Path(s).mkdir()
+    with ProcessPoolExecutor(max_workers=WORKERS) as pool:
+        for f in [pool.submit(_write_description, str(tmp_path / "warm")) for _ in range(WORKERS)]:
+            f.result()
+        start = time.time() + 1.0
+        stop = tmp_path / "writers_done"
+        writers = [pool.submit(_add_links, str(out), group, start) for group in sources]
+        readers = [pool.submit(_resolve_raw_until, str(out), str(raw), start, str(stop))
+                   for _ in range(WORKERS - n_writers)]
+        try:
+            assert sum(f.result() for f in writers) == n_writers * n_links
+        finally:
+            stop.touch()
+        failed = [x for f in readers for x in f.result()]
+
+    assert not failed, f"{len(failed)} resolutions failed, first: {failed[:2]}"
+    written = json.loads((out / "dataset_description.json").read_text(encoding="utf-8"))
+    assert len(written["DatasetLinks"]) == 1 + n_writers * n_links
 
 
 def test_tools_writing_links_at_once_keep_every_link(tmp_path):

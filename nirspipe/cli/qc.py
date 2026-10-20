@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from collections import defaultdict
@@ -11,6 +10,7 @@ from dataclasses import replace
 
 from nirspipe import __version__
 
+from nirspipe.io.derivatives import read_dataset_description
 from nirspipe.io.naming import report_name
 from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
@@ -171,10 +171,7 @@ def cmd_prep_raw(
 
 def _generated_by(tree: Path) -> set[str]:
     """The tool names in a tree's dataset_description.json, empty when there is none."""
-    try:
-        desc = json.loads((Path(tree) / "dataset_description.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return set()
+    desc = read_dataset_description(Path(tree))
     return {str(e.get("Name", "")) for e in desc.get("GeneratedBy") or [] if isinstance(e, dict)}
 
 

@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 - With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
 - Runs writing into one output tree at once could drop each other's `DatasetLinks`, and dyad QC reading that tree then failed
+- On Windows, a run could fail to name its sources while another run sharing its output tree rewrote `dataset_description.json`
 - A subject report whose epoch preview is skipped says why, instead of claiming the run has no events
 
 ## [0.71.0] - 2026-10-19
