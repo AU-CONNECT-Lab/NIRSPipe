@@ -757,6 +757,14 @@ def test_the_correlation_names_its_own_null_only_when_one_ran():
     assert template_slots("hyper_isc", {"isc_phase_null_iter": 0})["options"] == ""
 
 
+def test_the_correlation_null_says_whether_its_phases_were_shared():
+    alone = template_slots("hyper_isc", {"isc_phase_null_iter": 50})["options"]
+    shared = template_slots("hyper_isc", {"isc_phase_null_iter": 50,
+                                          "isc_phase_null_shared": True})["options"]
+    assert "each phase-randomised independently" in alone
+    assert "one shared set of random phases in each repetition" in shared
+
+
 def test_both_nulls_read_after_the_regions_phase_first(tmp_path):
     for name, step, extra in (
             ("cond-all_null-pair_stat-wtc_relmat", "hyper_wtc_bycondition_pairnull", _PAIRNULL),

@@ -3,6 +3,7 @@
 ::
 
   phase_scramble             One surrogate trace, the spectrum kept and the phases randomised.
+  phase_rotate               Several traces rotated by one shared set of random phases.
   compute_wtc_phase_null     A dyad against a phase-scrambled partner, computed inside the
                              per-dyad pass.
   compute_wtc_pair_null      The accounting the re-paired null needs, whose draws are real
@@ -58,6 +59,23 @@ def phase_scramble(sig: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     if n % 2 == 0:
         scrambled[-1] = spectrum[-1]
     return np.fft.irfft(scrambled, n=n)
+
+
+def phase_rotate(rows: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Surrogates of several signals, each frequency's phase moved by one random angle shared by all rows.
+
+    The multivariate surrogate of Prichard and Theiler (1994): each row keeps its power
+    spectrum, as in :func:`phase_scramble`, and the rows keep their cross-spectra, so a
+    member's channels stay as correlated with each other as they were recorded. DC and, on
+    an even-length record, Nyquist keep their values, as in :func:`phase_scramble`.
+    """
+    n = rows.shape[1]
+    spectrum = np.fft.rfft(rows, axis=1)
+    rotated = spectrum * np.exp(1j * rng.uniform(-np.pi, np.pi, size=spectrum.shape[1]))
+    rotated[:, 0] = spectrum[:, 0]
+    if n % 2 == 0:
+        rotated[:, -1] = spectrum[:, -1]
+    return np.fft.irfft(rotated, n=n, axis=1)
 
 
 # ---- Phase-scrambled null ----

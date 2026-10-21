@@ -471,10 +471,13 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
         options += (" The correlation was taken at the lag of largest magnitude within "
                     f"±{_num(params['isc_max_lag_s'])} s, keeping its sign.")
     if params.get("isc_phase_null_iter"):
+        scramble = ("all shifted by one shared set of random phases in each repetition"
+                    if params.get("isc_phase_null_shared") else
+                    "each phase-randomised independently")
         options += (f" Its null repeated the correlation {int(params['isc_phase_null_iter'])} "
-                    "times against the second member's channels, each phase-randomised "
-                    "independently, and was summarised by the mean and the 95th percentile of "
-                    "the absolute correlation.")
+                    f"times against the second member's channels, {scramble}, and was "
+                    "summarised by the mean and the 95th percentile of the absolute "
+                    "correlation.")
     return {"chroma": chroma, "options": options}
 
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:

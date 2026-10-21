@@ -79,6 +79,8 @@ HYPER = {
     "isc_whiten_s": Case({"--isc-whiten-s": ["2"]}, ("isc",)),
     "isc_max_lag": Case({"--isc-max-lag": ["2"]}, ("isc",)),
     "isc_phase_null": Case({"--isc-phase-null": ["5"]}, ("isc",)),
+    "isc_phase_null_shared": Case({"--isc-phase-null-shared": []}, ("isc",),
+                                  {"--isc-phase-null": ["5"]}),
     "short_max_dist": Case({"--short-max-dist": ["5"]}, BOTH),
     "long_min_dist": Case({"--long-min-dist": ["6"]}, BOTH, {"--short-max-dist": ["5"]}),
     "long_max_dist": Case({"--long-max-dist": ["20"]}, BOTH, SHORT_AS_LONG),

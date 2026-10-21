@@ -653,12 +653,13 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
                       needs=("draw", "label", "label2"))
     real = _read_isc(output_dir, ISC_REAL_SUFFIX, task, chroma, isc_test,
                      needs=("label", "label2"))
-    settings = _isc_settings_of(set(draws.source) | set(real.source))
+    settings = _isc_settings_of(set(draws.source) | set(real.source), null)
     if len(settings) > 1:
         raise ValueError(
             f"the correlation's draws and real tables were not computed alike (band, "
-            f"whitening order, lag search): {sorted(settings, key=str)}. Finish whichever "
-            f"rerun is in progress before reading this.")
+            f"whitening order, lag search{', shared phases' if null == 'phase' else ''}): "
+            f"{sorted(settings, key=str)}. Finish whichever rerun is in progress before "
+            f"reading this.")
     whiten_s = next(iter(settings))[1] if settings else None
     if magnitude_against_unwhitened_phase(isc_test, null, whiten_s):
         logger.warning("ISC %s, phase null: |r| on unwhitened correlations tends to sit above "
@@ -674,7 +675,9 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
                          value_name="abs_r_z" if isc_test == "magnitude" else "r_z",
                          statistic=f"mean {magnitude} over channel pairings, then over "
                                    f"occasions",
-                         extra={"isc_test": isc_test, "isc_whiten_s": whiten_s})
+                         extra={"isc_test": isc_test, "isc_whiten_s": whiten_s,
+                                **({"isc_phase_null_shared": next(iter(settings))[3]}
+                                   if null == "phase" and settings else {})})
 
 
 def _read_isc(output_dir: Path, suffix: str, task: str, chroma: str, isc_test: str,
@@ -694,12 +697,14 @@ def _read_isc(output_dir: Path, suffix: str, task: str, chroma: str, isc_test: s
     return frame.dropna(subset=["coherence"])
 
 
-def _isc_settings_of(paths: "set[str]") -> set:
+def _isc_settings_of(paths: "set[str]", null: str = "repaired") -> set:
     """What each correlation table was computed with, refusing a table that does not say.
 
     ::
 
       every sidecar band 0.01-0.1, AR 10 s, lag 2 s  ->  {((0.01, 0.1), 10.0, 2.0)}
+
+    The phase null also says whether its draws shared their phases across a member's channels.
     """
     found = set()
     for tsv in paths:
@@ -708,9 +713,14 @@ def _isc_settings_of(paths: "set[str]") -> set:
             raise ValueError(
                 f"{Path(tsv).name} does not record how its correlation was computed. Rerun "
                 f"`nirspipe-hyper` (and its null) for that dyad on current code.")
+        if null == "phase" and "isc_phase_null_shared" not in params:
+            raise ValueError(
+                f"{Path(tsv).name} does not record whether its phase null shared its phases. "
+                f"Rerun `nirspipe-hyper` for that dyad on current code.")
         band = params.get("isc_band_hz")
         found.add((tuple(band) if band else None, params["isc_whiten_s"],
-                   params.get("isc_max_lag_s")))
+                   params.get("isc_max_lag_s"),
+                   *([params["isc_phase_null_shared"]] if null == "phase" else [])))
     return found
 
 

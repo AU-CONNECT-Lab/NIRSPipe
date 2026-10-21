@@ -22,7 +22,7 @@ import pandas as pd
 
 from nirspipe.qc.metrics._helpers import long_channel_picks
 from nirspipe.pipeline.hyper._helpers import _shared_sfreq, long_axis_over
-from nirspipe.pipeline.hyper.surrogate import phase_scramble
+from nirspipe.pipeline.hyper.surrogate import phase_rotate, phase_scramble
 from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z, pair_of, zscore_rows
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, frames_under
@@ -320,6 +320,7 @@ def compute_isc_pairs(
     on_draws: "Callable[[pd.DataFrame], None] | None" = None,
     skip_s: float = 0.0,
     excluded: "np.ndarray | None" = None,
+    shared_phases: bool = False,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -336,7 +337,9 @@ def compute_isc_pairs(
     signal's own power spectrum and so its autocorrelation. It adds ``null_mean``,
     ``null_sd``, ``null_p95`` and ``percentile``, the share of a cell's surrogate draws its
     real value beat. All four are on ``|r|``, since a surrogate is as likely to land either
-    side of zero.
+    side of zero. ``shared_phases`` rotates all of the second member's channels by one set of
+    random phases per draw (:func:`~nirspipe.pipeline.hyper.surrogate.phase_rotate`) instead
+    of scrambling each channel on its own.
 
     On whitened recordings the null scrambles the residuals, as the coherence's does.
 
@@ -374,7 +377,7 @@ def compute_isc_pairs(
 
     null_level = None
     if n_null > 0:
-        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed, keep)
+        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed, keep, shared_phases)
         if off is not None:
             draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
@@ -401,7 +404,7 @@ def _draw_rows(frame: pd.DataFrame, ch_names: list[str], draws: np.ndarray) -> p
 
 def _isc_null_draws(
     data1: np.ndarray, data2: np.ndarray, max_lag: int, n_iter: int, seed: int | None,
-    keep: "np.ndarray | None" = None,
+    keep: "np.ndarray | None" = None, shared: bool = False,
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
@@ -414,8 +417,11 @@ def _isc_null_draws(
     draws = np.empty((n_iter, data1.shape[0], data2.shape[0]))
     for i in range(n_iter):
         surrogate = data2.copy()
-        for row in np.flatnonzero(finite):
-            surrogate[row] = phase_scramble(data2[row], rng)
+        if shared:
+            surrogate[finite] = phase_rotate(data2[finite], rng)
+        else:
+            for row in np.flatnonzero(finite):
+                surrogate[row] = phase_scramble(data2[row], rng)
         draws[i] = _isc_matrix(data1, surrogate, max_lag, keep)[0]
     return draws
 

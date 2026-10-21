@@ -732,7 +732,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
 # ---- the correlation, read above the cell ----
 
 ISC_SETTINGS = {"isc_band_hz": None, "isc_whiten_s": 0.0, "isc_max_lag_s": 0.0,
-                "roi_min_channels": 2}
+                "isc_phase_null_shared": False, "roi_min_channels": 2}
 
 
 def _isc_rows(rs, condition="game"):
@@ -853,6 +853,35 @@ def test_the_phase_nulls_isc_draws_are_read_too(tmp_path):
     _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
     written = write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
     assert _cohort("phase", "cohort", statistic="isc") in [p.name for p in written]
+
+
+def test_the_cohort_tables_record_whether_the_phase_null_shared_its_phases(tmp_path):
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase",
+                    settings={**ISC_SETTINGS, "isc_phase_null_shared": True})
+    write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+    _, side = _isc_cohort(tmp_path, "signed", null="phase")
+    assert side["parameters"]["isc_phase_null_shared"] is True
+
+
+def test_phase_draws_that_do_not_say_how_they_scrambled_are_refused(tmp_path):
+    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "isc_phase_null_shared"}
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase", settings=settings)
+    with pytest.raises(ValueError, match="whether its phase null shared its phases"):
+        write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+
+
+def test_dyads_scrambled_both_ways_are_not_pooled(tmp_path):
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
+    side = next(tmp_path.rglob("*_stat-isc_relmat.json"))
+    side.write_text(json.dumps({"parameters": {**ISC_SETTINGS, "isc_phase_null_shared": True}}))
+    with pytest.raises(ValueError, match="not computed alike.*shared phases"):
+        write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+
+
+def test_the_re_paired_null_does_not_ask_how_a_phase_null_scrambled(tmp_path):
+    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "isc_phase_null_shared"}
+    _write_isc_tree(tmp_path, [0.3] * 4, settings=settings)
+    assert write_group_null(tmp_path, "main", n_resample=200, seed=3)
 
 
 def test_isc_tables_that_do_not_record_their_settings_are_refused(tmp_path):
