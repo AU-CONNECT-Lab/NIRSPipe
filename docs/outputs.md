@@ -22,7 +22,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 | `band-` | A re-averaged band from `nirspipe-hyper-band` |
 | `chan-`, `label-` | A channel or a region, in figure names |
 
-The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. An entity appears only where it tells two otherwise identical files apart. `group-`, `pair-`, `chromo-`, `chan-`, `agg-`, `band-`, `cond-`, `null-` and `stat-`, and the `relmat` and `nirsmap` suffixes, are this package's extensions to BIDS, declared in its own naming configuration. Each tree's `.bidsignore` exempts the reports, `logs/`, `figures/`, the Plotly.js copy and the JSON-only records, so every table stays visible to a validator.
+The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. A run's outputs carry its input's `ses`, `task`, `acq` and `run`, so two recordings told apart by any of them keep apart; any other entity appears only where it tells two otherwise identical files apart. `group-`, `pair-`, `chromo-`, `chan-`, `agg-`, `band-`, `cond-`, `null-` and `stat-`, and the `relmat` and `nirsmap` suffixes, are this package's extensions to BIDS, declared in its own naming configuration. Each tree's `.bidsignore` exempts the reports, `logs/`, `figures/`, the Plotly.js copy and the JSON-only records, so every table stays visible to a validator.
 
 ## The `nirspipe` tree
 

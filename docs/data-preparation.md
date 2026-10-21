@@ -97,10 +97,10 @@ The tree holds one copy per recording, so a member two groups share for the same
 
 ## Tables that name recordings
 
-Several flags take a table whose rows may apply to some recordings only: `--bad-channels` (when given a file), `--keep-spans` and `--bad-spans`. Optional `participant_id`, `session`, `task` and `run` columns limit a row:
+Several flags take a table whose rows may apply to some recordings only: `--bad-channels` (when given a file), `--keep-spans` and `--bad-spans`. Optional `participant_id`, `session`, `task`, `acq` and `run` columns limit a row:
 
 - A blank cell or an absent column means every recording.
-- Labels may keep or drop their `sub-`, `ses-`, `task-` and `run-` prefixes, and run numbers compare as numbers, so `1` and `01` are one run.
+- Labels may keep or drop their `sub-`, `ses-`, `task-`, `acq-` and `run-` prefixes, and run numbers compare as numbers, so `1` and `01` are one run.
 - A recording gets the union of every row it matches.
 - A row that matches no recording, or a column the table does not define, stops the run before any subject starts, naming the line.
 
@@ -135,7 +135,7 @@ nirspipe-prep keep-spans /data/bids keep.tsv --participant-label 01 02 --conditi
 nirspipe /data/bids /data/out participant --keep-spans keep.tsv ...
 ```
 
-Its columns are `participant_id`, whichever of `session`, `task` and `run` the recordings have, then `onset` and `duration`. Each occurrence keeps its marker's own length unless `--duration` gives them all one. Some recordings store every marker with a nominal length, often 1 s, rather than the length of its block, and the table then holds 1 s stretches without any error: check the `duration` column. The onsets are already each recording's own, so the table is used without `--keep-spans-from`.
+Its columns are `participant_id`, whichever of `session`, `task`, `acq` and `run` the recordings have, then `onset` and `duration`. Each occurrence keeps its marker's own length unless `--duration` gives them all one. Some recordings store every marker with a nominal length, often 1 s, rather than the length of its block, and the table then holds 1 s stretches without any error: check the `duration` column. The onsets are already each recording's own, so the table is used without `--keep-spans-from`.
 
 ## Pairs file
 
