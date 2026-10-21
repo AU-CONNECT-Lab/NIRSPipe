@@ -19,6 +19,7 @@ from nirspipe.utils import is_marker
 from nirspipe.pipeline.glm_censored import (censor_summary, condition_columns, events_left,
                                            fit_censored, kept_frames, refuse_too_few_frames,
                                            silent_conditions)
+from nirspipe.pipeline.glm_worsley import NOISE_PREFIX as WORSLEY_PREFIX, fit_worsley
 from nirspipe.pipeline.glm_whitening import (WHITENING_LOWBAND, WHITENING_PSD_SEGMENT_S,
                                             whitening_tables)
 from nirspipe.utils.lineage import stamp
@@ -40,7 +41,7 @@ HRFModel   = Literal[
     "fir",
 ]
 # arN (e.g. "ar2", "ar3") is also valid but cannot be expressed as a Literal
-NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto", "ar_irls"]
+NoiseModel = Literal["ols", "ar1", "ar2", "ar3", "ar4", "ar5", "auto", "ar_irls", "worsley"]
 DriftModel = Literal["cosine", "polynomial", "none"]
 SCRStrategy = Literal["mean", "pca"]
 
@@ -368,6 +369,8 @@ def fit_glm(
     noise_model: NoiseModel = "ar1",
 ) -> Any:
     from mne_nirs.statistics import run_glm
+    if noise_model.startswith(WORSLEY_PREFIX):
+        return fit_worsley(haemo, design_matrix, noise_model)[0]
     if not noise_model.startswith("ar_irls"):
         bins = max(len(haemo.ch_names), AR_BINS_MIN)
         return run_glm(haemo, design_matrix, noise_model=noise_model, bins=bins)
@@ -507,8 +510,13 @@ def run_glm_pipeline(
     censor_params: dict = censor_summary(haemo, keep)
     if conditions:
         censor_params["events_left"] = events_left(events, bad_spans(haemo))
+    worsley = noise_model.startswith(WORSLEY_PREFIX)
+    fitted_as_auto: list[str] = []
     if keep.all():
-        glm_est = fit_glm(haemo, dm, noise_model=noise_model)
+        if worsley:
+            glm_est, fitted_as_auto = fit_worsley(haemo, dm, noise_model)
+        else:
+            glm_est = fit_glm(haemo, dm, noise_model=noise_model)
         # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
         # design's fit instead, which differs from this under any AR noise model
         # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
@@ -534,7 +542,10 @@ def run_glm_pipeline(
                     censor_params["censored_n_spans"],
                     "; events left " + ", ".join(f"{c} {n['left']}/{n['total']}"
                                                  for c, n in left.items()) if left else "")
-        glm_est = fit_censored(haemo, dm, keep, noise_model)
+        if worsley:
+            glm_est, fitted_as_auto = fit_worsley(haemo, dm, noise_model, keep=keep)
+        else:
+            glm_est = fit_censored(haemo, dm, keep, noise_model)
         theta = np.column_stack([np.asarray(glm_est.data[ch].theta).ravel()
                                  for ch in haemo.ch_names])
         # estimated on the kept rows, applied to the whole run, so the residual is full length
@@ -551,8 +562,10 @@ def run_glm_pipeline(
         drift_params = {}
     # measured confounds stamped alongside the frequency ones, so a downstream step can read
     # off this file whether the systemic component was regressed out
+    # the channels whose bias-corrected AR could not be had at the order, fitted as auto
+    noise_params = {"worsley_fitted_as_auto": fitted_as_auto} if worsley else {}
     stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
-          noise_model=noise_model, drift_model=drift_model,
+          noise_model=noise_model, **noise_params, drift_model=drift_model,
           short_channel=short_channel_used,
           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")),
           conditions=conditions,
@@ -579,7 +592,7 @@ def run_glm_pipeline(
                           self_fitted=sole_regressor_channels(haemo, short_channel_used, sep_bands),
                           censored=~keep, whitening=whitening, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
-                          noise_model=noise_model, drift_model=drift_model,
+                          noise_model=noise_model, **noise_params, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
                           short_channel=short_channel_used,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))

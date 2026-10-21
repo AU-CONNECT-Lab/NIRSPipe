@@ -38,9 +38,9 @@ _HRF_CHOICES           = [
     "glover", "glover + derivative", "glover + derivative + dispersion", "fir",
 ]
 # what the GUI dropdown offers and the help lists; "auto" is an AR order of 4x the sampling rate
-_NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls"]
+_NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls", "worsley"]
 # the one rule, shared with the GUI's `pattern` so the browser refuses what argparse would
-NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?"
+NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?|worsley(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
 # a plain non-negative decimal or none, shared with the GUI's `pattern` as the noise model is
 CUTOFF_PATTERN         = r"[Nn][Oo][Nn][Ee]|[0-9]+(?:\.[0-9]*)?|\.[0-9]+"
@@ -54,14 +54,14 @@ def _cutoff(value: str) -> "float | str":
 
 
 def _noise_model(value: str) -> str:
-    """``ols``, ``auto``, ``arN`` for any order the library will take, or ``ar_irls``.
+    """``ols``, ``auto``, ``arN`` for any order the library will take, ``ar_irls`` or ``worsley``.
 
     A pattern rather than a closed list; the dropdown and the help name the common ones.
     """
     if re.fullmatch(NOISE_MODEL_PATTERN, value):
         return value
     raise argparse.ArgumentTypeError(
-        f"{value!r}: expected 'ols', 'auto', 'arN' (e.g. ar1 or ar16), or 'ar_irls'")
+        f"{value!r}: expected 'ols', 'auto', 'arN' (e.g. ar1 or ar16), 'ar_irls' or 'worsley'")
 
 
 _SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
@@ -240,8 +240,10 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Residual autocorrelation model, default 'auto': 'ols', 'auto' (an AR "
                           "order of 4x the sampling rate), 'arN' for order N, or 'ar_irls', "
                           "which adds a robust norm so residual motion is down-weighted "
-                          "('ar_irlsN' caps its order). Too low an order inflates task t "
-                          "values.")
+                          "('ar_irlsN' caps its order), or 'worsley', auto's order with the "
+                          "coefficients corrected for the bias the fit leaves in the "
+                          "residual ('worsleyN' for order N). Too low an order inflates task "
+                          "t values.")
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
                      help="Low-frequency drift regressors in design matrix. glm and rest "
                           "default to cosine; optional in denoise, where the bandpass detrends.")

@@ -163,13 +163,24 @@ def _correction_phrase(value: Any) -> str:
     return (f" P values were corrected by {_P_CORRECTION_NAMES[value]} within each "
             "condition, level and test.")
 
-def _noise_phrase(value: Any) -> str:
+def _noise_phrase(value: Any, fitted_as_auto: "list | None" = None) -> str:
     """The noise model as prose, expanding the one spelling that names no order.
 
     ``auto`` is mne-nirs' own rule and reaches the sidecar unexpanded, so the sentence has
     to say what it stands for.
     """
     value = str(value or "").strip().lower()
+    if value.startswith("worsley"):
+        order = value[len("worsley"):]
+        order = order if order.isdigit() else "four times the sampling rate in Hz"
+        phrase = (f"an autoregressive noise model of order {order} whose coefficients were "
+                  "estimated from the residual autocovariances after the bias correction of "
+                  "Worsley et al. (2002)")
+        if fitted_as_auto:
+            phrase += (f" ({len(fitted_as_auto)} channel(s), whose corrected autocovariances "
+                       "were not positive definite at that order, kept the uncorrected "
+                       "estimate)")
+        return phrase
     if value == "auto":
         return ("an autoregressive noise model whose order is four times the sampling rate "
                 "in Hz (the MNE-NIRS 'auto' setting)")
@@ -535,12 +546,14 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return {"sfreq": _num(params.get("sfreq") or params.get("resample_sfreq"))}
     if key == "confound_regression":
         return {"regressors": _regressor_phrase(params),
-                "noise_model": _noise_phrase(params.get("noise_model")),
+                "noise_model": _noise_phrase(params.get("noise_model"),
+                                             params.get("worsley_fitted_as_auto")),
                 "censoring": _censoring_phrase(params)}
     if key == "glm":
         return {"conditions": _conditions_phrase(params),
                 "regressors": _regressor_phrase(params),
-                "noise_model": _noise_phrase(params.get("noise_model")),
+                "noise_model": _noise_phrase(params.get("noise_model"),
+                                             params.get("worsley_fitted_as_auto")),
                 "censoring": _censoring_phrase(params)}
     if key == "gvtd_censoring":
         return {"channel_set": str(params.get("gvtd_censor_channel_set")

@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `--noise-model worsley`: auto's AR order with its coefficients bias-corrected for the fit; channels where the correction fails are fitted as auto and listed in the sidecar
 - `nirspipe-hyper --isc-phase-null-shared` shifts all of a member's channels by one shared set of random phases in each ISC phase-null draw; off by default
 - `nirspipe-hyper-groupnull` warns, in its log and on the page, when `--isc-test magnitude` meets the phase null on unwhitened correlations
 - `nirspipe-hyper` and `nirspipe-hyper-pairnull` take `--device cuda`: wavelet transforms run on an NVIDIA card, checked against the CPU on each group's first pairing
