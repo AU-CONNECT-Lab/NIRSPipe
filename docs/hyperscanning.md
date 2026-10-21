@@ -128,6 +128,7 @@ All of its options are off by default, so a run naming none reports the zero-lag
 - `--isc-whiten-s SECONDS` correlates the residuals of an autoregressive model, by the coherence's rule with an order of its own. Whitening shrinks r, so a whitened matrix does not compare with an unwhitened one.
 - `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way, sign kept, and writes the shift as `lag_s`, positive where the second member follows. The maximum over many shifts is larger than any single one under no coupling, so pair it with `--isc-phase-null`.
 - `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates of the second member, searched the same way, adding `null_abs_mean`, `null_abs_sd`, `null_abs_p95` and `percentile` and keeping every draw.
+- `--isc-phase-null-shared` shifts all of the second member's channels in each of those draws by one shared set of random phases, so the channels stay as correlated with each other as recorded. Off by default: each channel is scrambled on its own.
 
 The report's connectivity circle draws a chord where a pairing beats the 95th percentile of its own surrogates, or, without a null, for the strongest tenth of pairings, labelled as a display cut. `--isc-threshold` forces an absolute cut instead.
 
@@ -154,12 +155,13 @@ Coherence between two unrelated recordings is not zero, so a value is read again
 - **The pool.** `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same position in the pairs file, the only safe pool when one person appears in several groups. `any` draws from every other group's members and is refused when anybody is repeated. With `position` there is one candidate per other group, so G groups give G - 1 draws, and a `percentile` resolves to about 100/G points. `--wtc-pair-max` stops after N draws.
 - **Skipped candidates.** A candidate whose recording cannot be read, was recorded at another rate, has no quality record, lacks a condition's marker, has a shorter block of that condition, or is too short to whiten, is skipped, and the refusals are counted by reason (`pair_refused`).
 - **The correlation too.** The same draws give the correlation's re-paired null, whose `percentile` ranks \|r\| among the \|draws\|.
+- **The pages.** Once its draws are written it draws those dyads' pages again from each dyad's run record, reading the phase-scrambled null from disk instead of drawing it again, so their condition pages read the re-paired null. The record is kept, the redraw logs to `<group>_redraw.log`, and `--no-report` leaves the pages as they were.
 
 The two nulls are written to separate files, and `nirspipe-hyper-merge` refuses to combine them.
 
 ### Arrow levels
 
-A phase arrow is drawn only where the coherence clears a per-frequency level. The whole-run page uses the phase-scrambled level, else the Monte Carlo one, else the flat `--wtc-arrow-min` (0.5). A condition page uses the re-paired level `nirspipe-hyper-pairnull` wrote, else what the whole-run page used; its ISC chords likewise use the re-paired correlation null. The re-paired level reaches the pages on the next run: `nirspipe-hyper`, then `nirspipe-hyper-pairnull`, then `nirspipe-hyper` again. A level is used only when its sidecar matches the run (frequency range, mask, whitening, wavelet grid, alignment, sources, and each condition's span); otherwise the page says which file it did not use and why. The page's Arrow threshold row names the level used, and every band-mean table records it as `phase_level_source`.
+A phase arrow is drawn only where the coherence clears a per-frequency level. The whole-run page uses the phase-scrambled level, else the Monte Carlo one, else the flat `--wtc-arrow-min` (0.5). A condition page uses the re-paired level `nirspipe-hyper-pairnull` wrote, else what the whole-run page used; its ISC chords likewise use the re-paired correlation null. The re-paired level reaches the pages when `nirspipe-hyper-pairnull` redraws them; a dyad it could not redraw, one without a run record or drawn with `--no-report`, keeps its level until `nirspipe-hyper` runs again. A level is used only when its sidecar matches the run (frequency range, mask, whitening, wavelet grid, alignment, sources, and each condition's span); otherwise the page says which file it did not use and why. The page's Arrow threshold row names the level used, and every band-mean table records it as `phase_level_source`.
 
 ## Above the channel: `nirspipe-hyper-groupnull`
 
@@ -175,7 +177,7 @@ The cohort level is written two ways, a `test` column naming each. `resample` re
 
 With `--roi-mapping` each region is a level beside the whole-brain mean, its homologous pairings averaged, and when the null was drawn crossed every ordered region pair is a level too. A region is ranked for an occasion only where that dyad's own table kept it.
 
-The coherence is always tested above its null. The correlation is averaged in Fisher z and `--isc-test` sets the read: `signed` (the default) averages z and tests two-sided, `magnitude` averages \|z\| and tests above the null.
+The coherence is always tested above its null. The correlation is averaged in Fisher z and `--isc-test` sets the read: `signed` (the default) averages z and tests two-sided, `magnitude` averages \|z\| and tests above the null. Against the phase-scrambled null on correlations that were not whitened, \|z\| tends to sit above the null, so the run warns and the page says so; whiten with `--isc-whiten-s` or keep `signed`.
 
 No multiple-comparison correction runs unless `--p-correction` names one (`fdr_bh`, `fdr_by`, `holm`, `bonferroni`); the uncorrected `p` is always written, and a method adds a `p_<method>` column. Every table writes `family`, the number of tests a correction runs over. Each run also writes a Methods paragraph for the test, `logs/<cohort table>_methods.md`, and rewrites the task's page, `task-<task>_desc-groupnull_report.html`, from every cohort table on disk.
 
