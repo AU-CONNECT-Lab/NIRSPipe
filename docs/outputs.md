@@ -101,7 +101,9 @@ derivatives/nirspipe-hyper/
     ├── group-<id>_task-<t>_cond-<c>_report.html   ← one per condition window
     ├── group-<id>_task-<t>_desc-raw_report.html   ← nirspipe-qc hyper-raw
     ├── figures/
-    ├── logs/group-<id>_task-<t>.toml
+    ├── logs/group-<id>_task-<t>.{log,toml}        ← nirspipe-hyper's live log and run record
+    ├── logs/group-<id>_task-<t>_desc-raw.log      ← nirspipe-qc hyper-raw's live log
+    ├── logs/group-<id>_task-<t>_null-pair.log     ← nirspipe-hyper-pairnull's live log
     └── nirs/                                      ← every table has a .json sidecar
 ```
 
@@ -183,6 +185,7 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 | Layer | Format | Path | For |
 |-------|--------|------|-----|
 | Live log | Text | `sub-<label>/logs/sub-<label>.log` | Following a run; `--verbose` adds debug output |
+| Dyad live log | Text | `group-<id>/logs/group-<id>_task-<t>.log`, `_desc-raw.log` for `hyper-raw`, `_null-pair.log` for the re-paired null | Following one group of a dyad command |
 | Run record | TOML | `sub-<label>/logs/sub-<label>.toml` | What a subject was run with, and rerunning it |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
 

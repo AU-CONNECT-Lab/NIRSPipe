@@ -7,6 +7,7 @@ process drew it.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -56,6 +57,11 @@ def _differences(a: Path, b: Path) -> list[str]:
             if sorted(x.files) != sorted(y.files) or any(
                     not np.array_equal(x[k], y[k], equal_nan=True) for k in x.files):
                 out.append(name)
+        elif name.endswith(".json"):
+            # every sidecar stamps the moment it was written
+            x, y = (json.loads(f[name].read_text(encoding="utf-8")) for f in (left, right))
+            if {**x, "timestamp": None} != {**y, "timestamp": None}:
+                out.append(name)
         elif left[name].read_bytes() != right[name].read_bytes():
             out.append(name)
     return out
@@ -77,7 +83,7 @@ def test_nirspipe_hyper_writes_the_same_tree_on_two_processes(cohort):
         hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
                         "--roi-mapping", str(write_roi_map(root)),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
-                        "--wtc-band-fmax", "0.10",
+                        "--wtc-band-fmax", "0.10", "--no-channel-cross",
                         "--wtc-significance", "--wtc-mc-count", "10", "--wtc-seed", "7",
                         "--nprocs", nprocs])
         trees[nprocs] = out
@@ -112,7 +118,7 @@ def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort):
         trees[nprocs] = out
 
     names = _outputs(trees["1"])
-    assert any("null-pair" in n for n in names) and any("desc-raw" in n for n in names)
+    assert any("null-pair" in n for n in names) and any("desc-usable_qc" in n for n in names)
     assert _differences(trees["1"], trees["2"]) == []
     for tree in trees.values():
         assert {p.name for p in _logs(tree)} >= {
