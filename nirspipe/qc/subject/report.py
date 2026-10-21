@@ -2222,7 +2222,8 @@ def build_subject_report(
         singles = _single_trial_conditions(raw_haemo, epoch_tmin, epoch_tmax)
         if singles:
             msg = section_note("caveat.single_trial", conds=", ".join(singles))
-            _note(notes, subject, msg)
+            # a run note like any other, logged as a warning rather than note()'s info
+            notes.append(msg)
             logger.warning("sub-%s | %s", subject, msg)
     # the window note only matters to figures that get drawn; asked before the skip it would
     # tell a reader to widen a window for a section that is not there
