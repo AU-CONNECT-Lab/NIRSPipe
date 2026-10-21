@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import zlib
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -875,7 +877,8 @@ def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -
                 continue
             box_x += [i + offset] * int(finite.sum())
             box_y += vals[finite].tolist()
-            rng = np.random.default_rng(seed=abs(hash(col)) % (2**32))
+            # crc32, not hash(): str hashes are salted per process, so the jitter would move
+            rng = np.random.default_rng(seed=zlib.crc32(col.encode()))
             pt_x += (i + offset
                      + rng.uniform(-slot * 0.22, slot * 0.22, size=len(rows))).tolist()
             pt_y += vals.tolist()

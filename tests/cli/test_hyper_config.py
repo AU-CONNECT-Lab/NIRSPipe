@@ -74,9 +74,15 @@ def runs(tmp_path_factory):
                 "--no-channel-cross", "--wtc-chroma", "hbo", "--wtc-phase-null", "2",
                 "--isc-phase-null", "3", "--wtc-seed", "0")
     record = next(first.rglob("logs/group-*.toml"))
+    # the same run with no seed given, then rerun from its record
+    drawn = run("drawn", "--wtc-fmin", "0.02", "--band-fmin", "0.03", "--band-fmax", "0.12",
+                "--no-channel-cross", "--wtc-chroma", "hbo", "--wtc-phase-null", "2",
+                "--isc-phase-null", "3")
+    drawn_record = next(drawn.rglob("logs/group-*.toml"))
     return {"first": first, "record": record,
             "again": run("again", "--config", str(record)),
-            "rebanded": run("rebanded", "--config", str(record), "--band-fmin", "0.05")}
+            "rebanded": run("rebanded", "--config", str(record), "--band-fmin", "0.05"),
+            "drawn": drawn, "drawn_again": run("drawn_again", "--config", str(drawn_record))}
 
 
 def _hyper(out):
@@ -104,6 +110,38 @@ def test_a_shorthand_typed_over_the_record_reaches_both_measures(runs):
     assert hyper["band_fmin"] == hyper["wtc_band_fmin"] == hyper["isc_fmin"] == 0.05
     assert hyper["wtc_band_fmax"] == hyper["isc_fmax"] == 0.12
     assert hyper["wtc_phase_null_cross"] is False
+
+
+# ---- an unseeded run ----
+
+def test_an_unseeded_run_records_the_seed_it_drew(runs):
+    seed = _hyper(runs["drawn"])["hyper"]["wtc_seed"]
+    assert isinstance(seed, int) and seed >= 0
+    assert _hyper(runs["drawn_again"])["hyper"]["wtc_seed"] == seed
+
+
+def test_an_unseeded_run_s_rerun_repeats_its_null_draws(runs):
+    tables = sorted(p.relative_to(runs["drawn"]) for p in runs["drawn"].rglob("*.tsv"))
+    assert any("null-phase" in p.name for p in tables)
+    for rel in tables:
+        assert (runs["drawn"] / rel).read_bytes() == (runs["drawn_again"] / rel).read_bytes(), rel
+
+
+def test_an_unseeded_group_null_draws_one_seed_for_every_table_and_prints_it(
+        tmp_path, monkeypatch, capsys):
+    # the cohort sidecar records the seed it is handed; test_pair_null_group covers repeating
+    from nirspipe.pipeline.hyper import pair_null_group
+    from nirspipe.qc.hyper import groupnull_report
+
+    seeds = []
+    monkeypatch.setattr(pair_null_group, "nulls_on_disk", lambda out, task: ["phase", "repaired"])
+    monkeypatch.setattr(pair_null_group, "chromas_on_disk", lambda out, task, null: ["hbo", "hbr"])
+    monkeypatch.setattr(pair_null_group, "write_group_null",
+                        lambda *a, seed, **k: seeds.append(seed) or [])
+    monkeypatch.setattr(groupnull_report, "write_groupnull_report", lambda out, task: None)
+    hyper_cli.main_group_null([str(tmp_path), "group", "--task-label", TASK])
+    assert len(seeds) == 4 and len(set(seeds)) == 1 and isinstance(seeds[0], int)
+    assert f"--seed {seeds[0]}" in capsys.readouterr().err
 
 
 def test_a_record_from_another_version_warns_and_runs(tmp_path, capsys):

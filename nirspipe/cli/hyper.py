@@ -461,6 +461,8 @@ def cmd_run(
     wtc_band_fmax = band_fmax if wtc_band_fmax is None else wtc_band_fmax
     isc_fmin = band_fmin if isc_fmin is None else isc_fmin
     isc_fmax = band_fmax if isc_fmax is None else isc_fmax
+    # drawn when unset, so the record holds the seed and a --config rerun repeats the draws
+    wtc_seed = _shared.seed_or_drawn(wtc_seed, "--wtc-seed")
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
@@ -617,6 +619,7 @@ def cmd_group_null(
 
     setup_logging(verbose=verbose)
     roi_map = _app_options.load_roi_mapping(roi_mapping)
+    seed = _shared.seed_or_drawn(seed, "--seed")
     nulls = null or nulls_on_disk(output_dir, task)
     if not nulls:
         print(f"Error: no null draws for task {task} under {output_dir}. Run "
@@ -846,9 +849,9 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "scales linearly; lower it to preview a run, raise it to settle "
                           "a contour. Ignored without --wtc-significance.")
     run.add_argument("--wtc-seed", type=int, default=None,
-                     help="Seed the Monte Carlo surrogates behind --wtc-significance and the "
-                          "phase randomisation behind --wtc-phase-null. Also bypasses pycwt's "
-                          "on-disk cache, which is not keyed on the seed.")
+                     help="Seed the --wtc-significance surrogates and the --wtc-phase-null and "
+                          "--isc-phase-null draws. Omitted, one is drawn and written to the "
+                          "run record, so a --config rerun repeats them.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                      help="Chromophore(s) the coherence and the correlation run on (default "
                           "both). HbO and HbR are separate passes, never mixed, so 'both' costs "
@@ -1025,7 +1028,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "picks one stand-in per occasion, so the finest p it can "
                                  "express is 1/(n+1).")
     group_null.add_argument("--seed", type=int, default=None,
-                            help="Seed the resampling, so the cohort p is reproducible.")
+                            help="Seed the resampling. Omitted, one is drawn and written to "
+                                 "the cohort tables' sidecars.")
     group_null.add_argument("--p-correction", default="none",
                             choices=P_CORRECTIONS,
                             help="Multiple-comparison correction, within one condition at one "

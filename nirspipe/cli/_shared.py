@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import secrets
 import sys
 from pathlib import Path
 
@@ -75,6 +76,16 @@ def add_nprocs(container, unit: str = "subject") -> None:
         "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=_positive_int, default=None,
         help=f"CPU cores to use in all. Up to this many {unit}s run at once and spare cores go "
              f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core.")
+
+
+def seed_or_drawn(seed: int | None, flag: str) -> int:
+    """The seed given, or one drawn now and printed, so every run's draws can be repeated."""
+    if seed is not None:
+        return seed
+    seed = secrets.randbelow(2**31)
+    print(f"[info] no {flag} given; drew {seed}. Pass {flag} {seed} to repeat this run's "
+          "random draws.", file=sys.stderr)
+    return seed
 
 
 def split_cpus(nprocs: int | None, n_subjects: int) -> tuple[int, int | None]:
