@@ -840,8 +840,9 @@ def _run_post_for_subject(
                     (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, fc_seed, fc_roi),
                 ))
                 if src_entities.get("run") is not None:
-                    by_task.setdefault((src_entities.get("session"), src_entities.get("task")),
-                                       []).append((src_entities, post_config))
+                    # every entity but the run, as XCP-D groups them
+                    key = tuple(sorted((k, str(v)) for k, v in src_entities.items() if k != "run"))
+                    by_task.setdefault(key, []).append((src_entities, post_config))
 
             for entries in by_task.values():
                 config = entries[0][1]

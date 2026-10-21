@@ -110,3 +110,16 @@ def test_one_run_is_not_joined(tmp_path):
     nirs = _tree(tmp_path, (("01", 1),))
     assert not [p for p in nirs.iterdir() if "_run-" not in p.name
                 and p.suffix in (".snirf", ".tsv")]
+
+
+def test_files_told_apart_by_another_entity_are_not_runs_of_one_series(tmp_path):
+    bids = tmp_path / "bids"
+    _write_dataset_root(bids, ["01"])
+    for acq, seed in (("a", 1), ("b", 2)):
+        raw, _ = fingerprint_raw("01", "tapping", seed=seed, blocks=True)
+        _write_subject(bids, "01", f"tapping_acq-{acq}_run-01", raw)
+    run_cli.main([str(bids), str(tmp_path / "out"), "participant", *CLI_ARGS, "--mode", "rest",
+                  "--skip-bids-validation", "--combine-runs", "--no-report"])
+    nirs = tmp_path / "out" / "sub-01" / "nirs"
+    assert not [p for p in nirs.iterdir() if "_run-" not in p.name
+                and p.suffix in (".snirf", ".tsv")]
