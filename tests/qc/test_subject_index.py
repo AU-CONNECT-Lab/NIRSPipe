@@ -6,6 +6,7 @@ these build a subject folder rather than running anything.
 """
 
 import json
+import re
 
 from nirspipe.io.naming import report_name
 from nirspipe.qc.common.channel_table import (
@@ -19,6 +20,8 @@ from nirspipe.qc.subject.subject_index import (
     _links,
     collect_bad_channels,
     collect_runs,
+    run_headings,
+    write_subject_index,
 )
 
 TAB = chr(9)
@@ -128,6 +131,27 @@ def test_the_pipeline_verdict_wins_and_prep_raws_stands_in_where_it_is_alone(tmp
     rows = collect_bad_channels(tmp_path, [both, raw_only])["rejected"]
     assert {r["pair"]: r["bad_in"] for r in rows} == {"S1_D1": [True, False],
                                                       "S2_D2": [False, True]}
+
+
+def test_a_column_is_headed_by_what_tells_its_run_apart():
+    assert run_headings([{"task": "rest"}, {"task": "hold"}]) == ["rest", "hold"]
+    assert run_headings([{"task": "rest", "run": "01"}, {"task": "rest", "run": "02"}]) == [
+        "rest run-01", "rest run-02"]
+    assert run_headings([{"ses": "1", "task": "rest", "acq": "a"},
+                         {"ses": "2", "task": "rest", "acq": "a"}]) == ["ses-1 rest", "ses-2 rest"]
+    assert run_headings([{"task": "rest", "acq": "a"}, {"task": "hold"}]) == [
+        "rest acq-a", "hold"]
+    assert run_headings([{}]) == [""]
+
+
+def test_two_acqs_of_one_task_head_columns_of_their_own(tmp_path):
+    _run(tmp_path, "rest_acq-a", bad_pairs=("S1_D1",))
+    _run(tmp_path, "rest_acq-b")
+
+    html = write_subject_index("01", tmp_path, "nirspipe").read_text(encoding="utf-8")
+    table = html.split('id="Rejections"', 1)[1].split("</thead>", 1)[0]
+    assert re.findall(r"<th>(.*?)</th>", table) == [
+        "Source-detector", "rest acq-a", "rest acq-b", "Runs"]
 
 
 def test_a_tree_without_channel_metrics_says_nothing(tmp_path):

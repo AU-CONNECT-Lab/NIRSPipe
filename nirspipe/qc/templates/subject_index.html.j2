@@ -220,7 +220,7 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
   <thead>
     <tr>
       <th>Source-detector</th>
-      {% for row in rows %}<th>{{ row.entities.get('task', row.label) }}</th>{% endfor %}
+      {% for row in rows %}<th>{{ row.heading }}</th>{% endfor %}
       <th>Runs</th>
     </tr>
   </thead>

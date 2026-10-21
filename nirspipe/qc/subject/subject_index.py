@@ -329,7 +329,22 @@ def collect_runs(sub_dir: Path) -> list[dict]:
         flags = outlier_flags([row["metrics"][column]["raw"] for row in rows])
         for row, flagged in zip(rows, flags):
             row["metrics"][column]["flagged"] = flagged
+    for row, heading in zip(rows, run_headings([row["entities"] for row in rows])):
+        row["heading"] = heading or row["label"]
     return rows
+
+
+def run_headings(entities: list[dict]) -> list[str]:
+    """Each run's short name: its task, plus whichever other entities tell the runs apart.
+
+    ::
+
+      [{task: rest, acq: a}, {task: rest, acq: b}]  ->  ["rest acq-a", "rest acq-b"]
+    """
+    keys = ("ses", "task", "acq", "run")
+    shown = [k for k in keys if k == "task" or len({e.get(k) for e in entities}) > 1]
+    return [" ".join(e[k] if k == "task" else f"{k}-{e[k]}" for k in shown if e.get(k))
+            for e in entities]
 
 
 def _cond_row(name: str, kind: str, href: "str | None", span: str,
