@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- `nirspipe-hyper-groupnull` warns, in its log and on the page, when `--isc-test magnitude` meets the phase null on unwhitened correlations
 - `nirspipe-hyper` and `nirspipe-hyper-pairnull` take `--device cuda`: wavelet transforms run on an NVIDIA card, checked against the CPU on each group's first pairing
 
 ### Changed

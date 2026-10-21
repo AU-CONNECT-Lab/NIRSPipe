@@ -12,10 +12,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from nirspipe.io.derivatives import entity_of
+from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.io.naming import derivative_path
 from nirspipe.io.tables import read_table
+from nirspipe.pipeline.hyper.pair_null_group import magnitude_against_unwhitened_phase
 from nirspipe.qc.boilerplate import collect_software_versions
+from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.common.figure_io import _save_figure_html
 from nirspipe.qc.common.report_shell import footer_vars, guard, note, page_vars, render
 from nirspipe.qc.figures.hyper.groupnull_figures import (
@@ -56,6 +58,11 @@ def _section(byocc_path: Path, fig_dir: Path, errors: list, scope: str) -> "dict
     title = (f"{measure}, {_NULLS.get(entities['null'], entities['null'])} null, "
              f"{(entities['chromo'] or '').upper()}")
     p_col = p_column(cohort) if not cohort.empty else "p"
+    params = read_json(byocc_path.with_suffix(".json")).get("parameters", {})
+    caveat = (section_note("caveat.isc_magnitude_phase")
+              if magnitude_against_unwhitened_phase(params.get("isc_test"),
+                                                    params.get("null_kind"),
+                                                    params.get("isc_whiten_s")) else None)
 
     whole = whole_level(cohort) if not cohort.empty else cohort
     paired = (whole[whole["test"] == "paired"].set_index("condition")
@@ -92,6 +99,7 @@ def _section(byocc_path: Path, fig_dir: Path, errors: list, scope: str) -> "dict
     return {"title": title, "anchor": byocc_path.stem.replace("_desc-byoccasion_relmat", ""),
             "figures": figures, "rows": rows, "p_col": p_col,
             "pairings": whole["pairings"].iloc[0] if not whole.empty else "",
+            "caveat": caveat,
             "byoccasion": byocc_path.name,
             "cohort": cohort_path.name if cohort_path.exists() else None}
 

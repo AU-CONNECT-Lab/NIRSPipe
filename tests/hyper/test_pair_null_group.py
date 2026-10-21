@@ -13,7 +13,7 @@ import pytest
 
 from nirspipe.pipeline.hyper.pair_null_group import (
     _exact_p, _tailed_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
-    write_group_null)
+    magnitude_against_unwhitened_phase, write_group_null)
 from tests.hyper._names import cohort as _cohort, name
 
 
@@ -867,6 +867,39 @@ def test_isc_draws_and_real_tables_computed_differently_are_refused(tmp_path):
     side.write_text(json.dumps({"parameters": {**ISC_SETTINGS, "isc_max_lag_s": 2.0}}))
     with pytest.raises(ValueError, match="not computed alike"):
         write_group_null(tmp_path, "main", n_resample=200, seed=3)
+
+
+@pytest.mark.parametrize("test, null, whiten_s, flagged", [
+    ("magnitude", "phase", 0.0, True), ("magnitude", "phase", None, True),
+    ("magnitude", "phase", 10.0, False), ("magnitude", "repaired", 0.0, False),
+    ("signed", "phase", 0.0, False)])
+def test_only_unwhitened_magnitude_against_the_phase_null_is_flagged(test, null, whiten_s,
+                                                                      flagged):
+    assert magnitude_against_unwhitened_phase(test, null, whiten_s) is flagged
+
+
+def test_unwhitened_magnitude_against_the_phase_null_warns_and_says_so_on_the_page(
+        tmp_path, caplog):
+    from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
+
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
+    write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3,
+                     isc_test="magnitude")
+    assert "|r| on unwhitened correlations" in caplog.text
+    _, side = _isc_cohort(tmp_path, "magnitude", null="phase")
+    assert side["parameters"]["isc_whiten_s"] == 0.0
+    page = write_groupnull_report(tmp_path, "main").read_text(encoding="utf-8")
+    assert "|r| was tested against the phase-scrambled null" in page
+
+
+def test_the_signed_test_against_the_phase_null_says_nothing(tmp_path, caplog):
+    from nirspipe.qc.hyper.groupnull_report import write_groupnull_report
+
+    _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
+    write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+    assert "|r| on unwhitened correlations" not in caplog.text
+    page = write_groupnull_report(tmp_path, "main").read_text(encoding="utf-8")
+    assert "|r| was tested against the phase-scrambled null" not in page
 
 
 def test_an_unknown_isc_test_is_refused(tmp_path):

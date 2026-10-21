@@ -94,6 +94,10 @@ NOTES = {
         "systemic physiology enter the correlation directly, and members recorded together "
         "drift alike. Pass --isc-fmin/--isc-fmax, or point --desc at a filtered stage "
         "(filtered, errts).",
+    "caveat.isc_magnitude_phase":
+        "|r| was tested against the phase-scrambled null on correlations that were not "
+        "whitened, where |r| tends to sit above that null, so these p values run small. "
+        "Whiten the correlation in nirspipe-hyper (--isc-whiten-s) or test it signed.",
 
     # ---- Cohorts ----
     "caveat.bandpass_pairs":

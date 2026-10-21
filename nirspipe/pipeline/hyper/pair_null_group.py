@@ -78,6 +78,11 @@ ISC_DRAWS_SUFFIX = {kind: _tail(condition="all", nulldist=null, statistic="isc",
 ISC_TESTS = ("signed", "magnitude")
 
 
+def magnitude_against_unwhitened_phase(isc_test, null_kind, isc_whiten_s) -> bool:
+    """|r| ranked against the phase null on correlations that were not whitened, whose p runs small."""
+    return isc_test == "magnitude" and null_kind == "phase" and not isc_whiten_s
+
+
 def _of_chroma(frame: pd.DataFrame, chroma: str) -> pd.DataFrame:
     """One chromophore's rows, blanks dropped. The value column is named per table kind."""
     out = frame[frame["chromophore"] == chroma] if "chromophore" in frame else frame
@@ -654,6 +659,11 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
             f"the correlation's draws and real tables were not computed alike (band, "
             f"whitening order, lag search): {sorted(settings, key=str)}. Finish whichever "
             f"rerun is in progress before reading this.")
+    whiten_s = next(iter(settings))[1] if settings else None
+    if magnitude_against_unwhitened_phase(isc_test, null, whiten_s):
+        logger.warning("ISC %s, phase null: |r| on unwhitened correlations tends to sit above "
+                       "its phase-scrambled null, so these p run small; whiten in "
+                       "nirspipe-hyper (--isc-whiten-s) or use --isc-test signed", chroma)
     two_sided = isc_test == "signed"
     min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
     cells = by_cell_from_draws(draws, real, two_sided=two_sided, method=p_correction,
@@ -664,7 +674,7 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
                          value_name="abs_r_z" if isc_test == "magnitude" else "r_z",
                          statistic=f"mean {magnitude} over channel pairings, then over "
                                    f"occasions",
-                         extra={"isc_test": isc_test})
+                         extra={"isc_test": isc_test, "isc_whiten_s": whiten_s})
 
 
 def _read_isc(output_dir: Path, suffix: str, task: str, chroma: str, isc_test: str,
