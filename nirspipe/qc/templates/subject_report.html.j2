@@ -369,13 +369,32 @@
     <p class="fig-path">{{ evoked_topomap_path }}</p>
     {% endif %}
 
-    {% if signal_topo_path %}
-    <h3>Signal by position</h3>
-    <p class="panel-note">{{ section_note('epoch.signal_by_position') }}</p>
-    <iframe class="plotly-frame" src="{{ signal_topo_path }}"
-            title="Each channel's evoked HbO and HbR at its place on the head"
-            style="height:{{ signal_topo_h }}px"></iframe>
-    <p class="fig-path">{{ signal_topo_path }}</p>
+    {% if signal_topo_path or trial_image_pairs %}
+    <div class="row row-picker">
+      {% if signal_topo_path %}
+      <div>
+        <h3>Signal by position</h3>
+        <p class="panel-note">{{ section_note('epoch.signal_by_position') }}</p>
+        <iframe id="signal-topo-frame" class="plotly-frame topo-frame" src="{{ signal_topo_path }}"
+                title="Each channel's evoked HbO and HbR at its place on the head"></iframe>
+        <p class="fig-path">{{ signal_topo_path }}</p>
+      </div>
+      {% endif %}
+      {% if trial_image_pairs %}
+      <div>
+        <h3>Trial image: single-channel trials</h3>
+        <p class="panel-note">{{ section_note('epoch.trial_image_single') }}</p>
+        <select class="ch-select" id="trialimg-select" onchange="pickTrialImage(this.selectedIndex)">
+          {% for ch in trial_image_pairs %}
+          <option value="{{ ch.path }}" data-pair="{{ ch.pair.split(' ')[0] }}">{{ ch.pair }}</option>
+          {% endfor %}
+        </select>
+        <iframe id="trialimg-frame" class="plotly-frame"
+                src="{{ trial_image_pairs[0].path }}"
+                style="height:{{ trial_image_pairs[0].h + 20 }}px;"></iframe>
+      </div>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if trial_image_roi_pairs %}
@@ -392,19 +411,6 @@
             style="height:{{ trial_image_roi_pairs[0].h + 20 }}px;"></iframe>
     {% endif %}
 
-    {% if trial_image_pairs %}
-    <h3>Trial image: single-channel trials</h3>
-    <p class="panel-note">{{ section_note('epoch.trial_image_single') }}</p>
-    <select class="ch-select"
-            onchange="document.getElementById('trialimg-frame').src=this.value">
-      {% for ch in trial_image_pairs %}
-      <option value="{{ ch.path }}">{{ ch.pair }}</option>
-      {% endfor %}
-    </select>
-    <iframe id="trialimg-frame" class="plotly-frame"
-            src="{{ trial_image_pairs[0].path }}"
-            style="height:{{ trial_image_pairs[0].h + 20 }}px;"></iframe>
-    {% endif %}
   </div>
 </section>
 {% endif %}
@@ -917,6 +923,37 @@ window.addEventListener("message", function(e) {
     });
   });
 })();
+
+// the trial images' channel, picked in the select or on Signal by position; the head
+// outlines whichever is picked
+function highlightTrialCell() {
+  var sel = document.getElementById("trialimg-select");
+  var topo = document.getElementById("signal-topo-frame");
+  if (!sel || !topo || !topo.contentWindow || sel.selectedIndex < 0) return;
+  topo.contentWindow.postMessage({type: "highlight-cell",
+    pair: sel.options[sel.selectedIndex].getAttribute("data-pair")}, "*");
+}
+function pickTrialImage(i) {
+  var sel = document.getElementById("trialimg-select");
+  var frame = document.getElementById("trialimg-frame");
+  if (!sel || !frame || i < 0) return;
+  sel.selectedIndex = i;
+  frame.src = sel.options[i].value;
+  highlightTrialCell();
+}
+window.addEventListener("message", function(e) {
+  if (!e.data) return;
+  if (e.data.type === "topo-ready") { highlightTrialCell(); return; }
+  if (e.data.type !== "pick-trial-channel") return;
+  var sel = document.getElementById("trialimg-select");
+  if (!sel) return;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].getAttribute("data-pair") !== e.data.pair) continue;
+    pickTrialImage(i);
+    document.getElementById("trialimg-frame").scrollIntoView({behavior: "smooth", block: "nearest"});
+    return;
+  }
+});
 
 // a click on the raw signal picks the channel the detail shows
 window.addEventListener("message", function(e) {

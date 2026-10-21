@@ -285,11 +285,22 @@ select#run-select {
 <section id="TrialImage" class="step">
   <h3 class="step-title">Trial Image</h3>
   <div class="details-body">
-    <p class="step-desc">{{ section_note('raw.trial_image') }}</p>
-    <select class="ch-select" id="trialimg-select"
-            onchange="document.getElementById('trialimg-frame').src=this.value"></select>
-    <iframe id="trialimg-frame" class="plotly-frame"
-            style="width:100%;border:0;"></iframe>
+    <div class="row row-picker" id="trialimg-row">
+      <div id="signal-topo-col">
+        <h3>Signal by position</h3>
+        <p class="panel-note">{{ section_note('raw.signal_by_position') }}</p>
+        <iframe id="signal-topo-frame" class="plotly-frame topo-frame"
+                title="Each channel's HbO and HbR average at its place on the head"></iframe>
+      </div>
+      <div>
+        <h3>Single-channel trials</h3>
+        <p class="panel-note">{{ section_note('raw.trial_image') }}</p>
+        <select class="ch-select" id="trialimg-select"
+                onchange="pickTrialImage(this.selectedIndex)"></select>
+        <iframe id="trialimg-frame" class="plotly-frame"
+                style="width:100%;border:0;"></iframe>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -438,7 +449,8 @@ window.addEventListener("message", function(e) {
   var frames = document.querySelectorAll("iframe");
   for (var i = 0; i < frames.length; i++) {
     if (frames[i].contentWindow === e.source) {
-      frames[i].style.height = e.data.h + "px";
+      // an aspect-ratio frame sizes its figure, not the other way round
+      if (!frames[i].classList.contains("topo-frame")) frames[i].style.height = e.data.h + "px";
       return;
     }
   }
@@ -735,16 +747,54 @@ function loadEpochMean() {
 
 function loadTrialImages() {
   var imgs = (_STATIC_DATA[_run_idx] || {}).trial_images || [];
+  var topo = ((_STATIC_DATA[_run_idx] || {}).figure_paths || {}).signal_topo;
   var sel  = document.getElementById("trialimg-select");
   var frame = document.getElementById("trialimg-frame");
   _showSection("TrialImage", imgs.length > 0);
   if (!imgs.length || !sel || !frame) return;
   sel.innerHTML = imgs.map(function(e) {
-    return '<option value="' + _esc(e.src) + '">' + _esc(e.pair) + "</option>";
+    return '<option value="' + _esc(e.src) + '" data-pair="' + _esc(e.pair) + '">'
+      + _esc(e.pair) + "</option>";
   }).join("");
   frame.style.height = (imgs[0].h || 400) + "px";
   frame.src = imgs[0].src;
+  // without the head, the trial image takes the whole row
+  var hasTopo = !!(topo && topo.src);
+  document.getElementById("signal-topo-col").style.display = hasTopo ? "" : "none";
+  document.getElementById("trialimg-row").classList.toggle("row-picker", hasTopo);
+  if (hasTopo) document.getElementById("signal-topo-frame").src = topo.src;
 }
+
+// the trial images' channel, picked in the select or on Signal by position; the head
+// outlines whichever is picked
+function highlightTrialCell() {
+  var sel = document.getElementById("trialimg-select");
+  var topo = document.getElementById("signal-topo-frame");
+  if (!sel || !topo || !topo.contentWindow || sel.selectedIndex < 0) return;
+  topo.contentWindow.postMessage({type: "highlight-cell",
+    pair: sel.options[sel.selectedIndex].getAttribute("data-pair")}, "*");
+}
+function pickTrialImage(i) {
+  var sel = document.getElementById("trialimg-select");
+  var frame = document.getElementById("trialimg-frame");
+  if (!sel || !frame || i < 0) return;
+  sel.selectedIndex = i;
+  frame.src = sel.options[i].value;
+  highlightTrialCell();
+}
+window.addEventListener("message", function(e) {
+  if (!e.data) return;
+  if (e.data.type === "topo-ready") { highlightTrialCell(); return; }
+  if (e.data.type !== "pick-trial-channel") return;
+  var sel = document.getElementById("trialimg-select");
+  if (!sel) return;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].getAttribute("data-pair") !== e.data.pair) continue;
+    pickTrialImage(i);
+    document.getElementById("trialimg-frame").scrollIntoView({behavior: "smooth", block: "nearest"});
+    return;
+  }
+});
 
 // ─── summary ──────────────────────────────────────────────────────────────────
 // The run-level facts the page opens with, mirroring the subject report's summary block.

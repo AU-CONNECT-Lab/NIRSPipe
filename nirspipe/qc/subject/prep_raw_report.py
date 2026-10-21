@@ -19,7 +19,7 @@ from nirspipe.qc.subject.condition_views import (
 )
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.common.figure_io import (
-    _pair_fname, _save_figure_html, _save_multi_fig_html,
+    FILL_FRAME_JS, TOPO_PICK_JS, _pair_fname, _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs, plotly_script_tags,
 )
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
@@ -204,7 +204,9 @@ def _process_run(
     from nirspipe.qc.figures import (
         build_channel_figure,
         build_epoch_preview_figure,
+        build_evoked_topo_figure,
         build_trial_image_by_condition,
+        build_trial_image_figure,
         build_psd_mean_figure,
         build_sci_psp_figure,
         build_trigger_timeline_single,
@@ -609,31 +611,41 @@ def _process_run(
                 h     = _save_figure_html(fig, fig_dir / fname, extra_js=hbo_hbr_fit_js(fig))
                 figure_paths["hbo_hbr_corr"] = {"src": f"figures/{fname}", "h": h}
 
-    # ── file: per-channel trial images ─────────────────────────────────────────
+    # ── file: per-channel trial images and Signal by position ──────────────────
     # Trials down the rows, so a channel that was fine for the first half and lost for the
-    # second reads as a band rather than being averaged away. HbO only, as the subject
-    # report's is. A condition holding fewer than two trials draws nothing, which is what a
-    # block design is.
+    # second reads as a band rather than being averaged away. Split by event name, pooled
+    # first, as the subject report's is; Signal by position beside it picks the channel.
     trial_img_pairs: list = []
     trial_img_by_cond: dict = {}
-    if epoch_view is not None and view_windows:
-        hbo_names = [c for c in epoch_view.ch_names if c.endswith(" hbo")]
-        for ch in hbo_names:
+    if epoch_view is not None:
+        for ch in [c for c in epoch_view.ch_names if c.endswith(" hbo")]:
             with guard("Trial image", errors, f"{label} | {ch}"):
-                by_label = build_trial_image_by_condition(
-                    epoch_view, ch, view_windows, fig_tmin, fig_tmax)
-                if not by_label:
+                figs = build_trial_image_figure(epoch_view, ch, fig_tmin, fig_tmax)
+                if not figs:
                     continue
                 pair = pair_of(ch)
                 fname = fig_name("trialimage", channel=_pair_fname(pair))
-                figs = [f for figs in by_label.values() for f in figs]
                 h = _save_multi_fig_html(figs, fig_dir / fname)
                 trial_img_pairs.append(
                     {"pair": pair, "src": f"figures/{fname}", "h": h})
-                # kept in memory so a condition page writes its own single-panel file
-                # rather than this stack of every condition
-                for cond_label, cond_figs in by_label.items():
-                    trial_img_by_cond.setdefault(cond_label, []).append((pair, cond_figs))
+        if trial_img_pairs:
+            with guard("Signal by position", errors, label):
+                fig = build_evoked_topo_figure(epoch_view, markers_on_data_axis(epoch_view),
+                                               _MAX_TS_PTS, fig_tmin, fig_tmax)
+                if fig is not None:
+                    fname = fig_name("signaltopo", suffix="nirsmap")
+                    h = _save_figure_html(fig, fig_dir / fname,
+                                          extra_js=TOPO_PICK_JS + FILL_FRAME_JS)
+                    figure_paths["signal_topo"] = {"src": f"figures/{fname}", "h": h}
+    # a condition page's own panel, split by condition window rather than event name: a
+    # page holds one window, and a block design's trials all share one name
+    if epoch_view is not None and view_windows:
+        for ch in [c for c in epoch_view.ch_names if c.endswith(" hbo")]:
+            with guard("Condition trial image", errors, f"{label} | {ch}"):
+                by_label = build_trial_image_by_condition(
+                    epoch_view, ch, view_windows, fig_tmin, fig_tmax)
+                for cond_label, cond_figs in (by_label or {}).items():
+                    trial_img_by_cond.setdefault(cond_label, []).append((pair_of(ch), cond_figs))
 
     # ── file: per-channel detail HTML ──────────────────────────────────────────
     # one file per pair, holding every condition's view: `condition_views` names the windows

@@ -151,7 +151,8 @@ NOTES = {
         "strong as the long row means part of the response is scalp signal.",
     "epoch.signal_by_position":
         "The same averages as curves: each channel's HbO (solid) and HbR (dotted) at its "
-        "place on the head, one colour per condition.",
+        "place on the head, one condition at a time (menu, top left). Click a channel for its "
+        "trial images.",
     "epoch.trial_image_roi":
         "Per ROI, HbO channels averaged first, then each trial a row, on the bandpassed "
         "signal before confound regression; runs with enough trials are smoothed across "
@@ -160,7 +161,7 @@ NOTES = {
         "Each trial is a row against time from onset, coloured by HbO: the response before "
         "averaging, on the bandpassed signal before confound regression. Runs with enough "
         "trials are smoothed across neighbouring trials. A panel per condition, the pooled "
-        "one first. Select a channel.",
+        "one first, with HbO and HbR averaged below.",
     "rest.alff":
         "Amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF), "
         "from the denoised residual. The map shows where the amplitude is; the connectivity "

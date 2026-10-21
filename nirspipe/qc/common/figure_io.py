@@ -79,6 +79,40 @@ _IFRAME_CSS = ("html,body{margin:0;padding:0;width:100%;}"
 # head on a wide page. Passed per figure rather than folded into _IFRAME_CSS for that reason.
 CENTER_FIGURE_CSS = ".plotly-graph-div{margin-left:auto;margin-right:auto;}"
 
+# For a figure whose frame is sized by the page (an aspect-ratio box): the figure takes the
+# frame's size and follows it when the window changes.
+FILL_FRAME_JS = (
+    "<script>(function(){"
+    "function fit(){var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on){setTimeout(fit,100);return;}"
+    "Plotly.relayout(gd,{width:window.innerWidth,height:window.innerHeight});}"
+    "if(document.readyState==='complete')fit();else window.addEventListener('load',fit);"
+    "window.addEventListener('resize',fit);"
+    "})();</script>"
+)
+
+# Signal by position as the trial images' channel picker: a click names its cell's channel to
+# the page, and the page names the picked channel back, so the cell is outlined however it
+# was picked (a click here or the page's select).
+TOPO_PICK_JS = (
+    "<script>(function(){"
+    "function hook(){var gd=document.querySelector('.plotly-graph-div');"
+    "if(!gd||!gd.on){setTimeout(hook,100);return;}"
+    "gd.on('plotly_click',function(e){var p=e.points&&e.points[0];"
+    "if(!p||p.customdata==null)return;"
+    "parent.postMessage({type:'pick-trial-channel',pair:String(p.customdata)},'*');});"
+    "window.addEventListener('message',function(e){"
+    "if(!e.data||e.data.type!=='highlight-cell')return;"
+    "var keep=(gd.layout.shapes||[]).filter(function(s){return s.name!=='picked';});"
+    "var box=keep.filter(function(s){return s.name===e.data.pair;})[0];"
+    "if(box)keep.push({type:'rect',name:'picked',xref:'paper',yref:'paper',x0:box.x0,"
+    "x1:box.x1,y0:box.y0,y1:box.y1,line:{color:'#f39c12',width:2.5}});"
+    "Plotly.relayout(gd,{shapes:keep});});"
+    "parent.postMessage({type:'topo-ready'},'*');}"
+    "if(document.readyState==='complete')hook();else window.addEventListener('load',hook);"
+    "})();</script>"
+)
+
 # The figure's own height, reported to the page that frames it. Measured off the plot
 # divs and not off `document.body.scrollHeight`, which is floored by the iframe's current
 # height and so never lets a figure shrink.

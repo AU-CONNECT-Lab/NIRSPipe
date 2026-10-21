@@ -766,6 +766,8 @@ def condition_payloads(
         paths = dict(payload.get("figure_paths") or {})
         paths.pop("psd", None)
         paths.pop("hbo_hbr_corr", None)
+        # it picks among the run's trial images, which this page does not carry
+        paths.pop("signal_topo", None)
         for key in ("carpet", "ch_detail_template", "motion_detail_template"):
             entry_path = paths.get(key)
             if isinstance(entry_path, dict) and entry_path.get("src"):

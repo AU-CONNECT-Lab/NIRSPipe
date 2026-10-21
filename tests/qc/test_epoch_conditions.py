@@ -5,7 +5,10 @@ import numpy as np
 import pytest
 
 from nirspipe.qc.figures.common.topomap import evoked_channel_map_figure
-from nirspipe.qc.figures.subject.raw_figures import build_epoch_preview_figure
+from nirspipe.qc.figures.subject.raw_figures import (
+    build_epoch_preview_figure, build_evoked_topo_figure, build_trial_image_figure,
+)
+from nirspipe.qc.common.windows import markers_on_data_axis
 from nirspipe.qc.metrics._helpers import epochable_events
 from nirspipe.qc.subject.prep_raw_report import _below_cardiac
 from nirspipe.qc.subject.report import _no_epoch_reason, _single_trial_conditions
@@ -81,3 +84,23 @@ def test_the_raw_display_low_pass_drops_the_heartbeat_and_keeps_the_slow_signal(
     out = _below_cardiac(raw, 0.7).get_data()[0] * 1e6
     mid = slice(1000, 5000)
     np.testing.assert_allclose(out[mid], slow[mid], atol=0.02)
+
+
+def test_signal_by_position_shows_one_condition_at_a_time_in_first_appearance_order(mixed):
+    fig = build_evoked_topo_figure(mixed, markers_on_data_axis(mixed), 2000, -5.0, 25.0)
+    menu = fig.layout.updatemenus[0]
+    assert [b.label for b in menu.buttons] == ["once (n=1)", "zeta (n=4)", "alpha (n=4)"]
+    shown = {t.legendgroup.split(" ", 1)[1] for t in fig.data if t.visible}
+    assert shown == {"once"}
+    picked = menu.buttons[2].args[0]["visible"]
+    assert {t.legendgroup.split(" ", 1)[1] for t, v in zip(fig.data, picked) if v} == {"alpha"}
+
+
+def test_a_trial_image_draws_the_hbr_average_of_the_same_trials(mixed):
+    figs = build_trial_image_figure(mixed, "S1_D1 hbo", -5.0, 25.0)
+    events, event_id = epochable_events(mixed, -5.0, 25.0)
+    epochs = mne.Epochs(mixed, events, event_id, tmin=-5.0, tmax=25.0, baseline=(-5.0, 0),
+                        picks=["S1_D1 hbr"], preload=True, verbose="error")
+    alpha = next(f for f in figs if "/ alpha" in f.layout.annotations[0].text)
+    hbr = next(t for t in alpha.data if t.name == "HbR")
+    np.testing.assert_allclose(hbr.y, epochs["alpha"].average().data[0] * 1e6, rtol=1e-6)

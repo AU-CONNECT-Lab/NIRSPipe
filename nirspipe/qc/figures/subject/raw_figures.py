@@ -527,11 +527,12 @@ def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
 def _trial_image_plot(
     data: np.ndarray, times: np.ndarray, title: str, zmax: float,
     row_labels: "list[str] | None" = None,
+    hbr_mean: "np.ndarray | None" = None,
 ) -> "go.Figure":
-    """Trial x time heatmap + trial average. ``data`` is already trial-smoothed."""
+    """Trial x time heatmap (HbO) + trial average (HbO, and HbR when given). ``data`` is already trial-smoothed."""
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
-        subplot_titles=[title, "trial average"],
+        subplot_titles=[title, "trial average" if hbr_mean is None else "trial average: HbO, HbR"],
     )
     fig.add_trace(go.Heatmap(
         z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
@@ -539,9 +540,14 @@ def _trial_image_plot(
         colorbar=dict(title="µM", len=0.7, y=0.62),
     ), row=1, col=1)
     fig.add_trace(go.Scatter(
-        x=times.tolist(), y=data.mean(axis=0).tolist(),
-        line=dict(color="#c0392b", width=1.5),
+        x=times.tolist(), y=data.mean(axis=0).tolist(), name="HbO",
+        line=dict(color=HBO_COLOR, width=1.5),
     ), row=2, col=1)
+    if hbr_mean is not None:
+        fig.add_trace(go.Scatter(
+            x=times.tolist(), y=np.asarray(hbr_mean).tolist(), name="HbR",
+            line=dict(color=HBR_COLOR, width=1.5),
+        ), row=2, col=1)
     fig.add_vline(x=0.0, line=dict(color="#333", width=1, dash="dash"))
     fig.update_yaxes(title_text="trial", row=1, col=1)
     if row_labels and len(row_labels) <= _TRIAL_ROW_LABEL_MAX:
@@ -572,11 +578,13 @@ def _trial_image_figures(
     res: "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]]",
     title_for: "callable",
     trial_smooth: "int | None",
+    hbr: "dict[str, np.ndarray] | None" = None,
 ) -> "list[go.Figure]":
     """One figure per condition, on a colour scale shared across them so panels compare.
 
     Smoothing runs first: the scale is taken from what is actually drawn, and an unsmoothed
-    single-trial spike would otherwise wash out every panel.
+    single-trial spike would otherwise wash out every panel. ``hbr`` maps a label to its
+    HbR trials, drawn as a second average line only.
     """
     panels = []
     for label, data, times, rows in res:
@@ -586,10 +594,25 @@ def _trial_image_figures(
         (float(np.nanpercentile(np.abs(d), 97)) for _, d, _, _ in panels),
         default=0.0,
     ) or 1.0
+    hbr = hbr or {}
     return [
-        _trial_image_plot(data, times, title_for(label, data.shape[0]), zmax, rows)
+        _trial_image_plot(data, times, title_for(label, data.shape[0]), zmax, rows,
+                          hbr_mean=hbr[label].mean(axis=0) if label in hbr else None)
         for label, data, times, rows in panels
     ]
+
+
+def _hbr_picks(raw_haemo: mne.io.Raw, picks: "list[int]") -> "list[int]":
+    """The HbR partners of HbO picks, e.g. "S1_D1 hbo" -> "S1_D1 hbr"; partners missing are skipped."""
+    names = [raw_haemo.ch_names[i].removesuffix(" hbo") + " hbr" for i in picks]
+    return [raw_haemo.ch_names.index(n) for n in names if n in raw_haemo.ch_names]
+
+
+def _hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax) -> "dict[str, np.ndarray]":
+    """HbR trials per trial-image label, epoched exactly as the HbO ones are."""
+    partners = _hbr_picks(raw_haemo, picks)
+    res = _trial_image_data(raw_haemo, partners, epoch_tmin, epoch_tmax) if partners else None
+    return {label: data for label, data, _, _ in res or []}
 
 
 def build_trial_image_figure(
@@ -608,11 +631,13 @@ def build_trial_image_figure(
     """
     if ch_name not in raw_haemo.ch_names:
         return None
-    res = _trial_image_data(raw_haemo, [raw_haemo.ch_names.index(ch_name)], epoch_tmin, epoch_tmax)
+    picks = [raw_haemo.ch_names.index(ch_name)]
+    res = _trial_image_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
     if res is None:
         return None
     return _trial_image_figures(
-        res, lambda label, n: f"Trial image: {ch_name} / {label} ({_n_trials(n)})", trial_smooth)
+        res, lambda label, n: f"Trial image: {ch_name} / {label} ({_n_trials(n)})", trial_smooth,
+        hbr=_hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax))
 
 
 def _roi_picks(raw_haemo: mne.io.Raw, channels: "list[str]") -> "list[int]":
@@ -706,7 +731,11 @@ def _condition_trial_images(
             if data.shape[0] >= min_trials]
     if not kept:
         return None
-    figs = _trial_image_figures(kept, title_for, trial_smooth)
+    partners = _hbr_picks(raw_haemo, picks)
+    hbr_res = (_trial_image_by_span(raw_haemo, partners, spans, epoch_tmin, epoch_tmax)
+               if partners else None)
+    figs = _trial_image_figures(kept, title_for, trial_smooth,
+                                hbr={label: d for label, (d, _, _) in (hbr_res or {}).items()})
     return {label: [fig] for (label, *_), fig in zip(kept, figs)}
 
 
@@ -776,7 +805,7 @@ def build_roi_trial_image_figure(
     return _trial_image_figures(
         res,
         lambda label, n: f"Trial image: ROI {roi_name} / {label} ({len(picks)} ch, {_n_trials(n)})",
-        trial_smooth,
+        trial_smooth, hbr=_hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax),
     )
 
 
@@ -1171,6 +1200,7 @@ def build_evoked_topo_figure(
     norm = _spread_topo_cells(norm01, hw, hh)
     box_shapes = []
     onset_shapes = []
+    trace_layer: "list[int]" = []
     fig = go.Figure()
 
     for pi, pair in enumerate(pairs):
@@ -1205,7 +1235,7 @@ def build_evoked_topo_figure(
             ))
 
         first = (pi == 0)
-        for layer in layers:
+        for li, layer in enumerate(layers):
             label, times_list = layer["label"], layer["times"]
             suffix = f" {label}" if label else ""
             n_txt = f" (n={layer['n']})" if layer["n"] else ""
@@ -1230,6 +1260,7 @@ def build_evoked_topo_figure(
                         f"<extra>{chromo.upper()}{suffix}</extra>"
                     ),
                 ))
+                trace_layer.append(li)
 
         fig.add_annotation(
             x=(x0 + x1) / 2, y=y1 + 0.003,
@@ -1283,4 +1314,23 @@ def build_evoked_topo_figure(
             showarrow=False, font=dict(size=9, color="#666"),
             xanchor="left", yanchor="bottom",
         )
+    if evoked_mode and len(layers) > 1:
+        _one_condition_at_a_time(fig, layers, trace_layer)
     return fig
+
+
+def _one_condition_at_a_time(fig: go.Figure, layers: "list[dict]", trace_layer: "list[int]"):
+    """A dropdown that shows one condition's curves, the first by default: overlaid, every
+    cell carries two lines per condition and four conditions are unreadable."""
+    def shown(li):
+        return [layer_of == li for layer_of in trace_layer]
+
+    for trace, visible in zip(fig.data, shown(0)):
+        trace.visible = visible
+    buttons = [dict(label=f"{layer['label']} (n={layer['n']})", method="restyle",
+                    args=[{"visible": shown(li)}])
+               for li, layer in enumerate(layers)]
+    fig.update_layout(updatemenus=[dict(
+        buttons=buttons, direction="down", showactive=True,
+        x=0.0, xanchor="left", y=1.0, yanchor="top", font=dict(size=10),
+    )])

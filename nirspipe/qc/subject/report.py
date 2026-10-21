@@ -86,7 +86,7 @@ from nirspipe.qc.common.channel_table import (
     registration_note, roi_overlap_note, separation_blocks, separation_notes,
 )
 from nirspipe.qc.common.figure_io import (
-    CENTER_FIGURE_CSS, _fig_href, _pair_fname, save_png,
+    CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
     _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
@@ -1286,9 +1286,10 @@ def _section_evoked_topomap(
         fig = build_evoked_topo_figure(raw_haemo, markers_on_data_axis(raw_haemo),
                                        _OVERVIEW_MAX_PTS, epoch_tmin, epoch_tmax)
         if fig is not None:
+            # the page sizes its frame and picks trial images from its clicks
             topo_path, topo_h = _save_plotly_html(
                 fig, figures_dir / fig_name("signaltopo", suffix="nirsmap"),
-                extra_css=CENTER_FIGURE_CSS)
+                extra_js=TOPO_PICK_JS + FILL_FRAME_JS)
     return {"evoked_topomap_path": path, "evoked_topomap_h": h,
             "signal_topo_path": topo_path, "signal_topo_h": topo_h}
 

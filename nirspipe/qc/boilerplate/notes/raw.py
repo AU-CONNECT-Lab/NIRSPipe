@@ -59,9 +59,13 @@ NOTES = {
         "If the dotted trace rises with the solid one, part of the response is "
         "scalp signal, which <code>--short-channel</code> removes later.",
     "raw.trial_image":
-        "Trials down, time across, a panel per condition. A channel lost partway through a "
-        "block shows as a band here. Low-passed as the grand mean is. A condition needs two trials "
-        "to draw.",
+        "Trials down, time across, a panel per condition, the pooled one first, with HbO and HbR "
+        "averaged below. A channel lost partway through the run shows as a band here. Low-passed "
+        "as the grand mean is.",
+    "raw.signal_by_position":
+        "Each channel's HbO (solid) and HbR (dotted) average at its place on the head, one "
+        "condition at a time (menu, top left), low-passed as the grand mean is. Click a channel "
+        "for its trial images.",
 
     # ---- Metrics ----
     "raw.scope_long":

@@ -39,7 +39,9 @@ def _views(path):
 @pytest.fixture(scope="module")
 def epochs_by_block(condition_run):
     """Each block's own trials on the pipeline's uncorrected haemoglobin, which the raw viewer draws."""
-    raw = condition_run.read("uncorrected")
+    # display low-pass: stopband from --cardiac-l-freq (0.8 Hz here), passband to 0.64 Hz
+    raw = condition_run.read("uncorrected").copy().filter(None, 0.64, h_trans_bandwidth=0.16,
+                                                          verbose="error")
     events, event_id = mne.events_from_annotations(raw, event_id={"trial": 1}, verbose="error")
     onsets = events[:, 0] / raw.info["sfreq"]
     return {block: mne.Epochs(raw, events[(onsets >= t0) & (onsets < t1)], event_id, tmin=TMIN,

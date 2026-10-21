@@ -246,6 +246,28 @@ def test_the_grand_mean_carries_no_cardiac_ripple(raw_viewer_run, denoise_run):
     assert abs(np.dot(y, probe)) < 0.05 * unfiltered
 
 
+def test_an_event_design_gets_a_trial_image_per_channel_beside_its_picker(raw_viewer_run, denoise_run, page):
+    html, data = page
+    assert "pick-trial-channel" in html
+    topo = raw_viewer_run.out / "sub-01" / data["figure_paths"]["signal_topo"]["src"]
+    assert "pick-trial-channel" in topo.read_text(encoding="utf-8")
+    images = {e["pair"]: e["src"] for e in data["trial_images"]}
+    raw = denoise_run.read("uncorrected").copy().filter(None, 0.64, h_trans_bandwidth=0.16,
+                                                        verbose="error")
+    events, event_id = mne.events_from_annotations(raw, verbose="error")
+    epochs = mne.Epochs(raw, events, event_id, tmin=-5.0, tmax=25.0, baseline=(-5.0, 0),
+                        preload=True, reject_by_annotation=False, verbose="error")
+    assert len(epochs) == len(EVENT_ONSETS)
+    for pair in raw_viewer_run.truth.long_pairs:
+        fig = one_figure(raw_viewer_run.out / "sub-01" / images[pair.name])
+        heat = next(t for t in fig["data"] if t["type"] == "heatmap")
+        expected = epochs.get_data(picks=[f"{pair.name} hbo"])[:, 0, :] * 1e6
+        np.testing.assert_allclose(np.asarray(heat["z"], float), expected, rtol=1e-4, atol=1e-3)
+        _, hbr = xy(next(t for t in fig["data"] if t.get("name") == "HbR"))
+        np.testing.assert_allclose(hbr, epochs.average(picks=[f"{pair.name} hbr"]).data[0] * 1e6,
+                                   rtol=1e-4, atol=1e-3)
+
+
 def test_the_decoupled_trial_has_the_lowest_sci(raw_viewer_run):
     fig = one_figure(raw_viewer_run.figure("rawtrialqc", suffix="qc"))
     sci = {}
