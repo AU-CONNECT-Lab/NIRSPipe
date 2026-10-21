@@ -27,7 +27,7 @@ cd NIRSPipe
 pip install -e ".[dev]"
 ```
 
-See [Installation](docs/installation.md) for bids-validator and the optional GPU install.
+See [Installation](https://au-connect-lab.github.io/NIRSPipe/installation.html) for bids-validator and the optional GPU install.
 
 ## Quick start
 
@@ -53,7 +53,7 @@ nirspipe /data/bids /data/derivatives participant \
   --short-channel mean
 ```
 
-The cardiac and respiration bands depend on the population and have no default. More examples are in [Usage](docs/usage.md#examples).
+The cardiac and respiration bands depend on the population and have no default. More examples are in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html#examples).
 
 ### Hyperscanning
 
@@ -75,7 +75,7 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
   --roi-mapping roi.json
 ```
 
-`--device cuda` on `nirspipe-hyper` or `nirspipe-hyper-pairnull` runs the wavelet transforms on an NVIDIA card. [Hyperscanning](docs/hyperscanning.md#nulls) explains what each null controls for; the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
+`--device cuda` on `nirspipe-hyper` or `nirspipe-hyper-pairnull` runs the wavelet transforms on an NVIDIA card. [Hyperscanning](https://au-connect-lab.github.io/NIRSPipe/hyperscanning.html#nulls) explains what each null controls for; the [Tutorial](https://au-connect-lab.github.io/NIRSPipe/tutorial.html) runs public dyads from download to the cohort test.
 
 ## Commands
 
@@ -90,7 +90,7 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
 | `nirspipe-rate` | Rating viewers for the QC reports |
 | `nirspipe-gui` | Desktop interface |
 
-Every flag is listed in [Usage](docs/usage.md).
+Every flag is listed in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html).
 
 ## Documentation
 
