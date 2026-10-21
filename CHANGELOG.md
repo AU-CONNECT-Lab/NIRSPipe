@@ -29,7 +29,9 @@ All notable changes to this project will be documented in this file.
 - Both subject reports set Signal by position beside the single-channel trial image; clicking a channel picks its trial image
 - Signal by position shows one condition at a time, chosen from a menu, opening on the first with three or more trials
 - The brain views drop the blank bands above and below the brains, so the picture is shorter
-- Trial image panels are shorter, 320 px each
+- A channel's trial image shows all trials pooled, then the condition chosen on Signal by position, in one figure on one colour bar
+- Trial images draw the heatmap and its average 2:1 under one title, without the overlapping subtitle
+- Signal by position names channels on hover only, as the cell labels overlapped their neighbours
 - The raw report's channel detail drops its epoch average, which the trial images now carry
 - Trial images draw the HbR average beside the HbO one
 - The raw report's trial images split by event name, pooled first, as the subject report's do; condition pages keep their window's trials

@@ -20,6 +20,7 @@ from nirspipe.qc.subject.condition_views import (
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.common.figure_io import (
     FILL_FRAME_JS, TOPO_PICK_JS, _pair_fname, _save_figure_html, _save_multi_fig_html,
+    save_fragment_views_html,
     extract_markers, figure_namer, get_channel_pairs, plotly_script_tags,
 )
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
@@ -206,7 +207,7 @@ def _process_run(
         build_epoch_preview_figure,
         build_evoked_topo_figure,
         build_trial_image_by_condition,
-        build_trial_image_figure,
+        build_trial_image_views,
         build_psd_mean_figure,
         build_sci_psp_figure,
         build_trigger_timeline_single,
@@ -620,12 +621,13 @@ def _process_run(
     if epoch_view is not None:
         for ch in [c for c in epoch_view.ch_names if c.endswith(" hbo")]:
             with guard("Trial image", errors, f"{label} | {ch}"):
-                figs = build_trial_image_figure(epoch_view, ch, fig_tmin, fig_tmax)
-                if not figs:
+                views = build_trial_image_views(epoch_view, ch, fig_tmin, fig_tmax)
+                if not views:
                     continue
                 pair = pair_of(ch)
                 fname = fig_name("trialimage", channel=_pair_fname(pair))
-                h = _save_multi_fig_html(figs, fig_dir / fname)
+                h = save_fragment_views_html(views, fig_dir / fname,
+                                             section_note("epoch.trial_image_missing"))
                 trial_img_pairs.append(
                     {"pair": pair, "src": f"figures/{fname}", "h": h})
         if trial_img_pairs:

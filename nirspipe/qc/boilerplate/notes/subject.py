@@ -160,8 +160,11 @@ NOTES = {
     "epoch.trial_image_single":
         "Each trial is a row against time from onset, coloured by HbO: the response before "
         "averaging, on the bandpassed signal before confound regression. Runs with enough "
-        "trials are smoothed across neighbouring trials. A panel per condition, the pooled "
-        "one first, with HbO and HbR averaged below.",
+        "trials are smoothed across neighbouring trials. All trials pooled, then the "
+        "condition chosen on the head, each with its HbO and HbR average below.",
+    "epoch.trial_image_missing":
+        "{label}: too few trials for a panel of its own; its trial is a row of the pooled "
+        "image.",
     "rest.alff":
         "Amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF), "
         "from the denoised residual. The map shows where the amplitude is; the connectivity "

@@ -466,6 +466,9 @@ def build_psd_mean_figure(
 
 
 
+_POOLED_LABEL = "all conditions"
+
+
 def _trial_image_data(
     raw_haemo: mne.io.Raw, picks: "list[int]", epoch_tmin: float, epoch_tmax: float,
 ) -> "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]] | None":
@@ -499,7 +502,7 @@ def _trial_image_data(
             by_code = {v: k for k, v in event_id.items()}
             rows = [str(by_code.get(int(c), "")) for c in epochs.events[:, 2]]
             # average over channels → (n_trials, n_times)
-            out.append(("all conditions", data.mean(axis=1) * 1e6, epochs.times, rows))
+            out.append((_POOLED_LABEL, data.mean(axis=1) * 1e6, epochs.times, rows))
         for cond in event_id:
             try:
                 cond_data = epochs[cond].get_data()
@@ -524,43 +527,67 @@ def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
     return data
 
 
+# per group: heatmap 2 parts, average 1 part, as MNE's epochs image; a gap row between groups
+_TRIAL_GROUP_PX = 290
+
+
+def _trial_groups_figure(groups: "list[tuple]", zmax: float) -> "go.Figure":
+    """Trial images stacked in one figure on one colour bar, one title per group.
+
+    ``groups`` is ``[(title, data, times, row_labels, hbr_mean)]`` with ``data`` already
+    trial-smoothed; each group draws its HbO heatmap, then its HbO (and HbR) average.
+    """
+    heights, titles = [], []
+    for k, (title, *_rest) in enumerate(groups):
+        last = k == len(groups) - 1
+        heights += [2, 1] + ([] if last else [0.45])
+        titles += [title, ""] + ([] if last else [""])
+    fig = make_subplots(rows=len(heights), cols=1, shared_xaxes=True, row_heights=heights,
+                        vertical_spacing=0.01, subplot_titles=titles)
+    for r in range(3, len(heights) + 1, 3):
+        fig.update_yaxes(visible=False, row=r, col=1)
+    for k, (_title, data, times, row_labels, hbr_mean) in enumerate(groups):
+        hr, cr = 3 * k + 1, 3 * k + 2
+        fig.add_trace(go.Heatmap(
+            z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
+            # no zsmooth: it would blend adjacent rows, which are separate trials or conditions
+            showscale=(k == 0), colorbar=dict(title=dict(text="HbO µM", side="right"),
+                                              len=0.8 / len(groups), y=1.0, yanchor="top",
+                                              thickness=12),
+        ), row=hr, col=1)
+        fig.add_trace(go.Scatter(
+            x=times.tolist(), y=data.mean(axis=0).tolist(), name="HbO", showlegend=(k == 0),
+            line=dict(color=HBO_COLOR, width=1.5),
+        ), row=cr, col=1)
+        if hbr_mean is not None:
+            fig.add_trace(go.Scatter(
+                x=times.tolist(), y=np.asarray(hbr_mean).tolist(), name="HbR",
+                showlegend=(k == 0), line=dict(color=HBR_COLOR, width=1.5),
+            ), row=cr, col=1)
+        fig.update_yaxes(title_text="trial", title_font=dict(size=10), row=hr, col=1)
+        if row_labels and len(row_labels) <= _TRIAL_ROW_LABEL_MAX:
+            fig.update_yaxes(tickmode="array", tickvals=list(range(len(row_labels))),
+                             ticktext=row_labels, tickfont=dict(size=9), row=hr, col=1)
+        fig.update_yaxes(title_text="µM", title_font=dict(size=10), row=cr, col=1)
+    fig.add_vline(x=0.0, line=dict(color="#333", width=1, dash="dash"))
+    fig.update_xaxes(title_text="Time from onset (s)", row=len(heights), col=1)
+    fig.update_annotations(font_size=12)
+    fig.update_layout(
+        height=60 + _TRIAL_GROUP_PX * len(groups), plot_bgcolor="white", paper_bgcolor="white",
+        margin=dict(l=60, r=20, t=30, b=40),
+        legend=dict(orientation="h", x=1, xanchor="right", y=1.0, yanchor="bottom",
+                    font=dict(size=10)),
+    )
+    return fig
+
+
 def _trial_image_plot(
     data: np.ndarray, times: np.ndarray, title: str, zmax: float,
     row_labels: "list[str] | None" = None,
     hbr_mean: "np.ndarray | None" = None,
 ) -> "go.Figure":
-    """Trial x time heatmap (HbO) + trial average (HbO, and HbR when given). ``data`` is already trial-smoothed."""
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.06,
-        subplot_titles=[title, "trial average" if hbr_mean is None else "trial average: HbO, HbR"],
-    )
-    fig.add_trace(go.Heatmap(
-        z=data, x=times.tolist(), colorscale="RdBu_r", zmid=0, zmin=-zmax, zmax=zmax,
-        # no zsmooth: it would blend adjacent rows, which are separate trials or conditions
-        colorbar=dict(title="µM", len=0.7, y=0.62),
-    ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=times.tolist(), y=data.mean(axis=0).tolist(), name="HbO",
-        line=dict(color=HBO_COLOR, width=1.5),
-    ), row=2, col=1)
-    if hbr_mean is not None:
-        fig.add_trace(go.Scatter(
-            x=times.tolist(), y=np.asarray(hbr_mean).tolist(), name="HbR",
-            line=dict(color=HBR_COLOR, width=1.5),
-        ), row=2, col=1)
-    fig.add_vline(x=0.0, line=dict(color="#333", width=1, dash="dash"))
-    fig.update_yaxes(title_text="trial", row=1, col=1)
-    if row_labels and len(row_labels) <= _TRIAL_ROW_LABEL_MAX:
-        fig.update_yaxes(tickmode="array", tickvals=list(range(len(row_labels))),
-                         ticktext=row_labels, tickfont=dict(size=9), row=1, col=1)
-    fig.update_yaxes(title_text="µM", row=2, col=1)
-    fig.update_xaxes(title_text="Time from onset (s)", row=2, col=1)
-    # several stack per channel, one per condition, so each is kept short
-    fig.update_layout(
-        height=320, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        margin=dict(l=60, r=20, t=40, b=40),
-    )
-    return fig
+    """One trial image: HbO heatmap, then the HbO (and HbR) average. ``data`` is already trial-smoothed."""
+    return _trial_groups_figure([(title, data, times, row_labels, hbr_mean)], zmax)
 
 
 def _auto_trial_smooth(n_trials: int) -> int:
@@ -616,19 +643,23 @@ def _hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax) -> "dict[str, np.nda
     return {label: data for label, data, _, _ in res or []}
 
 
-def build_trial_image_figure(
+def build_trial_image_views(
     raw_haemo: mne.io.Raw,
     ch_name: str,
     epoch_tmin: float = -5.0,
     epoch_tmax: float = 25.0,
     trial_smooth: "int | None" = None,
-) -> "list[go.Figure] | None":
-    """Trial image: one HbO channel's epochs stacked as a trial x time heatmap + trial average.
+) -> "dict[str, go.Figure] | None":
+    """One HbO channel's trial images as views keyed by condition: the pooled trials, then that
+    condition, in one figure. Rows = trials, x = time from onset, colour = baseline-corrected
+    HbO, smoothed across neighbouring trials in long runs.
 
-    Rows = stimulus repetitions, x = time from onset, colour = baseline-corrected HbO,
-    optionally smoothed across adjacent trials to reveal the slow response.
-    The un-averaged companion to the block average. One figure per condition, pooled panel
-    first. None if no (non-BAD) events / channel absent.
+    The key ``""`` holds the pooled trials alone, for a condition with no panel of its own (one
+    trial, a row of the pooled image). One colour scale across every view, so switching the
+    condition does not recolour the pooled trials. A run with one condition has no pooled panel
+    and every view is that condition. None if no (non-BAD) events / channel absent.
+
+    e.g. conditions "a" and "b" -> {"a": pooled + a, "b": pooled + b, "": pooled}.
     """
     if ch_name not in raw_haemo.ch_names:
         return None
@@ -636,9 +667,19 @@ def build_trial_image_figure(
     res = _trial_image_data(raw_haemo, picks, epoch_tmin, epoch_tmax)
     if res is None:
         return None
-    return _trial_image_figures(
-        res, lambda label, n: f"Trial image: {ch_name} / {label} ({_n_trials(n)})", trial_smooth,
-        hbr=_hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax))
+    hbr = _hbr_by_label(raw_haemo, picks, epoch_tmin, epoch_tmax)
+    groups = {}
+    for label, data, times, rows in res:
+        sm = trial_smooth if trial_smooth is not None else _auto_trial_smooth(data.shape[0])
+        hbr_mean = hbr[label].mean(axis=0) if label in hbr else None
+        groups[label] = (f"{label} ({_n_trials(data.shape[0])})", _smooth_trials(data, sm),
+                         times, rows, hbr_mean)
+    zmax = max(float(np.nanpercentile(np.abs(g[1]), 97)) for g in groups.values()) or 1.0
+    pooled = groups.pop(_POOLED_LABEL, None)
+    lead = [pooled] if pooled else []
+    views = {label: _trial_groups_figure(lead + [g], zmax) for label, g in groups.items()}
+    views[""] = _trial_groups_figure(lead or [next(iter(groups.values()))], zmax)
+    return views
 
 
 def _roi_picks(raw_haemo: mne.io.Raw, channels: "list[str]") -> "list[int]":
@@ -1091,7 +1132,7 @@ def _topo_layers(
 # ---- Topo cell placement ----
 
 _TOPO_INSET = 0.03          # keep cells off the head outline
-_TOPO_LABEL_GAP = 0.014     # paper units reserved above a cell for its S-D label
+_TOPO_ROW_GAP = 0.014       # paper units between cells stacked one above the other
 _TOPO_DISC_R = 0.46         # cell centres stay within this radius of the head outline
 
 
@@ -1107,7 +1148,7 @@ def _spread_topo_cells(norm01: "np.ndarray", hw: float, hh: float) -> "np.ndarra
     the second is pushed to the neighbouring slot instead of on top of the first.
     """
     slot_w = 2 * hw + 0.006
-    slot_h = 2 * hh + _TOPO_LABEL_GAP
+    slot_h = 2 * hh + _TOPO_ROW_GAP
     lo, hi = _TOPO_INSET, 1.0 - _TOPO_INSET
     ncols = max(1, int((hi - lo) // slot_w))
     nrows = max(1, int((hi - lo) // slot_h))
@@ -1263,13 +1304,6 @@ def build_evoked_topo_figure(
                 ))
                 trace_layer.append(li)
 
-        fig.add_annotation(
-            x=(x0 + x1) / 2, y=y1 + 0.003,
-            xref="paper", yref="paper",
-            text=pair, showarrow=False,
-            font=dict(size=7, color="#444"),
-            xanchor="center", yanchor="bottom",
-        )
 
     head_shapes = [
         dict(type="circle",
@@ -1333,7 +1367,9 @@ def _one_condition_at_a_time(fig: go.Figure, layers: "list[dict]", trace_layer: 
         # one condition on screen, so the colours go back to HbO red and HbR blue, as the
         # trial images beside it draw them
         trace.line.color = HBO_COLOR if trace.legendgroup.startswith("hbo") else HBR_COLOR
-    buttons = [dict(label=f"{layer['label']} (n={layer['n']})", method="restyle",
+    # name carries the bare condition, which the page keys the trial images by
+    buttons = [dict(label=f"{layer['label']} (n={layer['n']})", name=layer["label"],
+                    method="restyle",
                     args=[{"visible": shown(li)}])
                for li, layer in enumerate(layers)]
     fig.update_layout(updatemenus=[dict(

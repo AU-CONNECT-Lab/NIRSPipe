@@ -91,9 +91,9 @@ FILL_FRAME_JS = (
     "})();</script>"
 )
 
-# Signal by position as the trial images' channel picker: a click names its cell's channel to
-# the page, and the page names the picked channel back, so the cell is outlined however it
-# was picked (a click here or the page's select).
+# Signal by position as the trial images' picker: a click names its cell's channel to the page,
+# its condition menu names the condition, and the page names the picked channel back, so the
+# cell is outlined however it was picked (a click here or the page's select).
 TOPO_PICK_JS = (
     "<script>(function(){"
     "function hook(){var gd=document.querySelector('.plotly-graph-div');"
@@ -108,6 +108,10 @@ TOPO_PICK_JS = (
     "if(box)keep.push({type:'rect',name:'picked',xref:'paper',yref:'paper',x0:box.x0,"
     "x1:box.x1,y0:box.y0,y1:box.y1,line:{color:'#f39c12',width:2.5}});"
     "Plotly.relayout(gd,{shapes:keep});});"
+    "gd.on('plotly_buttonclicked',function(e){"
+    "parent.postMessage({type:'pick-condition',label:e.button.name},'*');});"
+    "var m=(gd.layout.updatemenus||[])[0];"
+    "if(m)parent.postMessage({type:'pick-condition',label:m.buttons[m.active||0].name},'*');"
     "parent.postMessage({type:'topo-ready'},'*');}"
     "if(document.readyState==='complete')hook();else window.addEventListener('load',hook);"
     "})();</script>"
@@ -226,6 +230,35 @@ def _save_figure_html(fig, path: Path, extra_js: str = "", extra_css: str = "",
         html = html.replace("</body>", f"{extra_js}\n</body>", 1)
     path.write_text(html, encoding="utf-8")
     return h
+
+
+def save_fragment_views_html(views: "dict[str, object]", path: Path, missing_note: str = "") -> int:
+    """Several figures in one file, the one keyed by the URL fragment drawn. Returns the tallest height.
+
+    ``…_desc-trialimage_nirs.html#3.0`` draws ``views["3.0"]``; a fragment with no view of its
+    own draws ``views[""]`` under ``missing_note``, whose ``{label}`` names the fragment. The page
+    changes the fragment rather than the file, so a switch redraws without a reload, and each
+    redraw posts its height as ``iframe-resize``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    specs = {key: json.loads(fig.to_json()) for key, fig in views.items()}
+    html = (
+        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        f"{plotly_script_tags(path)}"
+        f"<style>{_IFRAME_CSS}.view-note{{font:12px sans-serif;color:#555;padding:4px 60px;}}"
+        ".view-note:empty{display:none;}</style></head><body>"
+        '<div id="view-note" class="view-note"></div><div id="view-fig"></div><script>'
+        f"var VIEWS={json.dumps(specs)},NOTE={json.dumps(missing_note)};"
+        "function show(){var key=decodeURIComponent(location.hash.slice(1)),spec=VIEWS[key];"
+        "var note=document.getElementById('view-note'),gd=document.getElementById('view-fig');"
+        "note.textContent=spec||!key?'':NOTE.replace('{label}',key);spec=spec||VIEWS[''];"
+        "Plotly.react(gd,spec.data,spec.layout,{displaylogo:false,responsive:true}).then(function(){"
+        "parent.postMessage({type:'iframe-resize',h:note.offsetHeight+gd.offsetHeight},'*');});}"
+        "window.addEventListener('hashchange',show);show();"
+        "</script></body></html>"
+    )
+    path.write_text(html, encoding="utf-8")
+    return max(int(fig.layout.height or 0) for fig in views.values())
 
 
 def _save_multi_fig_html(figs: list, path: Path, views: "dict | None" = None) -> int:

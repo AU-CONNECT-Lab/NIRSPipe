@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from tests._fingerprint import EVENT_DURATION, EVENT_ONSETS, RESPONSE_AMP
-from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
+from tests.figure_accuracy._payload import fragment_views, one_figure, plotly_figures, plotly_frames
 from tests.figure_accuracy._read import traces, xy
 from tests.figure_accuracy.conftest import ROI_MAP
 
@@ -81,7 +81,8 @@ def test_each_trial_image_is_its_channel_s_trials(denoise_run, evoked):
     for pair in denoise_run.truth.long_pairs:
         if pair.bad:
             continue
-        fig = plotly_figures(denoise_run.figure("trialimage", chan=f"{pair.name.replace('_', '')}hbo"))[0]
+        # one condition, so the fallback view is that condition's trials
+        fig = fragment_views(denoise_run.figure("trialimage", chan=f"{pair.name.replace('_', '')}hbo"))[""]
         heat = next(t for t in fig["data"] if t["type"] == "heatmap")
         trials = evoked.get_data(picks=[f"{pair.name} hbo"])[:, 0, :] * 1e6
         np.testing.assert_allclose(np.asarray(heat["z"], float), trials, rtol=1e-4, atol=1e-3)

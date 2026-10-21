@@ -757,7 +757,7 @@ function loadTrialImages() {
       + _esc(e.pair) + "</option>";
   }).join("");
   frame.style.height = (imgs[0].h || 400) + "px";
-  frame.src = imgs[0].src;
+  frame.src = imgs[0].src + "#" + encodeURIComponent(trialCond);
   // without the head, the trial image takes the whole row
   var hasTopo = !!(topo && topo.src);
   document.getElementById("signal-topo-col").style.display = hasTopo ? "" : "none";
@@ -774,17 +774,25 @@ function highlightTrialCell() {
   topo.contentWindow.postMessage({type: "highlight-cell",
     pair: sel.options[sel.selectedIndex].getAttribute("data-pair")}, "*");
 }
+// the condition the head's menu shows; the trial image file draws it off its URL fragment
+var trialCond = "";
 function pickTrialImage(i) {
   var sel = document.getElementById("trialimg-select");
   var frame = document.getElementById("trialimg-frame");
   if (!sel || !frame || i < 0) return;
   sel.selectedIndex = i;
-  frame.src = sel.options[i].value;
+  frame.src = sel.options[i].value + "#" + encodeURIComponent(trialCond);
   highlightTrialCell();
 }
 window.addEventListener("message", function(e) {
   if (!e.data) return;
   if (e.data.type === "topo-ready") { highlightTrialCell(); return; }
+  if (e.data.type === "pick-condition") {
+    trialCond = e.data.label || "";
+    var s = document.getElementById("trialimg-select");
+    if (s) pickTrialImage(s.selectedIndex);
+    return;
+  }
   if (e.data.type !== "pick-trial-channel") return;
   var sel = document.getElementById("trialimg-select");
   if (!sel) return;

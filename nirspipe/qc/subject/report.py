@@ -87,6 +87,7 @@ from nirspipe.qc.common.channel_table import (
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
+    save_fragment_views_html,
     _save_figure_html, _save_multi_fig_html,
     extract_markers, figure_namer, get_channel_pairs,
 )
@@ -113,7 +114,7 @@ from nirspipe.qc.figures import (
     design_matrix_static_figure,
     design_matrix_heatmap,
     build_epoch_preview_figure,
-    build_trial_image_figure,
+    build_trial_image_views,
     build_roi_trial_image_figure,
     build_trial_image_by_condition,
     build_roi_trial_image_by_condition,
@@ -1321,14 +1322,15 @@ def _section_trial_image(
                 roi_saved.append({"pair": str(roi_name), "path": _fig_href(fname), "h": h})
 
     saved = []
-    # HbO only: single-trial HbR is too low-amplitude to read as an image, and the HbO/HbR
-    # relation is already reported by hbo_hbr_corr and the per-channel detail figure
+    # the heatmap is HbO only: single-trial HbR is too low-amplitude to read as an image, so
+    # HbR is its average under the heatmap. One view per condition, picked by URL fragment
+    missing = section_note("epoch.trial_image_missing")
     for ch in [c for c in raw_haemo.ch_names if c.endswith(" hbo")]:
         with _guard(f"trial image {ch}", errors, subject):
-            figs = build_trial_image_figure(raw_haemo, ch, epoch_tmin, epoch_tmax)
-            if figs:
+            views = build_trial_image_views(raw_haemo, ch, epoch_tmin, epoch_tmax)
+            if views:
                 fname = fig_name("trialimage", channel=_pair_fname(ch))
-                h = _save_multi_fig_html(figs, figures_dir / fname)
+                h = save_fragment_views_html(views, figures_dir / fname, missing)
                 saved.append({"pair": ch, "path": _fig_href(fname), "h": h})
     return {"trial_image_pairs": saved, "trial_image_roi_pairs": roi_saved}
 

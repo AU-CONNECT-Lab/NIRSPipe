@@ -13,7 +13,7 @@ from nirspipe.qc.figures.common._utils import PSD_NFFT
 from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.subject.record_io import read_record
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
-from tests.figure_accuracy._payload import _decode, one_figure, plotly_figures
+from tests.figure_accuracy._payload import _decode, fragment_views, one_figure, plotly_figures
 from tests.figure_accuracy._read import (
     brain_inputs, by_pair, pair_sci, share_at, slider_layout, traces, which_pair, xy,
 )
@@ -259,7 +259,7 @@ def test_an_event_design_gets_a_trial_image_per_channel_beside_its_picker(raw_vi
                         preload=True, reject_by_annotation=False, verbose="error")
     assert len(epochs) == len(EVENT_ONSETS)
     for pair in raw_viewer_run.truth.long_pairs:
-        fig = one_figure(raw_viewer_run.out / "sub-01" / images[pair.name])
+        fig = fragment_views(raw_viewer_run.out / "sub-01" / images[pair.name])[""]
         heat = next(t for t in fig["data"] if t["type"] == "heatmap")
         expected = epochs.get_data(picks=[f"{pair.name} hbo"])[:, 0, :] * 1e6
         np.testing.assert_allclose(np.asarray(heat["z"], float), expected, rtol=1e-4, atol=1e-3)

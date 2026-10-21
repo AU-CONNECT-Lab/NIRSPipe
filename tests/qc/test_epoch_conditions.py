@@ -6,7 +6,7 @@ import pytest
 
 from nirspipe.qc.figures.common.topomap import evoked_channel_map_figure
 from nirspipe.qc.figures.subject.raw_figures import (
-    build_epoch_preview_figure, build_evoked_topo_figure, build_trial_image_figure,
+    build_epoch_preview_figure, build_evoked_topo_figure, build_trial_image_views,
 )
 from nirspipe.qc.common.windows import markers_on_data_axis
 from nirspipe.qc.metrics._helpers import epochable_events
@@ -100,10 +100,28 @@ def test_signal_by_position_shows_one_condition_at_a_time_in_first_appearance_or
 
 
 def test_a_trial_image_draws_the_hbr_average_of_the_same_trials(mixed):
-    figs = build_trial_image_figure(mixed, "S1_D1 hbo", -5.0, 25.0)
+    alpha = build_trial_image_views(mixed, "S1_D1 hbo", -5.0, 25.0)["alpha"]
     events, event_id = epochable_events(mixed, -5.0, 25.0)
     epochs = mne.Epochs(mixed, events, event_id, tmin=-5.0, tmax=25.0, baseline=(-5.0, 0),
                         picks=["S1_D1 hbr"], preload=True, verbose="error")
-    alpha = next(f for f in figs if "/ alpha" in f.layout.annotations[0].text)
-    hbr = next(t for t in alpha.data if t.name == "HbR")
+    # the pooled group first, then alpha's
+    hbr = [t for t in alpha.data if t.name == "HbR"][1]
     np.testing.assert_allclose(hbr.y, epochs["alpha"].average().data[0] * 1e6, rtol=1e-6)
+
+
+def test_each_view_is_the_pooled_trials_then_its_condition_on_one_colour_scale(mixed):
+    views = build_trial_image_views(mixed, "S1_D1 hbo", -5.0, 25.0)
+    # "once" has one trial: no view of its own, it falls back to the pooled one
+    assert set(views) == {"zeta", "alpha", ""}
+    titles = {k: [a.text for a in v.layout.annotations if a.text] for k, v in views.items()}
+    assert titles == {"zeta": ["all conditions (9 trials)", "zeta (4 trials)"],
+                      "alpha": ["all conditions (9 trials)", "alpha (4 trials)"],
+                      "": ["all conditions (9 trials)"]}
+    scales = {(h.zmin, h.zmax) for v in views.values() for h in v.data if h.type == "heatmap"}
+    assert len(scales) == 1
+
+
+def test_the_condition_menu_names_each_condition_bare(mixed):
+    fig = build_evoked_topo_figure(mixed, markers_on_data_axis(mixed), 2000, -5.0, 25.0)
+    assert [b.name for b in fig.layout.updatemenus[0].buttons] == ["once", "zeta", "alpha"]
+    assert not [a for a in fig.layout.annotations if a.text in {"S1_D1", "S2_D2"}]

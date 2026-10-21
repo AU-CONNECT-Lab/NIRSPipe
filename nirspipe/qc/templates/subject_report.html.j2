@@ -389,7 +389,7 @@
           <option value="{{ ch.path }}" data-pair="{{ ch.pair.split(' ')[0] }}">{{ ch.pair }}</option>
           {% endfor %}
         </select>
-        <iframe id="trialimg-frame" class="plotly-frame"
+        <iframe id="trialimg-frame" class="plotly-frame" data-fit-height
                 src="{{ trial_image_pairs[0].path }}"
                 style="height:{{ trial_image_pairs[0].h + 20 }}px;"></iframe>
       </div>
@@ -933,17 +933,25 @@ function highlightTrialCell() {
   topo.contentWindow.postMessage({type: "highlight-cell",
     pair: sel.options[sel.selectedIndex].getAttribute("data-pair")}, "*");
 }
+// the condition the head's menu shows; the trial image file draws it off its URL fragment
+var trialCond = "";
 function pickTrialImage(i) {
   var sel = document.getElementById("trialimg-select");
   var frame = document.getElementById("trialimg-frame");
   if (!sel || !frame || i < 0) return;
   sel.selectedIndex = i;
-  frame.src = sel.options[i].value;
+  frame.src = sel.options[i].value + "#" + encodeURIComponent(trialCond);
   highlightTrialCell();
 }
 window.addEventListener("message", function(e) {
   if (!e.data) return;
   if (e.data.type === "topo-ready") { highlightTrialCell(); return; }
+  if (e.data.type === "pick-condition") {
+    trialCond = e.data.label || "";
+    var s = document.getElementById("trialimg-select");
+    if (s) pickTrialImage(s.selectedIndex);
+    return;
+  }
   if (e.data.type !== "pick-trial-channel") return;
   var sel = document.getElementById("trialimg-select");
   if (!sel) return;

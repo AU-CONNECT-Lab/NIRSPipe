@@ -59,3 +59,10 @@ def plotly_frames(path: Path) -> dict[float, dict]:
     match = re.search(r"Plotly\.addFrames\(\s*'[^']+'\s*,\s*", text)
     frames, _ = _DECODER.raw_decode(text, match.end())
     return {float(f["name"]): f for f in _decode(frames)}
+
+
+def fragment_views(path: Path) -> dict[str, dict]:
+    """A views file's figures by the URL fragment that draws each, ``""`` the fallback."""
+    text = Path(path).read_text(encoding="utf-8")
+    views, _ = _DECODER.raw_decode(text, text.index("var VIEWS=") + len("var VIEWS="))
+    return {key: _decode(spec) for key, spec in views.items()}
