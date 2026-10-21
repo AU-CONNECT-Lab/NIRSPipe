@@ -1329,6 +1329,9 @@ def _one_condition_at_a_time(fig: go.Figure, layers: "list[dict]", trace_layer: 
     first = next((li for li, layer in enumerate(layers) if layer["n"] >= SCALE_MIN_TRIALS), 0)
     for trace, visible in zip(fig.data, shown(first)):
         trace.visible = visible
+        # one condition on screen, so the colours go back to HbO red and HbR blue, as the
+        # trial images beside it draw them
+        trace.line.color = HBO_COLOR if trace.legendgroup.startswith("hbo") else HBR_COLOR
     buttons = [dict(label=f"{layer['label']} (n={layer['n']})", method="restyle",
                     args=[{"visible": shown(li)}])
                for li, layer in enumerate(layers)]

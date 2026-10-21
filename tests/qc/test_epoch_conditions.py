@@ -93,6 +93,8 @@ def test_signal_by_position_shows_one_condition_at_a_time_in_first_appearance_or
     # opens on the first condition with three trials or more, not the one-off
     shown = {t.legendgroup.split(" ", 1)[1] for t in fig.data if t.visible}
     assert shown == {"zeta"} and menu.active == 1
+    assert {t.line.color for t in fig.data if t.legendgroup.startswith("hbo")} == {"#e74c3c"}
+    assert {t.line.color for t in fig.data if t.legendgroup.startswith("hbr")} == {"#3498db"}
     picked = menu.buttons[2].args[0]["visible"]
     assert {t.legendgroup.split(" ", 1)[1] for t, v in zip(fig.data, picked) if v} == {"alpha"}
 
