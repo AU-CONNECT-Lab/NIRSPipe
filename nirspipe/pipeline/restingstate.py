@@ -257,7 +257,9 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     over the channels of a single chromophore (``chromophore`` is "hbo" or "hbr"); HbO and HbR
     anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
     is 1. Empty frame if the chromophore has < 2 channels. Only frames outside every ``BAD_``
-    span enter the correlation, here and in the ROI and seed products.
+    span enter the correlation, here and in the ROI and seed products. Where a channel has NaN
+    frames (a ``--combine-runs`` series, in the runs it was bad) each pair is taken over the
+    frames both channels have, as pandas ``DataFrame.corr`` does.
 
     A rejected channel's row and column are NaN, not dropped: every subject's matrix keeps the
     same shape and the same channel order, so a group analysis can stack them however their
@@ -274,11 +276,18 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
     picks = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
     if len(picks) < 2:
         return pd.DataFrame()
-    fc = pd.DataFrame(np.corrcoef(_kept(raw, raw.get_data(picks=picks))), index=picks, columns=picks)
+    fc = pd.DataFrame(_corr(_kept(raw, raw.get_data(picks=picks))), index=picks, columns=picks)
     bads = [c for c in picks if c in set(raw.info["bads"])]
     fc.loc[bads, :] = np.nan
     fc.loc[:, bads] = np.nan
     return fc
+
+
+def _corr(rows: np.ndarray) -> np.ndarray:
+    """Pearson r between rows, pairwise over the frames both rows have when any frame is NaN."""
+    if not np.isnan(rows).any():
+        return np.corrcoef(rows)
+    return pd.DataFrame(rows.T).corr().to_numpy(copy=True)
 
 
 def _kept(raw: mne.io.Raw, data: np.ndarray) -> np.ndarray:
@@ -306,7 +315,8 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 
-def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo") -> pd.DataFrame:
+def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo",
+                   signals: "dict[str, np.ndarray] | None" = None) -> pd.DataFrame:
     r"""ROI-level FC for one chromophore: average each ROI's channels, then Pearson corr between ROIs.
 
     .. math::
@@ -320,16 +330,22 @@ def compute_fc_roi(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: 
 
     Every ROI the map lists keeps its row and column; one with no good channel is blank, so
     every subject's matrix has the same shape. Empty when fewer than two ROIs resolve, since
-    no correlation is left to compute.
+    no correlation is left to compute. ``signals`` ({ROI: series}) replaces the averaging, for
+    a joined series whose ROIs were averaged run by run.
     """
-    members = _roi_members(raw, roi_map, chromophore)
-    if len(members) < 2:
+    if signals is None:
+        signals = _roi_signals(raw, _roi_members(raw, roi_map, chromophore))
+    if len(signals) < 2:
         return pd.DataFrame()
-    names = list(members)
-    signals = [raw.get_data(picks=picks).mean(axis=0) for picks in members.values()]
-    fc = pd.DataFrame(np.corrcoef(_kept(raw, np.vstack(signals))), index=names, columns=names)
+    names = list(signals)
+    fc = pd.DataFrame(_corr(_kept(raw, np.vstack(list(signals.values())))),
+                      index=names, columns=names)
     labels = list(roi_map)
     return fc.reindex(index=labels, columns=labels)
+
+
+def _roi_signals(raw: mne.io.Raw, members: "dict[str, list[str]]") -> "dict[str, np.ndarray]":
+    return {roi: raw.get_data(picks=picks).mean(axis=0) for roi, picks in members.items()}
 
 
 def _roi_members(
@@ -362,7 +378,9 @@ def _roi_members(
     return members
 
 
-def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo") -> pd.DataFrame:
+def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore: str = "hbo",
+                    signals: "dict[str, np.ndarray] | None" = None,
+                    members: "dict[str, list[str]] | None" = None) -> pd.DataFrame:
     r"""Seed-to-whole-brain FC: each ROI's mean signal against every channel.
 
     .. math::
@@ -378,6 +396,9 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
         {ROI label: [channel names]}; every ROI becomes one seed, i.e. one row.
     chromophore : str, optional
         "hbo" or "hbr". HbO and HbR anti-correlate, so they never share a map.
+    signals, members : dict, optional
+        {ROI: seed series} and {ROI: the channels averaged into it}, given together for a
+        joined series whose seeds were averaged run by run; by default both come from ``raw``.
 
     Returns
     -------
@@ -401,20 +422,22 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     is not part of any seed. Columns span every channel, a rejected one's being NaN, as in
     :func:`compute_fc`.
     """
-    members = _roi_members(raw, roi_map, chromophore)
+    if signals is None:
+        members = _roi_members(raw, roi_map, chromophore)
+        signals = _roi_signals(raw, members)
     cols = [c for c in raw.ch_names if c.endswith(f" {chromophore}")]
-    if not members or len(cols) < 2:
+    if not signals or len(cols) < 2:
         return pd.DataFrame()
 
     data = _kept(raw, raw.get_data(picks=cols))
     col_index = {c: i for i, c in enumerate(cols)}
     bad_cols = [col_index[c] for c in cols if c in set(raw.info["bads"])]
     rows = []
-    for picks in members.values():
-        seed = _kept(raw, raw.get_data(picks=picks).mean(axis=0))
-        r = np.corrcoef(np.vstack([seed, data]))[0, 1:]   # row 0 is the seed against every column
-        r[[col_index[c] for c in picks]] = np.nan
+    for roi, signal in signals.items():
+        seed = _kept(raw, signal)
+        r = _corr(np.vstack([seed, data]))[0, 1:]   # row 0 is the seed against every column
+        r[[col_index[c] for c in members[roi]]] = np.nan
         r[bad_cols] = np.nan
         rows.append(r)
-    seed_map = pd.DataFrame(np.vstack(rows), index=list(members), columns=cols)
+    seed_map = pd.DataFrame(np.vstack(rows), index=list(signals), columns=cols)
     return seed_map.reindex(index=list(roi_map))

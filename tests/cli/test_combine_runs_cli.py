@@ -1,8 +1,9 @@
 """`nirspipe --combine-runs` on a subject with two runs of a task, through the CLI.
 
 The joined FC is held to a re-derivation from the two runs' own written residuals: each
-z-scored per channel over its kept frames with numpy, joined, and correlated over the kept
-frames.
+z-scored per channel over its kept frames with numpy, blanked where the run marked the channel
+bad, joined, and correlated over the kept frames both channels have. S1_D1 is marked bad in
+run-01 only, so it takes part in run-02 alone.
 """
 
 import json
@@ -30,9 +31,11 @@ def _tree(root, runs, report=False):
         _write_subject(bids, "01", f"tapping_run-{run}", raw)
     roi = root / "roi.json"
     roi.write_text(json.dumps(ROI))
+    bads = root / "bads.tsv"
+    bads.write_text("run\tbad_channels\n01\tS1_D1\n", encoding="utf-8")
     run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, "--mode", "rest",
                   "--skip-bids-validation", "--combine-runs", "--roi-mapping", str(roi),
-                  *([] if report else ["--no-report"])])
+                  "--bad-channels", str(bads), *([] if report else ["--no-report"])])
     return root / "out" / "sub-01" / "nirs"
 
 
@@ -59,7 +62,7 @@ def test_the_joined_series_and_its_fc_are_written_without_the_run(two):
     assert not [p for p in two.glob("*stat-alff*") if "_run-" not in p.name]
 
 
-def test_the_sidecar_names_each_run_its_onset_and_every_runs_bads(two):
+def test_the_sidecar_names_each_run_its_onset_and_the_runs_each_channel_took_part_in(two):
     side = _side(two / "sub-01_task-tapping_desc-errts_nirs.snirf")
     runs = _runs(two)
     assert [s.rsplit("/", 1)[-1] for s in side["Sources"]] == [p.name for p in runs]
@@ -67,24 +70,59 @@ def test_the_sidecar_names_each_run_its_onset_and_every_runs_bads(two):
     assert side["parameters"]["combined_runs"] == [
         {"run": runs[0].name, "onset_s": 0.0},
         {"run": runs[1].name, "onset_s": round(first.n_times / first.info["sfreq"], 6)}]
-    assert side["bad_channels"] == sorted({ch for p in runs for ch in _side(p)["bad_channels"]},
-                                          key=first.ch_names.index)
+    bads = [set(_side(p)["bad_channels"]) for p in runs]
+    assert "S1_D1 hbo" in bads[0] - bads[1]
+    # bad in the joined series only where every run marked it
+    assert side["bad_channels"] == [ch for ch in first.ch_names if all(ch in b for b in bads)]
+    assert side["parameters"]["channel_runs"] == {
+        ch: [f"run-{r}" for r, b in zip(("01", "02"), bads) if ch not in b]
+        for ch in first.ch_names}
 
 
-def test_the_joined_fc_is_the_runs_z_scored_joined_and_correlated(two):
+def test_a_channel_bad_in_one_run_is_nan_there_and_kept_in_the_other(two):
+    joined = read_snirf(two / "sub-01_task-tapping_desc-errts_nirs.snirf")
+    first = read_snirf(_runs(two)[0])
+    row = joined.get_data(picks=["S1_D1 hbo"])[0]
+    assert np.isnan(row[:first.n_times]).all() and np.isfinite(row[first.n_times:]).all()
+
+
+@pytest.mark.parametrize("pair", [("S1_D1 hbo", "S2_D2 hbo"), ("S2_D2 hbo", "S4_D4 hbo")])
+def test_the_joined_fc_is_the_runs_z_scored_joined_and_correlated(two, pair):
     parts, keeps = [], []
     for path in _runs(two):
         raw = read_snirf(path)
         keep = kept_frames(raw)
-        data = raw.get_data(picks=["S1_D1 hbo", "S2_D2 hbo"])
+        data = raw.get_data(picks=list(pair))
         kept = data[:, keep]
-        parts.append(((data.T - kept.mean(axis=1)) / kept.std(axis=1)).T)
+        part = ((data.T - kept.mean(axis=1)) / kept.std(axis=1)).T
+        part[[ch in raw.info["bads"] for ch in pair]] = np.nan
+        parts.append(part)
         keeps.append(keep)
-    joined, keep = np.hstack(parts), np.concatenate(keeps)
-    expected = np.corrcoef(joined[0, keep], joined[1, keep])[0, 1]
+    joined = np.hstack(parts)
+    both = np.concatenate(keeps) & np.isfinite(joined).all(axis=0)
+    expected = np.corrcoef(joined[0, both], joined[1, both])[0, 1]
     fc = pd.read_csv(two / "sub-01_task-tapping_chromo-hbo_stat-pearson_relmat.tsv", sep="\t",
                      index_col=0)
-    assert fc.loc["S1_D1 hbo", "S2_D2 hbo"] == pytest.approx(expected, abs=1e-6)
+    assert fc.loc[pair] == pytest.approx(expected, abs=1e-6)
+
+
+def test_the_joined_roi_fc_averages_each_run_over_its_own_good_members(two):
+    parts = {"A": [], "B": []}
+    keeps = []
+    for path in _runs(two):
+        raw = read_snirf(path)
+        keep = kept_frames(raw)
+        keeps.append(keep)
+        for roi, bases in ROI.items():
+            picks = [f"{b} hbo" for b in bases if f"{b} hbo" not in raw.info["bads"]]
+            mean = raw.get_data(picks=picks).mean(axis=0)
+            parts[roi].append((mean - mean[keep].mean()) / mean[keep].std())
+    keep = np.concatenate(keeps)
+    a, b = (np.concatenate(parts[roi])[keep] for roi in ("A", "B"))
+    roi_fc = "sub-01_task-tapping_chromo-hbo_seg-roi_agg-roi_stat-pearson_relmat.tsv"
+    fc = pd.read_csv(two / roi_fc, sep="\t", index_col=0)
+    assert fc.loc["A", "B"] == pytest.approx(np.corrcoef(a, b)[0, 1], abs=1e-6)
+    assert _side(two / roi_fc)["parameters"]["roi_channels"]["run-01"]["A"] == ["S2_D2 hbo"]
 
 
 def test_the_joined_series_gets_no_quality_record_of_its_own(two):

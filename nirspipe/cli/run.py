@@ -231,7 +231,8 @@ def _build_parser() -> argparse.ArgumentParser:
     post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=None,
                       help="After postprocessing, join each task's runs, each z-scored per "
                            "channel over its kept frames, into one series written without the "
-                           "run entity, and compute FC on it. ALFF and GLM tables stay per run.")
+                           "run entity, and compute FC on it. A channel joins only from the runs "
+                           "where it is good. ALFF and GLM tables stay per run.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", type=float,

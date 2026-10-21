@@ -2,7 +2,9 @@
 
 Each run is z-scored per channel before the runs are joined in run order, so that a run with
 a larger variance does not outweigh the others in a correlation taken across the joined
-series. The mean and SD come from the run's kept frames, the ones a correlation reads.
+series. The mean and SD come from the run's kept frames, the ones a correlation reads. A
+channel takes part only in the runs where it is good; its frames in the others are NaN, so a
+correlation over the joined series reads each pair over the frames both channels have.
 """
 
 from __future__ import annotations
@@ -30,11 +32,14 @@ def zscore_kept(data: np.ndarray, keep: np.ndarray) -> np.ndarray:
     return out
 
 
-def join_runs(raws: "list[mne.io.BaseRaw]") -> "tuple[mne.io.RawArray, list[float]]":
+def join_runs(raws: "list[mne.io.BaseRaw]", absent: "list[set[str]] | None" = None,
+              ) -> "tuple[mne.io.RawArray, list[float]]":
     """The runs z-scored over their kept frames and joined in order, with each run's onset in seconds.
 
-    The first run's info carries over, its bad channels replaced by every run's; each run's
-    annotations keep their place within it. Refused when the runs differ in channels or rate.
+    A channel's frames are NaN in a run where it is ``absent`` (by default the run's bad
+    channels). The first run's info carries over, its bad channels replaced by those bad in
+    every run; each run's annotations keep their place within it. Refused when the runs differ
+    in channels or rate.
     """
     first = raws[0]
     for raw in raws[1:]:
@@ -43,15 +48,18 @@ def join_runs(raws: "list[mne.io.BaseRaw]") -> "tuple[mne.io.RawArray, list[floa
         if raw.info["sfreq"] != first.info["sfreq"]:
             raise StageError(f"the runs are sampled at {first.info['sfreq']:g} and "
                              f"{raw.info['sfreq']:g} Hz; join them after --resample-sfreq")
+    if absent is None:
+        absent = [set(raw.info["bads"]) for raw in raws]
     sfreq = float(first.info["sfreq"])
     info = first.info.copy()
-    info["bads"] = sorted({ch for raw in raws for ch in raw.info["bads"]},
-                          key=first.ch_names.index)
+    info["bads"] = [ch for ch in first.ch_names if all(ch in raw.info["bads"] for raw in raws)]
     onsets, onset = [], 0.0
     parts, onset_s, duration_s, description = [], [], [], []
-    for raw in raws:
+    for raw, missing in zip(raws, absent):
         onsets.append(onset)
-        parts.append(zscore_kept(raw.get_data(), kept_frames(raw)))
+        part = zscore_kept(raw.get_data(), kept_frames(raw))
+        part[[raw.ch_names.index(ch) for ch in missing]] = np.nan
+        parts.append(part)
         ann = raw.annotations
         onset_s += list(ann.onset - raw.first_time + onset)
         duration_s += list(ann.duration)
@@ -61,3 +69,30 @@ def join_runs(raws: "list[mne.io.BaseRaw]") -> "tuple[mne.io.RawArray, list[floa
     joined.set_annotations(mne.Annotations(onset_s, duration_s, description,
                                            orig_time=joined.annotations.orig_time))
     return joined, onsets
+
+
+def join_roi_signals(raws: "list[mne.io.BaseRaw]", labels: "list[str]",
+                     roi_map: "dict[str, list[str]]", chromophore: str,
+                     ) -> "tuple[dict[str, np.ndarray], dict[str, dict[str, list[str]]]]":
+    """Each ROI averaged per run over that run's good members, z-scored over its kept frames and joined.
+
+    Returns ``({roi: joined signal}, {run label: {roi: members}})``. An ROI is NaN in a run
+    where none of its channels is good, and left out when that holds in every run.
+    """
+    from nirspipe.pipeline.restingstate import _roi_members
+
+    members = {label: _roi_members(raw, roi_map, chromophore) for raw, label in zip(raws, labels)}
+    signals = {}
+    for roi in roi_map:
+        if not any(roi in m for m in members.values()):
+            continue
+        parts = []
+        for raw, label in zip(raws, labels):
+            picks = members[label].get(roi)
+            if picks is None:
+                parts.append(np.full(raw.n_times, np.nan))
+                continue
+            mean = raw.get_data(picks=picks).mean(axis=0, keepdims=True)
+            parts.append(zscore_kept(mean, kept_frames(raw))[0])
+        signals[roi] = np.concatenate(parts)
+    return signals, members

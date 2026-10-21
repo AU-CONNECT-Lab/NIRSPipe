@@ -525,21 +525,25 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
 
     ``runs`` holds the source entities of each run of one subject, session and task, in run
     order. Each run's final series (:func:`final_stage`) is z-scored per channel over its kept
-    frames and the runs are joined (:func:`~nirspipe.pipeline.combine_runs.join_runs`); the
-    joined series is written without the run entity, its sidecar's ``combined_runs`` naming
-    each run and its onset, and the FC products the mode writes are computed on it over its
-    kept frames. ALFF and the GLM's tables stay per run. A run under ``--min-time`` is left
-    out, and fewer than two runs left join nothing. Returns the joined file, or None.
+    frames and the runs are joined (:func:`~nirspipe.pipeline.combine_runs.join_runs`), a
+    channel taking part only in the runs where it is good and NaN in the others; ROIs are
+    averaged per run over that run's good members before the z-score. The joined series is
+    written without the run entity, its sidecar's ``combined_runs`` naming each run and its
+    onset and ``channel_runs`` the runs each channel took part in; it is bad only where every
+    run marked it. The FC products the mode writes are computed on it, each pair over the
+    kept frames both channels have. ALFF and the GLM's tables stay per run. A run under
+    ``--min-time`` is left out, and fewer than two runs left join nothing. Returns the joined
+    file, or None.
     """
     from nirspipe.io.optode_space import copy_placement
-    from nirspipe.pipeline.combine_runs import join_runs
+    from nirspipe.pipeline.combine_runs import join_roi_signals, join_runs
 
     stage = final_stage(config, mode)
     if stage is None:
         logger.warning("sub-%s | --combine-runs: the runs end on their own input (no bandpass, "
                        "resampling or regression), so nothing is joined", config.subject)
         return None
-    paths, raws = [], []
+    paths, raws, labels = [], [], []
     for entities in runs:
         path = build_output_path(output_dir=output_dir, subject=config.subject,
                                  session=config.session,
@@ -555,16 +559,22 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
             continue
         paths.append(path)
         raws.append(raw)
+        labels.append(f"run-{entities['run']}")
     if len(raws) < 2:
         logger.warning("sub-%s | --combine-runs: fewer than two runs of task %s to join",
                        config.subject, runs[0].get("task"))
         return None
-    joined, onsets = join_runs(raws)
+    # a short channel regressed out of itself has no residual left to correlate in that run
+    absent = [set(raw.info["bads"]) | set(sole_regressor_channels(
+        raw, config.short_channel, separation_bands(config))) for raw in raws]
+    joined, onsets = join_runs(raws, absent)
     rec = Recorder()
     # the first run under a stage of its own, since the joined series takes that run's stage
     rec.register_input(paths[0], stamp(raws[0], stage="combine_input", step="load"))
     stamp(joined, stage=stage, step="combine_runs", source=raws[0],
           combined_runs=[{"run": p.name, "onset_s": round(o, 6)} for p, o in zip(paths, onsets)],
+          channel_runs={ch: [label for label, gone in zip(labels, absent) if ch not in gone]
+                        for ch in joined.ch_names},
           zscored="per run and channel, over its kept frames")
     known = [{**span, "onset": span["onset"] + onset}
              for path, onset in zip(paths, onsets)
@@ -578,8 +588,10 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
         logger.warning("sub-%s | --combine-runs: no optode placement carried over: %s",
                        config.subject, exc)
     if mode == "rest" or config.fc:
+        rois = ({c: join_roi_signals(raws, labels, config.roi_map, c) for c in ("hbo", "hbr")}
+                if config.roi_map else None)
         _write_fc_derivatives(joined, config, output_dir, rec, source_entities=entities,
-                              known_spans=known)
+                              known_spans=known, joined_rois=rois)
     return written
 
 
@@ -620,11 +632,14 @@ def _write_fc_derivatives(
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
     known_spans: "list[dict] | None" = None,
+    joined_rois: "dict[str, tuple[dict, dict]] | None" = None,
 ) -> tuple:
     """Write the FC, ROI FC and seed-map TSVs for one residual.
 
     Returns (fc_hbo_df, fc_hbr_df, fc_roi, fc_seed). The last two are
-    {chromophore: frame} and stay empty without a roi_map.
+    {chromophore: frame} and stay empty without a roi_map. ``joined_rois`` is
+    {chromophore: (ROI signals, members per run)} from
+    :func:`~nirspipe.pipeline.combine_runs.join_roi_signals`, for a joined series.
 
     All three modes land here, and the only thing that differs is what arrives: rest
     regresses confounds alone, glm regresses the task as well, and denoise passes either its
@@ -692,28 +707,36 @@ def _write_fc_derivatives(
         logger.info("sub-%s | fcz (%s) -> %s", config.subject, chromo, fcz_path)
 
         if config.roi_map:
-            fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo)
+            signals = seeds = None
+            if joined_rois:
+                signals, members = joined_rois[chromo]
+                # a seed's own channels are those averaged into it in any run
+                seeds = {roi: [ch for ch in raw_resid.ch_names
+                               if any(ch in run.get(roi, ()) for run in members.values())]
+                         for roi in signals}
+            else:
+                members = _roi_members(raw_resid, config.roi_map, chromo)
+            fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo, signals=signals)
             if not fc_roi_df.empty:
                 fc_roi_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "pearson")
                 write_tsv(fc_roi_df, fc_roi_path, index=True, index_label="roi")
                 # the members, not the map: an ROI correlation averages them into a
                 # signal that exists nowhere else, and which ones survived is a property
                 # of this run, so without them the number cannot be reproduced
-                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo,
-                         roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
+                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo, roi_channels=members)
                 logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "fisherz")
                 write_tsv(fisher_z(fc_roi_df), fcroiz_path, index=True, index_label="roi")
-                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo,
-                         roi_channels=_roi_members(raw_resid, config.roi_map, chromo))
+                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo, roi_channels=members)
                 logger.info("sub-%s | fc_roiz (%s) -> %s", config.subject, chromo, fcroiz_path)
 
                 fc_roi[chromo] = fc_roi_df
 
             # seed map: one side averaged, so it is a third product rather than a view of the
             # two above. Cells for a seed's own channels are NaN, not zero.
-            fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo)
+            fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo, signals=signals,
+                                         members=seeds)
             for ch in (c for c in empty if c in fc_seed_df.columns):
                 fc_seed_df[ch] = np.nan
             if not fc_seed_df.empty:
@@ -722,8 +745,7 @@ def _write_fc_derivatives(
                 # the channels each seed was actually built from, which is the requested map
                 # minus whatever was rejected; without it a reader cannot tell why a cell
                 # inside a listed ROI holds a value instead of being blank
-                _sidecar(fcseed_path, "fc_seed", chromophore=chromo,
-                         seed_channels=_roi_members(raw_resid, config.roi_map, chromo))
+                _sidecar(fcseed_path, "fc_seed", chromophore=chromo, seed_channels=members)
                 logger.info("sub-%s | fc_seed (%s) -> %s", config.subject, chromo, fcseed_path)
 
                 fcseedz_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "fisherz")

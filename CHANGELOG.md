@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-hyper` and `nirspipe-hyper-pairnull` take `--device cuda`: wavelet transforms run on an NVIDIA card, checked against the CPU on each group's first pairing
 
 ### Changed
+- `--combine-runs` joins a channel only from the runs where it is good (NaN in the others) and takes FC pairwise; ROIs are averaged per run
 - `nirspipe-hyper-pairnull` redraws each re-paired dyad's pages from its run record, its phase null read from disk, so condition arrows read the re-paired null; `--no-report` skips it
 - The run note on optode positions follows the run's placement on fsaverage, as the brain views do; it names why a run could not be placed
 
