@@ -21,6 +21,8 @@ from tests.provenance._sweep import argv, moved, snapshot
 # the flags that pick what runs rather than how
 SELECTION = {"help", "version", "verbose", "config", "pairs_csv", "group_id",
              "participant_label", "task_label", "check_only", "no_report", "task"}
+# cores only: tests/cli/test_hyper_nprocs.py holds every output to the serial run's
+EXECUTION = {"nprocs"}
 
 
 @dataclass(frozen=True)
@@ -214,7 +216,7 @@ def runs(dyads):
 # ---- the sweep ----
 
 def _settings(parser) -> set[str]:
-    return {a.dest for a in parser._actions if a.option_strings} - SELECTION
+    return {a.dest for a in parser._actions if a.option_strings} - SELECTION - EXECUTION
 
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
