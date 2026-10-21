@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.72.0] - 2026-10-20
+
 ### Added
 - `nirspipe-qc prep-raw` takes `--nprocs` and reports several subjects at once
 - `nirspipe-hyper`, `nirspipe-hyper-pairnull` and `nirspipe-qc hyper-raw` take `--nprocs` and run several groups at once, each in its own process
