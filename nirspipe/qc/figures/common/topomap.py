@@ -18,7 +18,9 @@ from plotly.subplots import make_subplots
 from nirspipe.qc.metrics._helpers import epochable_events
 from nirspipe.utils import is_marker
 from nirspipe.utils.logging import get_logger
-from nirspipe.qc.figures.common._utils import _optode_positions, _topomap_project
+from nirspipe.qc.figures.common._utils import (
+    SCALE_MIN_TRIALS, _optode_positions, _topomap_project,
+)
 
 logger = get_logger("qc.figures")
 
@@ -37,8 +39,6 @@ _OPEN_AT     = 6.0     # canonical HbO peak, so the figure opens on the informat
 # ---- Colour ----
 # a percentile, not the max, so one stray condition cannot wash the rest out to white
 _SCALE_PCT   = 99.5
-# below this a condition is single-trial noise: drawn, but not consulted for the range
-_SCALE_MIN_TRIALS = 3
 
 
 def _condition_evokeds(
@@ -204,9 +204,9 @@ def evoked_channel_map_figure(
         return _pair_values(evokeds[cond], pairs, per_pair, chromo, t)
 
     # one scale per chromophore, spanning both separations
-    # conditions under _SCALE_MIN_TRIALS are drawn but left out of the range, as the grand mean
+    # conditions under SCALE_MIN_TRIALS are drawn but left out of the range, as the grand mean
     n_trials = {c: int(getattr(evokeds[c], "nave", 0) or 0) for c in conds}
-    scaling = [c for c in conds if n_trials[c] >= _SCALE_MIN_TRIALS] or list(conds)
+    scaling = [c for c in conds if n_trials[c] >= SCALE_MIN_TRIALS] or list(conds)
 
     vlim = {}
     for chromo in chromos:
@@ -271,8 +271,9 @@ def _assemble(rows, conds, times, open_at, geometry, outlines, opt_xy,
               row_values, vlim, chromos, verdicts, scaling) -> go.Figure:
     """Build the subplot grid, the frames and the slider from the per-row value function."""
     n_rows, n_cols = len(rows), len(conds)
+    # still on the shared colours, so a strong one saturates rather than rescales
     titles = [c if c in scaling or len(scaling) == len(conds)
-              else f"{c}<br><span style='font-size:9px'>off the shared scale</span>"
+              else f"{c}<br><span style='font-size:9px'>too few trials to set the scale</span>"
               for c in conds]
     fig = make_subplots(rows=n_rows, cols=n_cols,
                         subplot_titles=titles + [""] * (n_cols * (n_rows - 1)),

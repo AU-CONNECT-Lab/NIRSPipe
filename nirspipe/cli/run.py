@@ -166,10 +166,6 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Cut each task annotation into trials this long before epoching, "
                                "so a block design gets one trial per piece: a 240 s block at 25 "
                                "s gives 9, the remainder dropped.")
-    prep_opt.add_argument("--epoch-single-trial", action="store_true",
-                          help="Draw the epoch section even when no condition repeats (skipped "
-                               "by default, as one trial leaves nothing to average), for when "
-                               "the single trial is the thing to look at.")
     prep_opt.add_argument("--by-condition", action="store_true",
                           help="Also write one QC report page per annotated condition, as "
                                "cond-<condition>. Its numbers are sliced from the run's "

@@ -22,6 +22,10 @@ All notable changes to this project will be documented in this file.
 - SNR is labelled μ/σ wherever it is shown, a linear ratio rather than dB
 - Signal by position moves from the raw report to the subject report's epoch section, drawn on the processed epochs
 - The raw and subject reports carry the dyad page's head slider: coupling, SCI and PSP on the head, window by window
+- **Breaking**: `--epoch-single-trial` is gone; the epoch section is drawn when no condition repeats, and the run notes name conditions occurring once
+- Epoch figures list conditions in order of first appearance, as the event timeline does
+- A grand-mean panel with fewer than three trials gets its own y scale instead of being clipped to the shared one
+- The raw report's grand mean and trial images are low-passed for display below `--cardiac-l-freq`
 
 ### Fixed
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure

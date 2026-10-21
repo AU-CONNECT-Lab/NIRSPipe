@@ -442,6 +442,10 @@ def epochable_events(raw, tmin: float, tmax: float):
     if len(events) == 0 or not event_id:
         return empty
     events = events[np.isin(events[:, 2], list(event_id.values()))]
+    # first appearance, as the event timeline lists them; mne sorts names as strings
+    first = {k: events[events[:, 2] == v, 0].min() for k, v in event_id.items()
+             if (events[:, 2] == v).any()}
+    event_id = dict(sorted(event_id.items(), key=lambda kv: first.get(kv[0], np.inf)))
 
     sfreq = raw.info["sfreq"]
     first = int(round(tmin * sfreq))

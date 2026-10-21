@@ -54,12 +54,14 @@ NOTES = {
         "Every event on one axis, a row per condition. It shows what no average can: a "
         "condition that stopped partway through, or a block started twice.",
     "raw.epoch":
-        "A row per condition: good long channels solid, good short ones dotted, unfiltered and "
-        "uncorrected. If the dotted trace rises with the solid one, part of the response is "
+        "A row per condition: good long channels solid, good short ones dotted, uncorrected and "
+        "low-passed for display below <code>--cardiac-l-freq</code>, so no heartbeat ripple. "
+        "If the dotted trace rises with the solid one, part of the response is "
         "scalp signal, which <code>--short-channel</code> removes later.",
     "raw.trial_image":
         "Trials down, time across, a panel per condition. A channel lost partway through a "
-        "block shows as a band here. A condition needs two trials to draw.",
+        "block shows as a band here. Low-passed as the grand mean is. A condition needs two trials "
+        "to draw.",
 
     # ---- Metrics ----
     "raw.scope_long":

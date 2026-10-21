@@ -81,8 +81,6 @@ CASES = {
     "epoch_tmin": Case("denoise", {"--epoch-tmin": ["-2"]}, (), EPOCHS, report=True),
     "epoch_tmax": Case("denoise", {"--epoch-tmax": ["15"]}, (), EPOCHS, report=True),
     "epoch_chunk_duration": Case("denoise", {"--epoch-chunk-duration": ["40"]}, (), report=True),
-    "epoch_single_trial": Case("denoise", {"--epoch-single-trial": []}, (), dataset="single",
-                               report=True),
     "by_condition": Case("denoise", {"--by-condition": []}, (), report=True),
     "gvtd_censor": Case("denoise", GVTD, ("sci",), {"--gvtd-censor-n-std": ["3"]}),
     "gvtd_censor_n_std": Case("denoise", {"--gvtd-censor-n-std": ["5"]}, ("sci",), GVTD),
@@ -151,13 +149,6 @@ def inputs(tmp_path_factory):
     (nirs / "sub-01_task-tapping_channels.tsv").write_text("name\ttype\tstatus\n" + "".join(
         f"{n}\tNIRSCWAMPLITUDE\t{'bad' if n.startswith('S5_D5') else 'good'}\n" for n in names))
 
-    # no condition repeats: the epoch section is skipped unless --epoch-single-trial
-    single = root / "bids_single"
-    _write_dataset_root(single, ["01"])
-    raw, _ = fingerprint_raw("01", "tapping", blocks=True)
-    raw.annotations.delete([i for i, d in enumerate(raw.annotations.description) if d not in ("ca", "cb")])
-    _write_subject(single, "01", "tapping", raw)
-
     two = root / "bids_two_runs"
     _write_dataset_root(two, ["01"])
     for run, seed in (("01", 1), ("02", 2)):
@@ -176,7 +167,7 @@ def inputs(tmp_path_factory):
     for key, (name, text) in files.items():
         paths[key] = str(root / name)
         (root / name).write_text(text)
-    return {"root": root, "datasets": {"main": bids, "single": single, "two_runs": two},
+    return {"root": root, "datasets": {"main": bids, "two_runs": two},
             "paths": paths}
 
 

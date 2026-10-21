@@ -219,15 +219,31 @@ def test_the_timeline_bars_are_the_events(raw_viewer_run):
         np.testing.assert_allclose(np.asarray(bar["x"], float), EVENT_DURATION, atol=1e-6)
 
 
-def test_the_grand_mean_averages_the_kept_long_channels_only(raw_viewer_run, denoise_run):
-    _, y = xy(traces(one_figure(raw_viewer_run.figure("rawepochmean")), "HBO long")[0])
-    raw = denoise_run.read("uncorrected")
+def _raw_grand_mean(raw, kept):
     events, event_id = mne.events_from_annotations(raw, verbose="error")
     epochs = mne.Epochs(raw, events, event_id, tmin=-5.0, tmax=25.0, baseline=(-5.0, 0),
                         preload=True, reject_by_annotation=False, verbose="error")
+    return epochs.average(picks=kept).data.mean(axis=0) * 1e6
+
+
+def test_the_grand_mean_averages_the_kept_long_channels_only(raw_viewer_run, denoise_run):
+    _, y = xy(traces(one_figure(raw_viewer_run.figure("rawepochmean")), "HBO long")[0])
+    raw = denoise_run.read("uncorrected")
     kept = [f"{p.name} hbo" for p in raw_viewer_run.truth.long_pairs if not p.bad]
-    np.testing.assert_allclose(y, epochs.average(picks=kept).data.mean(axis=0) * 1e6,
-                               rtol=1e-4, atol=1e-3)
+    # display low-pass: stopband from --cardiac-l-freq (0.8 Hz here), passband to 0.64 Hz
+    shown = raw.copy().filter(None, 0.64, h_trans_bandwidth=0.16, verbose="error")
+    np.testing.assert_allclose(y, _raw_grand_mean(shown, kept), rtol=1e-4, atol=1e-3)
+
+
+def test_the_grand_mean_carries_no_cardiac_ripple(raw_viewer_run, denoise_run):
+    _, y = xy(traces(one_figure(raw_viewer_run.figure("rawepochmean")), "HBO long")[0])
+    raw = denoise_run.read("uncorrected")
+    kept = [f"{p.name} hbo" for p in raw_viewer_run.truth.long_pairs if not p.bad]
+    t = np.arange(len(y)) / raw.info["sfreq"]
+    probe = np.exp(-2j * np.pi * CARDIAC_FREQ * t)
+    unfiltered = abs(np.dot(_raw_grand_mean(raw, kept), probe))
+    assert unfiltered > 0
+    assert abs(np.dot(y, probe)) < 0.05 * unfiltered
 
 
 def test_the_decoupled_trial_has_the_lowest_sci(raw_viewer_run):

@@ -542,12 +542,16 @@ def _process_run(
     # the epoch figures need concrete bounds; per-trial QC reads None as "use event duration"
     fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
     fig_tmax = _EPOCH_TMAX if epoch_tmax is None else epoch_tmax
+    epoch_view = None
+    if raw_haemo is not None:
+        with guard("Epoch display low-pass", errors, label):
+            epoch_view = _below_cardiac(raw_haemo, cardiac_l_freq)
 
     # ── file: grand mean ───────────────────────────────────────────────────────
     # One row per condition, every kept long channel averaged with the short ones dotted.
-    if raw_haemo is not None:
+    if epoch_view is not None:
         with guard("Grand mean", errors, label):
-            fig = build_epoch_preview_figure(raw_haemo, epoch_tmin=fig_tmin,
+            fig = build_epoch_preview_figure(epoch_view, epoch_tmin=fig_tmin,
                                              epoch_tmax=fig_tmax, sep_bands=sep_bands)
             if fig:
                 fname = fig_name("epochmean")
@@ -612,12 +616,12 @@ def _process_run(
     # block design is.
     trial_img_pairs: list = []
     trial_img_by_cond: dict = {}
-    if raw_haemo is not None and view_windows:
-        hbo_names = [c for c in raw_haemo.ch_names if c.endswith(" hbo")]
+    if epoch_view is not None and view_windows:
+        hbo_names = [c for c in epoch_view.ch_names if c.endswith(" hbo")]
         for ch in hbo_names:
             with guard("Trial image", errors, f"{label} | {ch}"):
                 by_label = build_trial_image_by_condition(
-                    raw_haemo, ch, view_windows, fig_tmin, fig_tmax)
+                    epoch_view, ch, view_windows, fig_tmin, fig_tmax)
                 if not by_label:
                     continue
                 pair = pair_of(ch)
@@ -808,7 +812,7 @@ def _process_run(
         # record off disk, the way the subject report's do
         "remake_psd":    _psd_maker(raw, cardiac_l_freq, cardiac_h_freq, sep_bands,
                                     build_psd_mean_figure),
-        "remake_epoch":  _epoch_maker(raw_haemo, fig_tmin, fig_tmax, sep_bands,
+        "remake_epoch":  _epoch_maker(epoch_view, fig_tmin, fig_tmax, sep_bands,
                                       build_epoch_preview_figure),
         "remake_hbo_hbr_corr": _hbo_hbr_maker(raw_haemo, raw_haemo_post, sep_bands,
                                               motion_correction,
@@ -920,6 +924,17 @@ def _head_slider_maker(raw, series: dict, channels: list, cutoffs: dict, sep_ban
                 if out["head_slider_path"] else None)
 
     return remake
+
+
+def _below_cardiac(raw_haemo, cardiac_l_freq: float):
+    """A copy for the epoch figures only, low-passed to stop at the cardiac band's lower edge.
+
+    This stage is otherwise unfiltered, and an average of a few trials keeps the heartbeat as
+    a ripple on a curve read for its shape. e.g. ``--cardiac-l-freq 0.7`` passes up to 0.56 Hz
+    and stops from 0.7 Hz.
+    """
+    return raw_haemo.copy().filter(None, 0.8 * cardiac_l_freq,
+                                   h_trans_bandwidth=0.2 * cardiac_l_freq, verbose="error")
 
 
 def _epoch_maker(raw_haemo, tmin: float, tmax: float, sep_bands, build):

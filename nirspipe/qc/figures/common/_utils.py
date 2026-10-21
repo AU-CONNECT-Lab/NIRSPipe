@@ -50,6 +50,10 @@ CONDITION_PALETTE = [
 # reader cannot tell from a line.
 _MIN_BLOCK_S = 1e-3
 
+# Below this many trials a condition's average is close to single-trial noise, so it is drawn
+# but does not set the scale the other conditions are read on.
+SCALE_MIN_TRIALS = 3
+
 
 def timeline_row_traces(events, y, color, name, showlegend, hover_tail=""):
     """One row of an event timeline: a bar per timed block, a tick per instant event.

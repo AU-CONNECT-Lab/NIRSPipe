@@ -13,7 +13,7 @@ from nirspipe.utils.spans import bad_spans
 
 from nirspipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
-    LONG_COLOR, PSD_NFFT, SHORT_COLOR, UNCLASSIFIED_COLOR,
+    LONG_COLOR, PSD_NFFT, SCALE_MIN_TRIALS, SHORT_COLOR, UNCLASSIFIED_COLOR,
     TIMELINE_ROW_PX, block_duration_labels,
     line_xy, minmax_xy,
     physio_bands, timeline_axes, timeline_row_bands,
@@ -849,8 +849,8 @@ def build_epoch_preview_figure(
         # stacked, one row per condition, rather than side by side
         n = len(panels)
         scaling = _scale_setting_conditions(panels)
-        titles = [f"{c} (n={e.shape[0]})" +
-                  ("" if (c, e) in scaling or len(scaling) == n else ", off the shared scale")
+        on_shared = {c for c, _ in scaling}
+        titles = [f"{c} (n={e.shape[0]})" + ("" if c in on_shared else ", own scale")
                   for c, e in panels]
         fig = make_subplots(
             rows=n, cols=1, shared_xaxes=True, vertical_spacing=min(0.06, 0.9 / n),
@@ -863,6 +863,7 @@ def build_epoch_preview_figure(
                 by_cond.setdefault(m["description"], []).append(float(m["duration"]))
 
         yrange = _shared_yrange(scaling, traces)
+        anchor = next(i for i, (c, _) in enumerate(panels, start=1) if c in on_shared)
 
         for i, (_cond, ep) in enumerate(panels, start=1):
             for picks, color, label, dash in traces:
@@ -884,10 +885,16 @@ def build_epoch_preview_figure(
             fig.add_hline(y=0, line=dict(color="#cccccc", width=1), row=i, col=1)
             fig.add_vline(x=0, line=dict(color="#7f8c8d", width=1, dash="dash"),
                           row=i, col=1)
-            # one y scale for every row, or each condition autoscales to itself
+            # one y scale for the scale-setting rows; a too-few-trials row would be clipped on
+            # it, so it autoscales and its title says so
+            if _cond not in on_shared:
+                scale = {"autorange": True}
+            elif i == anchor:
+                scale = {"range": yrange}
+            else:
+                scale = {"matches": "y" if anchor == 1 else f"y{anchor}"}
             fig.update_yaxes(title_text="Conc. (µmol/L)", gridcolor="#eeeeee",
-                             row=i, col=1,
-                             **({"range": yrange} if i == 1 else {"matches": "y"}))
+                             row=i, col=1, **scale)
         fig.update_xaxes(range=[epoch_tmin, epoch_tmax])
         fig.update_xaxes(title_text="Time rel. onset (s)", gridcolor="#eeeeee",
                          zerolinecolor="#cccccc", row=n, col=1)
@@ -905,20 +912,16 @@ def build_epoch_preview_figure(
         return None
 
 
-_SCALE_MIN_TRIALS = 3
-
-
 def _scale_setting_conditions(panels):
     """Conditions allowed to set the shared y scale, which is not every condition.
 
     A stray trigger leaves a condition of one or two trials whose average is single-trial
-    noise. Below ``_SCALE_MIN_TRIALS`` a condition is still drawn, just not consulted for the
-    range.
+    noise. Below ``SCALE_MIN_TRIALS`` a condition is still drawn, on its own scale.
 
     e.g. panels of 30, 30 and 2 trials -> the two 30-trial ones. When nothing clears the bar
     (a block design with one block per condition) every panel is kept.
     """
-    kept = [p for p in panels if p[1].shape[0] >= _SCALE_MIN_TRIALS]
+    kept = [p for p in panels if p[1].shape[0] >= SCALE_MIN_TRIALS]
     return kept or list(panels)
 
 
