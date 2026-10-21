@@ -52,6 +52,7 @@ def run_wtc_null(
     roi_map_name: str = "custom",
     roi_min_channels: int = ROI_MIN_CHANNELS,
     device=None,
+    reuse: bool = False,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -74,6 +75,10 @@ def run_wtc_null(
     ``roi_map`` adds the ROI maps' own level, :func:`roi_level_path`, from the same pass.
 
     ``device`` is the card the transforms run on, None for the CPU.
+
+    ``reuse`` keeps a null already on disk when every level it wrote was drawn on these
+    recordings with these settings, iterations and seed, and returns ``{}`` so nothing is
+    written again; otherwise the null is drawn as usual.
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
@@ -82,13 +87,34 @@ def run_wtc_null(
     from nirspipe.pipeline.hyper.surrogate import compute_wtc_phase_null
     from nirspipe.pipeline.hyper._helpers import _chroma_tuple
     from nirspipe.pipeline.hyper.whiten import whiten_raws
-    from nirspipe.pipeline.hyper.wtc_store import level_params, save_null_levels
+    from nirspipe.pipeline.hyper.wtc_store import level_mismatch, level_params, save_null_levels
     from nirspipe.utils.lineage import paths_from
 
     band_fmin = band_fmin if band_fmin is not None else wtc_fmin
     band_fmax = band_fmax if band_fmax is not None else wtc_fmax
 
     chroma = _chroma_tuple(chroma, "chroma")
+
+    def _level_path(ch_type: str) -> Path:
+        return group_output_path(
+            output_dir, group_id, {"task": task, "chromophore": ch_type, "nulldist": "phase",
+                                   "statistic": "wtc", "desc": "level"},
+            "relmat", ".npz", session=session)
+
+    drawn_as = {**level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
+                               mask_coi=mask_coi, whiten_s=whiten_s),
+                "n_iter": n_iter, "seed": seed}
+    if reuse:
+        wanted = [(_level_path(c), drawn_as) for c in chroma]
+        if roi_map:
+            wanted += [(roi_level_path(output_dir, group_id, task, c, roi_map_name, session),
+                        {**drawn_as, **roi_level_params(roi_map, roi_min_channels, cross)})
+                       for c in chroma]
+        if all(path.exists() and level_mismatch(path, expected, aligned_raws) is None
+               for path, expected in wanted):
+            logger.info("Phase-scrambled WTC: the null on disk was drawn on these recordings "
+                        "with these settings; read rather than drawn again.")
+            return {}
 
     logger.info(
         "Phase-scrambled WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
@@ -107,25 +133,16 @@ def run_wtc_null(
             roi_map=roi_map, roi_min_channels=roi_min_channels, device=device)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
-            path = save_null_levels(null.levels, group_output_path(
-                output_dir, group_id,
-                {"task": task, "chromophore": ch_type, "nulldist": "phase",
-                 "statistic": "wtc", "desc": "level"}, "relmat", ".npz", session=session))
+            path = save_null_levels(null.levels, _level_path(ch_type))
             # what the report checks before it thresholds its arrows against this level
             _hyper_sidecar(path, "hyper_wtc_phasenull_level",
-                           paths_from(aligned_raws.values()),
-                           **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
-                                          mask_coi=mask_coi, whiten_s=whiten_s),
-                           n_iter=n_iter, seed=seed)
+                           paths_from(aligned_raws.values()), **drawn_as)
         if getattr(null, "roi_levels", None):
             path = save_null_levels(null.roi_levels, roi_level_path(
                 output_dir, group_id, task, ch_type, roi_map_name, session))
             _hyper_sidecar(path, "hyper_wtc_phasenull_level",
-                           paths_from(aligned_raws.values()),
-                           **level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
-                                          mask_coi=mask_coi, whiten_s=whiten_s),
-                           **roi_level_params(roi_map, roi_min_channels, cross),
-                           n_iter=n_iter, seed=seed)
+                           paths_from(aligned_raws.values()), **drawn_as,
+                           **roi_level_params(roi_map, roi_min_channels, cross))
     return nulls
 
 

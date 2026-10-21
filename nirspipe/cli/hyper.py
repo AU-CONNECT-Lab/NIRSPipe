@@ -11,6 +11,7 @@ only the dyad tree (`<output> group`).
 from __future__ import annotations
 
 import argparse
+import json
 import multiprocessing
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -120,8 +121,12 @@ def _init_group_worker(blas: "int | None", verbose: bool) -> None:
 
 
 def _run_groups(groups: dict, process, nprocs: "int | None" = None, verbose: bool = False,
-                log_file=None, what: str = "report") -> None:
-    """Run process(gid, task, session, members) -> output path per group, logging each to log_file(key); exit non-zero on failure."""
+                log_file=None, what: str = "report", exit_on_failure: bool = True) -> list:
+    """Run process(gid, task, session, members) -> output path per group, logging each to log_file(key).
+
+    Exits non-zero on a failure, or with ``exit_on_failure`` False returns the keys that
+    succeeded and leaves the exit to the caller.
+    """
     jobs, blas = _shared.split_cpus(nprocs, len(groups))
     print(f"Processing {len(groups)} group session(s)"
           + (f", {jobs} at once..." if jobs > 1 else "..."))
@@ -139,12 +144,13 @@ def _run_groups(groups: dict, process, nprocs: "int | None" = None, verbose: boo
         return 0 if ok else 1
 
     logs = {key: (log_file(key) if log_file else None) for key in groups}
-    n_fail = 0
+    failed = []
     if jobs == 1:
         with threadpool_limits(limits=blas) if blas else nullcontext():
             for key, members in groups.items():
                 print(f"  -> {_name(key, members)}", flush=True)
-                n_fail += _report(*_group_outcome(process, key, members, logs[key]), "     ")
+                if _report(*_group_outcome(process, key, members, logs[key]), "     "):
+                    failed.append(key)
     else:
         # processes, not threads: matplotlib holds the GIL while it rasterises. So `process`
         # has to pickle, a module-level function or a partial of one
@@ -160,11 +166,13 @@ def _run_groups(groups: dict, process, nprocs: "int | None" = None, verbose: boo
                 except Exception as exc:
                     # the worker itself died, or its result would not pickle
                     outcome = (False, f"[error] worker failed: {exc!r}")
-                n_fail += _report(*outcome, f"  {_name(key, groups[key])}: ")
+                if _report(*outcome, f"  {_name(key, groups[key])}: "):
+                    failed.append(key)
 
-    print(f"\nDone: {len(groups) - n_fail} succeeded, {n_fail} failed.")
-    if n_fail > 0:
+    print(f"\nDone: {len(groups) - len(failed)} succeeded, {len(failed)} failed.")
+    if failed and exit_on_failure:
         raise SystemExit(1)
+    return [key for key in groups if key not in failed]
 
 
 def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
@@ -363,6 +371,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         roi_map_name=s.roi_name,
         roi_min_channels=s.wtc_roi_min_channels,
         device=device,
+        reuse=s.redraw,
     ) if s.wtc_phase_null else None
 
     report_path = build_hyper_post_report(
@@ -411,6 +420,10 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         bads_scope=s.bads_scope,
         wtc_device=device,
     )
+    if s.redraw:
+        # the record still describes the run that wrote these tables, which a redraw repeats
+        logger.info("group-%s | pages redrawn; run record kept", gid)
+        return report_path
     try:
         # the resolved bands under the keys the SQM record stamps them with, so the two
         # can be compared directly; run_args holds only the flags as typed. An absent
@@ -453,11 +466,15 @@ def cmd_run(
     participant_label: list[str] | None = None,
     band_fmin: "float | None" = None, band_fmax: "float | None" = None,
     config: "Path | None" = None, nprocs: "int | None" = None, device: str = "cpu",
+    redraw_groups: "set | None" = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
     The null reuses this run's aligned recordings and every band parameter, so it cannot be
     computed over a different band than the table it sits beside.
+
+    ``redraw_groups`` (no flag) runs those group keys only, as a repeat of the run in their
+    record: a phase null on disk is read rather than drawn, and the record is left as it is.
     """
     # unset, the null is crossed exactly when the real table is
     if wtc_phase_null_cross is None:
@@ -473,6 +490,7 @@ def cmd_run(
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
+    run_args.pop("redraw_groups")
 
     # each metric gets the band it was given, never the other's; a mismatch is only warned about
     isc_band = (isc_fmin, isc_fmax) if (isc_fmin is not None or isc_fmax is not None) else None
@@ -519,6 +537,8 @@ def cmd_run(
               file=sys.stderr)
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
+    if redraw_groups is not None:
+        groups = {key: members for key, members in groups.items() if key in redraw_groups}
     if not check_only:
         _check_device(device, nprocs, len(groups))
 
@@ -568,11 +588,14 @@ def cmd_run(
     settings = SimpleNamespace(
         **run_args, run_args=run_args, chroma=chroma, cond_pad=cond_pad,
         bands_override=bands_override, roi_map=roi_map, roi_name=roi_name,
-        scope_tasks=scope_tasks, isc_band=isc_band, timestamp=timestamp)
+        scope_tasks=scope_tasks, isc_band=isc_band, timestamp=timestamp,
+        redraw=redraw_groups is not None)
+    # a redraw logs beside the run it repeats rather than over that run's log
+    log_tail = "_redraw.log" if redraw_groups is not None else ".log"
     _run_groups(groups, partial(_run_one_group, settings), nprocs, verbose,
                 log_file=None if check_only else (
                     lambda key: group_report_dir(output_dir, key[0]) / "logs"
-                    / f"{group_label(*key)}.log"))
+                    / f"{group_label(*key)}{log_tail}"))
     if check_only:
         return
 
@@ -730,8 +753,9 @@ def cmd_pair_null(
     participant_label: list[str] | None = None,
     nprocs: int | None = None,
     device: str = "cpu",
+    no_report: bool = False,
 ) -> None:
-    """Draw the re-paired null for dyads whose real tables are already on disk."""
+    """Draw the re-paired null for dyads whose real tables are already on disk, then redraw their pages."""
     setup_logging(verbose=verbose)
     write_dataset_description(output_dir, name="nirspipe-hyper output",
                               generated_by="nirspipe-hyper", source=derivatives_dir,
@@ -756,14 +780,58 @@ def cmd_pair_null(
         wtc_pair_cross=wtc_pair_cross, wtc_limit_scales=wtc_limit_scales, roi_map=roi_map,
         roi_name=roi_map_name(roi_mapping), wtc_roi_min_channels=wtc_roi_min_channels,
         device=device)
-    _run_groups(targets, partial(_pair_null_one_group, settings), nprocs, verbose,
-                log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
-                / f"{group_label(*key)}_null-pair.log", what="pair null")
+    done = _run_groups(targets, partial(_pair_null_one_group, settings), nprocs, verbose,
+                       log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
+                       / f"{group_label(*key)}_null-pair.log", what="pair null",
+                       exit_on_failure=False)
+    redrawn = no_report or _redraw_pages(output_dir, done, nprocs, verbose, device)
     # a closing hint must not decide the exit code
     try:
         _merge_reminder(output_dir)
     except Exception as exc:
         logger.debug("merge reminder skipped: %s", exc)
+    if len(done) < len(targets) or not redrawn:
+        raise SystemExit(1)
+
+
+def _redraw_pages(output_dir: Path, keys: list, nprocs: "int | None", verbose: bool,
+                  device: str) -> bool:
+    """Draw each re-paired dyad's pages again from its run record, so their arrows read the new null.
+
+    Dyads sharing one record's settings are redrawn in one `nirspipe-hyper` pass. Returns
+    whether every redraw that could run succeeded.
+    """
+    from nirspipe.utils import load_toml
+
+    runs: dict = {}
+    for key in keys:
+        record = group_report_dir(output_dir, key[0]) / "logs" / f"{group_label(*key)}.toml"
+        hyper = load_toml(record).get("hyper", {}) if record.exists() else {}
+        if not hyper:
+            print(f"[warn] {group_label(*key)}: no nirspipe-hyper run record, so its pages "
+                  "keep the null they were drawn with; rerun nirspipe-hyper for it",
+                  file=sys.stderr)
+            continue
+        if hyper.get("no_report"):
+            continue
+        # sep_* are the bands each group resolved for itself, not settings of the run
+        settings = json.dumps({k: v for k, v in hyper.items() if not k.startswith("sep_")},
+                              sort_keys=True, default=str)
+        runs.setdefault(settings, []).append((key, record, hyper))
+    ok = True
+    for items in runs.values():
+        _, record, hyper = items[0]
+        print(f"\nRedrawing {len(items)} dyad page set(s) against the re-paired null...")
+        argv = [str(hyper["derivatives_dir"]), str(output_dir), "group",
+                "--pairs-csv", str(hyper["pairs_csv"]), "--config", str(record),
+                "--device", device, *(["--nprocs", str(nprocs)] if nprocs else []),
+                *(["--verbose"] if verbose else [])]
+        try:
+            _dispatch("nirspipe-hyper", partial(cmd_run, redraw_groups={k for k, _, _ in items}),
+                      argv)
+        except SystemExit as exc:
+            ok = ok and not exc.code
+    return ok
 
 def cmd_merge(output_dir: Path, verbose: bool) -> None:
     """Merge every per-dyad coherence table into one long table per kind."""
@@ -1143,6 +1211,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     pair.add_argument("--wtc-limit-scales", action=argparse.BooleanOptionalAction, default=True,
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in nirspipe-hyper.")
+    pair.add_argument("--no-report", action="store_true",
+                      help="Leave each dyad's pages as nirspipe-hyper drew them. By default "
+                           "they are drawn again from the dyad's run record, reading its "
+                           "phase null from disk, so the condition arrows read this null.")
     _shared.add_nprocs(pair, unit="group")
     _add_device(pair)
 
