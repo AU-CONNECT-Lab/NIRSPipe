@@ -1,12 +1,12 @@
 """The --keep-spans table from condition names (nirspipe-prep keep-spans) and --keep-spans-from MARKER."""
 
 import json
-import logging
 import shutil
 from datetime import datetime, timezone
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 
 from nirspipe.cli import prep as prep_cli
@@ -97,17 +97,18 @@ def test_a_zero_length_occurrence_needs_a_duration(tmp_path, capsys):
                                                                       (250.0, 100.0)]
 
 
-def test_two_recordings_the_table_cannot_tell_apart_are_warned_about(tmp_path, caplog):
+def test_two_recordings_told_apart_by_acq_get_rows_of_their_own(tmp_path):
     bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("mixed",))
     nirs = bids / "sub-01" / "nirs"
     for suffix in (".snirf", ".json"):
         shutil.copy(nirs / f"sub-01_task-mixed_nirs{suffix}",
                     nirs / f"sub-01_task-mixed_acq-b_nirs{suffix}")
-    with caplog.at_level(logging.WARNING, logger="nirspipe"):
-        prep_cli.main(["keep-spans", str(bids), str(tmp_path / "keep.tsv"),
-                       "--participant-label", "01", "--conditions", "talk",
-                       "--skip-bids-validation"])
-    assert "share every label the table has a column for" in caplog.text
+    out = tmp_path / "keep.tsv"
+    prep_cli.main(["keep-spans", str(bids), str(out), "--participant-label", "01",
+                   "--conditions", "talk", "--skip-bids-validation"])
+    table = pd.read_csv(out, sep="\t", dtype=str, keep_default_na=False)
+    assert list(table.columns)[:3] == ["participant_id", "task", "acq"]
+    assert table.groupby("acq").size().to_dict() == {"": 1, "b": 1}
 
 
 # ---- the marker origin ----

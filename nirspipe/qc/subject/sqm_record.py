@@ -142,7 +142,7 @@ def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
 
 def entities_of(label: str) -> dict[str, str | None]:
     """Pull the BIDS entities back out of a run label, for the columns a database wants."""
-    return {key: entity_of(label, key) for key in ("ses", "task", "run")}
+    return {key: entity_of(label, key) for key in ("ses", "task", "acq", "run")}
 
 
 # What record_path writes, for the readers that glob for it; one spelling for all of them.

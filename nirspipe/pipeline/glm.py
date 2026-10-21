@@ -647,7 +647,7 @@ def _glm_name(source_path: "str | None", suffix: str, **extra) -> str:
     stem = Path(source_path).name if source_path else ""
     carried = {key: entity_of(stem, short)
                for key, short in (("subject", "sub"), ("session", "ses"),
-                                  ("task", "task"), ("run", "run"))}
+                                  ("task", "task"), ("acquisition", "acq"), ("run", "run"))}
     return derivative_path("", suffix, ".tsv", **carried, **extra).name
 
 

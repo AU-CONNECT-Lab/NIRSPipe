@@ -260,7 +260,8 @@ def cmd_keep_spans(
     # nothing is written unless every subject's rows were found
     _report(_run_parallel(_spans_one, participant_label, nprocs))
     table = pd.DataFrame([row for sub in participant_label for row in rows[sub]])
-    labels = [c for c in ("participant_id", "session", "task", "run") if c in table.columns]
+    labels = [c for c in ("participant_id", "session", "task", "acq", "run")
+              if c in table.columns]
     out_tsv.parent.mkdir(parents=True, exist_ok=True)
     write_tsv(table[[*labels, "onset", "duration"]].fillna(""), out_tsv)
     print(f"wrote {len(table)} row(s) to {out_tsv}")

@@ -21,8 +21,9 @@ SPANS_NAME = "desc-ratedspans_qc.tsv"
 # the dyad viewer's key: one verdict for every run of the member's task and session
 HYPER_KEY = "_hyper"
 
-_CHANNEL_COLUMNS = ["participant_id", "session", "task", "run", "bad_channels", "keep_channels"]
-_SPAN_COLUMNS = ["participant_id", "session", "task", "run", "onset", "duration"]
+_CHANNEL_COLUMNS = ["participant_id", "session", "task", "acq", "run", "bad_channels",
+                    "keep_channels"]
+_SPAN_COLUMNS = ["participant_id", "session", "task", "acq", "run", "onset", "duration"]
 
 
 def _read(path: Path) -> dict:
@@ -45,10 +46,11 @@ def channel_rows(trees: list[Path]) -> tuple[list[dict], list[str]]:
 
       sub-01_task-rest_desc-rawdecision_qc.json:
       {"sub-01_task-rest_run-01": {"S1_D1 hbo": "bad", "S2_D2 hbo": "good"}}
-      -> {"participant_id": "sub-01", "session": "", "task": "rest", "run": "01",
+      -> {"participant_id": "sub-01", "session": "", "task": "rest", "acq": "", "run": "01",
           "bad_channels": "S1_D1", "keep_channels": "S2_D2"}
 
-    A ``_hyper`` entry leaves ``run`` blank, so it holds for every run of that task and session.
+    A ``_hyper`` entry leaves ``acq`` and ``run`` blank, so it holds for every run of that
+    task and session.
     """
     rows, conflicts = [], []
     for tree in trees:
@@ -72,7 +74,8 @@ def channel_rows(trees: list[Path]) -> tuple[list[dict], list[str]]:
                 conflicts += [f"{base['participant_id']} {key}: {p}" for p in sorted(clash)]
                 if bad or keep:
                     run = "" if key == HYPER_KEY else (entity_of(key, "run") or "")
-                    rows.append({**base, "run": run, "bad_channels": ",".join(bad),
+                    acq = "" if key == HYPER_KEY else (entity_of(key, "acq") or "")
+                    rows.append({**base, "acq": acq, "run": run, "bad_channels": ",".join(bad),
                                  "keep_channels": ",".join(keep)})
     return rows, conflicts
 
@@ -96,7 +99,7 @@ def span_rows(trees: list[Path]) -> tuple[list[dict], bool]:
     """One ``--bad-spans`` row per marked stretch, and whether any span file was found.
 
     ``{"sub-01_task-rest_run-01": [[12.0, 15.5]]}`` in ``sub-01_task-rest_desc-rawspans_qc.json``
-        -> ``{"participant_id": "sub-01", "session": "", "task": "rest", "run": "01",
+        -> ``{"participant_id": "sub-01", "session": "", "task": "rest", "acq": "", "run": "01",
               "onset": 12.0, "duration": 3.5}``
     """
     rows, found = [], False
@@ -108,7 +111,8 @@ def span_rows(trees: list[Path]) -> tuple[list[dict], bool]:
                     "task": entity_of(path.name, "task") or ""}
             for key, spans in _read(path).items():
                 for start, stop in spans:
-                    rows.append({**base, "run": entity_of(key, "run") or "",
+                    rows.append({**base, "acq": entity_of(key, "acq") or "",
+                                 "run": entity_of(key, "run") or "",
                                  "onset": start, "duration": round(stop - start, 3)})
     return rows, found
 

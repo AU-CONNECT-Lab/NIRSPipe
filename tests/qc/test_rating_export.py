@@ -31,9 +31,9 @@ def test_a_run_s_decisions_become_one_row_and_the_dyad_s_a_row_for_every_run(tmp
 
     assert conflicts == []
     assert rows == [
-        {"participant_id": "sub-01", "session": "02", "task": "rest", "run": "01",
+        {"participant_id": "sub-01", "session": "02", "task": "rest", "acq": "", "run": "01",
          "bad_channels": "S1_D1", "keep_channels": "S2_D2"},
-        {"participant_id": "sub-01", "session": "02", "task": "rest", "run": "",
+        {"participant_id": "sub-01", "session": "02", "task": "rest", "acq": "", "run": "",
          "bad_channels": "S3_D3", "keep_channels": ""},
     ]
 
@@ -58,6 +58,16 @@ def test_the_exported_table_is_what_bad_channels_reads(tmp_path):
     assert _keep_channels_for("S1_D1,S2_D2", "01", entities) == []
 
 
+def test_a_decision_on_one_acq_reaches_that_acq_only(tmp_path):
+    _decisions(tmp_path, "01", "rest", {"sub-01_task-rest_acq-a_run-01": {"S1_D1 hbo": "bad"}})
+    channels, _, _ = export_ratings([tmp_path], tmp_path / "out")
+    assert pd.read_csv(channels, sep="\t", dtype=str)["acq"].tolist() == ["a"]
+    assert _bad_channels_for(str(channels), "01",
+                             {"task": "rest", "acquisition": "a", "run": 1}) == ["S1_D1"]
+    assert _bad_channels_for(str(channels), "01",
+                             {"task": "rest", "acquisition": "b", "run": 1}) == []
+
+
 def test_final_verdicts_are_listed_for_reading(tmp_path):
     stem = "sub-01_task-rest_desc-raw_report"
     path = rating_path(tmp_path, stem)
@@ -73,7 +83,7 @@ def test_final_verdicts_are_listed_for_reading(tmp_path):
 def test_an_empty_tree_still_writes_both_tables_with_their_headers(tmp_path):
     channels, verdicts, _ = export_ratings([tmp_path], tmp_path)
     assert list(pd.read_csv(channels, sep="\t").columns) == [
-        "participant_id", "session", "task", "run", "bad_channels", "keep_channels"]
+        "participant_id", "session", "task", "acq", "run", "bad_channels", "keep_channels"]
     assert list(pd.read_csv(verdicts, sep="\t").columns) == ["page", "key", "verdict", "note"]
 
 

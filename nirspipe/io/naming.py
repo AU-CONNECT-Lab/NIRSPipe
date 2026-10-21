@@ -128,7 +128,8 @@ def _label_entities(label: str) -> dict:
 
     return {key: entity_of(label, short)
             for key, short in (("subject", "sub"), ("group", "group"),
-                               ("session", "ses"), ("task", "task"), ("run", "run"))}
+                               ("session", "ses"), ("task", "task"),
+                               ("acquisition", "acq"), ("run", "run"))}
 
 
 def report_name(label: str, *, desc: "str | None" = None,

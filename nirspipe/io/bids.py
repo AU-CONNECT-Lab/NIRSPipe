@@ -218,9 +218,10 @@ def channel_status_bads(layout: BIDSLayout, nirs_path: Path) -> list[str]:
 
 
 def bids_label(subject: str, entities: dict) -> str:
-    """Build a BIDS filename stem (sub-.._ses-.._task-.._run-..) from parsed entities."""
+    """Build a BIDS filename stem (sub-.._ses-.._task-.._acq-.._run-..) from parsed entities."""
     parts = [f"sub-{subject}"]
-    for key, prefix in (("session", "ses"), ("task", "task"), ("run", "run")):
+    for key, prefix in (("session", "ses"), ("task", "task"), ("acquisition", "acq"),
+                        ("run", "run")):
         val = entities.get(key)
         if val:
             parts.append(f"{prefix}-{val}")

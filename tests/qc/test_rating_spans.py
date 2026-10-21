@@ -59,7 +59,7 @@ def test_the_exported_table_is_what_bad_spans_reads(tmp_path):
 
     assert table == tmp_path / "out" / SPANS_NAME
     assert list(pd.read_csv(table, sep="\t").columns) == [
-        "participant_id", "session", "task", "run", "onset", "duration"]
+        "participant_id", "session", "task", "acq", "run", "onset", "duration"]
     entities = {"session": "02", "task": "rest", "run": 1}
     assert _spans_for(str(table), "01", entities, flag="--bad-spans") == [(12.0, 3.5), (300.0, 12.5)]
     assert _spans_for(str(table), "01", {**entities, "run": 2}, flag="--bad-spans") == []

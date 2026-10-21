@@ -7,12 +7,9 @@ from typing import Any
 
 from nirspipe.io.snirf import read_snirf
 from nirspipe.utils import is_marker
-from nirspipe.utils.logging import get_logger
-
-logger = get_logger("pipeline.keep_spans")
 
 # table column -> pybids entity, in the table's column order
-_LABEL_COLUMNS = {"session": "session", "task": "task", "run": "run"}
+_LABEL_COLUMNS = {"session": "session", "task": "task", "acq": "acquisition", "run": "run"}
 
 
 def condition_spans(
@@ -46,19 +43,12 @@ def condition_spans(
         raise FileNotFoundError(f"No SNIRF found for sub-{sub} ses={ses} task={task} run={run}")
 
     rows: list[dict[str, Any]] = []
-    seen: dict[tuple, str] = {}
     for f in files:
         name = Path(f.path).name
         entities = f.get_entities()
         labels = {"participant_id": f"sub-{sub}",
                   **{column: str(entities[entity]) for column, entity in _LABEL_COLUMNS.items()
                      if entities.get(entity) is not None}}
-        # the table names a recording by these labels only, so another entity (acq) is lost
-        key = tuple(sorted(labels.items()))
-        if key in seen:
-            logger.warning("%s and %s share every label the table has a column for; the rows "
-                           "of each will apply to both", seen[key], name)
-        seen[key] = name
 
         raw = read_snirf(f.path, preload=False, verbose="error")
         found = []

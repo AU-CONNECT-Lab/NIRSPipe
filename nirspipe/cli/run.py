@@ -114,13 +114,13 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt.add_argument("--bad-channels",
                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "
                                "every subject; or a table with a bad_channels column, rows "
-                               "optionally limited by participant_id, session, task and run as "
-                               "in --keep-spans. Either wavelength marks the pair. Marked, not "
-                               "removed, and added to the SCI-detected bad channels.")
+                               "optionally limited by participant_id, session, task, acq and "
+                               "run as in --keep-spans. Either wavelength marks the pair. "
+                               "Marked, not removed, and added to the SCI-detected bad channels.")
     prep_opt.add_argument("--keep-spans", type=Path, metavar="TABLE",
                           help="Table of the stretches to use (onset and duration in s on each "
                                "recording's own time axis), rows optionally limited by "
-                               "participant_id, session, task and run. The rest is marked "
+                               "participant_id, session, task, acq and run. The rest is marked "
                                "BAD_unselected and left out of screening and every estimate; a "
                                "recording no row matches is used whole. See --keep-spans-from.")
     prep_opt.add_argument("--keep-spans-from", metavar="MARKER",

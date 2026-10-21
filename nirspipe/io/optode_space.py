@@ -264,7 +264,7 @@ def channel_coords_path(run_file) -> Path:
     run_file = Path(run_file)
     keep = {name: entity_of(run_file.name, key)
             for name, key in (("subject", "sub"), ("session", "ses"), ("task", "task"),
-                              ("run", "run"))}
+                              ("acquisition", "acq"), ("run", "run"))}
     return run_file.parent / derivative_path(".", "channels", ".tsv", space=SPACE, **keep).name
 
 

@@ -22,9 +22,13 @@ else:
 
 logger = get_logger("io.derivatives")
 
+# what tells two recordings of one subject and session apart; pybids names acq "acquisition"
+RUN_ENTITIES = ("task", "acquisition", "run")
+
+
 def carry_entities(source_entities: dict[str, str] | None) -> dict[str, str]:
-    """Keep only task/run from source entities so output filenames mirror the input."""
-    return {k: v for k, v in (source_entities or {}).items() if k in ("task", "run")}
+    """Keep only task, acq and run from source entities so output filenames mirror the input."""
+    return {k: v for k, v in (source_entities or {}).items() if k in RUN_ENTITIES}
 
 
 def build_output_path(
@@ -302,11 +306,14 @@ def select_one_run(
         return f"{name}: {', '.join(found)}" if len(found) > 1 else ""
 
     varies = ", ".join(x for x in (_spread("ses"), _spread("run")) if x)
+    acq = _spread("acq")
     raise MissingDerivativesError(
         f"{len(candidates)} candidates for {subject_id} task-{task} {what}: "
         f"{', '.join(p.name for p in candidates)}. "
         + (f"They differ by {varies}. Add a session or run column to the group CSV to say "
            "which one to use." if varies
+           else f"They differ by {acq}, which the group CSV cannot select; run the dyad "
+           "commands on a tree holding one of them." if acq
            else "They cannot be told apart by session or run; remove the duplicates.")
     )
 

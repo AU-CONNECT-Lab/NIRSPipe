@@ -463,7 +463,8 @@ def _log_run_notes(run_notes: "list[tuple[str, str]]") -> None:
 
 # --bad-channels table column -> (pybids entity, optional prefix)
 _BAD_CHANNEL_KEYS = {"participant_id": ("subject", "sub-"), "session": ("session", "ses-"),
-                     "task": ("task", "task-"), "run": ("run", "run-")}
+                     "task": ("task", "task-"), "acq": ("acquisition", "acq-"),
+                     "run": ("run", "run-")}
 
 
 def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...],
@@ -536,7 +537,7 @@ def _span_rows(path: Path, flag: str = "--keep-spans",
 def _bad_channel_row_matches(row: dict[str, Any], subject: str, entities: dict | None) -> bool:
     if row["participant_id"] and row["participant_id"] != subject.removeprefix("sub-"):
         return False
-    for column in ("session", "task", "run"):
+    for column in ("session", "task", "acq", "run"):
         if not row[column]:
             continue
         if entities is None:
@@ -567,7 +568,7 @@ def _bad_channels_for(spec: str | None, subject: str, entities: dict | None = No
 
     gives every recording of "sub-01" the first row and its ses-02 run-1 both rows, and
     every subject's ses-02 the last row. A recording's list is the union of every row that
-    matches it, and a blank or absent participant_id, session, task or run matches all.
+    matches it, and a blank or absent participant_id, session, task, acq or run matches all.
     ``entities`` are the recording's parsed BIDS entities; without them only the rows that
     hold for every recording of the subject count. A subject no row matches has none. The
     prefixes are optional, so "01" and "sub-01" name the same subject.
