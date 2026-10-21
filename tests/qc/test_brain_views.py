@@ -175,3 +175,15 @@ def test_the_brain_is_lit_white_and_drawn_matte():
         assert brain.prop.specular == 0.0
     finally:
         plotter.close()
+
+
+def test_blank_bands_shrink_to_the_kept_rows_and_content_rows_all_stay():
+    # 40 blank, 3 title, 50 blank, 5 brain, 60 blank; one column of each view blank throughout
+    rows = [0] * 40 + [1] * 3 + [0] * 50 + [1] * 5 + [0] * 60
+    img = np.full((len(rows), 4, 3), 255, np.uint8)
+    for i, ink in enumerate(rows):
+        if ink:
+            img[i, 1] = 0
+    out = bv._squeeze_blank_rows(img, keep=10)
+    inked = np.any(out < 252, axis=(1, 2)).astype(int).tolist()
+    assert inked == [0] * 10 + [1] * 3 + [0] * 10 + [1] * 5 + [0] * 10

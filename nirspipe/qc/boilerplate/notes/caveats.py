@@ -62,8 +62,8 @@ NOTES = {
         "no scored trial falls inside this window: the annotation that defines it is not "
         "one, and events with no duration are scored only with --epoch-tmin/--epoch-tmax",
     "caveat.single_trial":
-        "{conds} occur once in the epoch window, so their epoch panels show that one trial, "
-        "not an average.",
+        "One trial in the epoch window, so its epoch panels show that trial rather than an "
+        "average: {conds}.",
     "caveat.one_trial":
         "this condition holds {n} trial inside its window, and one row is not a comparison",
 

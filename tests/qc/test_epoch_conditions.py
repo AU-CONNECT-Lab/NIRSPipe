@@ -90,8 +90,9 @@ def test_signal_by_position_shows_one_condition_at_a_time_in_first_appearance_or
     fig = build_evoked_topo_figure(mixed, markers_on_data_axis(mixed), 2000, -5.0, 25.0)
     menu = fig.layout.updatemenus[0]
     assert [b.label for b in menu.buttons] == ["once (n=1)", "zeta (n=4)", "alpha (n=4)"]
+    # opens on the first condition with three trials or more, not the one-off
     shown = {t.legendgroup.split(" ", 1)[1] for t in fig.data if t.visible}
-    assert shown == {"once"}
+    assert shown == {"zeta"} and menu.active == 1
     picked = menu.buttons[2].args[0]["visible"]
     assert {t.legendgroup.split(" ", 1)[1] for t, v in zip(fig.data, picked) if v} == {"alpha"}
 

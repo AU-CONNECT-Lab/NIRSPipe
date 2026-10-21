@@ -1320,17 +1320,19 @@ def build_evoked_topo_figure(
 
 
 def _one_condition_at_a_time(fig: go.Figure, layers: "list[dict]", trace_layer: "list[int]"):
-    """A dropdown that shows one condition's curves, the first by default: overlaid, every
-    cell carries two lines per condition and four conditions are unreadable."""
+    """A dropdown that shows one condition's curves: overlaid, every cell carries two lines per
+    condition and four conditions are unreadable. It opens on the first condition with enough
+    trials to set a scale, so a one-off marker is not what a reader sees first."""
     def shown(li):
         return [layer_of == li for layer_of in trace_layer]
 
-    for trace, visible in zip(fig.data, shown(0)):
+    first = next((li for li, layer in enumerate(layers) if layer["n"] >= SCALE_MIN_TRIALS), 0)
+    for trace, visible in zip(fig.data, shown(first)):
         trace.visible = visible
     buttons = [dict(label=f"{layer['label']} (n={layer['n']})", method="restyle",
                     args=[{"visible": shown(li)}])
                for li, layer in enumerate(layers)]
     fig.update_layout(updatemenus=[dict(
-        buttons=buttons, direction="down", showactive=True,
+        buttons=buttons, direction="down", showactive=True, active=first,
         x=0.0, xanchor="left", y=1.0, yanchor="top", font=dict(size=10),
     )])

@@ -27,7 +27,8 @@ All notable changes to this project will be documented in this file.
 - A grand-mean panel with fewer than three trials gets its own y scale instead of being clipped to the shared one
 - The raw report's grand mean and trial images are low-passed for display below `--cardiac-l-freq`
 - Both subject reports set Signal by position beside the single-channel trial image; clicking a channel picks its trial image
-- Signal by position shows one condition at a time, chosen from a menu
+- Signal by position shows one condition at a time, chosen from a menu, opening on the first with three or more trials
+- The brain views drop the blank bands above and below the brains, so the picture is shorter
 - Trial images draw the HbR average beside the HbO one
 - The raw report's trial images split by event name, pooled first, as the subject report's do; condition pages keep their window's trials
 

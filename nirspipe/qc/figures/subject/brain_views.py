@@ -51,6 +51,22 @@ def _trim_white(arr: np.ndarray, pad: int = 6, threshold: int = 252) -> np.ndarr
     return arr[:, max(0, c0 - pad): c1 + pad + 1]
 
 
+def _squeeze_blank_rows(arr: np.ndarray, keep: int = 24, threshold: int = 252) -> np.ndarray:
+    """Shorten every run of near-white rows to ``keep`` rows, edges included.
+
+    The camera fits the brain and the optodes, so each view carries wide blank bands above
+    and below the brain. Run on the joined views, a row goes only when it is blank in all
+    of them, so the views stay aligned.
+    """
+    blank = ~np.any(arr[:, :, :3] < threshold, axis=(1, 2))
+    rows, run = [], 0
+    for i, empty in enumerate(blank):
+        run = run + 1 if empty else 0
+        if run <= keep:
+            rows.append(i)
+    return arr[rows]
+
+
 def _link_color(sci: float | None, good: bool | None, threshold: float) -> str:
     """The screening verdict first, then the SCI ladder (which matches the flat map).
 
@@ -243,7 +259,7 @@ def quality_brain_views(
 
     trimmed = [_trim_white(a) for a in imgs]
     h = min(a.shape[0] for a in trimmed)
-    combined = np.hstack([a[:h, :] for a in trimmed])
+    combined = _squeeze_blank_rows(np.hstack([a[:h, :] for a in trimmed]))
     pil = _PILImage.fromarray(combined.astype(np.uint8))
     buf = _io.BytesIO()
     pil.save(buf, format="PNG", optimize=True)

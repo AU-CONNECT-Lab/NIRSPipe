@@ -100,7 +100,8 @@ details[open] > summary::before { transform: rotate(90deg); }
 @media (max-width: 900px) { .row-main { grid-template-columns: 1fr; } }
 
 /* ---- Signal by position beside the trial image it picks, in both subject reports ---- */
-.row-picker { grid-template-columns: 1fr 1fr; align-items: start; }
+/* the head narrower: the trial images' heatmaps gain the width it gives up */
+.row-picker { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
 @media (max-width: 900px) { .row-picker { grid-template-columns: 1fr; } }
 .topo-frame { aspect-ratio: 700 / 760; height: auto; }
 .panel-head { font-size: 0.9rem; font-weight: 600; color: var(--ink); margin: 0 0 0.3rem; }
