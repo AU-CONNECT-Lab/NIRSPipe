@@ -379,8 +379,9 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     monkeypatch.setattr("nirspipe.pipeline.hyper.group_io._hyper_sidecar",
                         lambda *a, **k: None)
     monkeypatch.setattr("nirspipe.utils.lineage.path_from", lambda r: None)
-    # both read the montage off the recordings, which these stubs do not have
+    # both read the montage and the BAD_ spans off the recordings, which these stubs do not have
     monkeypatch.setattr("nirspipe.pipeline.hyper.wtc.wtc_grid_params", lambda raws: {})
+    monkeypatch.setattr("nirspipe.pipeline.hyper.wtc_store.level_params", lambda raws, **k: {})
     wtc_null.run_wtc_null(
         group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
         output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
