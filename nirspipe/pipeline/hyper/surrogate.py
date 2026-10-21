@@ -271,6 +271,7 @@ def compute_wtc_phase_null(
     analysis_window: "tuple[float, float] | None" = None,
     roi_map: "dict[str, list[str]] | None" = None,
     roi_min_channels: int = ROI_MIN_CHANNELS,
+    device=None,
 ) -> "NullDraws":
     """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -309,6 +310,9 @@ def compute_wtc_phase_null(
     ``roi_map`` also fills ``NullDraws.roi_levels``, the level each ROI map's arrows clear:
     the per-frequency quantile of the surrogate maps averaged into ROIs with the same
     ``roi_min_channels``, never an average of the channels' levels.
+
+    ``device`` is the card the transforms run on, None for the CPU; the surrogates are drawn
+    on the CPU either way.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -347,7 +351,7 @@ def compute_wtc_phase_null(
             cross=cross, limit_scales=limit_scales, cache1=cache1,
             # the same axis the real table is built on, without which the null cannot be
             # subtracted from it row by row
-            axis=long_axis_over(raws.values(), ch_type, sep_bands))
+            axis=long_axis_over(raws.values(), ch_type, sep_bands), gpu=device)
         before = len(cond_frames)
         _collect_draw(result, frames, cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
@@ -381,6 +385,7 @@ def compute_wtc_pair_null(
     windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
     on_draw: "Callable[[str, dict], None] | None" = None,
+    device=None,
 ) -> "NullDraws":
     """Re-paired band means: WTC of one member against people they never interacted with.
 
@@ -405,6 +410,8 @@ def compute_wtc_pair_null(
 
     The pool is finite, unlike phase randomisation's, so the number of draws is a property of
     the cohort rather than a setting. That is what limits the resolution of ``percentile``.
+
+    ``device`` is the card the transforms run on, None for the CPU.
     """
     # no whole-run list: a re-paired draw is one condition, cut from each side's own marker
     cond_frames: list[pd.DataFrame] = []
@@ -431,7 +438,8 @@ def compute_wtc_pair_null(
         result = _wtc_over_pairs(
             wtc_pair, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales,
-            cache1=caches.setdefault(cache_key, {}), axis=axis, excluded_samples=excluded)
+            cache1=caches.setdefault(cache_key, {}), axis=axis, excluded_samples=excluded,
+            gpu=device)
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
                            freqs=result.freqs, times=result.times,
                            excluded={true_pair: mask for mask in result.excluded.values()})

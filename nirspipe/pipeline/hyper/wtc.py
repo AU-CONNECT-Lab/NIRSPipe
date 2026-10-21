@@ -202,13 +202,17 @@ def wtc_grid_params(raws: dict) -> dict:
 
 @dataclass
 class _WaveletGrid:
-    """The scale grid every channel of one transform shares, built once per run."""
+    """The scale grid every channel of one transform shares, built once per run.
+
+    ``gpu`` is the card the transform runs on, None for the CPU.
+    """
     mother: object
     s0: float
     J: int
     sj: np.ndarray
     scales: np.ndarray
     n_fft: int
+    gpu: object = None
 
 
 @dataclass
@@ -222,7 +226,7 @@ class _ChannelWavelet:
 
 
 def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
-                  limit_scales: bool) -> _WaveletGrid:
+                  limit_scales: bool, gpu=None) -> _WaveletGrid:
     """The scale grid pycwt would pick for signals of length ``n``, resolved up front."""
     mother = _morlet()
     if limit_scales:
@@ -234,7 +238,14 @@ def _wavelet_grid(dt: float, n: int, fmin: float, fmax: float,
     n_fft = _fft_length(n, dt, float(sj[-1]))
     mother.n_fft = n_fft
     return _WaveletGrid(mother=mother, s0=s0, J=J, sj=sj,
-                        scales=np.ones([1, n]) * sj[:, None], n_fft=n_fft)
+                        scales=np.ones([1, n]) * sj[:, None], n_fft=n_fft, gpu=gpu)
+
+
+def _freqs_and_coi(grid: _WaveletGrid, sj: np.ndarray, n0: int, dt: float):
+    """The frequency of each scale and the cone of influence, in seconds per sample."""
+    freqs = 1 / (grid.mother.flambda() * sj)
+    coi = n0 / 2 - np.abs(np.arange(0, n0) - (n0 - 1) / 2)
+    return freqs, grid.mother.flambda() * grid.mother.coi() * dt * coi
 
 
 def _cwt(sig: np.ndarray, dt: float, grid: _WaveletGrid):
@@ -258,15 +269,13 @@ def _cwt(sig: np.ndarray, dt: float, grid: _WaveletGrid):
     W = fft.ifft(fft.fft(sig, n=n_fft) * psi_ft_bar, axis=1, n=n_fft)
 
     sj = grid.sj
-    freqs = 1 / (grid.mother.flambda() * sj)
     # pycwt drops any scale whose row came back all-NaN, and the caller's grid check reads
     # the shortened sj to catch it
     sel = np.invert(np.isnan(W).all(axis=1))
     if np.any(sel):
-        sj, freqs, W = sj[sel], freqs[sel], W[sel, :]
+        sj, W = sj[sel], W[sel, :]
 
-    coi = n0 / 2 - np.abs(np.arange(0, n0) - (n0 - 1) / 2)
-    coi = grid.mother.flambda() * grid.mother.coi() * dt * coi
+    freqs, coi = _freqs_and_coi(grid, sj, n0, dt)
     return W[:, :n0], sj, freqs, coi
 
 
@@ -279,6 +288,8 @@ def _prepare_channel(sig: np.ndarray, dt: float, grid: _WaveletGrid) -> _Channel
         raise ValueError(f"signal length {len(sig)} differs from the grid's "
                          f"{grid.scales.shape[1]}")
     y = (sig - sig.mean()) / sig.std()
+    if grid.gpu is not None:
+        return grid.gpu.prepare_channel(y, dt, grid)
     W, sj, freqs, coi = _cwt(y, dt, grid)
     # pycwt drops any scale whose row came back all-NaN, which would leave two channels on
     # different grids and misalign the cross spectrum without changing its shape
@@ -300,6 +311,8 @@ def _pair_from_prepared(p1: _ChannelWavelet, p2: _ChannelWavelet, dt: float,
     :math:`R^2 = |S(W_{xy})|^2 / (S(|W_x|^2)\, S(|W_y|^2))`, phase taken from
     :math:`W_{xy} = W_x W_y^{*}`.
     """
+    if grid.gpu is not None:
+        return grid.gpu.pair_from_prepared(p1, p2, dt, grid)
     W12 = p1.W * p2.W.conj()
     phase = np.angle(W12)
     # in place, and after the phase: the cross spectrum is the largest array a pairing holds
@@ -345,6 +358,18 @@ def _trim_pair(
     if signif is not None and np.ndim(signif) == 1 and len(signif) == len(freqs):
         sig_band = np.asarray(signif)[order][band].astype(np.float32)
     return WCT_band, freqs_band, coi_dec, sig_band, phase_band
+
+
+def _trimmed_on_cpu(sig1: np.ndarray, sig2: np.ndarray, dt: float, step: int, fmin: float,
+                    fmax: float, limit_scales: bool):
+    """One pairing through the CPU path and its weaker member's power share, for a card's check."""
+    grid = _wavelet_grid(dt, len(sig1), fmin, fmax, limit_scales)
+    p1, p2 = _prepare_channel(sig1, dt, grid), _prepare_channel(sig2, dt, grid)
+    WCT, aWCT = _pair_from_prepared(p1, p2, dt, grid)
+    share = np.minimum(p1.S / p1.S.max(axis=1, keepdims=True),
+                       p2.S / p2.S.max(axis=1, keepdims=True))
+    trim = (p1.coi, p1.freqs, len(sig1), step, fmin, fmax)
+    return _trim_pair(WCT, aWCT, *trim), _trim_pair(share, share, *trim)[0]
 
 
 def _pairwise_wtc(
@@ -443,6 +468,7 @@ def _wtc_over_pairs(
     axis: "list[str] | None" = None,
     cache1: "dict[tuple[str, str], _ChannelWavelet] | None" = None,
     excluded_samples: "dict[str, np.ndarray] | None" = None,
+    gpu=None,
 ) -> WTCResult:
     """Run pairwise Morlet WTC over precomputed per-subject {label: signal} maps.
 
@@ -486,6 +512,10 @@ def _wtc_over_pairs(
     hand channels with similar autocorrelation near-identical surrogates. A pair's level
     therefore depends on how many pairs ran before it, so changing the channel set moves the
     levels of everything after it.
+
+    ``gpu`` is a :class:`~nirspipe.pipeline.hyper._gpu.CudaDevice` to run the transform on,
+    checked against the CPU on the first pairing it computes. The significance route stays
+    on the CPU, pycwt doing its own transform.
     """
     subject_ids = list(raws.keys())
     ref_raw = raws[subject_ids[0]]
@@ -505,7 +535,11 @@ def _wtc_over_pairs(
     if not significance:
         first = next((s for m in signals.values() for s in m.values() if s is not None), None)
         if first is not None:
-            grid = _wavelet_grid(dt, len(first), fmin, fmax, limit_scales)
+            grid = _wavelet_grid(dt, len(first), fmin, fmax, limit_scales, gpu)
+    elif gpu is not None:
+        logger.info("--wtc-significance: the transform runs on the CPU, inside pycwt")
+    on_gpu = grid is not None and grid.gpu is not None
+    trim = grid.gpu.trim_pair if on_gpu else _trim_pair
 
     rng_state = np.random.get_state() if seed is not None else None
     if seed is not None:
@@ -523,6 +557,9 @@ def _wtc_over_pairs(
                                  if axis is not None or a in sig_map2])
             pair_data: dict[str | tuple[str, str], dict | None] = {}
             n_blank = 0
+            out1, out2 = excluded_samples[sub1], excluded_samples[sub2]
+            n = min(len(out1), len(out2))
+            union = (out1[:n] | out2[:n])[::step]
             # crossing revisits every label of side 2 once per label of side 1, and never
             # revisits side 1, so within one call only side 2 is worth holding on to.
             # Across calls it is the other way round, which is what `cache1` is for
@@ -561,35 +598,47 @@ def _wtc_over_pairs(
                             prep1 = cache1.get((sub1, label1))
                             if prep1 is None:
                                 prep1 = _prepare_channel(sig1, dt, grid)
-                                cache1[(sub1, label1)] = prep1
+                                # a card keeps transforms only while they fit; past that
+                                # they are recomputed, which costs little there
+                                if not on_gpu or grid.gpu.has_room():
+                                    cache1[(sub1, label1)] = prep1
                         prep2 = cache2.get(label2)
                         if prep2 is None:
                             prep2 = _prepare_channel(sig2, dt, grid)
-                            if cross:
+                            if cross and (not on_gpu or grid.gpu.has_room()):
                                 cache2[label2] = prep2
                         WCT, aWCT = _pair_from_prepared(prep1, prep2, dt, grid)
-                        WCT_band, freqs_band, coi_dec, sig_band, phase_band = _trim_pair(
+                        WCT_band, freqs_band, coi_dec, sig_band, phase_band = trim(
                             WCT, aWCT, prep1.coi, prep1.freqs, len(sig1), step, fmin, fmax)
+                        if on_gpu and grid.gpu.check is None:
+                            on_cpu, share = _trimmed_on_cpu(sig1, sig2, dt, step, fmin, fmax,
+                                                            limit_scales)
+                            grid.gpu.verify(
+                                on_cpu, (WCT_band, freqs_band, coi_dec, sig_band, phase_band),
+                                share=share, excluded=union,
+                                pairing=f"{sub1} {label1} - {sub2} {label2}")
                     if shared_freqs is None:
                         shared_freqs = freqs_band
                         shared_times = ref_raw.times[::step]
                     pair_data[key] = {"wtc": WCT_band, "coi": coi_dec, "sig": sig_band,
                                       "phase": phase_band}
                 except Exception as exc:
+                    # the card failing is the run's failure, never one blank pairing
+                    if on_gpu:
+                        grid.gpu.raise_if_device(exc)
                     logger.warning("WTC failed %s-%s label %s: %s", sub1, sub2, key, exc)
                     pair_data[key] = None
             if n_blank:
                 logger.info("%s-%s: %d of %d pairing(s) left blank, one side having no "
                             "usable channel there", sub1, sub2, n_blank, len(label_pairs))
             result_pairs[(sub1, sub2)] = pair_data
-            out1, out2 = excluded_samples[sub1], excluded_samples[sub2]
-            n = min(len(out1), len(out2))
-            union = (out1[:n] | out2[:n])[::step]
             if union.any():
                 result_excluded[(sub1, sub2)] = union
     finally:
         if rng_state is not None:
             np.random.set_state(rng_state)
+        if on_gpu:
+            grid.gpu.release()
 
     times = shared_times if shared_times is not None else np.array([])
     return WTCResult(
@@ -611,6 +660,7 @@ def compute_wtc(
     limit_scales: bool = True,
     ch_type: str = "hbo",
     sep_bands=None,
+    device=None,
 ) -> WTCResult:
     """Compute pairwise WTC per long channel of one chromophore, using a Morlet wavelet.
 
@@ -627,6 +677,9 @@ def compute_wtc(
     n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by
     the label. The cost is quadratic in the channel count, and it is also what
     :func:`roi_mean_of_channels` needs to build the cross-ROI matrix.
+
+    ``device`` is the card to run on (:func:`~nirspipe.pipeline.hyper._gpu.open_device`),
+    None for the CPU.
     """
     subject_ids = list(raws.keys())
     if len(subject_ids) < 2:
@@ -636,7 +689,7 @@ def compute_wtc(
 
     return _wtc_over_pairs(
         raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales,
-        axis=long_axis_over(raws.values(), ch_type, sep_bands))
+        axis=long_axis_over(raws.values(), ch_type, sep_bands), gpu=device)
 
 
 def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:

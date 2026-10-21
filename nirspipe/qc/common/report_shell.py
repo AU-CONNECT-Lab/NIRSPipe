@@ -22,6 +22,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from nirspipe.exceptions import DeviceError
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.report_shell")
@@ -59,6 +60,9 @@ def guard(label: str, errors: list, scope: str):
     """
     try:
         yield
+    except DeviceError:
+        # the card failing stops the run rather than one section
+        raise
     except Exception as exc:
         errors.append(f"{label}: {exc}")
         logger.exception("%s | %s failed", scope, label)
