@@ -38,7 +38,7 @@ from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
     nirs_required_fields, require_nirs_fields, split_sources,
 )
-from nirspipe.io.snirf import write_snirf
+from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.utils.spans import excluded_spans
 
 logger = get_logger("post.pipeline")
@@ -506,6 +506,81 @@ def run_post(
     # written to disk and the SQM record measures each one per channel set, so the report
     # reads `filtered` -> `errts`.
     return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
+
+
+def final_stage(config: PostConfig, mode: Mode) -> "str | None":
+    """The desc of the series a run ends on, the one FC reads; None when that is the run's input."""
+    if mode in ("glm", "rest") or _has_confounds(config):
+        return "errts"
+    if config.resample_sfreq is not None:
+        return "resampled"
+    if config.high_pass is not None or config.low_pass is not None:
+        return "filtered"
+    return None
+
+
+def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
+                        runs: "list[dict[str, str]]") -> "Path | None":
+    """Join one task's runs after postprocessing and compute FC on the joined series.
+
+    ``runs`` holds the source entities of each run of one subject, session and task, in run
+    order. Each run's final series (:func:`final_stage`) is z-scored per channel over its kept
+    frames and the runs are joined (:func:`~nirspipe.pipeline.combine_runs.join_runs`); the
+    joined series is written without the run entity, its sidecar's ``combined_runs`` naming
+    each run and its onset, and the FC products the mode writes are computed on it over its
+    kept frames. ALFF and the GLM's tables stay per run. A run under ``--min-time`` is left
+    out, and fewer than two runs left join nothing. Returns the joined file, or None.
+    """
+    from nirspipe.io.optode_space import copy_placement
+    from nirspipe.pipeline.combine_runs import join_runs
+
+    stage = final_stage(config, mode)
+    if stage is None:
+        logger.warning("sub-%s | --combine-runs: the runs end on their own input (no bandpass, "
+                       "resampling or regression), so nothing is joined", config.subject)
+        return None
+    paths, raws = [], []
+    for entities in runs:
+        path = build_output_path(output_dir=output_dir, subject=config.subject,
+                                 session=config.session,
+                                 entities={**carry_entities(entities), "desc": stage},
+                                 suffix="nirs", extension=".snirf")
+        raw = read_snirf(path)
+        keep = kept_frames(raw)
+        kept_s = float(keep.sum() / raw.info["sfreq"])
+        if kept_s < config.min_time or keep.sum() < 3:
+            logger.warning("sub-%s | --combine-runs: %s left out, %.1f s kept under "
+                           "--min-time %g s", config.subject, path.name, kept_s,
+                           config.min_time)
+            continue
+        paths.append(path)
+        raws.append(raw)
+    if len(raws) < 2:
+        logger.warning("sub-%s | --combine-runs: fewer than two runs of task %s to join",
+                       config.subject, runs[0].get("task"))
+        return None
+    joined, onsets = join_runs(raws)
+    rec = Recorder()
+    # the first run under a stage of its own, since the joined series takes that run's stage
+    rec.register_input(paths[0], stamp(raws[0], stage="combine_input", step="load"))
+    stamp(joined, stage=stage, step="combine_runs", source=raws[0],
+          combined_runs=[{"run": p.name, "onset_s": round(o, 6)} for p, o in zip(paths, onsets)],
+          zscored="per run and channel, over its kept frames")
+    known = [{**span, "onset": span["onset"] + onset}
+             for path, onset in zip(paths, onsets)
+             for span in read_json(path.with_suffix(".json")).get("excluded_spans", [])]
+    entities = {k: v for k, v in carry_entities(runs[0]).items() if k != "run"}
+    written = _write_step_snirf(joined, config, output_dir, desc=stage, rec=rec,
+                                source_entities=entities, known_spans=known, inputs=paths[1:])
+    try:
+        copy_placement(paths[0], written)
+    except StageError as exc:
+        logger.warning("sub-%s | --combine-runs: no optode placement carried over: %s",
+                       config.subject, exc)
+    if mode == "rest" or config.fc:
+        _write_fc_derivatives(joined, config, output_dir, rec, source_entities=entities,
+                              known_spans=known)
+    return written
 
 
 # what desc-meanfilled's sidecar says about the frames it altered

@@ -62,7 +62,7 @@ import pandas as pd
 
 from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
-from nirspipe.io.derivatives import bids_uris, entity_of, read_json, resolve_bids_uri
+from nirspipe.io.derivatives import bids_uris, entity_of, joined_runs, read_json, resolve_bids_uri
 from nirspipe.io.tables import read_table
 from nirspipe.utils import is_optical_density
 from nirspipe.utils.logging import get_logger
@@ -132,7 +132,8 @@ def scan_runs(nirs_dir: Path) -> dict[str, dict[str, Path]]:
     runs: dict[str, dict[str, Path]] = {}
     for path in sorted(Path(nirs_dir).glob("*_desc-*_nirs.snirf")):
         stage = entity_of(path, "desc")
-        if stage is None:
+        # a --combine-runs series is several runs, which no run's record describes
+        if stage is None or joined_runs(path):
             continue
         label = path.name[: path.name.index("_desc-")]
         runs.setdefault(label, {})[stage] = path

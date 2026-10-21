@@ -18,6 +18,7 @@ import numpy as np
 
 from nirspipe.cli import _app_options, _shared
 from nirspipe.cli.run import mode_defaults, read_config
+from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               validate_bids)
 from nirspipe.io.naming import report_name, roi_map_name
@@ -795,7 +796,7 @@ def _run_post_for_subject(
     One entry per run, keyed the same way as the prep results, so the report loop can pair
     them up. A run whose post failed simply has no entry.
     """
-    from nirspipe.pipeline.post_pipeline import run_post
+    from nirspipe.pipeline.post_pipeline import run_post, write_combined_runs
 
     mode = _v(args["mode"])
     task_label = args.get("task_label")
@@ -820,6 +821,8 @@ def _run_post_for_subject(
                 logger.warning("no desc-preproc snirf found for sub-%s, skipping post", subject)
                 continue
 
+            # the runs of one session and task, which --combine-runs joins once all are done
+            by_task: dict = {}
             for snirf_path in preproc_files:
                 src_entities = post_layout.parse_file_entities(str(snirf_path))
                 # per file, for the session the file sits in; see the prep loop
@@ -836,6 +839,20 @@ def _run_post_for_subject(
                     _POST_FIELDS,
                     (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, fc_seed, fc_roi),
                 ))
+                if src_entities.get("run") is not None:
+                    by_task.setdefault((src_entities.get("session"), src_entities.get("task")),
+                                       []).append((src_entities, post_config))
+
+            for entries in by_task.values():
+                config = entries[0][1]
+                if not config.combine_runs or len(entries) < 2:
+                    continue
+                runs = [e for e, _ in sorted(entries, key=lambda e: int(e[0]["run"]))]
+                try:
+                    write_combined_runs(config, output_dir, mode, runs)
+                except StageError as exc:
+                    logger.warning("sub-%s | --combine-runs: task %s not joined: %s",
+                                   subject, runs[0].get("task"), exc)
 
     return post_runs
 

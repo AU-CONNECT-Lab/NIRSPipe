@@ -248,6 +248,12 @@ def split_sources(paths: "Iterable[str | Path]", written: Path) -> tuple[list[st
 
 
 
+def joined_runs(path: "Path | str") -> list:
+    """The runs a ``--combine-runs`` series was joined from, as its sidecar names them; [] for a run's own file."""
+    params = read_json(Path(path).with_suffix(".json")).get("parameters") or {}
+    return params.get("combined_runs") or []
+
+
 def entity_of(path: "Path | str", name: str) -> str | None:
     """Read one BIDS entity back out of a filename, or None when it carries no such key.
 

@@ -121,9 +121,7 @@ ALLOWED_SAME = {
     "allow_cropped_input": "acts only on a crop tree, where the base run is refused outright",
 }
 # confirmed defects, pinned until they are fixed
-KNOWN = {
-    "combine_runs": "PostConfig.combine_runs is set from the flag and read by no step",
-}
+KNOWN: dict = {}
 
 
 # ---- the inputs ----
