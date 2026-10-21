@@ -31,7 +31,7 @@ from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from nirspipe.qc.common.figure_io import figure_namer, _save_figure_html
-from nirspipe.io.derivatives import entity_of
+from nirspipe.io.derivatives import entity_of, joined_runs
 from nirspipe.io.naming import report_name
 from nirspipe.qc.common.channel_table import (
     CHANNEL_METRICS_SUFFIX, CHANNEL_METRICS_SUFFIXES, RAW_CHANNEL_METRICS_SUFFIX,
@@ -475,6 +475,60 @@ def write_condition_figures(sub_dir: Path, subject: str, groups: list[dict]) -> 
     return out
 
 
+def collect_combined(sub_dir: Path) -> list[dict]:
+    """Each ``--combine-runs`` series of the subject: its label, the runs it joined, its FC tables.
+
+    ``sub-01_task-rest_desc-errts_nirs.snirf`` joined from run-01 and run-02
+        -> ``{"label": "sub-01_task-rest", "runs": [...], "channel": {"hbo": path, ...}}``
+    """
+    out = []
+    for nirs_dir in [sub_dir / "nirs", *sorted(sub_dir.glob("ses-*/nirs"))]:
+        for path in sorted(nirs_dir.glob("*_desc-*_nirs.snirf")):
+            runs = joined_runs(path)
+            if not runs:
+                continue
+            label = path.name[: path.name.index("_desc-")]
+
+            def _tables(pattern: str) -> dict:
+                found = {c: next(iter(sorted(nirs_dir.glob(pattern.format(c=c)))), None)
+                         for c in ("hbo", "hbr")}
+                return {c: p for c, p in found.items() if p is not None}
+
+            out.append({"label": label, "series": path,
+                        "runs": [f"run-{entity_of(entry['run'], 'run')}" for entry in runs],
+                        "channel": _tables(f"{label}_chromo-{{c}}_stat-pearson_relmat.tsv"),
+                        "roi": _tables(f"{label}_chromo-{{c}}_seg-*_agg-roi_stat-pearson_relmat.tsv")})
+    return out
+
+
+def write_combined_figures(sub_dir: Path, item: dict) -> dict:
+    """The joined series' channel FC panel and ROI matrix, drawn as the run reports draw a run's."""
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.io.tables import read_table
+    from nirspipe.qc.figures.subject.rest_figures import fc_roi_matrix_figure, rest_channel_panel
+    from nirspipe.qc.metrics._helpers import bands_from_record
+
+    def _matrix(path: Path):
+        frame = read_table(path)
+        return frame.set_index(frame.columns[0])
+
+    def _save(name: str, fig) -> "dict | None":
+        if fig is None:
+            return None
+        fname = figure_namer(item["label"])(name)
+        return {"src": f"figures/{fname}", "h": _save_figure_html(fig, sub_dir / "figures" / fname)}
+
+    params = json.loads(item["series"].with_suffix(".json").read_text(encoding="utf-8"))
+    channel = {c: _matrix(p) for c, p in item["channel"].items()}
+    panel = rest_channel_panel(channel.get("hbo"), channel.get("hbr"), None,
+                               raw=read_snirf(item["series"]),
+                               sep_bands=bands_from_record(params.get("parameters") or {}),
+                               title="Functional connectivity over the joined runs")
+    roi = fc_roi_matrix_figure({c: _matrix(p) for c, p in item["roi"].items()},
+                               title="ROI-to-ROI functional connectivity over the joined runs")
+    return {"panel": _save("joinedfc", panel), "roi_panel": _save("joinedroifc", roi)}
+
+
 def write_subject_index(
     subject: str,
     sub_dir: Path,
@@ -488,6 +542,10 @@ def write_subject_index(
         return None
 
     errors: list[str] = []
+    combined = collect_combined(sub_dir)
+    for item in combined:
+        with guard(f"Runs combined ({item['label']})", errors, f"sub-{subject}"):
+            item.update(write_combined_figures(sub_dir, item))
     condition_groups = collect_conditions(sub_dir)
     figures: dict = {"profile": None, "per_run": []}
     if condition_groups:
@@ -507,6 +565,7 @@ def write_subject_index(
                       errors=errors or None, scope=f"sub-{subject}"),
         subject=subject,
         rows=rows,
+        combined=combined,
         channels=collect_bad_channels(sub_dir, [r["label"] for r in rows]),
         columns=[head for head, _, _ in _COLUMNS],
         condition_groups=condition_groups,

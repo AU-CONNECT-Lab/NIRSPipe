@@ -18,6 +18,7 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
    on the run's own report. The sections follow the body, so a subject with no conditions
    gets no entry for them. #}
 {% set _sections = [("Runs", "Runs")] %}
+{% if combined %}{% set _ = _sections.append(("Combined", "Runs combined")) %}{% endif %}
 {% if condition_groups %}
   {% set _ = _sections.append(("Conditions", "Conditions")) %}
   {% if condition_figures.profile %}
@@ -95,6 +96,22 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
   {{ section_note('subject_index.outlier', z=outlier_z) }}
   {% endif %}
 </p>
+
+{% if combined %}
+<h2 id="Combined">Runs combined</h2>
+{% for item in combined %}
+{% if combined | length > 1 %}<h3>{{ item.label }}</h3>{% endif %}
+<p class="step-desc">{{ section_note('subject_index.combined', runs=item.runs | join(', ')) }}</p>
+{% if item.panel %}
+<iframe class="plotly-frame" src="{{ item.panel.src }}" title="Functional connectivity over the joined runs"
+        style="height:{{ item.panel.h }}px"></iframe>
+{% endif %}
+{% if item.roi_panel %}
+<iframe class="plotly-frame" src="{{ item.roi_panel.src }}" title="ROI functional connectivity over the joined runs"
+        style="height:{{ item.roi_panel.h }}px"></iframe>
+{% endif %}
+{% endfor %}
+{% endif %}
 
 {% if condition_groups %}
 <h2 id="Conditions">Conditions</h2>

@@ -309,6 +309,10 @@ NOTES = {
         "rejected if either wavelength is. Read from each run&rsquo;s "
         "<code>_desc-channel_qc.tsv</code>, whose union <code>--bads-scope subject</code> "
         "takes, or <code>_desc-rawchannel_qc.tsv</code> for a run only prep-raw saw.",
+    "subject_index.combined":
+        "Joined by <code>--combine-runs</code> from {runs}: each run z-scored per channel over "
+        "its kept frames, the runs joined in order, and FC taken over the joined kept frames. "
+        "Each run&rsquo;s own FC stays in its report.",
     "subject_index.rebuilt":
         "Rebuilt from the records under <code>nirs/</code> each time either command runs, so "
         "it lists what is on disk, not what one command produced. The command below rebuilt "
