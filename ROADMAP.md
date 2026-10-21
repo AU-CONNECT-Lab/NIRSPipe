@@ -14,7 +14,7 @@ Where this package is and where it is going. Released changes are in [CHANGELOG.
 
 **Interfaces.** Everything is available from the command line. A browser interface covers the steps that benefit from being interactive: preparing data, editing markers, launching batches, aligning pairs, and running the pipeline while watching its output arrive.
 
-**Reproducibility.** Runs are logged, and the logs consolidate into a database that answers questions across a whole study. The numerical results have been checked against independent implementations of the same algorithms.
+**Reproducibility.** Every run writes a record of its settings and outcome, and that record reruns it. The numerical results have been checked against independent implementations of the same algorithms.
 
 ---
 

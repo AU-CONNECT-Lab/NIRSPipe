@@ -29,14 +29,17 @@ nirspipe/
 ├── cli/             ← argparse entry points, one file per command
 │   ├── run.py       ← nirspipe (participant / group)
 │   ├── workflows.py ← what a run walks: subject resolution, config merge, dispatch
-│   ├── snirf2bids.py, prep.py, qc.py, hyper.py, rate.py, gui.py, db.py
+│   ├── run_record.py ← each run's TOML record
+│   ├── snirf2bids.py, prep.py, qc.py, hyper.py, rate.py, gui.py
 │
 ├── pipeline/        ← signal processing
 │   ├── prep_pipeline.py     (fixed-order preprocessing)
 │   ├── post_pipeline.py     (denoise / glm / rest dispatch)
-│   ├── glm.py, glm_censored.py, ar_irls.py
+│   ├── glm.py, glm_censored.py, ar_irls.py, glm_worsley.py
+│   ├── glm_whitening.py     (the residual's whitening diagnostic)
 │   ├── denoise.py           (bandpass and resampling)
 │   ├── restingstate.py      (ALFF, connectivity)
+│   ├── combine_runs.py      (a task's runs joined, --combine-runs)
 │   ├── motion.py            (motion correction)
 │   ├── censor_fill.py       (filling corrupted BAD_ spans before the bandpass)
 │   ├── crop.py, edit_markers.py, keep_spans.py
@@ -48,9 +51,11 @@ nirspipe/
 │       ├── surrogate.py         (the nulls' recomputation)
 │       ├── hyper_post.py        (what nirspipe-hyper walks)
 │       ├── pair_null.py, pair_null_group.py
-│       └── wtc_store.py, wtc_null.py, wtc_aggregate.py
+│       ├── wtc_store.py, wtc_null.py, wtc_aggregate.py
+│       └── _gpu.py              (the transforms on a CUDA card, --device cuda)
 │
-├── io/              ← bids.py, snirf.py, naming.py, derivatives.py, auxiliary.py, tables.py
+├── io/              ← bids.py, snirf.py, naming.py, derivatives.py, auxiliary.py, tables.py,
+│                      groups.py (the pairs table), optode_space.py (optodes on fsaverage)
 │
 ├── qc/
 │   ├── subject/     ← run report, raw report, condition pages, subject index,
@@ -66,14 +71,15 @@ nirspipe/
 ├── interface/       ← the GUI
 ├── utils/           ← logging, lineage, spans, snirf_prep, net
 ├── data/            ← the BIDS entities and path patterns names are built from, mode presets
-└── exceptions.py    ← AlignmentError, GroupCSVError, MissingDerivativesError, StageError
+└── exceptions.py    ← AlignmentError, GroupCSVError, MissingDerivativesError, StageError,
+                       FilterDesignError, DeviceError
 ```
 
 | Module | Responsibility |
 |--------|---------------|
 | `cli/` | Argument parsing, subject iteration, parallel dispatch. No signal processing. |
 | `io/` | BIDS querying, SNIRF read and write, derivative names, paths and sidecars. |
-| `pipeline/` | All signal processing. Writes the stage files; owns no report or database writes. |
+| `pipeline/` | All signal processing. Writes the stage files; owns no report writes. |
 | `qc/` | Quality records, metrics, reports, rating, Methods text. Reads the pipeline's outputs. |
 | `interface/` | The GUI. Builds commands; runs no preprocessing in its own process. |
 | `utils/` | Logging, lineage, span handling. |

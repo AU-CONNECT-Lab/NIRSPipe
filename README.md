@@ -10,10 +10,10 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 
 | Level | What it does |
 |-------|--------------|
-| `participant` | Preprocessing in a fixed order: optical density, windowed channel screening, motion correction, Beer-Lambert. Then postprocessing when `--mode` is given: `denoise` (bandpass, resampling, optional confound regression), `glm` (first-level GLM) or `rest` (confound regression, ALFF, functional connectivity). |
+| `participant` | Preprocessing in a fixed order: optical density, windowed channel screening, motion correction, Beer-Lambert. Then postprocessing when `--mode` is given: `denoise` (bandpass, resampling, optional confound regression), `glm` (first-level GLM) or `rest` (confound regression, ALFF, functional connectivity, which `--combine-runs` also computes over a task's runs joined). |
 | `group` | Cohort pages over the per-run quality records, and over the per-dyad ones where the tree holds dyads. |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) specification, every file with a provenance sidecar. Each run gets an HTML QC report with a provenance graph and a generated Methods paragraph. Raw-recording, cohort and dyad QC reports, wavelet coherence and inter-subject correlation for dyads with two nulls, a rating viewer, a desktop GUI and a run-log database complete the package.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) specification, every file with a provenance sidecar. Each run gets an HTML QC report with a provenance graph and a generated Methods paragraph. Raw-recording, cohort and dyad QC reports, wavelet coherence and inter-subject correlation for dyads with two nulls, a rating viewer and a desktop GUI complete the package.
 
 ![NIRSPipe overview: inputs, preprocessing, postprocessing, hyperscanning, quality control, and outputs](assets/nirspipe_overview.jpg)
 
@@ -27,7 +27,7 @@ cd NIRSPipe
 pip install -e ".[dev]"
 ```
 
-See [Installation](docs/installation.md) for bids-validator and the brain template the figures use.
+See [Installation](docs/installation.md) for bids-validator and the optional GPU install.
 
 ## Quick start
 
@@ -75,7 +75,7 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
   --roi-mapping roi.json
 ```
 
-[Hyperscanning](docs/hyperscanning.md#nulls) explains what each null controls for; the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
+`--device cuda` on `nirspipe-hyper` or `nirspipe-hyper-pairnull` runs the wavelet transforms on an NVIDIA card. [Hyperscanning](docs/hyperscanning.md#nulls) explains what each null controls for; the [Tutorial](docs/tutorial.md) runs public dyads from download to the cohort test.
 
 ## Commands
 

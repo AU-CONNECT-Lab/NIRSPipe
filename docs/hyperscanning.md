@@ -185,6 +185,10 @@ No multiple-comparison correction runs unless `--p-correction` names one (`fdr_b
 
 The transform and the prewhitening run on each member's whole record. A pairing then leaves out the union of the two members' `BAD_` spans ([Excluded time](workflows.md#excluded-time)): the excluded columns leave the band means, the phase averages and `n_valid_frac`, and the correlation reads only the samples both members kept. Prewhitening fits each member's coefficients on that member's own kept time. A coherence cell where either member has no power left, as deep inside a long filled span, is NaN. Both nulls leave out the real pairing's excluded time; the re-paired null also leaves out each stand-in's own corrupted spans. Every dyad table records each pairing's `kept_s`.
 
+## Running on a GPU
+
+`--device cuda` runs the wavelet transforms of `nirspipe-hyper` and `nirspipe-hyper-pairnull` on an NVIDIA card in double precision, once the optional extra is installed ([GPU](installation.md#gpu)). The command stops before any group is loaded when cupy is missing, no card is visible, or the card cannot hold the groups `--nprocs` runs at once, about 4.5 GiB each. Each group's first pairing is also computed on the CPU; unless the two agree to one float32 unit in the last place (cells near the power floor aside), that group stops with nothing written from the card and the run goes on to the next. The sidecars name the card; the check's cell counts go to the run record, and for the re-paired null to its sidecars.
+
 ## Other commands
 
 **`nirspipe-hyper-band`** re-averages the maps `nirspipe-hyper --wtc-save-maps` saved over another band, with no second transform, and writes tables only, named with a `band-` entity beside the originals. The band must lie inside the frequency axis the maps were computed on.

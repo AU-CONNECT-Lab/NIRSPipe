@@ -26,6 +26,14 @@ nirspipe --version
 deno install -A -g -n bids-validator jsr:@bids/validator
 ```
 
+## GPU
+
+`nirspipe-hyper` and `nirspipe-hyper-pairnull` can run the wavelet transforms on an NVIDIA card with `--device cuda` ([Running on a GPU](hyperscanning.md#running-on-a-gpu)). The optional extra installs cupy with the CUDA 12 libraries it needs, so no CUDA toolkit is required, only a driver for CUDA 12 or later:
+
+```bash
+pip install -e ".[gpu]"
+```
+
 ## Dependencies
 
 | Package | Version | Role |
