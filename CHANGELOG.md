@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.73.0] - 2026-10-21
+
 ### Added
 - `--combine-runs` now joins a task's runs after postprocessing, each z-scored over its kept frames, and computes FC on the joined series; ALFF and GLM tables stay per run
 - The subject index draws each joined series' FC, channel and ROI, under Runs combined
