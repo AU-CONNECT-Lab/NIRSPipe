@@ -454,7 +454,7 @@ def activation_panel(
     """Every condition's render stacked into one image, for a caller that wants one file.
 
     The subject report does not use this. It renders each condition through
-    :func:`activation_condition_figures` and switches between them instead.
+    :func:`activation_condition_figures` and shows each file in turn.
     """
     rendered = activation_condition_figures(raw_haemo, results_dict, clim, view, size)
     if not rendered:

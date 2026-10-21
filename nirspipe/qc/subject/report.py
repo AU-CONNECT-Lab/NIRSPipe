@@ -1851,10 +1851,7 @@ def _section_glm(
             glm_design_heatmap_path = save_png(b64, figures_dir,
                                                fig_name("heatmap", suffix="design", extension=".png"))
 
-    # One file per condition behind a switch, not one tall image: five conditions stacked
-    # reach ~3500 px, where a condition cannot be looked at on its own and two cannot be
-    # compared. The colour scale is still shared across them, which is what keeps the
-    # switch a comparison rather than five separate pictures.
+    # one file per condition, all shown, against one colour scale so they compare
     if glm_est is not None and conditions and raw_haemo is not None:
         with _guard("GLM activation panel", errors, subject):
             from nirspipe.qc.figures import activation_condition_figures
@@ -1868,8 +1865,7 @@ def _section_glm(
                 df["Contrast"] = df["Contrast"].astype(str)
                 results_dict = {c: df[df["Contrast"] == c] for c in conditions}
                 # _pair_fname strips everything but alphanumerics, so "game-1" and
-                # "game 1" would land on one file and the switcher would offer two labels
-                # pointing at the same picture
+                # "game 1" would land on one file and two labels would show the same picture
                 used: set[str] = set()
                 failed: list[tuple[str, str]] = []
                 rendered = activation_condition_figures(raw_haemo, results_dict, failed=failed)
@@ -1884,8 +1880,7 @@ def _section_glm(
                                                                 extension=".png", condition=slug))
                     if path:
                         glm_activation_conditions.append({"label": label, "path": path})
-                # the first condition is what the img element loads before anything is
-                # picked, and it is also what still gates the GLM section being open
+                # still what gates the GLM section being shown
                 if glm_activation_conditions:
                     glm_activation_path = glm_activation_conditions[0]["path"]
 
@@ -2661,7 +2656,7 @@ def _condition_glm(report_vars: dict, label: str) -> dict:
 
     Nothing is recomputed. ``_section_glm`` already rendered one figure per condition
     against a colour scale shared across them, so a condition page shows the one that is
-    already on disk and drops the switcher, which would have one option.
+    already on disk.
     """
     conditions = [c for c in (report_vars.get("glm_activation_conditions") or [])
                   if c.get("label") == label]

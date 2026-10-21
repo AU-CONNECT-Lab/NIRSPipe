@@ -1,7 +1,7 @@
-"""The GLM activation panel is one figure per condition behind a switch, not one tall image.
+"""The GLM activation panel is one figure per condition, every one shown, not one tall image.
 
 What matters about the split is the part that is easy to lose: the colour scale has to
-stay shared, or the switch stops being a comparison and a condition that barely activated
+stay shared, or the figures stop being a comparison and a condition that barely activated
 fills its own scale and reads as strong.
 
 `_save_glm_brain` needs fsaverage and an offscreen GL context, so it is stubbed here:
@@ -134,3 +134,30 @@ def _png_height(b64: str) -> int:
     raw = base64.b64decode(b64)
     assert raw[:8] == b"\x89PNG\r\n\x1a\n"
     return int.from_bytes(raw[20:24], "big")
+
+
+# ---- the report shows every condition at once ----
+
+def _activation_block(**variables) -> str:
+    from nirspipe.qc.common.report_shell import TEMPLATE_DIR, template_env
+    text = (TEMPLATE_DIR / "subject_report.html.j2").read_text(encoding="utf-8")
+    start = text.index("{% if glm_activation_conditions %}")
+    end = text.index("{% endif %}", text.index("{% elif glm_activation_path %}")) + len("{% endif %}")
+    return template_env().from_string(text[start:end]).render(**variables)
+
+
+def test_every_condition_figure_is_on_the_page_without_a_menu():
+    conds = [{"label": c, "path": f"figures/x_cond-{c}_desc-glmactivation_nirsmap.png"}
+             for c in ("Control", "TappingLeft", "TappingRight")]
+    html = _activation_block(glm_activation_conditions=conds)
+    for cond in conds:
+        assert f'src="{cond["path"]}"' in html
+    assert html.count("<img") == 3
+    assert "<select" not in html
+
+
+def test_a_condition_page_shows_its_one_figure():
+    html = _activation_block(glm_activation_conditions=[
+        {"label": "video", "path": "figures/x_cond-video_desc-glmactivation_nirsmap.png"}])
+    assert html.count("<img") == 1
+    assert "cond-video" in html

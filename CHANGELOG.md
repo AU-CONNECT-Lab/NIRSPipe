@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The run report shows every condition's GLM activation figure, one under another, in place of a menu
+
 ### Fixed
 - The subject index's Channel rejections columns name each run by task plus whichever of session, acq and run tell the runs apart
 

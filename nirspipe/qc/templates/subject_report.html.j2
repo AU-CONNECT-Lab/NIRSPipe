@@ -488,18 +488,10 @@
     {% if glm_activation_conditions %}
       <h3>Activation by condition</h3>
       <p class="panel-note">{{ section_note('glm.activation') }}</p>
-      {% if glm_activation_conditions | length > 1 %}
-      <select class="ch-select"
-              onchange="document.getElementById('glm-activation-img').src=this.value;
-                        document.getElementById('glm-activation-path').textContent=this.value;">
-        {% for cond in glm_activation_conditions %}
-        <option value="{{ cond.path }}">{{ cond.label }}</option>
-        {% endfor %}
-      </select>
-      {% endif %}
-      <img id="glm-activation-img" src="{{ glm_activation_conditions[0].path }}"
-           alt="Activation by condition" style="max-width:100%;display:block;" />
-      <p class="fig-path" id="glm-activation-path">{{ glm_activation_conditions[0].path }}</p>
+      {% for cond in glm_activation_conditions %}
+      <img class="responsive" src="{{ cond.path }}" alt="Activation: {{ cond.label }}" />
+      <p class="fig-path">{{ cond.path }}</p>
+      {% endfor %}
     {% elif glm_activation_path %}
       <h3>Activation by condition</h3>
       <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
