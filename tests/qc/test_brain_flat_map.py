@@ -3,6 +3,7 @@
 import base64
 import io
 
+import mne
 import numpy as np
 import pytest
 from PIL import Image
@@ -65,6 +66,49 @@ def _drawn_lines(raw, sci, rejected, monkeypatch) -> dict:
 def test_each_pair_is_one_line_between_its_own_source_and_detector(raw, monkeypatch):
     lines = _drawn_lines(raw, {n: 0.95 for n in raw.ch_names}, [], monkeypatch)
     assert set(lines) == {n.rsplit(" ", 1)[0] for n in raw.ch_names}
+
+
+# ---- the map draws the run's placement, not the file's frame ----
+
+# a file frame like NIRStar's: turned half a circle about z and moved 130 mm off the origin
+_FILE_FROM_HEAD = np.array([[-1.0, 0.0, 0.0, 0.13],
+                            [0.0, -1.0, 0.0, 0.12],
+                            [0.0, 0.0, 1.0, 0.11],
+                            [0.0, 0.0, 0.0, 1.0]])
+
+
+def _in_file_frame(raw, placement):
+    from nirspipe.io.optode_space import hold_placement
+    moved = raw.copy()
+    for ch in moved.info["chs"]:
+        ch["loc"][:9] = mne.transforms.apply_trans(_FILE_FROM_HEAD, ch["loc"][:9].reshape(3, 3)).ravel()
+    return hold_placement(moved, placement)
+
+
+def _head_placed(raw):
+    from nirspipe.io.optode_space import Placement, head_to_mri, hold_placement
+    return hold_placement(raw.copy(), Placement("head", np.diag([1e3, 1e3, 1e3, 1.0]) @ head_to_mri()))
+
+
+def test_a_cap_recorded_in_another_frame_lands_where_its_head_frame_twin_does(raw):
+    from nirspipe.io.optode_space import Placement, head_to_mri
+    from nirspipe.qc.figures.common.topomap import _projected_optodes
+    # what a landmark registration finds for that file: back to head, then onto fsaverage mm
+    found = np.diag([1e3, 1e3, 1e3, 1.0]) @ head_to_mri() @ np.linalg.inv(_FILE_FROM_HEAD)
+    expected, _, _ = _projected_optodes(_head_placed(raw))
+    drawn, _, _ = _projected_optodes(_in_file_frame(raw, Placement("landmarks", found)))
+    assert drawn.keys() == expected.keys()
+    for name, xy in expected.items():
+        assert drawn[name] == pytest.approx(tuple(xy), abs=1e-9), name
+
+
+def test_an_unplaced_cap_is_drawn_as_its_coordinates_stand(raw):
+    from nirspipe.io.optode_space import Placement
+    from nirspipe.qc.figures.common.topomap import _projected_optodes
+    expected, _, outlines = _projected_optodes(_head_placed(raw))
+    drawn, _, _ = _projected_optodes(_in_file_frame(raw, Placement("none", note="no reading")))
+    # left in the file's frame the cap is not moved back onto the head it was recorded on
+    assert all(np.hypot(*(np.asarray(drawn[n]) - expected[n])) > 0.01 for n in expected)
 
 
 def test_a_rejected_pair_is_red_at_any_sci_and_the_rest_follow_their_sci(raw, monkeypatch):

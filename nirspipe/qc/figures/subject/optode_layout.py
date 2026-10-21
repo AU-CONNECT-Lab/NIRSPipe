@@ -47,7 +47,7 @@ def optode_layout_static(
     """
     import matplotlib.pyplot as plt
 
-    projected = _projected_optodes(raw.info)
+    projected = _projected_optodes(raw)
     if projected is None:
         return None
     opt_xy, pairs, outlines = projected

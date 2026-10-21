@@ -50,7 +50,7 @@ def head_geometry(raw: mne.io.Raw, pairs: list[str]) -> "dict | None":
 
     None when the montage has no usable optode positions.
     """
-    got = _projected_optodes(raw.info)
+    got = _projected_optodes(raw)
     if got is None:
         return None
     opt_xy, all_pairs, outlines = got

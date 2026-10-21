@@ -189,7 +189,7 @@ def test_optode_layout_puts_each_optode_where_the_head_maps_do(haemo, monkeypatc
     optode_layout.optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)
     ax = drawn["fig"].axes[0]
 
-    opt_xy, _, outlines = _projected_optodes(haemo.info)
+    opt_xy, _, outlines = _projected_optodes(haemo)
     assert outlines
     placed = {t.get_text(): t.get_position() for t in ax.texts}
     assert placed.keys() == opt_xy.keys()

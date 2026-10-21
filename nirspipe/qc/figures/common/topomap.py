@@ -15,9 +15,11 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from nirspipe.io.optode_space import placement_of
 from nirspipe.qc.metrics._helpers import epochable_events
 from nirspipe.utils import is_marker
 from nirspipe.utils.logging import get_logger
+from nirspipe.qc.figures.common._brain_utils import to_head
 from nirspipe.qc.figures.common._utils import (
     SCALE_MIN_TRIALS, _optode_positions, _topomap_project,
 )
@@ -63,16 +65,37 @@ def _condition_evokeds(
     return out
 
 
-def _projected_optodes(info: mne.Info) -> "tuple[dict, list, dict] | None":
+def _placed_info(raw: mne.io.Raw) -> mne.Info:
+    """``raw.info`` with its fNIRS positions moved into fsaverage's head frame by the run's placement.
+
+    A recording already in head frame comes back as it is, and one no reading placed keeps its
+    coordinates as they stand, as the 3-D views draw it.
+    """
+    placement = placement_of(raw)
+    if not placement.placed or placement.method == "head":
+        return raw.info
+    info = raw.info.copy()
+    picks = mne.pick_types(info, meg=False, fnirs=True, exclude=[])
+    # loc holds the channel, source and detector positions, three points per channel
+    locs = np.array([info["chs"][i]["loc"][:9] for i in picks]).reshape(-1, 3)
+    for i, loc in zip(picks, to_head(locs, raw).reshape(len(picks), 9)):
+        info["chs"][i]["loc"][:9] = loc
+    return info
+
+
+def _projected_optodes(raw: mne.io.Raw) -> "tuple[dict, list, dict] | None":
     """Optode 2-D coordinates, channel pairs and the head outline, in MNE's topomap frame.
 
     Uses the same azimuthal projection and fitted sphere MNE uses for a real topomap, so this
-    figure and the optode layout describe the same head. Falls back to raw x/y when the
-    montage carries no sphere, which loses the head outline but keeps the relative geometry.
+    figure and the optode layout describe the same head. The positions are the run's placed
+    ones, so a file recorded in another frame lands on the head as it does in the 3-D views.
+    Falls back to raw x/y when the montage carries no sphere, which loses the head outline but
+    keeps the relative geometry.
 
     e.g. a two-pair montage yields ``({"S1": (x, y), "D1": ..., "D2": ...},
     [("S1", "D1"), ("S1", "D2")], {"head": (xs, ys), ...})``.
     """
+    info = _placed_info(raw)
     picks = list(mne.pick_types(info, meg=False, fnirs=True, exclude=[]))
     if not picks:
         return None
@@ -164,7 +187,7 @@ def evoked_channel_map_figure(
     if not evokeds:
         return None
 
-    geom = _projected_optodes(raw_haemo.info)
+    geom = _projected_optodes(raw_haemo)
     if geom is None:
         return None
     opt_xy, all_pairs, outlines = geom
