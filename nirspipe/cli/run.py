@@ -229,7 +229,9 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
     # None rather than False, here and on --drift-order, so a --config or mode value can show
     post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=None,
-                      help="Concatenate multiple runs before postprocessing.")
+                      help="After postprocessing, join each task's runs, each z-scored per "
+                           "channel over its kept frames, into one series written without the "
+                           "run entity, and compute FC on it. ALFF and GLM tables stay per run.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", type=float,

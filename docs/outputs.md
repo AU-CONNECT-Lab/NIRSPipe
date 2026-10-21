@@ -8,7 +8,7 @@ title: Outputs
 
 ## Naming
 
-Every name is built from BIDS entities. `<run>` below stands for the input recording's own, `sub-<label>[_ses-<label>]_task-<label>[_run-<index>]`.
+Every name is built from BIDS entities. `<run>` below stands for the input recording's own, `sub-<label>[_ses-<label>]_task-<label>[_run-<index>]`, and `<task>` for the same without the run.
 
 | Entity | Means |
 |--------|-------|
@@ -73,6 +73,8 @@ derivatives/nirspipe/
         ├── <run>_seg-<map>_agg-roi_stat-alff_nirsmap.tsv                ← + --roi-mapping
         ├── <run>_chromo-{hbo,hbr}_stat-{pearson,fisherz}_relmat.tsv     ← rest or --fc
         ├── <run>_chromo-{hbo,hbr}_seg-<map>_agg-{roi,seed}_stat-{pearson,fisherz}_relmat.tsv  ← + --roi-mapping
+        ├── <task>_desc-<stage>_nirs.snirf          ← --combine-runs: the task's runs joined, named without run-
+        ├── <task>_chromo-{hbo,hbr}_..._relmat.tsv  ← --combine-runs: FC of the joined series, as above
         ├── <page>_desc-rating_qc.json, <page>_desc-rawrating_qc.json    ← section ratings
         └── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
 ```

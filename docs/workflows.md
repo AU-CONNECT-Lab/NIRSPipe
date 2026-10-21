@@ -262,6 +262,10 @@ The rest-mode panel of the report: HbO and HbR channel correlation matrices on o
 
 `--fc` writes the connectivity products of rest mode in the other two modes: in `glm` from the residual the task was modelled out of, in `denoise` from its confound residual or its bandpassed data. ALFF is not written, since it needs a broadband residual. Give `--high-pass` / `--low-pass` too; without a bandpass the correlations are dominated by drift.
 
+### Combining runs
+
+`--combine-runs` joins the runs of a task once each has been postprocessed. Files of one subject that differ only in `run` are joined in run order: each run's final series (the residual, or the bandpassed or resampled data when no regression ran) is z-scored per channel over its frames outside `BAD_` spans, so a run with a larger variance does not outweigh the others, and the joined series is written without the `run` entity, its sidecar naming each run and where it starts. FC, ROI FC and seed FC are computed on the joined series over its kept frames wherever the mode writes FC; ALFF and the GLM's tables stay per run. A channel rejected in any run is rejected in the joined series. A run with less kept time than `--min-time` is left out, and a task with a single run is not joined. The [subject index](qc.md) draws the joined FC.
+
 ## Excluded time
 
 A run is always processed whole. Time that should not count is marked with an annotation whose description starts with `BAD_`, and every estimate leaves those frames out. Nothing is cut: every output keeps the run's full length, the spans travel with it as annotations, and every sidecar lists them under `excluded_spans`. With no span at all, every step takes its plain route.

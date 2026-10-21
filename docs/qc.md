@@ -146,7 +146,7 @@ Section `whitening`, only for a GLM fitted with conditions, whose t values assum
 
 ## The run report
 
-`nirspipe` writes one self-contained HTML page per run, plus a subject index that lists every run and condition page on disk, from either command, read back from the quality records. Each page can be opened directly in a browser or served by the [rating viewer](#rating). Every report follows one layout: a summary, the processing steps in order, **Quality Metrics** (the tables), **Quality Figures** (the figures that read off them), and the run record last. Nothing is folded. A figure that fails to build leaves a placeholder and an entry under Errors & Warnings; the rest of the page still renders.
+`nirspipe` writes one self-contained HTML page per run, plus a subject index that lists every run and condition page on disk, from either command, read back from the quality records. Under `--combine-runs` the index also draws the FC of each joined series. Each page can be opened directly in a browser or served by the [rating viewer](#rating). Every report follows one layout: a summary, the processing steps in order, **Quality Metrics** (the tables), **Quality Figures** (the figures that read off them), and the run record last. Nothing is folded. A figure that fails to build leaves a placeholder and an entry under Errors & Warnings; the rest of the page still renders.
 
 ### Summary
 
