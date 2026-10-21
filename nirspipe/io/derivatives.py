@@ -519,7 +519,13 @@ def _link_target(root: Path, value: str) -> Path:
         from urllib.parse import unquote, urlparse
         from urllib.request import url2pathname
         return Path(url2pathname(unquote(urlparse(value).path))).resolve()
-    return (root / value).resolve()
+    spelled = (root / value).resolve()
+    if spelled.exists():
+        return spelled
+    # Windows climbs ".." on the spelling, so a link written from the tree's real path, past
+    # a junction, only resolves from there
+    real = (root.resolve() / value).resolve()
+    return real if real.exists() else spelled
 
 
 def _linked_roots(root: Path) -> dict[str, Path]:

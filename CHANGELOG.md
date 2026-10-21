@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The run report shows every condition's GLM activation figure, one under another, in place of a menu
 
 ### Fixed
+- A rerun no longer refuses an output directory named through a Windows junction when an earlier run named its real path
 - The optode flat map and the head maps draw the run's placed optode positions, so a file recorded in another frame lands on the head as in the 3-D views
 - The subject index's Channel rejections columns name each run by task plus whichever of session, acq and run tell the runs apart
 

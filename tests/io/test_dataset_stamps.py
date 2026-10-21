@@ -178,6 +178,20 @@ def test_a_link_to_another_tree_still_refuses_the_run(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows directory link")
+def test_a_rerun_naming_the_output_through_a_junction_reads_the_link_its_first_run_wrote(tmp_path):
+    import _winapi
+    _raw_dataset(tmp_path / "data" / "bids")
+    (tmp_path / "e" / "deep" / "run").mkdir(parents=True)
+    (tmp_path / "c").mkdir()
+    _winapi.CreateJunction(str(tmp_path / "e" / "deep" / "run"), str(tmp_path / "c" / "run"))
+    # the first run named the output by its real path, so its link climbs from there
+    write_dataset_description(tmp_path / "e" / "deep" / "run" / "task", source=tmp_path / "data" / "bids")
+    write_dataset_description(tmp_path / "c" / "run" / "task", source=tmp_path / "data" / "bids")
+    links = json.loads((tmp_path / "c" / "run" / "task" / "dataset_description.json").read_text())
+    assert links["DatasetLinks"] == {"raw": "../../../../data/bids"}
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows directory link")
 def test_a_new_link_through_a_junction_stays_relative_as_spelled(tmp_path):
     import _winapi
     # the data sits elsewhere; the run names it through a junction beside its output
