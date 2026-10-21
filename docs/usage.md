@@ -77,7 +77,7 @@ nirspipe /data/bids /data/derivatives group
 
 ## Conventions
 
-- **Entity flags** are spelled the same on every command: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. A label may be given with its `sub-` / `ses-` / `task-` prefix or without. List options take space-separated values or the flag repeated. The BIDS App options also answer to their underscore spellings (`--participant_label`, `--work_dir`, ...).
+- **Entity flags** are spelled the same on every command: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. A label may be given with its `sub-` / `ses-` / `task-` prefix or without. List options take space-separated values or the flag repeated. The BIDS App options also answer to their underscore spellings (`--participant_label`, `--bids_filter_file`, ...).
 - **Every command** takes `--version` and `--verbose`.
 - **Tables** you supply are read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed ([Table files](data-preparation.md#table-files)).
 - **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep`, `nirspipe-qc prep-raw` and `hyper-raw`) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
@@ -151,7 +151,7 @@ Written to `<run>_desc-contrast_nirsmap.tsv`, one row per contrast and channel.
 
 ## `nirspipe`
 
-`participant` preprocesses each selected subject, and postprocesses it when `--mode` is given. `group` reads the quality records under `OUTPUT_DIR` and writes the cohort pages; it reads nothing from `BIDS_DIR` and needs no preprocessing flag. The run stops before writing anything when the output directory is the input, when `--work-dir` lies inside the input, or when `--participant-label` names a subject the dataset does not have. What each step does is in [Processing workflow](workflows.md).
+`participant` preprocesses each selected subject, and postprocesses it when `--mode` is given. `group` reads the quality records under `OUTPUT_DIR` and writes the cohort pages; it reads nothing from `BIDS_DIR` and needs no preprocessing flag. The run stops before writing anything when the output directory is the input, or when `--participant-label` names a subject the dataset does not have. What each step does is in [Processing workflow](workflows.md).
 
 ```{argparse}
 :module: cli_parsers

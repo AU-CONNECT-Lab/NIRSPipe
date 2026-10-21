@@ -17,7 +17,7 @@ REQUIRED = ["--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
 
 _ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
-    bids_filter_file=None, work_dir=None, verbose=False, ignore=None, nprocs=None,
+    bids_filter_file=None, verbose=False, ignore=None, nprocs=None,
     no_report=True, dry_run=True, dpf=[6.0, 6.0], sci_threshold=0.8,
     motion_correction="tddr", cardiac_l_freq=0.7, cardiac_h_freq=1.5,
     resp_l_freq=0.2, resp_h_freq=0.5,
@@ -44,14 +44,6 @@ def test_an_output_directory_that_is_the_input_is_refused(mini_bids, capsys):
     assert exit_.value.code != 0
     assert "output directory is the input" in capsys.readouterr().err
     assert (mini_bids / "dataset_description.json").read_text() == before
-
-
-def test_a_work_directory_inside_the_input_is_refused(mini_bids, tmp_path):
-    with pytest.raises(SystemExit) as exit_:
-        main([str(mini_bids), str(tmp_path / "out"), "participant", *REQUIRED,
-              "--work-dir", str(mini_bids / "work")])
-    assert exit_.value.code != 0
-    assert not (mini_bids / "work").exists()
 
 
 # ---- participant labels ----

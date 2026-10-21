@@ -37,6 +37,9 @@ All notable changes to this project will be documented in this file.
 - The raw report's trial images split by event name, pooled first, as the subject report's do; condition pages keep their window's trials
 - Without `--wtc-seed` or `--seed`, a dyad command that draws at random picks a seed, prints it and records it, so the draws can be repeated
 
+### Removed
+- **Breaking**: `--work-dir`, which cached nothing; every stage is already written to the output directory
+
 ### Fixed
 - A rerun into an existing output tree no longer fails when its input is now reached through a junction or symlink; new dataset links stay relative as the paths were given
 - The cohort report's strip jitter no longer moves between runs of the same cohort

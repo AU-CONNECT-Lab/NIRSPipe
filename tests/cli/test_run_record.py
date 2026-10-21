@@ -34,7 +34,7 @@ noise_model = "ols"
 
 _BASE_ARGS = dict(
     analysis_level="participant", session_label=None, task_label=["tapping"],
-    bids_filter_file=None, work_dir=None, verbose=False, skip_bids_validation=True,
+    bids_filter_file=None, verbose=False, skip_bids_validation=True,
     ignore=None, nprocs=None, dry_run=False, no_report=True,
     dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr",
     cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5,

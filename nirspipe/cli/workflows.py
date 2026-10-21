@@ -214,7 +214,6 @@ def run_participant_level(args: dict[str, Any]) -> None:
     session_label: list[str] | None  = args.get("session_label")
     task_label: list[str] | None     = args.get("task_label")
     bids_filter_file: Path | None    = args.get("bids_filter_file")
-    work_dir: Path | None            = args.get("work_dir")
     verbose: bool                    = args.get("verbose", False)
 
     setup_logging(verbose=verbose)
@@ -324,7 +323,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             logger.info("processing: %s", snirf_path)
                             try:
                                 raw = read_snirf(snirf_path)
-                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, work_dir=work_dir, source_path=snirf_path,
+                                result = run_prep(raw, prep_config, output_dir=output_dir, source_entities=src_entities, source_path=snirf_path,
                                                   source_metadata=layout.get_metadata(str(snirf_path)))
                                 logger.info("finished prep: %s", snirf_path.name)
                                 prep_runs[bids_label(subject, src_entities)] = (raw, result, prep_config)

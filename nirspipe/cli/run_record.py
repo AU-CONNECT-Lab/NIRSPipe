@@ -158,7 +158,6 @@ def write_run_record(
         "run_command": _command_line(),
         "bids_dir": _fwd(args["bids_dir"]),
         "output_dir": _fwd(output_dir),
-        "work_dir": _fwd(args.get("work_dir")),
         "log_dir": _fwd(output_dir / "logs"),
         "participant_label": [subject],
         "session_label": args.get("session_label"),

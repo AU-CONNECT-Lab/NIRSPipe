@@ -230,7 +230,6 @@ def run_prep(
     config: PrepConfig,
     output_dir: Path,
     source_entities: dict[str, str] | None = None,
-    work_dir: Path | None = None,
     source_path: Path | None = None,
     source_metadata: dict | None = None,
 ) -> PrepResult:

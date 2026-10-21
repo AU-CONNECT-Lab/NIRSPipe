@@ -282,7 +282,6 @@ def _build_parser() -> argparse.ArgumentParser:
     out.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
     _shared.add_nprocs(out)
-    out.add_argument("--work-dir", "--work_dir", type=Path, help="Hash cache directory.")
 
     esc = p.add_argument_group("escape hatches")
     esc.add_argument("--ignore", nargs="+", action="extend", choices=_IGNORE_CHOICES,
@@ -321,12 +320,6 @@ def _check_keep_spans_from(args: argparse.Namespace) -> None:
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
     _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "nirspipe")
-    bids_dir = args.bids_dir.resolve()
-    work_dir = args.work_dir.resolve() if args.work_dir else None
-    if work_dir is not None and (work_dir == bids_dir or bids_dir in work_dir.parents):
-        print("Error: the work directory is inside the input BIDS directory; choose one "
-              "outside it.", file=sys.stderr)
-        raise SystemExit(1)
 
 
 # ---- --config: a run record, or any file of its shape ----

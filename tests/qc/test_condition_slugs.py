@@ -119,7 +119,7 @@ def test_a_pipeline_report_keeps_the_record_and_draws_no_condition_pages(tmp_pat
                   "--dpf", "6", "--sci-threshold", "0.5",
                   "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
                   "--resp-l-freq", "0.1", "--resp-h-freq", "0.5",
-                  "--by-condition", "--skip-bids-validation", "--work-dir", str(tmp_path / "w")])
+                  "--by-condition", "--skip-bids-validation"])
 
     records = list(out.rglob("*_desc-sqm_qc.json"))
     assert len(records) == 1
