@@ -22,14 +22,13 @@ from nirspipe.qc.figures.hyper.hyper_figures import (
     build_alignment_timeline,
     build_channel_summary,
     build_head_by_condition,
-    build_head_slider,
     build_motion_panel,
     build_psd,
     build_signal_overlay_pair,
     build_usable_time,
     motion_series,
 )
-from nirspipe.qc.figures.common.head_map import head_geometry
+from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
 from nirspipe.qc.metrics.hyper import (
     compute_hyper_sqm, coupled_grid, member_series, motion_summary, shared_screen_windows,
 )

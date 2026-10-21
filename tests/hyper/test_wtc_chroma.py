@@ -379,6 +379,27 @@ def test_the_condition_windows_reach_the_sidecar(by_condition):
     assert "wtc_mc_count" not in params
 
 
+def test_the_isc_sidecars_record_the_condition_windows(by_condition):
+    """The windows are the annotations `_report_by_condition` plants: 10 s and 200 s, 100 s each."""
+    planted = {"chat": [10.0, 110.0], "quiet": [200.0, 300.0]}
+
+    def params(path):
+        return json.loads(path.with_suffix(".json").read_text())["parameters"]
+
+    long_tables = [by_condition / name("G1", "tap", "iscpairs"),
+                   by_condition / name("G1", "tap", "iscpairs", segmentation="custom",
+                                       aggregation="roi")]
+    for path in long_tables:
+        assert params(path)["condition_windows_s"] == planted, path.name
+    for label, window in planted.items():
+        matrices = sorted(by_condition.glob(f"*_cond-{label}_stat-isc_relmat.json"))
+        assert len(matrices) == 4  # two chromophores, channel and ROI
+        for path in matrices:
+            assert params(path)["condition_window_s"] == window, path.name
+    whole_run = by_condition / name("G1", "tap", "iscpairs", chromophore="hbo")
+    assert "condition_window_s" not in params(whole_run)
+
+
 def test_a_monte_carlo_level_reaches_the_sidecar_and_the_methods(dyad, tmp_path):
     from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
 

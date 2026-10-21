@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- ISC sidecars record the condition windows: each condition's matrix its own, the long tables and draws all of them
+
 ## [0.72.0] - 2026-10-20
 
 ### Added

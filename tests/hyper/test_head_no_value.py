@@ -3,7 +3,7 @@
 import numpy as np
 
 from nirspipe.qc.figures.common.head_map import BLANK_COLOR, head_geometry
-from nirspipe.qc.figures.hyper.hyper_figures import build_head_slider
+from nirspipe.qc.figures.common.head_map import build_head_slider
 from nirspipe.utils import pair_of
 from tests._synth import synth_raw
 

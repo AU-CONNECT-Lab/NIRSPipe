@@ -22,7 +22,7 @@ from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from nirspipe.qc.figures.common.head_map import (
-    BLANK_COLOR, HEAD_SCALE, build_head_slider, head_axes as _head_axes,
+    BLANK_COLOR, HEAD_SCALE, head_axes as _head_axes,
     head_ground as _head_ground, head_glyph as _head_glyph, pair_values,
 )
 from nirspipe.io.auxiliary import ImuTrace

@@ -878,6 +878,8 @@ def run_hyper_post(
                 pairs_df.insert(0, "condition", label)
             isc_pair_frames.append(_with_kept(pairs_df, *(window or run_span)))
             sources = paths_from(aligned_raws.values())
+            own_window = ({"condition_window_s": [round(window[0], 3), round(window[1], 3)]}
+                          if label else {})
             # the cond- entity a condition's page takes, so its table is named the way its
             # page is and a reader can pair the two without a rule of their own
             common = {"task": task,
@@ -888,7 +890,7 @@ def run_hyper_post(
             write_isc_matrix(
                 group_output_path(output_dir, group_id, common, "relmat", ".tsv", session=session),
                 isc_mat, isc_ch_names, ch_type, sources, pair_ids, align=align_info,
-                **_isc_params(),
+                **_isc_params(), **own_window,
             )
             if roi_map:
                 roi_mat, roi_names = roi_mean_of_isc(
@@ -901,7 +903,7 @@ def run_hyper_post(
                             {**common, **roi_entities, "aggregation": "roi"},
                             "relmat", ".tsv", session=session),
                         roi_mat, roi_names, ch_type, sources, pair_ids, align=align_info,
-                        step="hyper_isc_roichan", index_label="roi",
+                        step="hyper_isc_roichan", index_label="roi", **own_window,
                     )
                     # the ROI cells as the channel ones: one row per pairing, crossed or not
                     rows = pd.DataFrame(
@@ -919,6 +921,7 @@ def run_hyper_post(
     isc: dict = {}
     isc_roi: dict = {}
     isc_levels: dict = {}
+    isc_windows = {"condition_windows_s": spans} if cond_windows else {}
     for pr in pairings:
         scopes = [(None, analysis_window)] + [(lab, (a, b)) for lab, a, b in cond_windows]
         both = {lab: {c: _isc_of(c, lab, window, pr) for c in chroma}
@@ -945,7 +948,7 @@ def run_hyper_post(
                 paths_from(aligned_raws.values()),
                 **_isc_params(), seed=wtc_seed,
                 chroma=list(chroma), conditions=[w[0] for w in cond_windows],
-                **align_info,
+                **isc_windows, **align_info,
             )
             tables[tsv_path.name] = tsv_path
             logger.info("ISC pair table saved: %s", tsv_path)
@@ -962,7 +965,7 @@ def run_hyper_post(
                 paths_from(aligned_raws.values()),
                 **_isc_params(), seed=wtc_seed,
                 chroma=list(chroma), conditions=[w[0] for w in cond_windows],
-                **align_info,
+                **isc_windows, **align_info,
             )
             tables[tsv_path.name] = tsv_path
             logger.info("ISC ROI pair table saved: %s", tsv_path)
@@ -983,7 +986,7 @@ def run_hyper_post(
                 path, "hyper_isc_bycondition_phasenull_draws",
                 paths_from(aligned_raws.values()),
                 **_isc_params(), seed=wtc_seed,
-                conditions=[w[0] for w in cond_windows], **align_info,
+                conditions=[w[0] for w in cond_windows], **isc_windows, **align_info,
             )
             logger.info("ISC phase draws saved: %s", path)
 
