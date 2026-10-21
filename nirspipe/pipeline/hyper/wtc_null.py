@@ -51,6 +51,7 @@ def run_wtc_null(
     roi_map: "dict[str, list[str]] | None" = None,
     roi_map_name: str = "custom",
     roi_min_channels: int = ROI_MIN_CHANNELS,
+    device=None,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -71,6 +72,8 @@ def run_wtc_null(
     to the second table. Both tables come out of this one pass of ``n_iter`` transforms.
 
     ``roi_map`` adds the ROI maps' own level, :func:`roi_level_path`, from the same pass.
+
+    ``device`` is the card the transforms run on, None for the CPU.
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
@@ -101,7 +104,7 @@ def run_wtc_null(
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            roi_map=roi_map, roi_min_channels=roi_min_channels)
+            roi_map=roi_map, roi_min_channels=roi_min_channels, device=device)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
             path = save_null_levels(null.levels, group_output_path(

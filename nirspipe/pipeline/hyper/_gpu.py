@@ -79,6 +79,16 @@ def open_device(device: str) -> "CudaDevice | None":
     raise ValueError(f"unknown device {device!r}; expected 'cpu' or 'cuda'")
 
 
+def device_params(device: "CudaDevice | None") -> dict:
+    """What a coherence sidecar records about the card, nothing for the CPU."""
+    if device is None:
+        return {}
+    env = device.environment
+    return {"wtc_device": "cuda", "wtc_device_name": env["gpu_name"],
+            "wtc_cupy_version": env["cupy_version"],
+            "wtc_cuda_version": env["cuda_runtime_version"]}
+
+
 def _version(v: int) -> str:
     """CUDA's integer version as written: 12090 -> '12.9'."""
     return f"{v // 1000}.{(v % 1000) // 10}"

@@ -343,6 +343,14 @@ def _monte_carlo(params: dict[str, Any]) -> str:
             f"autocorrelation{f' (random seed {seed})' if seed is not None else ''}, and its "
             "95th percentile taken at each frequency.")
 
+def _device_phrase(params: dict[str, Any]) -> str:
+    """The card the transforms ran on, or nothing for the CPU."""
+    if params.get("wtc_device") != "cuda":
+        return ""
+    return (" The wavelet transforms were computed in double precision on a graphics card "
+            f"({params.get('wtc_device_name')}; CuPy {params.get('wtc_cupy_version')}, "
+            f"CUDA {params.get('wtc_cuda_version')}).")
+
 def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
     """The coherence sentence's band and the clauses only some runs need."""
     wtc_lo, wtc_hi = params.get("wtc_fmin"), params.get("wtc_fmax")
@@ -367,6 +375,7 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
                  if params.get("bads_scope") == "subject" else ""),
         "excluded": (" Time inside a BAD_ span of either member was left out of every average, "
                      "with no guard band around it." if _has_member_spans(params) else ""),
+        "device": _device_phrase(params),
     }
 
 def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
@@ -392,6 +401,7 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
                   if pool_size is not None and n < int(pool_size)
                   else f"All {n} eligible stand-ins were used."),
         "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
+        "device": _device_phrase(params),
     }
 
 def _has_member_spans(params: dict[str, Any]) -> bool:

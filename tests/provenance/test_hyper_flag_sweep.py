@@ -21,8 +21,8 @@ from tests.provenance._sweep import argv, moved, snapshot
 # the flags that pick what runs rather than how
 SELECTION = {"help", "version", "verbose", "config", "pairs_csv", "group_id",
              "participant_label", "task_label", "check_only", "no_report", "task"}
-# cores only: tests/cli/test_hyper_nprocs.py holds every output to the serial run's
-EXECUTION = {"nprocs"}
+# where it runs: test_hyper_nprocs.py and test_wtc_gpu.py hold the outputs to the serial CPU run's
+EXECUTION = {"nprocs", "device"}
 
 
 @dataclass(frozen=True)

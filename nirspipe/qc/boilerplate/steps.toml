@@ -131,11 +131,11 @@ plain = "The recordings of each group were not aligned on an event marker; they 
 citations = []
 
 [hyper_wtc]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{excluded}{conditions}{significance}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between homologous retained long channels of each pair of members, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{excluded}{conditions}{significance}{window}{bads}{device}"
 citations = ["TODO_Wavelet"]
 
 [hyper_wtc_crossed]
-plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{excluded}{conditions}{significance}{window}{bads}"
+plain = "Inter-brain coupling was quantified with wavelet transform coherence (Morlet wavelet) between every retained long channel of one member and every retained long channel of another, separately for {chroma} {citations}.{whiten} Each coherence map was averaged over {band_fmin}–{band_fmax} Hz and over time{coi}, giving one value per channel pair.{excluded}{conditions}{significance}{window}{bads}{device}"
 citations = ["TODO_Wavelet"]
 
 [hyper_phasescale]
@@ -155,7 +155,7 @@ plain = "A phase-randomised null was drawn {citations}: each channel of the seco
 citations = ["TODO_PhaseNull"]
 
 [hyper_pairnull]
-plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins."
+plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins.{device}"
 citations = ["TODO_RepairedNull"]
 
 # Written beside the cohort tables by nirspipe-hyper-groupnull, not into any report

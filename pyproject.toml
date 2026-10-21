@@ -39,6 +39,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x>=13",   # --device cuda; CUDA 12 builds run on newer drivers too
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
+    "nvidia-cublas-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cuda-nvrtc-cu12",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov",

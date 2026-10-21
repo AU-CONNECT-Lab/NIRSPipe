@@ -21,6 +21,7 @@ import pandas as pd
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path, occasion_label
+from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
 from nirspipe.utils import cone_margin_s
@@ -396,6 +397,7 @@ def run_pair_null(
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
     session: "str | None" = None,
+    device=None,
 ) -> Path:
     """Draw, rank and write one group's re-paired null.
 
@@ -413,6 +415,9 @@ def run_pair_null(
     homologous null over a crossed table is a legitimate cheaper one. Draw and write are one
     step for the same reason: there is nothing to write between them, the table being ranked
     against is already on disk.
+
+    ``device`` is the card the transforms run on, None for the CPU; with no run record
+    here, its check against the CPU goes into the sidecars.
     """
     from nirspipe.pipeline.hyper.group_io import _hyper_sidecar, load_group_haemo
     from nirspipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
@@ -567,7 +572,7 @@ def run_pair_null(
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            on_draw=_isc_collector(ch_type))
+            on_draw=_isc_collector(ch_type), device=device)
         partners = null.partners or []
         cond_levels[ch_type] = null.cond_levels or {}
         for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
@@ -631,6 +636,8 @@ def run_pair_null(
         # the null is subtracted from the real table row by row, so the two have to say
         # they were built on the same clock for that subtraction to mean anything
         **alignment_params(aligned_real),
+        **device_params(device),
+        **((device.check or {"device_check_cells": 0}) if device is not None else {}),
     )
 
     # per condition only: a whole-run draw would cut the stand-in on the real dyad's clock

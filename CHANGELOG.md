@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `nirspipe-hyper` and `nirspipe-hyper-pairnull` take `--device cuda`: wavelet transforms run on an NVIDIA card, checked against the CPU on each group's first pairing
+
 ### Fixed
 - ISC sidecars record the condition windows: each condition's matrix its own, the long tables and draws all of them
 

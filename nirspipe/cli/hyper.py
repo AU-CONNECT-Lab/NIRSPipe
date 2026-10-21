@@ -31,12 +31,14 @@ from nirspipe.qc.metrics import SCI_WINDOW_S
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe import __version__
 from nirspipe.cli._app_options import separation_bands_from_args
-from nirspipe.exceptions import GroupCSVError, AlignmentError, MissingDerivativesError, StageError
+from nirspipe.exceptions import (AlignmentError, DeviceError, GroupCSVError,
+                                 MissingDerivativesError, StageError)
 from nirspipe.io.derivatives import (
     LINK_PREPROCESSED, entity_of, group_label, group_report_dir, read_json, write_bidsignore,
     write_dataset_description,
 )
 from nirspipe.io.groups import parse_group_csv
+from nirspipe.pipeline.hyper._gpu import INSTALL_HINT, check_card, open_device
 from nirspipe.pipeline.hyper.alignment import resolve_analysis_window
 from nirspipe.pipeline.hyper.group_quality import (resolve_group_bands, write_group_bads,
                                                    write_group_channel_coords)
@@ -304,6 +306,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
     _quality_summary(aligned_raws, group_sqm, sep_bands)
     if s.check_only:
         return None
+    device = open_device(s.device)
     bad_channels = {sid: sqm.get("bad_channels", []) for sid, sqm in group_sqm.items()}
     write_group_bads(s.output_dir, members, group_sqm, s.bads_scope, session=ses)
     write_group_channel_coords(s.derivatives_dir, s.output_dir, members, s.desc, session=ses)
@@ -359,6 +362,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         roi_map=s.roi_map if s.wtc_phase_null_cross == s.wtc_channel_cross else None,
         roi_map_name=s.roi_name,
         roi_min_channels=s.wtc_roi_min_channels,
+        device=device,
     ) if s.wtc_phase_null else None
 
     report_path = build_hyper_post_report(
@@ -404,6 +408,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         analysis_window=analysis_window,
         desc=s.desc,
         bads_scope=s.bads_scope,
+        wtc_device=device,
     )
     try:
         # the resolved bands under the keys the SQM record stamps them with, so the two
@@ -414,7 +419,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
             {**s.run_args, **bands_to_record(sep_bands)},
             gid, task, s.timestamp, s.output_dir,
             group_report_dir(s.output_dir, gid),
-            members=[e.subject_id for e in members], session=ses,
+            members=[e.subject_id for e in members], session=ses, device=device,
         )
         logger.info("group-%s | run record -> %s", gid, record)
     except Exception:
@@ -446,7 +451,7 @@ def cmd_run(
     check_only: bool, verbose: bool,
     participant_label: list[str] | None = None,
     band_fmin: "float | None" = None, band_fmax: "float | None" = None,
-    config: "Path | None" = None, nprocs: "int | None" = None,
+    config: "Path | None" = None, nprocs: "int | None" = None, device: str = "cpu",
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -513,6 +518,8 @@ def cmd_run(
               file=sys.stderr)
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
+    if not check_only:
+        _check_device(device, nprocs, len(groups))
 
     roi_map = _app_options.load_roi_mapping(roi_mapping)
     # the seg- entity every ROI table takes, so one tree can hold two ROI definitions
@@ -693,6 +700,7 @@ def _pair_null_one_group(s: SimpleNamespace, gid, task, ses, members):
 
     return run_pair_null(
         gid, task, members, s.all_groups, s.derivatives_dir, s.output_dir,
+        device=open_device(s.device),
         pool=s.wtc_pair_pool, n_max=s.wtc_pair_max, desc=s.desc,
         bads_scope=s.bads_scope, scope_tasks=s.scope_tasks, chroma=s.chroma,
         cross=s.wtc_pair_cross, limit_scales=s.wtc_limit_scales,
@@ -718,6 +726,7 @@ def cmd_pair_null(
     verbose: bool,
     participant_label: list[str] | None = None,
     nprocs: int | None = None,
+    device: str = "cpu",
 ) -> None:
     """Draw the re-paired null for dyads whose real tables are already on disk."""
     setup_logging(verbose=verbose)
@@ -730,6 +739,7 @@ def cmd_pair_null(
     # drawn only from the dyads the caller happened to name would be a different null
     targets = _select_groups(pairs_csv, group_id, task_label, participant_label)
     all_groups = parse_group_csv(pairs_csv)
+    _check_device(device, nprocs, len(targets))
 
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
@@ -741,7 +751,8 @@ def cmd_pair_null(
         wtc_pair_pool=wtc_pair_pool, wtc_pair_max=wtc_pair_max, desc=desc,
         bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
         wtc_pair_cross=wtc_pair_cross, wtc_limit_scales=wtc_limit_scales, roi_map=roi_map,
-        roi_name=roi_map_name(roi_mapping), wtc_roi_min_channels=wtc_roi_min_channels)
+        roi_name=roi_map_name(roi_mapping), wtc_roi_min_channels=wtc_roi_min_channels,
+        device=device)
     _run_groups(targets, partial(_pair_null_one_group, settings), nprocs, verbose,
                 log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
                 / f"{group_label(*key)}_null-pair.log", what="pair null")
@@ -768,6 +779,25 @@ def cmd_merge(output_dir: Path, verbose: bool) -> None:
 # can run one participant at a time. Spelled out anyway, because the positional is what
 # makes the command the shape a BIDS App runner expects.
 _LEVELS = ["group"]
+
+
+def _add_device(container) -> None:
+    container.add_argument(
+        "--device", choices=["cpu", "cuda"], default="cpu",
+        help="Where the wavelet transforms run. cuda uses an NVIDIA card in double precision, "
+             f"checked against the CPU on each group's first pairing; install with {INSTALL_HINT}.")
+
+
+def _check_device(device: str, nprocs: "int | None", n_groups: int) -> None:
+    """Refuse --device cuda before any group is loaded when the card cannot run it."""
+    if device != "cuda":
+        return
+    try:
+        name = check_card(_shared.split_cpus(nprocs, n_groups)[0])
+    except DeviceError as exc:
+        print(f"[error] {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    print(f"[info] wavelet transforms on {name}", file=sys.stderr)
 
 
 def _command_parser(prog: str, description: str, *, reads_subjects: bool,
@@ -982,6 +1012,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "leaves out; the directories and --pairs-csv still come from the "
                           "command line.")
     _shared.add_nprocs(run, unit="group")
+    _add_device(run)
     _app_options.add_separation_bands(run, note="An override: the bands come from each member's "
                                  "record, and members prepped with different bands are "
                                  "refused. Use it only for records that carry none.")
@@ -1105,6 +1136,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Compute only the scales inside the frequency range plus margin "
                            "(default on), as in nirspipe-hyper.")
     _shared.add_nprocs(pair, unit="group")
+    _add_device(pair)
 
     merge = _command_parser(
         "nirspipe-hyper-merge", reads_subjects=False, parents=[common],

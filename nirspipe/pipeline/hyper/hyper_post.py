@@ -20,6 +20,7 @@ from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, merged
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path
+from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper._helpers import _chroma_tuple
 from nirspipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
 from nirspipe.pipeline.hyper.isc import compute_isc_pairs, roi_mean_of_isc
@@ -71,6 +72,8 @@ class HyperPostConfig:
     # the stage and the rejection scope the recordings were loaded with, for the sidecars
     desc: str | None = None
     bads_scope: str | None = None
+    # the card the transforms run on (--device), None for the CPU
+    device: Any = None
 
     # resolved in __post_init__, never passed in
     chroma: tuple = field(init=False)
@@ -348,6 +351,7 @@ def run_hyper_post(
             roi_min_channels=int(wtc_roi_min_channels),
             **wtc_grid_params(aligned_raws), **align_info, **_whiten_params(),
             excluded_spans_s=_member_spans(),
+            **device_params(config.device),
         )
 
     def _transform_condition(tstart: float, tstop: float, ch_type: str):
@@ -375,7 +379,7 @@ def run_hyper_post(
                           significance=wtc_significance, seed=wtc_seed,
                           mc_count=wtc_mc_count, cross=wtc_channel_cross,
                           limit_scales=wtc_limit_scales, ch_type=ch_type,
-                          sep_bands=sep_bands)
+                          sep_bands=sep_bands, device=config.device)
         # the cut's own clock starts at zero, so the condition sits `tstart - lo` into it
         part = window_result(res, tstart - lo, tstart - lo + (tstop - tstart))
         # back onto the aligned clock, the one its markers and the whole-run maps are on
@@ -647,7 +651,8 @@ def run_hyper_post(
             wtc_result = compute_wtc(
                 wtc_raws, fmin=wtc_fmin, fmax=wtc_fmax, significance=wtc_significance,
                 seed=wtc_seed, mc_count=wtc_mc_count, cross=wtc_channel_cross,
-                limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands)
+                limit_scales=wtc_limit_scales, ch_type=ch_type, sep_bands=sep_bands,
+                device=config.device)
 
         # --tstart/--tend: the window is read out of the transform, never cut from the
         # recording, so the whole-run pass below is the window's and the conditions inside

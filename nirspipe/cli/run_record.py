@@ -235,6 +235,7 @@ def write_group_run_record(
     group_dir: Path,
     members: list[str] | None = None,
     session: str | None = None,
+    device=None,
 ) -> Path:
     """Write a TOML run record for one hyperscanning group.
 
@@ -249,6 +250,9 @@ def write_group_run_record(
     [hyper] is the whole argument dict rather than a config dataclass because the
     hyperscanning CLI has none: its options go straight from argparse into the report
     builder, so the args *are* the resolved settings.
+
+    ``device`` is the card the transforms ran on: its versions join [environment], its check
+    against the CPU [execution].
     """
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
@@ -261,10 +265,12 @@ def write_group_run_record(
         "task_label": task,
         "participant_label": list(members or []),
         "nprocs": args.get("nprocs"),
+        "device": args.get("device"),
+        **((device.check or {"device_check_cells": 0}) if device is not None else {}),
         **({"config": _fwd(args["config"])} if args.get("config") else {}),
     }
 
-    skip = {"func", "output_dir", "verbose", "config", "nprocs"}
+    skip = {"func", "output_dir", "verbose", "config", "nprocs", "device"}
     hyper = {k: (list(v) if isinstance(v, tuple) else v)
              for k, v in args.items()
              if k not in skip and not isinstance(v, dict)}
@@ -272,7 +278,8 @@ def write_group_run_record(
     out = group_dir / "logs" / f"{group_label(group_id, task, session)}.toml"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join([
-        _section("environment", _environment()),
+        _section("environment", {**_environment(),
+                                 **(device.environment if device is not None else {})}),
         _section("execution", execution),
         _section("hyper", hyper),
     ]), encoding="utf-8")

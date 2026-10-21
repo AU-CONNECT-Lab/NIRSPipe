@@ -1099,6 +1099,7 @@ def build_hyper_post_report(
     desc: str | None = None,
     bads_scope: str | None = None,
     session: str | None = None,
+    wtc_device=None,
 ) -> "Path | None":
     """Build hyperscanning post-QC report.
 
@@ -1530,6 +1531,7 @@ def build_hyper_post_report(
                 isc_band=isc_band,
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
                 analysis_window=analysis_window, desc=desc, bads_scope=bads_scope,
+                device=wtc_device,
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
