@@ -668,13 +668,15 @@ def _process_run(
                           for p in channel_pairs}
         for pair in channel_pairs:
             with guard("Channel detail", errors, f"{label} | {pair}"):
-                detail_fig, psd_fig, epoch_fig = build_channel_figure(
+                # no epoch panel: the trial images carry each condition's HbO and HbR
+                # average, low-passed, where this stage would draw cardiac ripple
+                detail_fig, psd_fig, _ = build_channel_figure(
                     raw_haemo, detail_markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
-                    cardiac=(cardiac_l_freq, cardiac_h_freq),
+                    cardiac=(cardiac_l_freq, cardiac_h_freq), epoch=False,
                 )
                 fname = fig_name("detail", channel=_pair_fname(pair))
                 _save_multi_fig_html(
-                    [detail_fig, psd_fig, epoch_fig], fig_dir / fname,
+                    [detail_fig, psd_fig], fig_dir / fname,
                     views=condition_view_table(detail_fig, detail_spans))
         if channel_pairs:
             figure_paths["ch_detail_template"] = (

@@ -20,7 +20,7 @@ NOTES = {
         "this condition alone; it rejects nothing.",
     "raw.condition_spectrum":
         "The spectrum, grand mean and HbO–HbR correlation are redrawn on a cut of the "
-        "recording; the per-channel spectrum and epoch average stay the whole run's.",
+        "recording; the per-channel spectrum stays the whole run's.",
 
     # ---- Panels ----
     "raw.signal":
@@ -30,7 +30,8 @@ NOTES = {
         "Pick a channel by its trace above or in the list to see its concentration after "
         "Beer-Lambert and its spectrum.",
     "raw.channel_detail_picked":
-        "{pair}: concentration, spectrum and epoch average, after Beer-Lambert.",
+        "{pair}: concentration and spectrum, after Beer-Lambert. Its epoch averages are under "
+        "Trial Image.",
     "raw.psd":
         "Optical density before Beer-Lambert. One mean per separation group (long, short, "
         "neither), each channel faint behind it.",

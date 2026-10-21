@@ -555,9 +555,10 @@ def _trial_image_plot(
                          ticktext=row_labels, tickfont=dict(size=9), row=1, col=1)
     fig.update_yaxes(title_text="µM", row=2, col=1)
     fig.update_xaxes(title_text="Time from onset (s)", row=2, col=1)
+    # several stack per channel, one per condition, so each is kept short
     fig.update_layout(
-        height=480, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
-        margin=dict(l=60, r=20, t=50, b=40),
+        height=320, plot_bgcolor="white", paper_bgcolor="white", showlegend=False,
+        margin=dict(l=60, r=20, t=40, b=40),
     )
     return fig
 

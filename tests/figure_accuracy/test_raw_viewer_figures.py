@@ -268,6 +268,13 @@ def test_an_event_design_gets_a_trial_image_per_channel_beside_its_picker(raw_vi
                                    rtol=1e-4, atol=1e-3)
 
 
+def test_the_channel_detail_is_the_trace_and_its_spectrum_only(raw_viewer_run):
+    # the epoch averages live in the trial images, low-passed
+    for pair in raw_viewer_run.truth.long_pairs:
+        figs = plotly_figures(raw_viewer_run.figure("rawdetail", chan=_fname(pair.name)))
+        assert len(figs) == 2, pair.name
+
+
 def test_the_decoupled_trial_has_the_lowest_sci(raw_viewer_run):
     fig = one_figure(raw_viewer_run.figure("rawtrialqc", suffix="qc"))
     sci = {}
