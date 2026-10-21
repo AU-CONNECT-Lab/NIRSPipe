@@ -44,8 +44,11 @@ def test_the_height_report_watches_the_plot_divs_not_the_body():
     assert "o.observe(d)" in _RESIZE_JS
 
 
-def test_only_the_refitting_frame_takes_the_figures_height():
+def test_only_the_frames_whose_figures_report_their_height_take_it():
+    # the HbO-HbR panel refits to its frame; the trial image swaps views of different heights
     text = (TEMPLATE_DIR / "subject_report.html.j2").read_text(encoding="utf-8")
     frames = re.findall(r"<iframe[^>]*data-fit-height[^>]*>", text)
-    assert len(frames) == 1 and "hbo_hbr_path" in frames[0]
+    assert len(frames) == 2
+    assert any("hbo_hbr_path" in f for f in frames)
+    assert any('id="trialimg-frame"' in f for f in frames)
     assert 'querySelectorAll("iframe[data-fit-height]")' in text

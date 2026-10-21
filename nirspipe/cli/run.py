@@ -39,10 +39,10 @@ _HRF_CHOICES           = [
 ]
 # what the GUI dropdown offers and the help lists; "auto" is an AR order of 4x the sampling rate
 _NOISE_CHOICES        = ["auto", "ols", "ar1", "ar2", "ar3", "ar4", "ar5", "ar_irls", "worsley"]
-# the one rule, shared with the GUI's `pattern` so the browser refuses what argparse would
+# the one rule the validator applies; the GUI leaves the check to the CLI it calls
 NOISE_MODEL_PATTERN    = r"ols|auto|ar[1-9][0-9]*|ar_irls(?:[1-9][0-9]*)?|worsley(?:[1-9][0-9]*)?"
 _DRIFT_CHOICES         = ["cosine", "polynomial", "none"]
-# a plain non-negative decimal or none, shared with the GUI's `pattern` as the noise model is
+# a plain non-negative decimal or none
 CUTOFF_PATTERN         = r"[Nn][Oo][Nn][Ee]|[0-9]+(?:\.[0-9]*)?|\.[0-9]+"
 
 def _cutoff(value: str) -> "float | str":

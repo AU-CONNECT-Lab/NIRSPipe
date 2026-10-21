@@ -210,41 +210,6 @@ def test_every_mode_fits_the_model_that_was_asked_for():
     assert src.count("noise_model=config.noise_model") >= 3
 
 
-def test_the_gui_field_takes_what_the_cli_takes():
-    """The Analysis page's field is free text with a suggestion list, and its `pattern` is
-    the CLI's rule.
-
-    The rule is written once and the page imports it, so what is left to pin is that the
-    page still reaches for it: a `pattern=` spelled out again here would be the second copy
-    this test exists to prevent. A user typing `ar16` into the page and having the browser
-    refuse it, or the page accepting something the CLI then rejects, are both silent.
-    """
-    import argparse
-    import re
-
-    from pathlib import Path
-
-    from nirspipe.cli.run import NOISE_MODEL_PATTERN, _noise_model
-
-    src = Path("nirspipe/interface/pages/analysis.py").read_text(encoding="utf-8")
-    # empty by default, so the chosen mode's default fills it in rather than a value the page picked
-    assert 'id="an-noise-model"' in src and 'placeholder="mode default"' in src
-    assert 'value="auto"' not in src, "a typed default here would override the mode's"
-    assert "pattern=NOISE_MODEL_PATTERN" in src, "the page must use the CLI's rule, not its own copy"
-    assert 'pattern="' not in src, "a literal pattern here is the second copy of the rule"
-    pattern = NOISE_MODEL_PATTERN
-
-    for value in ("auto", "ols", "ar1", "ar5", "ar16", "ar31", "ar100", "ar_irls", "ar_irls40",
-                  "ar0", "banana", "ar", "AR16", "ar1.5", "", "ar_irls0", "irls"):
-        browser = bool(re.fullmatch(pattern, value))
-        try:
-            _noise_model(value)
-            cli = True
-        except argparse.ArgumentTypeError:
-            cli = False
-        assert browser == cli, f"{value!r}: page says {browser}, CLI says {cli}"
-
-
 # ---- which events the warning reads ----
 
 def test_an_events_table_overrides_the_annotations():
