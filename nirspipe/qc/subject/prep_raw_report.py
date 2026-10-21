@@ -27,7 +27,7 @@ from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_la
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
-    channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, registration_note,
+    channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, placement_note,
     save_channel_csv,
     separation_blocks,
     separation_notes,
@@ -38,7 +38,7 @@ from nirspipe.qc.metrics import (
     haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
     screen_channels, screening_scores,
 )
-from nirspipe.qc.metrics._helpers import registration_offset, separation_orphans
+from nirspipe.qc.metrics._helpers import separation_orphans
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
@@ -800,7 +800,7 @@ def _process_run(
             "wavelengths": pair_wavelengths(ch_rows),
             "blocks": separation_blocks(pair_cells, sep_bands),
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
-            "notes":  [n for n in (registration_note(registration_offset(raw)),
+            "notes":  [n for n in (placement_note(raw),
                                    *separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
                                                      orphan_mm=separation_orphans(raw, sep_bands)),
                                    section_note(

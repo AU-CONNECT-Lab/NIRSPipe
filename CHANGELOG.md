@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `nirspipe-hyper` and `nirspipe-hyper-pairnull` take `--device cuda`: wavelet transforms run on an NVIDIA card, checked against the CPU on each group's first pairing
 
+### Changed
+- The run note on optode positions follows the run's placement on fsaverage, as the brain views do; it names why a run could not be placed
+
 ### Fixed
 - ISC sidecars record the condition windows: each condition's matrix its own, the long tables and draws all of them
 - A reviewer's kept channels now rescue a run whose every channel failed screening, instead of the run stopping

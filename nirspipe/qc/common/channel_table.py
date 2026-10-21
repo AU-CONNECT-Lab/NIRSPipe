@@ -15,8 +15,10 @@ from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
+from nirspipe.io.optode_space import placement_of
 from nirspipe.io.tables import write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
@@ -253,16 +255,19 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
     }
 
 
-def registration_note(offset: "tuple[float, float] | None") -> "str | None":
-    """What to say when the optode positions were never registered to the head.
+def placement_note(raw) -> "str | None":
+    """What to say when no reading placed the optodes on fsaverage, read as the brain views read it.
 
-    ``offset`` is :func:`nirspipe.qc.metrics.registration_offset`' output, and None means
-    there is nothing to say. One wording for both views, as the separation notes are.
+    None for a placed run, and for one with no positions at all, which the separation notes
+    already name. One wording for both views, as the separation notes are.
     """
-    if offset is None:
+    locs = np.array([ch["loc"][3:9] for ch in raw.info["chs"]], dtype=float)
+    if not np.nan_to_num(locs).any():
         return None
-    reach, scalp = offset
-    return section_note("caveat.unregistered", reach=reach, scalp=scalp)
+    placement = placement_of(raw)
+    if placement.placed:
+        return None
+    return section_note("caveat.unplaced", reason=placement.note)
 
 
 def roi_overlap_note(roi_map: "dict[str, list[str]] | None") -> "str | None":

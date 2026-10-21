@@ -83,7 +83,7 @@ from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
-    registration_note, roi_overlap_note, separation_blocks, separation_notes,
+    placement_note, roi_overlap_note, separation_blocks, separation_notes,
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
@@ -93,7 +93,7 @@ from nirspipe.qc.common.figure_io import (
 )
 from nirspipe.qc.metrics import (
     CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks, long_short_channels,
-    registration_offset, separation_bands, separation_orphans, epochable_events,
+    separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
 from nirspipe.qc.metrics._helpers import bands_from_record
@@ -2280,9 +2280,9 @@ def build_subject_report(
         _note(notes, subject, section_note("caveat.filter_edge", edge_s=round(1.0 / l_freq),
                                            l_freq=l_freq))
 
-    unregistered = registration_note(registration_offset(raw_intensity))
-    if unregistered:
-        _note(notes, subject, unregistered)
+    unplaced = placement_note(raw_intensity)
+    if unplaced:
+        _note(notes, subject, unplaced)
     overlap = roi_overlap_note(roi_map)
     if overlap:
         _note(notes, subject, overlap)

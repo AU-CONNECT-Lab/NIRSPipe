@@ -4,12 +4,11 @@ from __future__ import annotations
 
 NOTES = {
     # ---- Montage ----
-    "caveat.unregistered":
-        "The optode positions are not registered to this head: they sit a median of "
-        "{reach:.0f} mm from its centre, the scalp at {scalp:.0f} mm. The 3-D views, flat "
-        "maps and topographies are therefore not anatomical; separations, screening and "
-        "metrics are unaffected. Fixing it needs the digitised fiducials or a standard "
-        "montage.",
+    "caveat.unplaced":
+        "The optodes could not be placed on the template head ({reason}). The 3-D views, "
+        "flat maps and topographies draw the coordinates as they stand and are not "
+        "anatomical; separations, screening and metrics are unaffected. Landmarks in the "
+        "file or a standard montage would fix it.",
     "caveat.no_separation":
         "No channel fell in either separation range: the recording has no optode positions "
         "(every separation reads as zero) or the ranges exclude every channel. Metrics "
