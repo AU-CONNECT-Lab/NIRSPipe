@@ -8,8 +8,12 @@ read, so a reader of a coherence table can recover which preprocessing produced 
 from __future__ import annotations
 
 import json
+import sys
 from fnmatch import fnmatch
 
+import pytest
+
+from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import (
     JSON_ONLY_DESCS, write_bidsignore, write_dataset_description,
 )
@@ -134,3 +138,54 @@ def test_dataset_root_of_stops_at_the_nearest_description(tmp_path):
         (root / "dataset_description.json").write_text("{}")
     assert dataset_root_of(inner / "sub-01" / "x.snirf") == inner.resolve()
     assert dataset_root_of(tmp_path / "nowhere" / "x.snirf") is None
+
+
+def _raw_dataset(path):
+    path.mkdir(parents=True)
+    (path / "dataset_description.json").write_text(json.dumps(
+        {"Name": "raw", "BIDSVersion": "1.8.0", "DatasetType": "raw"}))
+
+
+def _linked_out(tmp_path, raw_link):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "dataset_description.json").write_text(json.dumps(
+        {"Name": "x", "BIDSVersion": "1.8.0", "DatasetType": "derivative",
+         "DatasetLinks": {"raw": raw_link}}))
+    return out
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows directory link")
+def test_a_source_reached_through_a_junction_is_the_tree_its_link_already_names(tmp_path):
+    import _winapi
+    real = tmp_path / "moved" / "bids"
+    _raw_dataset(real)
+    (tmp_path / "old").mkdir()
+    _winapi.CreateJunction(str(real), str(tmp_path / "old" / "bids"))
+    # written before the data moved behind the junction, so spelled through it
+    out = _linked_out(tmp_path, "../old/bids")
+    write_dataset_description(out, source=tmp_path / "old" / "bids")
+    links = json.loads((out / "dataset_description.json").read_text())["DatasetLinks"]
+    assert links == {"raw": "../old/bids"}
+
+
+def test_a_link_to_another_tree_still_refuses_the_run(tmp_path):
+    for name in ("a", "b"):
+        _raw_dataset(tmp_path / name)
+    out = _linked_out(tmp_path, "../a")
+    with pytest.raises(StageError, match="write this run into a new output directory"):
+        write_dataset_description(out, source=tmp_path / "b")
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows directory link")
+def test_a_new_link_through_a_junction_stays_relative_as_spelled(tmp_path):
+    import _winapi
+    # the data sits elsewhere; the run names it through a junction beside its output
+    real = tmp_path / "elsewhere" / "bids"
+    _raw_dataset(real)
+    (tmp_path / "work").mkdir()
+    _winapi.CreateJunction(str(real), str(tmp_path / "work" / "bids"))
+    out = tmp_path / "work" / "out"
+    write_dataset_description(out, source=tmp_path / "work" / "bids")
+    links = json.loads((out / "dataset_description.json").read_text())["DatasetLinks"]
+    assert links == {"raw": "../bids"}

@@ -572,11 +572,22 @@ def resolve_bids_uri(uri: str, written: Path) -> Path:
 
 
 def _link_value(source: Path, root: Path) -> str:
-    """Relative where both trees share a drive, so moving them together keeps the link."""
-    try:
-        return Path(os.path.relpath(source.resolve(), root.resolve())).as_posix()
-    except ValueError:
-        return source.resolve().as_uri()
+    """Relative where both trees share a drive, so moving them together keeps the link.
+
+    The paths as given come first: a tree reached through a junction or symlink sits on
+    another drive once resolved, which would leave only an absolute URI. A spelling is used
+    only if it leads back to the source, since after a POSIX symlink ``..`` climbs the real
+    path rather than the spelled one.
+    """
+    for src, base in ((os.path.abspath(source), os.path.abspath(root)),
+                      (source.resolve(), root.resolve())):
+        try:
+            value = Path(os.path.relpath(src, base)).as_posix()
+        except ValueError:
+            continue
+        if _link_target(root, value) == source.resolve():
+            return value
+    return source.resolve().as_uri()
 
 
 def _source_dataset(source: Path, url: str) -> dict:
@@ -636,12 +647,15 @@ def write_dataset_description(
                 kind = read_dataset_description(source).get("DatasetType")
                 link = LINK_PREPROCESSED if kind == "derivative" else LINK_RAW
             value = _link_value(source, output_dir)
-            if links.get(link, value) != value:
+            # compared by where it leads, not by spelling: a source reached through a junction
+            # or symlink is written differently once resolved, and is still the same tree
+            if link in links and _link_target(output_dir, links[link]) != source.resolve():
                 raise StageError(
                     f"{path} links {link!r} to {links[link]}, and this run reads {source}. The "
                     "Sources already written there resolve through that link; write this run "
                     "into a new output directory.")
-            links[link] = value
+            # an existing spelling is kept: every Sources entry already resolves through it
+            links.setdefault(link, value)
             # one entry per source tree, however its URL was spelled when it was written
             sources = [s for s in sources
                        if _link_target(output_dir, str(s.get("URL", ""))) != source.resolve()]

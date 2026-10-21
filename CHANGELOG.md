@@ -38,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - Without `--wtc-seed` or `--seed`, a dyad command that draws at random picks a seed, prints it and records it, so the draws can be repeated
 
 ### Fixed
+- A rerun into an existing output tree no longer fails when its input is now reached through a junction or symlink; new dataset links stay relative as the paths were given
 - The cohort report's strip jitter no longer moves between runs of the same cohort
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 - With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
