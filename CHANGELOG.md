@@ -33,8 +33,10 @@ All notable changes to this project will be documented in this file.
 - The raw report's channel detail drops its epoch average, which the trial images now carry
 - Trial images draw the HbR average beside the HbO one
 - The raw report's trial images split by event name, pooled first, as the subject report's do; condition pages keep their window's trials
+- Without `--wtc-seed` or `--seed`, a dyad command that draws at random picks a seed, prints it and records it, so the draws can be repeated
 
 ### Fixed
+- The cohort report's strip jitter no longer moves between runs of the same cohort
 - With `--n-jobs` above 1, a subject's GLM report could show another subject's activation, regressor or beta figure
 - With `--n-jobs` above 1, subjects could fail at random on Windows, or a report could lose a panel
 - Runs writing into one output tree at once could drop each other's `DatasetLinks`, and dyad QC reading that tree then failed

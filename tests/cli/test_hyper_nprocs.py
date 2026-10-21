@@ -1,8 +1,8 @@
-"""The dyad commands under --nprocs write what they write one group at a time.
+"""The subject and dyad commands under --nprocs write what they write one unit at a time.
 
-Both sides hold BLAS to one thread per group (--nprocs 1 against --nprocs 2 over two groups),
-so the comparison is exact: anything that differs leaked between groups or depends on which
-process drew it.
+Both sides hold BLAS to one thread per unit (--nprocs 1 against --nprocs 2), so the comparison
+is exact: anything that differs leaked between subjects or groups, or depends on which thread
+or process drew it.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from nirspipe.io.snirf import read_snirf
 from tests._dyad_fingerprint import make_group_dataset, write_roi_map
 from tests._fingerprint import CLI_ARGS
 
 # compared byte for byte or array for array; logs and pages carry paths and timestamps
-_COMPARED = (".tsv", ".json", ".npz", ".png")
+_COMPARED = (".tsv", ".json", ".npz", ".png", ".snirf")
 
 
 def _flag(name: str) -> list[str]:
@@ -57,6 +58,12 @@ def _differences(a: Path, b: Path) -> list[str]:
             if sorted(x.files) != sorted(y.files) or any(
                     not np.array_equal(x[k], y[k], equal_nan=True) for k in x.files):
                 out.append(name)
+        elif name.endswith(".snirf"):
+            # HDF5 stamps its own write time, so the recording is compared, not the bytes
+            x, y = read_snirf(left[name]), read_snirf(right[name])
+            if not np.array_equal(x.get_data(), y.get_data(), equal_nan=True) or (
+                    x.info["bads"] != y.info["bads"]):
+                out.append(name)
         elif name.endswith(".json"):
             # every sidecar stamps the moment it was written
             x, y = (json.loads(f[name].read_text(encoding="utf-8")) for f in (left, right))
@@ -69,6 +76,22 @@ def _differences(a: Path, b: Path) -> list[str]:
 
 def _logs(tree: Path) -> list[Path]:
     return sorted(tree.glob("group-*/logs/*.log"))
+
+
+def test_nirspipe_writes_the_same_subjects_on_two_threads(cohort):
+    from nirspipe.cli import run as run_cli
+
+    root, bids, _, _ = cohort
+    trees = {}
+    for nprocs in ("1", "2"):
+        out = root / f"participant_{nprocs}"
+        run_cli.main([str(bids), str(out), "participant", *CLI_ARGS, "--by-condition",
+                      "--skip-bids-validation", "--nprocs", nprocs])
+        trees[nprocs] = out
+
+    names = _outputs(trees["1"])
+    assert sum(n.endswith(".snirf") for n in names) > 10 and any(n.endswith(".png") for n in names)
+    assert _differences(trees["1"], trees["2"]) == []
 
 
 def test_nirspipe_hyper_writes_the_same_tree_on_two_processes(cohort):

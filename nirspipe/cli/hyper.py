@@ -462,7 +462,8 @@ def cmd_run(
     isc_fmin = band_fmin if isc_fmin is None else isc_fmin
     isc_fmax = band_fmax if isc_fmax is None else isc_fmax
     # drawn when unset, so the record holds the seed and a --config rerun repeats the draws
-    wtc_seed = _shared.seed_or_drawn(wtc_seed, "--wtc-seed")
+    if wtc_significance or wtc_phase_null or isc_phase_null:
+        wtc_seed = _shared.seed_or_drawn(wtc_seed, "--wtc-seed")
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
@@ -850,8 +851,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "a contour. Ignored without --wtc-significance.")
     run.add_argument("--wtc-seed", type=int, default=None,
                      help="Seed the --wtc-significance surrogates and the --wtc-phase-null and "
-                          "--isc-phase-null draws. Omitted, one is drawn and written to the "
-                          "run record, so a --config rerun repeats them.")
+                          "--isc-phase-null draws. Omitted with any of them on, one is drawn "
+                          "and written to the run record, so a --config rerun repeats them.")
     run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
                      help="Chromophore(s) the coherence and the correlation run on (default "
                           "both). HbO and HbR are separate passes, never mixed, so 'both' costs "
