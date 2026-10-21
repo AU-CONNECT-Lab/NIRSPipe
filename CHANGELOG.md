@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `--combine-runs` now joins a task's runs after postprocessing, each z-scored over its kept frames, and computes FC on the joined series; ALFF and GLM tables stay per run
 - The subject index draws each joined series' FC, channel and ROI, under Runs combined
+- Runs combined also tables each joined run's length, kept time and rejected pairs, and draws the joined carpet with run starts and `BAD_` spans
 - `--noise-model worsley`: auto's AR order with its coefficients bias-corrected for the fit; channels where the correction fails are fitted as auto and listed in the sidecar
 - `nirspipe-hyper --isc-phase-null-shared` shifts all of a member's channels by one shared set of random phases in each ISC phase-null draw; off by default
 - `nirspipe-hyper-groupnull` warns, in its log and on the page, when `--isc-test magnitude` meets the phase null on unwhitened correlations

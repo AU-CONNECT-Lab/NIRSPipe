@@ -314,6 +314,10 @@ NOTES = {
         "its kept frames, the runs joined in order, a channel only from the runs where it is "
         "good and an ROI averaged per run over that run&rsquo;s good channels. FC is taken per "
         "pair over the kept frames both have. Each run&rsquo;s own FC stays in its report.",
+    "subject_index.combined_carpet":
+        "The joined series as written, each channel z-scored per run. A blue rule starts each "
+        "run; shading marks <code>BAD_</code> spans. A channel is blank in the runs that "
+        "rejected it.",
     "subject_index.rebuilt":
         "Rebuilt from the records under <code>nirs/</code> each time either command runs, so "
         "it lists what is on disk, not what one command produced. The command below rebuilt "

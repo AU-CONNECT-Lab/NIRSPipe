@@ -351,16 +351,18 @@ def carpet_z(
     after a correction can be z-scored by the *uncorrected* numbers: rescaling it by its own
     SD would divide out the shrinkage the comparison exists to show. Pass them back as
     ``stats`` to do that. That carpet is still detrended by its own fit. 2 dp because the
-    colour scale cannot resolve more.
+    colour scale cannot resolve more. NaN frames (a channel absent from some joined runs) stay
+    blank and are left out of the fit, the mean and the SD.
     """
     n = data.shape[1]
     step = -(-n // CARPET_MAX_PTS)
+    missing = np.isnan(data).any()
     # linear detrend then z-score per row, as fMRIPrep and MRIQC draw their carpets
-    carpet = detrend(data, axis=1, type="linear")
+    carpet = _detrend_finite(data) if missing else detrend(data, axis=1, type="linear")
     if stats is None:
-        mean = carpet.mean(axis=1, keepdims=True)
-        std = carpet.std(axis=1, keepdims=True)
-        std[std == 0] = 1.0
+        mean = (np.nanmean if missing else np.mean)(carpet, axis=1, keepdims=True)
+        std = (np.nanstd if missing else np.std)(carpet, axis=1, keepdims=True)
+        std[(std == 0) | np.isnan(std)] = 1.0
     else:
         mean, std = stats
     pad = -n % step
@@ -372,6 +374,18 @@ def carpet_z(
     t = np.nanmean(np.pad(np.asarray(times[:n], float), (0, pad),
                           constant_values=np.nan).reshape(-1, step), axis=1)
     return np.round(np.clip(z, -z_threshold, z_threshold), 2), t, (mean, std)
+
+
+def _detrend_finite(data: np.ndarray) -> np.ndarray:
+    """Each row less its least-squares line over its finite frames; an empty row stays NaN."""
+    out = np.full_like(data, np.nan, dtype=float)
+    x = np.arange(data.shape[1], dtype=float)
+    for i, row in enumerate(data):
+        ok = np.isfinite(row)
+        if ok.sum() >= 2:
+            slope, intercept = np.polyfit(x[ok], row[ok], 1)
+            out[i, ok] = row[ok] - (slope * x[ok] + intercept)
+    return out
 
 
 def add_carpet(fig, row: int, z: np.ndarray, t: np.ndarray, labels: list[str],

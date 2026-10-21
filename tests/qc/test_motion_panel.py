@@ -289,3 +289,16 @@ def test_the_strip_marks_the_long_rows_on_both_carpets_and_the_legend_names_them
         assert [sh.fillcolor for sh in mine] == [legend["A"], legend["B"], legend["unassigned"]]
         assert mine[0].y1 == pytest.approx(1.0 - 0.002) and mine[-1].y0 == pytest.approx(0.4 + 0.002)
     assert not [sh for sh in plain.layout.shapes if sh.type == "rect" and sh.x1 < -0.015]
+
+
+def test_a_carpet_row_with_missing_frames_is_drawn_from_the_frames_it_has():
+    from scipy.signal import detrend
+
+    rng = np.random.default_rng(0)
+    data = rng.standard_normal((2, 200)) + np.linspace(0, 5, 200)
+    data[0, :80] = np.nan
+    z, _, _ = carpet_z(data, np.arange(200) / 10.0, z_threshold=10.0)
+    assert np.isnan(z[0, :80]).all() and not np.isnan(z[1]).any()
+    # the line fitted over the frames a row has is the line of that stretch alone
+    tail = detrend(data[0, 80:])
+    np.testing.assert_allclose(z[0, 80:], np.round((tail - tail.mean()) / tail.std(), 2), atol=0.011)

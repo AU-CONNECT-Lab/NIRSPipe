@@ -102,6 +102,30 @@ tr.cond-whole td { background: var(--surface-alt); font-weight: 600; }
 {% for item in combined %}
 {% if combined | length > 1 %}<h3>{{ item.label }}</h3>{% endif %}
 <p class="step-desc">{{ section_note('subject_index.combined', runs=item.runs | join(', ')) }}</p>
+{% if item.run_rows %}
+<div class="scroll">
+<table>
+  <thead>
+    <tr><th>Run</th><th>Length</th><th>Kept</th><th>Rejected pairs</th></tr>
+  </thead>
+  <tbody>
+  {% for row in item.run_rows %}
+    <tr>
+      <td>{{ row.run }}</td>
+      <td>{{ "%.1f"|format(row.duration_s) }} s</td>
+      <td>{{ "%.1f"|format(row.kept_s) }} s</td>
+      <td>{% if row.rejected %}{{ row.rejected | join(', ') }}{% else %}<span class="muted">none</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% if item.carpet %}
+<iframe class="plotly-frame" src="{{ item.carpet.src }}" title="Carpet of the joined runs"
+        style="height:{{ item.carpet.h }}px"></iframe>
+<p class="subtitle">{{ section_note('subject_index.combined_carpet') }}</p>
+{% endif %}
 {% if item.panel %}
 <iframe class="plotly-frame" src="{{ item.panel.src }}" title="Functional connectivity over the joined runs"
         style="height:{{ item.panel.h }}px"></iframe>

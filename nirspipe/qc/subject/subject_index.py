@@ -501,12 +501,38 @@ def collect_combined(sub_dir: Path) -> list[dict]:
     return out
 
 
+def combined_run_rows(series: Path, raw) -> list[dict]:
+    """One row per joined run: its duration, the seconds kept outside ``BAD_`` spans, its rejected pairs.
+
+    ``run-02`` starting at 300 s of a 10 Hz joined series 500 s long
+        -> ``{"run": "run-02", "onset_s": 300.0, "duration_s": 200.0, "kept_s": 180.0,
+        "rejected": ["S1_D2"]}``
+    """
+    from nirspipe.pipeline.glm_censored import kept_frames
+
+    keep = kept_frames(raw)
+    sfreq = float(raw.info["sfreq"])
+    entries = joined_runs(series)
+    starts = [round(entry["onset_s"] * sfreq) for entry in entries] + [raw.n_times]
+    rows = []
+    for entry, i0, i1 in zip(entries, starts, starts[1:]):
+        side = json.loads((series.parent / entry["run"]).with_suffix(".json")
+                          .read_text(encoding="utf-8"))
+        rows.append({"run": f"run-{entity_of(entry['run'], 'run')}", "onset_s": entry["onset_s"],
+                     "duration_s": (i1 - i0) / sfreq,
+                     "kept_s": float(keep[i0:i1].sum()) / sfreq,
+                     "rejected": list(dict.fromkeys(pair_of(ch) for ch in side["bad_channels"]))})
+    return rows
+
+
 def write_combined_figures(sub_dir: Path, item: dict) -> dict:
-    """The joined series' channel FC panel and ROI matrix, drawn as the run reports draw a run's."""
+    """The joined series' run table, carpet, channel FC panel and ROI matrix, drawn as a run report draws them."""
     from nirspipe.io.snirf import read_snirf
     from nirspipe.io.tables import read_table
+    from nirspipe.qc.figures.subject.carpet_compare import carpet_compare_figure, mark_joined_runs
     from nirspipe.qc.figures.subject.rest_figures import fc_roi_matrix_figure, rest_channel_panel
     from nirspipe.qc.metrics._helpers import bands_from_record
+    from nirspipe.utils.spans import bad_spans
 
     def _matrix(path: Path):
         frame = read_table(path)
@@ -519,14 +545,20 @@ def write_combined_figures(sub_dir: Path, item: dict) -> dict:
         return {"src": f"figures/{fname}", "h": _save_figure_html(fig, sub_dir / "figures" / fname)}
 
     params = json.loads(item["series"].with_suffix(".json").read_text(encoding="utf-8"))
+    raw = read_snirf(item["series"])
+    rows = combined_run_rows(item["series"], raw)
+    carpet = carpet_compare_figure([(f"desc-{entity_of(item['series'].name, 'desc')}", raw)])
+    if carpet is not None:
+        mark_joined_runs(carpet, [(row["run"], row["onset_s"]) for row in rows], bad_spans(raw))
     channel = {c: _matrix(p) for c, p in item["channel"].items()}
     panel = rest_channel_panel(channel.get("hbo"), channel.get("hbr"), None,
-                               raw=read_snirf(item["series"]),
+                               raw=raw,
                                sep_bands=bands_from_record(params.get("parameters") or {}),
                                title="Functional connectivity over the joined runs")
     roi = fc_roi_matrix_figure({c: _matrix(p) for c, p in item["roi"].items()},
                                title="ROI-to-ROI functional connectivity over the joined runs")
-    return {"panel": _save("joinedfc", panel), "roi_panel": _save("joinedroifc", roi)}
+    return {"run_rows": rows, "carpet": _save("joinedcarpet", carpet),
+            "panel": _save("joinedfc", panel), "roi_panel": _save("joinedroifc", roi)}
 
 
 def write_subject_index(

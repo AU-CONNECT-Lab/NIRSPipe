@@ -3,10 +3,11 @@
 The joined FC is held to a re-derivation from the two runs' own written residuals: each
 z-scored per channel over its kept frames with numpy, blanked where the run marked the channel
 bad, joined, and correlated over the kept frames both channels have. S1_D1 is marked bad in
-run-01 only, so it takes part in run-02 alone.
+run-01 only, so it takes part in run-02 alone; run-02 carries a BAD_manual span from 20 to 30 s.
 """
 
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -23,7 +24,10 @@ from tests.figure_accuracy._payload import one_figure
 ROI = {"A": ["S1_D1", "S2_D2"], "B": ["S4_D4", "S5_D5"]}
 
 
-def _tree(root, runs, report=False):
+SPAN = (20.0, 10.0)
+
+
+def _tree(root, runs, report=False, mode="rest", extra=()):
     bids = root / "bids"
     _write_dataset_root(bids, ["01"])
     for run, seed in runs:
@@ -33,9 +37,13 @@ def _tree(root, runs, report=False):
     roi.write_text(json.dumps(ROI))
     bads = root / "bads.tsv"
     bads.write_text("run\tbad_channels\n01\tS1_D1\n", encoding="utf-8")
-    run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, "--mode", "rest",
+    spans = root / "spans.tsv"
+    spans.write_text(f"run\tonset\tduration\n02\t{SPAN[0]}\t{SPAN[1]}\n", encoding="utf-8")
+    run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, "--mode", mode,
                   "--skip-bids-validation", "--combine-runs", "--roi-mapping", str(roi),
-                  "--bad-channels", str(bads), *([] if report else ["--no-report"])])
+                  "--bad-channels", str(bads), *extra,
+                  *(["--bad-spans", str(spans)] if len(runs) > 1 else []),
+                  *([] if report else ["--no-report"])])
     return root / "out" / "sub-01" / "nirs"
 
 
@@ -142,6 +150,46 @@ def test_the_subject_index_draws_the_joined_fc(two):
                      index_col=0)
     assert cell == pytest.approx(fc.loc["S1_D1 hbo", "S2_D2 hbo"], abs=1e-6)
     assert (sub / "figures" / "sub-01_task-tapping_desc-joinedroifc_nirs.html").exists()
+
+
+def test_the_index_tables_each_runs_length_kept_time_and_rejected_pairs(two):
+    html = (two.parent / "sub-01_desc-index_report.html").read_text(encoding="utf-8")
+    cells = {row[0]: row[1:] for row in re.findall(
+        r"<td>(run-\d+)</td>\s*<td>([^<]*)</td>\s*<td>([^<]*)</td>\s*<td>(.*?)</td>", html)}
+    # only run-02 carries a BAD_ span, the one the table gave it
+    for path, run, cut in zip(_runs(two), ("run-01", "run-02"), (0.0, SPAN[1])):
+        raw = read_snirf(path)
+        rejected = ", ".join(dict.fromkeys(ch.rsplit(" ", 1)[0] for ch in raw.info["bads"]))
+        length = raw.n_times / raw.info["sfreq"]
+        assert cells[run] == (f"{length:.1f} s", f"{length - cut:.1f} s", rejected)
+    assert "S1_D1" in cells["run-01"][2] and "S1_D1" not in cells["run-02"][2]
+
+
+def test_the_index_carpet_marks_the_runs_and_the_bad_span(two):
+    fig = one_figure(two.parent / "figures" / "sub-01_task-tapping_desc-joinedcarpet_nirs.html")
+    first = read_snirf(_runs(two)[0])
+    onset = first.n_times / first.info["sfreq"]
+    rules = [s for s in fig["layout"]["shapes"] if s["type"] == "line"
+             and s.get("x0") == s.get("x1") and s.get("yref", "").endswith("domain")]
+    assert [r["x0"] for r in rules] == [pytest.approx(onset)]
+    names = {a["text"]: a["x"] for a in fig["layout"]["annotations"] if a["text"].startswith("run-")}
+    assert names == {"run-01": 0.0, "run-02": pytest.approx(onset)}
+    (shade,) = [s for s in fig["layout"]["shapes"] if s["type"] == "rect" and s.get("layer") == "above"]
+    assert (shade["x0"], shade["x1"]) == (pytest.approx(onset + SPAN[0]),
+                                          pytest.approx(onset + SPAN[0] + SPAN[1]))
+    # S1_D1 was rejected in run-01: its row is blank there and drawn in run-02
+    heat = fig["data"][0]
+    z = np.asarray(heat["z"], float)[list(heat["y"]).index("S1_D1 hbo")]
+    t = np.asarray(heat["x"], float)
+    assert np.isnan(z[t < onset - 1]).all() and np.isfinite(z[t > onset + 1]).all()
+
+
+@pytest.mark.parametrize("mode, extra", [("denoise", ()), ("glm", ("--drift-high-pass", "0.01", "--stim-dur", "5"))])
+def test_the_index_draws_the_run_table_and_carpet_in_every_mode(tmp_path, mode, extra):
+    nirs = _tree(tmp_path, (("01", 1), ("02", 2)), report=True, mode=mode, extra=extra)
+    html = (nirs.parent / "sub-01_desc-index_report.html").read_text(encoding="utf-8")
+    assert 'id="Combined"' in html and "<th>Rejected pairs</th>" in html
+    assert (nirs.parent / "figures" / "sub-01_task-tapping_desc-joinedcarpet_nirs.html").exists()
 
 
 def test_one_run_is_not_joined(tmp_path):

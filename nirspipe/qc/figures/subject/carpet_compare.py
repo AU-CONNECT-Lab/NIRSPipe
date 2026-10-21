@@ -5,7 +5,9 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import (
+    HBO_COLOR, HBR_COLOR, SPAN_KIND_COLOR, SPAN_KIND_LABEL, _hex_to_rgba,
+)
 from nirspipe.qc.figures.common.motion_panel import (
     CARPET_Z, _GVTD_AFTER, _GVTD_LINE, _LINE_MAX_PTS, _SEAM, _gvtd_row_label, _maxpool_xy,
     _px_rows, _roi_order, add_roi_legend, add_roi_strip, carpet_coloraxis, carpet_z,
@@ -14,12 +16,14 @@ from nirspipe.qc.figures.common.motion_panel import (
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.qc.boilerplate.vocabulary import display_value
 from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
+from nirspipe.utils.spans import span_kind
 
 _CARPET_ROW_PX = 190
 _CHROMO_COLOR = {"hbo": HBO_COLOR, "hbr": HBR_COLOR}
 _GVTD_ROW_PX = 90
 _VSPACE = 0.035
 _ROI_SEAM = "#ffffff"
+_RUN_RULE = "#2b5797"
 
 
 def _stage_channels(stages, chromophore: str) -> list[str]:
@@ -224,3 +228,29 @@ def _chromo_marks(fig, row: int, spans: list, n_ch: int) -> None:
             fig.add_shape(type="line", xref="x domain", yref="y domain",
                           x0=0, x1=1, y0=edge, y1=edge,
                           line=dict(color=_ROI_SEAM, width=2), row=row, col=1)
+
+
+def mark_joined_runs(fig, runs: "list[tuple[str, float]]",
+                     spans: "list[tuple[float, float, str]]", row: int = 1) -> None:
+    """A joined series' carpet with each run's start ruled and named, and its ``BAD_`` spans shaded by kind.
+
+    ``runs`` is ``[(label, onset s)]`` and ``spans`` ``[(start, stop, description)]``, both on
+    the joined time axis.
+    """
+    for label, onset in runs:
+        if onset > 0:
+            fig.add_vline(x=onset, line=dict(color=_RUN_RULE, width=2), row=row, col=1)
+        fig.add_annotation(x=onset, y=1, yref="y domain", text=label, showarrow=False,
+                           xanchor="left", yanchor="top", font=dict(size=11, color=_RUN_RULE),
+                           bgcolor="rgba(255,255,255,0.8)", row=row, col=1)
+    for start, stop, desc in spans:
+        fig.add_vrect(x0=start, x1=stop, fillcolor=_hex_to_rgba(SPAN_KIND_COLOR[span_kind(desc)], 0.3),
+                      line_width=0, layer="above", row=row, col=1)
+    # a vrect has no legend entry of its own, so each kind present gets a swatch
+    for kind in ("unselected", "corrupted"):
+        if any(span_kind(desc) == kind for _, _, desc in spans):
+            fig.add_trace(go.Scatter(
+                x=[None], y=[None], mode="markers", name=SPAN_KIND_LABEL[kind],
+                marker=dict(symbol="square", size=10,
+                            color=_hex_to_rgba(SPAN_KIND_COLOR[kind], 0.35)),
+            ), row=row, col=1)
