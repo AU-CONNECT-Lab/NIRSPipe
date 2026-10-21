@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - ISC sidecars record the condition windows: each condition's matrix its own, the long tables and draws all of them
+- A reviewer's kept channels now rescue a run whose every channel failed screening, instead of the run stopping
 
 ## [0.72.0] - 2026-10-20
 

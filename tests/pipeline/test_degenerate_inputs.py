@@ -107,6 +107,19 @@ def test_non_finite_and_manual_marks_that_leave_nothing_name_both(tmp_path):
         _prep(raw, tmp_path, bad_channels=rest)
 
 
+def test_a_reviewer_keep_rescues_a_run_whose_every_channel_failed_screening(tmp_path):
+    raw = synth_raw("01", "rest")
+    result = _prep(raw, tmp_path, min_good_frac=1.01, keep_channels=["S1_D1"])
+    assert set(result.bad_channels) == {c for c in raw.ch_names if not c.startswith("S1_D1 ")}
+
+
+def test_a_keep_that_channels_tsv_overrules_still_stops_the_run(tmp_path):
+    raw = synth_raw("01", "rest")
+    with pytest.raises(StageError, match="channels.tsv leaves no usable channel"):
+        _prep(raw, tmp_path, min_good_frac=1.01, keep_channels=["S1_D1"],
+              channels_tsv_bads=["S1_D1"])
+
+
 def test_manual_marks_alone_that_leave_nothing_still_say_so(tmp_path):
     raw = synth_raw("01", "rest", bad_pair=None)
     every = sorted({c.rsplit(" ", 1)[0] for c in raw.ch_names})

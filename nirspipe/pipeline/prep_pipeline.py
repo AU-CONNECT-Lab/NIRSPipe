@@ -99,6 +99,7 @@ def mark_bad_channels(
     psp_threshold: float | None = None,
     min_good_frac: float | None = None,
     screen_scope: str = "run",
+    keep: "list[str] | tuple" = (),
 ) -> tuple[mne.io.Raw, list[str], dict[str, float], dict[str, float]]:
     """Screen channels into raw.info['bads'].
 
@@ -112,8 +113,9 @@ def mark_bad_channels(
 
     Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
     coupled-window shares, the last two because the report and the quality record both want
-    them on their own.
-    Raises StageError if the criteria leave no usable channel.
+    them on their own. ``keep`` (pairs a reviewer kept) does not change the rejections
+    returned; it only stops a run whose every channel failed from being refused here.
+    Raises StageError if the criteria leave no usable channel and nothing is kept.
     """
     require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
@@ -135,7 +137,7 @@ def mark_bad_channels(
     bad_chs, why = screen_channels(scores, cutoffs)
     # without this the run dies four steps later inside Beer-Lambert, which reports only
     # that it found no optical density data and never mentions the screening
-    if sci_scores and len(bad_chs) == len(sci_scores):
+    if sci_scores and len(release_kept(bad_chs, list(keep))[0]) == len(sci_scores):
         failed = sorted({c for reasons in why.values() for c in reasons})
         lines = ", ".join(f"{k} {v}" for k, v in sorted(cutoffs.items()))
         raise StageError(
@@ -322,7 +324,8 @@ def run_prep(
     raw_od, bad_chs, sci_scores, good_frac_scores = mark_bad_channels(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
         min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
-        cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq)
+        cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq,
+        keep=config.keep_channels)
     kept: list[str] = []
     if config.keep_channels:
         both = sorted({pair_of(c) for c in config.keep_channels}

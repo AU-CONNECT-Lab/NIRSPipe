@@ -101,3 +101,13 @@ def test_the_uncoupled_pair_is_rejected_in_both_wavelengths_and_nothing_else(od)
 def test_a_line_no_channel_can_clear_is_refused_with_the_flag_to_change(od):
     with pytest.raises(StageError, match=r"every channel failed screening.*--min-good-frac"):
         mark_bad_channels(od, 0.8, *CARDIAC, min_good_frac=1.01)
+
+
+def test_a_reviewer_keep_lifts_the_refusal_and_leaves_the_rejections_as_screened(od):
+    _, bad, *_ = mark_bad_channels(od, 0.8, *CARDIAC, min_good_frac=1.01, keep=["S1_D1"])
+    assert set(bad) == set(od.ch_names)
+
+
+def test_a_keep_naming_no_channel_of_the_recording_lifts_nothing(od):
+    with pytest.raises(StageError, match="every channel failed screening"):
+        mark_bad_channels(od, 0.8, *CARDIAC, min_good_frac=1.01, keep=["S9_D9"])
