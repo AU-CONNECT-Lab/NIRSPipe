@@ -10,6 +10,9 @@ _R_CLIP = 0.999999
 # channels each member must keep in a region for its ROI cell to be reported
 ROI_MIN_CHANNELS = 1
 
+# seconds within which two times are one edge: far under a sample, far over round-off
+TIME_TOL_S = 1e-6
+
 
 def unwrap_enum(val: Any, default: Any = None) -> Any:
     if val is None:

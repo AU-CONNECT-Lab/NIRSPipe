@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - A real partner's `BAD_` span lying before a condition excluded most of that condition from every re-paired draw, thinning or emptying its null
 - A stand-in sharing no usable channel pairing with the fixed member stopped the dyad's whole re-paired null; it is now a blank draw
 - A dyad whose members kept no channel pairing in common is refused saying so, where it failed on an empty array
+- Under `--wtc-window-s`, round-off could drop a condition's last window or move the column on a window edge into the next window
 
 ## [0.73.0] - 2026-10-21
 

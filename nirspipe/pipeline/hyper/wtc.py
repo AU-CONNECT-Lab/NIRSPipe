@@ -29,7 +29,7 @@ from scipy.signal import convolve2d
 
 from nirspipe.exceptions import StageError
 from nirspipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
-from nirspipe.utils import cone_margin_s, fisher_r_to_z
+from nirspipe.utils import TIME_TOL_S, cone_margin_s, fisher_r_to_z
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, frames_under
 
@@ -718,7 +718,9 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
     # no pairing was computed, so there is no time axis to cut and every pairing stays blank
     if not times.size:
         return result
-    keep = (times >= float(tstart)) & (times <= float(tstop))
+    # both edges inclusive within round-off, so a column on an edge does not move from one
+    # window to the next because an onset computed as -1e-14
+    keep = (times >= float(tstart) - TIME_TOL_S) & (times <= float(tstop) + TIME_TOL_S)
     if not keep.any():
         raise ValueError(
             f"window [{tstart}, {tstop}] holds no sample of a result spanning "

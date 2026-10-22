@@ -145,3 +145,13 @@ def test_the_values_inside_the_window_are_the_ones_the_whole_run_had(result):
 def test_a_window_holding_no_sample_says_what_the_result_spans(result):
     with pytest.raises(ValueError, match="0.0-1198.0 s"):
         window_result(result, 2000.0, 2500.0)
+
+
+def test_a_column_on_an_edge_is_in_both_windows_whatever_the_round_off(result):
+    """Times 0, 2, ..., so 100 s is a column. Windows 0-100 and 100-200 both hold it, and
+    still do when the condition's onset computed as -1.42e-14 s, as one aligned onset did."""
+    drift = -1.42e-14
+    first = window_result(result, 0.0 + drift, 100.0 + drift)
+    second = window_result(result, 100.0 + drift, 200.0 + drift)
+    assert first.times[-1] == 100.0 and second.times[0] == 100.0
+    assert len(first.times) == len(second.times) == 51

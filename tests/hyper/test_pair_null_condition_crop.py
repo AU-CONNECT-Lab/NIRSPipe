@@ -270,3 +270,11 @@ def test_a_description_carrying_a_hash_is_its_own_label(monkeypatch):
     _markers(monkeypatch, ("trial#b", 100.0), ("block#3", 400.0))
     assert pair_null._partner_condition_onsets(None, ["trial#b", "block#3"]) == {
         "trial#b": 100.0, "block#3": 400.0}
+
+
+def test_a_span_a_hair_short_of_three_windows_still_holds_three():
+    """212.3 + 300 - 212.3 computes as 299.99999999999994 s, which a floor took for two."""
+    from nirspipe.qc.common.windows import split_windows
+
+    windows, _ = split_windows([("game2", 212.3, 212.3 + 300.0)], 100.0)
+    assert [w[0] for w in windows] == ["game2-w1", "game2-w2", "game2-w3"]

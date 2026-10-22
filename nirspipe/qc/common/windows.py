@@ -12,6 +12,7 @@ import mne
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import read_json
 from nirspipe.qc.common.figure_io import _pair_fname, extract_markers
+from nirspipe.utils import TIME_TOL_S
 from nirspipe.utils.lineage import path_from
 from nirspipe.utils.logging import get_logger
 
@@ -189,7 +190,8 @@ def split_windows(
     sources: dict[str, tuple[str, float]] = {}
     for label, tstart, tstop in windows:
         span = float(tstop) - float(tstart)
-        n = int(span // length_s)
+        # a 300 s condition can compute as 299.9999999999999 s and still hold three windows
+        n = int((span + TIME_TOL_S) // length_s)
         if n < 1:
             logger.info("condition %s spans %.1fs, under the %.1fs window: no window fits",
                         label, span, length_s)

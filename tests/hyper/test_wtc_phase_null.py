@@ -304,7 +304,7 @@ def test_each_window_gets_its_own_null_level(stub_null):
     mid = float(TIMES[len(TIMES) // 2])
     _, by_cond = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=2,
-        windows=[("early", float(TIMES[0]), mid - 1e-9),
+        windows=[("early", float(TIMES[0]), mid - 0.5),
                  ("late", mid, float(TIMES[-1]))]).summarise()
     levels = dict(zip(by_cond["condition"], by_cond["null_mean"]))
     assert levels["early"] == pytest.approx(0.2)
@@ -334,7 +334,7 @@ def test_without_an_analysis_window_the_whole_run_row_covers_the_record(stub_nul
 @pytest.mark.parametrize("half, expected", [("first", 0.2), ("second", 0.8)])
 def test_the_whole_run_row_is_the_window_when_one_is_given(stub_null, half, expected):
     mid = float(TIMES[len(TIMES) // 2])
-    window = ((float(TIMES[0]), mid - 1e-9) if half == "first"
+    window = ((float(TIMES[0]), mid - 0.5) if half == "first"
               else (mid, float(TIMES[-1])))
     whole, _ = stub_null.compute_wtc_phase_null(
         {"s1": None, "s2": None}, 0.02, 0.30, n_iter=1, analysis_window=window).summarise()
