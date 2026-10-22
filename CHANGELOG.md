@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - The subject index's Channel rejections columns name each run by task plus whichever of session, acq and run tell the runs apart
 - The re-paired null's `percentile` counted a stand-in lacking a pairing as a draw the real value lost to; groupnull's per-cell coherence p inherited it
 - A real partner's `BAD_` span lying before a condition excluded most of that condition from every re-paired draw, thinning or emptying its null
+- A stand-in sharing no usable channel pairing with the fixed member stopped the dyad's whole re-paired null; it is now a blank draw
+- A dyad whose members kept no channel pairing in common is refused saying so, where it failed on an empty array
 
 ## [0.73.0] - 2026-10-21
 

@@ -461,6 +461,9 @@ def compute_wtc_pair_null(
         result = WTCResult(pairs={true_pair: next(iter(result.pairs.values()))},
                            freqs=result.freqs, times=result.times,
                            excluded={true_pair: mask for mask in result.excluded.values()})
+        if not len(result.times):
+            logger.warning("re-paired WTC: %s shares no usable channel pairing with %s in %s, "
+                           "so its draw is blank", partner_id, true_pair[0], label)
         # The segment carries context either side of the condition, so the pad is dropped
         # here: the transform used it, the band mean must not. There is no whole-run draw to
         # collect, the two recordings being alignable one condition at a time or not at all.

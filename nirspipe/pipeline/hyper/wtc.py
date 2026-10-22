@@ -27,6 +27,7 @@ import pandas as pd
 from scipy.fft import next_fast_len
 from scipy.signal import convolve2d
 
+from nirspipe.exceptions import StageError
 from nirspipe.pipeline.hyper._helpers import _long_signals, _shared_sfreq, long_axis_over
 from nirspipe.utils import cone_margin_s, fisher_r_to_z
 from nirspipe.utils.logging import get_logger
@@ -687,9 +688,15 @@ def compute_wtc(
 
     signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
 
-    return _wtc_over_pairs(
+    result = _wtc_over_pairs(
         raws, signals, fmin, fmax, significance, seed, mc_count, cross, limit_scales,
         axis=long_axis_over(raws.values(), ch_type, sep_bands), gpu=device)
+    # a re-paired draw takes this case as a blank draw; a real dyad has nothing to measure
+    if not len(result.times):
+        raise StageError(
+            f"no {ch_type.upper()} channel pairing is usable in both of "
+            f"{', '.join(subject_ids)}: each member kept channels the other rejected")
+    return result
 
 
 def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
@@ -708,6 +715,9 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
     over time, so a window of it is itself.
     """
     times = np.asarray(result.times, dtype=float)
+    # no pairing was computed, so there is no time axis to cut and every pairing stays blank
+    if not times.size:
+        return result
     keep = (times >= float(tstart)) & (times <= float(tstop))
     if not keep.any():
         raise ValueError(
@@ -862,7 +872,9 @@ def wtc_band_mean(
     """
     freqs = np.asarray(result.freqs, dtype=float)
     band  = (freqs >= fmin) & (freqs <= fmax)
-    if not band.any():
+    computed = any(data is not None for labels in result.pairs.values() for data in labels.values())
+    # a result with no map has no frequency axis either, and only blank rows to give
+    if not band.any() and computed:
         span = f"{freqs.min():.4f}-{freqs.max():.4f} Hz" if freqs.size else "empty"
         raise ValueError(
             f"no WTC frequency bin inside [{fmin}, {fmax}] Hz; the computed axis spans {span}. "

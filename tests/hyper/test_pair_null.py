@@ -121,6 +121,27 @@ def test_a_label_no_stand_in_carries_still_gets_a_row(stub):
     assert sorted(by_cond["label"]) == ["S1_D1", "S1_D2", "S9_D9"]
 
 
+def test_a_stand_in_sharing_no_channel_is_a_blank_draw_not_a_crash(monkeypatch):
+    """The transform hands back no map and no time axis for such a stand-in, as it does for
+    every pairing one side lacks. Its rows stay blank, and the other draws are the null."""
+    def fake_pairs(raws, signals, *args, axis=None, **kwargs):
+        blank = "sub-02G03" in raws
+        return WTCResult(pairs={tuple(raws): {label: None if blank else _map(0.4)
+                                              for label in axis}},
+                         freqs=np.array([]) if blank else FREQS,
+                         times=np.array([]) if blank else TIMES)
+
+    monkeypatch.setattr(surrogate, "_long_signals", lambda raw, *a, **k: {})
+    monkeypatch.setattr(surrogate, "_wtc_over_pairs", fake_pairs)
+    null = _run(["sub-02G02", "sub-02G03"])
+    _, by_cond = null.summarise()
+    assert by_cond["n_iter"].tolist() == [1, 1]
+    assert by_cond["null_mean"].tolist() == pytest.approx([0.4, 0.4])
+    assert null.partners == ["sub-02G02", "sub-02G03"]
+    blank_rows = [f for f, d in zip(null.cond_draws, null.cond_draw_ids) if d == "sub-02G03"]
+    assert len(blank_rows) == 1 and blank_rows[0]["coherence"].isna().all()
+
+
 # ---- refusals ----
 
 def test_no_usable_partner_is_an_error_rather_than_an_empty_table():

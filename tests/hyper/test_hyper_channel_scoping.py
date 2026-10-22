@@ -115,6 +115,35 @@ def test_isc_matches_channels_by_label_not_position():
     assert diag[[0, 2, 3]] == pytest.approx(1.0, abs=1e-6)     # the rest still line up
 
 
+def _disjoint():
+    a, b = _haemo("11"), _haemo("12")
+    a.info["bads"] = [c for c in a.ch_names if c[:5] in ("S1_D1", "S2_D2")]
+    b.info["bads"] = [c for c in b.ch_names if c[:5] in ("S3_D3", "S4_D4")]
+    return {"sub-A": a, "sub-B": b}
+
+
+def test_a_dyad_whose_members_kept_no_channel_in_common_is_refused():
+    """Homologous pairing over S1-S4 with one member keeping S3, S4 and the other S1, S2:
+    nothing to measure, said as such rather than as a band the axis does not reach."""
+    with pytest.raises(StageError, match="no HBO channel pairing is usable"):
+        compute_wtc(_disjoint(), fmin=0.02, fmax=0.2)
+
+
+def test_the_null_reads_such_a_pairing_as_blank_rows():
+    """The same pair as a re-paired draw: no map, no axis, and every label still a row."""
+    from nirspipe.pipeline.hyper.wtc import _wtc_over_pairs, window_result
+    from nirspipe.pipeline.hyper._helpers import _long_signals, long_axis_over
+
+    raws = _disjoint()
+    signals = {sid: _long_signals(raw) for sid, raw in raws.items()}
+    result = _wtc_over_pairs(raws, signals, 0.02, 0.2, False, None, 300, False, True,
+                             axis=long_axis_over(raws.values()))
+    assert not len(result.times)
+    rows = wtc_band_mean(window_result(result, 10.0, 60.0), 0.03, 0.1)
+    assert rows["label"].tolist() == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
+    assert rows["coherence"].isna().all()
+
+
 def test_the_axis_is_the_union_of_the_two_montages():
     """One member's montage is not the axis: each side can carry a label the other lost."""
     from nirspipe.pipeline.hyper._helpers import long_axis_over
