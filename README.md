@@ -50,7 +50,7 @@ nirspipe /data/bids /data/derivatives participant \
   --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
   --resp-l-freq 0.1 --resp-h-freq 0.5 \
   --mode glm --stim-dur 15 --drift-high-pass 0.01 \
-  --short-channel mean
+  --short-channel pca
 ```
 
 The cardiac and respiration bands depend on the population and have no default. More examples are in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html#examples).

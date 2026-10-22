@@ -40,7 +40,7 @@ A first-level GLM, the events taken from the SNIRF annotations with a fixed dura
 nirspipe /data/bids /data/derivatives participant \
     --dpf 6.0 --sci-threshold 0.8 --cardiac-* --resp-* \
     --mode glm --stim-dur 15 --drift-high-pass 0.01 \
-    --short-channel mean --contrast-file contrasts.toml
+    --short-channel pca --contrast-file contrasts.toml
 ```
 
 Resting state, ALFF and connectivity, with regions:
@@ -48,7 +48,7 @@ Resting state, ALFF and connectivity, with regions:
 ```bash
 nirspipe /data/bids /data/derivatives participant \
     --dpf 6.0 --sci-threshold 0.8 --cardiac-* --resp-* \
-    --mode rest --short-channel mean --roi-mapping rois.json
+    --mode rest --short-channel pca --roi-mapping rois.json
 ```
 
 A denoised residual for analyses done elsewhere, such as dyad coherence on task data:
@@ -56,7 +56,7 @@ A denoised residual for analyses done elsewhere, such as dyad coherence on task 
 ```bash
 nirspipe /data/bids /data/derivatives participant \
     --dpf 6.0 --sci-threshold 0.8 --cardiac-* --resp-* \
-    --mode denoise --short-channel mean --high-pass 0.02 --low-pass 0.2
+    --mode denoise --short-channel pca --high-pass 0.02 --low-pass 0.2
 ```
 
 Children's faster heart rate needs a higher cardiac band, or good channels are rejected:

@@ -20,7 +20,7 @@ Where this package is and where it is going. Released changes are in [CHANGELOG.
 
 ## In progress
 
-Nothing. The last piece of planned work closed on 2026-09-14.
+Nothing.
 
 ---
 
@@ -30,10 +30,7 @@ Ordered by how often each has come up, not by when it might happen.
 
 **Analysis**
 
-- Spline followed by wavelet motion correction
 - External regressors in confound regression. Built, then withheld: whether it helps has not been shown on enough data to turn on
-- Prewhitening before the dyad coherence. The one study proposing it is a simulation, and its only arm resembling an adult pair found the coherence lowered rather than recovered, so it waits on a measurement of our own
-- All short channels as separate confound regressors, instead of their mean. The published comparison ranks it above the mean, and the change is bounded
 - Pooling the dyad phase angle across a cohort. Each pair's lead now has an angle and a spread; combining angles over dyads needs circular statistics rather than the route the coherence takes, and which test to use is better chosen once the spread has been seen on a real cohort than picked in advance
 - Phase locking value beside the coherence. It is blind to amplitude, so it asks something neither shipped metric does, and most of it falls out of a transform already computed. It would be off by default, as the other inter-brain metrics are
 - Cluster-based permutation over the coherence plane in time and scale. Neighbouring cells are not independent, so connected regions rather than single cells are the unit a correction should be built on
