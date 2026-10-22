@@ -41,11 +41,6 @@ Ordered by how often each has come up, not by when it might happen.
 - Projecting resting-state maps onto a brain surface rather than a flat layout
 - Deriving region mappings from the montage automatically, instead of writing them by hand
 - Comparing one subject's repeated runs side by side, to show how stable a measure is within a person
-- Comparing the signal before and after every processing step, not only the two that have it
-
-**Under the hood**
-
-- Moving SNIRF reading onto a maintained library. Blocked upstream: the fix exists but has not been released
 
 ---
 
