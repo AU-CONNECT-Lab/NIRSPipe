@@ -1,12 +1,14 @@
-"""Per-vertex colours for an activation map on a cortical surface, drawn as ``stc.plot`` does.
+"""Per-vertex colours for a map on a cortical surface: an activation drawn as ``stc.plot``
+does, or an unsigned amplitude.
 
-A binary curvature layer in grey sits under a diverging data layer that is transparent near
-zero; the two are composited into one RGBA per vertex, ready to hand to a mesh.
+A binary curvature layer in grey sits under the data layer, which for an activation is
+diverging and transparent near zero, and for an amplitude is as opaque as the channels cover
+the vertex; the two are composited into one RGBA per vertex, ready to hand to a mesh.
 """
 
 import numpy as np
 from matplotlib import colormaps
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, Normalize
 from scipy import sparse
 
 _N_COLORS = 256
@@ -126,11 +128,31 @@ def _over(bottom: np.ndarray, top: np.ndarray) -> np.ndarray:
     return np.clip(out, 0, 1, out=out)
 
 
+def _cortex_rgba(curvature: np.ndarray) -> np.ndarray:
+    # gyri (curvature <= 0) at a third of the grey ramp, sulci at two thirds
+    return colormaps["Greys"]((np.asarray(curvature > 0, float) + 1) / 3)
+
+
 def activation_rgba(curvature: np.ndarray, values: np.ndarray,
                     fmin: float, fmid: float, fmax: float) -> np.ndarray:
     """Per-vertex RGBA: sulci and gyri in two greys, with ``values`` over them."""
-    # gyri (curvature <= 0) at a third of the grey ramp, sulci at two thirds
-    cortex = colormaps["Greys"]((np.asarray(curvature > 0, float) + 1) / 3)
     lut = ListedColormap(diverging_lut(fmin, fmid, fmax) / 255.0)
     data = lut((values + fmax) / (2 * fmax))
-    return _over(cortex, data)
+    return _over(_cortex_rgba(curvature), data)
+
+
+def coverage_rgba(curvature: np.ndarray, weighted: np.ndarray, cover: np.ndarray,
+                  vmin: float, vmax: float, cmap: str = "viridis") -> np.ndarray:
+    """Per-vertex RGBA for an unsigned map: its colour over the greys, as opaque as covered.
+
+    ``weighted`` is the projected values and ``cover`` the projected ones, so their ratio is
+    the channels' weighted mean. Dividing keeps the edge of the covered patch at its value,
+    where smoothing alone would pull it toward zero and read as a low one::
+
+        coverage_rgba(curv, weighted=[0.25], cover=[0.5], 0, 1)  # viridis(0.5), half opaque
+    """
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = np.where(cover > 0, weighted / cover, vmin)
+    data = colormaps[cmap](Normalize(vmin, vmax)(mean))
+    data[:, 3] = np.clip(cover, 0, 1)
+    return _over(_cortex_rgba(curvature), data)

@@ -16,7 +16,7 @@
 {% if mode != 'rest' %}{% set _ = _sections.append(("Epoch", "Epoch Preview")) %}{% endif %}
 {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
    FC panel too #}
-{% if rest_alff_topo_path %}{% set _ = _sections.append(("RestALFF", "ALFF / fALFF")) %}{% endif %}
+{% if rest_alff_brain_path %}{% set _ = _sections.append(("RestALFF", "ALFF / fALFF")) %}{% endif %}
 {% if rest_panel_path %}{% set _ = _sections.append(("RestFC", "Functional Connectivity")) %}{% endif %}
 {% if glm_design_path or glm_activation_path %}
   {% set _ = _sections.append(("GLM", "GLM")) %}
@@ -424,11 +424,10 @@
   <h3 class="step-title">ALFF / fALFF</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('rest.alff') }}</p>
-    {% if rest_alff_topo_path %}
-      <p class="step-desc">{{ section_note('rest.alff_layout') }}</p>
-      <iframe class="plotly-frame" src="{{ rest_alff_topo_path }}" title="ALFF / fALFF topography"
-              style="height:{{ rest_alff_topo_h }}px"></iframe>
-      <p class="fig-path">{{ rest_alff_topo_path }}</p>
+    {% if rest_alff_brain_path %}
+      <p class="step-desc">{{ section_note('rest.alff_brain') }}</p>
+      <img class="responsive" src="{{ rest_alff_brain_path }}" alt="mALFF of HbO on the cortex" />
+      <p class="fig-path">{{ rest_alff_brain_path }}</p>
     {% else %}
       <div class="placeholder">ALFF not computed: --high-pass and --low-pass are required.</div>
     {% endif %}

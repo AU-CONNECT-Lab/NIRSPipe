@@ -1,29 +1,35 @@
 """Resting-state QC figures.
 
 rest_channel_panel():   the run's channels in one panel, FC matrices over ALFF and fALFF.
-alff_topo_figure():     amplitude and spectral share drawn on the optode flat map.
+alff_brain_figure():    mALFF projected onto the cortex, as the GLM activation is.
 fc_roi_matrix_figure(): connectivity ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
-The panel answers how much and with whom, the flat maps answer where. Both flat maps are
-built on the shared head in :mod:`nirspipe.qc.figures.common.head_map` rather than on their
-own projection, so a channel sits where the report's other head figures put it.
-
-# TODO: project ALFF/fALFF onto a brain surface (not just the flat map) via mne_nirs when
-# head coordinates are available.
+The panel answers how much and with whom, the brain and the flat map answer where. The seed
+map stays on the shared head in :mod:`nirspipe.qc.figures.common.head_map`, where each
+channel keeps its own place next to the seed's.
 """
 
 from __future__ import annotations
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import mne
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from plotly.subplots import make_subplots
 
+from nirspipe.qc.common.figure_io import fig_png_b64
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 
+from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
+from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
+from nirspipe.qc.figures.common._surface_overlay import coverage_rgba
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common.head_map import (
     BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
@@ -37,9 +43,6 @@ logger = get_logger("qc.figures.rest")
 _HBO_COLOR = HBO_COLOR
 _HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
-
-# an unsigned magnitude, so one hue ramped rather than a diverging pair
-_ALFF_SCALE = "Viridis"
 
 
 # The blocks a rest panel's channels are laid out in, and what each is called. Same split and
@@ -381,11 +384,6 @@ def _head_grid(n_rows: int, n_cols: int, titles: list[str], geo: dict, empty=())
     return fig
 
 
-def _col_centre(col: int, n_cols: int) -> float:
-    width = (1.0 - (n_cols - 1) * _COL_GAP) / n_cols
-    return (col - 1) * (width + _COL_GAP) + width / 2
-
-
 def _finish_head_grid(fig, geo, n_rows, n_cols, title):
     """Square axes, the run's title, and room under the grid for the bars."""
     head_axes(fig, {"run": geo}, n_rows, n_cols)
@@ -468,103 +466,53 @@ def fc_seed_topo_figure(
     return _finish_head_grid(fig, geo, n_rows, n_cols, title)
 
 
-# What each row draws, best column first, and the measured column its hover names. mALFF
-# is standardised within each chromophore, so HbO and HbR share one scale; the measured
-# amplitude is one hover away.
-_ALFF_ROWS = ((("malff", "alff"), "alff"), (("falff",), None))
-_ALFF_LABELS = {"malff": "mALFF", "alff": "ALFF", "falff": "fALFF"}
+# (title, azimuth, elevation): both sides, the top and the front. An fMRI surface plot's
+# medial views are left out, since no optode reaches the medial cortex.
+_BRAIN_VIEWS = (("Left", 180, 90), ("Right", 0, 90), ("Superior", 0, 0), ("Frontal", 90, 90))
+_BRAIN_VIEW_PX = (560, 480)
 
 
-def _alff_rows(alff_df: pd.DataFrame) -> "list[tuple[str, str, str | None]]":
-    """(column, label, measured column) per row, dropping a row the frame cannot fill.
+def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> "str | None":
+    """mALFF of HbO on the fsaverage cortex in four views, as a base64 PNG.
 
-    ``alff`` stands in where a frame carries no ``malff``, which only a hand-built one does.
-    Its hover names nothing extra, the colour already being the measured number.
+    The long channels that were kept and carry a value are projected as the GLM activation
+    is, and the scale runs from their lowest value to their highest. None when no channel
+    has one.
     """
-    out = []
-    for candidates, measured in _ALFF_ROWS:
-        col = next((c for c in candidates if c in alff_df.columns), None)
-        if col:
-            out.append((col, _ALFF_LABELS[col], measured if measured != col else None))
-    return out
+    from nirspipe.qc.metrics import long_short_channels
 
-
-def _col_colorbar(col: int, n_cols: int, n_rows: int) -> dict:
-    """Colorbar placement for one column of a head grid: horizontal, under the grid.
-
-    Not beside the column: the grid anchors each head square inside a much wider cell, so a
-    vertical bar at a cell's edge floats in the gap between two heads.
-    """
-    return {"orientation": "h", "len": 0.3, "thickness": 9,
-            "x": _col_centre(col, n_cols), "xanchor": "center",
-            "y": -10 / _grid_px(n_rows), "yanchor": "top",
-            # beside the bar, not above it: a title over a horizontal bar grows the block
-            # upward and runs into the subplot titles above
-            "tickfont": {"size": 9}, "title": {"side": "right"}}
-
-
-def alff_topo_figure(
-    raw: mne.io.Raw,
-    alff_df: pd.DataFrame,
-    title: str = "ALFF and fALFF on the optode layout",
-    sep_bands=None,
-) -> "go.Figure | None":
-    """Low-frequency amplitude drawn on the flat map, or None with no positions.
-
-    One disc per channel, at its source-detector midpoint, because the value is a property
-    of a place rather than of a path.
-
-    A row per chromophore, a column per measure. Both measures are dimensionless, so a
-    column's two chromophores share one scale and one bar and can be read against each other.
-    The columns keep their own: fALFF is a share of the whole spectrum and mALFF a multiple
-    of the chromophore's own mean.
-
-    A rejected channel is drawn grey rather than dropped, so the montage stays complete and
-    the gap reads as a rejection, and its value is kept out of the scale. Grey alone, not
-    grey and faded: for this figure a rejected channel is exactly the channel with no value.
-    """
-    geo = _head_for(raw, sep_bands)
-    if geo is None:
-        logger.warning("ALFF topography skipped: montage carries no optode positions")
+    measure = "malff" if "malff" in alff_df.columns else "alff"
+    values = alff_df.set_index("channel")[measure].astype(float)
+    long_names, _ = long_short_channels(raw, sep_bands)
+    long_pairs = {pair_of(ch) for ch in (long_names or raw.ch_names)}
+    bads = set(raw.info["bads"])
+    names = [ch for ch, kind in zip(raw.ch_names, raw.get_channel_types())
+             if kind == "hbo" and ch not in bads and pair_of(ch) in long_pairs
+             and np.isfinite(values.get(ch, np.nan))]
+    if not names:
         return None
+    vals = values.loc[names].to_numpy()
+    vmin, vmax = float(vals.min()), float(vals.max())
 
-    values = {str(row["channel"]): row for _, row in alff_df.iterrows()}
-    chromos = [(chromo, lab) for chromo, lab in (("hbo", "HbO"), ("hbr", "HbR"))
-               if any(ch.endswith(f" {chromo}") for ch in values)]
-    measures = _alff_rows(alff_df)
-    if not chromos or not measures:
-        return None
-    dim = {pair_of(ch) for ch in raw.info["bads"]}
-    blank = [n in dim for n in geo["long"]["names"]]
+    # a column of ones alongside, so each vertex knows how much of it the channels cover
+    stc, subjects_dir = project_to_cortex(raw.copy().pick(names),
+                                          np.column_stack([vals, np.ones_like(vals)]))
+    with RENDER_LOCK:
+        images = render_cortex(
+            stc, lambda curv, s: coverage_rgba(curv, s[:, 0], s[:, 1], vmin, vmax),
+            subjects_dir, _BRAIN_VIEW_PX,
+            [{"azimuth": az, "elevation": el} for _, az, el in _BRAIN_VIEWS])
 
-    def column(measure: str, chromo: str) -> np.ndarray:
-        vals = _values_for(
-            geo, lambda ch, m=measure: float(values[ch][m]) if ch in values else np.nan,
-            chromo)
-        # compute_alff already blanks a rejected channel, but the frame is an argument and
-        # may not have come from it; the recording's own bads are the authority, and a
-        # rejected channel that kept its value would still set the scale below
-        vals[blank] = np.nan
-        return vals
-
-    n_rows, n_cols = len(chromos), len(measures)
-    titles = [f"{label} - {lab}" for _, lab in chromos for _, label, _ in measures]
-    fig = _head_grid(n_rows, n_cols, titles, geo)
-
-    for j, (measure, label, raw_key) in enumerate(measures, start=1):
-        by_row = [column(measure, chromo) for chromo, _ in chromos]
-        # the scale comes from the channels that have a value: one rejected channel with a
-        # runaway amplitude would flatten every real difference into one colour
-        good = np.concatenate([v[np.isfinite(v)] for v in by_row])
-        if not len(good):
-            continue
-        for i, ((chromo, _lab), vals) in enumerate(zip(chromos, by_row), start=1):
-            measured = column(raw_key, chromo) if raw_key else None
-            head_glyph(fig, geo, "long", vals, i, j, label,
-                       float(good.min()), float(good.max()),
-                       bar=_col_colorbar(j, n_cols, n_rows) if i == n_rows else False,
-                       colorscale=_ALFF_SCALE, blank_color=BLANK_COLOR,
-                       fmt=".2f", mark="disc",
-                       customdata=measured,
-                       hover_tail="" if measured is None else "<br>%{customdata:.3g} M")
-    return _finish_head_grid(fig, geo, n_rows, n_cols, title)
+    fig = plt.figure(figsize=(9.2, 8))
+    grid = fig.add_gridspec(2, 3, width_ratios=[1, 1, 0.05], wspace=0.02, hspace=0.08)
+    for k, ((view, _, _), img) in enumerate(zip(_BRAIN_VIEWS, images)):
+        ax = fig.add_subplot(grid[k // 2, k % 2])
+        ax.imshow(img)
+        ax.set_title(view, fontsize=11)
+        ax.axis("off")
+    bar = fig.colorbar(ScalarMappable(norm=Normalize(vmin, vmax), cmap="viridis"),
+                       cax=fig.add_subplot(grid[:, 2]))
+    bar.set_label("mALFF (1 = mean channel), HbO" if measure == "malff" else "ALFF (M), HbO",
+                  fontsize=11)
+    bar.outline.set_linewidth(0.5)
+    return fig_png_b64(fig, dpi=100, pad_inches=0.1)

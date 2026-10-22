@@ -169,10 +169,10 @@ NOTES = {
         "Amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF), "
         "from the denoised residual. The map shows where the amplitude is; the connectivity "
         "panel below gives each channel&rsquo;s value beside its correlations.",
-    "rest.alff_layout":
-        "One disc per channel at its source-detector midpoint, HbO on top and HbR below. "
-        "Amplitude is mALFF (each channel over its chromophore's mean), with the molar "
-        "value on hover. Grey channels carry no value; short channels are not drawn.",
+    "rest.alff_brain":
+        "mALFF of HbO: each kept long channel&rsquo;s amplitude over its chromophore&rsquo;s "
+        "mean, so 1 is an average channel, spread over the cortex within 3 cm. Yellow is "
+        "stronger, purple weaker, grey unmeasured. Low is not a poor channel.",
     "fc.channel_matrix":
         "Channel-by-channel Pearson r, HbO left and HbR right on one scale, on the residual "
         "the mode analyses. In rest mode each channel&rsquo;s ALFF and fALFF sit below in "
@@ -183,7 +183,8 @@ NOTES = {
         "<code>--roi-mapping</code>.",
     "fc.seed_topography":
         "A flat map per seed ROI, each channel coloured by its correlation with the "
-        "seed&rsquo;s mean signal, on the matrix&rsquo;s scale. Solid grey channels are "
+        "seed&rsquo;s mean signal, on the matrix&rsquo;s scale: red rises and falls with "
+        "the seed, blue against it. Solid grey channels are "
         "inside the seed (undefined, not zero); faded grey ones were rejected. Short "
         "channels are not drawn.",
     "glm.activation":

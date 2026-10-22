@@ -41,7 +41,7 @@ from nirspipe.qc.figures.subject.correlation_panel import hbo_hbr_correlation_fi
 from nirspipe.qc.figures.subject.optode_layout import optode_layout_static
 from nirspipe.qc.figures.common.topomap import evoked_channel_map_figure
 from nirspipe.qc.figures.subject.rest_figures import (
-    alff_topo_figure,
+    alff_brain_figure,
     rest_channel_panel,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
@@ -90,7 +90,7 @@ __all__ = [
     "hbo_hbr_fit_js",
     "optode_layout_static",
     "evoked_channel_map_figure",
-    "alff_topo_figure",
+    "alff_brain_figure",
     "rest_channel_panel",
     "fc_roi_matrix_figure",
     "fc_seed_topo_figure",

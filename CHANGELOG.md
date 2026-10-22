@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The run report shows every condition's GLM activation figure, one under another, in place of a menu
+- The rest report draws mALFF of HbO on the cortex in four views, in place of the flat ALFF and fALFF map
 
 ### Fixed
 - A rerun no longer refuses an output directory named through a Windows junction when an earlier run named its real path

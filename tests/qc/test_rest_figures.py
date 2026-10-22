@@ -1,10 +1,9 @@
-"""The two rest-mode figures: the ROI FC matrix and the ALFF flat map.
+"""The rest-mode figures: the ROI FC matrix, the channel panel and mALFF on the cortex.
 
-The ALFF bar chart orders channels by name, which cannot be read as the spatial claim it
-is. Both are Plotly figures, so what is asserted is the geometry that carries the meaning
-and the refusals: no frames and no optode positions must give None rather than an
-exception, because the report treats None as "skip the panel" and an exception as a broken
-report.
+For the Plotly figures what is asserted is the geometry that carries the meaning and the
+refusals: no frames must give None rather than an exception, because the report treats
+None as "skip the panel" and an exception as a broken report. The brain figure is checked
+through what it hands the projection, and once rendered for real.
 
 The seed map's own route is pinned in test_rest_seed_figure.
 """
@@ -13,10 +12,12 @@ import numpy as np
 import pandas as pd
 import plotly.colors as pc
 import pytest
+from matplotlib import colormaps
 
 from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
+from nirspipe.qc.figures.subject import rest_figures
 from nirspipe.qc.figures.subject.rest_figures import (
-    alff_topo_figure, fc_roi_matrix_figure, rest_channel_panel,
+    alff_brain_figure, fc_roi_matrix_figure, rest_channel_panel,
 )
 
 
@@ -166,7 +167,9 @@ def test_a_channel_with_no_correlation_leaves_every_row_of_the_panel():
     assert list(heat.x) == list(strip["ticktext"]) == ["S1_D1", "S2_D1"]
 
 
-# ---- ALFF on the layout ----
+
+
+# ---- ALFF on the cortex ----
 
 @pytest.fixture(scope="module")
 def haemo():
@@ -192,99 +195,115 @@ def alff_df(haemo):
     })
 
 
-def test_the_flat_map_is_drawn_from_the_montage(haemo, alff_df):
-    assert alff_topo_figure(haemo, alff_df) is not None
+@pytest.fixture
+def projected(monkeypatch):
+    """What alff_brain_figure hands to the projection and the renderer, with neither run."""
+    seen = {}
+
+    def project(raw, columns):
+        seen["names"], seen["columns"] = list(raw.ch_names), np.asarray(columns)
+        return None, None
+
+    def render(stc, colour, subjects_dir, size, views):
+        seen["colour"], seen["views"] = colour, views
+        return [np.full((48, 56, 3), 255, np.uint8)] * len(views)
+
+    monkeypatch.setattr(rest_figures, "project_to_cortex", project)
+    monkeypatch.setattr(rest_figures, "render_cortex", render)
+    return seen
 
 
-def test_a_channel_is_one_disc_and_not_a_path(haemo, alff_df):
-    """An amplitude is a property of a place. Drawn as a source-to-detector bar it would
-    chain into the neighbouring channels wherever they share an optode, and a montage of
-    independent measurements would read as one connected polyline."""
+def _long_hbo(raw):
     from nirspipe.qc.metrics import long_short_channels
 
-    long_names, _ = long_short_channels(haemo, None)
-    # short channels are off every map in this module, so the count is the long ones
-    n_drawn = len({c.split(" ")[0] for c in long_names})
-    fig = alff_topo_figure(haemo, alff_df)
-    panel = [t for t in fig.data
-             if t.marker.colorscale is not None and t.xaxis == fig.data[-1].xaxis]
-    # the bar mark would put a string of markers on every channel instead of one disc
-    assert sum(len(t.x) for t in panel) == n_drawn
+    long_names, _ = long_short_channels(raw, None)
+    return [ch for ch in long_names if ch.endswith(" hbo") and ch not in raw.info["bads"]]
 
 
-def test_the_two_chromophores_of_a_column_share_one_bar(haemo, alff_df):
-    """mALFF and fALFF are both dimensionless, so HbO and HbR can be read against each
-    other; a bar per panel could compare nothing with anything."""
-    fig = alff_topo_figure(haemo, alff_df)
-    bars = [t for t in fig.data if getattr(t.marker, "showscale", False)]
-    assert len(bars) == 2
-    assert {b.marker.colorbar.title.text for b in bars} == {"mALFF", "fALFF"}
+def test_only_the_kept_long_hbo_channels_are_projected(haemo, alff_df, projected):
+    marked = haemo.copy()
+    marked.info["bads"] = [_long_hbo(haemo)[0]]
+    assert alff_brain_figure(marked, alff_df) is not None
+
+    names = _long_hbo(marked)
+    assert projected["names"] == names
+    malff = alff_df.set_index("channel")["malff"]
+    np.testing.assert_array_equal(projected["columns"][:, 0], malff[names].to_numpy())
+    # the second column is the coverage every vertex is divided by
+    np.testing.assert_array_equal(projected["columns"][:, 1], 1.0)
 
 
-def test_the_column_scale_spans_both_chromophores(haemo, alff_df):
-    fig = alff_topo_figure(haemo, alff_df)
-    by_col = {}
-    for t in fig.data:
-        if t.marker.colorscale is not None and t.marker.cmin is not None:
-            n = int(t.xaxis[1:] or 1)
-            # a 2 x 2 grid numbers its axes row by row, so odd axes are the first column
-            by_col.setdefault((n - 1) % 2, set()).add((t.yaxis, t.marker.cmin, t.marker.cmax))
-    # two panels a column, and both ends of the scale identical across them
-    for panels in by_col.values():
-        assert len({y for y, _, _ in panels}) == 2
-        assert len({(lo, hi) for _, lo, hi in panels}) == 1
-
-
-def test_a_row_is_one_chromophore(haemo, alff_df):
-    titles = [a.text for a in alff_topo_figure(haemo, alff_df).layout.annotations if a.text]
-    assert titles == ["mALFF - HbO", "fALFF - HbO", "mALFF - HbR", "fALFF - HbR"]
-
-
-def test_alff_stands_in_where_a_frame_carries_no_malff(haemo, alff_df):
-    """Only a hand-built frame does; the figure still draws two rows rather than one."""
-    fig = alff_topo_figure(haemo, alff_df.drop(columns=["malff"]))
-    bars = [t for t in fig.data if getattr(t.marker, "showscale", False)]
-    assert {b.marker.colorbar.title.text for b in bars} == {"ALFF", "fALFF"}
-
-
-def test_the_hover_keeps_the_measured_amplitude(haemo, alff_df):
-    """The colour is a multiple of the chromophore mean, so the molar value it came from
-    has nowhere else to go."""
-    fig = alff_topo_figure(haemo, alff_df)
-    carried = [t for t in fig.data if t.customdata is not None]
-    assert carried and all("customdata" in t.hovertemplate for t in carried)
-
-
-def test_no_optode_positions_means_no_figure(haemo, alff_df):
-    """The bar chart still works without coordinates; this panel cannot, and says so."""
-    flat = haemo.copy()
-    for ch in flat.info["chs"]:
-        ch["loc"][:] = 0.0
-    assert alff_topo_figure(flat, alff_df) is None
-
-
-def _scales(fig) -> list[tuple]:
-    """(cmin, cmax) of every trace that carries a colour scale, i.e. one per panel."""
-    return [(t.marker.cmin, t.marker.cmax) for t in fig.data
-            if getattr(t.marker, "cmin", None) is not None]
-
-
-def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df):
+def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df, projected):
     """One dead channel with a runaway amplitude would otherwise flatten every real
-    difference into one colour.
-
-    Asked the direct way: does the spike move the scale? Kept, it must; rejected, it must
-    not, which a figure that only faded the channel and went on reading its value would fail.
-    Comparing a rejected run against a clean one instead would compare two different sets of
-    channels, since rejecting one removes its fALFF from that panel too.
-    """
+    difference into one colour: the largest kept value must still take the top colour."""
+    outlier = _long_hbo(haemo)[0]
     spiked = alff_df.copy()
-    # the drawn column is what sets the scale, so that is the one to spike
-    spiked.loc[spiked.index[0], "malff"] = 1e6
-    outlier = str(spiked.iloc[0]["channel"])
-
-    assert _scales(alff_topo_figure(haemo, spiked)) != _scales(alff_topo_figure(haemo, alff_df))
-
+    spiked.loc[spiked["channel"] == outlier, "malff"] = 1e6
     marked = haemo.copy()
     marked.info["bads"] = [outlier]
-    assert _scales(alff_topo_figure(marked, spiked)) == _scales(alff_topo_figure(marked, alff_df))
+    alff_brain_figure(marked, spiked)
+
+    top = spiked.set_index("channel")["malff"][_long_hbo(marked)].max()
+    rgba = projected["colour"](np.array([-1.0]), np.array([[top, 1.0]]))
+    np.testing.assert_allclose(rgba[0, :3], colormaps["viridis"](1.0)[:3], atol=1e-12)
+
+
+def test_alff_stands_in_where_a_frame_carries_no_malff(haemo, alff_df, projected):
+    """Only a hand-built frame lacks mALFF; the molar ALFF is drawn instead."""
+    alff_brain_figure(haemo, alff_df.drop(columns=["malff"]))
+    alff = alff_df.set_index("channel")["alff"]
+    np.testing.assert_array_equal(projected["columns"][:, 0],
+                                  alff[projected["names"]].to_numpy())
+
+
+def test_the_views_skip_the_medial_wall(haemo, alff_df, projected):
+    alff_brain_figure(haemo, alff_df)
+    assert [(v["azimuth"], v["elevation"]) for v in projected["views"]] == [
+        (180, 90), (0, 90), (0, 0), (90, 90)]
+
+
+def test_no_value_anywhere_means_no_figure(haemo, alff_df, projected):
+    assert alff_brain_figure(haemo, alff_df.assign(malff=np.nan)) is None
+    assert "names" not in projected
+
+
+def test_a_low_and_a_high_channel_land_on_their_own_sides(tmp_path):
+    """Rendered for real: from above, the left channel's low value is purple on the
+    left of the picture and the right channel's high value yellow on the right."""
+    import base64
+    import io
+    import os
+
+    import mne
+    from PIL import Image
+
+    subjects_dir = mne.utils.get_subjects_dir()
+    if subjects_dir is None or not os.path.isfile(
+            os.path.join(subjects_dir, "fsaverage", "surf", "lh.pial")):
+        pytest.skip("fsaverage is not on this machine")
+
+    names = [f"S{s}_D{d} {c}" for s, d in ((1, 1), (2, 2)) for c in ("hbo", "hbr")]
+    raw = mne.io.RawArray(np.zeros((4, 100)),
+                          mne.create_info(names, 10.0, ["hbo", "hbr", "hbo", "hbr"]),
+                          verbose=False)
+    pos = {"S1": [-0.05, 0.02, 0.10], "D1": [-0.02, 0.02, 0.11],
+           "S2": [0.05, 0.02, 0.10], "D2": [0.02, 0.02, 0.11]}
+    fid = dict(nasion=[0.0, 0.085, -0.035], lpa=[-0.081, -0.029, -0.041],
+               rpa=[0.084, -0.029, -0.041])
+    raw.set_montage(mne.channels.make_dig_montage(ch_pos=pos, coord_frame="head", **fid),
+                    verbose="error")
+    frame = pd.DataFrame({"channel": names, "malff": [0.5, 0.5, 1.5, 1.5]})
+
+    img = np.array(Image.open(io.BytesIO(base64.b64decode(
+        alff_brain_figure(raw, frame)))).convert("RGB")).astype(int)
+    h, w, _ = img.shape
+    superior = img[h // 2:, : int(w * 0.46)]   # bottom left of the 2 x 2, bar excluded
+
+    def count(part, rgb):
+        return int(np.all(np.abs(part - np.array(rgb) * 255) < 40, axis=2).sum())
+
+    purple, yellow = colormaps["viridis"](0.0)[:3], colormaps["viridis"](1.0)[:3]
+    half = superior.shape[1] // 2
+    left, right = superior[:, :half], superior[:, half:]
+    assert count(left, purple) > 50 and count(left, yellow) == 0
+    assert count(right, yellow) > 50 and count(right, purple) == 0

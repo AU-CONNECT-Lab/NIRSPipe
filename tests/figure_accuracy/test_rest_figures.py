@@ -52,17 +52,18 @@ def test_the_fc_matrix_recovers_the_designed_network(rest_run, panel):
 
 # ---- amplitude ----
 
-def test_the_alff_strip_and_the_alff_map_are_the_written_alff(rest_run, panel):
+def test_the_alff_strip_and_the_alff_brain_are_the_written_alff(rest_run, panel):
     written = _table(rest_run, "stat-alff_nirsmap.tsv", "channel")
     strip = next(t for t in panel["data"] if t.get("name") == "HbO"
                  and "ALFF (M)" in (t.get("hovertemplate") or ""))
     for pair, value in zip(strip["customdata"], strip["y"]):
         assert value == pytest.approx(written.loc[f"{pair} hbo", "alff"], rel=1e-5), pair
-    topo = one_figure(rest_run.figure("topo", suffix="nirsmap", entities="stat-alff"))
-    hbo = next(t for t in topo["data"] if (t.get("xaxis") or "x") == "x" and t.get("customdata") is not None)
-    for pair, malff, alff in zip(hbo["text"], hbo["marker"]["color"], hbo["customdata"]):
-        assert malff == pytest.approx(written.loc[f"{pair} hbo", "malff"], rel=1e-5), pair
-        assert alff == pytest.approx(written.loc[f"{pair} hbo", "alff"], rel=1e-5), pair
+    # the brain is a picture, so what is checked is the table it was drawn from
+    handed = rest_run.captured["alff_brain_figure"][0][1].set_index("channel")
+    for channel in written.index:
+        assert handed.loc[channel, "malff"] == pytest.approx(written.loc[channel, "malff"],
+                                                             rel=1e-5, nan_ok=True), channel
+    assert list(rest_run.figures.glob("*_stat-alff_desc-brain_nirsmap.png"))
 
 
 def test_alff_is_the_band_amplitude_of_the_broadband_residual_of_the_same_channel(rest_run):

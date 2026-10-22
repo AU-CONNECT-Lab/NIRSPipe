@@ -89,8 +89,9 @@ def rest_run(tmp_path_factory) -> Run:
     """The resting-state fingerprint through rest mode, with an ROI map."""
     root = tmp_path_factory.mktemp("fingerprint_rest")
     done = run_capturing(root, ["--mode", "rest", "--short-channel", "mean",
-                                "--roi-mapping", _roi_file(root)], (), task="rest", rest=True)
-    return Run(root / "out", done["truth"], task="rest")
+                                "--roi-mapping", _roi_file(root)], ("alff_brain_figure",),
+                         task="rest", rest=True)
+    return Run(root / "out", done["truth"], task="rest", captured=done["captured"])
 
 
 @pytest.fixture(scope="session")

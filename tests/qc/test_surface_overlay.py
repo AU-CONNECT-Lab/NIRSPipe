@@ -8,8 +8,10 @@ import mne
 import numpy as np
 import pytest
 
+from matplotlib import colormaps
+
 from nirspipe.qc.figures.common._surface_overlay import (
-    activation_rgba, diverging_lut, smoothing_matrix, vertex_normals,
+    activation_rgba, coverage_rgba, diverging_lut, smoothing_matrix, vertex_normals,
 )
 
 LIMITS = [(0.0, 0.5, 1.0), (0.5, 0.75, 1.0), (0.2, 0.3, 2.0), (0.0, 0.0, 1.0), (0.0, 1.0, 1.0),
@@ -119,3 +121,21 @@ def test_the_composited_colours_match_mne(fmin, fmid, fmax):
                      name="data")
     np.testing.assert_allclose(activation_rgba(curv, values, fmin, fmid, fmax),
                                mesh._current_colors, atol=1e-12)
+
+
+def test_an_amplitude_keeps_its_value_to_the_edge_of_the_covered_patch():
+    viridis = colormaps["viridis"]
+    gyrus, sulcus = (np.array(colormaps["Greys"](g)[:3]) for g in (1 / 3, 2 / 3))
+    curv = np.array([-1.0, 1.0, -1.0, 1.0])
+    # fully covered at 0.5; uncovered; half covered, 0.25 of 0.5 is a mean of 0.5; over-covered
+    weighted = np.array([0.5, 0.0, 0.25, 2.0])
+    cover = np.array([1.0, 0.0, 0.5, 2.0])
+
+    rgba = coverage_rgba(curv, weighted, cover, 0.0, 1.0)
+
+    np.testing.assert_allclose(rgba[0, :3], viridis(0.5)[:3], atol=1e-12)
+    np.testing.assert_allclose(rgba[1, :3], sulcus, atol=1e-12)
+    np.testing.assert_allclose(rgba[2, :3], 0.5 * np.array(viridis(0.5)[:3]) + 0.5 * gyrus,
+                               atol=1e-12)   # the colour of 0.5, half over the gyrus grey
+    np.testing.assert_allclose(rgba[3, :3], viridis(1.0)[:3], atol=1e-12)
+    np.testing.assert_allclose(rgba[:, 3], 1.0)

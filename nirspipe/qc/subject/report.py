@@ -127,7 +127,7 @@ from nirspipe.qc.figures import (
     build_ts_figure,
     channel_quality_heatmap,
     condition_quality_heatmap,
-    alff_topo_figure,
+    alff_brain_figure,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
     rest_channel_panel,
@@ -1924,8 +1924,8 @@ def _section_rest(
     roi_map_name: "str | None" = None,
     sep_bands=None,
 ) -> dict:
-    panel_path = alff_topo_path = fc_roi_path = fc_seed_path = None
-    alff_topo_h = fc_seed_h = panel_h = fc_roi_h = 0
+    panel_path = alff_brain_path = fc_roi_path = fc_seed_path = None
+    fc_seed_h = panel_h = fc_roi_h = 0
     with _guard("Rest channel panel", errors, subject):
         if fc_df is not None:
             fig = rest_channel_panel(fc_df, fc_hbr_df, alff_df, raw=raw_haemo,
@@ -1933,13 +1933,11 @@ def _section_rest(
             if fig is not None:
                 panel_path, panel_h = _save_plotly_html(
                     fig, figures_dir / fig_name("restpanel"))
-    with _guard("ALFF topography", errors, subject):
+    with _guard("ALFF brain", errors, subject):
         if alff_df is not None and raw_haemo is not None:
-            fig = alff_topo_figure(raw_haemo, alff_df, sep_bands=sep_bands)
-            if fig is not None:   # None means the montage carries no optode positions
-                alff_topo_path, alff_topo_h = _save_plotly_html(
-                    fig, figures_dir / fig_name("topo", suffix="nirsmap",
-                                                statistic="alff"))
+            alff_brain_path = save_png(
+                alff_brain_figure(raw_haemo, alff_df, sep_bands=sep_bands), figures_dir,
+                fig_name("brain", suffix="nirsmap", statistic="alff", extension=".png"))
     with _guard("ROI FC matrix", errors, subject):
         if fc_roi:
             fig = fc_roi_matrix_figure(fc_roi)
@@ -1958,7 +1956,7 @@ def _section_rest(
                         "matrix", suffix="relmat", segmentation=roi_map_name,
                         aggregation="seed", statistic="pearson"))
     return {"rest_panel_path": panel_path, "rest_panel_h": panel_h,
-            "rest_alff_topo_path": alff_topo_path, "rest_alff_topo_h": alff_topo_h,
+            "rest_alff_brain_path": alff_brain_path,
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
             "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
