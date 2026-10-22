@@ -143,6 +143,12 @@ def test_the_null_reads_such_a_pairing_as_blank_rows():
     assert rows["label"].tolist() == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
     assert rows["coherence"].isna().all()
 
+    # a stand-in with no usable channel at all reaches the transform as an empty map
+    signals["sub-B"] = {}
+    result = _wtc_over_pairs(raws, signals, 0.02, 0.2, False, None, 300, False, True,
+                             axis=long_axis_over(raws.values()))
+    assert not len(result.times)
+
 
 def test_the_axis_is_the_union_of_the_two_montages():
     """One member's montage is not the axis: each side can carry a label the other lost."""

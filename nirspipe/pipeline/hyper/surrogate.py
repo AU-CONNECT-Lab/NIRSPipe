@@ -21,6 +21,7 @@ import mne
 import numpy as np
 import pandas as pd
 
+from nirspipe.exceptions import StageError
 from nirspipe.pipeline.hyper._helpers import _long_signals, long_axis_over
 from nirspipe.pipeline.hyper.roi import (roi_maps_from_channels, roi_mean_of_channels,
                                            roi_mean_of_homologous)
@@ -449,8 +450,16 @@ def compute_wtc_pair_null(
         if on_draw is not None:
             on_draw(partner_id, label, pair, extra[1] if len(extra) > 1 else inner, excluded)
         wtc_pair = extra[0] if extra else pair
-        signals = {sid: _long_signals(raw, ch_type, sep_bands)
-                   for sid, raw in wtc_pair.items()}
+        signals = {}
+        for sid, raw in wtc_pair.items():
+            try:
+                signals[sid] = _long_signals(raw, ch_type, sep_bands)
+            except StageError:
+                # a stand-in with no usable channel at all is a blank draw, as is one that
+                # shares none; the fixed member was refused on the real table already
+                if sid != partner_id:
+                    raise
+                signals[sid] = {}
         segment = float(min(raw.times[-1] for raw in pair.values()))
         cache_key = (label, round(float(inner[0]), 3), round(segment, 3))
         result = _wtc_over_pairs(

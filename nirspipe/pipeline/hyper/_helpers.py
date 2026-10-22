@@ -7,6 +7,7 @@ from collections.abc import Iterable
 import mne
 import numpy as np
 
+from nirspipe.exceptions import StageError
 from nirspipe.utils import pair_of
 from nirspipe.qc.metrics._helpers import long_channel_picks
 
@@ -44,7 +45,7 @@ def _long_by_label(
     """
     picks = long_channel_picks(raw, ch_type, sep_bands=sep_bands)
     if not picks:
-        raise ValueError(
+        raise StageError(
             f"no usable long {ch_type.upper()} channel: every one is either short-distance "
             "or marked bad"
         )

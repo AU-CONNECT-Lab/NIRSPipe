@@ -10,6 +10,7 @@ along with the axis rule that lets a stand-in with a different montage be drawn 
 import numpy as np
 import pytest
 
+from nirspipe.exceptions import StageError
 from nirspipe.pipeline.hyper import surrogate
 from nirspipe.pipeline.hyper.surrogate import compute_wtc_pair_null
 from nirspipe.pipeline.hyper.wtc import WTCResult
@@ -140,6 +141,42 @@ def test_a_stand_in_sharing_no_channel_is_a_blank_draw_not_a_crash(monkeypatch):
     assert null.partners == ["sub-02G02", "sub-02G03"]
     blank_rows = [f for f, d in zip(null.cond_draws, null.cond_draw_ids) if d == "sub-02G03"]
     assert len(blank_rows) == 1 and blank_rows[0]["coherence"].isna().all()
+
+
+def _no_channel_for(who):
+    def signals(raw, *a, **k):
+        if raw is who:
+            raise StageError("no usable long HBO channel: every one is either short-distance "
+                             "or marked bad")
+        return {"S1_D1": np.zeros(10)}
+    return signals
+
+
+def test_a_stand_in_with_no_usable_channel_is_a_blank_draw_too(monkeypatch):
+    """Its signal map is empty, which the transform turns into no map at all, as above."""
+    draws = _draws(["sub-02G02", "sub-02G03"])
+    empty_partner = draws[1][2]["sub-02G03"]
+
+    def fake_pairs(raws, signals, *args, axis=None, **kwargs):
+        blank = not signals["sub-02G03" if "sub-02G03" in raws else "sub-02G02"]
+        return WTCResult(pairs={tuple(raws): {label: None if blank else _map(0.4)
+                                              for label in axis}},
+                         freqs=np.array([]) if blank else FREQS,
+                         times=np.array([]) if blank else TIMES)
+
+    monkeypatch.setattr(surrogate, "_long_signals", _no_channel_for(empty_partner))
+    monkeypatch.setattr(surrogate, "_wtc_over_pairs", fake_pairs)
+    null = compute_wtc_pair_null(draws, TRUE, ["S1_D1", "S1_D2"], 0.02, 0.30)
+    _, by_cond = null.summarise()
+    assert by_cond["n_iter"].tolist() == [1, 1]
+    assert null.partners == ["sub-02G02", "sub-02G03"]
+
+
+def test_the_fixed_member_without_a_channel_is_still_refused(monkeypatch):
+    draws = _draws(["sub-02G02"])
+    monkeypatch.setattr(surrogate, "_long_signals", _no_channel_for(draws[0][2][TRUE[0]]))
+    with pytest.raises(StageError, match="no usable long"):
+        compute_wtc_pair_null(draws, TRUE, ["S1_D1"], 0.02, 0.30)
 
 
 # ---- refusals ----

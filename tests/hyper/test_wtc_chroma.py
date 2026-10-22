@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from nirspipe.exceptions import StageError
 from nirspipe.pipeline.hyper._helpers import _long_by_label
 from nirspipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
 from tests.hyper._names import archive, name
@@ -103,7 +104,7 @@ def test_the_two_passes_are_different_numbers(dyad):
 def test_the_error_names_the_chromophore_that_has_no_channel(dyad):
     raw = dyad["sub-01"].copy()
     raw.info["bads"] = [c for c in raw.ch_names if c.endswith(" hbr")]
-    with pytest.raises(ValueError, match="no usable long HBR channel"):
+    with pytest.raises(StageError, match="no usable long HBR channel"):
         _long_by_label(raw, "hbr")
 
 
