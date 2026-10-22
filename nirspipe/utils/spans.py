@@ -67,7 +67,9 @@ def frames_under(raw: mne.io.BaseRaw, spans) -> np.ndarray:
     sfreq = float(raw.info["sfreq"])
     under = np.zeros(raw.n_times, dtype=bool)
     for start, stop, *_ in spans:
-        under[max(int(np.round(start * sfreq)), 0):int(np.round(stop * sfreq))] = True
+        # both edges held at 0: a span that ended before the data starts would otherwise
+        # hand the slice a negative stop, which counts from the end
+        under[max(int(np.round(start * sfreq)), 0):max(int(np.round(stop * sfreq)), 0)] = True
     return under
 
 

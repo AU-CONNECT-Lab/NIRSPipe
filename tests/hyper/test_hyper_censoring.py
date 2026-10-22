@@ -48,6 +48,16 @@ def _union(dyad):
         frames_under(dyad["sub-02"], bad_spans(dyad["sub-02"]))
 
 
+def test_a_span_ending_before_the_data_marks_no_frame():
+    """A real partner's span moved onto a later cut lands at negative times. It covers none
+    of the cut; a negative slice stop once marked all of it but the span's own length."""
+    raw = _dyad()["sub-01"]
+    assert not frames_under(raw, [(-40.0, -30.0)]).any()
+    straddling = frames_under(raw, [(-5.0, 2.0)])
+    assert straddling.sum() == round(2.0 * SFREQ)
+    assert straddling[:round(2.0 * SFREQ)].all()
+
+
 # ---- without spans ----
 
 def test_without_a_span_nothing_is_excluded_and_every_average_is_unchanged():
