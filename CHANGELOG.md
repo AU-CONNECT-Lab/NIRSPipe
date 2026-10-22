@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - A rerun no longer refuses an output directory named through a Windows junction when an earlier run named its real path
 - The optode flat map and the head maps draw the run's placed optode positions, so a file recorded in another frame lands on the head as in the 3-D views
 - The subject index's Channel rejections columns name each run by task plus whichever of session, acq and run tell the runs apart
+- The re-paired null's `percentile` counted a stand-in lacking a pairing as a draw the real value lost to; groupnull's per-cell coherence p inherited it
 
 ## [0.73.0] - 2026-10-21
 

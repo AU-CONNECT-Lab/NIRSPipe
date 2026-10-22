@@ -88,6 +88,18 @@ def test_a_pair_blank_in_every_iteration_is_not_ranked_either():
     assert np.isnan(table["percentile"].iloc[0])
 
 
+def test_a_stand_in_lacking_the_pair_is_left_out_of_the_rank():
+    """Six stand-ins, two without the pair: the real value is above the other four, so it
+    beat every draw there is, the four that n_iter counts. Counting the two blanks as lost
+    put it at 66.7."""
+    values = (0.10, float("nan"), 0.20, 0.25, float("nan"), 0.30)
+    null = NullDraws(draws=[_draw(v) for v in values], cond_draws=[], keys=KEYS, levels={})
+    table, _ = null.summarise(real=_draw(0.5))
+
+    assert table["n_iter"].iloc[0] == 4
+    assert table["percentile"].iloc[0] == pytest.approx(100.0)
+
+
 def test_no_real_table_leaves_the_percentile_column_off_rather_than_empty():
     null = NullDraws(draws=[_draw(0.2)], cond_draws=[], keys=KEYS, levels={})
     table, _ = null.summarise()

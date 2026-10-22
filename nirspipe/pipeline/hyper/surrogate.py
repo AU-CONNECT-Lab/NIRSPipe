@@ -501,7 +501,7 @@ def _average_iterations(frames: "list[pd.DataFrame]", keys: "list[str]",
     ``null_sd``, ``null_p95`` and ``n_iter`` describe the spread it came out of.
 
     ``real`` is the true-dyad table, matched on ``keys``, and adds ``percentile``: the share
-    of a cell's draws its real value beat. A cell the real table has no row for, or whose
+    of a cell's finite draws its real value beat. A cell the real table has no row for, or whose
     real value is NaN, gets NaN rather than a rank against nothing.
     """
     stacked = pd.concat(frames, ignore_index=True)
@@ -566,9 +566,9 @@ def _null_percentile(out: pd.DataFrame, keys: "list[str]", draws: dict,
     for key in _row_keys(out, keys):
         real_value = truth.get(key, float("nan"))
         draw = draws.get(key)
-        # a NaN draw compares False, so a pair blank in every iteration would rank 0th:
-        # "the real value beat none of them", which is a claim about draws that do not exist
-        usable = draw is not None and np.isfinite(draw).any()
-        values.append(float((draw < real_value).mean() * 100)
-                      if usable and np.isfinite(real_value) else float("nan"))
+        # ranked among the finite draws, the ones n_iter counts: a NaN draw compares False
+        # and would count as one the real value lost to, when that stand-in lacked the pair
+        finite = draw[np.isfinite(draw)] if draw is not None else np.array([])
+        values.append(float((finite < real_value).mean() * 100)
+                      if finite.size and np.isfinite(real_value) else float("nan"))
     return values

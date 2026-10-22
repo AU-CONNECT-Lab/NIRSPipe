@@ -16,10 +16,11 @@ signals harder to control.
 
 import mne
 import numpy as np
+import pandas as pd
 import pytest
 
 from nirspipe.pipeline.hyper.isc import (
-    _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
+    _add_isc_null_columns, _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
 )
 from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
 from tests._synth import synth_raw
@@ -150,6 +151,14 @@ def test_a_rejected_channel_is_blank_in_the_table_and_is_not_ranked(dyad):
     assert blanked["percentile"].isna().all()
     # only the rejecting member's side goes blank
     assert frame[frame["label2"] == rejected]["r"].notna().any()
+
+
+def test_a_missing_draw_is_left_out_of_the_phase_null_rank():
+    """|r| 0.5 against |draws| 0.1, 0.2, 0.6 and one blank: two of three beaten."""
+    frame = pd.DataFrame({"label": ["S1_D1"], "label2": ["S1_D1"]})
+    draws = np.array([0.1, np.nan, -0.2, 0.6]).reshape(4, 1, 1)
+    _add_isc_null_columns(frame, np.array([[-0.5]]), ["S1_D1"], draws)
+    assert frame["percentile"].iloc[0] == pytest.approx(200 / 3)
 
 
 def test_the_matrix_entry_point_agrees_with_the_table(dyad):

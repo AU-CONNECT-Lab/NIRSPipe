@@ -442,13 +442,15 @@ def _add_isc_null_columns(
     absolute = np.abs(draws)
     # a blanked channel makes a cell all-NaN, which every nan-aware reduction warns about and
     # then handles correctly; the blank mask below is what actually decides those cells
-    with warnings.catch_warnings(), np.errstate(invalid="ignore"):
+    with warnings.catch_warnings(), np.errstate(invalid="ignore", divide="ignore"):
         warnings.simplefilter("ignore", RuntimeWarning)
         null_abs_mean = np.nanmean(absolute, axis=0)
         # an estimate from a sample of draws, as the WTC and group nulls take it
         null_abs_sd   = np.nanstd(absolute, axis=0, ddof=1)
         null_abs_p95  = np.nanpercentile(absolute, 95, axis=0)
-        beaten        = (absolute < np.abs(isc_mat)[None, :, :]).mean(axis=0) * 100
+        # over the finite draws only, as the re-paired null ranks
+        beaten        = ((absolute < np.abs(isc_mat)[None, :, :]).sum(axis=0)
+                         / np.isfinite(absolute).sum(axis=0) * 100)
     # a cell whose draws are all NaN was never ranked against anything, and a count of zero
     # there would read as a real value that lost to every surrogate
     blank = ~np.isfinite(absolute).any(axis=0) | ~np.isfinite(isc_mat)

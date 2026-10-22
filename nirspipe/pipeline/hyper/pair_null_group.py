@@ -482,8 +482,9 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str,
         frame = frame.dropna(subset=["percentile"]).copy()
         if frame.empty:
             continue
-        # the real value counted into its own null, as everywhere else here
-        beaten = frame["percentile"] / 100 * frame["n_iter"]
+        # the real value counted into its own null, as everywhere else here; rounded, as the
+        # percentile is a count over n_iter written as a share
+        beaten = (frame["percentile"] / 100 * frame["n_iter"]).round()
         frame["p"] = _exact_p(beaten, frame["n_iter"])
         parts.append(_correct(frame, ["condition"], method).assign(level=level))
     if not parts:

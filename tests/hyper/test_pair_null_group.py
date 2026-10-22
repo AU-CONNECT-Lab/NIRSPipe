@@ -435,6 +435,13 @@ def test_the_percentile_becomes_an_exact_p(tmp_path):
     assert out.p.max() == pytest.approx(1.0)
 
 
+def test_a_percentile_over_three_draws_is_read_back_as_a_count(tmp_path):
+    """Two of three beaten is 66.67 on disk and rank 2 of 4 back, p 0.5 exactly."""
+    _write_cells(tmp_path, [[200 / 3] * 4] * 3, n_iter=3)
+    out = by_cell(tmp_path, "main", "hbo", "repaired")
+    assert set(out.p) == {0.5}
+
+
 def test_nothing_clears_the_correction_when_the_cells_are_middling(tmp_path):
     _write_cells(tmp_path, [[50, 55, 45, 50]] * 3)
     out = by_cell(tmp_path, "main", "hbo", "repaired", method="fdr_bh")
