@@ -24,10 +24,9 @@ from matplotlib.patches import Patch
 from nirspipe.qc.common.figure_io import fig_png_b64
 from nirspipe.utils.logging import get_logger
 
-from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK, to_head
-from nirspipe.qc.figures.common._surface_overlay import (
-    activation_rgba, smoothing_matrix, vertex_normals,
-)
+from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
+from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
+from nirspipe.qc.figures.common._surface_overlay import activation_rgba
 from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL
 from nirspipe.utils.spans import span_kind
@@ -185,66 +184,17 @@ def _add_shared_colorbar(fig, clim: dict) -> None:
     cb.outline.set_linewidth(0.5)
 
 
-def _mne_lighting(plotter) -> None:
-    """MNE's three camera lights in place of the headlight: below, upper left, upper right."""
-    lights = list(plotter.renderer.GetLights())
-    lights[0].SetSwitch(False)
-    placed = ((0, -45), (-60, 30), (60, 30))
-    for i, light in enumerate(lights[1:]):
-        az, el = placed[i] if i < len(placed) else (0.0, 0.0)
-        theta, phi = np.deg2rad(az), np.deg2rad(90.0 - el)
-        light.SetPosition(np.sin(theta) * np.sin(phi), np.cos(phi), np.cos(theta) * np.sin(phi))
-        light.SetIntensity(0.7 if i < len(placed) else 0.0)
-        light.SetSwitch(i < len(placed))
-        light.SetColor(1.0, 1.0, 1.0)
-
-
 def _render_activation(stc, clim: dict, subjects_dir, size: tuple[int, int],
                        view_configs: list[dict]) -> list[np.ndarray]:
     """Draw ``stc`` on the fsaverage pial surface as ``stc.plot`` does, without its Qt window.
 
     Same defaults as ``stc.plot``: transparent below fmin, 10 smoothing steps, grey binary
-    curvature. Renders in an off-screen pyvista plotter, one RGB image per ``view_configs``.
+    curvature. One RGB image per ``view_configs``.
     """
-    import os
-
-    import pyvista as pv
-    from nibabel.freesurfer import read_morph_data
-
     fmin, fmid, fmax = clim["pos_lims"]
-    surf_dir = os.path.join(subjects_dir, "fsaverage", "surf")
-
-    plotter = pv.Plotter(off_screen=True, window_size=list(size))
-    try:
-        plotter.set_background("white")
-        for hemi, vertices, data in (("lh", stc.vertices[0], stc.lh_data[:, 0]),
-                                     ("rh", stc.vertices[1], stc.rh_data[:, 0])):
-            coords, faces = mne.read_surface(os.path.join(surf_dir, f"{hemi}.pial"))
-            curv = read_morph_data(os.path.join(surf_dir, f"{hemi}.curv"))
-            smooth = smoothing_matrix(faces, len(coords), vertices, steps=10)
-
-            mesh = pv.PolyData(coords, np.hstack([np.full((len(faces), 1), 3), faces]).ravel())
-            mesh.point_data["Normals"] = vertex_normals(coords, faces)
-            mesh.GetPointData().SetActiveNormals("Normals")
-            mesh.point_data["Data"] = activation_rgba(curv, smooth @ data, fmin, fmid, fmax)
-            actor = plotter.add_mesh(mesh, scalars="Data", rgba=True, reset_camera=False)
-            actor.prop.interpolation = "phong"
-
-        _mne_lighting(plotter)
-        focal = np.asarray(plotter.center, float)
-        images = []
-        for cfg in view_configs:
-            # MNE's convention: elevation is the polar angle from +z; camera 480 mm from origin
-            az, el = np.deg2rad(cfg["azimuth"]), np.deg2rad(cfg["elevation"])
-            position = 480 * np.array([np.sin(el) * np.cos(az), np.sin(el) * np.sin(az),
-                                       np.cos(el)])
-            up = (0, 0, 1) if 5 <= abs(cfg["elevation"]) <= 175 else (0, 1, 0)
-            plotter.camera_position = [position, focal, up]
-            plotter.render()
-            images.append(np.asarray(plotter.screenshot(return_img=True))[:, :, :3])
-        return images
-    finally:
-        plotter.close()
+    return render_cortex(
+        stc, lambda curv, smoothed: activation_rgba(curv, smoothed[:, 0], fmin, fmid, fmax),
+        subjects_dir, size, view_configs)
 
 
 def _save_glm_brain(
@@ -255,12 +205,6 @@ def _save_glm_brain(
     size: tuple[int, int] = (800, 700),
     title: str = "",
 ) -> str:
-    from mne import EvokedArray, read_source_spaces
-    from mne.source_estimate import stc_near_sensors
-    from mne._fiff.constants import FIFF
-    from mne.utils import get_subjects_dir
-    import os
-
     view_configs = [
         {'azimuth': 180, 'elevation': 90},  # Lateral
         {'azimuth': 0,   'elevation': 0},   # Dorsal
@@ -288,24 +232,7 @@ def _save_glm_brain(
     # the projection steps of plot_glm_surface_projection; the render is _render_activation
     if ch_col is not None:
         results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
-    ea = EvokedArray(results_df[coef_col].values[:, np.newaxis], raw_hbo.info.copy())
-    # trans="fsaverage" makes stc_near_sensors read loc as head coords, so move the
-    # optodes into that frame rather than just relabelling them
-    for idx in range(len(ea.ch_names)):
-        loc = ea.info["chs"][idx]["loc"]
-        loc[:9] = to_head(loc[:9].reshape(3, 3), raw_hbo).reshape(9)
-        ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
-
-    subjects_dir = get_subjects_dir(raise_error=True)
-    src_path = os.path.join(subjects_dir, "fsaverage", "bem", "fsaverage-ico-5-src.fif")
-    src = read_source_spaces(src_path)
-
-    picks = np.arange(len(ea.ch_names))
-    stc = stc_near_sensors(
-        evoked=ea, picks=picks, subject="fsaverage", trans="fsaverage",
-        distance=0.03, mode="weighted", surface="pial",
-        subjects_dir=subjects_dir, src=src, project=True, verbose=False,
-    )
+    stc, subjects_dir = project_to_cortex(raw_hbo, results_df[coef_col].values[:, np.newaxis])
     with RENDER_LOCK:
         view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
 
