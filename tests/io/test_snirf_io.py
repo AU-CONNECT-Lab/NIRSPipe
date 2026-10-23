@@ -5,9 +5,17 @@ the writer puts the stage in the desc- entity and read_snirf reads the same stri
 back. That handoff is the one place the whole provenance chain touches disk.
 """
 
+import logging
+
+import h5py
+import mne
+import numpy as np
 import pytest
 
-from nirspipe.io.snirf import read_snirf, write_snirf
+from nirspipe.io.auxiliary import read_aux_snirf
+from nirspipe.io.bids import write_bids_from_snirf
+from nirspipe.io.snirf import read_raw_snirf, read_snirf, write_snirf
+from nirspipe.io.tables import read_table
 from nirspipe.utils.lineage import lineage_of, path_from, stage_of
 
 from tests._synth import synth_raw
@@ -132,3 +140,87 @@ def test_an_unreadable_sidecar_does_not_break_the_read(raw, tmp_path):
     path.with_suffix(".json").write_text("{not json")
 
     assert read_snirf(path).info["bads"] == []
+
+
+# ---- a file whose clock does not start at 0 ----
+
+def _on_its_own_clock(raw, path, t0, unit="s"):
+    """The recording with its clock starting at t0, events a and b at 10 s and 55 s of its data, and one aux channel."""
+    write_snirf(raw, path)
+    k = 1000.0 if unit == "ms" else 1.0
+    with h5py.File(path, "r+") as f:
+        nirs = f["nirs"]
+        times = (nirs["data1/time"][...] + t0) * k
+        nirs["data1/time"][...] = times
+        for key in [key for key in nirs if key.startswith("stim")]:
+            del nirs[key]
+        for i, (name, onset) in enumerate((("a", 10.0), ("b", 55.0)), start=1):
+            stim = nirs.create_group(f"stim{i}")
+            stim.create_dataset("name", data=name.encode())
+            stim.create_dataset("data", data=np.array([[(onset + t0) * k, 2.0 * k, 1.0]]))
+        aux = nirs.create_group("aux1")
+        aux.create_dataset("name", data=b"ACCEL_X")
+        aux.create_dataset("dataTimeSeries", data=np.zeros(len(times)))
+        aux.create_dataset("time", data=times)
+        tags = nirs["metaDataTags"]
+        if "TimeUnit" in tags:
+            del tags["TimeUnit"]
+        tags.create_dataset("TimeUnit", data=unit.encode())
+    return path
+
+
+def _events(raw):
+    a = raw.annotations
+    return [(round(float(o), 6), round(float(d), 6), str(n)) for o, d, n in zip(a.onset, a.duration, a.description)]
+
+
+def test_events_stay_on_the_data_when_the_clock_starts_late(raw, tmp_path):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=70.0)
+
+    assert _events(read_snirf(path)) == [(10.0, 2.0, "a"), (55.0, 2.0, "b")]
+
+
+def test_mne_alone_places_them_past_the_end_and_drops_them(raw, tmp_path):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=70.0)
+
+    assert _events(mne.io.read_raw_snirf(path, verbose="error")) == []
+
+
+def test_the_move_is_reported_with_the_clock(raw, tmp_path, caplog):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=70.0)
+    with caplog.at_level(logging.WARNING):
+        read_raw_snirf(path, verbose="error")
+    assert "starts at 70 s" in caplog.text
+
+
+def test_a_file_in_milliseconds_has_its_events_in_seconds(raw, tmp_path):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=0.0, unit="ms")
+
+    back = read_raw_snirf(path, verbose="error")
+    assert back.info["sfreq"] == pytest.approx(raw.info["sfreq"])
+    assert _events(back) == [(10.0, 2.0, "a"), (55.0, 2.0, "b")]
+
+
+def test_a_file_starting_at_zero_reads_as_mne_reads_it(raw, tmp_path, caplog):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=0.0)
+    with caplog.at_level(logging.WARNING):
+        back = read_raw_snirf(path, verbose="error")
+    assert _events(back) == [(10.0, 2.0, "a"), (55.0, 2.0, "b")]
+    assert _events(back) == _events(mne.io.read_raw_snirf(path, verbose="error"))
+    assert "clock" not in caplog.text
+
+
+def test_aux_stamps_sit_on_the_data_axis(raw, tmp_path):
+    path = _on_its_own_clock(raw, tmp_path / "sub-01_task-tapping_nirs.snirf", t0=70.0)
+
+    times, _, _ = read_aux_snirf(path)
+    assert np.allclose(times["ACCEL_X"], raw.times)
+
+
+def test_conversion_to_bids_writes_the_events_on_the_data(raw, tmp_path):
+    path = _on_its_own_clock(raw, tmp_path / "recording.snirf", t0=70.0)
+    write_bids_from_snirf(path, tmp_path / "bids", subject="01", task="tapping")
+
+    events = read_table(next((tmp_path / "bids").rglob("*_events.tsv")))
+    assert events["onset"].tolist() == [10.0, 55.0]
+    assert events["trial_type"].tolist() == ["a", "b"]

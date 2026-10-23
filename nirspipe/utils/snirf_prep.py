@@ -56,8 +56,8 @@ def bids_stem(snirf_path: Path) -> str:
 
 
 def read_raw_snirf(snirf_path: Path):
-    import mne
-    return mne.io.read_raw_snirf(str(snirf_path), preload=True, verbose=False)
+    from nirspipe.io.snirf import read_raw_snirf as read
+    return read(snirf_path, preload=True, verbose=False)
 
 
 def annotations_to_df(raw) -> pd.DataFrame:

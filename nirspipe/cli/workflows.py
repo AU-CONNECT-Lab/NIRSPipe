@@ -25,7 +25,7 @@ from nirspipe.io.naming import report_name, roi_map_name
 from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
 )
-from nirspipe.io.snirf import read_snirf
+from nirspipe.io.snirf import read_raw_snirf, read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
 from nirspipe.pipeline.motion import motion_settings
@@ -657,7 +657,7 @@ def _refuse_bad_span_rows(spec: str | None, layout: Any,
             if not _bad_channel_row_matches(row, ent["subject"], ent):
                 continue
             if f.path not in headers:
-                raw = mne.io.read_raw_snirf(f.path, preload=False, verbose="error")
+                raw = read_raw_snirf(f.path, preload=False, verbose="error")
                 try:
                     origin = marker_onset(raw, marker) if marker else 0.0
                 except ValueError:

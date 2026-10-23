@@ -32,6 +32,7 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.utils.logging import get_logger
+from nirspipe.io.snirf import text_field, time_frame
 from nirspipe.io.tables import write_tsv
 
 logger = get_logger("io.auxiliary")
@@ -50,16 +51,6 @@ _FLOAT_FORMAT = "%.6g"
 
 
 # ---- reading ----
-
-def _decode(value) -> str:
-    """SNIRF metadata strings arrive as bytes, 0-d arrays or 1-element arrays.
-
-    NIRx writes an aux channel's `name` as an HDF5 scalar.
-    """
-    array = np.asarray(value)
-    item = array.item() if array.ndim == 0 else array.ravel()[0]
-    return item.decode() if isinstance(item, bytes) else str(item)
-
 
 def read_aux_snirf(path: Path | str) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, str]]:
     """Read every aux channel of a SNIRF file.
@@ -80,23 +71,26 @@ def read_aux_snirf(path: Path | str) -> tuple[dict[str, np.ndarray], dict[str, n
         if "nirs" not in handle:
             return times, values, units
         nirs = handle["nirs"]
-        for key in sorted(k for k in nirs if k.startswith("aux")):
+        keys = sorted(k for k in nirs if k.startswith("aux"))
+        # onto the data's axis, which mne starts at 0 whatever the file's clock
+        t0, scale = time_frame(handle) if keys else (0.0, 1.0)
+        for key in keys:
             group = nirs[key]
             if "dataTimeSeries" not in group or "time" not in group:
                 logger.warning("aux group %s in %s has no data or no time, skipping", key, path)
                 continue
-            name = _decode(group["name"][()]) if "name" in group else key
+            name = text_field(group["name"][()]) if "name" in group else key
             data = np.squeeze(np.asarray(group["dataTimeSeries"][()], dtype=float))
             if data.ndim != 1:
                 logger.warning("aux channel %s is %s, not a single series, skipping", name, data.shape)
                 continue
-            stamps = np.asarray(group["time"][()], dtype=float).ravel()
+            stamps = np.asarray(group["time"][()], dtype=float).ravel() * scale - t0
             if len(stamps) != len(data):
                 logger.warning("aux channel %s has %d timestamps for %d samples, skipping",
                                name, len(stamps), len(data))
                 continue
             times[name], values[name] = stamps, data
-            units[name] = _decode(group["dataUnit"][()]) if "dataUnit" in group else "n/a"
+            units[name] = text_field(group["dataUnit"][()]) if "dataUnit" in group else "n/a"
 
     return times, values, units
 

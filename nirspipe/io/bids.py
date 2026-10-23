@@ -124,10 +124,11 @@ def write_bids_from_snirf(
     the two preauricular points, "mri" when they already sit on a template brain: MNE reads
     "mri" as fsaverage, not as the subject's own scan.
     """
-    import mne
     import mne_bids
 
-    raw = mne.io.read_raw_snirf(str(input_file), optode_frame=optode_frame, preload=False)
+    from nirspipe.io.snirf import read_raw_snirf
+
+    raw = read_raw_snirf(input_file, optode_frame=optode_frame, preload=False)
     bids_path = mne_bids.BIDSPath(
         subject=subject,
         task=task,

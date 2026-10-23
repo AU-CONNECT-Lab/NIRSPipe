@@ -12,6 +12,12 @@ import numpy as np
 
 from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.utils.lineage import stamp
+from nirspipe.utils.logging import get_logger
+
+logger = get_logger("io.snirf")
+
+# the spec's other time unit; mne scales the time vector by it but not the stims
+_TO_SECONDS = {"ms": 1e-3}
 
 
 def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
@@ -19,9 +25,9 @@ def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
 
     A cropped Raw keeps its annotations on the original recording's axis and holds the
     offset in first_time, so a marker at second 0 of a segment taken from 543 s in still
-    reads 543. SNIRF has nowhere to put that offset: its axis always starts at zero, and
-    the marker would be written at 543 s of a 900 s segment, or past the end of a segment
-    cropped from later still, where the reader silently drops it.
+    reads 543. mne-nirs writes the time axis from zero, so the marker would be written at
+    543 s of a 900 s segment, or past the end of a segment cropped from later still, where
+    the reader silently drops it.
     """
     a = raw.annotations
     out = mne.io.RawArray(raw.get_data(), raw.info.copy(), verbose="error")
@@ -111,6 +117,61 @@ _FILTER_KEYS = ("high_pass", "low_pass", "filter_method", "filter_order")
 _DRIFT_KEYS = ("drift_model", "drift_high_pass", "drift_order")
 
 
+def text_field(value) -> str:
+    """SNIRF metadata strings arrive as bytes, 0-d arrays or 1-element arrays.
+
+    NIRx writes an aux channel's `name` as an HDF5 scalar.
+    """
+    array = np.asarray(value)
+    item = array.item() if array.ndim == 0 else array.ravel()[0]
+    return item.decode() if isinstance(item, bytes) else str(item)
+
+
+def time_frame(handle) -> tuple[float, float]:
+    """The data's first time stamp in seconds, and the factor taking the file's time unit to seconds."""
+    tags = handle["nirs/metaDataTags"]
+    unit = text_field(tags["TimeUnit"][()]).strip() if "TimeUnit" in tags else "s"
+    scale = _TO_SECONDS.get(unit, 1.0)
+    return float(handle["nirs/data1/time"][0]) * scale, scale
+
+
+def _stims_on_data_axis(handle, t0: float, scale: float) -> mne.Annotations:
+    # the stim groups as mne reads them, in seconds from the data's first sample
+    onset, duration, description = [], [], []
+    for key in handle["nirs"]:
+        if "stim" not in key:
+            continue
+        data = np.atleast_2d(np.asarray(handle[f"nirs/{key}/data"][()], dtype=float))
+        if data.shape[1] < 3:
+            continue
+        onset.extend(data[:, 0] * scale - t0)
+        duration.extend(data[:, 1] * scale)
+        description.extend([text_field(handle[f"nirs/{key}/name"][()])] * len(data))
+    return mne.Annotations(onset, duration, description)
+
+
+def read_raw_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
+    """mne's SNIRF reader, with the events kept on the data when the file's clock does not start at 0.
+
+    The spec writes stim onsets on the clock of the `time` vector. mne starts the data at 0
+    but reads the stims as written, so each lands t0 late and any that then falls past the
+    end is dropped; a file in milliseconds has its stims read as seconds.
+    """
+    import h5py
+
+    raw = mne.io.read_raw_snirf(str(path), **kwargs)
+    with h5py.File(str(path), "r") as handle:
+        t0, scale = time_frame(handle)
+        if t0 == 0 and scale == 1:
+            return raw
+        stims = _stims_on_data_axis(handle, t0, scale)
+    raw.set_annotations(stims, emit_warning=False)
+    if t0:
+        logger.warning("%s: the file's clock starts at %g s, so its events were moved back by "
+                       "as much to sit on the data, which starts at 0", Path(path).name, t0)
+    return raw
+
+
 def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     """Read a SNIRF and restore its pipeline stage from the desc- entity.
 
@@ -122,7 +183,7 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     """
     kwargs.setdefault("preload", True)
     path = Path(path)
-    raw = mne.io.read_raw_snirf(str(path), **kwargs)
+    raw = read_raw_snirf(path, **kwargs)
     sidecar = _sidecar(path)
     _restore_bads(raw, sidecar)
     params = sidecar.get("parameters") or {}
