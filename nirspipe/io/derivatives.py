@@ -393,8 +393,8 @@ def find_preproc_snirf(
 
 
 # Windows refuses to rename over a file anything else has open, so a reader that happens to be
-# mid-read costs a retry rather than the run.
-_REPLACE_TRIES = 5
+# mid-read costs a retry rather than the run; under load a holder can keep it past a quarter second
+_REPLACE_BUDGET_S = 5.0
 _REPLACE_WAIT_S = 0.05
 
 # held for one read and one write of a small file, so a minute means a stuck holder
@@ -442,20 +442,20 @@ def read_dataset_description(root: Path) -> dict[str, Any]:
     one has no links and every Sources URI of the run would then be refused.
     """
     path = Path(root) / "dataset_description.json"
-    for attempt in range(_REPLACE_TRIES):
+    deadline = time.monotonic() + _REPLACE_BUDGET_S
+    while True:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return {}
         except PermissionError:
-            if attempt == _REPLACE_TRIES - 1:
+            if time.monotonic() > deadline:
                 raise
             time.sleep(_REPLACE_WAIT_S)
             continue
         except json.JSONDecodeError:
             return {}
         return data if isinstance(data, dict) else {}
-    return {}
 
 
 # What a reader should not hold against the tree: the reports and their figures are for
@@ -693,12 +693,13 @@ def write_dataset_description(
         tmp = path.with_name(f".{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
         try:
             tmp.write_text(text)
-            for attempt in range(_REPLACE_TRIES):
+            deadline = time.monotonic() + _REPLACE_BUDGET_S
+            while True:
                 try:
                     os.replace(tmp, path)
                     return
                 except PermissionError:
-                    if attempt == _REPLACE_TRIES - 1:
+                    if time.monotonic() > deadline:
                         raise
                     time.sleep(_REPLACE_WAIT_S)
         finally:

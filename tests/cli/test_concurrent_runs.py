@@ -183,3 +183,37 @@ def test_tools_writing_links_at_once_keep_every_link(tmp_path):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ---- How long a sharing violation is waited out ----
+
+def _held(times: int, real):
+    """A stand-in that raises Windows' sharing violation `times` times, then does the real thing."""
+    calls = {"n": 0}
+
+    def call(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] <= times:
+            raise PermissionError(13, "Permission denied")
+        return real(*args, **kwargs)
+    return call
+
+
+def test_a_read_waits_out_a_holder_longer_than_five_retries(tmp_path, monkeypatch):
+    """Eight refusals in a row, as a loaded machine gave: a count of five gave up at the fifth."""
+    from nirspipe.io import derivatives
+
+    write_dataset_description(tmp_path, source=tmp_path / "raw", link="raw")
+    monkeypatch.setattr(derivatives.time, "sleep", lambda s: None)
+    monkeypatch.setattr(Path, "read_text", _held(8, Path.read_text))
+    assert "raw" in derivatives.read_dataset_description(tmp_path)["DatasetLinks"]
+
+
+def test_a_replace_waits_out_a_holder_longer_than_five_retries(tmp_path, monkeypatch):
+    from nirspipe.io import derivatives
+
+    write_dataset_description(tmp_path)
+    monkeypatch.setattr(derivatives.time, "sleep", lambda s: None)
+    monkeypatch.setattr(derivatives.os, "replace", _held(8, derivatives.os.replace))
+    write_dataset_description(tmp_path, source=tmp_path / "raw", link="raw")
+    assert "raw" in json.loads((tmp_path / "dataset_description.json").read_text())["DatasetLinks"]
