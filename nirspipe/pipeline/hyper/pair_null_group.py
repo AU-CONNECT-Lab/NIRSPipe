@@ -318,12 +318,10 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
       real kept a b c at .40 .30 .20 (mean .30), a draw kept a b at .35 .25
         -> over a and b the draw is .05 under the real; the draw counts as .30 - .05 = .25
 
-    A stand-in rejects other channels than the real partner, and a channel more people keep
-    is a better one, so a draw averaged over its own channels sits on another set than the
-    real value. Each draw is compared on the pairings it shares with the real one and the
-    difference is taken off the real mean, so the pool ranks, averages and spreads as the
-    draws would on the real pairing's channels. With nothing rejected it is the draws' own
-    means. A draw sharing no pairing is left out.
+    Each draw is compared on the pairings it shares with the real one and the difference is
+    taken off the real mean, so the pool ranks, averages and spreads as the draws would on
+    the real pairing's channels. With nothing rejected it is the draws' own means. A draw
+    sharing no pairing is left out.
     """
     real = real.assign(cell=_cell(real))
     draws = draws.assign(cell=_cell(draws))

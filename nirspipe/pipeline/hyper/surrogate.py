@@ -149,8 +149,7 @@ class NullDraws:
         is only meaningful on draws that were themselves crossed.
 
         ``real_channels``, the real channel table per condition, puts each condition draw on
-        the real pairing's channels (:func:`_region_on_real_channels`): a re-paired draw
-        rejects other channels than the real partner.
+        the real pairing's channels (:func:`_region_on_real_channels`).
         """
         keys = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
         group = roi_mean_of_channels if crossed else roi_mean_of_homologous

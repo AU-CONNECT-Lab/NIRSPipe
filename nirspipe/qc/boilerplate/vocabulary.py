@@ -412,6 +412,10 @@ def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
                   if pool_size is not None and n < int(pool_size)
                   else f"All {n} eligible stand-ins were used."),
         "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
+        # written only when a region map was given
+        "regions": (" A stand-in's region value was compared with the real dyad's over the "
+                    "channel pairs both kept, and that difference subtracted from the real "
+                    "region value." if "roi_min_channels" in params else ""),
         "device": _device_phrase(params),
     }
 

@@ -717,6 +717,12 @@ def test_the_null_sentence_names_the_pool_the_pairs_the_count_and_the_pad():
     assert slots["measures"] == "coherence was"
 
 
+def test_the_region_sentence_appears_only_with_a_region_map():
+    assert template_slots("hyper_pairnull", _PAIRNULL)["regions"] == ""
+    with_map = template_slots("hyper_pairnull", {**_PAIRNULL, "roi_min_channels": 1})["regions"]
+    assert "over the channel pairs both kept" in with_map
+
+
 def test_a_capped_any_pool_crossed_null_with_the_correlation_says_so():
     slots = template_slots("hyper_pairnull", {
         **_PAIRNULL, "n_iter": 10, "pair_candidates": 44, "pair_pool": "any", "cross": True,

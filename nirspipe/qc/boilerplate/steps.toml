@@ -155,12 +155,12 @@ plain = "A phase-randomised null was drawn {citations}: each channel of the seco
 citations = ["TODO_PhaseNull"]
 
 [hyper_pairnull]
-plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins.{device}"
+plain = "Coherence expected by chance was estimated with a re-paired null {citations}: the first-listed member was kept and their partner replaced, one at a time, by {pool} recorded on the same task, and {measures} recomputed for each such pairing over {pairs}. {count} Each condition was cut from each recording at that recording's own onset of the condition, with up to {pad} s of recording on either side, so every pairing spanned the same condition. Each channel pair's null was summarised by the mean and the 95th percentile of its stand-ins.{regions}{device}"
 citations = ["TODO_RepairedNull"]
 
 # Written beside the cohort tables by nirspipe-hyper-groupnull, not into any report
 [hyper_groupnull]
-plain = "Cohort-level coupling was tested against the {null} null {citations}: {measure} was averaged over channel pairs within each occasion (one group on one task) and then over occasions, and compared with the null in two ways, a {tail} paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion{two_sided}.{correction}"
+plain = "Cohort-level coupling was tested against the {null} null {citations}: {measure} was averaged over channel pairs within each occasion (one group on one task) and then over occasions. Each draw was compared with the real value over the channel pairs both kept, and that difference was subtracted from the real occasion mean, so a draw stands on the real dyad's channels. The result was compared with the null in two ways, a {tail} paired t test of each occasion's value against the mean of its own draws, and a permutation test ranking the cohort mean among {n_resample} cohort means each built from one randomly chosen draw per occasion{two_sided}.{correction}"
 citations = ["TODO_GroupNull"]
 
 [hyper_roi]

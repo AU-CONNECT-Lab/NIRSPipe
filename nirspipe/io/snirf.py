@@ -153,9 +153,8 @@ def _stims_on_data_axis(handle, t0: float, scale: float) -> mne.Annotations:
 def read_raw_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     """mne's SNIRF reader, with the events kept on the data when the file's clock does not start at 0.
 
-    The spec writes stim onsets on the clock of the `time` vector. mne starts the data at 0
-    but reads the stims as written, so each lands t0 late and any that then falls past the
-    end is dropped; a file in milliseconds has its stims read as seconds.
+    mne starts the data at 0 but keeps the stims on the file's clock, in its unit, and drops
+    those that then fall past the end.
     """
     import h5py
 
