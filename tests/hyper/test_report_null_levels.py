@@ -149,6 +149,26 @@ def test_the_re_paired_level_thresholds_its_condition_and_nothing_else(dyad, n_f
     assert side["phase_level_source_by_condition"] == {"hbo": {"rest": "phase", "talk": "pair"}}
 
 
+def test_the_sidecar_names_each_level_file_and_the_run_that_drew_it(dyad, n_freqs, tmp_path):
+    from nirspipe import __version__
+
+    _phase_level(dyad, tmp_path, n_freqs)
+    _pair_level(dyad, tmp_path, n_freqs, condition="talk")
+    _build(dyad, tmp_path)
+    files = _sidecar(tmp_path, {"statistic": "wtc"})["phase_level_files"]["hbo"]
+    for kind, path in (("phase", _level_file(tmp_path, "phase")),
+                       ("pair", _level_file(tmp_path, "pair", condition="all"))):
+        stamp = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        assert files[kind] == {"file": path.name, "pipeline_version": __version__,
+                               "timestamp": stamp["timestamp"]}
+
+
+def test_no_level_used_names_no_level_file(dyad, n_freqs, tmp_path):
+    _phase_level(dyad, tmp_path, n_freqs, value=2.0, wtc_fmin=0.01)
+    _build(dyad, tmp_path)
+    assert "phase_level_files" not in _sidecar(tmp_path, {"statistic": "wtc"})
+
+
 def test_a_re_paired_level_for_another_span_is_not_used(dyad, n_freqs, tmp_path):
     path = save_cond_null_levels({"talk": {(*SUBS, label): np.full(n_freqs, 2.0)
                                            for label in LABELS}},

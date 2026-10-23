@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- A dyad table's sidecar names the null level files that gated its phase columns, with the version and time of the run that drew each
+
 ### Changed
 - The run report shows every condition's GLM activation figure, one under another, in place of a menu
 - The rest report draws mALFF of HbO on the cortex in four views, in place of the flat ALFF and fALFF map

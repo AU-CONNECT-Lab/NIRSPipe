@@ -19,7 +19,7 @@ from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, fisher_r_to_z
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, merged
 from nirspipe.exceptions import StageError
-from nirspipe.io.derivatives import group_output_path
+from nirspipe.io.derivatives import group_output_path, read_json
 from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper._helpers import _chroma_tuple
 from nirspipe.pipeline.hyper.roi import roi_mean_of_channels, roi_mean_of_homologous
@@ -438,6 +438,16 @@ def run_hyper_post(
             logger.warning("%s | %s not used: %s", scope, path.name, why)
         return why is None
 
+    # chromophore -> null kind -> the level file the phase cells were gated by, and its stamp
+    level_files: dict = {}
+
+    def _note_level(path: Path, ch_type: str, kind: str) -> None:
+        """Which level file gated the phase columns and which run of the null drew it, for the sidecar."""
+        side = read_json(path.with_suffix(".json"))
+        level_files.setdefault(ch_type, {})[kind] = {
+            "file": path.name, "pipeline_version": side.get("pipeline_version"),
+            "timestamp": side.get("timestamp")}
+
     def _level_of(by_label: dict, label):
         """A map's level, a same-channel pair matched across a crossed and an uncrossed key.
 
@@ -477,10 +487,12 @@ def run_hyper_post(
             return
         with guard(f"WTC null level ({ch_type})", errors, scope):
             levels = load_null_levels(npz_path)
-            for pair_key, labels in result.pairs.items():
-                for label, data in labels.items():
-                    _set_level(data, _level_of(levels.get(pair_key, {}), label), "null",
-                               len(result.freqs))
+            used = sum(_set_level(data, _level_of(levels.get(pair_key, {}), label), "null",
+                                  len(result.freqs))
+                       for pair_key, labels in result.pairs.items()
+                       for label, data in labels.items())
+            if used:
+                _note_level(npz_path, ch_type, "phase")
             logger.info("%s | phase arrows drawn against the phase-scrambled null (%s)",
                         scope, ch_type)
 
@@ -529,6 +541,7 @@ def run_hyper_post(
                               "pair", len(cond_wtc.freqs))
                    for pair_key, labels in cond_wtc.pairs.items() for ch, data in labels.items())
         if used:
+            _note_level(_level_path(ch_type, "pair"), ch_type, "pair")
             logger.info("%s | condition %s: phase arrows drawn against the re-paired null "
                         "(%s, %d channel pairs)", scope, label, ch_type, used)
 
@@ -773,6 +786,7 @@ def run_hyper_post(
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
     by_condition = dict(conditions=[w[0] for w in cond_windows],
                         phase_level_source=run_level,
+                        **({"phase_level_files": level_files} if level_files else {}),
                         **({"condition_windows_s": spans,
                             "phase_level_source_by_condition": cond_level}
                            if cond_windows else {}))
