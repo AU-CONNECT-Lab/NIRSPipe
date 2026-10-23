@@ -259,6 +259,69 @@ def test_the_roi_summary_survives_a_null_that_has_no_whole_run_draw(stub):
     assert by_cond is not None and set(by_cond["condition"]) == {"early", "late"}
 
 
+# ---- a region's draws on the real pairing's channels ----
+
+def _region_null(draw_cells, crossed=False):
+    """A re-paired null of one condition over region r = a b c, one frame per draw; None is a rejected channel."""
+    import numpy as np
+    import pandas as pd
+    from nirspipe.pipeline.hyper.surrogate import NullDraws
+
+    def frame(cells):
+        return pd.DataFrame([{"condition": "early", "sub1": TRUE[0], "sub2": TRUE[1], "label": c,
+                              **({"label2": c} if crossed else {}),
+                              "coherence": np.nan if v is None else v, "n_valid_frac": 1.0}
+                             for c, v in cells.items()])
+    return NullDraws(draws=[], cond_draws=[frame(c) for c in draw_cells],
+                     keys=["sub1", "sub2", "label"], levels={}), frame
+
+
+REGION = {"r": ["a", "b", "c"]}
+DRAW_CELLS = [{"a": 0.35, "b": 0.25, "c": None},
+              {"a": 0.30, "b": 0.30, "c": 0.30},
+              {"a": None, "b": None, "c": 0.10}]
+
+
+def _region_summary(min_channels=1, crossed=False, matched=True):
+    import pandas as pd
+
+    null, frame = _region_null(DRAW_CELLS, crossed=crossed)
+    real_channels = frame({"a": 0.40, "b": 0.30, "c": 0.20})
+    real_roi = pd.DataFrame([{"condition": "early", "sub1": TRUE[0], "sub2": TRUE[1], "label": "r",
+                              **({"label2": "r"} if crossed else {}), "coherence": 0.30}])
+    _, by_cond = null.summarise_roi(REGION, real_by_cond=real_roi, min_channels=min_channels,
+                                    crossed=crossed,
+                                    real_channels=real_channels if matched else None)
+    return by_cond.iloc[0]
+
+
+def test_a_region_draw_is_compared_on_the_channels_it_shares_with_the_real_pairing():
+    # real .30 over a b c; the draws come out .25 (a b), .30 (all) and .20 (c alone)
+    row = _region_summary()
+    assert row.null_mean == pytest.approx(0.25)
+    assert row.percentile == pytest.approx(200 / 3)
+    assert row.n_iter == 3
+
+
+def test_each_draw_over_its_own_channels_reads_otherwise():
+    """What the matching changes: the third draw's lone low channel no longer stands for the region."""
+    row = _region_summary(matched=False)
+    assert row.null_mean == pytest.approx(0.70 / 3)
+    assert row.percentile == pytest.approx(100 / 3)
+
+
+def test_the_region_minimum_applies_to_the_shared_channels():
+    row = _region_summary(min_channels=2)
+    assert row.n_iter == 2
+    assert row.null_mean == pytest.approx(0.275)
+
+
+def test_a_crossed_region_matrix_is_matched_the_same_way():
+    row = _region_summary(crossed=True)
+    assert row.null_mean == pytest.approx(0.25)
+    assert row.n_iter == 3
+
+
 # ---- the draws behind each metric ----
 
 def test_the_correlation_keeps_its_draws_too(tmp_path):

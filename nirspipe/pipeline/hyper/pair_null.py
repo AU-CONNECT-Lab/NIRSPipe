@@ -591,16 +591,17 @@ def run_pair_null(
                 bucket.append(part)
 
         if roi_map:
+            real_channels = _for_chroma(real_by_cond, ch_type)
             _, roi_cond = null.summarise_roi(
                 roi_map, real=None,
                 real_by_cond=_for_chroma(real_roi_by_cond, ch_type),
-                min_channels=roi_min_channels)
+                min_channels=roi_min_channels, real_channels=real_channels)
             cross_cond = None
             if roi_crossed:
                 _, cross_cond = null.summarise_roi(
                     roi_map, real=None,
                     real_by_cond=_for_chroma(real_cross_by_cond, ch_type),
-                    min_channels=roi_min_channels, crossed=True)
+                    min_channels=roi_min_channels, crossed=True, real_channels=real_channels)
             for part, bucket in ((roi_cond, roi_cond_frames),
                                  (cross_cond, cross_cond_frames)):
                 if part is not None:

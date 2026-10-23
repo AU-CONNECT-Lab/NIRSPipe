@@ -133,6 +133,7 @@ class NullDraws:
                       real_by_cond: "pd.DataFrame | None" = None,
                       min_channels: int = ROI_MIN_CHANNELS,
                       crossed: bool = False,
+                      real_channels: "pd.DataFrame | None" = None,
                       ) -> "tuple[pd.DataFrame, pd.DataFrame | None]":
         """The same two tables at ROI level, for :func:`roi_mean_of_homologous`.
 
@@ -146,16 +147,26 @@ class NullDraws:
         the within-region cross pairings, which a homologous null never draws. ``crossed``
         groups every pairing instead, :func:`roi_mean_of_channels`'s ROI x ROI matrix, and
         is only meaningful on draws that were themselves crossed.
+
+        ``real_channels``, the real channel table per condition, puts each condition draw on
+        the real pairing's channels (:func:`_region_on_real_channels`): a re-paired draw
+        rejects other channels than the real partner.
         """
         keys = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
         group = roi_mean_of_channels if crossed else roi_mean_of_homologous
         whole = [group(f, roi_map, min_channels=min_channels) for f in self.draws]
+        real_of = (dict(tuple(real_channels.groupby("condition", sort=False)))
+                   if real_channels is not None else None)
         cond = None
         if self.cond_draws:
             cond = []
             for frame in self.cond_draws:
                 for condition, part in frame.groupby("condition", sort=False):
                     grouped = group(part, roi_map, min_channels=min_channels)
+                    if real_of is not None:
+                        grouped = _region_on_real_channels(
+                            grouped, part, real_of.get(condition), roi_map, min_channels,
+                            crossed)
                     grouped.insert(0, "condition", condition)
                     cond.append(grouped)
         return (
@@ -163,6 +174,46 @@ class NullDraws:
             (_average_iterations(cond, ["condition"] + keys, real=real_by_cond)
              if cond else None),
         )
+
+
+def _region_on_real_channels(own: pd.DataFrame, draw: pd.DataFrame, real: "pd.DataFrame | None",
+                             roi_map: dict[str, list[str]], min_channels: int,
+                             crossed: bool) -> pd.DataFrame:
+    """A draw's region means moved onto the real pairing's channels, as groupnull's `matched_pools` moves a level's.
+
+    ::
+
+      region of a b c, real .40 .30 .20 (mean .30), the draw kept a b at .35 .25
+        -> .05 under the real over a and b, so the region's draw is .30 - .05 = .25
+
+    Draw and real are compared over the pairings both kept, the region's channel minimum
+    applied to those, and the difference is taken off the real region mean over the real
+    pairing's own channels. ``own`` is the draw grouped over its own channels; its rows and
+    columns are kept, its coherence replaced.
+    """
+    keys = ["sub1", "sub2", "label"] + (["label2"] if crossed else [])
+    out = own.copy()
+    out["coherence"] = np.nan
+    if real is None:
+        out["coherence_z"] = np.nan
+        return out
+    if not crossed:
+        draw, real = (f[f["label"] == f["label2"]].drop(columns=["label2"])
+                      if "label2" in f.columns else f for f in (draw, real))
+    real = real[keys + ["coherence", "n_valid_frac"]]
+    both = draw[keys + ["coherence", "n_valid_frac"]].merge(
+        real[keys + ["coherence"]].rename(columns={"coherence": "real"}), on=keys)
+    both = both[both["coherence"].notna() & both["real"].notna()]
+    if not both.empty:
+        def mean(frame):
+            return (roi_mean_of_channels(frame, roi_map, min_channels=min_channels)
+                    .set_index(keys)["coherence"])
+        shift = mean(both.assign(coherence=both["real"]).drop(columns=["real"])) \
+            - mean(both.drop(columns=["real"]))
+        matched = mean(real) - shift
+        out["coherence"] = matched.reindex(pd.MultiIndex.from_frame(out[keys])).to_numpy()
+    out["coherence_z"] = fisher_r_to_z(out["coherence"])
+    return out
 
 
 # Quantile of the surrogate coherence a cell has to clear before its phase arrow is drawn.
