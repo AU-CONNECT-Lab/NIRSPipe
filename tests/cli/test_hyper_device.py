@@ -28,6 +28,17 @@ def _card():
         pytest.skip("no CUDA card")
 
 
+def _comparable(params: dict) -> dict:
+    """The parameters both runs share: the device's own left out, and when each run drew its levels."""
+    out = {k: v for k, v in params.items() if k not in _DEVICE_KEYS}
+    if "phase_level_files" in out:
+        out["phase_level_files"] = {
+            chroma: {kind: {k: v for k, v in level.items() if k != "timestamp"}
+                     for kind, level in kinds.items()}
+            for chroma, kinds in out["phase_level_files"].items()}
+    return out
+
+
 def _same_tables(cpu: Path, gpu: Path) -> None:
     left, right = _outputs(cpu), _outputs(gpu)
     assert set(left) == set(right)
@@ -38,8 +49,7 @@ def _same_tables(cpu: Path, gpu: Path) -> None:
         elif name.endswith(".json"):
             a, b = (json.loads(f[name].read_text(encoding="utf-8")) for f in (left, right))
             pa, pb = a.get("parameters", {}), b.get("parameters", {})
-            assert {k: v for k, v in pa.items() if k not in _DEVICE_KEYS} == \
-                {k: v for k, v in pb.items() if k not in _DEVICE_KEYS}, name
+            assert _comparable(pa) == _comparable(pb), name
         elif name.endswith(".npz"):
             x, y = np.load(left[name]), np.load(right[name])
             assert sorted(x.files) == sorted(y.files)
