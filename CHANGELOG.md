@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - On a loaded Windows machine, runs writing into one tree could still fail reading or replacing `dataset_description.json` while another run held it
 - A fresh install lacked statsmodels, so `--noise-model ar_irls` and `nirspipe-hyper-groupnull` failed where they first needed it
 - A SNIRF whose clock does not start at 0 had every event and aux sample placed that late, and events past the shifted end dropped
+- Runs of one subject on different sessions or tasks shared one run record and log, which parallel runs left unreadable; each selection now keeps its own
 
 ## [0.73.0] - 2026-10-21
 

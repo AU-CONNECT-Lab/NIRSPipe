@@ -292,13 +292,13 @@ def _summary_meta(df: pd.DataFrame, metric_cols: list[str], descs: list[str]) ->
 
 
 def unfinished_subjects(output_dir: Path) -> list[dict]:
-    """Subjects whose last `nirspipe` run failed or never wrote its outcome, from their run records.
+    """Runs whose last `nirspipe` invocation failed or never wrote its outcome, one per run record.
 
     ::
 
-        sub-01/logs/sub-01.toml  [outcome] status = "failed"   ->  listed, with its error
-        sub-02/logs/sub-02.toml  [outcome] status = "success"  ->  left out
-        sub-03/logs/sub-03.toml  no [outcome] (killed)         ->  listed as unfinished
+        sub-01/logs/sub-01.toml        [outcome] status = "failed"   ->  listed, with its error
+        sub-02/logs/sub-02.toml        [outcome] status = "success"  ->  left out
+        sub-03/logs/sub-03_ses-2.toml  no [outcome] (killed)         ->  listed as sub-03_ses-2
     """
     rows: list[dict] = []
     for path in sorted(output_dir.glob("sub-*/logs/sub-*.toml")):

@@ -125,10 +125,10 @@ def write_run_record(
     prep_config: Any = None,
     post_config: Any = None,
     post_sources: dict[str, str] | None = None,
-) -> None:
-    """Write a TOML run record for one subject.
+) -> Path:
+    """Write a TOML run record for one subject, returning its path.
 
-    Output: sub_dir/logs/sub-{subject}.toml  (sub_dir defaults to output_dir)
+    Output: sub_dir/logs/<record_stem>.toml  (sub_dir defaults to output_dir)
 
     Sections:
       [environment]: software versions + system info
@@ -197,13 +197,36 @@ def write_run_record(
                 **{k: post_sources[_FIELD_OF.get(k, k)] for k, v in post.items()
                    if v is not None and _FIELD_OF.get(k, k) in post_sources}}))
 
-    out = record_path(sub_dir if sub_dir is not None else output_dir, subject)
+    out = record_path(sub_dir if sub_dir is not None else output_dir, subject,
+                      args.get("session_label"), args.get("task_label"))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(sections), encoding="utf-8")
+    return out
 
 
-def record_path(sub_dir: Path, subject: str) -> Path:
-    return sub_dir / "logs" / f"sub-{subject}.toml"
+def record_stem(subject: str, sessions: "list[str] | None" = None,
+                tasks: "list[str] | None" = None) -> str:
+    """The name a subject's run record and log share: the subject and the run's selection.
+
+    ::
+
+      sub 01                                        ->  sub-01
+      sub 01, --session-label 2 1                   ->  sub-01_ses-1+2
+      sub 01, --session-label 1, --task-label rest  ->  sub-01_ses-1_task-rest
+
+    Runs of one subject started in parallel on different sessions or tasks each keep their
+    own record, and rerunning a selection replaces its record.
+    """
+    stem = f"sub-{subject}"
+    for entity, labels in (("ses", sessions), ("task", tasks)):
+        if labels:
+            stem += f"_{entity}-" + "+".join(sorted(set(labels)))
+    return stem
+
+
+def record_path(sub_dir: Path, subject: str, sessions: "list[str] | None" = None,
+                tasks: "list[str] | None" = None) -> Path:
+    return sub_dir / "logs" / f"{record_stem(subject, sessions, tasks)}.toml"
 
 
 def error_line(exc: BaseException) -> str:
@@ -212,12 +235,11 @@ def error_line(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {lines[0]}" if lines else type(exc).__name__
 
 
-def write_run_outcome(sub_dir: Path, subject: str, status: str, duration_s: float,
+def write_run_outcome(record: Path, status: str, duration_s: float,
                       error: str | None = None) -> None:
-    """Append [outcome] to the subject's run record; a record without one never finished."""
-    out = record_path(sub_dir, subject)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("a", encoding="utf-8") as f:
+    """Append [outcome] to a run record; a record without one never finished."""
+    record.parent.mkdir(parents=True, exist_ok=True)
+    with record.open("a", encoding="utf-8") as f:
         f.write("\n" + _section("outcome", {
             "status": status,
             "finished": datetime.now().isoformat(timespec="seconds"),

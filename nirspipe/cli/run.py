@@ -195,7 +195,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            "--config and then the command line override. The run record "
                            "names where each setting came from.")
     post.add_argument("--config", type=Path,
-                      help="A run record (logs/sub-<label>.toml) or a TOML of the same shape: "
+                      help="A run record (sub-<label>/logs/sub-<label>*.toml) or a TOML of the same shape: "
                            "[prep] and [post] keyed by flag name. Reruns with its settings; "
                            "flags given here override it, and its post settings override the "
                            "mode's defaults.")

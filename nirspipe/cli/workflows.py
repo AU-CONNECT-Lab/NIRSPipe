@@ -32,8 +32,8 @@ from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
-from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, error_line, write_run_outcome,
-                                     write_run_record)
+from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, error_line, record_stem,
+                                     write_run_outcome, write_run_record)
 from nirspipe.utils.spans import bad_spans, marker_onset
 
 logger = get_logger("cli.workflows")
@@ -273,12 +273,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
     def _one(subject: str) -> None:
         sub_timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
         sub_dir = output_dir / f"sub-{subject}"
-        log_file = sub_dir / "logs" / f"sub-{subject}.log"
+        log_file = sub_dir / "logs" / f"{record_stem(subject, session_label, task_label)}.log"
         with thread_log_file(log_file), _isolate(subject, failed):
             logger.info("sub-%s | starting", subject)
             # built here purely to record what will be used; the loops below build their own
             # per-session copies. Resolving now keeps the record even if the run then fails.
-            write_run_record(
+            record = write_run_record(
                 args, subject, sub_timestamp, output_dir, sub_dir=sub_dir,
                 prep_config=_make_prep_config(subject, None, args),
                 post_config=(_build_post_config(subject, None, args, toml, roi_map=roi_map)
@@ -415,7 +415,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
                 failed.append(subject)
             finally:
-                write_run_outcome(sub_dir, subject, status, time.monotonic() - t0, error)
+                write_run_outcome(record, status, time.monotonic() - t0, error)
 
     nprocs = args.get("nprocs")
     if nprocs:

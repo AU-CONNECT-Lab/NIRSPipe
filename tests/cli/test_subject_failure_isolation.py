@@ -10,6 +10,7 @@ import sys
 
 import pytest
 
+from nirspipe.cli.run_record import record_stem
 from nirspipe.cli.workflows import run_participant_level
 
 _ARGS = dict(
@@ -87,7 +88,7 @@ def test_parallel_runs_every_subject(parallel_attempted):
 def test_each_subject_keeps_its_own_log(parallel_attempted):
     _, out = parallel_attempted
     for sub, other in (("01", "02"), ("02", "01")):
-        log = out / f"sub-{sub}" / "logs" / f"sub-{sub}.log"
+        log = out / f"sub-{sub}" / "logs" / f"{record_stem(sub, tasks=['tapping'])}.log"
         assert log.exists(), f"sub-{sub} has no log"
         text = log.read_text(encoding="utf-8")
         assert f"sub-{sub} | starting" in text
@@ -124,7 +125,11 @@ def mixed_outcome(mini_bids, tmp_path, monkeypatch):
 
 def _outcome(out, sub):
     from nirspipe.utils import load_toml
-    return load_toml(out / f"sub-{sub}" / "logs" / f"sub-{sub}.toml").get("outcome")
+    return load_toml(_record(out, sub)).get("outcome")
+
+
+def _record(out, sub):
+    return out / f"sub-{sub}" / "logs" / f"{record_stem(sub, tasks=['tapping'])}.toml"
 
 
 def test_a_failed_subject_records_the_first_line_of_its_error(mixed_outcome):
@@ -143,7 +148,7 @@ def test_a_finished_subject_records_success_and_no_error(mixed_outcome):
 def test_a_record_with_an_outcome_still_reads_back_as_config(mixed_outcome):
     from nirspipe.cli.run import read_config
 
-    settings = read_config(mixed_outcome / "sub-01" / "logs" / "sub-01.toml")
+    settings = read_config(_record(mixed_outcome, "01"))
     assert settings["prep"]["sci_threshold"] == 0.8
 
 

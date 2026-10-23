@@ -55,7 +55,7 @@ def _run_and_read(bids_dir, out_dir, **overrides):
     finally:
         sys.argv = original
 
-    # sub-01.toml, not sub-01_<timestamp>.toml: the record carries no stamp, so a re-run
+    # named by the selection, sub-01_task-tapping.toml, and carrying no stamp, so a re-run
     # overwrites it
     record = next((out_dir / "sub-01" / "logs").glob("sub-01*.toml"))
     return tomllib.loads(record.read_text())
@@ -141,6 +141,53 @@ def test_environment_records_the_pipeline_version(record):
 def test_a_prep_only_run_has_no_post_section(prep_only_record):
     assert "post" not in prep_only_record
     assert "prep" in prep_only_record
+
+
+# ---- one record per selection ----
+#
+# A study script runs one subject's sessions or tasks as separate invocations, in parallel.
+# One record per subject had two units overwrite it and each append its [outcome].
+
+def test_the_record_is_named_by_the_selection():
+    from nirspipe.cli.run_record import record_stem
+
+    assert record_stem("01") == "sub-01"
+    assert record_stem("01", ["2", "1"]) == "sub-01_ses-1+2"
+    assert record_stem("01", ["1"], ["rest"]) == "sub-01_ses-1_task-rest"
+
+
+@pytest.fixture
+def per_task_logs(mini_bids, tmp_path, monkeypatch):
+    """sub-01 run once per task and tapping again, prep failing at once; returns its logs folder."""
+    def _boom(raw, config, *args, **kwargs):
+        raise RuntimeError("synthetic prep failure")
+
+    monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _boom)
+    out = tmp_path / "out"
+    original = sys.argv
+    try:
+        for task in ("tapping", "rest", "tapping"):
+            sys.argv = ["nirspipe", str(mini_bids), str(out), "participant", "--task-label", task]
+            with pytest.raises(SystemExit):
+                run_participant_level({**_BASE_ARGS, "bids_dir": mini_bids, "output_dir": out,
+                                       "participant_label": ["01"], "task_label": [task]})
+    finally:
+        sys.argv = original
+    return out / "sub-01" / "logs"
+
+
+def test_each_selection_keeps_its_own_record_and_log(per_task_logs):
+    assert sorted(p.name for p in per_task_logs.iterdir()) == [
+        "sub-01_task-rest.log", "sub-01_task-rest.toml",
+        "sub-01_task-tapping.log", "sub-01_task-tapping.toml"]
+    rest = tomllib.loads((per_task_logs / "sub-01_task-rest.toml").read_text(encoding="utf-8"))
+    assert rest["execution"]["task_label"] == ["rest"]
+
+
+def test_rerunning_a_selection_replaces_its_record(per_task_logs):
+    text = (per_task_logs / "sub-01_task-tapping.toml").read_text(encoding="utf-8")
+    assert text.count("[outcome]") == 1
+    assert tomllib.loads(text)["outcome"]["status"] == "failed"
 
 
 # ---- the hyperscanning group record ----
