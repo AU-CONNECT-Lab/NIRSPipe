@@ -7,8 +7,9 @@ can say whether the pairing beats its null at all.
 Two levels, because they need different data and only one of them fits inside the per-dyad
 stage:
 
-``occasion``  the channels averaged, ranked in that occasion's own draws. One dyad's draws
-              are enough; it is here so that both levels come off one table.
+``occasion``  the channels averaged, ranked in that occasion's own draws, each draw put on
+              the real pairing's channels (`matched_pools`). One dyad's draws are enough;
+              it is here so that both levels come off one table.
 ``cohort``    the channels averaged and then the occasions averaged, against a null that
               draws one stand-in per occasion. This needs every occasion's draws at once,
               which is why it cannot live in a stage that runs one dyad at a time.
@@ -297,18 +298,61 @@ def _tailed_p(value: float, pool: np.ndarray, two_sided: bool) -> float:
     return min(1.0, 2 * min(upper, lower))
 
 
+def _cell(frame: pd.DataFrame) -> pd.Series:
+    """A pairing's key: its label, and its partner's where that is another channel.
+
+    A homologous pairing keys alike whether its table carries ``label2`` or not.
+    """
+    label = frame["label"].astype(str)
+    if "label2" not in frame.columns:
+        return label
+    other = frame["label2"].fillna(frame["label"]).astype(str)
+    return label.where(other == label, label + ">" + other)
+
+
+def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple[float, np.ndarray]]":
+    """Each occasion-condition's real channel mean, and its draws moved onto the real pairing's channels.
+
+    ::
+
+      real kept a b c at .40 .30 .20 (mean .30), a draw kept a b at .35 .25
+        -> over a and b the draw is .05 under the real; the draw counts as .30 - .05 = .25
+
+    A stand-in rejects other channels than the real partner, and a channel more people keep
+    is a better one, so a draw averaged over its own channels sits on another set than the
+    real value. Each draw is compared on the pairings it shares with the real one and the
+    difference is taken off the real mean, so the pool ranks, averages and spreads as the
+    draws would on the real pairing's channels. With nothing rejected it is the draws' own
+    means. A draw sharing no pairing is left out.
+    """
+    real = real.assign(cell=_cell(real))
+    draws = draws.assign(cell=_cell(draws))
+    by_occ = dict(tuple(draws.groupby(["condition", "occasion"])))
+    out = {}
+    for (cond, occ), part in real.groupby(["condition", "occasion"]):
+        d = by_occ.get((cond, occ))
+        if d is None:
+            continue
+        x = part.groupby("cell").coherence.mean().dropna()
+        if x.empty:
+            continue
+        y = (d.groupby(["draw", "cell"]).coherence.first().unstack("cell")
+             .reindex(columns=x.index).to_numpy(dtype=float))
+        shared = np.isfinite(y)
+        n = shared.sum(axis=1)
+        keep = n > 0
+        x_shared = (shared * x.to_numpy())[keep].sum(axis=1) / n[keep]
+        y_shared = np.where(shared, y, 0.0)[keep].sum(axis=1) / n[keep]
+        value = float(x.mean())
+        out[(cond, occ)] = (value, value - (x_shared - y_shared))
+    return out
+
+
 def by_occasion(draws: pd.DataFrame, real: pd.DataFrame,
                 two_sided: bool = False) -> pd.DataFrame:
-    """Each occasion's channel mean, ranked in that occasion's own draws."""
+    """Each occasion's channel mean, ranked in that occasion's own draws on the real pairing's channels."""
     rows = []
-    real_mean = real.groupby(["condition", "occasion"]).coherence.mean()
-    draw_mean = draws.groupby(["condition", "occasion", "draw"]).coherence.mean()
-    for (cond, occ), value in real_mean.items():
-        try:
-            pool = draw_mean.loc[(cond, occ)].to_numpy(dtype=float)
-        except KeyError:
-            continue
-        pool = pool[~np.isnan(pool)]
+    for (cond, occ), (value, pool) in matched_pools(draws, real).items():
         if pool.size == 0:
             continue
         beaten = int((value > pool).sum())
@@ -339,22 +383,19 @@ def by_cohort(draws: pd.DataFrame, real: pd.DataFrame,
     ``paired`` averages each occasion's draws into one baseline and tests real against it
     paired over occasions, so the width is the spread between occasions.
 
-    ``lift`` is the same number in both rows; what differs is what it is divided by.
+    ``lift`` is the same number in both rows; what differs is what it is divided by. Each
+    occasion's draws are on the real pairing's channels, as in `matched_pools`.
     """
     rng = np.random.default_rng(seed)
+    matched = matched_pools(draws, real)
     rows = []
     for cond, real_part in real.groupby("condition"):
-        wide = (draws[draws.condition == cond]
-                .groupby(["occasion", "draw"]).coherence.mean()
-                .unstack("draw"))
-        occasions = [o for o in real_part.occasion.unique() if o in wide.index]
-        if not occasions:
-            continue
-        observed = real_part[real_part.occasion.isin(occasions)].groupby("occasion").coherence.mean()
-        pools = {o: wide.loc[o].dropna().to_numpy(dtype=float) for o in occasions}
-        pools = {o: p for o, p in pools.items() if p.size}
+        # in the real table's order, which sets the order the resample draws in
+        pools = {o: matched[(cond, o)][1] for o in real_part.occasion.unique()
+                 if (cond, o) in matched and matched[(cond, o)][1].size}
         if not pools:
             continue
+        observed = pd.Series({o: matched[(cond, o)][0] for o in pools})
         null = np.mean([p[rng.integers(0, p.size, n_resample)] for p in pools.values()], axis=0)
         value = float(observed.mean())
         # the real statistic counted into its own null, as at occasion level

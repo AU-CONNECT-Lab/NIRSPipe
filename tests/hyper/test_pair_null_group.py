@@ -13,7 +13,7 @@ import pytest
 
 from nirspipe.pipeline.hyper.pair_null_group import (
     _exact_p, _tailed_p, _variants, by_cell, by_cohort, by_occasion, correct_cohort,
-    magnitude_against_unwhitened_phase, write_group_null)
+    magnitude_against_unwhitened_phase, matched_pools, write_group_null)
 from tests.hyper._names import cohort as _cohort, name
 
 
@@ -80,6 +80,72 @@ def test_the_lift_is_against_that_occasions_own_draw_mean():
     out = by_occasion(_draws_with_spread(0.02), _real(0.40)).set_index("occasion")
     assert out.lift.to_dict() == pytest.approx({"G01": 0.10, "G03": 0.09, "G04": 0.11},
                                                abs=1e-12)
+
+
+# ---- each draw on the real pairing's channels ----
+
+def _one_occasion(real_cells, draw_cells, occasion="G01"):
+    """Real and draw rows for one occasion of `game`; a missing or None cell is a rejected channel."""
+    real = pd.DataFrame([{"chromophore": "hbo", "condition": "game", "occasion": occasion,
+                          "label": c, "coherence": v} for c, v in real_cells.items()])
+    draws = pd.DataFrame([{"chromophore": "hbo", "condition": "game", "occasion": occasion,
+                           "draw": d, "label": c, "coherence": np.nan if v is None else v}
+                          for d, cells in draw_cells.items() for c, v in cells.items()])
+    return draws, real
+
+
+def test_a_draw_missing_a_channel_is_compared_on_the_channels_it_shares():
+    # real .30 over a b c; d1 is .05 under on a b, d2 level on all three, d3 .10 under on c
+    draws, real = _one_occasion(
+        {"a": 0.40, "b": 0.30, "c": 0.20},
+        {"d1": {"a": 0.35, "b": 0.25, "c": None},
+         "d2": {"a": 0.30, "b": 0.30, "c": 0.30},
+         "d3": {"a": None, "b": None, "c": 0.10}})
+    row = by_occasion(draws, real).iloc[0]
+    assert row.coherence == pytest.approx(0.30)
+    assert row.null_mean == pytest.approx(0.25)
+    assert row.lift == pytest.approx(0.05)
+    assert row.percentile == pytest.approx(200 / 3)
+    assert row.p == pytest.approx(2 / 4)
+
+
+def test_a_channel_only_the_draw_kept_does_not_enter_its_mean():
+    draws, real = _one_occasion({"a": 0.40, "b": 0.20},
+                                {"d1": {"a": 0.30, "b": 0.10, "c": 0.90}})
+    (value, pool), = matched_pools(draws, real).values()
+    assert value == pytest.approx(0.30)
+    assert pool.tolist() == pytest.approx([0.20])
+
+
+def test_a_draw_sharing_no_channel_is_left_out_of_the_pool():
+    draws, real = _one_occasion({"a": 0.40, "b": 0.20},
+                                {"d1": {"a": 0.30, "b": 0.30}, "d2": {"a": None, "b": None, "c": 0.5},
+                                 "d3": {"a": 0.20, "b": 0.20}})
+    row = by_occasion(draws, real).iloc[0]
+    assert row.n_iter == 2
+    assert row.null_mean == pytest.approx(0.25)
+
+
+def test_with_nothing_rejected_the_pool_is_the_draws_own_means():
+    draws, real = _one_occasion({"a": 0.40, "b": 0.20},
+                                {"d1": {"a": 0.30, "b": 0.10}, "d2": {"a": 0.50, "b": 0.30}})
+    (_, pool), = matched_pools(draws, real).values()
+    assert sorted(pool.tolist()) == pytest.approx([0.20, 0.40])
+
+
+def test_the_cohort_lift_is_the_mean_of_the_occasions_matched_lifts():
+    # lifts .05, .10 and .00 on three occasions, each with one draw missing channel c
+    parts = [_one_occasion({"a": 0.40, "b": 0.30, "c": 0.20},
+                           {"d1": {"a": 0.40 - lift, "b": 0.30 - lift, "c": None},
+                            "d2": {"a": 0.40 - lift, "b": 0.30 - lift, "c": 0.20 - lift}},
+                           occasion=occ)
+             for occ, lift in zip(OCCASIONS, (0.05, 0.10, 0.00))]
+    draws = pd.concat([d for d, _ in parts], ignore_index=True)
+    real = pd.concat([r for _, r in parts], ignore_index=True)
+    coh = by_cohort(draws, real, n_resample=500, seed=1).set_index("test")
+    assert coh.loc["paired", "lift"] == pytest.approx(0.05)
+    assert coh.loc["paired", "null_mean"] == pytest.approx(0.25)
+    assert coh.loc["resample", "lift"] == pytest.approx(0.05)
 
 
 # ---- the cohort ----
