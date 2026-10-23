@@ -162,7 +162,7 @@ The Analysis page set up as the tutorial's preprocessing step, after the run: th
 
 ### Run record
 
-Give **Run record** a run's record (`<output_dir>/sub-<id>/logs/sub-<id>.toml`) or any `--config` file, and **Load into the form** fills every field it holds, read as `nirspipe --config` reads it: a file the command line would refuse shows its message. A record holds no folders, so the two folder fields keep the last ones used; check them.
+Give **Run record** a run's record (a `.toml` in `<output_dir>/sub-<id>/logs/`) or any `--config` file, and **Load into the form** fills every field it holds, read as `nirspipe --config` reads it: a file the command line would refuse shows its message. A record holds no folders, so the two folder fields keep the last ones used; check them.
 
 ### Stages
 

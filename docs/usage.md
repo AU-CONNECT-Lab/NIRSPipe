@@ -86,7 +86,7 @@ nirspipe /data/bids /data/derivatives group
 
 ## Configuration file
 
-`--config` takes a TOML file of settings, so a run can be kept under version control and run again. Every run writes one: its run record, `sub-<label>/logs/sub-<label>.toml`, is in this format, so `--config` on a record reruns the run it records.
+`--config` takes a TOML file of settings, so a run can be kept under version control and run again. Every run writes one: its run record, `sub-<label>/logs/sub-<label>.toml` (with `_ses-` and `_task-` added when `--session-label` or `--task-label` chose part of the subject), is in this format, so `--config` on a record reruns the run it records.
 
 ```toml
 [prep]
@@ -267,7 +267,7 @@ Starts the desktop interface and prints the address to open ([GUI](gui.md)).
 
 ## Troubleshooting
 
-`--verbose` prints debug output, including each step's timing and paths; the same stream goes to `sub-<label>/logs/sub-<label>.log`. Rerunning a subject overwrites its outputs and run record; to keep both, write to a second output directory. A rerun that changes the passband, the resampling rate or the drift basis warns before overwriting, since those files' names do not show the change.
+`--verbose` prints debug output, including each step's timing and paths; the same stream goes to the subject's live log in `sub-<label>/logs/`, named like its run record. Rerunning a subject overwrites its outputs, and rerunning the same selection its run record; to keep both, write to a second output directory. A rerun that changes the passband, the resampling rate or the drift basis warns before overwriting, since those files' names do not show the change.
 
 | Message | Cause and fix |
 |---------|---------------|

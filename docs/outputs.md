@@ -46,8 +46,8 @@ derivatives/nirspipe/
     ├── <run>_desc-mne_report.html                  ← MNE's own report of the run
     ├── figures/                                    ← every figure of every run, one flat folder
     ├── logs/
-    │   ├── sub-<label>.log                         ← text log
-    │   └── sub-<label>.toml                        ← run record
+    │   ├── sub-<label>[_ses-<s>][_task-<t>].log    ← text log, named by the run's selection
+    │   └── sub-<label>[_ses-<s>][_task-<t>].toml   ← run record
     └── [ses-<label>/]nirs/                         ← every data file has a .json sidecar
         ├── <run>_desc-od_nirs.snirf                ← prep: optical density
         ├── <run>_desc-sci_nirs.snirf               ← prep: channel screening
@@ -187,16 +187,18 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 
 | Layer | Format | Path | For |
 |-------|--------|------|-----|
-| Live log | Text | `sub-<label>/logs/sub-<label>.log` | Following a run; `--verbose` adds debug output |
+| Live log | Text | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].log` | Following a run; `--verbose` adds debug output |
 | Dyad live log | Text | `group-<id>/logs/group-<id>_task-<t>.log`, `_desc-raw.log` for `hyper-raw`, `_null-pair.log` for the re-paired null, `_redraw.log` for the pages it redraws | Following one group of a dyad command |
-| Run record | TOML | `sub-<label>/logs/sub-<label>.toml` | What a subject was run with, and rerunning it |
+| Run record | TOML | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].toml` | What a subject was run with, and rerunning it |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
+
+The live log and the run record are named by the run's selection: `ses-` holds the labels `--session-label` gave and `task-` those `--task-label` gave, several joined by `+` (`sub-01_ses-1+2`), and a run given neither is `sub-<label>`. Runs of one subject on different sessions or tasks, in parallel or not, each keep their own pair; rerunning the same selection replaces it.
 
 ### Run record
 
 Each subject's run record is written at the start of its run, with four sections: `[environment]` (package, Python and dependency versions, platform), `[execution]` (the verbatim command, paths, labels and switches), `[prep]` and `[post]` (every setting as resolved, keyed by flag name in the flag's units), and `[post_sources]`, naming for every post setting the layer it came from: `cli`, `config`, `mode` or `default`. Tables are written as typed, with absolute paths, so a record reads from anywhere. A post setting the run switched off is written `"none"`.
 
-When the subject ends, an `[outcome]` section is appended: `status` (`success` or `failed`), `finished`, `duration_s` and, for a failure, the first line of the `error`; the full traceback is in the live log. A record without `[outcome]` belongs to a run that was stopped before it ended. The cohort page lists every subject whose last run did not succeed.
+When the subject ends, an `[outcome]` section is appended: `status` (`success` or `failed`), `finished`, `duration_s` and, for a failure, the first line of the `error`; the full traceback is in the live log. A record without `[outcome]` belongs to a run that was stopped before it ended. The cohort page lists every run record whose last run did not succeed.
 
 ```toml
 [execution]

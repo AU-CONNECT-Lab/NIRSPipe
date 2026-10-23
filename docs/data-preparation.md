@@ -24,7 +24,7 @@ The `_nirs.json` sidecar needs at least `SamplingFrequency`, `NIRSChannelCount`,
 | Optional file | Used for |
 |------|---------|
 | `participants.tsv` | Subject metadata; an `age` column is shown in the QC report. |
-| `*_events.tsv` | Task events. Without one, the pipeline reads the annotations embedded in the SNIRF. |
+| `*_events.tsv` | Not read: events come from the stim groups inside the SNIRF, placed on the data's time axis even when the file's clock does not start at 0. `edit-markers` writes its edits into the SNIRF and this table both, and `--events-path` gives the GLM a design table of its own. |
 | `*_channels.tsv` | A channel whose `status` is `bad` is marked bad in preprocessing ([Channel screening](workflows.md#channel-screening)). |
 | `*_optodes.tsv`, `*_coordsystem.json` | Optode positions, needed for the topographic maps and the 3D brain figures. |
 
