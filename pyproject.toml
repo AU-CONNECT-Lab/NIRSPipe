@@ -34,6 +34,7 @@ dependencies = [
     "flask>=3.0",         # nirspipe-gui and the nirspipe-rate viewers
     "pycwt>=0.4",         # hyperscanning WTC (nirspipe-qc hyper-post)
     "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
+    "statsmodels>=0.14",  # ar_irls's robust refit and groupnull's p corrections
     "tomli>=2.0; python_version < '3.11'",
     "bibtexparser>=2.0.0b1",
 ]
