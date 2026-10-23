@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.74.0] - 2026-10-23
+
 ### Added
 - A dyad table's sidecar names the null level files that gated its phase columns, with the version and time of the run that drew each
 
