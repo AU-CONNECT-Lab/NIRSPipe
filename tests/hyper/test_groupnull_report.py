@@ -175,3 +175,25 @@ def test_under_three_occasions_the_caption_says_there_is_no_paired_test(tmp_path
 def test_another_task_s_tables_stay_off_the_page(tmp_path):
     _write(tmp_path, _byoccasion(), _cohort())
     assert write_groupnull_report(tmp_path, "other") is None
+
+
+def test_role_pairs_get_their_own_table_over_the_whole_brains_pairings(tmp_path):
+    cohort = _cohort()
+    roles = [{**row, "granularity": "rolepair", "level": level, "pairings": pairings,
+              "coherence": 0.4 + k / 100}
+             for k, (level, pairings) in enumerate((("student-teacher", "all"),
+                                                    ("student-student", "all"),
+                                                    ("student-teacher", "homologous")))
+             for row in cohort[cohort.granularity == "whole"].to_dict("records")]
+    _write(tmp_path, _byoccasion(), pd.concat([cohort, pd.DataFrame(roles)]))
+    html = write_groupnull_report(tmp_path, "main").read_text(encoding="utf-8")
+
+    table = html[html.index("<th>role pair</th>"):]
+    table = table[:table.index("</table>")]
+    assert table.count("<td>student-teacher</td>") == table.count("<td>student-student</td>") == 4
+    assert "0.4200" not in table
+
+
+def test_without_roles_there_is_no_role_table(tmp_path):
+    _write(tmp_path, _byoccasion(), _cohort())
+    assert "role pair" not in write_groupnull_report(tmp_path, "main").read_text(encoding="utf-8")

@@ -14,6 +14,10 @@ stage:
               draws one stand-in per occasion. This needs every occasion's draws at once,
               which is why it cannot live in a stage that runs one dyad at a time.
 
+A group of more than two members is one value per occasion as well, the mean over its member
+pairings, and where the pairs table named roles each unordered role pair is also read on its
+own (granularity ``rolepair``).
+
 A homologous null tests the homologous pairings only, since a crossed real table's other
 cells have no null behind it. A crossed null also tests every pairing and, given a region
 map, every ordered region pair.
@@ -115,11 +119,14 @@ def _thick(level: str, d: pd.DataFrame, r: pd.DataFrame, sides: "tuple[str, ...]
     a time, so a region one dyad left blank is not ranked for that dyad here.
     """
     keys = ["occasion", "condition"]
-    counts = r.groupby(keys)[list(sides)].nunique()
-    kept = counts[(counts >= min_channels).all(axis=1)].reset_index()[keys]
-    if len(kept) < len(counts):
+    # every member pairing of a group has to keep the region, its mean being over all of them
+    members = [k for k in ("sub1", "sub2") if k in r.columns]
+    counts = r.groupby(keys + members)[list(sides)].nunique()
+    thick = (counts >= min_channels).all(axis=1).groupby(level=keys).all()
+    kept = thick[thick].reset_index()[keys]
+    if len(kept) < len(thick):
         logger.info("level %s: %d of %d occasion-condition(s) under %d channel(s) per "
-                    "member left out", level, len(counts) - len(kept), len(counts),
+                    "member left out", level, len(thick) - len(kept), len(thick),
                     min_channels)
     return d.merge(kept, on=keys), r.merge(kept, on=keys)
 
@@ -159,6 +166,14 @@ def _variants(draws: pd.DataFrame, real: pd.DataFrame, roi_map: "dict | None",
         else:
             all_pairings = True
             yield "whole", "whole", "all", draws, real
+    # the whole brain once per unordered role pair, where the cohort holds more than one
+    if "rolepair" in real.columns and real["rolepair"].nunique() > 1:
+        for pair in sorted(real["rolepair"].dropna().unique()):
+            yield ("rolepair", pair, "homologous", hom_d[hom_d["rolepair"] == pair],
+                   hom_r[hom_r["rolepair"] == pair])
+            if all_pairings:
+                yield ("rolepair", pair, "all", draws[draws["rolepair"] == pair],
+                       real[real["rolepair"] == pair])
     roi_map = bare_roi_map(roi_map or {})
     for name, channels in roi_map.items():
         d, r = _thick(name, hom_d[hom_d["label"].isin(channels)],
@@ -322,7 +337,12 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
     taken off the real mean, so the pool ranks, averages and spreads as the draws would on
     the real pairing's channels. With nothing rejected it is the draws' own means. A draw
     sharing no pairing is left out.
+
+    A group of more than two members takes the mean over its member pairings of each one's
+    channel mean, and so does each draw: matched pairing by pairing, then averaged under
+    the draw id its pairings share. A draw missing one of the pairings is left out.
     """
+    members = [k for k in ("sub1", "sub2") if k in real.columns and k in draws.columns]
     real = real.assign(cell=_cell(real))
     draws = draws.assign(cell=_cell(draws))
     by_occ = dict(tuple(draws.groupby(["condition", "occasion"])))
@@ -331,33 +351,62 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
         d = by_occ.get((cond, occ))
         if d is None:
             continue
-        _refuse_several_pairings(occ, part, d)
-        x = part.groupby("cell").coherence.mean().dropna()
-        if x.empty:
+        pairings = dict(tuple(part.groupby(members))) if members else {(): part}
+        drawn = dict(tuple(d.groupby(members))) if members else {(): d}
+        missing = [key for key in pairings if key not in drawn]
+        if missing:
+            logger.warning("%s %s: no draws for %s, so the mean over its pairings has no "
+                           "null", occ, cond, ", ".join("-".join(k) for k in missing))
             continue
-        y = (d.groupby(["draw", "cell"]).coherence.first().unstack("cell")
-             .reindex(columns=x.index).to_numpy(dtype=float))
-        shared = np.isfinite(y)
-        n = shared.sum(axis=1)
-        keep = n > 0
-        x_shared = (shared * x.to_numpy())[keep].sum(axis=1) / n[keep]
-        y_shared = np.where(shared, y, 0.0)[keep].sum(axis=1) / n[keep]
-        value = float(x.mean())
-        out[(cond, occ)] = (value, value - (x_shared - y_shared))
+        got = [_matched(pairings[key], drawn[key]) for key in pairings]
+        if any(m is None for m in got):
+            continue
+        value = float(np.mean([v for v, _ in got]))
+        pool = pd.concat([p for _, p in got], axis=1).dropna().mean(axis=1)
+        if len(got) > 1 and pool.empty:
+            logger.warning("%s %s: no draw covers all %d of its pairings", occ, cond, len(got))
+        out[(cond, occ)] = (value, pool.to_numpy(dtype=float))
     return out
 
 
-def _refuse_several_pairings(occ: str, real: pd.DataFrame, draws: pd.DataFrame) -> None:
-    """Refuse an occasion of more than two members, whose pairings one mean would mix."""
-    for frame in (real, draws):
-        keys = [k for k in ("sub1", "sub2") if k in frame.columns]
-        n = len(frame[keys].drop_duplicates()) if keys else 1
-        if n > 1:
-            # refused, not averaged: the real side would average every pairing, the draws one
-            raise ValueError(
-                f"{occ} holds {n} member pairings, a group of more than two. The occasion "
-                f"and cohort levels take one value per occasion, and a group's pairings are "
-                f"not combined into one yet, so groupnull does not support such groups.")
+def _matched(real: pd.DataFrame, draws: pd.DataFrame) -> "tuple[float, pd.Series] | None":
+    """One pairing's real channel mean, and its draws on its channels by draw id; None with no real value."""
+    x = real.groupby("cell").coherence.mean().dropna()
+    if x.empty:
+        return None
+    by_draw = draws.groupby(["draw", "cell"]).coherence.first().unstack("cell")
+    y = by_draw.reindex(columns=x.index).to_numpy(dtype=float)
+    shared = np.isfinite(y)
+    n = shared.sum(axis=1)
+    keep = n > 0
+    x_shared = (shared * x.to_numpy())[keep].sum(axis=1) / n[keep]
+    y_shared = np.where(shared, y, 0.0)[keep].sum(axis=1) / n[keep]
+    value = float(x.mean())
+    return value, pd.Series(value - (x_shared - y_shared), index=by_draw.index[keep])
+
+
+def _with_role_pairs(draws: pd.DataFrame, real: pd.DataFrame
+                     ) -> "tuple[pd.DataFrame, pd.DataFrame]":
+    """Both frames with each pairing's unordered role pair, off the roles the real tables record.
+
+    ::
+
+      G01 roles {a: teacher, b: student}, row a-b  ->  rolepair "student-teacher"
+
+    Left as they are where no real table records ``member_roles``.
+    """
+    roles = {}
+    for source, occ in real[["source", "occasion"]].drop_duplicates().itertuples(index=False):
+        for sub, role in (_params_of(source).get("member_roles") or {}).items():
+            roles[(occ, sub)] = role
+    if not roles or not all({"sub1", "sub2"} <= set(f.columns) for f in (draws, real)):
+        return draws, real
+
+    def pair_of(frame: pd.DataFrame) -> list:
+        sides = [[roles.get(k) for k in zip(frame["occasion"], frame[side])]
+                 for side in ("sub1", "sub2")]
+        return ["-".join(sorted((a, b))) if a and b else None for a, b in zip(*sides)]
+    return draws.assign(rolepair=pair_of(draws)), real.assign(rolepair=pair_of(real))
 
 
 def by_occasion(draws: pd.DataFrame, real: pd.DataFrame,
@@ -807,6 +856,7 @@ def _write_levels(output_dir: Path, task: str, chroma: str, null: str, measure: 
 
     sources = sorted(set(draws.source) | set(real.source))
     min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
+    draws, real = _with_role_pairs(draws, real)
 
     occ_parts, coh_parts = [], []
     for gran, level, pairings, d, r in _variants(draws, real, roi_map,

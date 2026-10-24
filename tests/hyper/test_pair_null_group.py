@@ -133,14 +133,68 @@ def test_with_nothing_rejected_the_pool_is_the_draws_own_means():
     assert sorted(pool.tolist()) == pytest.approx([0.20, 0.40])
 
 
-def test_an_occasion_of_three_pairings_is_refused_rather_than_mixed():
-    pairs = [("sub-01", "sub-02"), ("sub-01", "sub-03"), ("sub-02", "sub-03")]
-    base = {"chromophore": "hbo", "condition": "game", "occasion": "G02", "label": "a"}
-    real = pd.DataFrame([{**base, "sub1": a, "sub2": b, "coherence": 0.4} for a, b in pairs])
-    draws = pd.DataFrame([{**base, "sub1": a, "sub2": b, "draw": k, "coherence": 0.2}
-                          for a, b in pairs for k in range(3)])
-    with pytest.raises(ValueError, match="G02 holds 3 member pairings"):
-        matched_pools(draws, real)
+# ---- a group of more than two: one value, the mean over its member pairings ----
+
+TRIAD = [("sub-01", "sub-02"), ("sub-01", "sub-03"), ("sub-02", "sub-03")]
+
+
+def _triad(real: dict, draws: dict, occasion="G02"):
+    """``real`` {pairing: {label: value}}, ``draws`` {pairing: {draw: {label: value}}}."""
+    base = {"chromophore": "hbo", "condition": "game", "occasion": occasion}
+    real_rows = [{**base, "sub1": a, "sub2": b, "label": c, "coherence": v}
+                 for (a, b), cells in real.items() for c, v in cells.items()]
+    draw_rows = [{**base, "sub1": a, "sub2": b, "draw": k, "label": c,
+                  "coherence": np.nan if v is None else v}
+                 for (a, b), by_draw in draws.items() for k, cells in by_draw.items()
+                 for c, v in cells.items()]
+    return pd.DataFrame(draw_rows), pd.DataFrame(real_rows)
+
+
+def test_a_group_is_its_pairings_mean_against_the_mean_of_each_draws_pairings():
+    """Real .6 .3 .3, mean .4; each draw the mean of the same draw id across the three."""
+    draws, real = _triad(
+        {pair: {"a": v} for pair, v in zip(TRIAD, (0.6, 0.3, 0.3))},
+        {pair: {k: {"a": v} for k, v in enumerate(values)}
+         for pair, values in zip(TRIAD, ((0.1, 0.2, 0.3), (0.2, 0.2, 0.2), (0.3, 0.5, 0.1)))})
+    (value, pool), = matched_pools(draws, real).values()
+    assert value == pytest.approx(0.4)
+    assert pool.tolist() == pytest.approx([0.2, 0.3, 0.2])
+
+
+def test_a_draw_missing_one_of_the_pairings_is_left_out():
+    draws, real = _triad({pair: {"a": 0.4} for pair in TRIAD},
+                         {pair: {k: {"a": 0.2} for k in (range(2) if pair == TRIAD[2]
+                                                         else range(3))} for pair in TRIAD})
+    (_, pool), = matched_pools(draws, real).values()
+    assert len(pool) == 2
+
+
+def test_each_pairing_is_matched_on_its_own_channels():
+    """Pairing 2's draw lost b: on a alone it is .3 under its real .5, so it counts as
+    .4 - .3 = .1, and pairing 1's as .2. Pooling the cells across pairings would give .18."""
+    draws, real = _triad(
+        {TRIAD[0]: {"a": 0.4, "b": 0.2}, TRIAD[1]: {"a": 0.5, "b": 0.3}},
+        {TRIAD[0]: {"d1": {"a": 0.3, "b": 0.1}}, TRIAD[1]: {"d1": {"a": 0.2, "b": None}}})
+    (value, pool), = matched_pools(draws, real).values()
+    assert value == pytest.approx(0.35)
+    assert pool.tolist() == pytest.approx([0.15])
+
+
+def test_a_pairing_without_draws_leaves_its_group_unranked(caplog):
+    draws, real = _triad({pair: {"a": 0.4} for pair in TRIAD},
+                         {pair: {0: {"a": 0.2}} for pair in TRIAD[:2]})
+    assert matched_pools(draws, real) == {}
+    assert "no draws for sub-02-sub-03" in caplog.text
+
+
+def test_a_region_thin_in_one_pairing_leaves_out_that_group():
+    """Its mean is over every pairing, so a region one pairing cannot fill is not its own."""
+    cells = {"S1_D1": 0.4, "S1_D2": 0.4}
+    draws, real = _triad({pair: (cells if pair != TRIAD[2] else {"S1_D1": 0.4})
+                          for pair in TRIAD}, {pair: {0: cells} for pair in TRIAD})
+    levels = {lv: r for g, lv, _, _, r in _variants(draws, real, {"front": list(cells)},
+                                                    min_channels=2) if g == "roi"}
+    assert "front" not in levels
 
 
 def test_an_occasion_of_one_pairing_still_reads_with_its_member_columns():
@@ -151,6 +205,57 @@ def test_an_occasion_of_one_pairing_still_reads_with_its_member_columns():
     (value, pool), = matched_pools(draws, real).values()
     assert value == pytest.approx(0.4)
     assert sorted(pool.tolist()) == pytest.approx([0.1, 0.3])
+
+
+def _write_class_tree(root, n_occasions=3):
+    """Classes of a teacher and two students, teacher-student pairings at .5 and .3 and the
+    students' at .2, every draw .1, the roles in the real tables' sidecars."""
+    members = ("t", "s1", "s2")
+    roles = {"t": "teacher", "s1": "student", "s2": "student"}
+    real_values = {("t", "s1"): 0.5, ("t", "s2"): 0.3, ("s1", "s2"): 0.2}
+    for k in range(1, n_occasions + 1):
+        occ = f"G{k:02d}"
+        d = root / f"group-{occ}" / "nirs"
+        d.mkdir(parents=True)
+        ids = {m: f"sub-{m}{occ}" for m in members}
+        base = {"chromophore": "hbo", "condition": "game"}
+        real = pd.DataFrame([{**base, "sub1": ids[a], "sub2": ids[b], "label": c,
+                              "coherence": v} for (a, b), v in real_values.items()
+                             for c in CHANNELS])
+        draws = pd.DataFrame([{**base, "sub1": ids[a], "sub2": ids[b], "draw": f"x{j}",
+                               "label": c, "coherence": 0.1 + 0.01 * j}
+                              for (a, b) in real_values for j in range(5) for c in CHANNELS])
+        draws.to_csv(d / name(occ, "main", "wtcbycond-pairnull-draws"), sep="\t", index=False)
+        real_tsv = d / name(occ, "main", "wtc")
+        real.to_csv(real_tsv, sep="\t", index=False)
+        real_tsv.with_suffix(".json").write_text(json.dumps({"parameters": {
+            "roi_min_channels": 2, "member_roles": {ids[m]: roles[m] for m in members}}}))
+
+
+def test_with_roles_each_role_pair_is_read_on_its_own(tmp_path):
+    _write_class_tree(tmp_path)
+    write_group_null(tmp_path, "main", n_resample=200, seed=3)
+    occ = pd.read_csv(tmp_path / _cohort("pair", "byoccasion"), sep="\t")
+
+    means = (occ[occ.granularity != "channel"]
+             .groupby(["granularity", "level"])["coherence"].first())
+    assert means.to_dict() == pytest.approx({("whole", "whole"): (0.5 + 0.3 + 0.2) / 3,
+                                             ("rolepair", "student-student"): 0.2,
+                                             ("rolepair", "student-teacher"): 0.4})
+    cohort = pd.read_csv(tmp_path / _cohort("pair", "cohort"), sep="\t")
+    assert set(cohort.loc[cohort.granularity == "rolepair", "family"]) == {2}
+
+
+def test_one_role_pair_in_the_whole_cohort_adds_no_family(tmp_path):
+    """One role for everyone: its one role pair is the whole brain over again."""
+    _write_class_tree(tmp_path)
+    for side in tmp_path.rglob("*_stat-wtc_relmat.json"):
+        params = json.loads(side.read_text())["parameters"]
+        params["member_roles"] = {sub: "member" for sub in params["member_roles"]}
+        side.write_text(json.dumps({"parameters": params}))
+    write_group_null(tmp_path, "main", n_resample=200, seed=3)
+    occ = pd.read_csv(tmp_path / _cohort("pair", "byoccasion"), sep="\t")
+    assert "rolepair" not in set(occ.granularity)
 
 
 def test_the_cohort_lift_is_the_mean_of_the_occasions_matched_lifts():

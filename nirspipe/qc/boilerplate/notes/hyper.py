@@ -239,6 +239,9 @@ NOTES = {
         "Left, each occasion&rsquo;s real value against its own null mean, hollow where not "
         "above; right, both means with 95% intervals. The caption is the paired test, given "
         "from three occasions.",
+    "groupnull.rolepairs":
+        "By role pair: each group&rsquo;s pairings between those two roles, averaged within "
+        "the group, against the same draws.",
     "groupnull.regions":
         "Each region&rsquo;s lift, the real mean minus the null mean, printed in its cell on a "
         "scale centred on zero; bold with a star where its paired test is below {alpha} ({p_col}).",

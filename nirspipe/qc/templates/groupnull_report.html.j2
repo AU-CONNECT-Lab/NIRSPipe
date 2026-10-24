@@ -48,6 +48,17 @@ table.groupnull-table th { color: var(--muted); font-weight: 600; }
       </tbody>
     </table>
     {% endif %}
+    {% if s.role_rows %}
+    <p class="qm-note">{{ section_note('groupnull.rolepairs') }}</p>
+    <table class="groupnull-table">
+      <thead><tr>{% for c in role_columns %}<th>{{ s.p_col if c == "p" else c }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for r in s.role_rows %}
+        <tr>{% for c in role_columns %}<td>{{ r[c] }}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
     <p class="fig-path"><a href="{{ s.byoccasion }}">{{ s.byoccasion }}</a>{% if s.cohort %} &bull; <a href="{{ s.cohort }}">{{ s.cohort }}</a>{% endif %}</p>
   </div>
 </section>

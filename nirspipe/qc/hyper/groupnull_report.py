@@ -31,6 +31,7 @@ _MEASURES = {"wtc": "WTC", "isc": "ISC"}
 _NULLS = {"pair": "re-paired", "phase": "phase-scrambled"}
 _VALUE_AXIS = {"coherence": "WTC", "r_z": "ISC (Fisher z)", "abs_r_z": "|ISC| (Fisher z)"}
 _TABLE_COLUMNS = ("condition", "test", "real", "null_mean", "lift", "p", "n_occasions")
+_ROLE_COLUMNS = ("role pair",) + _TABLE_COLUMNS
 
 
 def _paired_caption(row: "pd.Series | None", p_col: str) -> str:
@@ -89,15 +90,21 @@ def _section(byocc_path: Path, fig_dir: Path, errors: list, scope: str) -> "dict
             figures["regions"] = {"src": f"figures/{fname}",
                                   "h": _save_figure_html(fig, fig_dir / fname)}
 
-    rows = []
-    for _, r in whole.iterrows():
-        rows.append({"condition": r["condition"], "test": r["test"],
-                     "real": f"{r[value]:.4f}", "null_mean": f"{r['null_mean']:.4f}",
-                     "lift": f"{r['lift']:+.4f}",
-                     "p": "" if pd.isna(r.get(p_col)) else f"{r[p_col]:.3g}",
-                     "n_occasions": int(r["n_occasions"])})
+    def _row(r: pd.Series) -> dict:
+        return {"condition": r["condition"], "test": r["test"],
+                "real": f"{r[value]:.4f}", "null_mean": f"{r['null_mean']:.4f}",
+                "lift": f"{r['lift']:+.4f}",
+                "p": "" if pd.isna(r.get(p_col)) else f"{r[p_col]:.3g}",
+                "n_occasions": int(r["n_occasions"])}
+
+    rows = [_row(r) for _, r in whole.iterrows()]
+    # the whole brain per role pair, over the pairing set the whole-brain rows read
+    roles = (cohort[(cohort["granularity"] == "rolepair")
+                    & (cohort["pairings"] == whole["pairings"].iloc[0])]
+             if not whole.empty else cohort)
+    role_rows = [{"role pair": r["level"], **_row(r)} for _, r in roles.iterrows()]
     return {"title": title, "anchor": byocc_path.stem.replace("_desc-byoccasion_relmat", ""),
-            "figures": figures, "rows": rows, "p_col": p_col,
+            "figures": figures, "rows": rows, "role_rows": role_rows, "p_col": p_col,
             "pairings": whole["pairings"].iloc[0] if not whole.empty else "",
             "caveat": caveat,
             "byoccasion": byocc_path.name,
@@ -136,6 +143,7 @@ def write_groupnull_report(output_dir: Path, task: str) -> "Path | None":
         sections=sections,
         nav_sections=[(s["anchor"], s["title"]) for s in sections],
         table_columns=_TABLE_COLUMNS,
+        role_columns=_ROLE_COLUMNS,
         alpha=ALPHA,
     )
     out = output_dir / derivative_path("", "report", ".html", task=task, desc="groupnull").name
