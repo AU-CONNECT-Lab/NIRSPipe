@@ -327,24 +327,7 @@ def task_scope_windows(
     return out
 
 
-def _coupled_mask(
-    raw_od: mne.io.Raw,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    sci_cutoff: float,
-    psp_cutoff: float,
-    window_s: float,
-):
-    """(mask, centers): mask is channel x window, True where the channel is coupled."""
-    got = _coupled_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
-    if got is None:
-        return None, None
-    sci, psp, centers = got
-    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
-    return (None, None) if mask is None else (mask, centers)
-
-
-def _coupled_matrices(raw_od, cardiac_l_freq: float, cardiac_h_freq: float, window_s: float):
+def _screen_matrices(raw_od, cardiac_l_freq: float, cardiac_h_freq: float, window_s: float):
     """``(sci, psp, centers)`` off one recording, None when SCI could not be measured.
 
     PSP is None when it alone failed, which costs a run screened on SCI nothing.
@@ -363,7 +346,7 @@ def _coupled_matrices(raw_od, cardiac_l_freq: float, cardiac_h_freq: float, wind
     return sci, psp, window_centers(times)
 
 
-def coupled_mask_from_matrices(
+def passing_mask_from_matrices(
     sci_matrix, psp_matrix, sci_cutoff: float, psp_cutoff: "float | None",
 ) -> "np.ndarray | None":
     """Channel x window, True where a channel passes in that window. None if unusable.
@@ -441,7 +424,7 @@ def counted_screen_windows(
       a 100 s recording at 10 Hz, BAD_ over 0-45 s  ->  centres 5..95, counted from 55 s on
 
     The grid is mne-nirs' windowed SCI grid (``ceil`` samples per window, the last window
-    ending one sample early), so this agrees window for window with :func:`coupled_windows`.
+    ending one sample early), so this agrees window for window with :func:`passing_windows`.
     """
     sfreq = float(raw.info["sfreq"])
     win = int(np.ceil(window_s * sfreq))
@@ -461,7 +444,7 @@ def good_window_fraction(
     window_s: float = SCREEN_WINDOW_S,
     scope: "list[tuple[str, float, float]] | None" = None,
 ) -> dict[str, float]:
-    """Share of windows in which a channel is coupled, per channel.
+    """Share of windows in which a channel passes, per channel.
 
     ::
 
@@ -482,11 +465,11 @@ def good_window_fraction(
     Returns an empty dict when a metric the rule reads cannot be measured, or when the scope
     keeps no window, which screens nothing rather than rejecting everything.
     """
-    return coupled_windows(raw_od, cardiac_l_freq, cardiac_h_freq,
+    return passing_windows(raw_od, cardiac_l_freq, cardiac_h_freq,
                            sci_cutoff, psp_cutoff, window_s, scope)["fractions"]
 
 
-def coupled_windows(
+def passing_windows(
     raw_od: mne.io.Raw,
     cardiac_l_freq: float,
     cardiac_h_freq: float,
@@ -515,12 +498,12 @@ def coupled_windows(
     :func:`good_window_fraction` returns an empty dict; ``mask`` is None when nothing could
     be measured at all, and ``psp`` is None when PSP alone could not be.
     """
-    got = _coupled_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    got = _screen_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     if got is None:
         return {"fractions": {}, "mask": None, "centers": None,
                 "sci": None, "psp": None, "channel_order": list(raw_od.ch_names)}
     sci, psp, centers = got
-    mask = coupled_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
+    mask = passing_mask_from_matrices(sci, psp, sci_cutoff, psp_cutoff)
     out = {"mask": mask, "centers": centers, "sci": sci, "psp": psp,
            "channel_order": list(raw_od.ch_names), "fractions": {}}
     if mask is None:

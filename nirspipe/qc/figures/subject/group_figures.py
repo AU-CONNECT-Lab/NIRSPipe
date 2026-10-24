@@ -758,7 +758,7 @@ _CONDITION_PER_CHANNEL = {
 
 # Appended after them. `good_frac` has no panel in the profile and belongs here because it
 # is the line a channel is actually rejected on, which is what a condition's kept count is.
-_EXTRA_CHANNEL_PANELS = (("good_frac_per_channel", "Coupled windows"),)
+_EXTRA_CHANNEL_PANELS = (("good_frac_per_channel", "Passing windows"),)
 
 
 def _channel_matrix(by_condition: dict, conditions: list[str],

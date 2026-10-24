@@ -8,7 +8,7 @@ table (the dyad's ``desc-usable_qc.tsv``).
 
 What it reports is what a dyad has and a subject cannot:
 
-- the **shared** usable time, a channel pair being usable only while it is coupled in both
+- the **shared** usable time, a channel pair being usable only while it is passing in both
   members at once, split into the asymmetric loss and the shared one
 - where that time went, per channel pair and per condition
 

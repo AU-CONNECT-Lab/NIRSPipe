@@ -93,7 +93,7 @@ def _half_coupled():
 
 
 def test_min_good_frac_reaches_the_comparison(tmp_path_factory):
-    """The share of coupled windows is what rejects, so moving it has to move the verdict.
+    """The share of passing windows is what rejects, so moving it has to move the verdict.
 
     S1_D1 is coupled in half its windows, so a line under 0.5 keeps it and one over drops it.
     """
@@ -182,7 +182,7 @@ def test_a_threshold_that_rejects_everything_says_so(tmp_path_factory):
     # The criterion is the window count; the SCI line is what made every window fail, so the
     # message has to carry it too or it names a share with no way to see what caused it.
     with pytest.raises(StageError,
-                       match=r"failed screening on coupled windows .*sci 1\.1"):
+                       match=r"failed screening on passing windows .*sci 1\.1"):
         _prep(tmp_path_factory.mktemp("sci_all_bad"), sci_threshold=1.1)
 
 

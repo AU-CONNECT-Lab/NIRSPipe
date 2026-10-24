@@ -541,7 +541,7 @@ def condition_channel_status(
       -> {"sub-01": {"run": {"S5_D5"}, "line": 0.7,
                      "conditions": {"cb": {"S3_D3": (0.5, True), "S1_D1": (1.0, False)}}}}
 
-    A condition's tuple is ``(coupled share, failing)``, folded from the two wavelengths of a
+    A condition's tuple is ``(passing share, failing)``, folded from the two wavelengths of a
     pair: the lower share, and failing when either is in the entry's ``bad_channels``. That
     assessment rejects nothing; ``run`` is the set every coherence was computed on.
     """

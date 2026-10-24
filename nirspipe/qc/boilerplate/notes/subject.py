@@ -20,13 +20,13 @@ NOTES = {
         "section says how it leaves them out.",
     "excluded.conditions":
         "Per condition: its window, its seconds outside every BAD_ span, the screening "
-        "windows its coupled share counted, and for a task GLM the trials whose interval "
+        "windows its passing share counted, and for a task GLM the trials whose interval "
         "touches no BAD_ span.",
     "excluded.skipped":
         "{output} was not computed: {reason}.",
     "summary.condition_not_assessed":
         "Every screening window of this condition touches a BAD_ span, so it is not "
-        "assessed: no channel is counted as failing here, and its coupled-window shares are "
+        "assessed: no channel is counted as failing here, and its passing-window shares are "
         "blank.",
     "summary.condition_rebuilt":
         "The motion figures are the run&rsquo;s, narrowed to this condition. The SCI/PSP "
@@ -58,7 +58,7 @@ NOTES = {
         "is good (line <strong>{cv}</strong>). SCI threshold: <strong>{sci}</strong>.",
     "quality.brain_views":
         "Red is rejected by screening, whatever its SCI; the rest are graded green to red by "
-        "SCI against the run&rsquo;s line. Screening counts coupled windows, so a channel "
+        "SCI against the run&rsquo;s line. Screening counts passing windows, so a channel "
         "can be dropped at a high SCI.",
     "quality.head_slider":
         "The panel above on the head, moved through the recording by the slider: left to right, "

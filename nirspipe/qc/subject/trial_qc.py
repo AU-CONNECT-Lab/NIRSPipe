@@ -105,7 +105,7 @@ def trial_sqm(raw, t0: float, t1: float,
     the rows that read no fixed window: its CV and SNR would be the whole crop's under a
     windowed label. One shorter than :data:`MIN_SCI_TRIAL_S` returns ``{}``, drawn blank: its
     SCI would be a correlation over a heartbeat or two. No sliding-window series is attached,
-    and a trial shorter than two screening windows gets no coupled-window share, so its
+    and a trial shorter than two screening windows gets no passing-window share, so its
     status row screens nothing rather than rejecting everything.
     """
     from nirspipe.qc.metrics import (

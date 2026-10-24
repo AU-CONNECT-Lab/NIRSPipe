@@ -38,7 +38,7 @@ def optode_layout_static(
     """Matplotlib static optode flat map. Returns base64 PNG or None.
 
     A pair in ``bad_channels`` is red whatever its SCI, so this is a quality map rather than
-    an SCI map: a channel rejected on its coupled-window share is never drawn green beside a
+    an SCI map: a channel rejected on its passing-window share is never drawn green beside a
     table calling it BAD.
 
     Optodes sit where MNE's topomap projection puts them, inside MNE's head outline, so this

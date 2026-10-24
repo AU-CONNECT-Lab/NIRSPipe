@@ -29,7 +29,7 @@ NOTES = {
         "Each block&rsquo;s onset on the shared clock minus {ref}&rsquo;s. Beyond "
         "{tol}&nbsp;s ({n} samples) means a late trigger or drifting clocks.",
     "hyper_raw.usable":
-        "A channel is usable by the dyad only while it is coupled in <em>both</em> members "
+        "A channel is usable by the dyad only while it is passing in <em>both</em> members "
         "at once, so the dyad can keep less time than either member.",
     "hyper_raw.usable_panel":
         "Above the carpet: each member&rsquo;s long-channel mean SCI and PSP, which build the "
@@ -51,10 +51,10 @@ NOTES = {
         "median, mean and SD, so a drop is movement removed.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: first each block&rsquo;s share "
-        "of coupled windows, then window by window. Bars are long channels, ringed discs "
+        "of passing windows, then window by window. Bars are long channels, ringed discs "
         "short ones; light grey has no value.",
     "hyper_raw.head_by_condition":
-        "Colour is the share of the block&rsquo;s windows in which the channel was coupled "
+        "Colour is the share of the block&rsquo;s windows in which the channel passed "
         "in that member.",
     "hyper_raw.head_slider":
         "A row per member, moved through the recording by the slider: left to right, whether "
@@ -76,7 +76,7 @@ NOTES = {
         "Green is kept by every member, yellow mixed, red kept by none.",
     "hyper_raw.channel_decisions":
         "A row per channel pair, members side by side, long and short channels in separate "
-        "tables. Red marks a pair that member rejected: BAD for too few coupled windows, BAD "
+        "tables. Red marks a pair that member rejected: BAD for too few passing windows, BAD "
         "(manual) by hand. Click a decision to cycle it; it saves when the page is served by "
         "<code>nirspipe-rate hyper</code>.",
     "hyper_raw.channels_tsv":
@@ -185,7 +185,7 @@ NOTES = {
     "hyper_post.condition_grid":
         "Each member&rsquo;s channel pairs over this window. <b>Run</b> is the whole-run "
         "screening every coherence used; <b>In condition</b> says whether a pair passes on "
-        "this window alone, and rejects nothing. Hover a cell for its coupled-window share.",
+        "this window alone, and rejects nothing. Hover a cell for its passing-window share.",
     "hyper_post.condition_summary":
         "Every condition&rsquo;s channel grid in one figure, a column per pair: a pair "
         "failing in one condition shows as a lone red cell. <b>Run</b> is the screening "
@@ -208,7 +208,7 @@ NOTES = {
         "dyad's own values side by side.",
     "hyper_group.usable_read":
         "One bar per dyad. A cell is one channel pair in one window, usable when it was "
-        "coupled in both members at the same moment.",
+        "passing in both members at the same moment.",
     "hyper_group.pair_field_read":
         "One dot per cell, dark usable and pale lost, with the pair columns ordered worst "
         "first.",

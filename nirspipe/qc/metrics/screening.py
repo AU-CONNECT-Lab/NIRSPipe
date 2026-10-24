@@ -94,7 +94,7 @@ CRITERIA: tuple[Criterion, ...] = (
               config_field="sci_threshold", screens=False),
     Criterion("psp", "PSP", None, _psp_scorer,
               config_field="psp_threshold", screens=False),
-    Criterion("good_frac", "coupled windows", GOOD_FRAC_PASS, _good_frac_scorer,
+    Criterion("good_frac", "passing windows", GOOD_FRAC_PASS, _good_frac_scorer,
               config_field="min_good_frac", needs_context=True),
 )
 
@@ -185,8 +185,8 @@ def require_screened(scores: dict[str, dict[str, float]], name: str) -> None:
     if unmeasured:
         raise StageError(
             f"{name}: channel screening could not measure {', '.join(unmeasured)} (the "
-            f"warning above says why), so it cannot tell a coupled channel from an "
-            f"uncoupled one. A recording needs two {SCREEN_WINDOW_S:g} s windows outside "
+            f"warning above says why), so it cannot tell a passing channel from a "
+            f"failing one. A recording needs two {SCREEN_WINDOW_S:g} s windows outside "
             f"its BAD_ spans and a cardiac band its sampling rate can filter.")
 
 
@@ -197,7 +197,7 @@ def screen_channels(
     """The rejected channels, and which criteria each one failed.
 
     screen_channels({"good_frac": {"S1_D1 760": 0.4}})
-    -> (["S1_D1 760"], {"S1_D1 760": ["coupled windows"]})
+    -> (["S1_D1 760"], {"S1_D1 760": ["passing windows"]})
 
     The union over the criteria that screen: one failed is enough. Criteria with ``screens``
     unset are scored and reported but reject nothing, so a channel with a poor whole-run SCI

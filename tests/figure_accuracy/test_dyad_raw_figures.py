@@ -220,13 +220,13 @@ def test_the_panels_on_the_shared_screening_grid_are_drawn(groups, group, desc):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_the_head_slider_loses_each_planted_decoupling_in_its_coupled_row(groups, group):
+def test_the_head_slider_loses_each_planted_decoupling_in_its_passing_row(groups, group):
     from tests._dyad_fingerprint import CONDITION_FAILING
     from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
     path = groups.figure(group, "desc-rawheadslider_nirs.html")
     fig, frames = one_figure(path), plotly_frames(path)
     columns, rows = slider_layout(fig)
-    assert columns == ["Coupled", "SCI", "PSP"]
+    assert columns == ["Passing", "SCI", "PSP"]
     assert sorted(rows) == sorted(m.sid for m in groups.truth.group(group))
 
     def heads(sid, pair):
@@ -246,19 +246,19 @@ def test_the_head_slider_loses_each_planted_decoupling_in_its_coupled_row(groups
         if m.subject not in CONDITION_FAILING:
             continue
         pair, onset, span = CONDITION_FAILING[m.subject]
-        coupled, sci, _psp = heads(m.sid, pair)
-        at = [k for k, name in enumerate(fig["data"][coupled]["text"]) if name == pair]
+        passing, sci, _psp = heads(m.sid, pair)
+        at = [k for k, name in enumerate(fig["data"][passing]["text"]) if name == pair]
         inside = [c for c in frames if c - half >= onset and c + half <= onset + span]
         assert inside, (m.sid, pair)
         for c in inside:
-            row = colours(c, coupled)
+            row = colours(c, passing)
             assert np.all(np.asarray(row["marker"]["color"], float)[at] == 0.0), (m.sid, c)
             assert {row["customdata"][k] for k in at} == {"no"}, (m.sid, c)
             # the planted anti-phase pulse drives the pair's SCI far under any line
             assert np.all(np.asarray(colours(c, sci)["marker"]["color"], float)[at] < 0.5)
         if pair != m.rejected:
             outside = [c for c in frames if c + half < onset or c - half > onset + span]
-            kept = [np.all(np.asarray(colours(c, coupled)["marker"]["color"], float)[at] == 1.0)
+            kept = [np.all(np.asarray(colours(c, passing)["marker"]["color"], float)[at] == 1.0)
                     for c in outside]
             assert np.mean(kept) > 0.8, (m.sid, np.mean(kept))
 

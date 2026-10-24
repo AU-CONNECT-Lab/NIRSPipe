@@ -215,7 +215,7 @@ def build_usable_time(
 ) -> "go.Figure | None":
     """Which pairs the dyad could use, when, and what went wrong where it could not.
 
-    A channel is usable by the dyad only while it is coupled in **both** members at the same
+    A channel is usable by the dyad only while it is passing in **both** members at the same
     moment, so the dyad's usable time is the intersection of the two and not the smaller of
     them: two members can each keep 13 of 14 pairs and share only 12, if the pair they each
     lose is a different one. That intersection is the carpet at the bottom.
@@ -289,10 +289,10 @@ def build_usable_time(
         colorscale=[[0, _BAD_COLOR], [0.33, _BAD_COLOR], [0.33, _MIX_COLOR],
                     [0.66, _MIX_COLOR], [0.66, _GOOD_COLOR], [1, _GOOD_COLOR]],
         zmin=0, zmax=2, showscale=False, ygap=2,
-        hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>%{z:.0f} member(s) coupled<extra></extra>",
+        hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>%{z:.0f} member(s) passing<extra></extra>",
     ), row=n_rows, col=1)
     # the key a discrete heatmap cannot carry itself
-    for colour, lab in ((_GOOD_COLOR, "coupled in both"), (_MIX_COLOR, "one member only"),
+    for colour, lab in ((_GOOD_COLOR, "passing in both"), (_MIX_COLOR, "one member only"),
                         (_BAD_COLOR, "neither")):
         fig.add_trace(go.Bar(x=[None], y=[None], orientation="h", name=lab,
                              marker=dict(color=colour, line=dict(width=0)),
@@ -852,7 +852,7 @@ def build_head_by_condition(
     grid: dict,
     conditions: dict,
 ) -> "go.Figure | None":
-    """One head per member per block, coloured by the share of its windows that coupled.
+    """One head per member per block, coloured by the share of its windows that passed.
 
     The aggregated view: which part of whose cap went and in which block. Complements the
     usable-time carpet, which is channel by time with no geometry.
@@ -877,7 +877,7 @@ def build_head_by_condition(
                 if scope not in geo:
                     continue
                 vals = pair_values(geo, scope, by_pair, lambda v, s=sel: v[s].mean())
-                _head_glyph(fig, geo, scope, vals, ri, ci, "Coupled<br>windows", 0.0, 1.0,
+                _head_glyph(fig, geo, scope, vals, ri, ci, "Passing<br>windows", 0.0, 1.0,
                             bar=(ri == 1 and ci == len(names) and scope == "long"),
                             colorscale=HEAD_SCALE, sid=sid, blank_color=_NO_VALUE)
     _head_axes(fig, geo_by_sub, len(subject_ids), len(names), row_labels=subject_ids)

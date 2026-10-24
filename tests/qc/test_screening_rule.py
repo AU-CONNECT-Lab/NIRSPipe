@@ -20,7 +20,7 @@ from tests._synth import synth_raw
 def test_a_channel_under_the_coupled_window_line_is_rejected_and_says_why():
     bad, why = screen_channels({"good_frac": {"a": GOOD_FRAC_PASS - 0.1, "b": 1.0}})
     assert bad == ["a"]
-    assert why == {"a": ["coupled windows"]}
+    assert why == {"a": ["passing windows"]}
 
 
 def test_whole_run_sci_and_psp_are_reported_but_reject_nothing():

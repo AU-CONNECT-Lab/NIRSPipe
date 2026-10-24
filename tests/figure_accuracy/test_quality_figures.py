@@ -96,7 +96,7 @@ def table(denoise_run):
 
 
 @pytest.mark.parametrize("metric, column", [(PSP, "psp"), (CV, "cv"),
-                                            (SNR, "snr"), ("Coupled", "good_frac")])
+                                            (SNR, "snr"), ("Passing", "good_frac")])
 def test_every_grid_cell_prints_the_channel_table_value(grid, table, metric, column):
     for channel, row in table.items():
         printed = float(grid[(channel, metric)][0])
@@ -146,7 +146,7 @@ def test_the_report_table_heads_both_sci_columns_with_their_estimator(denoise_ru
 def test_the_head_slider_reads_coupled_sci_psp_and_never_couples_the_dead_pair(denoise_run):
     path = denoise_run.figure("headslider")
     fig, frames = one_figure(path), plotly_frames(path)
-    assert slider_layout(fig) == (["Coupled", "SCI", "PSP"], ["sub-01"])
+    assert slider_layout(fig) == (["Passing", "SCI", "PSP"], ["sub-01"])
     dead = next(p for p in denoise_run.truth.pairs if p.bad).name
     i = next(i for i, t in enumerate(fig["data"])
              if "coupled:" in (t.get("hovertemplate") or "") and dead in list(t.get("text") or []))

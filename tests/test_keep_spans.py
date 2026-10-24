@@ -14,7 +14,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.bids import get_layout
 from nirspipe.io.snirf import read_snirf
 from nirspipe.pipeline.prep_pipeline import PrepConfig, intensity_to_od, mark_bad_channels, run_prep
-from nirspipe.qc.metrics.windowed import _counted, counted_screen_windows, coupled_windows
+from nirspipe.qc.metrics.windowed import _counted, counted_screen_windows, passing_windows
 from nirspipe.qc.subject.record_io import read_record
 from nirspipe.utils.spans import (UNSELECTED, add_bad_spans, bad_spans, excluded_spans,
                                   excluded_time, mark_unselected)
@@ -132,7 +132,7 @@ def test_a_window_touching_a_span_is_not_counted():
 
 def test_the_pre_check_and_the_screening_count_the_same_windows():
     od = intensity_to_od(mark_unselected(fingerprint_raw("01", "tapping")[0], [(33.0, 200.0)]))
-    got = coupled_windows(od, 0.8, 1.9, 0.75, 0.12)
+    got = passing_windows(od, 0.8, 1.9, 0.75, 0.12)
     centers, counted = counted_screen_windows(od)
     assert np.array_equal(centers, got["centers"])
     expected = got["mask"][:, counted].mean(axis=1)
@@ -142,7 +142,7 @@ def test_the_pre_check_and_the_screening_count_the_same_windows():
 
 def test_without_spans_the_share_is_the_plain_window_mean():
     od = intensity_to_od(fingerprint_raw("01", "tapping")[0])
-    got = coupled_windows(od, 0.8, 1.9, 0.75, 0.12)
+    got = passing_windows(od, 0.8, 1.9, 0.75, 0.12)
     assert [got["fractions"][ch] for ch in od.ch_names] == got["mask"].mean(axis=1).tolist()
 
 

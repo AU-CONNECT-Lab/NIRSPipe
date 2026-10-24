@@ -390,7 +390,7 @@ def channel_columns(drop: "Sequence[str]" = ()) -> list[tuple[str, str]]:
 
 
 # Every column a table prints, minus the derived Status, plus the three raw values no table
-# has room for: the coupled-window share the verdict rests on, the verdict itself as a flag,
+# has room for: the passing-window share the verdict rests on, the verdict itself as a flag,
 # and the criterion it failed.
 CSV_FIELDS = (*(key for key, _ in channel_columns(("status",))),
               "good_frac", "is_bad", "reason")
@@ -403,7 +403,7 @@ OD_SPLIT_COLUMNS = (
     ("channel_retention_rate", "Channel retention"),
     ("sci_win_mean",           f"Mean SCI ({SCI_WINDOW_S:g} s)"),
     ("sci_mean",               "Mean SCI (whole run)"),
-    ("good_frac_mean",         "Coupled windows"),
+    ("good_frac_mean",         "Passing windows"),
     ("psp_mean",               f"Mean PSP ({PSP_WINDOW_S:g} s)"),
     ("snr_mean",               f"Mean SNR μ/σ ({CV_WINDOW_S:g} s)"),
     ("cv_mean",                f"Mean CV ({CV_WINDOW_S:g} s)"),
@@ -676,7 +676,7 @@ def format_rows(
     ``sci_threshold`` None means no line was recorded, and the SCI cell stays uncoloured.
     ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
 
-    Status is ``BAD`` for a channel rejected on its coupled-window share, the reason every
+    Status is ``BAD`` for a channel rejected on its passing-window share, the reason every
     table's note states once, and ``BAD (manual)`` for one rejected by hand. ``reason`` keeps
     the full list for the channel TSV.
     """
@@ -684,12 +684,12 @@ def format_rows(
     from nirspipe.qc.metrics import CRITERIA, resolve_cutoffs
 
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold)
-    coupled = next(c.label for c in CRITERIA if c.name == "good_frac")
+    passing = next(c.label for c in CRITERIA if c.name == "good_frac")
     out = []
     for row in rows:
         why = _failed_criteria(row, cutoffs) if row["is_bad"] else []
-        # the coupled-window rule is the usual reason and the notes name it once
-        shown = [w for w in why if w != coupled]
+        # the passing-window rule is the usual reason and the notes name it once
+        shown = [w for w in why if w != passing]
         formatted: dict[str, Any] = {
             "name":       row.get(name_key),
             "status":     ("BAD (" + "/".join(shown) + ")" if shown

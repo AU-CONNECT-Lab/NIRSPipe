@@ -235,7 +235,7 @@ def _sci_scores(stages: dict[str, Path]) -> dict[str, float]:
 
 
 def _good_frac_scores(stages: dict[str, Path]) -> dict[str, float]:
-    """Per-channel coupled-window share from the sci sidecar, or empty.
+    """Per-channel passing-window share from the sci sidecar, or empty.
 
     Not recomputed when it is absent, unlike :func:`_sci_scores`: it depends on this run's
     ``--sci-threshold``, ``--psp-threshold``, ``--min-good-frac`` and ``--screen-scope``,
@@ -307,7 +307,7 @@ def _short_section(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
-    Coupling (SCI, PSP, the coupled-window share), amplitude (SNR, CV) and saturation,
+    Coupling (SCI, PSP, the passing-window share), amplitude (SNR, CV) and saturation,
     against the whole recording's ``ceiling``, transfer to short
     channels, and so does the whole spike family: the mask is a per-channel MAD test, and the
     frame counts over it ask how many of *these* channels spiked at once, which the windowed
@@ -456,7 +456,7 @@ def raw_sections(
     The separations that produced the split are stamped beside those counts, since the
     defaults can move and a reader of an old record cannot otherwise recover them.
 
-    ``good_frac_scores`` is the coupled-window share the screening already counted, passed
+    ``good_frac_scores`` is the passing-window share the screening already counted, passed
     in rather than recounted: it is two windowed passes over the recording, and a caller
     that screened has it. None leaves the entry empty rather than paying for it again.
     """
@@ -737,7 +737,7 @@ def _forced_bads(stages: dict[str, Path], cutoffs: dict[str, float]) -> "frozens
     ::
 
       sidecar bad_channels [S2_D2 760, S2_D2 850, S3_D3 760, S3_D3 850], S3 failing the
-      coupled-window line on good_frac_scores  ->  {S2_D2 760, S2_D2 850}
+      passing-window line on good_frac_scores  ->  {S2_D2 760, S2_D2 850}
     """
     from nirspipe.qc.metrics import screen_channels
 
@@ -848,7 +848,7 @@ def _condition_entries(
     numbers for one recording. ``forced`` are the run's channels rejected by hand or for
     non-finite samples, which fail every condition whatever their coupling there.
 
-    ``excluded`` are the run's ``BAD_`` spans as ``(start, stop)``. They leave the coupled share,
+    ``excluded`` are the run's ``BAD_`` spans as ``(start, stop)``. They leave the passing share,
     and so the assessment; each entry states its ``kept_s`` and ``counted_windows``, and one
     with no counted window is not assessed.
     """

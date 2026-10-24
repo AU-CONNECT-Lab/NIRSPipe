@@ -5,8 +5,8 @@ is a column selection out of the windowed metrics the run already computed, neve
 the recording, so its numbers stay on the run's filter and window grid. See
 :func:`~nirspipe.qc.metrics.windowed.condition_window_means`.
 
-Each view screens on its own stretch, so a channel coupled through one condition and loose
-through another is named in the one it was loose in. That is what a per-condition page is
+Each view screens on its own stretch, so a channel passing in one condition and failing
+in another is named in the one it failed in. That is what a per-condition page is
 for. It is a *view*, not what the run did: the recording was processed under the run's
 verdict, and the run's own page carries it, one click away through the run index.
 """
@@ -993,9 +993,9 @@ def condition_slices_from_record(
     matrices and their window bounds, so a condition is a column selection out of what the
     run measured once.
 
-    The coupled-window share is rebuilt here rather than read, because the record stores
+    The passing-window share is rebuilt here rather than read, because the record stores
     only its whole-run value. It goes through
-    :func:`~nirspipe.qc.metrics.windowed.coupled_mask_from_matrices`, the same AND the
+    :func:`~nirspipe.qc.metrics.windowed.passing_mask_from_matrices`, the same AND the
     screening applied, so a condition's share cannot disagree with the verdict the run was
     screened by. Both cutoffs have to be the run's own; passing anything else produces a
     number no channel was judged against.
@@ -1008,7 +1008,7 @@ def condition_slices_from_record(
     recovered from the whole-run scalars.
     """
     from nirspipe.qc.metrics.windowed import (
-        condition_window_means, coupled_mask_from_matrices, windows_touching,
+        condition_window_means, passing_mask_from_matrices, windows_touching,
     )
 
     windowed = record.get("windowed") or {}
@@ -1029,7 +1029,7 @@ def condition_slices_from_record(
     sci_by_cond = condition_window_means(sci_matrix, sci_times, windows)
     psp_by_cond = ({} if not psp_matrix or psp_times is None
                    else condition_window_means(psp_matrix, psp_times, windows))
-    mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, sci_cutoff, psp_cutoff) \
+    mask = passing_mask_from_matrices(sci_matrix, psp_matrix, sci_cutoff, psp_cutoff) \
         if psp_matrix or psp_cutoff is None else None
     if mask is not None and len(spans):
         mask = mask.astype(float)

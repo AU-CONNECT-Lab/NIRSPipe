@@ -114,7 +114,7 @@ def mark_bad_channels(
     Windows touching a ``BAD_`` span are never counted, and fewer than two left stops the run.
 
     Returns raw (modified in-place), the rejected channel names, the SCI scores, and the
-    coupled-window shares, the last two because the report and the quality record both want
+    passing-window shares, the last two because the report and the quality record both want
     them on their own. ``keep`` (pairs a reviewer kept) does not change the rejections
     returned; it only stops a run whose every channel failed from being refused here.
     Raises StageError if the criteria leave no usable channel and nothing is kept.
@@ -199,7 +199,7 @@ class PrepConfig:
     resp_h_freq: float
     session: str | None = None
     psp_threshold: float | None = None      # a second per-window line, off unless given
-    min_good_frac: float = GOOD_FRAC_PASS   # share of coupled windows a kept channel needs
+    min_good_frac: float = GOOD_FRAC_PASS   # share of passing windows a kept channel needs
     screen_scope: str = "run"               # count those windows over "run" or "task" only
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD
     # trial window for the report's epoch figures and per-trial scoring; None means the

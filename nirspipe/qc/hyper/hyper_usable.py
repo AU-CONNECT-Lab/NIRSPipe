@@ -1,6 +1,6 @@
 """The dyad's shared usable time, as the numbers a cohort reads rather than as a carpet.
 
-A cell is one channel pair in one window, and it is usable only while the pair is coupled in
+A cell is one channel pair in one window, and it is usable only while the pair is passing in
 **both** members at that moment. That intersection is what
 :func:`~nirspipe.qc.metrics.hyper.dyad_status` computes; this reduces it to what a
 cohort report can carry: a handful of scalars for the record, and one row per
@@ -90,7 +90,7 @@ def usable_table(grid: dict, subject_ids: list[str],
     under the condition ``whole run``, so the table has the same shape either way and a
     cohort panel does not have to know which it is reading.
 
-    The windows are on the dyad's aligned clock, :func:`coupled_grid` having already put
+    The windows are on the dyad's aligned clock, :func:`passing_grid` having already put
     every member on it; a condition span measured on a member's own clock would select the
     wrong columns here by that member's crop offset.
     """

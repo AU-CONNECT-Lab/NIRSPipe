@@ -15,7 +15,7 @@ def test_a_screened_out_pair_names_the_coupled_window_criterion():
                                                 psp_threshold=0.1)}
     # the usual reason is stated once in each table's note, so Status prints it bare
     assert cells["S1_D1"]["status"] == "BAD"
-    assert "coupled windows" in cells["S1_D1"]["reason"]
+    assert "passing windows" in cells["S1_D1"]["reason"]
     assert cells["S2_D2"]["status"] == "OK" and not cells["S2_D2"]["reason"]
 
 

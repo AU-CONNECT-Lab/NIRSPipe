@@ -144,9 +144,9 @@ from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import span_kind
 from nirspipe.qc.metrics.windowed import (
-    _in_scope, coupled_mask_from_matrices, window_centers,
+    _in_scope, passing_mask_from_matrices, window_centers,
 )
-from nirspipe.qc.metrics.hyper import coupled_grid, member_series
+from nirspipe.qc.metrics.hyper import passing_grid, member_series
 from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
 from nirspipe.qc.boilerplate.vocabulary import (
     format_metric, is_key_metric, metric_class, metric_label, metric_summary, with_unit,
@@ -376,7 +376,7 @@ def _section_head_slider(
     figures_dir: Path,
     fig_name,
 ) -> dict:
-    """The dyad page's head slider for one subject: whether each window coupled, then its SCI
+    """The dyad page's head slider for one subject: whether each window passed, then its SCI
     and PSP, on the head, window by window.
 
     Read off the stored matrices, cut to a condition's windows when they are, through the dyad
@@ -386,14 +386,14 @@ def _section_head_slider(
     if sci_matrix is None or psp_matrix is None or times is None or not len(channels):
         return out
     with _guard("Head slider", errors, subject):
-        mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, cutoffs["sci"], cutoffs["psp"])
+        mask = passing_mask_from_matrices(sci_matrix, psp_matrix, cutoffs["sci"], cutoffs["psp"])
         if mask is None:
             return out
         sid = f"sub-{subject}"
         sqm = {sid: {"screen_windows": {"mask": mask, "centers": window_centers(times),
                                         "sci": sci_matrix, "psp": psp_matrix,
                                         "channel_order": list(channels)}}}
-        grid = coupled_grid(sqm, [sid], {})
+        grid = passing_grid(sqm, [sid], {})
         long_names, _ = long_short_channels(raw_intensity, sep_bands)
         geo = head_geometry(raw_intensity, list(dict.fromkeys(pair_of(n) for n in long_names))
                             or grid["pairs"]) if grid is not None else None

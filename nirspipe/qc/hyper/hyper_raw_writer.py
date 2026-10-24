@@ -30,7 +30,7 @@ from nirspipe.qc.figures.hyper.hyper_figures import (
 )
 from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
 from nirspipe.qc.metrics.hyper import (
-    compute_hyper_sqm, coupled_grid, member_series, motion_summary, shared_screen_windows,
+    compute_hyper_sqm, passing_grid, member_series, motion_summary, shared_screen_windows,
 )
 from nirspipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from nirspipe.qc.common.report_shell import guard, note
@@ -214,7 +214,7 @@ def _process_hyper_raw_group(
         if intensity_raws and cardiac_l_freq is not None and cardiac_h_freq is not None:
             shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids,
                                            cardiac_l_freq, cardiac_h_freq)
-        grid = coupled_grid(shared, subject_ids, {}, duration_s=duration_s) if shared else None
+        grid = passing_grid(shared, subject_ids, {}, duration_s=duration_s) if shared else None
     if grid is None:
         note(notes, label, "no shared screening grid: a member's aligned recording could "
                            "not be screened. The usable-time and head panels are empty")

@@ -1,7 +1,7 @@
 """Which stretches of a recording the channel screening counts over.
 
 A run holds time no analysis reads: the lead-in before the first block, the gaps between
-blocks, the tail after the last one. ``"task"`` counts coupled windows only inside the
+blocks, the tail after the last one. ``"task"`` counts passing windows only inside the
 annotated blocks.
 
 This is one channel set either way: only the *denominator* is restricted, so a contrast

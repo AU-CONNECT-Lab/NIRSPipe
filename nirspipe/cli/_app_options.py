@@ -132,7 +132,7 @@ def add_min_good_frac(container, note: str = "") -> None:
 
 
 def add_screen_scope(container, note: str = "") -> None:
-    """``--screen-scope``: which part of the recording the coupled windows are counted over."""
+    """``--screen-scope``: which part of the recording the passing windows are counted over."""
     container.add_argument(
         "--screen-scope", choices=["run", "task"], default="run",
         help="Which windows count toward --min-good-frac: 'run' (default) the whole "

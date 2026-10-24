@@ -73,7 +73,7 @@ def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_fra
     """
     return [
         ("Status",  None,               None,  None),
-        ("Coupled", "good_frac_per_ch", ".3f", lambda v: v >= good_frac_thresh),
+        ("Passing", "good_frac_per_ch", ".3f", lambda v: v >= good_frac_thresh),
         (f"SCI ({SCI_WINDOW_S:g} s)", "sci_per_ch", ".3f", lambda v: v >= sci_thresh),
         (f"CV ({CV_WINDOW_S:g} s)",   "cv_per_ch",  ".3f", lambda v: v <= cv_thresh),
         (f"PSP ({PSP_WINDOW_S:g} s)", "psp_per_ch", ".3f",
@@ -145,8 +145,8 @@ def channel_quality_heatmap(
     already ordered ``ch_names`` long block first; it draws the divider and names the two
     blocks.
 
-    Status is the screening verdict and Coupled is the row that produces it, which is why it
-    sits directly under: a channel can fail on its coupled-window share with every average
+    Status is the screening verdict and Passing is the row that produces it, which is why it
+    sits directly under: a channel can fail on its passing-window share with every average
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
     them prunes; PSP with ``psp_thresh`` None is drawn neutral, its value in the hover.
@@ -324,7 +324,7 @@ def member_condition_heatmap(
                                                 words=("pass", "fail"))
                     if share is not None:
                         line = member.get("line")
-                        cell += f"<br>coupled {share:.2f}" + (
+                        cell += f"<br>passing {share:.2f}" + (
                             f" against {sid}'s line {line:.2f}" if line is not None else "")
                     cell = f"{label} · {cell}"
                 xs.append(i * _SPACING)

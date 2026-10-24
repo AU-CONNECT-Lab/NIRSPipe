@@ -264,7 +264,7 @@ def _split_sizes(values: np.ndarray, size: float) -> "tuple[np.ndarray, np.ndarr
     return np.where(finite, size, 0.0), np.where(finite, 0.0, size)
 
 
-def _coupled_words(values: np.ndarray, per_pair) -> np.ndarray:
+def _passing_words(values: np.ndarray, per_pair) -> np.ndarray:
     """``yes`` or ``no`` per marker, the hover of a row whose colour is a pass or a fail."""
     return np.repeat(np.where(np.asarray(values) >= 0.5, "yes", "no"), per_pair)
 
@@ -274,16 +274,16 @@ def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
     """The slider's numbers, left to right: (label, colour bar title, {sid: {pair: series}},
     cmin, cmax, colour scale).
 
-    Coupled is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
+    Passing is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
     the subject report's SCI/PSP strip follows. PSP with no line spans its own values on one
     hue, as that strip draws it; SCI with no line, or a number with no data, is left out.
     """
     rows = []
     ok = grid.get("ok") or {}
-    coupled = {sid: dict(zip(grid["pairs"], np.asarray(ok[sid], dtype=float)))
+    passing = {sid: dict(zip(grid["pairs"], np.asarray(ok[sid], dtype=float)))
                for sid in subject_ids if sid in ok}
-    if coupled:
-        rows.append(("Coupled", "Coupled", coupled, 0.0, 1.0, HEAD_SCALE))
+    if passing:
+        rows.append(("Passing", "Passing", passing, 0.0, 1.0, HEAD_SCALE))
     window = f"<br>({SCREEN_WINDOW_S:g} s)"
     for label, line in (("SCI", cutoffs.get("sci")), ("PSP", cutoffs.get("psp"))):
         key = f"per_pair_{label.lower()}"
@@ -320,7 +320,7 @@ def build_head_slider(
 ) -> "go.Figure | None":
     """A row of heads per member, or the one subject's, the slider running the whole recording.
 
-    The instantaneous view, in columns read left to right: whether the window coupled, the
+    The instantaneous view, in columns read left to right: whether the window passed, the
     mask the screening counts, then SCI and PSP, the numbers that build it, each on a scale
     centred on its line in ``cutoffs`` where it has one. Every frame names the block it lands in, so a position on the
     slider says what was being done and not only when. ``conditions`` is ``{name: (t0, t1)}``,
@@ -373,7 +373,7 @@ def build_head_slider(
         bottom = fig.get_subplot(n_rows, mi).yaxis.domain[0]
         bar = dict(x=x_dom[1] + 0.004, xanchor="left", y=(top + bottom) / 2, yanchor="middle",
                    len=0.8 * (top - bottom), title=dict(text=""))
-        if label == "Coupled":
+        if label == "Passing":
             bar.update(tickvals=[0, 1], ticktext=["no", "yes"])
         for ri, sid in enumerate(subject_ids, start=1):
             geo = geo_by_sub.get(sid)
@@ -388,10 +388,10 @@ def build_head_slider(
                 i = head_glyph(fig, geo, scope, vals, ri, mi, title, cmin, cmax,
                                 bar=bar if (ri == n_rows and scope == "long") else False,
                                 colorscale=scale, sid=sid)
-                if label == "Coupled":
+                if label == "Passing":
                     fig.data[i].update(
-                        customdata=_coupled_words(vals, per_pair),
-                        hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>coupled: "
+                        customdata=_passing_words(vals, per_pair),
+                        hovertemplate=f"<b>{sid}</b><br>%{{text}}<br>passing: "
                                       "%{customdata}<extra></extra>")
                 j = _blank_twin(fig, i, sid, ri, mi)
                 size = float(fig.data[i].marker.size)
@@ -411,8 +411,8 @@ def build_head_slider(
             markers = np.repeat(per_channel, per_pair)
             shown, blank = _split_sizes(markers, size)
             coloured = go.Scatter(marker=dict(color=markers.astype(np.float32), size=shown))
-            if label == "Coupled":
-                coloured.customdata = _coupled_words(per_channel, per_pair)
+            if label == "Passing":
+                coloured.customdata = _passing_words(per_channel, per_pair)
             data += [coloured, go.Scatter(marker=dict(size=blank))]
         return data
 

@@ -51,7 +51,7 @@ def compute_raw_sqm(
     cardiac_l_freq, cardiac_h_freq : float
         Cardiac band edges in Hz.
     good_frac_scores : dict[str, float] or None, optional
-        Per-channel share of coupled windows, as the screening already counted it. None
+        Per-channel share of passing windows, as the screening already counted it. None
         stores no such entry rather than paying for a second windowed pass.
     ceiling : float or None, optional
         The whole recording's highest intensity, which the saturated share is counted
@@ -62,7 +62,7 @@ def compute_raw_sqm(
     -------
     dict
         Flat dict of SCI (whole-run and windowed), channel distance, PSP, CP, the
-        coupled-window share, and
+        passing-window share, and
         (intensity input only) CV/SNR/amplitude plus motion metrics.
 
     Notes

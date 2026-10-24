@@ -111,7 +111,7 @@ def test_the_run_page_grid_and_each_condition_page_grid_agree(groups, group):
                     (cond, sid, row, p)
 
 
-def test_the_hover_names_each_cell_s_coupled_share_and_its_member_s_own_line(groups):
+def test_the_hover_names_each_cell_s_passing_share_and_its_member_s_own_line(groups):
     for cond in BLOCKS:
         dots = _figure(_page(groups, "G01", None, cond))["data"][0]
         for m in groups.truth.group("G01"):
@@ -122,7 +122,7 @@ def test_the_hover_names_each_cell_s_coupled_share_and_its_member_s_own_line(gro
                 share = min(v for c, v in frac.items() if pair_of(c) == p)
                 text = next(t for t in dots["text"]
                             if t.startswith(f"{m.sid} · {cond} · {p} ·"))
-                assert f"coupled {share:.2f} against {m.sid}'s line {line:.2f}" in text, text
+                assert f"passing {share:.2f} against {m.sid}'s line {line:.2f}" in text, text
 
 
 # ---- truth checks: the planted verdicts ----

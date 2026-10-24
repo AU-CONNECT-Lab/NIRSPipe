@@ -191,7 +191,7 @@ def test_a_recording_shorter_than_two_windows_stops_prep(tmp_path):
 
 
 def test_an_unmeasured_criterion_is_refused_not_read_as_every_channel_passing():
-    with pytest.raises(StageError, match="could not measure coupled windows"):
+    with pytest.raises(StageError, match="could not measure passing windows"):
         require_screened({"sci": {"S1_D1 760": 0.9}, "good_frac": {}}, "run")
 
 
@@ -203,7 +203,7 @@ def test_prep_refuses_when_the_window_criterion_fails_to_measure(tmp_path, monke
     def broken(*args, **kwargs):
         raise RuntimeError("simulated failure")
     monkeypatch.setattr("nirspipe.qc.metrics.screening.good_window_fraction", broken)
-    with pytest.raises(StageError, match="could not measure coupled windows"):
+    with pytest.raises(StageError, match="could not measure passing windows"):
         _prep(synth_raw("01", "rest"), tmp_path)
 
 

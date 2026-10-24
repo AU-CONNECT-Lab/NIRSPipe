@@ -44,7 +44,7 @@ def _by_label(rows: list[dict]) -> dict:
 # ---- Shared usable time ----
 
 def build_usable_bars(rows: list[dict], order: list[str]) -> "go.Figure | None":
-    """One bar per dyad, split into coupled in both / one member / neither.
+    """One bar per dyad, split into passing in both / one member / neither.
 
     The overview panel, carrying both channels and time, a cell being one channel pair in one
     window. The three colours are the ones the dyad's own usable-time carpet uses.
@@ -52,7 +52,7 @@ def build_usable_bars(rows: list[dict], order: list[str]) -> "go.Figure | None":
     None when no dyad carries the split.
     """
     by_label = _by_label(rows)
-    parts = (("usable_window_frac", "coupled in both", _GOOD_COLOR),
+    parts = (("usable_window_frac", "passing in both", _GOOD_COLOR),
              ("one_member_frac", "one member only", _MIX_COLOR),
              ("neither_frac", "neither", _BAD_COLOR))
     if not any(p[0] in by_label[l]["usable"] for l in order for p in parts[1:]):

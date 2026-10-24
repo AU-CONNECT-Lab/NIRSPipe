@@ -597,7 +597,7 @@
           ('channel_retention_rate', metric_label('channel_retention_rate', condition=(condition_label|default('')) != '')),
           ('sci_win_mean', 'Mean SCI (%g s windows)'|format(sci_window_s)),
           ('sci_mean', 'Mean SCI (whole run)'),
-          ('good_frac_mean', 'Coupled windows'),
+          ('good_frac_mean', 'Passing windows'),
           ('psp_mean', 'Mean PSP (%g s windows)'|format(psp_window_s)),
           ('snr_mean', 'Mean SNR μ/σ (intensity, %g s)'|format(cv_window_s)),
           ('cv_mean', 'Mean CV (intensity, %g s)'|format(cv_window_s))] %}

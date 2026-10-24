@@ -94,7 +94,7 @@ NOTES = {
         "Two values are before &rarr; after {method}.",
     "raw.channel_summary":
         "Green pass, red fail, against this run's lines. Only Status rejects a channel, read "
-        "off the Coupled row.",
+        "off the Passing row.",
     "raw.trial_qc":
         "Each event window scored on its own. Colour is relative within a metric row, not a "
         "threshold.",
@@ -104,7 +104,7 @@ NOTES = {
     "raw.channel_decisions":
         "One row per source-detector pair; SNR, CV, Spike and Saturated print both wavelengths, "
         "and HbO–HbR corr is before motion correction. Red rows were rejected: BAD for too few "
-        "coupled windows, BAD (manual) by hand. Click a decision to cycle it; it saves "
+        "passing windows, BAD (manual) by hand. Click a decision to cycle it; it saves "
         "automatically.",
     "raw.channel_table_condition":
         "One row per source-detector pair; SNR, CV, Spike and Saturated print both wavelengths, "

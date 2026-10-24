@@ -2,7 +2,7 @@
 
 A detector stuck at its ceiling gives both wavelengths the same constant. mne-nirs filters
 that to identical rounding residue and scales it up, so the windowed SCI reads about 1 and the
-peak power is large: the pair passed the coupled-window screening and later broke the AR GLM.
+peak power is large: the pair passed the passing-window screening and later broke the AR GLM.
 """
 
 import mne

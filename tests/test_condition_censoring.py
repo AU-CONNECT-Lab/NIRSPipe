@@ -9,7 +9,7 @@ import pytest
 from nirspipe.cli import run as run_cli
 from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
-from nirspipe.qc.metrics.windowed import (condition_window_means, coupled_mask_from_matrices,
+from nirspipe.qc.metrics.windowed import (condition_window_means, passing_mask_from_matrices,
                                           window_centers, windows_touching)
 from nirspipe.qc.subject.record_io import read_record
 from nirspipe.qc.subject.sqm_record import _kept_seconds
@@ -63,7 +63,7 @@ def test_a_condition_counts_only_its_windows_clear_of_every_span(tmp_path):
     assert 0 < counted.sum() < inside.sum()
     assert entry["counted_windows"] == counted.sum()
 
-    mask = coupled_mask_from_matrices(win["sci_matrix"], win["psp_matrix"],
+    mask = passing_mask_from_matrices(win["sci_matrix"], win["psp_matrix"],
                                       SCI_CUTOFF, PSP_CUTOFF)
     share = np.asarray(mask, dtype=float)[:, counted].mean(axis=1)
     got = entry["per_channel"]["good_frac_per_channel"]

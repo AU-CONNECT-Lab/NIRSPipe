@@ -120,10 +120,10 @@ def _check_condition_grid(cells, run, block, hand=()):
         if metric == "Status":
             assert (value != "OK") == (name in rejected), (block, channel, value)
             seen.add(metric)
-        if metric == "Coupled":
+        if metric == "Passing":
             assert (colour == _BAD_COLOR) == (name in uncoupled), (block, channel, value)
             seen.add(metric)
-    assert seen == {"Status", "Coupled"}
+    assert seen == {"Status", "Passing"}
 
 
 def slider_layout(figure: dict) -> tuple[list[str], list[str]]:

@@ -306,7 +306,7 @@ def _process_run(
                 raw_secs.update(secs)
                 raw_pc.update(pc)
     # A window shorter than two screening windows has too few to count, so it is not offered
-    # a condition at all. Each condition's coupled-window share is in the record's
+    # a condition at all. Each condition's passing-window share is in the record's
     # `by_condition`, sliced from the windowed pass. Bound before the guard: it swallows
     # the exception, and the per-condition views read it afterwards.
     cond_windows: list = []

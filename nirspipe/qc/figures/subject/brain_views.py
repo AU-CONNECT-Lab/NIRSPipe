@@ -71,7 +71,7 @@ def _link_color(sci: float | None, good: bool | None, threshold: float) -> str:
     """The screening verdict first, then the SCI ladder (which matches the flat map).
 
     ``good`` is the verdict and SCI only grades under it. Channels are screened on how many
-    windows they were coupled in, so a channel at SCI 0.96 can be dropped and must not be
+    windows they passed in, so a channel at SCI 0.96 can be dropped and must not be
     drawn green. See ``sci_color``, which carries the same rule for the flat map beside this
     one.
     """

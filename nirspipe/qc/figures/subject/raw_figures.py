@@ -85,7 +85,7 @@ def sci_color(sci: float | None, threshold: float,
       sci_color(0.96, 0.80, rejected=True)   -> red
 
     ``rejected`` outranks SCI because the two are not the same question. Screening counts how
-    many windows a channel was coupled in, so a channel whose whole-run SCI is 0.96 can still
+    many windows a channel passed in, so a channel whose whole-run SCI is 0.96 can still
     be loose through most of a condition and be dropped.
 
     Passing None keeps the SCI-only ladder, for the callers that have no verdict to hand.

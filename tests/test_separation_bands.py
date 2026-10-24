@@ -608,7 +608,7 @@ def test_a_rejected_channel_in_neither_range_prints_why_it_went():
     rows = channel_rows(_split_record(), sci, ["O 760"])
     out = {r["name"]: r for r in format_rows(rows, 0.8)}
 
-    assert out["O 760"]["reason"] == "coupled windows"
+    assert out["O 760"]["reason"] == "passing windows"
     # the usual reason is stated once in the note, not on every row
     assert out["O 760"]["status"] == "BAD"
     assert out["L 760"]["status"] == "OK"

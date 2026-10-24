@@ -2,7 +2,7 @@
 
 Reads :mod:`~nirspipe.pipeline.hyper.group_io`; nothing reads this. Everything that reduces two
 members to one answer applies the same rule: a dyad's channel is usable only while it is
-coupled in **both** of them.
+passing in **both** of them.
 """
 
 from __future__ import annotations
@@ -220,9 +220,9 @@ def compute_group_sqm_raw(
         screen: dict = {}
         screen_windows: dict = {}
         if raw_od is not None:
-            # the coupled-window grid, kept so the panels shade the windows the verdict used
-            from nirspipe.qc.metrics.windowed import coupled_windows
-            counted = coupled_windows(
+            # the passing-window grid, kept so the panels shade the windows the verdict used
+            from nirspipe.qc.metrics.windowed import passing_windows
+            counted = passing_windows(
                 raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
                 scope=resolve_screen_scope(raw, screen_scope))
             if counted["mask"] is not None:
@@ -539,7 +539,7 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one,
     and one that recorded no PSP line is masked on SCI alone.
     """
-    from nirspipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
+    from nirspipe.qc.metrics.windowed import passing_mask_from_matrices, window_centers
 
     windowed = record.get("windowed") or {}
     lines = cutoffs or {}
@@ -548,7 +548,7 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     sci = windowed.get("sci_matrix")
     psp = windowed.get("psp_matrix")
     psp_line = lines.get("psp")
-    mask = coupled_mask_from_matrices(sci, psp, float(lines["sci"]),
+    mask = passing_mask_from_matrices(sci, psp, float(lines["sci"]),
                                       None if psp_line is None else float(psp_line))
     times = windowed.get("sci_times")
     if mask is None or not times:
@@ -591,7 +591,7 @@ def _screen_cutoffs(json_path: Path) -> dict:
     """The screening lines a run used, off its ``desc-sci`` sidecar.
 
     ``{"sci": 0.8, "psp": 0.1, "good_frac": 0.75}``, or an empty dict when the sidecar
-    predates them. A per-condition view rebuilds the coupled-window share from the stored
+    predates them. A per-condition view rebuilds the passing-window share from the stored
     matrices, and it has to apply the lines that subject was actually screened by, not the
     registry defaults or ``nirspipe-hyper``'s own ``--sci-threshold``, which only colours the
     dyad page.

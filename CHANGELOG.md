@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given
+- Reports, tables and the channel TSV's reason call the screened windows "passing windows" in place of "coupled windows"
 
 ### Fixed
 - Channel screening that could not be measured (a cardiac band near Nyquist, a recording under two windows) kept every channel; preprocessing and raw QC now stop instead

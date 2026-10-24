@@ -269,7 +269,7 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
 _CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR"}
 
 def _screening_scope(params: dict[str, Any]) -> str:
-    """Which windows the coupled share was counted over, as the run recorded it."""
+    """Which windows the passing share was counted over, as the run recorded it."""
     counted = params.get("screen_scope_counted")
     if counted == "task":
         return "the windows inside annotated task blocks"
@@ -764,7 +764,7 @@ KEY_METRICS = frozenset({
     "gvtd_pct_above_thresh",    # ... and how much of it clearly moved
     "gvtd_filt_p95",            # ... and how bad it got, in units nothing adaptive sets
     "sci_win_mean",             # the optodes were coupled
-    "good_frac_mean",           # ... and stayed coupled, which is what rejects a channel
+    "good_frac_mean",           # ... and kept passing its windows, which is what rejects a channel
     "hbo_hbr_corr_mean",        # what came out looks like haemodynamics
 })
 
@@ -791,7 +791,7 @@ _STAGE_RAW_AND_CORRECTED = "Measured on the raw recording and again after motion
 _STAGE_CONDITION_MOTION = "Here: the motion-corrected file's windows inside this condition."
 _RAW_METRICS = (
     # good_frac_mean sits here and not with sci/psp, which it is built from: those two are
-    # measured again on the corrected file, and the coupled-window count is taken once, at
+    # measured again on the corrected file, and the passing-window count is taken once, at
     # screening, on the optical density as it arrived
     "good_frac_mean",
     "channel_retention_rate", "cp_mean", "n_flat_channels",
@@ -988,7 +988,7 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "sci_win_mean":            (f"Mean SCI ({SCI_WINDOW_S:g} s)", ".3f", None, _HIGHER),
     "channel_retention_rate":  ("Channel retention", "pct", (0.9, 0.7), _HIGHER),
     "psp_mean":                (f"Mean PSP ({PSP_WINDOW_S:g} s)", ".3f", None, _HIGHER),
-    "good_frac_mean":          ("Coupled windows", "pct", (0.75, 0.5), _HIGHER),
+    "good_frac_mean":          ("Passing windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),

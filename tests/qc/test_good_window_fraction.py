@@ -180,7 +180,7 @@ def test_no_scope_counts_the_whole_recording(stub_windows):
 
 
 def test_a_scope_drops_the_windows_outside_it(stub_windows):
-    """The same channel, judged only on the stretch the analysis reads. Coupled in the first
+    """The same channel, judged only on the stretch the analysis reads. Passing in the first
     two windows and dead in the last two: over the run that is a half, over a scope holding
     only the first two it is all of them."""
     stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])

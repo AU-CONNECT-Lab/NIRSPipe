@@ -42,7 +42,7 @@ def test_rows_are_grouped_by_metric_then_condition():
     assert list(fig.layout.yaxis.ticktext) == ["rest", "task"] * 6
     headings = [a.text for a in fig.layout.annotations]
     assert headings == [f"<b>{m}</b>" for m in
-                        ("Status", "Coupled", f"SCI ({SCI_WINDOW_S:g} s)",
+                        ("Status", "Passing", f"SCI ({SCI_WINDOW_S:g} s)",
                          f"CV ({CV_WINDOW_S:g} s)", f"PSP ({PSP_WINDOW_S:g} s)",
                          f"SNR μ/σ ({CV_WINDOW_S:g} s)")]
 

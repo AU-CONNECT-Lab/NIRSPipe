@@ -132,7 +132,7 @@ def _sci_metrics(
 
 
 def _good_frac_metrics(good_frac_scores: dict[str, float] | None) -> dict[str, Any]:
-    """The coupled-window share per channel and its mean, or empty when nothing measured it.
+    """The passing-window share per channel and its mean, or empty when nothing measured it.
 
     Handed in rather than measured here: the screening already counted these windows, and
     counting them twice is a second pass of windowed SCI and PSP over the whole recording.
@@ -159,7 +159,7 @@ def blank_flat_windows(raw_od: mne.io.Raw, scores: np.ndarray, window_s: float) 
 
     ::
 
-      a pair stuck at the detector's ceiling  ->  NaN in every window, never counted as coupled
+      a pair stuck at the detector's ceiling  ->  NaN in every window, never counted as passing
 
     mne-nirs filters a flat pair to the same rounding residue on both wavelengths and then
     scales it up, which reads as a perfect correlation and a large cardiac peak. A flat

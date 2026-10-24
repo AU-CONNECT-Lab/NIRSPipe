@@ -291,4 +291,4 @@ def test_the_run_page_carries_the_head_slider(raw_viewer_run, page):
     src = page[1]["figure_paths"]["head_slider"]["src"]
     assert src.endswith("_desc-rawheadslider_nirs.html")
     fig = one_figure(raw_viewer_run.out / "sub-01" / src)
-    assert slider_layout(fig) == (["Coupled", "SCI", "PSP"], ["sub-01"])
+    assert slider_layout(fig) == (["Passing", "SCI", "PSP"], ["sub-01"])

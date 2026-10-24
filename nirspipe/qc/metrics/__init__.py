@@ -81,6 +81,6 @@ from nirspipe.qc.metrics.aggregate import (  # noqa: F401
 )
 from nirspipe.qc.metrics.hyper import (  # noqa: F401
     sci_of, _rejected_pairs, _ch_kept_by_member,
-    coupled_grid, dyad_status, member_series,
+    passing_grid, dyad_status, member_series,
     motion_summary, compute_hyper_sqm,
 )

@@ -105,7 +105,7 @@ def _take_windows(matrix: "np.ndarray", idx: "np.ndarray", fill) -> "np.ndarray"
     return out
 
 
-def coupled_grid(
+def passing_grid(
     sqm_data: dict[str, dict],
     subject_ids: list[str],
     offsets: dict[str, float],
@@ -138,7 +138,7 @@ def coupled_grid(
     each member's own clock stop coinciding as soon as the members' offsets differ.
 
     The first member's windows are the dyad's; every other member contributes its window
-    nearest each of them in time (:func:`_nearest_windows`), and counts as not coupled where
+    nearest each of them in time (:func:`_nearest_windows`), and counts as not passing where
     it has none. ``index`` keeps that choice so :func:`member_series` reads the same columns.
 
     None when a member has no grid, or shares no window with the first member.
@@ -163,7 +163,7 @@ def coupled_grid(
             return None
         if (idx < 0).any():
             logger.info("%s has no window within %g s of %d of the dyad's %d; counted as "
-                        "not coupled there", sid, SCREEN_WINDOW_S / 2, int((idx < 0).sum()),
+                        "not passing there", sid, SCREEN_WINDOW_S / 2, int((idx < 0).sum()),
                         len(ref))
     masks = {sid: _take_windows(masks[sid], index[sid], False) for sid in subject_ids}
 
@@ -218,12 +218,12 @@ def shared_screen_windows(
     Each member's own screening runs on its own clock from its first sample, so two members
     whose triggers sit at different points of their recordings were screened on windows that
     never coincide. Measured on the aligned copies, every member's windows start at 0 on the
-    shared clock and are the same stretches of it, so :func:`coupled_grid` compares like with
+    shared clock and are the same stretches of it, so :func:`passing_grid` compares like with
     like at zero offset. The verdict a member was rejected by is untouched: that stays the
     one from its own screening, which its own report shows.
     """
     from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
-    from nirspipe.qc.metrics.windowed import compute_windowed_cv, coupled_windows
+    from nirspipe.qc.metrics.windowed import compute_windowed_cv, passing_windows
 
     out = {}
     for sid in subject_ids:
@@ -235,7 +235,7 @@ def shared_screen_windows(
                            "empty", sid)
             return {}
         od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-        counted = coupled_windows(od, cardiac_l_freq, cardiac_h_freq,
+        counted = passing_windows(od, cardiac_l_freq, cardiac_h_freq,
                                   cutoffs["sci"], cutoffs.get("psp"))
         if counted["mask"] is None:
             return {}
@@ -258,7 +258,7 @@ def shared_screen_windows(
 
 
 def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
-    """``pair x window``: 2 coupled in every member, 1 in some, 0 in none."""
+    """``pair x window``: 2 passing in every member, 1 in some, 0 in none."""
     stack = np.array([grid["ok"][sid] for sid in subject_ids])
     return np.where(stack.all(axis=0), 2, np.where(stack.any(axis=0), 1, 0))
 
@@ -282,7 +282,7 @@ def member_series(sqm_data: dict, sid: str, grid: dict) -> dict:
     The three series are averaged over the same rows the carpet folds into pairs, off the
     same matrices its mask came from, so a dip in a line and a hole under it are one
     measurement and not two. GVTD is absent unless the member's record carried it; see
-    :func:`coupled_grid`. A dyad window the member has no window for is NaN.
+    :func:`passing_grid`. A dyad window the member has no window for is NaN.
 
     ``per_pair_sci`` and ``per_pair_psp`` keep every pair separately, short ones included,
     because the head figures colour one marker per channel and draw both separations.

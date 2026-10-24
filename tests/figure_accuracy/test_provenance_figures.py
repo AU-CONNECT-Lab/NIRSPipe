@@ -62,7 +62,7 @@ def test_the_chain_is_the_denoise_mode_s_order(diagram):
 
 @pytest.mark.parametrize("desc, detail", [
     ("sci", f"SCI {_arg('--sci-threshold'):g} + PSP {_arg('--psp-threshold'):g}, "
-            f"coupled ≥ {_arg('--min-good-frac'):g}"),
+            f"passing ≥ {_arg('--min-good-frac'):g}"),
     ("motcorrected", "tddr"),
     ("preproc", "dpf " + ", ".join(f"{d:g}" for d in DPF)),
 ])
