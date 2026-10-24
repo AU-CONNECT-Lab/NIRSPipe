@@ -205,6 +205,7 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         load_group_raw_bids,
         load_group_stage,
     )
+    from nirspipe.pipeline.dpf import dpf_caveat, wavelengths
     from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
     from nirspipe.qc.hyper.hyper_report import build_hyper_report
     from nirspipe.utils.lineage import path_from
@@ -232,6 +233,10 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
                                      channels_tsv_bads=tsv_bads, imu=member_imu)
     ages = _ages_for(s.dpf, s.bids_dir, list(raws_cw))
     raws_haemo = {sid: _raw_to_haemo(r, s.dpf, ages.get(sid)) for sid, r in raws_cw.items()}
+    # the dyad page says it the way it says a member screening could not judge
+    for sid, age in ages.items():
+        if caveat := dpf_caveat(age, wavelengths(raws_cw[sid])):
+            sqm_data.setdefault(sid, {})["dpf_caveat"] = caveat
     if s.no_align:
         aligned_raws, offsets = trim_to_shortest(raws_haemo)
     else:

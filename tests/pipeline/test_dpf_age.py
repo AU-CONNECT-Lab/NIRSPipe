@@ -65,3 +65,38 @@ def test_the_methods_name_the_age_and_the_equation():
     sentence = step_sentence("beer_lambert", {"dpf": [6.2966, 5.2343], "dpf_age": 30.0})
     assert "6.30 and 5.23" in sentence and "age of 30 years" in sentence
     assert "Scholkmann and Wolf (2013)" in sentence
+
+
+# ---- outside the range the paper recommends ----
+
+def test_inside_the_recommended_range_there_is_nothing_to_say():
+    from nirspipe.pipeline.dpf import dpf_caveat
+    assert dpf_caveat(30.0, [760.0, 850.0]) is None
+    assert dpf_caveat(0.0, [690.0, 950.0]) is None
+
+
+def test_an_age_or_a_wavelength_outside_it_is_named():
+    from nirspipe.pipeline.dpf import dpf_caveat
+    caveat = dpf_caveat(75.0, [660.0, 850.0])
+    assert "age 75 years" in caveat and "660 nm" in caveat and "850 nm" not in caveat
+    assert "extrapolation" in caveat
+
+
+def test_the_run_goes_on_and_the_log_says_so(caplog):
+    od = intensity_to_od(synth_raw("01", "rest"))
+    with caplog.at_level("WARNING"):
+        got = resolve_dpf(["age"], od, 80.0)
+    assert len(got) == len(wavelengths(od))
+    assert any("age 80 years" in r.getMessage() for r in caplog.records)
+
+
+def test_the_report_notes_it_only_for_an_age_dpf():
+    from types import SimpleNamespace
+    from nirspipe.qc.subject.report import _note_dpf_range
+
+    raw = synth_raw("01", "rest")
+    notes = []
+    _note_dpf_range(notes, "01", SimpleNamespace(dpf=["age"], age=80.0), raw)
+    _note_dpf_range(notes, "01", SimpleNamespace(dpf=[6.0], age=None), raw)
+    _note_dpf_range(notes, "01", SimpleNamespace(dpf=["age"], age=30.0), raw)
+    assert len(notes) == 1 and "age 80 years" in notes[0]

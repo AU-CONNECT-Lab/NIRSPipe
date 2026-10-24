@@ -14,7 +14,7 @@ from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
 from nirspipe.io.derivatives import bids_uris
 from nirspipe.io.naming import report_name
 from nirspipe.io.snirf import read_raw_snirf
-from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf
+from nirspipe.pipeline.dpf import as_ppf, dpf_caveat, dpf_from_age, resolve_dpf, wavelengths
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
 from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -275,6 +275,8 @@ def _process_run(
 
     factors = resolve_dpf(dpf, raw_od, run.get("age"))
     ppf = as_ppf(factors)
+    if dpf_from_age(dpf) and (caveat := dpf_caveat(run["age"], wavelengths(raw_od))):
+        note(notes, label, caveat)
     # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):

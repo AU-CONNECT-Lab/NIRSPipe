@@ -143,6 +143,8 @@ def _process_hyper_raw_group(
     for sid in subject_ids:
         if gap := (sqm_data.get(sid) or {}).get("screening_gap"):
             note(notes, label, f"{sid}: " + section_note("caveat.unscreened", reason=gap))
+        if caveat := (sqm_data.get(sid) or {}).get("dpf_caveat"):
+            note(notes, label, f"{sid}: {caveat}")
 
     conditions = _condition_spans(first_raw)
     if not conditions:

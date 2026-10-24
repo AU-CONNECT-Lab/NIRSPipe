@@ -180,6 +180,16 @@ def _note(notes: list, subject: str, message: str) -> None:
     note(notes, f"sub-{subject}", message)
 
 
+def _note_dpf_range(notes: list, subject: str, config: Any, raw_intensity) -> None:
+    """An age DPF computed outside its equation's recommended range, said on the page."""
+    from nirspipe.pipeline.dpf import dpf_caveat, dpf_from_age, wavelengths
+
+    age = getattr(config, "age", None)
+    if age is not None and dpf_from_age(list(getattr(config, "dpf", []) or [])):
+        if caveat := dpf_caveat(age, wavelengths(raw_intensity)):
+            _note(notes, subject, caveat)
+
+
 # ---- Epoching gate ----
 
 def _single_trial_conditions(
@@ -2285,6 +2295,7 @@ def build_subject_report(
                      short_channel_requested=bool(getattr(config, "short_channel", None)),
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),
                      sep_bands=sep_bands)
+    _note_dpf_range(notes, subject, config, raw_intensity)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors,
                                                   figures_dir, fig_name)
     run_cutoffs       = resolve_cutoffs(config)

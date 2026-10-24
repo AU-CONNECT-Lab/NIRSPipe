@@ -31,6 +31,12 @@ NOTES = {
         "Channel screening could not judge this recording: {reason}. No channel was rejected "
         "by it, so OK here means unscreened; preprocessing refuses the recording.",
 
+    # ---- Optics ----
+    "caveat.dpf_age_range":
+        "--dpf age used the Scholkmann and Wolf (2013) equation outside the 0 to 70 years and "
+        "690 to 950 nm it is recommended for ({outside}), so its DPF there is an "
+        "extrapolation. It is also only validated on the frontal head.",
+
     # ---- Motion correction ----
     "caveat.motion_overmarked":
         "Motion correction ({method}) marked {share:.0%} of the good channels' samples as "
