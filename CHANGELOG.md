@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - `--dpf age` takes one DPF per wavelength from each participant's age in participants.tsv, by the Scholkmann and Wolf (2013) equation, and warns outside its recommended range
 - An optional `role` column in the pairs table: pairnull's position pool matches stand-ins by role, and the dyad tables record each member's role
 - `--wtc-phase-null` runs on groups of three or more, each pairing's later member scrambled once per draw and shared across its pairings
+- pairnull draws groups of three or more: each draw takes one stand-in per later member from one other group, shared across its pairings
 
 ### Changed
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given
@@ -19,7 +20,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Channel screening that could not be measured (a cardiac band near Nyquist, a recording under two windows) kept every channel; preprocessing now stops, raw QC reports say why
 - PSP was on a different scale from the 0.1 line it was compared with, so that line passed uncoupled windows; every reported PSP value changes
-- pairnull drew a group of three or more for its first two members only, leaving the other pairings without a null; such groups are now refused
+- pairnull drew a group of three or more for its first two members only, leaving the other pairings without a null
 - groupnull's occasion and cohort levels ranked a group of three or more's mean over every pairing against one pairing's draws; such groups are now refused
 - In a group of three or more, `--isc-phase-null` gave different members identical phase draws when seeded, and one member different surrogates across its pairings when not
 

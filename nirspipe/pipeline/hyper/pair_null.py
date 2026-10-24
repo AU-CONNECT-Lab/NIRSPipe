@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from itertools import combinations, product
 from pathlib import Path
 
 import numpy as np
@@ -40,31 +41,38 @@ POOLS = ("position", "any")
 _DURATION_TOL_S = 1e-3
 
 
-def partner_pool(
+def stand_in_draws(
     groups: dict,
     group_id: str,
     task: str,
     pool: str = "position",
-    position: int = 1,
     session: "str | None" = None,
-) -> list:
-    """The entries that can stand in for one member, taken from the other groups.
+) -> "list[dict]":
+    """The draws a group's re-paired null is made of: in each, a stand-in per replaced member.
 
-    ``groups`` is :func:`parse_group_csv`'s mapping. ``position`` is the index in the target
-    group of the member being replaced.
+    ``groups`` is :func:`parse_group_csv`'s mapping. Every member after the first is
+    replaced, keyed by its index in the target group; the first is held in every pairing.
 
     ::
 
-        pairs with groups G1..G3, two members each
-        partner_pool(groups, "G1", "rest")  -> [G2's member 1, G3's member 1]
+        G1 (t, s, s), G2 (t, s, s), G3 (t, s), by role
+        stand_in_draws(groups, "G1", "main")
+          -> [{1: G2 s#1, 2: G2 s#2}, {1: G2 s#2, 2: G2 s#1}, {1: G3 s}]
 
-    ``position`` keeps a member's role: where the two members of a group are not
-    interchangeable, only the other groups' member at the same index is a valid stand-in.
-    Where the pairs table has a role column the role decides instead of the index, so every
-    other group's member in that role stands in, two students of one group among them.
-    It is also the only safe pool where one person appears in several groups, since ``any``
-    would there pair somebody with themselves. ``any`` doubles the pool and is refused unless
-    the table shows nobody is repeated.
+    Each draw comes from one other occasion, never the target's own. Within it a replaced
+    member's stand-in matches by key: its index under ``position``, its role there where the
+    pairs table has a role column, nothing under ``any``. The donor's members of a key
+    rotate over the target's members of that key, the k-th draw giving the target's q-th
+    the donor's (q + k)-th, so a stand-in fills a member at most once and no draw uses a
+    donor member twice; a donor gives as many draws as its scarcest key has members, and a
+    member it cannot fill goes without in that donor's draws. For a dyad this is one draw per
+    other group's member of that key.
+
+    ``position`` keeps a member's role where the members of a group are not
+    interchangeable. It is also the only safe pool where one person appears in several
+    groups, since ``any`` would there pair somebody with themselves. ``any`` doubles a
+    dyad's pool and is refused unless the table shows nobody is repeated. Who may not stand
+    in against whom is the caller's rule, applied per pairing.
 
     A group recorded in several sessions is one occasion per session, and ``session`` names
     the target's; the group's other sessions are other occasions, as other groups are.
@@ -80,21 +88,53 @@ def partner_pool(
     if pool == "any":
         _refuse_repeated_subjects(same_task, task)
         _warn_unverifiable_pool(same_task)
-        own = {entry.subject_id for entry in same_task[target]}
-        return [entry for occ, members in same_task.items() if occ != target
-                for entry in members if entry.subject_id not in own]
+    own = same_task[target]
 
-    # only the member held fixed is barred, not the whole group, so repeat visits keep a pool
-    held = {e.subject_id for i, e in enumerate(same_task[target]) if i != position}
-    role = same_task[target][position].role
-    if role is not None:
-        return [entry for occ, members in same_task.items() if occ != target
-                for entry in members
-                if entry.role == role and entry.subject_id not in held]
-    return [members[position] for occ, members in same_task.items()
-            if occ != target and len(members) > position
-            and members[position].subject_id not in held]
+    def key_of(index: int, entry) -> "int | str | None":
+        if pool == "any":
+            return None
+        return entry.role if entry.role is not None else index
 
+    # the replaced members in order within each key, which is their rank in the rotation
+    slots: dict = {}
+    for index, entry in enumerate(own[1:], start=1):
+        slots.setdefault(key_of(index, entry), []).append(index)
+    own_ids = {entry.subject_id for entry in own}
+    draws: list = []
+    for occ, members in same_task.items():
+        if occ == target:
+            continue
+        donors = {}
+        for index, entry in enumerate(members):
+            if pool == "any" and entry.subject_id in own_ids:
+                continue
+            donors.setdefault(key_of(index, entry), []).append(entry)
+        present = [key for key in slots if donors.get(key)]
+        for shift in range(min((len(donors[key]) for key in present), default=0)):
+            draws.append({index: donors[key][(rank + shift) % len(donors[key])]
+                          for key in present
+                          for rank, index in enumerate(slots[key])
+                          if rank < len(donors[key])})
+    return draws
+
+
+def pairing_stand_ins(ids: "list[str]", draws: "list[dict]") -> dict:
+    """Each pairing's ``(draw id, stand-in)`` for its later member, in draw order.
+
+    ::
+
+        ids [a, b, c], draws [{1: d, 2: e}]
+          -> {(0, 1): [("d+e", d)], (0, 2): [("d+e", e)], (1, 2): [("d+e", e)]}
+
+    A draw's id joins its stand-ins' recording ids, so the pairings it serves share it and a
+    dyad's is its stand-in's. A stand-in who is the pairing's held member, another session
+    of that person, is left out of that pairing only.
+    """
+    draw_ids = ["+".join(recording_id(entry) for _, entry in sorted(draw.items()))
+                for draw in draws]
+    return {(i, j): [(draw_ids[k], draw[j]) for k, draw in enumerate(draws)
+                     if j in draw and draw[j].subject_id != ids[i]]
+            for i, j in combinations(range(len(ids)), 2)}
 
 
 def _refuse_repeated_subjects(same_task: dict, task: str) -> None:
@@ -274,10 +314,7 @@ def _draw_condition_pairs(
         if n_max is not None and drawn >= n_max:
             logger.info("stopping at %d stand-ins, the limit asked for", drawn)
             break
-        # a stand-in is a recording, not a person: one person can stand in from several sessions
-        pid = "_".join([entry.subject_id]
-                       + [f"{key}-{value}" for key, value in (("ses", entry.session),
-                                                              ("run", entry.run)) if value])
+        pid = recording_id(entry)
         try:
             partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
         except Exception as exc:
@@ -368,6 +405,23 @@ def _draw_condition_pairs(
                    (max(lead, transient), lead + span), excluded)
 
 
+def recording_id(entry) -> str:
+    """A stand-in's name: a recording, not a person, so one person can stand in from several sessions."""
+    return "_".join([entry.subject_id]
+                    + [f"{key}-{value}" for key, value in (("ses", entry.session),
+                                                           ("run", entry.run)) if value])
+
+
+def _as_draw(pairs, draw_of: dict):
+    """Each yielded pair named by its draw rather than its stand-in, so one draw's pairings share an id."""
+    for pid, label, pair, inner, white, isc_inner, excluded in pairs:
+        did = draw_of[pid]
+
+        def named(by_id: dict) -> dict:
+            return {did if key == pid else key: value for key, value in by_id.items()}
+        yield did, label, named(pair), inner, named(white), isc_inner, named(excluded)
+
+
 def _same_length(cuts: dict) -> dict:
     """Trim the longer of two cuts to the shorter one's sample count.
 
@@ -413,6 +467,11 @@ def run_pair_null(
     real side has them, and the crossed ROI table when both sides are crossed. Returns the
     whole-run path.
 
+    Each pairing holds its earlier member and replaces its later one, by the draws of
+    :func:`stand_in_draws`: one stand-in per replaced member in each draw, the same in every
+    pairing it closes, and the draw's id, its stand-ins' ids joined by ``+``, shared by those
+    pairings. A group with a pairing no draw can fill is refused before anything is drawn.
+
     The re-paired ISC rides along on the same draws.
 
     Unlike the phase-scrambled null this runs after the real table rather than around it,
@@ -433,14 +492,6 @@ def run_pair_null(
     from nirspipe.pipeline.hyper._helpers import long_axis_over
     from nirspipe.pipeline.hyper.wtc import wtc_grid_params
     from nirspipe.utils.lineage import paths_from
-
-    if len(members) != 2:
-        # refused, not warned: a third member's pairings would have no null, without a word
-        raise StageError(
-            f"the re-paired null needs exactly 2 members, got {len(members)} in group "
-            f"{group_id!r}: {[m.subject_id for m in members]}. It holds the first member and "
-            "replaces the second, so the other pairings would have no null. Groups of more "
-            "than two are not supported by this null yet.")
 
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
     cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
@@ -481,8 +532,7 @@ def run_pair_null(
     sep_bands = resolve_group_bands(members, group_sqm)
 
     aligned_real, offsets = align_recordings(raws, task)
-    fixed_id = members[0].subject_id
-    true_pair = (members[0].subject_id, members[1].subject_id)
+    ids = [m.subject_id for m in members]
     aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
     # a stand-in need not match the whole recording's length: each condition is cut from its
     # own marker on both sides
@@ -494,13 +544,24 @@ def run_pair_null(
             f"the tree now aligns to {aligned_duration:.3f} s. Rerun `nirspipe-hyper` for "
             f"group {group_id!r} before drawing its null.")
 
-    candidates = partner_pool(groups, group_id, task, pool=pool, session=session)
-    if not candidates:
+    candidates = pairing_stand_ins(
+        ids, stand_in_draws(groups, group_id, task, pool=pool, session=session))
+    unfilled = ["-".join((ids[i], ids[j])) for (i, j), got in candidates.items() if not got]
+    if len(unfilled) == len(candidates):
         raise StageError(
             f"no other group runs task {task!r}, so there is nobody to re-pair "
             f"group {group_id!r} with. This null needs a cohort, not one dyad.")
-    logger.info("re-paired null for %s/%s: %d candidate stand-in(s) in the %r pool",
-                group_id, task, len(candidates), pool)
+    if unfilled:
+        # refused, not skipped: a group mean is over every pairing or it is not the group's
+        raise StageError(
+            f"no other group of task {task!r} can stand in for the later member of "
+            f"{', '.join(unfilled)} in group {group_id!r}, so those pairings would have no "
+            "null. The 'position' pool matches a member by its row in the group, or by role "
+            "where the pairs table has a role column; a role column or "
+            "'--wtc-pair-pool any' lets groups of other sizes stand in.")
+    n_offered = len({did for got in candidates.values() for did, _ in got})
+    logger.info("re-paired null for %s/%s: %d candidate draw(s) in the %r pool",
+                group_id, task, n_offered, pool)
 
     windows: list = []
     # {window label: (condition label, seconds into that condition)}, empty unless the real
@@ -508,7 +569,7 @@ def run_pair_null(
     # window it needs the condition it belongs to and how far into it the window starts
     window_sources: dict = {}
     if real_params["conditions"]:
-        windows = condition_windows(aligned_real[fixed_id], min_duration=1.0 / wtc_fmin)
+        windows = condition_windows(aligned_real[ids[0]], min_duration=1.0 / wtc_fmin)
         if analysis_window is not None:
             lo, hi = analysis_window
             windows = [w for w in windows if w[1] >= lo and w[2] <= hi]
@@ -536,13 +597,13 @@ def run_pair_null(
     isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
 
-    def _isc_collector(ch_type: str):
+    def _isc_collector(ch_type: str, fixed_id: str, true_pair: "tuple[str, str]"):
         """A callback that correlates each drawn pair, whole run and per condition."""
         from nirspipe.pipeline.hyper.isc import _kept_share, compute_isc_pairs
 
         def _collect(partner_id: str, label: str, pair: dict, inner: tuple,
                      excluded: "dict | None" = None) -> None:
-            ids = [fixed_id, partner_id]
+            pair_ids = [fixed_id, partner_id]
             union = None if excluded is None else excluded[fixed_id] | excluded[partner_id]
             # the segment carries context either side of the condition so the coherence's
             # cone lands in the pad; the correlation reads the condition out of it, filtered
@@ -550,7 +611,7 @@ def run_pair_null(
             for _ in (0,):
                 try:
                     _, _, pairs, _ = compute_isc_pairs(
-                        pair, ids, ch_type, sep_bands, window=inner,
+                        pair, pair_ids, ch_type, sep_bands, window=inner,
                         max_lag_s=isc_max_lag_s, band=isc_band, cross=bool(cross),
                         excluded=union)
                 except Exception:
@@ -564,7 +625,7 @@ def run_pair_null(
                 pairs["sub1"], pairs["sub2"] = true_pair
                 pairs.insert(0, "chromophore", ch_type)
                 # the share of the window correlated, as the coherence's is of the cells kept
-                pairs["n_valid_frac"] = _kept_share(pair, ids, inner, union)
+                pairs["n_valid_frac"] = _kept_share(pair, pair_ids, inner, union)
                 pairs.insert(1, "condition", label)
                 isc_cond_frames.append(pairs)
                 # one row per draw as well as the summary, so the correlation can be read
@@ -573,23 +634,28 @@ def run_pair_null(
 
         return _collect
 
-    partners: list[str] = []
+    # the draws each pairing got, in draw order
+    partners: dict = {}
     cond_levels: dict = {}
-    for ch_type in chroma:
-        draws = _draw_condition_pairs(
-            derivatives_dir, task, fixed_id, aligned_real[fixed_id], candidates, desc=desc,
-            bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
+    for ch_type, ((i, j), got) in product(chroma, candidates.items()):
+        fixed_id, true_pair = ids[i], (ids[i], ids[j])
+        draws = _as_draw(_draw_condition_pairs(
+            derivatives_dir, task, fixed_id, aligned_real[fixed_id], [e for _, e in got],
+            desc=desc, bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=n_max, refused=refused,
             window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
-            isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[true_pair[1]])
+            isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[ids[j]]),
+            {recording_id(entry): did for did, entry in got})
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            on_draw=_isc_collector(ch_type), device=device)
-        partners = null.partners or []
-        cond_levels[ch_type] = null.cond_levels or {}
+            on_draw=_isc_collector(ch_type, fixed_id, true_pair), device=device)
+        partners.setdefault(true_pair, {}).update(dict.fromkeys(null.partners or []))
+        # keyed by pairing within a condition, so the pairings' levels sit side by side
+        for label, levels in (null.cond_levels or {}).items():
+            cond_levels.setdefault(ch_type, {}).setdefault(label, {}).update(levels)
         for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
             draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
 
@@ -624,18 +690,22 @@ def run_pair_null(
                     part.insert(0, "chromophore", ch_type)
                     bucket.append(part)
 
-    _log_draw_quality(partners, refused, len(candidates))
+    for (i, j), got in candidates.items():
+        _log_draw_quality((ids[i], ids[j]), list(partners.get((ids[i], ids[j]), [])), len(got))
+    for reason, subs in sorted(refused.items()):
+        logger.info("  %d refused, %s: %s", len(set(subs)), reason, ", ".join(sorted(set(subs))))
+    used = list(dict.fromkeys(did for got in partners.values() for did in got))
 
     sources = paths_from(aligned_real.values())
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
-        wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=len(partners), cross=cross,
+        wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=len(used), cross=cross,
         desc=desc, bads_scope=bads_scope,
         **({"roi_min_channels": int(roi_min_channels)} if roi_map else {}),
         chroma=list(chroma), null_kind="repaired", pair_pool=pool,
-        pair_partners=sorted(partners), pair_candidates=len(candidates),
+        pair_partners=sorted(used), pair_candidates=n_offered,
         pair_refused={reason: sorted(set(subs)) for reason, subs in sorted(refused.items())},
         # no cond_overlap: each side is cut at its own marker, so the overlap is 1 by
         # construction rather than something the run has to report
@@ -696,7 +766,7 @@ def run_pair_null(
                        **level_params(aligned_real, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
                                       mask_coi=mask_coi, whiten_s=whiten_s),
                        condition_windows_s=params["condition_windows_s"],
-                       n_iter=len(partners), pair_partners=sorted(partners))
+                       n_iter=len(used), pair_partners=sorted(used))
 
     _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, _path, sources,
                     params, windows, isc_whiten_s, isc_max_lag_s, isc_band)
@@ -802,14 +872,13 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
         logger.info("re-paired ISC draws saved: %s", path)
 
 
-def _log_draw_quality(partners: list, refused: dict, n_candidates: int) -> None:
-    """Say what the pool gave and what it cost, since the pool is what limits the ranking."""
-    n = len(partners)
-    logger.info("re-paired null built from %d of %d candidates; a percentile off %d draws "
-                "resolves to about %.1f points", n, n_candidates, n, 100.0 / max(n, 1))
+def _log_draw_quality(pairing: "tuple[str, str]", partners: list, n_candidates: int) -> None:
+    """Say what the pool gave one pairing, since the pool is what limits the ranking."""
+    n, name = len(partners), "-".join(pairing)
+    logger.info("re-paired null of %s built from %d of %d candidates; a percentile off %d "
+                "draws resolves to about %.1f points", name, n, n_candidates, n,
+                100.0 / max(n, 1))
     if n < 20:
-        logger.warning("only %d stand-in(s) were available, so this null ranks coarsely and "
-                       "its 95th percentile rests on %d values. That is a property of the "
-                       "cohort, not of any setting.", n, n)
-    for reason, subs in sorted(refused.items()):
-        logger.info("  %d refused, %s: %s", len(set(subs)), reason, ", ".join(sorted(set(subs))))
+        logger.warning("only %d stand-in(s) were available for %s, so its null ranks "
+                       "coarsely and its 95th percentile rests on %d values. That is a "
+                       "property of the cohort, not of any setting.", n, name, n)
