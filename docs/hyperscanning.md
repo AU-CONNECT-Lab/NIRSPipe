@@ -128,7 +128,7 @@ All of its options are off by default, so a run naming none reports the zero-lag
 - `--isc-whiten-s SECONDS` correlates the residuals of an autoregressive model, by the coherence's rule with an order of its own. Whitening shrinks r, so a whitened matrix does not compare with an unwhitened one.
 - `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way, sign kept, and writes the shift as `lag_s`, positive where the second member follows. The maximum over many shifts is larger than any single one under no coupling, so pair it with `--isc-phase-null`.
 - `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates of the second member, searched the same way, adding `null_abs_mean`, `null_abs_sd`, `null_abs_p95` and `percentile` and keeping every draw.
-- `--isc-phase-null-shared` shifts all of the second member's channels in each of those draws by one shared set of random phases, so the channels stay as correlated with each other as recorded. Off by default: each channel is scrambled on its own.
+- `--phase-null-shared` shifts all of the second member's channels in each of those draws by one shared set of random phases, so the channels stay as correlated with each other as recorded. It applies to `--wtc-phase-null` as well. Off by default: each channel is scrambled on its own.
 
 The report's connectivity circle draws a chord where a pairing beats the 95th percentile of its own surrogates, or, without a null, for the strongest tenth of pairings, labelled as a display cut. `--isc-threshold` forces an absolute cut instead.
 
@@ -145,7 +145,7 @@ Coherence between two unrelated recordings is not zero, so a value is read again
 
 ### Phase-scrambled null
 
-`--wtc-phase-null N` recomputes the band means against N phase-randomised surrogates of one member and writes their mean in `null-phase_stat-wtc_relmat.tsv`, with `null_sd`, `null_p95`, `n_iter` and the `percentile` each real value sits at among the draws. It shares the run's stage, band, mask, whitening, channel set and windows; with conditions on, it follows the same windows at no extra transform and keeps every iteration in a `desc-draws` table. Crossing it squares the cost of every iteration, so it follows `--channel-cross` unless `--wtc-phase-null-cross` / `--no-wtc-phase-null-cross` says otherwise. Each iteration is a full coherence run, which makes this the expensive half of a dyad analysis.
+`--wtc-phase-null N` recomputes the band means against N phase-randomised surrogates of one member and writes their mean in `null-phase_stat-wtc_relmat.tsv`, with `null_sd`, `null_p95`, `n_iter` and the `percentile` each real value sits at among the draws. It shares the run's stage, band, mask, whitening, channel set and windows; with conditions on, it follows the same windows at no extra transform and keeps every iteration in a `desc-draws` table. Crossing it squares the cost of every iteration, so it follows `--channel-cross` unless `--wtc-phase-null-cross` / `--no-wtc-phase-null-cross` says otherwise. `--phase-null-shared` rotates all of the scrambled member's channels by one set of random phases per iteration, keeping their correlations with each other (Prichard and Theiler, 1994); off, each channel is scrambled on its own, as the fNIRS hyperscanning literature does. Every table records which, and `nirspipe-hyper-groupnull` refuses a tree drawn both ways. Each iteration is a full coherence run, which makes this the expensive half of a dyad analysis.
 
 ### Re-paired null
 

@@ -59,7 +59,7 @@ flowchart TD
     REC --> OD --> SCR --> MC --> BL --> POST --> SQM --> REP
 
     REC -.- M1["<b>raw</b><br/>SCI · PSP · CV · SNR · saturation<br/>GVTD · spikes"]
-    SCR --> BAD(["bad channels<br/><small>coupled in fewer than --min-good-frac of windows</small>"])
+    SCR --> BAD(["bad channels<br/><small>passing in fewer than --min-good-frac of windows</small>"])
     TAB[/"--bad-channels table · channels.tsv<br/><small>the table nirspipe-rate export writes</small>"/] --> BAD
     SPIN[/"--keep-spans · --bad-spans · --gvtd-censor<br/><small>--bad-spans also as nirspipe-rate export writes it</small>"/] --> SPANS(["BAD_ spans<br/><small>left out of screening and every estimate</small>"])
     MC -.- M2["<b>motion · motion_post</b><br/>correction footprint<br/>SCI · PSP · GVTD · spikes again"]
@@ -83,7 +83,7 @@ flowchart TD
 | Step | Measured there | Record section | Changes the data |
 |------|----------------|----------------|------------------|
 | Recording as it arrived | SCI, PSP, CV, SNR, saturation, GVTD, spikes ([coupling](#coupling-and-signal-level), [motion](#motion-from-the-optical-signal)) | `raw`, `raw_long`, `raw_short` | no |
-| Channel screening | Coupled-window share: SCI and PSP both clear their lines in a 10 s window | `raw` | marks channels bad, together with `--bad-channels` and `channels.tsv` |
+| Channel screening | Passing-window share: SCI clears its line in a 10 s window, and PSP too when `--psp-threshold` is given | `raw` | marks channels bad, together with `--bad-channels` and `channels.tsv` |
 | Excluded time | `--keep-spans`, `--bad-spans`, `--gvtd-censor` | `excluded`, `censor` | leaves time out of every estimate |
 | Motion correction | [Correction footprint](#motion-correction-footprint); SCI, PSP, GVTD and spikes measured again | `motion`, `motion_post` | no |
 | Beer-Lambert | HbO-HbR correlation, GCOR, CNR, band power, drift ([processed signal](#processed-signal)) | `preproc` | no |
@@ -157,7 +157,7 @@ A run with `BAD_` spans gets an **Excluded** section: the kept seconds, the span
 ### Preprocessing
 
 - **Raw signal.** Every channel's raw intensity stacked, each row z-scored, with the condition blocks shaded, beside the run's event table; a click on an event outlines its span on the traces. A click on a trace picks that channel in the selector below, which shows its HbO/HbR trace and spectrum on `desc-sci`. Every pair is listed, tagged `(rejected)`, `(short)` or `(short, rejected)`. Long traces are thinned for display by keeping each stretch's lowest and highest sample, so the cardiac pulse draws as a band rather than folding into a slow wave.
-- **Signal quality.** Windowed SCI, PSP and CV heatmaps (channels by time) with each channel's mean beside them, against the run's own lines, measured on `desc-sci`. SCI and PSP compare a pair's two wavelengths, so they get a row per source-detector pair; CV gets a row per wavelength. A pair whose two SCI or PSP rows ever differ is drawn a row each and named under Errors & Warnings. Below, the same windows on the head: a slider steps through the recording, with a row for whether each window coupled and rows for its SCI and its PSP, each scaled with its line at mid-scale. Then the 3D brain views beside the flat optode map, each channel's source-detector line coloured by windowed SCI against the run's line, rejected channels red.
+- **Signal quality.** Windowed SCI, PSP and CV heatmaps (channels by time) with each channel's mean beside them, against the run's own lines, measured on `desc-sci`. SCI and PSP compare a pair's two wavelengths, so they get a row per source-detector pair; CV gets a row per wavelength. A pair whose two SCI or PSP rows ever differ is drawn a row each and named under Errors & Warnings. Below, the same windows on the head: a slider steps through the recording, with a row for whether each window passed and rows for its SCI and its PSP, each centred on its line where it has one. Then the 3D brain views beside the flat optode map, each channel's source-detector line coloured by windowed SCI against the run's line, rejected channels red.
 - **Motion.** The motion-band GVTD trace above a carpet of the optical density (each row detrended and z-scored; each column the largest \|z\| of its stretch, so a short burst is not lost). Before and after correction share one scale and one threshold line. Spike segments are shaded on the trace; where the recording carries an IMU, a gyroscope row and an accelerometer row sit above it, the only motion record not taken from the optical data. With `--roi-mapping` the long rows are grouped by region. A per-channel selector shows one channel's derivative and its optical density before and after, with every `BAD_` span shaded by kind. A zoom compares the longest detected segments before and after correction.
 - **HbO / HbR.** The HbO–HbR correlation matrices and each pair's r, on `desc-preproc` and again after denoising. Rejected pairs are kept but ranked apart: independent noise at the two wavelengths converts to anticorrelated HbO and HbR, so a dead channel would otherwise rank with the best. Then a carpet of the last haemoglobin stage, HbO above HbR, each channel detrended and z-scored.
 - **Spectra by stage.** The mean spectrum over the long channels for `desc-preproc` and for the last stage the run wrote, with the cardiac and respiration bands, the Mayer wave and the filter cutoffs marked, and a per-channel selector. A run that high-passed notes that the first and last period of the cutoff are partly the filter settling.
@@ -173,7 +173,7 @@ A run with `BAD_` spans gets an **Excluded** section: the kept seconds, the span
 
 ### Quality Metrics
 
-**Run summary.** The record's scalars as one table, a metric per row, with columns **All**, **Long** and **Short**. Long is the column the verdict is read off and the only one coloured; Short says whether the regressors those channels feed can be trusted; All is the archival number. A montage that cannot be split has one value column. Where a metric was measured before and after a step, the cell reads before → after. Hover a label for what it measures and which way is good. Seven metrics are marked as the ones that decide whether a run is usable: channel retention, data retained, GVTD share above threshold, band-passed GVTD p95, windowed SCI, coupled windows and HbO–HbR correlation.
+**Run summary.** The record's scalars as one table, a metric per row, with columns **All**, **Long** and **Short**. Long is the column the verdict is read off and the only one coloured; Short says whether the regressors those channels feed can be trusted; All is the archival number. A montage that cannot be split has one value column. Where a metric was measured before and after a step, the cell reads before → after. Hover a label for what it measures and which way is good. Seven metrics are marked as the ones that decide whether a run is usable: channel retention, data retained, GVTD share above threshold, band-passed GVTD p95, windowed SCI, passing windows and HbO–HbR correlation.
 
 ```{figure} figures/qc_run_summary.png
 :alt: The run summary table of a run report
@@ -186,23 +186,23 @@ The run summary of one run. A cell with an arrow holds the value before and afte
 |-----------|-------|--------|-----|
 | Channel retention | ≥ 90 % | 70–90 % | < 70 % |
 | Mean SCI (whole run) | ≥ 0.75 | 0.5–0.75 | < 0.5 |
-| Coupled windows | ≥ 75 % | 50–75 % | < 50 % |
+| Passing windows | ≥ 75 % | 50–75 % | < 50 % |
 | Flat channels | 0 | 1 | ≥ 2 |
 | % data retained | ≥ 80 % | 60–80 % | < 60 % |
 
 No other metric is coloured: uncoloured means no cutoff was applied, not that the metric passed. None of the averages rejects anything; rejection is per channel, by the screening.
 
-**Per-channel table.** One row per source-detector pair: status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR μ/σ (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel coupled in too few windows and `BAD (manual)` for one rejected by hand.
+**Per-channel table.** One row per source-detector pair: status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR μ/σ (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel passing in too few windows and `BAD (manual)` for one rejected by hand.
 
 ### Quality Figures
 
 - **By denoising stage.** One small panel per metric across `desc-preproc`, `desc-filtered` and `desc-errts`, recomputed with every stage on the analysis passband so the panels show what each step did rather than what the filter did; a stage already filtered to that band is read as stored.
-- **By channel.** A pass/fail grid over status, coupled windows, SCI, CV, PSP and SNR, long channels first. A channel can be BAD with a green SCI cell: the cell is the average over windows, and rejection counts the windows that clear both lines.
+- **By channel.** A pass/fail grid over status, passing windows, SCI, CV, PSP and SNR, long channels first. A channel can be BAD with a green SCI cell: the cell is the average over windows, and rejection counts the windows that pass. PSP without a line is drawn blue-grey, its value in the hover.
 - **By condition.** With `--by-condition`, each condition's grid regrouped so one metric's conditions sit together, headed **In condition**: whether each channel passes on that stretch alone. A guide to choosing conditions; it rejects nothing.
 - **By trial.** Every trial window scored on its own, as a trial-by-metric heatmap, on the intensity recording. Colour is relative within a row, not a threshold. A window of 5 to 10 s is scored on SCI and GVTD only, since CV, SNR and PSP need 10 s, and one shorter than 5 s is left unscored.
 
 ```{figure} figures/qc_channel_grid.png
-:alt: A pass/fail grid of status, coupled windows, SCI, CV, PSP and SNR per channel
+:alt: A pass/fail grid of status, passing windows, SCI, CV, PSP and SNR per channel
 :width: 100%
 
 The pass/fail grid by channel and wavelength, long channels first. S3_D3 is rejected with a green SCI cell: the cell averages SCI over windows, and rejection counts the windows that clear both lines.
@@ -218,7 +218,7 @@ A condition page is a view of the run, not a second measurement: its numbers are
 
 ## Raw report
 
-`nirspipe-qc prep-raw` reports on raw recordings without running the pipeline: it screens the channels with the same criteria and draws the recording, one page per session and task, for as many subjects as you name. It writes the raw sections of the quality record, a per-channel table and the subject index, and takes the same screening and separation flags as `nirspipe`; pass what the run was preprocessed with, or the two reports describe different montages. Its figures share the subject's `figures/` folder with a `raw` prefix on `desc-`.
+`nirspipe-qc prep-raw` reports on raw recordings without running the pipeline: it screens the channels with the same criteria and draws the recording, one page per session and task, for as many subjects as you name. It writes the raw sections of the quality record, a per-channel table and the subject index, and takes the same screening and separation flags as `nirspipe`. A recording screening cannot judge, which preprocessing refuses, is still drawn, with the reason above its channel table and no channel rejected on screening; pass what the run was preprocessed with, or the two reports describe different montages. Its figures share the subject's `figures/` folder with a `raw` prefix on `desc-`.
 
 Its run summary is the same one table, grouped Optical density, Motion and Haemoglobin, the haemoglobin rows from its own Beer-Lambert conversion of the unfiltered recording. `--motion-correction` runs a correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening still describes the recording as delivered; pass the pipeline's method to read the values the run report will show. `--epoch-qc` adds the per-trial section, and `--by-condition` one page per condition. It writes no Methods paragraph, since it describes a recording rather than an analysis.
 
@@ -257,7 +257,7 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 
 | Panel | Shows |
 |-------|-------|
-| Shared usable time | One bar per dyad. A channel pair's window is usable only while the pair is coupled in **both** members at once; the rest splits into a loss that is one member's and a loss that is shared. |
+| Shared usable time | One bar per dyad. A channel pair's window is usable only while the pair is passing in **both** members at once; the rest splits into a loss that is one member's and a loss that is shared. |
 | Where the time went | The usable share per channel pair, and per condition for the dyads that lost the most. A pair pale across every dyad points at the cap rather than a dyad. |
 | Quality Metrics | The cohort summary and every dyad's numbers. |
 
@@ -275,7 +275,7 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 | Per-channel signals | Both members' traces and spectra, one channel at a time. |
 | Shared usable time | The usable share per channel pair and condition, screened again on the aligned grid. |
 | Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present, above the uncorrected rows only, since a correction leaves them unchanged. With `--derivatives-dir`, each member after motion correction too. |
-| Where on the head | Each member's coupled-window share on the montage per block, then a slider through the recording: whether each window coupled, its SCI and its PSP. |
+| Where on the head | Each member's passing-window share on the montage per block, then a slider through the recording: whether each window passed, its SCI and its PSP. |
 | Member and dyad metrics | Each member's numbers side by side, its IMU summaries where the recording carries one, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
 | Channel decisions | Each member's per-channel table side by side, with the rating decision, and the pairs each member's `channels.tsv` marked bad. |
 
@@ -283,7 +283,7 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 :alt: Shared usable time of one dyad per channel pair over the recording
 :width: 100%
 
-Shared usable time of one dyad: each channel pair's windows coupled in both members, in one member only or in neither, below the members' windowed SCI, PSP and CV and the condition blocks, on the shared clock.
+Shared usable time of one dyad: each channel pair's windows passing in both members, in one member only or in neither, below the members' windowed SCI, PSP and CV and the condition blocks, on the shared clock.
 ```
 
 It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `desc-channel_qc.tsv` and `desc-usable_qc.tsv`. They go into the dyad tree or into a raw QC tree of its own, as `prep-raw` writes the subjects' raw reports; `nirspipe-qc cohort-hyper` reads the quality records, so it runs on whichever tree `hyper-raw` wrote.
@@ -332,7 +332,7 @@ The GUI's Raw QC page opens these viewers in the app, through a Rate link per re
 
 The run report and the dyad analysis report carry a Methods paragraph ready to paste, with its references, as rendered text, plain text, Markdown and LaTeX. It is built from the provenance sidecars, so it describes the steps that ran with the values they ran with, and a step that was skipped leaves no sentence. A dyad's paragraph follows each member file's `Sources` back to the raw recording, so `--desc` decides what it describes. Each sentence names the method and the parameters a reader needs to reproduce it. `nirspipe-hyper-groupnull` writes its own paragraph beside its tables, in `logs/`. Raw reports carry none.
 
-> fNIRS data were processed using NIRSPipe v*X.Y.Z*. Raw intensity signals were converted to optical density (OD) using MNE-Python (Gramfort et al., 2013). Channels were screened in non-overlapping 10 s windows: a window counted as coupled when its scalp coupling index (SCI) was at least 0.8 and its peak spectral power (PSP) at least 0.1, both measured in the 0.7–1.5 Hz cardiac band (Pollonini et al., 2014). Channels coupled in fewer than 75% of their windows were marked as bad. Motion artifacts in the OD were corrected with temporal derivative distribution repair (TDDR) (Fishburn et al., 2019). Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law (Delpy et al., 1988; Cope & Delpy, 1988), using a differential pathlength factor (DPF) of 6. Data were bandpass filtered (0.01–0.5 Hz) using a zero-phase Butterworth filter (order 4, applied forward and backward). Finally, nuisance signals were removed by regressing an orthogonal basis spanning the retained short channels (HbO and HbR decomposed together) out of each channel in a model with no task regressors, fitted with ordinary least squares without prewhitening; all subsequent analysis used the residuals (Yücel et al., 2021).
+> fNIRS data were processed using NIRSPipe v*X.Y.Z*. Raw intensity signals were converted to optical density (OD) using MNE-Python (Gramfort et al., 2013). Channels were screened in non-overlapping 10 s windows: a window passed when its scalp coupling index (SCI), measured in the 0.7–1.5 Hz cardiac band (Pollonini et al., 2014), was at least 0.8. Channels passing in fewer than 75% of their windows were marked as bad. Peak spectral power (PSP) was computed in the same windows and reported without a threshold. Motion artifacts in the OD were corrected with temporal derivative distribution repair (TDDR) (Fishburn et al., 2019). Haemoglobin concentration changes (HbO, HbR) were computed from the OD with the modified Beer-Lambert law (Delpy et al., 1988; Cope & Delpy, 1988), using a differential pathlength factor (DPF) of 6. Data were bandpass filtered (0.01–0.5 Hz) using a zero-phase Butterworth filter (order 4, applied forward and backward). Finally, nuisance signals were removed by regressing an orthogonal basis spanning the retained short channels (HbO and HbR decomposed together) out of each channel in a model with no task regressors, fitted with ordinary least squares without prewhitening; all subsequent analysis used the residuals (Yücel et al., 2021).
 
 The reference list comes from `nirspipe/qc/boilerplate/references.bib`. The hyperscanning sentences cite placeholder entries whose author reads `TODO-ADD-...`, so an unfinished citation is visible rather than missing.
 

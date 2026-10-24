@@ -25,7 +25,7 @@ flowchart TD
 
     OD --> SCI["windowed coupling<br/><small>SCI and PSP per window, cardiac band</small>"]
     MANUAL[/"--bad-channels"/] -.-> MERGE
-    SCI --> MERGE["mark bad channels<br/><small>coupled windows &lt; min-good-frac ∪ manual</small>"]
+    SCI --> MERGE["mark bad channels<br/><small>passing windows &lt; min-good-frac ∪ manual</small>"]
     MERGE --> SCIF(["desc-sci"])
 
     SCIF --> MOT["motion correction<br/><small>tddr | wavelet | tpca | spline | spline_sg | wavelet_tddr | spline_wavelet | none</small>"]
@@ -60,9 +60,11 @@ Raw intensity is converted to optical density, $\Delta OD_\lambda = -\log(I / I_
 
 ### Channel screening
 
-The scalp coupling index (SCI) measures the strength of the cardiac pulsation in the optical density, as a proxy for how well the optode touches the scalp. Peak spectral power (PSP) measures the same pulsation in the frequency domain; movement that keeps the two wavelengths correlated inflates SCI but not PSP. Both are measured in the cardiac band set by `--cardiac-l-freq` / `--cardiac-h-freq`, which has no default because it depends on the population.
+The scalp coupling index (SCI) measures the strength of the cardiac pulsation in the optical density, as a proxy for how well the optode touches the scalp. Peak spectral power (PSP) measures the same pulsation in the frequency domain, computed as QT-NIRS computes it. Both are measured in the cardiac band set by `--cardiac-l-freq` / `--cardiac-h-freq`, which has no default because it depends on the population: choose it around the participants' heart rate, about 1 to 1.7 Hz for adults and 2 to 3 Hz for infants. The band's top edge plus the filter's 0.3 Hz roll-off has to stay below half the sampling rate, and a band that does not is refused with the highest top edge the recording allows.
 
-Neither metric decides on its own. They are paired inside short windows (`--window-length`, 10 s by default): a window counts as *coupled* when the channel clears both `--sci-threshold` and `--psp-threshold` (0.1 by default) in it, and a channel is marked bad when it is coupled in fewer than `--min-good-frac` (0.75 by default) of the windows that count. `--screen-scope` says which windows count: `run`, the whole recording, or `task`, only the annotated blocks, so the lead-in and the gaps between blocks are not held against a channel. `task` falls back to `run` when no annotation is long enough to hold two windows. A channel coupled for only part of a recording can therefore be rejected even when its whole-run SCI and PSP pass. The same criteria are used by every path that screens: the pipeline, the raw QC report, the per-trial scoring and the dyad commands.
+Screening counts 10 s windows; the window is fixed and does not follow `--window-length`. A window *passes* when the channel's SCI clears `--sci-threshold` in it, and a channel is marked bad when it passes in fewer than `--min-good-frac` (0.75 by default) of the windows that count. PSP is computed in the same windows and drawn in every report without a line. `--psp-threshold` has no default; given, a window has to clear it as well as the SCI line, inside the same window, as QT-NIRS does. Its 0.1 comes from PHOEBE, a tool for fitting the headgear before recording, and its authors have used 0.075 on recorded data; on expert-rated recordings either line rejected far more channels than the raters did. `--screen-scope` says which windows count: `run`, the whole recording, or `task`, only the annotated blocks, so the lead-in and the gaps between blocks are not held against a channel. `task` falls back to `run` when no annotation is long enough to hold two windows. A channel passing for only part of a recording can therefore be rejected even when its whole-run SCI passes. The same criteria are used by every path that screens: the pipeline, the raw QC report, the per-trial scoring and the dyad commands.
+
+A recording screening cannot judge, one with fewer than two windows outside its `BAD_` spans or one whose windowed SCI cannot be measured, stops preprocessing with the reason. The raw QC report and the dyad raw QC still draw it, reject none of its channels on screening, and say why above the channel table.
 
 ```{figure} figures/screening_scipsp.png
 :alt: Windowed SCI, PSP and CV heatmaps, channels by time
@@ -111,7 +113,7 @@ The motion-band GVTD of the long and the short channels above a carpet of the op
 
 ### Beer-Lambert law
 
-The corrected optical density is converted to HbO and HbR concentration changes with the modified Beer-Lambert law, $\Delta c = \Delta OD / (\varepsilon \cdot DPF \cdot d)$, where $\varepsilon$ is the molar extinction coefficient and $d$ the source-detector separation. `--dpf` takes one differential pathlength factor for every wavelength or one per wavelength. Writes `desc-preproc`, the end of preprocessing.
+The corrected optical density is converted to HbO and HbR concentration changes with the modified Beer-Lambert law, $\Delta c = \Delta OD / (\varepsilon \cdot DPF \cdot d)$, where $\varepsilon$ is the molar extinction coefficient and $d$ the source-detector separation. `--dpf` takes one differential pathlength factor for every wavelength, one per wavelength, or `age`, which computes one per wavelength from each participant's age in `participants.tsv` by the general equation of Scholkmann and Wolf (2013). The age is read in years unless `participants.json` gives its `Units` as months, weeks or days, and a participant with no age stops the run before its first subject. The sidecar records the factors used and the age. Writes `desc-preproc`, the end of preprocessing.
 
 ### Auxiliary channels
 
