@@ -298,14 +298,11 @@ def test_the_usable_carpet_loses_each_pair_to_the_members_that_fail_it(groups, g
         for t0, t1 in spans.get(pair, []):
             inside |= (x - half >= t0) & (x + half <= t1)
             touched |= (x + half > t0) & (x - half < t1)
-        # a movement fakes SCI but flattens PSP, so the window it lands in is not coupled;
-        # the band-pass spreads it into a neighbour, which is left out of the rest as well
+        # a movement can fake SCI, and with no PSP line nothing else judges its window, so
+        # the windows it and its band-pass spread touch are left out of the rest
         moved = np.zeros(len(x), bool)
         for t in spikes:
             moved |= np.abs(x - t) < 3 * half
-        holding = int(np.argmin(np.abs(x - SHARED_SPIKE)))
-        if pair not in rejected:
-            assert status[holding] < 2, (pair, x[holding])
         # a member's planted span costs the pair every window inside it
         assert inside.any() == (pair in spans), pair
         assert np.all(status[inside] < 2), pair

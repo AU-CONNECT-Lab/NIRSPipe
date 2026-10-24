@@ -143,13 +143,13 @@ def test_the_report_table_heads_both_sci_columns_with_their_estimator(denoise_ru
 
 # ---- the head slider ----
 
-def test_the_head_slider_reads_coupled_sci_psp_and_never_couples_the_dead_pair(denoise_run):
+def test_the_head_slider_reads_passing_sci_psp_and_never_passes_the_dead_pair(denoise_run):
     path = denoise_run.figure("headslider")
     fig, frames = one_figure(path), plotly_frames(path)
     assert slider_layout(fig) == (["Passing", "SCI", "PSP"], ["sub-01"])
     dead = next(p for p in denoise_run.truth.pairs if p.bad).name
     i = next(i for i, t in enumerate(fig["data"])
-             if "coupled:" in (t.get("hovertemplate") or "") and dead in list(t.get("text") or []))
+             if "passing:" in (t.get("hovertemplate") or "") and dead in list(t.get("text") or []))
     at = [k for k, name in enumerate(fig["data"][i]["text"]) if name == dead]
     for frame in frames.values():
         colours = np.asarray(frame["data"][frame["traces"].index(i)]["marker"]["color"], float)
