@@ -133,6 +133,26 @@ def test_with_nothing_rejected_the_pool_is_the_draws_own_means():
     assert sorted(pool.tolist()) == pytest.approx([0.20, 0.40])
 
 
+def test_an_occasion_of_three_pairings_is_refused_rather_than_mixed():
+    pairs = [("sub-01", "sub-02"), ("sub-01", "sub-03"), ("sub-02", "sub-03")]
+    base = {"chromophore": "hbo", "condition": "game", "occasion": "G02", "label": "a"}
+    real = pd.DataFrame([{**base, "sub1": a, "sub2": b, "coherence": 0.4} for a, b in pairs])
+    draws = pd.DataFrame([{**base, "sub1": a, "sub2": b, "draw": k, "coherence": 0.2}
+                          for a, b in pairs for k in range(3)])
+    with pytest.raises(ValueError, match="G02 holds 3 member pairings"):
+        matched_pools(draws, real)
+
+
+def test_an_occasion_of_one_pairing_still_reads_with_its_member_columns():
+    base = {"chromophore": "hbo", "condition": "game", "occasion": "G01", "label": "a",
+            "sub1": "sub-01", "sub2": "sub-02"}
+    real = pd.DataFrame([{**base, "coherence": 0.4}])
+    draws = pd.DataFrame([{**base, "draw": k, "coherence": c} for k, c in enumerate((0.1, 0.3))])
+    (value, pool), = matched_pools(draws, real).values()
+    assert value == pytest.approx(0.4)
+    assert sorted(pool.tolist()) == pytest.approx([0.1, 0.3])
+
+
 def test_the_cohort_lift_is_the_mean_of_the_occasions_matched_lifts():
     # lifts .05, .10 and .00 on three occasions, each with one draw missing channel c
     parts = [_one_occasion({"a": 0.40, "b": 0.30, "c": 0.20},

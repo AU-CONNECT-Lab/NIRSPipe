@@ -331,6 +331,7 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
         d = by_occ.get((cond, occ))
         if d is None:
             continue
+        _refuse_several_pairings(occ, part, d)
         x = part.groupby("cell").coherence.mean().dropna()
         if x.empty:
             continue
@@ -344,6 +345,19 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
         value = float(x.mean())
         out[(cond, occ)] = (value, value - (x_shared - y_shared))
     return out
+
+
+def _refuse_several_pairings(occ: str, real: pd.DataFrame, draws: pd.DataFrame) -> None:
+    """Refuse an occasion of more than two members, whose pairings one mean would mix."""
+    for frame in (real, draws):
+        keys = [k for k in ("sub1", "sub2") if k in frame.columns]
+        n = len(frame[keys].drop_duplicates()) if keys else 1
+        if n > 1:
+            # refused, not averaged: the real side would average every pairing, the draws one
+            raise ValueError(
+                f"{occ} holds {n} member pairings, a group of more than two. The occasion "
+                f"and cohort levels take one value per occasion, and a group's pairings are "
+                f"not combined into one yet, so groupnull does not support such groups.")
 
 
 def by_occasion(draws: pd.DataFrame, real: pd.DataFrame,
