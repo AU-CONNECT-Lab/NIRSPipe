@@ -104,11 +104,12 @@ def load_group_stage(
     return out
 
 
-def _raw_to_haemo(raw: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
+def _raw_to_haemo(raw: mne.io.Raw, dpf: list, age: "float | None" = None) -> mne.io.Raw:
+    from nirspipe.pipeline.dpf import as_ppf, resolve_dpf
+
     raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
-    # Single value applies to both wavelengths; a list gives one PPF per wavelength.
-    ppf = dpf[0] if len(dpf) == 1 else dpf
-    return mne.preprocessing.nirs.beer_lambert_law(raw_od, ppf=ppf)
+    return mne.preprocessing.nirs.beer_lambert_law(raw_od,
+                                                   ppf=as_ppf(resolve_dpf(dpf, raw_od, age)))
 
 
 def _for_task(paths: list[Path], task: str) -> list[Path]:

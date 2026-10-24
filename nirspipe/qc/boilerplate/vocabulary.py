@@ -323,8 +323,13 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
                          for span in params.get("excluded_spans") or []) else ""),
     }
 
-def _dpf_phrase(dpf: Any) -> str:
+def _dpf_phrase(dpf: Any, age: Any = None) -> str:
     """'a differential pathlength factor (DPF) of 6', or one per wavelength when they differ."""
+    if age is not None:
+        values = [f"{float(d):.2f}" for d in dpf]
+        return (f"differential pathlength factors (DPF) of {_series(values)}, in ascending "
+                f"order of wavelength, from the participant's age of {_num(age)} years by "
+                f"the general equation of Scholkmann and Wolf (2013)")
     values = list(dict.fromkeys(_num(d) for d in (dpf if isinstance(dpf, (list, tuple))
                                                   else [dpf])))
     if len(values) == 1:
@@ -545,7 +550,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "frame": f"{motion.SPLINE_SG_FRAME:g}",
                 "sg_cutoff": f"{motion.spline_sg_cutoff():.2f}"}
     if key == "beer_lambert":
-        return {"dpf": _dpf_phrase(params.get("dpf"))}
+        return {"dpf": _dpf_phrase(params.get("dpf"), params.get("dpf_age"))}
     if key == "bandpass":
         return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
                 "filter": _filter_phrase(params)}

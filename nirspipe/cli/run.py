@@ -91,9 +91,7 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Processing level. `group` is the BIDS Apps name for the cohort pass; it writes desc-subjects_qc.tsv and desc-subjects_report.html and, where the tree holds groups, desc-groups_qc.tsv and desc-groups_report.html.")
 
     prep = p.add_argument_group("preprocessing (required for participant level)")
-    # extend: accepts space-separated (--dpf 6 6) and repeated (--dpf 6 --dpf 6) forms.
-    prep.add_argument("--dpf", nargs="+", type=float, action="extend",
-                      help="Differential pathlength factor. One value or one per wavelength.")
+    _app_options.add_dpf(prep)
     # no default: _LEVEL_REQUIRES makes it required at participant level
     _app_options.add_sci_threshold(prep)
 

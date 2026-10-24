@@ -14,6 +14,7 @@ from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
 from nirspipe.io.derivatives import bids_uris
 from nirspipe.io.naming import report_name
 from nirspipe.io.snirf import read_raw_snirf
+from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
 from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
@@ -272,7 +273,8 @@ def _process_run(
                     thresh=motion_settings(motion_correction,
                                            motion_std_thresh)["motion_std_thresh"]))
 
-    ppf = dpf[0] if len(dpf) == 1 else dpf
+    factors = resolve_dpf(dpf, raw_od, run.get("age"))
+    ppf = as_ppf(factors)
     # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):
@@ -771,7 +773,8 @@ def _process_run(
                             else "badge-yellow" if bad_rate < 30 else "badge-red"),
             "sci_threshold": cutoffs["sci"],
             "good_frac": cutoffs["good_frac"],
-            "dpf": list(dpf),
+            "dpf": factors,
+            **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
             "motion_correction": motion_correction or "none",
             "scope": (section_note("raw.screened_long") if sqm_split

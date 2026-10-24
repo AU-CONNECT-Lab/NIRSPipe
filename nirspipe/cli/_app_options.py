@@ -100,6 +100,26 @@ def resolved_separation_bands(args):
     return separation_bands(type("Args", (), separation_bands_from_args(args)))
 
 
+def dpf_value(text: str) -> "float | str":
+    """One ``--dpf`` token: a number, or the word ``age``."""
+    if text.strip().lower() == "age":
+        return "age"
+    try:
+        return float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is neither a number nor 'age'") from None
+
+
+def add_dpf(container, required: bool = False) -> None:
+    """``--dpf``: the factors, or ``age`` for one per wavelength from participants.tsv."""
+    # extend: accepts space-separated (--dpf 6 6) and repeated (--dpf 6 --dpf 6) forms
+    container.add_argument(
+        "--dpf", nargs="+", type=dpf_value, action="extend", required=required,
+        help="Differential pathlength factor: one value, one per wavelength, or age for one "
+             "per wavelength from each participant's age in participants.tsv (Scholkmann & "
+             "Wolf 2013).")
+
+
 def add_sci_threshold(container, required: bool = False, note: str = "") -> None:
     """``--sci-threshold``: the coupling line channel screening rejects on. It has no default
     anywhere; ``required=False`` is for a parser that enforces it per analysis level."""

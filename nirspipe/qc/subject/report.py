@@ -427,10 +427,13 @@ def _uncorrected_haemo(
         return None
     with _guard("Uncorrected haemo", errors, subject):
         from mne.preprocessing.nirs import beer_lambert_law
+        from nirspipe.pipeline.dpf import as_ppf, resolve_dpf
+
         dpf = list(getattr(config, "dpf", []) or [])
         if not dpf:
             return None
-        return beer_lambert_law(raw_od_before.copy(), ppf=dpf[0] if len(dpf) == 1 else dpf)
+        factors = resolve_dpf(dpf, raw_od_before, getattr(config, "age", None))
+        return beer_lambert_law(raw_od_before.copy(), ppf=as_ppf(factors))
 
 
 def _pair_label(pair: str, short: bool, rejected: bool) -> str:

@@ -20,7 +20,7 @@ from nirspipe.cli import _app_options, _shared
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
-                              validate_bids)
+                              get_participant_age, validate_bids)
 from nirspipe.io.naming import report_name, roi_map_name
 from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
@@ -28,6 +28,7 @@ from nirspipe.io.derivatives import (
 from nirspipe.io.snirf import read_raw_snirf, read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
+from nirspipe.pipeline.dpf import dpf_from_age
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of, unwrap_enum as _v
@@ -208,6 +209,16 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     )
 
 
+def _refuse_missing_ages(dpf: list, bids_dir: Path, subjects: "list[str]") -> None:
+    """With ``--dpf age``, stop before the first subject when any of them has no age."""
+    try:
+        if dpf_from_age(dpf):
+            for subject in subjects:
+                get_participant_age(bids_dir, subject)
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}") from None
+
+
 def run_participant_level(args: dict[str, Any]) -> None:
     bids_dir: Path             = args["bids_dir"]
     output_dir: Path           = args["output_dir"]
@@ -238,6 +249,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
+    _refuse_missing_ages(args.get("dpf") or [], bids_dir, participant_label)
     _refuse_bad_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
     _refuse_bad_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
@@ -693,6 +705,8 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         subject=subject,
         session=session,
         dpf=args["dpf"],
+        **({"age": get_participant_age(args["bids_dir"], subject)}
+           if dpf_from_age(args["dpf"]) else {}),
         sci_threshold=args["sci_threshold"],
         **({"psp_threshold": args["psp_threshold"]}
            if args.get("psp_threshold") is not None else {}),

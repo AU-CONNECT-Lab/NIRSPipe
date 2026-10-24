@@ -142,32 +142,48 @@ def write_bids_from_snirf(
     mne_bids.write_raw_bids(raw, bids_path=bids_path, overwrite=overwrite, format="auto")
 
 
-def get_participant_age(
-    layout: BIDSLayout,
-    subject: str,
-    fallback: float | None = None,
-) -> float:
-    """Resolve participant age from participants.tsv; use fallback if missing.
+# participants.json's age Units in years; BIDS reads an age with no Units as years
+_AGE_UNITS = {"year": 1.0, "years": 1.0, "y": 1.0, "month": 1 / 12, "months": 1 / 12,
+              "week": 7 / 365.25, "weeks": 7 / 365.25, "day": 1 / 365.25, "days": 1 / 365.25}
 
-    Raises ValueError if age is not found and no fallback is provided.
+
+def get_participant_age(bids_root: Path, subject: str) -> float:
+    """A participant's age in years from participants.tsv, converted by participants.json's Units.
+
+    Raises ValueError when the row, the column or a number is missing, or the unit is not one
+    of years, months, weeks or days.
     """
-    from nirspipe.io.tables import read_table
-
-    tsv_path = Path(layout.root) / "participants.tsv"
+    tsv_path = Path(bids_root) / "participants.tsv"
+    wanted = subject.removeprefix("sub-")
+    age = None
     if tsv_path.exists():
         df = read_table(tsv_path, dtype={"participant_id": str})
         # with or without the prefix, as the --bad-channels table is read
-        wanted = subject.removeprefix("sub-")
         row = df[df["participant_id"].str.removeprefix("sub-") == wanted]
         if not row.empty and "age" in df.columns:
-            return float(row["age"].iloc[0])
+            age = _number(row["age"].iloc[0])
+    if age is None:
+        raise ValueError(f"participants.tsv gives no age for sub-{wanted}; add it, or pass "
+                         f"--dpf as numbers")
+    side = Path(bids_root) / "participants.json"
+    units = ((json.loads(side.read_text(encoding="utf-8")).get("age") or {}).get("Units")
+             if side.exists() else None)
+    if units is None:
+        return age
+    scale = _AGE_UNITS.get(str(units).strip().lower())
+    if scale is None:
+        raise ValueError(f"participants.json gives age in {units!r}; --dpf age reads years, "
+                         f"months, weeks or days")
+    return age * scale
 
-    if fallback is not None:
-        return float(fallback)
 
-    raise ValueError(
-        f"Age not found for sub-{subject} in participants.tsv and no --age fallback given."
-    )
+def _number(value) -> "float | None":
+    """A table cell as a number, None for n/a or text."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number
 
 
 def get_nirs_files(

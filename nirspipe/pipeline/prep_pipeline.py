@@ -26,6 +26,7 @@ from nirspipe.io.derivatives import (build_output_path, carry_entities, data_sta
                                      nirs_required_fields, write_sidecar_json)
 from nirspipe.io.optode_space import SPACE, Placement, place_optodes, write_channel_coords
 from nirspipe.io.snirf import write_snirf
+from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf
 from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
     MotionMethod,
     correct_motion,
@@ -172,12 +173,13 @@ def release_kept(screened: list[str], keep: list[str]) -> tuple[list[str], list[
 
 
 # Step 4: Beer-Lambert
-def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float]) -> mne.io.Raw:
-    """Convert OD to haemoglobin concentration via Beer-Lambert law."""
+def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float],
+                age: "float | None" = None) -> mne.io.Raw:
+    """Convert OD to haemoglobin concentration via Beer-Lambert law; ``age`` is what an age DPF came from."""
     from mne.preprocessing.nirs import beer_lambert_law
-    ppf =dpf[0] if len(dpf) == 1 else dpf
-    haemo = beer_lambert_law(raw_od, ppf=ppf)
-    return stamp(haemo, stage="preproc", step="beer_lambert", source=raw_od, dpf=dpf)
+    haemo = beer_lambert_law(raw_od, ppf=as_ppf(dpf))
+    return stamp(haemo, stage="preproc", step="beer_lambert", source=raw_od, dpf=dpf,
+                 **({"dpf_age": age} if age is not None else {}))
 
 # Pipeline orchestration
 @dataclass
@@ -191,13 +193,14 @@ class PrepResult:
 @dataclass
 class PrepConfig:
     subject: str
-    dpf: list[float]                        # required; one value or one per wavelength
+    dpf: list                               # required; one value, one per wavelength, or ["age"]
     sci_threshold: float                    # required; e.g. 0.8
     cardiac_l_freq: float
     cardiac_h_freq: float
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
+    age: float | None = None                # years, from participants.tsv, for --dpf age
     psp_threshold: float | None = None      # a second per-window line, off unless given
     min_good_frac: float = GOOD_FRAC_PASS   # share of passing windows a kept channel needs
     screen_scope: str = "run"               # count those windows over "run" or "task" only
@@ -459,9 +462,13 @@ def run_prep(
                                    config.motion_std_thresh)["motion_std_thresh"]))
 
     # step 4: Beer-Lambert
-    logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject, config.dpf)
-    raw_haemo = od_to_haemo(raw_od, dpf=config.dpf)
-    preproc_path = _save(raw_haemo, "preproc", extra_parameters={"dpf": config.dpf})
+    factors = resolve_dpf(config.dpf, raw_od, config.age)
+    logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject,
+                ", ".join(f"{d:.3f}" for d in factors))
+    aged = config.age if dpf_from_age(config.dpf) else None
+    raw_haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
+    preproc_path = _save(raw_haemo, "preproc", extra_parameters={
+        "dpf": factors, **({"dpf_age": aged} if aged is not None else {})})
     # named by the haemoglobin channels, as every analysis table after this one is
     write_channel_coords(raw_haemo, placement,
                          build_output_path(output_dir, config.subject,

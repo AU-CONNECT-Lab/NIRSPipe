@@ -73,6 +73,7 @@ def cmd_prep_raw(
     layout = get_layout(bids_dir)
     sessions = session_label or [None]
     tasks    = task_label    or [None]
+    ages = _ages_for(dpf, bids_dir, participant_label)
 
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
@@ -103,6 +104,7 @@ def cmd_prep_raw(
                         "task":        actual_task,
                         "channels_tsv_bads": ([] if "channel-status" in (ignore or [])
                                               else channel_status_bads(layout, snirf_p)),
+                        "age": ages.get(subject),
                     }
                     all_runs.append(run_dict)
                     # a chosen run gets a page of its own rather than replacing its task's page
@@ -228,7 +230,8 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
                                      screen_scope=s.screen_scope,
                                      sep_bands=s.sep_bands, session=ses,
                                      channels_tsv_bads=tsv_bads, imu=member_imu)
-    raws_haemo = {sid: _raw_to_haemo(r, s.dpf) for sid, r in raws_cw.items()}
+    ages = _ages_for(s.dpf, s.bids_dir, list(raws_cw))
+    raws_haemo = {sid: _raw_to_haemo(r, s.dpf, ages.get(sid)) for sid, r in raws_cw.items()}
     if s.no_align:
         aligned_raws, offsets = trim_to_shortest(raws_haemo)
     else:
@@ -427,10 +430,23 @@ def cmd_provenance(output_dir: Path) -> None:
         print("no provenance sidecars found - run the pipeline first")
 
 
+def _ages_for(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
+    """Each subject's age when ``--dpf age`` asks for it, refusing a subject without one."""
+    from nirspipe.io.bids import get_participant_age
+    from nirspipe.pipeline.dpf import dpf_from_age
+
+    try:
+        if not dpf_from_age(dpf):
+            return {}
+        return {s: get_participant_age(bids_dir, s) for s in subjects}
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+
+
 def _add_dpf_and_cardiac(parser) -> None:
     """The optics and cardiac band both raw reports need, required: they are population values."""
-    parser.add_argument("--dpf", nargs="+", type=float, action="extend", required=True,
-                        help="Differential pathlength factor. One value or one per wavelength.")
+    _app_options.add_dpf(parser, required=True)
     parser.add_argument("--cardiac-l-freq", type=float, required=True,
                         help="Lower bound of cardiac band in Hz (required; population-dependent).")
     parser.add_argument("--cardiac-h-freq", type=float, required=True,
