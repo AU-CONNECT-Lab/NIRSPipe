@@ -150,8 +150,7 @@ def record_has_bands(scalars: dict) -> bool:
 # channel *average*: a mean SNR of 20 over a montage is a different claim from one channel
 # reading 20.
 SCI_PASS = 0.8        # the SCI criterion's published cutoff; --sci-threshold itself has no default
-PSP_PASS = 0.1
-# Share of windows in which a channel must pass both lines above to be kept.
+# Share of windows a channel must pass to be kept: SCI's line, and PSP's when a run gives one.
 GOOD_FRAC_PASS = 0.75
 # CV is measured per channel name, and intensity names are per wavelength, so it is the
 # per-wavelength CV and takes its threshold: 5% (Lloyd-Fox 2009). SNR is 1/CV by

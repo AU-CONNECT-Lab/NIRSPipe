@@ -33,7 +33,8 @@ NOTES = {
         "at once, so the dyad can keep less time than either member.",
     "hyper_raw.usable_panel":
         "Above the carpet: each member&rsquo;s long-channel mean SCI and PSP, which build the "
-        "mask, so a dip explains the hole beneath. CV takes no part. Dotted lines are the "
+        "mask (PSP only with <code>--psp-threshold</code>), so a dip explains the hole "
+        "beneath. CV takes no part. Dotted lines are the "
         "screening thresholds and block edges.",
     "hyper_raw.motion":
         "Each trace is a member&rsquo;s GVTD over its own median, so 1.0 is that "
@@ -57,8 +58,8 @@ NOTES = {
         "in that member.",
     "hyper_raw.head_slider":
         "A row per member, moved through the recording by the slider: left to right, whether "
-        "each window coupled, then its SCI and PSP, each scaled with its line mid-way. The "
-        "block is named above the heads.",
+        "each window passed, then its SCI and PSP, each centred on its line where it has "
+        "one. The block is named above the heads.",
     "hyper_raw.comparable":
         "Downstream steps match channels by S-D label and assume one clock: an unmatched "
         "label becomes a blank row, different sampling rates are refused, and drift at the "

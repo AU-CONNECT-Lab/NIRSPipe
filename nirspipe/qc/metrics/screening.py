@@ -7,9 +7,9 @@ adding one is adding a line plus a scorer. Everything that prunes goes through
 :func:`screen_channels`, so the prep pipeline, the raw QC report, the per-trial scoring and
 the dyad path cannot end up screening on different things.
 
-**SCI and PSP are measured and reported but do not decide.** ``good_frac`` pairs them
-inside one short window and counts how many windows a channel passes; the two whole-run numbers stay in the table because every report
-prints them and because they are the lines ``good_frac`` applies per window.
+**SCI and PSP are measured and reported but do not decide.** ``good_frac`` counts the short
+windows in which a channel's SCI clears its line, and its PSP too when the run gives PSP a
+line; the two whole-run numbers stay in the table because every report prints them.
 
 The scores themselves are measured in :mod:`nirspipe.qc.metrics.coupling`; this module
 only decides. Cutoffs live in :mod:`nirspipe.qc.metrics._helpers` beside the other
@@ -25,7 +25,7 @@ import mne
 
 from nirspipe.exceptions import StageError
 from nirspipe.qc.metrics._helpers import (
-    GOOD_FRAC_PASS, PSP_PASS, SCI_PASS, require_cardiac_below_nyquist,
+    GOOD_FRAC_PASS, SCI_PASS, require_cardiac_below_nyquist,
 )
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
@@ -39,8 +39,9 @@ class Criterion:
     """One screening criterion: what it measures, where its line is, and how to score it.
 
     ``scorer`` takes optical density and the cardiac band and returns ``{channel: score}``.
-    ``config_field`` names the PrepConfig / CLI field a run may override ``cutoff`` with, or
-    None for a criterion with no flag. Every criterion so far fails low, which is what
+    ``cutoff`` None is a criterion with no line unless a run gives one. ``config_field``
+    names the PrepConfig / CLI field a run may override ``cutoff`` with, or None for a
+    criterion with no flag. Every criterion so far fails low, which is what
     ``fails_below`` records; a criterion that fails high would set it False.
 
     ``screens`` is whether failing this criterion rejects the channel. False means measured
@@ -52,7 +53,7 @@ class Criterion:
 
     name: str
     label: str
-    cutoff: float
+    cutoff: float | None
     scorer: Callable[..., dict[str, float]]
     config_field: str | None = None
     fails_below: bool = True
@@ -61,6 +62,8 @@ class Criterion:
 
     def failures(self, scores: dict[str, float], cutoff: float | None = None) -> list[str]:
         line = self.cutoff if cutoff is None else cutoff
+        if line is None:
+            return []
         return [ch for ch, v in scores.items()
                 if v is not None and ((v < line) if self.fails_below else (v > line))]
 
@@ -80,26 +83,26 @@ def _good_frac_scorer(raw_od: mne.io.Raw, cardiac_l_freq: float, cardiac_h_freq:
     return good_window_fraction(
         raw_od, cardiac_l_freq, cardiac_h_freq,
         sci_cutoff=cutoffs.get("sci", SCI_PASS),
-        psp_cutoff=cutoffs.get("psp", PSP_PASS),
+        psp_cutoff=cutoffs.get("psp"),
         scope=context.get("scope"))
 
 
-# The criteria, in the order a report lists them. Movement can fake a high SCI but not PSP,
-# so the rejection is `good_frac`, which requires both inside the same window.
+# The criteria, in the order a report lists them. The rejection is `good_frac`, which reads
+# SCI's line in each window, and PSP's in the same window only when a run gives it one.
 CRITERIA: tuple[Criterion, ...] = (
     Criterion("sci", "SCI", SCI_PASS, _sci_scorer,
               config_field="sci_threshold", screens=False),
-    Criterion("psp", "PSP", PSP_PASS, _psp_scorer,
+    Criterion("psp", "PSP", None, _psp_scorer,
               config_field="psp_threshold", screens=False),
     Criterion("good_frac", "coupled windows", GOOD_FRAC_PASS, _good_frac_scorer,
               config_field="min_good_frac", needs_context=True),
 )
 
 
-def criterion_cutoffs(config: object | None = None) -> dict[str, float]:
+def criterion_cutoffs(config: object | None = None) -> dict[str, float | None]:
     """Each criterion's line for this run: its default, overridden from ``config``.
 
-    criterion_cutoffs(config_with_sci_threshold_0_9) -> {"sci": 0.9, "psp": 0.1}
+    criterion_cutoffs(config_with_sci_threshold_0_9) -> {"sci": 0.9, "psp": None, ...}
 
     A criterion with no ``config_field``, or a config that does not carry it, keeps the
     default. Passing None gives the defaults, which is what a caller with no run config has.
@@ -113,10 +116,10 @@ def criterion_cutoffs(config: object | None = None) -> dict[str, float]:
     return cutoffs
 
 
-def resolve_cutoffs(config: object | None = None, **overrides) -> dict[str, float]:
+def resolve_cutoffs(config: object | None = None, **overrides) -> dict[str, float | None]:
     """:func:`criterion_cutoffs` with loose per-criterion overrides laid on top.
 
-    resolve_cutoffs(sci=0.9, psp=None) -> {"sci": 0.9, "psp": 0.1}
+    resolve_cutoffs(sci=0.9, psp=None) -> {"sci": 0.9, "psp": None, ...}
 
     For a caller holding the lines as separate floats rather than as a config object, which
     is every CLI command and every report builder. A None override is not a value, so it

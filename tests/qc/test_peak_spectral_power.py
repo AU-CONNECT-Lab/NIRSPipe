@@ -10,13 +10,14 @@ import pytest
 from scipy.signal import butter, sosfiltfilt
 
 from nirspipe.pipeline.prep_pipeline import intensity_to_od
-from nirspipe.qc.metrics._helpers import PSP_PASS
 from nirspipe.qc.metrics.coupling import _pair_peak_power, peak_spectral_power
 from tests._synth import synth_raw
 
 SFREQ = 10.0
 N = 100          # one 10 s window
 BAND = (0.7, 1.5)
+# the published line this scale is defined for
+PSP_LINE = 0.1
 
 
 def _cosine(f0: float) -> np.ndarray:
@@ -50,7 +51,7 @@ def test_two_wavelengths_with_no_shared_pulse_stay_under_the_line():
     sos = butter(4, BAND, btype="band", fs=SFREQ, output="sos")
     scores = [_pair_peak_power(*sosfiltfilt(sos, rng.standard_normal((2, N))), SFREQ, BAND[1])
               for _ in range(200)]
-    assert np.percentile(scores, 95) < PSP_PASS
+    assert np.percentile(scores, 95) < PSP_LINE
 
 
 def test_a_pair_s_two_channels_carry_one_score_in_channel_order():

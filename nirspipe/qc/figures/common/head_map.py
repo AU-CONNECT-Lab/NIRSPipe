@@ -321,8 +321,8 @@ def build_head_slider(
     """A row of heads per member, or the one subject's, the slider running the whole recording.
 
     The instantaneous view, in columns read left to right: whether the window coupled, the
-    mask the screening counts, then SCI and PSP, the two numbers that build it, each on a
-    scale centred on its line in ``cutoffs``. Every frame names the block it lands in, so a position on the
+    mask the screening counts, then SCI and PSP, the numbers that build it, each on a scale
+    centred on its line in ``cutoffs`` where it has one. Every frame names the block it lands in, so a position on the
     slider says what was being done and not only when. ``conditions`` is ``{name: (t0, t1)}``,
     or a list of ``(name, (t0, t1))`` where a condition recurs.
 

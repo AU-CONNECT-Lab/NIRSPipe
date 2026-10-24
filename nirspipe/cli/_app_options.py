@@ -110,26 +110,24 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
 
 
 def add_psp_threshold(container, note: str = "") -> None:
-    """``--psp-threshold``: the other line, from the same criteria table."""
-    from nirspipe.qc.metrics import PSP_PASS
-
+    """``--psp-threshold``: an optional second line; without it SCI alone decides a window."""
     container.add_argument(
         "--psp-threshold", type=float, default=None,
-        help=f"Peak spectral power a window must reach (default {PSP_PASS}). A window "
-             f"counts as coupled only when it clears this line and --sci-threshold together."
+        help="Peak spectral power (QT-NIRS scale) a window must also reach. No default: SCI "
+             "alone decides and PSP is only shown. 0.1 is a line for fitting the headgear; "
+             "0.075 has been used after recording."
              + (f" {note}" if note else ""))
 
 
 def add_min_good_frac(container, note: str = "") -> None:
-    """``--min-good-frac``: how much of the recording a channel has to be coupled for."""
+    """``--min-good-frac``: how much of the recording a channel has to pass in."""
     from nirspipe.qc.metrics import GOOD_FRAC_PASS
 
     container.add_argument(
         "--min-good-frac", type=float, default=None,
-        help=f"Share of windows a channel must be coupled in to be kept, 0 to 1 (default "
-             f"{GOOD_FRAC_PASS}). A window counts when SCI and PSP both clear their lines "
-             f"in it. This is the criterion that rejects; the two lines above set what a "
-             f"coupled window is."
+        help=f"Share of windows a channel must pass in to be kept, 0 to 1 (default "
+             f"{GOOD_FRAC_PASS}). A window passes when it clears --sci-threshold, and "
+             f"--psp-threshold if given. This is the criterion that rejects."
              + (f" {note}" if note else ""))
 
 
@@ -180,8 +178,8 @@ def check_motion_settings(method: str | None, std_thresh: float | None,
 def screening(note: str = "") -> argparse.ArgumentParser:
     """The screening lines as a parent parser.
 
-    One block for all three, because they are one decision: SCI and PSP say what a coupled
-    window is, and the third says how many of them a channel needs.
+    One block for all of them, because they are one decision: SCI, and PSP when given, say
+    which windows pass, and the share says how many of them a channel needs.
     """
     p = argparse.ArgumentParser(add_help=False)
     add_sci_threshold(p, required=True, note=note)

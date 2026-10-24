@@ -12,7 +12,7 @@ against its own signature, and both calls here are internal.
 
 import pytest
 
-from nirspipe.qc.metrics import GOOD_FRAC_PASS, PSP_PASS
+from nirspipe.qc.metrics import GOOD_FRAC_PASS
 
 
 def _config(argv_extra):
@@ -32,7 +32,7 @@ def _config(argv_extra):
 
 def test_the_defaults_arrive():
     config = _config([])
-    assert config.psp_threshold == PSP_PASS
+    assert config.psp_threshold is None
     assert config.min_good_frac == GOOD_FRAC_PASS
     assert config.screen_scope == "run"
 

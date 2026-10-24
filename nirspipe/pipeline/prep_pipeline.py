@@ -34,7 +34,7 @@ from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
 )
 from nirspipe.exceptions import StageError
 from nirspipe.qc.boilerplate.notes import section_note
-from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardiac_below_nyquist
+from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, require_cardiac_below_nyquist
 from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from nirspipe.utils.logging import get_logger
@@ -106,9 +106,10 @@ def mark_bad_channels(
 
     The criteria are :data:`nirspipe.qc.metrics.screening.CRITERIA` and a channel is
     rejected if it fails any criterion that screens, so what gets pruned is decided by that
-    table rather than here. ``threshold`` is the SCI line and ``psp_threshold`` the PSP one,
-    both applied inside a window; ``min_good_frac`` is the share of windows that has to clear
-    both, and it is the line that rejects. None keeps the criterion's own default. ``screen_scope`` is
+    table rather than here. ``threshold`` is the SCI line a window has to clear, and
+    ``psp_threshold`` a PSP line it has to clear as well, None for none; ``min_good_frac`` is
+    the share of windows that has to pass, and it is the line that rejects, None keeping the
+    criterion's own default. ``screen_scope`` is
     "run" or "task" and decides which windows are counted; see :func:`resolve_screen_scope`.
     Windows touching a ``BAD_`` span are never counted, and fewer than two left stops the run.
 
@@ -146,7 +147,7 @@ def mark_bad_channels(
     # that it found no optical density data and never mentions the screening
     if sci_scores and len(release_kept(bad_chs, list(keep))[0]) == len(sci_scores):
         failed = sorted({c for reasons in why.values() for c in reasons})
-        lines = ", ".join(f"{k} {v}" for k, v in sorted(cutoffs.items()))
+        lines = ", ".join(f"{k} {v}" for k, v in sorted(cutoffs.items()) if v is not None)
         raise StageError(
             f"every channel failed screening on {', '.join(failed)} (cutoffs {lines}; "
             f"best SCI {max(sci_scores.values()):.3f}). Lower --min-good-frac, or the "
@@ -197,7 +198,7 @@ class PrepConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
-    psp_threshold: float = PSP_PASS         # the other per-window line; SCI is the required one
+    psp_threshold: float | None = None      # a second per-window line, off unless given
     min_good_frac: float = GOOD_FRAC_PASS   # share of coupled windows a kept channel needs
     screen_scope: str = "run"               # count those windows over "run" or "task" only
     qc_window_s: float = 10.0               # sliding-window length (s) for windowed SCI/PSP/GVTD

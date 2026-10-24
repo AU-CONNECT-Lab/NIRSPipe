@@ -9,7 +9,7 @@ import pytest
 
 from nirspipe.exceptions import StageError
 from nirspipe.pipeline.prep_pipeline import intensity_to_od, mark_bad_channels
-from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, SCI_PASS
+from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, SCI_PASS
 from nirspipe.qc.metrics.screening import resolve_cutoffs, screen_channels
 
 from tests._synth import synth_raw
@@ -58,11 +58,16 @@ def test_rejected_channels_come_back_in_acquisition_order():
 
 def test_a_none_override_keeps_the_default():
     assert resolve_cutoffs(sci=None, psp=None) == {
-        "sci": SCI_PASS, "psp": PSP_PASS, "good_frac": GOOD_FRAC_PASS}
+        "sci": SCI_PASS, "psp": None, "good_frac": GOOD_FRAC_PASS}
+
+
+def test_psp_has_no_line_unless_given():
+    assert resolve_cutoffs(sci=0.8)["psp"] is None
+    assert resolve_cutoffs(sci=0.8, psp=0.075)["psp"] == 0.075
 
 
 def test_an_override_replaces_only_its_own_line():
-    assert resolve_cutoffs(sci=0.9) == {"sci": 0.9, "psp": PSP_PASS, "good_frac": GOOD_FRAC_PASS}
+    assert resolve_cutoffs(sci=0.9) == {"sci": 0.9, "psp": None, "good_frac": GOOD_FRAC_PASS}
 
 
 def test_a_config_field_sets_the_line_and_a_loose_override_beats_it():
@@ -70,7 +75,7 @@ def test_a_config_field_sets_the_line_and_a_loose_override_beats_it():
         sci_threshold = 0.6
         min_good_frac = 0.5
 
-    assert resolve_cutoffs(Config()) == {"sci": 0.6, "psp": PSP_PASS, "good_frac": 0.5}
+    assert resolve_cutoffs(Config()) == {"sci": 0.6, "psp": None, "good_frac": 0.5}
     assert resolve_cutoffs(Config(), good_frac=0.9)["good_frac"] == 0.9
 
 

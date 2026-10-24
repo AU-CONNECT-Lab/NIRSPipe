@@ -103,7 +103,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
 
     bandpass     + {high_pass: 0.01, low_pass: 0.5} -> "0.01-0.5 Hz"
     beer_lambert + {dpf: [6.0]}                     -> "dpf 6.0"
-    sci_pruning  + {sci_threshold: 0.75}            -> "SCI 0.75 + PSP 0.1, coupled ≥ 0.75"
+    sci_pruning  + {sci_threshold: 0.75}            -> "SCI 0.75, passing ≥ 0.75"
     unknown step, or the keys are absent            -> ""
 
     A post sidecar also carries its file's filter state, so each step names only the keys that describe it.
@@ -133,15 +133,16 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         return f"dpf {dpf}" if dpf is not None else ""
 
     if step == "sci_pruning":
-        # the two lines a window clears together and the share of windows that keeps a
-        # channel: the share rejects, so the SCI line alone would name the wrong rule
+        # the lines a window clears and the share of windows that keeps a channel: the
+        # share rejects, so the SCI line alone would name the wrong rule
         if pick("sci_threshold") is None:
             return ""
         # local: qc.metrics pulls in mne, and the GUI imports this module at start-up
         from nirspipe.qc.metrics import resolve_cutoffs
         lines = resolve_cutoffs(sci=pick("sci_threshold"), psp=pick("psp_threshold"),
                                 good_frac=pick("min_good_frac"))
-        return f"SCI {lines['sci']:g} + PSP {lines['psp']:g}, coupled ≥ {lines['good_frac']:g}"
+        psp = f" + PSP {lines['psp']:g}" if lines["psp"] is not None else ""
+        return f"SCI {lines['sci']:g}{psp}, passing ≥ {lines['good_frac']:g}"
 
     if step == "motion_correction":
         return str(pick("motion_correction") or "")

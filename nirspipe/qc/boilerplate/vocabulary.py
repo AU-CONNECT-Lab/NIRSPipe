@@ -280,7 +280,8 @@ def _screening_scope(params: dict[str, Any]) -> str:
 
 def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     """The screening sentence's numbers, its counting scope and any channels marked by hand."""
-    # Each line falls back to the criteria table for a record that does not carry it.
+    # The share falls back to the criteria table for a record that does not carry it; PSP
+    # has no line to fall back to.
     from nirspipe.qc.metrics import criterion_cutoffs
     cutoffs = criterion_cutoffs()
     psp = params.get("psp_threshold")
@@ -292,7 +293,10 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
     kept = list(dict.fromkeys(pair_of(c) for c in params.get("kept_channels") or []))
     return {
         "threshold": _num(params.get("sci_threshold")),
-        "psp_threshold": _num(psp if psp is not None else cutoffs["psp"]),
+        "psp_line": (f" and its peak spectral power (PSP) in the same band at least {_num(psp)}"
+                     if psp is not None else ""),
+        "psp_shown": (" Peak spectral power (PSP) was computed in the same windows and "
+                      "reported without a threshold." if psp is None else ""),
         # a share reads as a percentage in a Methods paragraph, and it is formatted from
         # the same value the screening used rather than written out beside it
         "min_good_frac": f"{float(good_frac) * 100:g}%",
@@ -680,7 +684,7 @@ METRIC_SUMMARY = {
     "sci_win_mean": f"Scalp coupling in {SCI_WINDOW_S:g} s windows, averaged, so brief movement sways it less than the whole-run SCI. Near 1 is good.",
     "channel_retention_rate": "Share of channels not marked bad. Higher is better.",
     "psp_mean": f"Strength of the heartbeat peak the two wavelengths share, in {PSP_WINDOW_S:g} s windows. Higher is better.",
-    "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass; channels are rejected on this. Higher is better.",
+    "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows passing on SCI, and on PSP when it has a line; channels are rejected on this. Higher is better.",
     "cp_mean": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental, with no better end; read SCI and PSP for coupling.",
 
     # raw intensity
@@ -863,7 +867,7 @@ RECORD_SECTIONS = {f"{stage}{suffix}": text + phrase
 RECORD_CHANNEL_METRICS = {
     "sci_per_channel": "Scalp coupling index over the whole run: the correlation of the two wavelengths in the cardiac band.",
     "sci_win_per_channel": f"The same correlation inside {SCI_WINDOW_S:g} s windows, averaged over the windows.",
-    "good_frac_per_channel": f"Share of {SCREEN_WINDOW_S:g} s windows in which SCI and PSP both pass; a channel is rejected on this.",
+    "good_frac_per_channel": f"Share of {SCREEN_WINDOW_S:g} s windows passing on SCI, and on PSP when it has a line; a channel is rejected on this.",
     "ch_dist_per_channel": "Source-detector separation in metres.",
     "psp_per_channel": f"Strength of the cardiac peak the two wavelengths share, averaged over {PSP_WINDOW_S:g} s windows.",
     "cp_per_channel": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental.",

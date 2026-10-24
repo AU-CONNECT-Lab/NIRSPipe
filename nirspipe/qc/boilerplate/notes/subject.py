@@ -62,8 +62,8 @@ NOTES = {
         "can be dropped at a high SCI.",
     "quality.head_slider":
         "The panel above on the head, moved through the recording by the slider: left to right, "
-        "whether each window coupled, then its SCI and PSP, each scaled with its line mid-way. "
-        "The event the slider sits in is named above the heads.",
+        "whether each window passed, then its SCI and PSP, each centred on its line where it "
+        "has one. The event the slider sits in is named above the heads.",
     "quality.brain_views_condition":
         "These views and the optode map grade this condition&rsquo;s own SCI; only what the "
         "run rejected is drawn rejected.",
@@ -265,14 +265,15 @@ NOTES = {
         "Scores on the recording before any correction. HbO&ndash;HbR corr is after "
         "Beer-Lambert, before and after denoising where two values are shown.",
     "metrics.per_channel":
-        "BAD means too few windows in which SCI and PSP both pass "
-        "(<code>--min-good-frac</code>), so a channel can be BAD with a passing whole-run "
-        "SCI; BAD (manual) was rejected by hand. A BAD short channel is left out of the "
+        "BAD means too few passing windows (<code>--min-good-frac</code>), a window passing "
+        "on SCI, and on PSP too when <code>--psp-threshold</code> is given, so a channel can "
+        "be BAD with a passing whole-run SCI; BAD (manual) was rejected by hand. A BAD short channel is left out of the "
         "regressors.",
     "channel_summary":
-        "Green pass, red fail, grey missing. Only Status rejects a channel: too few windows "
-        "where SCI (<code>--sci-threshold</code> {sci}) and PSP both pass "
-        "(<code>--min-good-frac</code>), or a rejection by hand. The other rows are for "
+        "Green pass, red fail, grey missing, blue-grey measured with no line. Only Status "
+        "rejects a channel: too few passing windows (<code>--min-good-frac</code>), a window "
+        "passing on SCI (<code>--sci-threshold</code> {sci}) and on PSP only with "
+        "<code>--psp-threshold</code>, or a rejection by hand. The other rows are for "
         "reference.",
     "condition_summary":
         "The condition pages&rsquo; channel grids in one figure, one metric&rsquo;s "

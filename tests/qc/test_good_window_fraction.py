@@ -1,13 +1,12 @@
-"""Channel screening by counting coupled windows.
+"""Channel screening by counting passing windows.
 
-The rule these cover: SCI and PSP are thresholded inside the same short window and
-combined there, and a channel is kept when enough windows pass.
+The rule these cover: SCI is thresholded in each short window, PSP too in the same window
+when a run gives it a line, and a channel is kept when enough windows pass.
 Two properties matter and neither is obvious from the code.
 
-The pairing is temporal. Movement inflates SCI and drives PSP to near zero, so a window
-with a high SCI and a low PSP is movement rather than coupling. Only a comparison made
-inside one window can see that; two whole-run averages no longer know whether the good SCI
-and the bad PSP happened at the same time.
+When PSP has a line the pairing is temporal: a window with a high SCI and a low PSP fails.
+Only a comparison made inside one window can see that; two whole-run averages no longer
+know whether the good SCI and the bad PSP happened at the same time.
 
 The counting is what an average cannot do. A mean over the recording is carried over the
 line by the stretch where the channel was fine, so a channel that is excellent for half a
@@ -83,11 +82,10 @@ def test_half_a_run_dead_scores_a_half(stub_windows):
     assert frac < 0.75
 
 
-# ---- the pairing ----
+# ---- the pairing, when PSP has a line ----
 
-def test_high_sci_with_dead_psp_is_not_a_coupled_window(stub_windows):
-    """Movement fakes a high SCI, and PSP near zero is how that is caught. Both have to
-    hold in the same window or the pair says nothing."""
+def test_high_sci_with_dead_psp_is_not_a_passing_window(stub_windows):
+    """Both have to hold in the same window or the pair says nothing."""
     stub_windows(sci=[[0.99] * 4], psp=[[0.01] * 4])
     assert _frac([[0]], [[0]])["ch0"] == pytest.approx(0.0)
 

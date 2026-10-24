@@ -184,8 +184,8 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 # Figure: shared usable time
 # ---------------------------------------------------------------------------
 
-# (key, axis label, whether the row is divided by each member's own median). SCI and PSP are
-# what the carpet's mask is made of; CV catches baseline shifts and signal loss they miss.
+# (key, axis label, whether the row is divided by each member's own median). SCI, and PSP
+# when it has a line, are what the carpet's mask is made of; CV catches what they miss.
 _SERIES_ROWS = (("sci", f"SCI ({SCREEN_WINDOW_S:g} s)", False),
                 ("psp", f"PSP ({SCREEN_WINDOW_S:g} s)", False),
                 ("cv", f"CV ({SCREEN_WINDOW_S:g} s)", False))

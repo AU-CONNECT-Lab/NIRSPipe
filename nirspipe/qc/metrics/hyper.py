@@ -55,9 +55,9 @@ def _ch_kept_by_member(
 
     **The verdict, not a threshold on SCI.** These three colours are labelled good / mixed /
     bad on every panel that draws them, and "good" has one meaning in this package: the
-    channel survived screening. Screening is `good_frac`, the share of 10 s windows in which
-    SCI and PSP both cleared their lines, so a channel can be dropped at a high SCI and kept
-    at a lower one; colouring by ``sci_threshold`` would call a rejected channel "good".
+    channel survived screening. Screening is `good_frac`, the share of 10 s windows that
+    passed (SCI, and PSP when given a line), so a channel can be dropped at a high SCI and
+    kept at a lower one; colouring by ``sci_threshold`` would call a rejected channel "good".
 
     ``sci_threshold`` stays the fallback and nothing else: a record with no rejection list at
     all is the one case with no verdict to draw, and an all-grey montage says less than the
@@ -118,8 +118,8 @@ def coupled_grid(
       -> {"t": [...], "pairs": ["S1_D1", ..., "S1_D8", ...],
           "long_pairs": ["S1_D1", ...], "ok": {"sub-01": mask, "sub-02": mask}}
 
-    with each ``mask`` a ``pair x window`` boolean, True where that member's SCI and PSP both
-    cleared their lines in that window. The three dyad panels that read it (the usable-time
+    with each ``mask`` a ``pair x window`` boolean, True where that member's window passed
+    its lines, SCI's and PSP's when it has one. The three dyad panels that read it (the usable-time
     carpet, the two head figures) then cannot disagree about which window was good.
 
     **Every pair, with the long ones named separately.** The carpet is a long-channel picture
