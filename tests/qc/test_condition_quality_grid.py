@@ -56,6 +56,16 @@ def test_every_cell_matches_the_condition_pages_own_grid():
             k: v for k, v in regrouped.items() if k.startswith(f"{label} · ")}
 
 
+def test_without_a_psp_line_the_psp_row_is_neutral_and_keeps_its_value():
+    args = _args(0.95, False)
+    args["psp_per_ch"] = {"A": 0.3, "B": 0.01}
+    trace = channel_quality_heatmap(sci_thresh=0.8, psp_thresh=None, **args).data[0]
+    psp = f"PSP ({PSP_WINDOW_S:g} s)"
+    cells = {t: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
+    assert cells == {f"A · {psp}: 0.300 (no line)": "#D9E6F2",
+                     f"B · {psp}: 0.010 (no line)": "#D9E6F2"}
+
+
 def test_a_single_condition_draws_nothing():
     assert condition_quality_heatmap([("rest", _args(0.95, False))], sci_thresh=0.8) is None
 

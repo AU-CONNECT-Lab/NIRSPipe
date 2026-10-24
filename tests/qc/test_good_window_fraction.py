@@ -131,6 +131,28 @@ def test_an_unmeasurable_metric_screens_nothing(monkeypatch):
     assert good_window_fraction(_Raw(["ch0"]), 0.7, 1.5, 0.8, 0.1) == {}
 
 
+# ---- no PSP line ----
+
+def test_without_a_psp_line_sci_alone_decides(stub_windows):
+    """A window with a high SCI counts whatever its PSP reads."""
+    stub_windows(sci=[[0.99, 0.99, 0.20, 0.20]], psp=[[0.01] * 4])
+    assert _frac([[0]], [[0]], psp_cut=None)["ch0"] == pytest.approx(0.5)
+
+
+def test_without_a_psp_line_an_unmeasurable_psp_costs_nothing(stub_windows, monkeypatch):
+    from nirspipe.qc.metrics import windowed
+
+    stub_windows(sci=[[0.9, 0.9, 0.2, 0.2]], psp=[[0.5] * 4])
+
+    def _boom(*a, **k):
+        raise RuntimeError("no PSP")
+
+    monkeypatch.setattr(windowed, "compute_windowed_psp", _boom)
+    assert _frac([[0]], [[0]], psp_cut=None)["ch0"] == pytest.approx(0.5)
+    # a run that asked for the PSP line cannot be screened without it
+    assert _frac([[0]], [[0]], psp_cut=0.1) == {}
+
+
 def test_grids_that_disagree_screen_nothing(stub_windows):
     """Both come off the same window length, so a shape mismatch means one of them did not
     do what it was asked; counting them against each other anyway would align window 3 of

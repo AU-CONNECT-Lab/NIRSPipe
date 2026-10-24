@@ -536,9 +536,9 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     """``{mask, centers, channel_order}`` off a stored record, empty when it has no matrices.
 
     The cutoffs are the run's own, since a record screened at a different SCI line has to be
-    re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one.
+    re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one,
+    and one that recorded no PSP line is masked on SCI alone.
     """
-    from nirspipe.qc.metrics._helpers import PSP_PASS
     from nirspipe.qc.metrics.windowed import coupled_mask_from_matrices, window_centers
 
     windowed = record.get("windowed") or {}
@@ -547,14 +547,16 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
         return {}
     sci = windowed.get("sci_matrix")
     psp = windowed.get("psp_matrix")
+    psp_line = lines.get("psp")
     mask = coupled_mask_from_matrices(sci, psp, float(lines["sci"]),
-                                      float(lines.get("psp", PSP_PASS)))
+                                      None if psp_line is None else float(psp_line))
     times = windowed.get("sci_times")
     if mask is None or not times:
         return {}
     out = {"mask": mask,
            "centers": window_centers(np.asarray(times, dtype=float)),
-           "sci": np.asarray(sci, dtype=float), "psp": np.asarray(psp, dtype=float),
+           "sci": np.asarray(sci, dtype=float),
+           **({"psp": np.asarray(psp, dtype=float)} if psp else {}),
            **({"cv": np.asarray(windowed["cv_matrix"], dtype=float)}
               if windowed.get("cv_matrix") else {}),
            "channel_order": list(windowed.get("sci_channels") or [])}

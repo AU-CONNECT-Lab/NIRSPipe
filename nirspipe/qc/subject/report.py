@@ -1673,18 +1673,17 @@ def _section_channel_summary(
     figures_dir: Path,
     fig_name,
     sci_thresh: float,
-    psp_thresh: "float | None" = None,
-    good_frac_thresh: "float | None" = None,
+    psp_thresh: "float | None",
+    good_frac_thresh: float,
 ) -> dict:
     """``fig_name`` so a per-condition page writes its own grid instead of overwriting the run's.
 
-    The PSP and coupled-share lines colour their rows; None keeps the package default.
+    The run's lines colour their rows; a PSP line of None draws PSP with no line.
     """
     path, h = None, 0
     with _guard("Channel quality summary", errors, subject):
-        lines = {k: v for k, v in (("psp_thresh", psp_thresh),
-                                   ("good_frac_thresh", good_frac_thresh)) if v is not None}
-        fig = channel_quality_heatmap(sci_thresh=sci_thresh, **lines, **heatmap_args(rows))
+        fig = channel_quality_heatmap(sci_thresh=sci_thresh, psp_thresh=psp_thresh,
+                                      good_frac_thresh=good_frac_thresh, **heatmap_args(rows))
         path, h = _save_plotly_html(fig, figures_dir / fig_name("chsummary", suffix="qc"))
     return {"channel_summary_path": path, "channel_summary_h": h}
 

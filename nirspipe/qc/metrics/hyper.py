@@ -230,13 +230,13 @@ def shared_screen_windows(
         member = dict(sqm_data.get(sid) or {})
         raw = intensity_raws.get(sid)
         cutoffs = member.get("screen_cutoffs") or {}
-        if raw is None or "sci" not in cutoffs or "psp" not in cutoffs:
+        if raw is None or cutoffs.get("sci") is None:
             logger.warning("%s: no aligned recording or screening lines; the dyad grid is "
                            "empty", sid)
             return {}
         od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
         counted = coupled_windows(od, cardiac_l_freq, cardiac_h_freq,
-                                  cutoffs["sci"], cutoffs["psp"])
+                                  cutoffs["sci"], cutoffs.get("psp"))
         if counted["mask"] is None:
             return {}
         windows = {k: counted[k] for k in ("mask", "centers", "sci", "psp", "channel_order")}

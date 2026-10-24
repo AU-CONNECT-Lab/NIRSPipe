@@ -49,3 +49,11 @@ def test_a_record_with_no_line_is_not_re_masked_at_a_guessed_one():
                            "sci_times": [[0, 10], [10, 20], [20, 30]]}}
     assert _screen_windows(record, {"psp": 0.1}) == {}
     assert _screen_windows(record, {"sci": 0.8, "psp": 0.1})["mask"].all()
+
+
+def test_a_record_with_no_psp_line_is_masked_on_sci_alone():
+    record = {"windowed": {"sci_matrix": [[0.9, 0.9, 0.5]],
+                           "psp_matrix": [[0.01, 0.01, 0.01]],
+                           "sci_times": [[0, 10], [10, 20], [20, 30]]}}
+    assert _screen_windows(record, {"sci": 0.8})["mask"].tolist() == [[True, True, False]]
+    assert not _screen_windows(record, {"sci": 0.8, "psp": 0.1})["mask"].any()

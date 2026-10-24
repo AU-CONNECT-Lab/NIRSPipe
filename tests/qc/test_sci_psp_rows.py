@@ -18,9 +18,10 @@ PSP = np.repeat([[0.20, 0.30, 0.40, 0.50],
 CV = np.arange(24, dtype=float).reshape(6, 4) / 200 + 0.01
 
 
-def _strip(sci=SCI, bad=(), warn=None):
+def _strip(sci=SCI, bad=(), warn=None, psp_threshold=0.1):
     return build_sci_psp_figure(
         {n: 0.9 for n in NAMES}, {n: 0.4 for n in NAMES}, set(bad), sci_threshold=0.8,
+        psp_threshold=psp_threshold,
         sci_matrix=sci, sci_win_times=TIMES, psp_matrix=PSP, psp_win_times=TIMES,
         cv_matrix=CV, cv_win_times=TIMES, window_s=10.0, warn=warn)
 
@@ -66,3 +67,22 @@ def test_a_pair_whose_wavelengths_disagree_is_drawn_twice_and_said_so():
     np.testing.assert_array_equal(np.asarray(_heat(fig, "SCI").z)[1:3], sci[2:4])
     assert len(warn) == 1 and "SCI" in warn[0] and "S2_D2" in warn[0]
     assert list(_heat(fig, "PSP").y) == PAIRS
+
+
+def test_without_a_psp_line_psp_spans_its_own_values_and_draws_no_rule():
+    fig = _strip(psp_threshold=None)
+    heat = _heat(fig, "PSP")
+    assert (heat.zmin, heat.zmax) == (0.01, 0.60)
+    assert heat.colorscale[0][1] == "#440154"           # viridis, not the pass/fail ramp
+    _, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"][:2]
+    assert set(psp_dots.marker.color) == {"#95a5a6"}
+    # the SCI and CV rules remain, and nothing is drawn at a PSP line
+    assert sorted(s.x0 for s in fig.layout.shapes) == [0.05, 0.8]
+
+
+def test_without_a_psp_line_the_lollipop_pair_judges_no_psp_dot():
+    fig = build_sci_psp_figure({n: 0.9 for n in NAMES}, {n: 0.04 for n in NAMES}, set(),
+                               sci_threshold=0.8, psp_threshold=None)
+    sci_dots, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"]
+    assert set(sci_dots.marker.color) == {"#27ae60"}
+    assert set(psp_dots.marker.color) == {"#95a5a6"}

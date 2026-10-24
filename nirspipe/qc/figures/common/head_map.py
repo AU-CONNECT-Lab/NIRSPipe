@@ -271,28 +271,42 @@ def _coupled_words(values: np.ndarray, per_pair) -> np.ndarray:
 
 def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
                  cutoffs: dict) -> list[tuple]:
-    """The slider's numbers, left to right: (label, colour bar title, {sid: {pair: series}}, cmin, cmax).
+    """The slider's numbers, left to right: (label, colour bar title, {sid: {pair: series}},
+    cmin, cmax, colour scale).
 
     Coupled is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
-    the subject report's SCI/PSP strip follows. A number with no data or no line is left out.
+    the subject report's SCI/PSP strip follows. PSP with no line spans its own values on one
+    hue, as that strip draws it; SCI with no line, or a number with no data, is left out.
     """
     rows = []
     ok = grid.get("ok") or {}
     coupled = {sid: dict(zip(grid["pairs"], np.asarray(ok[sid], dtype=float)))
                for sid in subject_ids if sid in ok}
     if coupled:
-        rows.append(("Coupled", "Coupled", coupled, 0.0, 1.0))
+        rows.append(("Coupled", "Coupled", coupled, 0.0, 1.0, HEAD_SCALE))
     window = f"<br>({SCREEN_WINDOW_S:g} s)"
     for label, line in (("SCI", cutoffs.get("sci")), ("PSP", cutoffs.get("psp"))):
         key = f"per_pair_{label.lower()}"
         values = {sid: series_by_sub[sid][key] for sid in subject_ids
                   if (series_by_sub.get(sid) or {}).get(key) is not None}
-        if line is None or not values:
+        if not values or (line is None and label == "SCI"):
+            continue
+        if line is None:
+            cmin, cmax = _series_range(values)
+            rows.append((label, label + window, values, cmin, cmax, "Viridis"))
             continue
         line = float(line)
         cmin, cmax = (2 * line - 1.0, 1.0) if label == "SCI" else (0.0, 2 * line)
-        rows.append((label, label + window, values, cmin, cmax))
+        rows.append((label, label + window, values, cmin, cmax, HEAD_SCALE))
     return rows
+
+
+def _series_range(values: dict) -> "tuple[float | None, float | None]":
+    """Smallest and largest finite value over ``{sid: {pair: series}}``."""
+    found = [np.asarray(s, dtype=float) for by_pair in values.values()
+             for s in by_pair.values()]
+    finite = np.concatenate([a[np.isfinite(a)] for a in found]) if found else np.array([])
+    return (float(finite.min()), float(finite.max())) if finite.size else (None, None)
 
 
 def build_head_slider(
@@ -351,7 +365,7 @@ def build_head_slider(
                         subplot_titles=[row[0] for row in rows] + [""] * (n_cols * (n_rows - 1)),
                         horizontal_spacing=0.07, vertical_spacing=0.05)
     drawn: list[tuple] = []
-    for mi, (label, title, values, cmin, cmax) in enumerate(rows, start=1):
+    for mi, (label, title, values, cmin, cmax, scale) in enumerate(rows, start=1):
         # one colour bar per number, right of its column and as tall as the members; the
         # column title already names it
         x_dom = fig.get_subplot(1, mi).xaxis.domain
@@ -373,7 +387,7 @@ def build_head_slider(
                 vals = pair_values(geo, scope, values[sid], lambda v, k=frames_at[0]: v[k])
                 i = head_glyph(fig, geo, scope, vals, ri, mi, title, cmin, cmax,
                                 bar=bar if (ri == n_rows and scope == "long") else False,
-                                colorscale=HEAD_SCALE, sid=sid)
+                                colorscale=scale, sid=sid)
                 if label == "Coupled":
                     fig.data[i].update(
                         customdata=_coupled_words(vals, per_pair),

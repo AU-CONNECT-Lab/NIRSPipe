@@ -92,6 +92,14 @@ def test_sci_and_psp_are_scaled_with_the_run_s_lines_mid_way(slider):
     assert (psp.cmin, psp.cmax) == pytest.approx((0.0, 0.3))
 
 
-def test_a_number_with_no_line_gets_no_column():
+def test_psp_with_no_line_spans_its_own_values_on_one_hue():
     fig, _, _ = _slider({"sci": 0.7})
-    assert _titles(fig)[0] == ["Coupled", "SCI"]
+    assert _titles(fig)[0] == ["Coupled", "SCI", "PSP"]
+    psp = fig.data[_coloured(fig, 1, 3)].marker
+    assert (psp.cmin, psp.cmax) == pytest.approx((0.02, 0.5))
+    assert psp.colorscale[0][1] == "#440154"
+
+
+def test_sci_with_no_line_gets_no_column():
+    fig, _, _ = _slider({"psp": 0.15})
+    assert _titles(fig)[0] == ["Coupled", "PSP"]

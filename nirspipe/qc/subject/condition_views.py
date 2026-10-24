@@ -979,7 +979,7 @@ def condition_slices_from_record(
     ch_names: "list[str]",
     windows: "list[tuple[str, float, float]]",
     sci_cutoff: float,
-    psp_cutoff: float,
+    psp_cutoff: "float | None",
     spans=(),
 ) -> "dict[str, dict[str, dict[str, float]]]":
     """Per-condition per-channel metrics read out of a quality record, nothing recomputed.
@@ -1030,7 +1030,7 @@ def condition_slices_from_record(
     psp_by_cond = ({} if not psp_matrix or psp_times is None
                    else condition_window_means(psp_matrix, psp_times, windows))
     mask = coupled_mask_from_matrices(sci_matrix, psp_matrix, sci_cutoff, psp_cutoff) \
-        if psp_matrix else None
+        if psp_matrix or psp_cutoff is None else None
     if mask is not None and len(spans):
         mask = mask.astype(float)
         mask[:, windows_touching(sci_times, spans)] = np.nan

@@ -345,40 +345,57 @@ def _coupled_mask(
 
 
 def _coupled_matrices(raw_od, cardiac_l_freq: float, cardiac_h_freq: float, window_s: float):
-    """``(sci, psp, centers)`` off one recording, or None when neither could be measured."""
+    """``(sci, psp, centers)`` off one recording, None when SCI could not be measured.
+
+    PSP is None when it alone failed, which costs a run screened on SCI nothing.
+    """
     try:
         sci, times = compute_windowed_sci(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
-        psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     except Exception as exc:
         logger.warning("windowed screening could not be measured (%s); it screens nothing",
                        exc)
         return None
+    try:
+        psp, _ = compute_windowed_psp(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
+    except Exception as exc:
+        logger.warning("windowed PSP could not be measured (%s)", exc)
+        psp = None
     return sci, psp, window_centers(times)
 
 
 def coupled_mask_from_matrices(
-    sci_matrix, psp_matrix, sci_cutoff: float, psp_cutoff: float,
+    sci_matrix, psp_matrix, sci_cutoff: float, psp_cutoff: "float | None",
 ) -> "np.ndarray | None":
-    """Channel x window, True where a channel is coupled in that window. None if unusable.
+    """Channel x window, True where a channel passes in that window. None if unusable.
 
     ::
 
-      sci 0.85 psp 0.30 against 0.8 / 0.1  ->  True
-      sci 0.92 psp 0.04 against 0.8 / 0.1  ->  False   (movement, not coupling)
+      sci 0.92 psp 0.04 against 0.8 / None  ->  True
+      sci 0.92 psp 0.04 against 0.8 / 0.1   ->  False
 
-    The AND is applied inside the window, and it lives here alone so the two callers cannot
-    drift apart: the screening
+    SCI decides alone unless a PSP line is given, and then both have to pass inside the same
+    window. It lives here alone so the two callers cannot drift apart: the screening
     measures the matrices off a recording, while a per-condition view reads the ones the
     quality record already stored. A second copy of this comparison would let a report
     disagree with the verdict the run was screened by.
     """
     sci = np.asarray(sci_matrix, dtype=float)
+    if sci.ndim != 2 or sci.shape[1] == 0:
+        logger.warning("windowed SCI %s is not a channel x window grid; screening nothing",
+                       sci.shape)
+        return None
+    passed = sci >= float(sci_cutoff)
+    if psp_cutoff is None:
+        return passed
+    if psp_matrix is None:
+        logger.warning("a PSP line was given but PSP could not be measured; screening nothing")
+        return None
     psp = np.asarray(psp_matrix, dtype=float)
-    if sci.shape != psp.shape or sci.ndim != 2 or sci.shape[1] == 0:
+    if sci.shape != psp.shape:
         logger.warning("windowed SCI %s and PSP %s do not share a grid; screening nothing",
                        sci.shape, psp.shape)
         return None
-    return (sci >= float(sci_cutoff)) & (psp >= float(psp_cutoff))
+    return passed & (psp >= float(psp_cutoff))
 
 
 def _in_scope(centers, scope) -> "np.ndarray":
@@ -440,7 +457,7 @@ def good_window_fraction(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     sci_cutoff: float,
-    psp_cutoff: float,
+    psp_cutoff: "float | None",
     window_s: float = SCREEN_WINDOW_S,
     scope: "list[tuple[str, float, float]] | None" = None,
 ) -> dict[str, float]:
@@ -450,10 +467,9 @@ def good_window_fraction(
 
       a channel passing both lines in 300 of 400 windows  ->  0.75
 
-    A window counts when SCI **and** PSP both pass in *that* window: a window with high SCI
-    and near-zero PSP is movement rather than coupling, which whole-run numbers cannot see.
-    Windows are counted rather than averaged, so a channel dead for half the run cannot pass
-    on the other half.
+    A window counts when its SCI passes, and its PSP too when ``psp_cutoff`` is given, both
+    inside *that* window. Windows are counted rather than averaged, so a channel dead for
+    half the run cannot pass on the other half.
 
     ``scope`` restricts the **denominator** to the windows whose centres fall inside those
     stretches, such as the blocks of a run without its lead-in and gaps. None counts the
@@ -463,8 +479,8 @@ def good_window_fraction(
     each piece: SCI and PSP filter to the cardiac band, so a cut piece is filtered against
     its own edges and lands on its own window grid. Masking keeps one grid and one filter.
 
-    Returns an empty dict when either metric cannot be measured, or when the scope keeps no
-    window, which screens nothing rather than rejecting everything.
+    Returns an empty dict when a metric the rule reads cannot be measured, or when the scope
+    keeps no window, which screens nothing rather than rejecting everything.
     """
     return coupled_windows(raw_od, cardiac_l_freq, cardiac_h_freq,
                            sci_cutoff, psp_cutoff, window_s, scope)["fractions"]
@@ -475,7 +491,7 @@ def coupled_windows(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     sci_cutoff: float,
-    psp_cutoff: float,
+    psp_cutoff: "float | None",
     window_s: float = SCREEN_WINDOW_S,
     scope: "list[tuple[str, float, float]] | None" = None,
 ) -> dict:
@@ -497,7 +513,7 @@ def coupled_windows(
     The scope restricts ``fractions`` only, never the grid, because a figure draws the whole
     recording and says which part of it counted. ``fractions`` is empty where
     :func:`good_window_fraction` returns an empty dict; ``mask`` is None when nothing could
-    be measured at all.
+    be measured at all, and ``psp`` is None when PSP alone could not be.
     """
     got = _coupled_matrices(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     if got is None:

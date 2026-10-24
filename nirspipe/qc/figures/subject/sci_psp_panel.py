@@ -60,32 +60,39 @@ def binary_heatmap_figure(
 
 
 _MISSING_COLOR = "#D3D3D3"
+# a value measured against no line: shown, neither passing nor failing
+_UNJUDGED_COLOR = "#D9E6F2"
+_UNJUDGED_DOT = "#95a5a6"
 
 
 def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_frac_thresh):
     """(row label, heatmap_args key, hover format, pass test) for every channel-grid row.
 
-    Status has no key and no test: it is read off ``is_bad``, the screening verdict.
+    Status has no key and no format: it is read off ``is_bad``, the screening verdict. PSP
+    has no test when the run gave it no line.
     """
     return [
         ("Status",  None,               None,  None),
         ("Coupled", "good_frac_per_ch", ".3f", lambda v: v >= good_frac_thresh),
         (f"SCI ({SCI_WINDOW_S:g} s)", "sci_per_ch", ".3f", lambda v: v >= sci_thresh),
         (f"CV ({CV_WINDOW_S:g} s)",   "cv_per_ch",  ".3f", lambda v: v <= cv_thresh),
-        (f"PSP ({PSP_WINDOW_S:g} s)", "psp_per_ch", ".3f", lambda v: v >= psp_thresh),
+        (f"PSP ({PSP_WINDOW_S:g} s)", "psp_per_ch", ".3f",
+         None if psp_thresh is None else (lambda v: v >= psp_thresh)),
         (f"SNR μ/σ ({CV_WINDOW_S:g} s)", "snr_per_ch", ".1f", lambda v: v >= snr_thresh),
     ]
 
 
 def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD")) -> tuple[str, str]:
-    """Colour and hover for one cell; ``value`` is the bad flag on the Status row, the one
-    row with no pass test. ``words`` name its two states."""
-    if check is None:
+    """Colour and hover for one cell; ``value`` is the bad flag on a row with no ``fmt``,
+    the Status row's kind. ``words`` name its two states."""
+    if fmt is None:
         if value is None:
             return _MISSING_COLOR, f"{ch} · {metric}: —"
         return (_BAD_COLOR if value else _GOOD_COLOR), f"{ch} · {metric}: {words[bool(value)]}"
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return _MISSING_COLOR, f"{ch} · {metric}: —"
+    if check is None:
+        return _UNJUDGED_COLOR, f"{ch} · {metric}: {value:{fmt}} (no line)"
     return (_GOOD_COLOR if check(value) else _BAD_COLOR), f"{ch} · {metric}: {value:{fmt}}"
 
 
@@ -128,7 +135,7 @@ def channel_quality_heatmap(
     sci_thresh: float,
     cv_thresh: float = CV_PASS,
     snr_thresh: float = SNR_PASS,
-    psp_thresh: float = PSP_PASS,
+    psp_thresh: "float | None" = PSP_PASS,
     good_frac_thresh: float = GOOD_FRAC_PASS,
     split_at: int | None = None,
 ) -> go.Figure:
@@ -142,7 +149,7 @@ def channel_quality_heatmap(
     sits directly under: a channel can fail on its coupled-window share with every average
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
-    them prunes.
+    them prunes; PSP with ``psp_thresh`` None is drawn neutral, its value in the hover.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
                "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
@@ -200,7 +207,7 @@ def condition_quality_heatmap(
     sci_thresh: float,
     cv_thresh: float = CV_PASS,
     snr_thresh: float = SNR_PASS,
-    psp_thresh: float = PSP_PASS,
+    psp_thresh: "float | None" = PSP_PASS,
     good_frac_thresh: float = GOOD_FRAC_PASS,
     status_label: str = "Status",
     status_words: "tuple[str, str]" = ("OK", "BAD"),
@@ -465,7 +472,7 @@ def lollipop_scores_figure(
     ch_names: list[str],
     mean_scores: np.ndarray,
     colors: list[str],
-    threshold: float,
+    threshold: "float | None",
     metric_label: str = "Score",
 ) -> go.Figure:
     n_ch = len(ch_names)
@@ -489,7 +496,8 @@ def lollipop_scores_figure(
         showlegend=False,
         hovertemplate="%{customdata}: %{x:.3f}<extra></extra>",
     ))
-    fig.add_vline(x=threshold, line=dict(dash="dash", color="#888", width=1))
+    if threshold is not None:
+        fig.add_vline(x=threshold, line=dict(dash="dash", color="#888", width=1))
     fig.update_layout(
         xaxis_title=metric_label,
         yaxis=dict(autorange="reversed", showticklabels=False),
@@ -532,12 +540,18 @@ def _per_pair(names: list[str], matrix) -> "tuple[list[str], np.ndarray, list[st
     return labels, np.array(kept), differ
 
 
+def _data_range(matrix) -> "tuple[float | None, float | None]":
+    values = np.asarray(matrix, dtype=float)
+    values = values[np.isfinite(values)]
+    return (float(values.min()), float(values.max())) if values.size else (None, None)
+
+
 def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
     bad_channels: set[str],
     sci_threshold: float,
-    psp_threshold: float = PSP_PASS,
+    psp_threshold: "float | None" = PSP_PASS,
     sci_matrix: np.ndarray | None = None,
     sci_win_times: np.ndarray | None = None,
     psp_matrix: np.ndarray | None = None,
@@ -565,6 +579,8 @@ def build_sci_psp_figure(
     The lollipop beside each row is that row averaged along time, so the dot and the strip
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
     the whole-run correlation and not the windowed one the strip draws.
+
+    ``psp_threshold`` None draws PSP with no line: one hue over its own range, grey dots.
 
     Without the windowed matrices this falls back to the lollipop-only pair.
     """
@@ -608,7 +624,8 @@ def build_sci_psp_figure(
         if not has_psp:
             return lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         psp_vals = psp_col[:, 0]
-        psp_colors = ["#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals]
+        psp_colors = [_UNJUDGED_DOT if psp_threshold is None
+                      else "#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals]
         fig_sci = lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         fig_psp = lollipop_scores_figure(labels, psp_vals, psp_colors, psp_threshold, "PSP")
         n_ch = len(labels)
@@ -632,7 +649,8 @@ def build_sci_psp_figure(
     # Every row pins its range with the threshold at mid-scale, so the line is the same
     # colour on every recording and anything far past it saturates. An open `zmid` scale
     # widens symmetrically to the farthest window, which ran PSP's bar below zero and SCI's
-    # above one. SCI tops out at 1, so its range ends there; PSP and CV start at 0.
+    # above one. SCI tops out at 1, so its range ends there; PSP and CV start at 0. A row
+    # with no line has no mid-scale and spans its own values on one hue.
     # the mean beside a row is that row's own mean, not the scalar of the same name: the
     # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
     # to 10 s. Here the dot is the row, averaged along time.
@@ -650,7 +668,7 @@ def build_sci_psp_figure(
          (2 * sci_threshold - 1.0, 1.0)),
         ("PSP", f"PSP ({windows})", "Row mean", psp_names, psp_rows, psp_win_times,
          _row_mean(psp_rows), psp_threshold, True, "PSP=%{z:.3f}",
-         (0.0, 2 * psp_threshold)),
+         _data_range(psp_rows) if psp_threshold is None else (0.0, 2 * psp_threshold)),
     ]
     if cv_matrix is not None and cv_win_times is not None:
         rows.append(("CV", f"CV ({windows})", "Row mean", ch_names, cv_matrix, cv_win_times,
@@ -690,7 +708,8 @@ def build_sci_psp_figure(
         fig.add_trace(go.Heatmap(
             z=z, x=centers.tolist(), y=labels,
             customdata=customdata,
-            colorscale="RdYlGn" if higher_better else "RdYlGn_r",
+            colorscale=("Viridis" if threshold is None
+                        else "RdYlGn" if higher_better else "RdYlGn_r"),
             zmin=zrange[0], zmax=zrange[1],
             colorbar=dict(title=name, thickness=10, x=1.01, yanchor="middle",
                           y=(domain[0] + domain[1]) / 2, len=0.95 * (domain[1] - domain[0])),
@@ -706,6 +725,8 @@ def build_sci_psp_figure(
                 colors.append("#e74c3c")
             elif not np.isfinite(v):
                 colors.append("#D3D3D3")
+            elif threshold is None:
+                colors.append(_UNJUDGED_DOT)
             elif (v >= threshold) if higher_better else (v <= threshold):
                 colors.append("#27ae60")
             else:
@@ -724,8 +745,9 @@ def build_sci_psp_figure(
                                              line=dict(width=0.5, color="#333")),
                                  showlegend=False,
                                  hovertemplate="%{y}: %{x:.3f}<extra></extra>"), row=i, col=2)
-        fig.add_vline(x=threshold, line_dash="dash", line_color="#888",
-                      line_width=1, row=i, col=2)
+        if threshold is not None:
+            fig.add_vline(x=threshold, line_dash="dash", line_color="#888",
+                          line_width=1, row=i, col=2)
 
         fig.update_yaxes(autorange="reversed", tickfont=dict(size=9), row=i, col=1)
         if _STRIP_ROW_PX * len(labels) + 60 <= _STRIP_MAX_PX:
