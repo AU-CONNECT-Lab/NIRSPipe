@@ -23,12 +23,13 @@ from typing import Callable
 
 import mne
 
+from nirspipe.exceptions import StageError
 from nirspipe.qc.metrics._helpers import (
     GOOD_FRAC_PASS, PSP_PASS, SCI_PASS, require_cardiac_below_nyquist,
 )
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
-from nirspipe.qc.metrics.windowed import good_window_fraction
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, good_window_fraction
 
 logger = get_logger("qc.metrics.screening")
 
@@ -168,6 +169,22 @@ def screening_scores(
                            c.label, exc)
             scores[c.name] = {}
     return scores
+
+
+def require_screened(scores: dict[str, dict[str, float]], name: str) -> None:
+    """Refuse a recording whose screening criteria came back unmeasured.
+
+    :func:`screening_scores` leaves a criterion it cannot measure empty, which rejects
+    nothing; a caller screening a whole recording must not read that as every channel
+    passing. Per-trial scoring tolerates it on purpose and does not call this.
+    """
+    unmeasured = [c.label for c in CRITERIA if c.screens and not scores.get(c.name)]
+    if unmeasured:
+        raise StageError(
+            f"{name}: channel screening could not measure {', '.join(unmeasured)} (the "
+            f"warning above says why), so it cannot tell a coupled channel from an "
+            f"uncoupled one. A recording needs two {SCREEN_WINDOW_S:g} s windows outside "
+            f"its BAD_ spans and a cardiac band its sampling rate can filter.")
 
 
 def screen_channels(

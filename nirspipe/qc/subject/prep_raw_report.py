@@ -36,8 +36,8 @@ from nirspipe.qc.common.channel_table import (
 )
 from nirspipe.qc.metrics import (
     IMU_STAT_KEYS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
-    screen_channels, screening_scores,
+    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, require_screened,
+    resolve_cutoffs, screen_channels, screening_scores,
 )
 from nirspipe.qc.metrics._helpers import separation_orphans
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
@@ -239,6 +239,7 @@ def _process_run(
     screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                      have={"sci": sci_scores}, cutoffs=cutoffs,
                                      scope=scope)
+    require_screened(screen_scores, label)
     bad_list, _why = screen_channels(screen_scores, cutoffs)
     bad_channels: set[str] = set(bad_list)
     # the recording's BIDS channels.tsv rejections, joined as the pipeline joins them

@@ -52,8 +52,8 @@ from nirspipe.qc.metrics.gvtd import (  # noqa: F401
     compute_windowed_gvtd, compute_windowed_filtered_gvtd,
 )
 from nirspipe.qc.metrics.screening import (  # noqa: F401
-    CRITERIA, Criterion, criterion_cutoffs, resolve_cutoffs, screen_channels,
-    screening_scores,
+    CRITERIA, Criterion, criterion_cutoffs, require_screened, resolve_cutoffs,
+    screen_channels, screening_scores,
 )
 from nirspipe.qc.metrics.coupling import (  # noqa: F401
     PSP_WINDOW_S, SCI_WINDOW_S, compute_sci_scores, compute_psp_scores, _sci_metrics,

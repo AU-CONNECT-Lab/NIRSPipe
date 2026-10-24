@@ -38,7 +38,8 @@ from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, PSP_PASS, require_cardi
 from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from nirspipe.utils.logging import get_logger
-from nirspipe.qc.metrics import resolve_cutoffs, screen_channels, screening_scores
+from nirspipe.qc.metrics import (require_screened, resolve_cutoffs, screen_channels,
+                                 screening_scores)
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
 from nirspipe.utils.spans import (add_bad_spans, bad_spans, excluded_spans, excluded_time,
@@ -120,20 +121,26 @@ def mark_bad_channels(
     require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
     scope = resolve_screen_scope(raw_od, screen_scope)
-    if bad_spans(raw_od):
-        _, counted = counted_screen_windows(raw_od, scope)
-        if counted.sum() < 2:
-            name = raw_od.filenames[0].name if raw_od.filenames and raw_od.filenames[0] else "run"
+    name = raw_od.filenames[0].name if raw_od.filenames and raw_od.filenames[0] else "run"
+    _, counted = counted_screen_windows(raw_od, scope)
+    if counted.sum() < 2:
+        found = (f"channel screening has {int(counted.sum())} window(s) of "
+                 f"{SCREEN_WINDOW_S:g} s to count and needs 2")
+        if bad_spans(raw_od):
             raise StageError(
                 f"{name}: with its BAD_ spans left out"
-                f"{' and only the task blocks counted' if scope else ''}, channel screening "
-                f"has {int(counted.sum())} window(s) of {SCREEN_WINDOW_S:g} s to count and "
-                f"needs 2 ({excluded_time(raw_od)['kept_s']:.0f} s of the recording "
+                f"{' and only the task blocks counted' if scope else ''}, {found} "
+                f"({excluded_time(raw_od)['kept_s']:.0f} s of the recording "
                 f"are outside every BAD_ span). Widen --keep-spans or shorten --bad-spans for "
                 f"this recording.")
+        raise StageError(
+            f"{name}: {'with only the task blocks counted, ' if scope else ''}{found} "
+            f"({raw_od.times[-1]:.0f} s recorded). "
+            f"{'Use --screen-scope run, or leave' if scope else 'Leave'} this recording out.")
     sci_scores = compute_sci(raw_od, cardiac_l_freq, cardiac_h_freq)
     scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                               have={"sci": sci_scores}, cutoffs=cutoffs, scope=scope)
+    require_screened(scores, name)
     bad_chs, why = screen_channels(scores, cutoffs)
     # without this the run dies four steps later inside Beer-Lambert, which reports only
     # that it found no optical density data and never mentions the screening

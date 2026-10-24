@@ -159,6 +159,9 @@ GOOD_FRAC_PASS = 0.75
 CV_PASS  = 0.05
 SNR_PASS = 1.0 / CV_PASS
 
+# MNE's and mne-nirs' default band-pass roll-off for SCI and PSP, which every caller keeps
+CARDIAC_TRANSITION_HZ = 0.3
+
 
 def long_short_channels(
     raw: mne.io.Raw, sep_bands: "Bands | None" = None,
@@ -287,13 +290,20 @@ def as_optical_density(raw: mne.io.Raw) -> mne.io.Raw:
 
 
 def require_cardiac_below_nyquist(sfreq: float, cardiac_h_freq: float) -> None:
-    """Refuse a cardiac band the recording's sampling rate cannot carry."""
+    """Refuse a cardiac band the recording's sampling rate cannot carry.
+
+    The band-pass behind SCI and PSP rolls off over ``CARDIAC_TRANSITION_HZ`` above the band,
+    and MNE refuses a roll-off that crosses Nyquist, so the band's top edge has to sit that
+    far below it.
+    """
     nyquist = sfreq / 2
-    if cardiac_h_freq >= nyquist:
+    if cardiac_h_freq + CARDIAC_TRANSITION_HZ > nyquist:
         raise ValueError(
-            f"--cardiac-h-freq {cardiac_h_freq:g} Hz is at or above the Nyquist frequency "
+            f"--cardiac-h-freq {cardiac_h_freq:g} Hz plus the filter's "
+            f"{CARDIAC_TRANSITION_HZ:g} Hz roll-off passes the Nyquist frequency "
             f"({nyquist:g} Hz) of this {sfreq:g} Hz recording, so the cardiac band cannot "
-            f"be filtered. Lower --cardiac-h-freq below {nyquist:g} Hz."
+            f"be filtered. Lower --cardiac-h-freq to {nyquist - CARDIAC_TRANSITION_HZ:g} Hz "
+            f"or below."
         )
 
 

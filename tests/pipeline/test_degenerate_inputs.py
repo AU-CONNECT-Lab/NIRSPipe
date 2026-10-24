@@ -24,7 +24,8 @@ from nirspipe.pipeline.prep_pipeline import (
     mark_bad_channels,
     run_prep,
 )
-from nirspipe.qc.metrics import compute_sci_scores, screening_scores
+from nirspipe.qc.metrics import compute_sci_scores, require_screened, screening_scores
+from nirspipe.qc.metrics._helpers import require_cardiac_below_nyquist
 
 from tests._synth import synth_raw
 
@@ -152,6 +153,58 @@ def test_screening_refuses_it_instead_of_screening_nothing(slow_intensity):
     have = {"sci": {ch: 1.0 for ch in od.ch_names}}
     with pytest.raises(ValueError, match=_ABOVE_NYQUIST):
         screening_scores(od, _BANDS["cardiac_l_freq"], _BANDS["cardiac_h_freq"], have=have)
+
+
+@pytest.mark.parametrize("h_freq", [2.0, 2.2, 2.21, 2.3, 2.4, 2.49])
+def test_the_guard_refuses_exactly_the_bands_mne_cannot_filter(h_freq):
+    # MNE's own band-pass at its default roll-off is the reference, at 5 Hz (Nyquist 2.5)
+    try:
+        mne.filter.filter_data(np.random.default_rng(0).standard_normal((1, 500)), 5.0,
+                               1.0, h_freq, l_trans_bandwidth=0.3, h_trans_bandwidth=0.3,
+                               verbose=False)
+        mne_refuses = False
+    except ValueError:
+        mne_refuses = True
+    try:
+        require_cardiac_below_nyquist(5.0, h_freq)
+        guard_refuses = False
+    except ValueError:
+        guard_refuses = True
+    assert guard_refuses == mne_refuses
+
+
+def test_a_band_just_under_nyquist_stops_screening_instead_of_screening_nothing():
+    # 2.4 Hz is under the 2.5 Hz Nyquist, but its roll-off is not: the infant-band case
+    od = intensity_to_od(synth_raw("01", "rest").resample(5.0))
+    with pytest.raises(ValueError, match=r"--cardiac-h-freq 2.4 Hz plus .* Lower "
+                                         r"--cardiac-h-freq to 2.2 Hz"):
+        mark_bad_channels(od, 0.8, 1.7, 2.4)
+
+
+# ---- a recording channel screening cannot judge ----
+
+def test_a_recording_shorter_than_two_windows_stops_prep(tmp_path):
+    raw = synth_raw("01", "rest", motion_onset=None).crop(tmax=15.0)
+    with pytest.raises(StageError, match=r"has 1 window\(s\) of 10 s to count and needs 2 "
+                                         r"\(15 s recorded\)"):
+        _prep(raw, tmp_path)
+
+
+def test_an_unmeasured_criterion_is_refused_not_read_as_every_channel_passing():
+    with pytest.raises(StageError, match="could not measure coupled windows"):
+        require_screened({"sci": {"S1_D1 760": 0.9}, "good_frac": {}}, "run")
+
+
+def test_a_measured_criterion_passes_the_check():
+    require_screened({"sci": {}, "good_frac": {"S1_D1 760": 0.0}}, "run")
+
+
+def test_prep_refuses_when_the_window_criterion_fails_to_measure(tmp_path, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("simulated failure")
+    monkeypatch.setattr("nirspipe.qc.metrics.screening.good_window_fraction", broken)
+    with pytest.raises(StageError, match="could not measure coupled windows"):
+        _prep(synth_raw("01", "rest"), tmp_path)
 
 
 # ---- a filter longer than the recording ----

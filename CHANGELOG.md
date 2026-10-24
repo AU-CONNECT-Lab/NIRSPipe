@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Channel screening that could not be measured (a cardiac band near Nyquist, a recording under two windows) kept every channel; preprocessing and raw QC now stop instead
+
 ## [0.74.0] - 2026-10-23
 
 ### Added

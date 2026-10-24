@@ -180,7 +180,8 @@ def compute_group_sqm_raw(
     per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
     channel set as the same subject's numbers in the individual reports and in `nirspipe-hyper`.
     """
-    from nirspipe.qc.metrics import imu_section, resolve_cutoffs, screen_channels, screening_scores
+    from nirspipe.qc.metrics import (imu_section, require_screened, resolve_cutoffs,
+                                     screen_channels, screening_scores)
     from nirspipe.qc.common.screen_scope import resolve_screen_scope
     from nirspipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
 
@@ -255,6 +256,7 @@ def compute_group_sqm_raw(
                                             "good_frac": counted["fractions"]},
                                       cutoffs=cutoffs,
                                       scope=resolve_screen_scope(raw, screen_scope))
+            require_screened(screen, entry.subject_id)
             bad_channels, _ = screen_channels(screen, cutoffs)
 
         # the member's BIDS channels.tsv rejections, joined as the pipeline joins them
