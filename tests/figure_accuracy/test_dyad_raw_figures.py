@@ -282,13 +282,15 @@ def test_the_usable_carpet_sits_on_the_shared_clock(groups, group):
 
 @pytest.mark.parametrize("group", GROUPS)
 def test_the_usable_carpet_loses_each_pair_to_the_members_that_fail_it(groups, group):
-    from tests._dyad_fingerprint import CONDITION_FAILING
+    from tests._dyad_fingerprint import CONDITION_FAILING, EXTRA_SPIKES, OWN_SPIKE, SHARED_SPIKE
     members = groups.truth.group(group)
     rejected = {m.rejected for m in members}
     spans: dict = {}
     for m in members:
         name, onset, span = CONDITION_FAILING[m.subject]
         spans.setdefault(name, []).append((onset, onset + span))
+    spikes = {SHARED_SPIKE, *(OWN_SPIKE[m.subject] for m in members),
+              *(t for m in members for t in EXTRA_SPIKES.get(m.subject, ()))}
     for pair, (x, status) in _carpet(groups, group).items():
         half = np.diff(x)[0] / 2
         inside = np.zeros(len(x), bool)
@@ -296,10 +298,18 @@ def test_the_usable_carpet_loses_each_pair_to_the_members_that_fail_it(groups, g
         for t0, t1 in spans.get(pair, []):
             inside |= (x - half >= t0) & (x + half <= t1)
             touched |= (x + half > t0) & (x - half < t1)
+        # a movement fakes SCI but flattens PSP, so the window it lands in is not coupled;
+        # the band-pass spreads it into a neighbour, which is left out of the rest as well
+        moved = np.zeros(len(x), bool)
+        for t in spikes:
+            moved |= np.abs(x - t) < 3 * half
+        holding = int(np.argmin(np.abs(x - SHARED_SPIKE)))
+        if pair not in rejected:
+            assert status[holding] < 2, (pair, x[holding])
         # a member's planted span costs the pair every window inside it
         assert inside.any() == (pair in spans), pair
         assert np.all(status[inside] < 2), pair
-        rest = status[~touched]
+        rest = status[~(touched | moved)]
         if pair in rejected:
             assert np.mean(rest == 1) > 0.85, (pair, np.mean(rest == 1))
         else:

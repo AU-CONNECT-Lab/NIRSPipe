@@ -12,7 +12,9 @@ import mne
 import numpy as np
 
 from nirspipe.qc.metrics._helpers import long_short_channels
-from nirspipe.qc.metrics.coupling import _window_samples, _windowed_cv, blank_flat_windows
+from nirspipe.qc.metrics.coupling import (
+    _window_samples, _windowed_cv, blank_flat_windows, peak_spectral_power,
+)
 from nirspipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
@@ -86,13 +88,11 @@ def compute_windowed_psp(
 
     Notes
     -----
-    Wrapper over mne_nirs ``peak_power``; the windowed companion to the whole-run
-    PSP, showing how the cardiac peak strength varies over time.
+    :func:`~nirspipe.qc.metrics.coupling.peak_spectral_power` with flat windows blanked; the
+    windowed companion to the whole-run PSP, showing how the cardiac peak strength varies
+    over time.
     """
-    from mne_nirs.preprocessing import peak_power
-    _, scores, times = peak_power(
-        raw_od, time_window=window_s, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq
-    )
+    scores, times = peak_spectral_power(raw_od, cardiac_l_freq, cardiac_h_freq, window_s)
     return blank_flat_windows(raw_od, scores, window_s), times
 
 

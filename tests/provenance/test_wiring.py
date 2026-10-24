@@ -17,6 +17,7 @@ demands success will ever notice.
 """
 
 
+import mne
 import numpy as np
 import pytest
 
@@ -35,11 +36,11 @@ _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_fr
 _BASE = dict(dpf=[6.0, 6.0], sci_threshold=0.8, motion_correction="tddr", **_BANDS)
 
 
-def _prep(tmp_dir, **overrides):
+def _prep(tmp_dir, raw=None, **overrides):
     """One prep run on synthetic data. Returns (PrepResult, the nirs output directory)."""
     config = PrepConfig(subject="01", **{**_BASE, **overrides})
-    result = run_prep(synth_raw("01", "tapping"), config, output_dir=tmp_dir,
-                      source_entities={"task": "tapping"})
+    result = run_prep(synth_raw("01", "tapping") if raw is None else raw, config,
+                      output_dir=tmp_dir, source_entities={"task": "tapping"})
     return result, tmp_dir / "sub-01" / "nirs"
 
 
@@ -78,20 +79,31 @@ def test_sci_threshold_reaches_the_comparison(tmp_path_factory):
         _prep(tmp_path_factory.mktemp("sci_high"), sci_threshold=0.98)
 
 
+def _half_coupled():
+    """The tapping recording with S1_D1's 850 nm reversed in time over its second half.
+
+    Reversal keeps the wavelength's level and spectrum and loses its phase against 760 nm,
+    so the pair is coupled in the first half of its windows and in none of the second.
+    """
+    raw = synth_raw("01", "tapping")
+    data = raw.get_data()
+    row, half = raw.ch_names.index("S1_D1 850"), raw.n_times // 2
+    data[row, half:] = data[row, half:][::-1]
+    return mne.io.RawArray(data, raw.info, verbose="error").set_annotations(raw.annotations)
+
+
 def test_min_good_frac_reaches_the_comparison(tmp_path_factory):
     """The share of coupled windows is what rejects, so moving it has to move the verdict.
 
-    Measured with the SCI line effectively off, so PSP alone decides which windows count:
-    the bad pairs are coupled in 0.45 of them and the good ones in all. A line under 0.45
-    therefore keeps everything and a line over it drops the bad pairs, which is the whole
-    behaviour the criterion exists for.
+    S1_D1 is coupled in half its windows, so a line under 0.5 keeps it and one over drops it.
     """
-    lenient, _ = _prep(tmp_path_factory.mktemp("frac_low"),
-                       sci_threshold=0.01, min_good_frac=0.4)
-    strict, _ = _prep(tmp_path_factory.mktemp("frac_high"),
-                      sci_threshold=0.01, min_good_frac=0.5)
-    assert lenient.bad_channels == []
-    assert set(strict.bad_channels) > set(lenient.bad_channels)
+    lenient, _ = _prep(tmp_path_factory.mktemp("frac_low"), min_good_frac=0.4,
+                       raw=_half_coupled())
+    strict, _ = _prep(tmp_path_factory.mktemp("frac_high"), min_good_frac=0.6,
+                      raw=_half_coupled())
+    assert "S1_D1 760" not in lenient.bad_channels
+    assert {"S1_D1 760", "S1_D1 850"} <= set(strict.bad_channels)
+    assert set(strict.bad_channels) - set(lenient.bad_channels) == {"S1_D1 760", "S1_D1 850"}
 
 
 def test_the_cardiac_band_reaches_the_sci_computation(baseline):

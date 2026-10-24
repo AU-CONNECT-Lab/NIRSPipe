@@ -11,10 +11,12 @@ from typing import Any
 
 import mne
 import numpy as np
+from mne.preprocessing.nirs import _validate_nirs_info
+from scipy import signal
 
 from nirspipe.qc.metrics._helpers import SNR_PASS
 from nirspipe.qc.metrics._helpers import (
-    _mean_or_none, _safe_metrics, require_cardiac_below_nyquist,
+    CARDIAC_TRANSITION_HZ, _mean_or_none, _safe_metrics, require_cardiac_below_nyquist,
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.utils.logging import get_logger
@@ -354,6 +356,84 @@ def _channel_distance_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
     }
 
 
+def _pair_peak_power(x: np.ndarray, y: np.ndarray, sfreq: float, h_freq: float) -> float:
+    """One window's PSP from the two wavelengths' band-passed samples."""
+    n = x.size
+    norm = np.sqrt(np.sum(x * x) * np.sum(y * y))
+    if norm == 0:
+        return 0.0
+    lags = np.arange(1 - n, n)
+    similarity = n * signal.correlate(x, y, mode="full") / (n - np.abs(lags)) / norm
+    freqs, power = signal.periodogram(
+        similarity, fs=sfreq, window=np.hamming(similarity.size), nfft=similarity.size,
+        detrend=False, scaling="spectrum")
+    return float(power[freqs < h_freq].max())
+
+
+def peak_spectral_power(
+    raw_od: mne.io.Raw,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    window_s: float,
+) -> "tuple[np.ndarray, list[tuple[float, float]]]":
+    r"""Peak spectral power (PSP) per channel in each non-overlapping window.
+
+    In each window the two wavelengths of a pair, band-passed to the cardiac band, give
+    :math:`x` and :math:`y` of :math:`N` samples. Their unbiased cross-correlation, scaled so
+    that lag 0 is the cosine similarity,
+
+    .. math::
+
+        s(k) = \frac{N}{N - |k|} \,
+               \frac{\sum_n x_{n+k} \, y_n}{\sqrt{\sum_n x_n^2 \, \sum_n y_n^2}},
+        \qquad |k| < N,
+
+    is Hamming-windowed, and PSP is the largest value of its one-sided power spectrum
+    (power, not density, scaling) below ``cardiac_h_freq``. Both channels of a pair get the
+    pair's value.
+
+    This is QT-NIRS's computation, the scale its 0.1 line is defined on; mne-nirs
+    ``peak_power`` returns a density spectrum of a biased correlation and is not on that
+    scale. The band-pass is MNE's, as for SCI, and windows are cut on mne-nirs' windowed SCI
+    grid, so the two land on the same columns.
+
+    Parameters
+    ----------
+    raw_od : mne.io.Raw
+        Optical-density recording, wavelength pairs adjacent as MNE orders them.
+    cardiac_l_freq, cardiac_h_freq : float
+        Cardiac band edges in Hz.
+    window_s : float
+        Window length in seconds.
+
+    Returns
+    -------
+    tuple[np.ndarray, list[tuple[float, float]]]
+        PSP per channel per window (rows in ``raw_od.ch_names`` order), and each window's
+        start and end times.
+    """
+    require_cardiac_below_nyquist(raw_od.info["sfreq"], cardiac_h_freq)
+    picks = _validate_nirs_info(raw_od.info)
+    sfreq = float(raw_od.info["sfreq"])
+    data = mne.filter.filter_data(
+        raw_od.get_data(), sfreq, cardiac_l_freq, cardiac_h_freq, picks=picks,
+        l_trans_bandwidth=CARDIAC_TRANSITION_HZ, h_trans_bandwidth=CARDIAC_TRANSITION_HZ,
+        verbose=False)
+    n = _window_samples(window_s, sfreq)
+    n_windows = raw_od.n_times // n
+    scores = np.zeros((len(picks), n_windows))
+    times = []
+    for w in range(n_windows):
+        # the last window stops a sample short of the end, as mne-nirs' SCI windows do
+        start, stop = w * n, min((w + 1) * n, raw_od.n_times - 1)
+        times.append((float(raw_od.times[start]), float(raw_od.times[stop])))
+        for i in range(0, len(picks), 2):
+            scores[i, w] = scores[i + 1, w] = _pair_peak_power(
+                data[picks[i], start:stop], data[picks[i + 1], start:stop],
+                sfreq, cardiac_h_freq)
+    return scores[np.argsort(picks)], times
+
+
 def compute_psp_scores(
     raw: mne.io.Raw,
     cardiac_l_freq: float,
@@ -362,8 +442,8 @@ def compute_psp_scores(
     """Peak spectral power per channel, averaged over ``PSP_WINDOW_S`` windows.
 
     Measured on optical density: the metric cross-correlates the two wavelengths, so it has
-    no meaning after Beer-Lambert, whatever ``peak_power``'s docstring says. Converting here
-    keeps this agreeing with the windowed PSP series, which is handed OD.
+    no meaning after Beer-Lambert. Converting here keeps this agreeing with the windowed PSP
+    series, which is handed OD.
 
     The window is pinned to ``PSP_WINDOW_S`` rather than following the QC window length; see
     the constant for what changes when it moves. The windowed PSP series is a separate view
@@ -373,11 +453,8 @@ def compute_psp_scores(
     not the record entry, and computing them twice per run would be paying twice for the
     same measurement.
     """
-    import mne_nirs.preprocessing as nirs_prep
     raw_od = as_optical_density(raw)
-    _, psp_scores, _ = nirs_prep.peak_power(
-        raw_od.copy(), time_window=PSP_WINDOW_S,
-        l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
+    psp_scores, _ = peak_spectral_power(raw_od, cardiac_l_freq, cardiac_h_freq, PSP_WINDOW_S)
     psp_scores = blank_flat_windows(raw_od, psp_scores, PSP_WINDOW_S)
     with np.errstate(invalid="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)

@@ -100,7 +100,8 @@ COUPLINGS = (
 MOTION_OD = 0.5
 OWN_SPIKE = {"01": 100.0, "02": 250.0, "03": 100.0, "04": 250.0, "05": 160.0, "00": 100.0,
              "03b": 100.0}
-EXTRA_SPIKES = {"03b": tuple(range(20, 400, 25))}
+# mid-window on the 10 s screening grid, so each costs one window and the run stays kept
+EXTRA_SPIKES = {"03b": (45.0, 95.0, 145.0, 245.0, 295.0, 345.0)}
 SHARED_SPIKE = 320.0
 
 # ---- Fingerprint frequencies (Hz): own HbO per subject and pair, HbR mark per subject ----

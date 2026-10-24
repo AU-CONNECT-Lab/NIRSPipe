@@ -2,10 +2,10 @@
 
 import numpy as np
 import pytest
-from mne_nirs.preprocessing import peak_power, scalp_coupling_index_windowed
+from mne_nirs.preprocessing import scalp_coupling_index_windowed
 
 from nirspipe.pipeline.prep_pipeline import intensity_to_od
-from nirspipe.qc.metrics.windowed import compute_windowed_cv
+from nirspipe.qc.metrics.windowed import compute_windowed_cv, compute_windowed_psp
 from tests._synth import synth_raw
 
 
@@ -20,14 +20,15 @@ def test_cv_windows_are_the_sci_and_psp_windows(sfreq):
 
     _, _, sci_times = scalp_coupling_index_windowed(od, time_window=10.0, l_freq=0.7,
                                                     h_freq=1.5, verbose=False)
-    _, _, psp_times = peak_power(od.copy(), time_window=10.0, l_freq=0.7, h_freq=1.5,
-                                 verbose=False)
+    _, psp_times = compute_windowed_psp(od, 0.7, 1.5, 10.0)
     _, cv_times = compute_windowed_cv(raw, 10.0)
 
     # starts and count, not ends: mne-nirs clips the last window's end to the final sample
     cv_starts = np.asarray(cv_times)[:, 0]
     np.testing.assert_allclose(cv_starts, np.asarray(sci_times)[:, 0])
     np.testing.assert_allclose(cv_starts, np.asarray(psp_times)[:, 0])
+    # and ends too between SCI and PSP, which cut the same last window short
+    np.testing.assert_allclose(np.asarray(psp_times), np.asarray(sci_times))
 
 
 def test_a_flat_channel_is_counted_and_kept_out_of_both_means():

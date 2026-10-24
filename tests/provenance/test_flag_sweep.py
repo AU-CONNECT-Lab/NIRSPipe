@@ -69,7 +69,8 @@ CASES = {
     "cardiac_h_freq": Case("denoise", {"--cardiac-h-freq": ["1.5"]}, ("sci",)),
     "resp_l_freq": Case("denoise", {"--resp-l-freq": ["0.1"]}, ("sci",)),
     "resp_h_freq": Case("denoise", {"--resp-h-freq": ["0.3"]}, ("sci",)),
-    "psp_threshold": Case("denoise", {"--psp-threshold": ["0.3"]}, ("sci",)),
+    # the half-decoupled pair's motion windows fall between 0.12 and 0.4, dropping it under 0.7
+    "psp_threshold": Case("denoise", {"--psp-threshold": ["0.4"]}, ("sci",)),
     "min_good_frac": Case("denoise", {"--min-good-frac": ["0.85"]}, ("sci",)),
     "screen_scope": Case("denoise", {"--screen-scope": ["task"]}, ("sci",)),
     # with no channel left short, the censoring falls back to every channel
