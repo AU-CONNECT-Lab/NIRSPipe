@@ -122,7 +122,7 @@ def test_nirspipe_hyper_writes_the_same_tree_on_two_processes(cohort):
             assert f"group-{own}" in text and f"group-{other}" not in text
 
 
-def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort):
+def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort, capsys):
     from nirspipe.cli import hyper as hyper_cli
     from nirspipe.cli import qc as qc_cli
 
@@ -136,8 +136,11 @@ def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort):
         hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--no-report", "--nprocs", nprocs])
-        hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
-                                  "--chroma", "hbo", "--nprocs", nprocs])
+        # G02 is three members, which the re-paired null refuses
+        with pytest.raises(SystemExit):
+            hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
+                                      "--chroma", "hbo", "--nprocs", nprocs])
+        assert "exactly 2 members, got 3" in capsys.readouterr().err
         trees[nprocs] = out
 
     names = _outputs(trees["1"])

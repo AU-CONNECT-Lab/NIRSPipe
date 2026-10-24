@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Channel screening that could not be measured (a cardiac band near Nyquist, a recording under two windows) kept every channel; preprocessing now stops, raw QC reports say why
 - PSP was on a different scale from the 0.1 line it was compared with, so that line passed uncoupled windows; every reported PSP value changes
+- pairnull drew a group of three or more for its first two members only, leaving the other pairings without a null; such groups are now refused
 
 ## [0.74.0] - 2026-10-23
 

@@ -218,6 +218,15 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
             wtc_limit_scales=True, verbose=False)
 
 
+def test_a_group_of_three_is_refused_before_anything_is_read(tmp_path):
+    from nirspipe.io.groups import GroupEntry
+    from nirspipe.pipeline.hyper.pair_null import run_pair_null
+
+    members = [GroupEntry("G01", f"sub-{s}", "main") for s in ("a", "b", "c")]
+    with pytest.raises(StageError, match="exactly 2 members, got 3"):
+        run_pair_null("G01", "main", members, {}, tmp_path / "absent", tmp_path)
+
+
 def test_the_real_table_records_the_window_it_describes():
     """The real table records --tstart/--tend, as the null that ranks it does.
 

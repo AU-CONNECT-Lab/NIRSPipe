@@ -427,6 +427,14 @@ def run_pair_null(
     from nirspipe.pipeline.hyper.wtc import wtc_grid_params
     from nirspipe.utils.lineage import paths_from
 
+    if len(members) != 2:
+        # refused, not warned: a third member's pairings would have no null, without a word
+        raise StageError(
+            f"the re-paired null needs exactly 2 members, got {len(members)} in group "
+            f"{group_id!r}: {[m.subject_id for m in members]}. It holds the first member and "
+            "replaces the second, so the other pairings would have no null. Groups of more "
+            "than two are not supported by this null yet.")
+
     roi_entities = {"segmentation": roi_map_name, "aggregation": "homologous"}
     cross_entities = {"segmentation": roi_map_name, "aggregation": "roi"}
 

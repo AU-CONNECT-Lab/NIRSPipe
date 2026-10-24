@@ -1171,7 +1171,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "Unlike --wtc-phase-null, a re-paired partner did the same task, so the "
                     "null keeps the shared task response. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
-                    "the percentile can rank. Run it after `nirspipe-hyper`, whose tables "
+                    "the percentile can rank. Groups of two only for now; a larger group "
+                    "is refused. Run it after `nirspipe-hyper`, whose tables "
                     "it reads its band, its mask, its frequency range and its window off, "
                     "and by default its stage, its rejection scope, its crossing and its "
                     "ROI minimum.")

@@ -90,7 +90,7 @@ def test_nirspipe_hyper_on_the_card_writes_the_cpus_tables(cohort):
     assert params["wtc_device"] == "cuda" and params["wtc_device_name"]
 
 
-def test_the_pair_null_on_the_card_writes_the_cpus_null_and_its_check(cohort):
+def test_the_pair_null_on_the_card_writes_the_cpus_null_and_its_check(cohort, capsys):
     from nirspipe.cli import hyper as hyper_cli
 
     root, _, pairs, deriv = cohort
@@ -100,14 +100,16 @@ def test_the_pair_null_on_the_card_writes_the_cpus_null_and_its_check(cohort):
         hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--no-report"])
-        # two processes, so each opens the card in its own worker
-        hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
-                                  "--chroma", "hbo", "--device", device, "--nprocs", "2"])
+        # two processes, so each opens the card in its own worker; G02 is three members
+        with pytest.raises(SystemExit):
+            hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
+                                      "--chroma", "hbo", "--device", device, "--nprocs", "2"])
+        assert "exactly 2 members, got 3" in capsys.readouterr().err
         trees[device] = out
     _same_tables(trees["cpu"], trees["cuda"])
     nulls = sorted(trees["cuda"].rglob("*_null-pair_stat-wtc_relmat.json"))
     assert {next(part for part in p.parts if part.startswith("group-"))
-            for p in nulls} == {"group-G01", "group-G02"}
+            for p in nulls} == {"group-G01"}
     for null in nulls:
         params = json.loads(null.read_text(encoding="utf-8"))["parameters"]
         assert params["wtc_device"] == "cuda" and params["device_check_cells"] > 0
