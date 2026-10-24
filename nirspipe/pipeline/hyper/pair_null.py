@@ -60,6 +60,8 @@ def partner_pool(
 
     ``position`` keeps a member's role: where the two members of a group are not
     interchangeable, only the other groups' member at the same index is a valid stand-in.
+    Where the pairs table has a role column the role decides instead of the index, so every
+    other group's member in that role stands in, two students of one group among them.
     It is also the only safe pool where one person appears in several groups, since ``any``
     would there pair somebody with themselves. ``any`` doubles the pool and is refused unless
     the table shows nobody is repeated.
@@ -84,6 +86,11 @@ def partner_pool(
 
     # only the member held fixed is barred, not the whole group, so repeat visits keep a pool
     held = {e.subject_id for i, e in enumerate(same_task[target]) if i != position}
+    role = same_task[target][position].role
+    if role is not None:
+        return [entry for occ, members in same_task.items() if occ != target
+                for entry in members
+                if entry.role == role and entry.subject_id not in held]
     return [members[position] for occ, members in same_task.items()
             if occ != target and len(members) > position
             and members[position].subject_id not in held]

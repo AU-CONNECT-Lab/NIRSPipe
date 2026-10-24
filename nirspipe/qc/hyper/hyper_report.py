@@ -1533,6 +1533,8 @@ def build_hyper_post_report(
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
                 analysis_window=analysis_window, desc=desc, bads_scope=bads_scope,
                 device=wtc_device,
+                member_roles=({e.subject_id: e.role for e in group}
+                              if any(e.role for e in group) else None),
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
             cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,

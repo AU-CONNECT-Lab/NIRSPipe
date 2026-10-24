@@ -19,6 +19,8 @@ class GroupEntry:
     # one recording: a subject recorded over several sessions, or several runs of one task
     session: str | None = None
     run: str | None = None
+    # the part the member plays (teacher, student), from an optional role column
+    role: str | None = None
 
 
 def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[GroupEntry]]":
@@ -32,6 +34,9 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
     session), while each entry keeps its own session to find its file::
 
         G1,sub-A,chat,3,1  +  G1,sub-B,chat,1,1  ->  {("G1", "chat", "1"): [A ses 3, B ses 1]}
+
+    A ``role`` column names each member's part, on every row or on none; members keep the
+    rows' order either way.
     """
     try:
         df = read_table(csv_path, dtype=str)
@@ -63,6 +68,15 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
                 f"occasion {occasion!r} is not a BIDS label: letters and digits only, "
                 "without a 'ses-' prefix")
         key = (str(row["group_id"]).strip(), str(row["task"]).strip(), occasion or session)
+        role = optional(row, "role")
+        if "role" in df.columns and role is None:
+            # a member without a part would match nobody's, or everybody's
+            raise GroupCSVError(
+                f"row for {row['subject_id']} in group {key[0]} has no role. The role "
+                "column names every member's part or none: fill it in, or drop the column")
+        # it becomes part of a level's name, so it has to read as one word there
+        if role is not None and not role.isalnum():
+            raise GroupCSVError(f"role {role!r} is not a label: letters and digits only")
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),
             # one spelling downstream: files are found by the sub- label, written either way
@@ -70,6 +84,7 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
             task=str(row["task"]).strip(),
             session=session,
             run=optional(row, "run"),
+            role=role,
         )
         result.setdefault(key, []).append(entry)
 

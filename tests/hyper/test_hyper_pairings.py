@@ -72,7 +72,7 @@ def triad():
     }
 
 
-def _run(members, where, **kwargs):
+def _run(members, where, roles=None, **kwargs):
     """Build the post report over `members` and return the directory it wrote into."""
     from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
@@ -80,7 +80,7 @@ def _run(members, where, **kwargs):
     ids = list(members)
     path = build_hyper_post_report(
         group_id="G1", task="tap",
-        group=[GroupEntry("G1", sid, "tap") for sid in ids],
+        group=[GroupEntry("G1", sid, "tap", role=(roles or {}).get(sid)) for sid in ids],
         aligned_raws=members, offsets={sid: 0.0 for sid in ids}, output_dir=where,
         wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1],
         wtc_chroma=("hbo",), **kwargs,
@@ -142,6 +142,25 @@ def test_a_triad_writes_one_page_per_pairing(triad, tmp_path):
     assert len(set(pages)) == 3
     for a, b in (("01", "02"), ("01", "03"), ("02", "03")):
         assert any(f"sub{a}xsub{b}" in name for name in pages), (a, b, pages)
+
+
+def test_the_real_tables_record_each_members_role(triad, tmp_path):
+    import json
+
+    roles = {"sub-01": "teacher", "sub-02": "student", "sub-03": "student"}
+    folder = _run(triad, tmp_path, roles=roles)
+    sides = [json.loads(p.read_text(encoding="utf-8")) for p in folder.rglob("*_relmat.json")]
+    real = [s for s in sides if s["step"] in ("hyper_wtc", "hyper_isc_pairs")]
+    assert {s["step"] for s in real} == {"hyper_wtc", "hyper_isc_pairs"}
+    assert all(s["parameters"]["member_roles"] == roles for s in real)
+
+
+def test_without_roles_no_table_records_any(triad, tmp_path):
+    import json
+
+    folder = _run(triad, tmp_path)
+    assert not any("member_roles" in json.loads(p.read_text(encoding="utf-8"))["parameters"]
+                   for p in folder.rglob("*_relmat.json"))
 
 
 def test_a_dyad_carries_no_pairing_suffix(triad, tmp_path):

@@ -56,6 +56,32 @@ def test_the_same_two_people_over_many_days_still_get_a_position_pool():
     assert [e.group_id for e in got] == ["G02", "G03"]
 
 
+# ---- the position pool by role ----
+
+def _classes():
+    """G01 a teacher and a student; G02 and G03 a teacher and two students, listed in any order."""
+    def entry(gid, sub, role):
+        return GroupEntry(gid, sub, "main", role=role)
+    return {
+        ("G01", "main", None): [entry("G01", "t1", "teacher"), entry("G01", "s1", "student")],
+        ("G02", "main", None): [entry("G02", "s2a", "student"), entry("G02", "t2", "teacher"),
+                                entry("G02", "s2b", "student")],
+        ("G03", "main", None): [entry("G03", "t3", "teacher"), entry("G03", "s3a", "student"),
+                                entry("G03", "s3b", "student")],
+    }
+
+
+def test_with_roles_every_other_groups_member_in_the_role_stands_in():
+    got = partner_pool(_classes(), "G01", "main")
+    assert [e.subject_id for e in got] == ["s2a", "s2b", "s3a", "s3b"]
+
+
+def test_with_roles_the_index_no_longer_decides():
+    """G02 lists a student first, so the index rule would have taken it for G01's teacher."""
+    got = partner_pool(_classes(), "G01", "main", position=0)
+    assert [e.subject_id for e in got] == ["t2", "t3"]
+
+
 # ---- the any pool ----
 
 def test_any_doubles_the_pool_when_nobody_repeats():

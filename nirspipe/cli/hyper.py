@@ -1194,7 +1194,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                       help="Chromophore(s) to draw the null on, coherence and correlation alike (default both).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
                       help="Who may stand in: 'position' (default) only another group's member "
-                           "at the same index, which keeps roles apart and is safe when one "
+                           "at the same index, or in the same role where the pairs table has a "
+                           "role column, which keeps roles apart and is safe when one "
                            "person is in several groups; 'any' every other group's member, "
                            "refused when anyone appears twice.")
     pair.add_argument("--wtc-pair-max", type=int, default=None, metavar="N",

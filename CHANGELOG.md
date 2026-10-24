@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `--dpf age` takes one DPF per wavelength from each participant's age in participants.tsv, by the Scholkmann and Wolf (2013) equation
+- An optional `role` column in the pairs table: pairnull's position pool matches stand-ins by role, and the dyad tables record each member's role
 
 ### Changed
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given

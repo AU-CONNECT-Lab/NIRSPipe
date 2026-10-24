@@ -76,6 +76,8 @@ class HyperPostConfig:
     bads_scope: str | None = None
     # the card the transforms run on (--device), None for the CPU
     device: Any = None
+    # {subject: role} from the pairs table's role column, None without one
+    member_roles: dict | None = None
 
     # resolved in __post_init__, never passed in
     chroma: tuple = field(init=False)
@@ -331,6 +333,8 @@ def run_hyper_post(
                if analysis_window is not None else {}),
             **({"desc": config.desc} if config.desc else {}),
             **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
+            # what groupnull reads a pairing's roles off
+            **({"member_roles": dict(config.member_roles)} if config.member_roles else {}),
             # the bands decide which channels are long, so which pairings exist
             **bands_to_record(sep_bands or separation_bands()),
         }
