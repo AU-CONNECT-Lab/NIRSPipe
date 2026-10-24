@@ -61,3 +61,33 @@ def test_a_blank_row_stays_blank_under_the_shared_rotation():
     draws = _isc_null_draws(member1, member2, 0, 3, seed=1, shared=True)
     assert np.isnan(draws[:, :, 2]).all()
     assert np.isfinite(draws[:, :, :2]).all()
+
+
+# ---- the coherence's phase null ----
+
+def test_the_coherence_draw_keeps_two_identical_channels_identical_only_when_shared():
+    from nirspipe.pipeline.hyper.surrogate import _surrogate_draw
+
+    rows = _rows()
+    signals = {"S1_D1": rows[0], "S2_D2": rows[0].copy(), "S3_D3": rows[2]}
+    shared = _surrogate_draw(signals, np.random.default_rng(4), shared=True)
+    alone = _surrogate_draw(signals, np.random.default_rng(4), shared=False)
+    np.testing.assert_allclose(shared["S1_D1"], shared["S2_D2"], atol=1e-9)
+    assert not np.allclose(alone["S1_D1"], alone["S2_D2"])
+    for label, sig in signals.items():
+        for out in (shared, alone):
+            np.testing.assert_allclose(np.abs(np.fft.rfft(out[label])),
+                                       np.abs(np.fft.rfft(sig)), rtol=1e-9, atol=1e-9)
+
+
+def test_a_coherence_channel_with_a_gap_is_left_as_it_is_and_the_rest_still_rotate():
+    from nirspipe.pipeline.hyper.surrogate import _surrogate_draw
+
+    rows = _rows()
+    blank = rows[1].copy()
+    blank[10] = np.nan
+    out = _surrogate_draw({"a": rows[0], "b": blank, "c": rows[0].copy()},
+                          np.random.default_rng(5), shared=True)
+    np.testing.assert_array_equal(out["b"], blank)
+    np.testing.assert_allclose(out["a"], out["c"], atol=1e-9)
+    assert not np.allclose(out["a"], rows[0])

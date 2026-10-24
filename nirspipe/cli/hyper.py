@@ -372,6 +372,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         roi_min_channels=s.wtc_roi_min_channels,
         device=device,
         reuse=s.redraw,
+        shared=s.phase_null_shared,
     ) if s.wtc_phase_null else None
 
     report_path = build_hyper_post_report(
@@ -411,7 +412,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         isc_whiten_s=s.isc_whiten_s,
         isc_max_lag_s=s.isc_max_lag,
         isc_phase_null=s.isc_phase_null,
-        isc_phase_null_shared=s.isc_phase_null_shared,
+        phase_null_shared=s.phase_null_shared,
         isc_band=s.isc_band,
         no_report=s.no_report,
         sep_bands=sep_bands,
@@ -456,7 +457,7 @@ def cmd_run(
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
     bads_scope: str, isc_threshold: "float | None", isc_whiten_s: float,
-    isc_max_lag: float, isc_phase_null: int, isc_phase_null_shared: bool,
+    isc_max_lag: float, isc_phase_null: int, phase_null_shared: bool,
     isc_fmin: "float | None", isc_fmax: "float | None",
     no_report: bool,
     normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
@@ -583,8 +584,9 @@ def cmd_run(
     if wtc_phase_null:
         logger.info("phase-scrambled null requested: %d full WTC runs per dyad, on top of the real one",
                     wtc_phase_null)
-    if isc_phase_null_shared and not isc_phase_null:
-        logger.warning("--isc-phase-null-shared is ignored without --isc-phase-null")
+    if phase_null_shared and not (wtc_phase_null or isc_phase_null):
+        logger.warning("--phase-null-shared is ignored without --wtc-phase-null or "
+                       "--isc-phase-null")
     settings = SimpleNamespace(
         **run_args, run_args=run_args, chroma=chroma, cond_pad=cond_pad,
         bands_override=bands_override, roi_map=roi_map, roi_name=roi_name,
@@ -1072,11 +1074,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "null_abs_sd, null_abs_p95 and percentile to stat-isc_relmat.tsv, "
                           "all of them magnitudes, since a correlation is two-sided. Off by default; "
                           "it costs N extra correlations per chromophore per window.")
-    run.add_argument("--isc-phase-null-shared", action="store_true",
-                     help="In each --isc-phase-null draw, shift all of the second member's "
-                          "channels by one shared set of random phases, so they stay as "
-                          "correlated with each other as recorded. Off by default: each "
-                          "channel is scrambled on its own.")
+    run.add_argument("--phase-null-shared", action="store_true",
+                     help="In each --wtc-phase-null and --isc-phase-null draw, shift all of "
+                          "the second member's channels by one shared set of random phases, "
+                          "so they stay as correlated with each other as recorded. Off by "
+                          "default: each channel is scrambled on its own.")
     run.add_argument("--check-only", action="store_true",
                      help="Load and align each dyad, print what the metrics would be "
                           "computed on, and stop. Nothing is written. Use it to look over a "

@@ -398,6 +398,9 @@ def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
     seed = params.get("seed")
     return {
         "pairs": "every channel pair" if params.get("cross") else "homologous channel pairs",
+        "scramble": ("one random phase shift per frequency shared by all of that member's "
+                     "channels, so they kept their correlations with each other"
+                     if params.get("phase_null_shared") else "drawn independently per channel"),
         "n_iter": str(int(params.get("n_iter") or 0)),
         "seed": f" (random seed {seed})" if seed is not None else "",
     }
@@ -491,7 +494,7 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
                     f"±{_num(params['isc_max_lag_s'])} s, keeping its sign.")
     if params.get("isc_phase_null_iter"):
         scramble = ("all shifted by one shared set of random phases in each repetition"
-                    if params.get("isc_phase_null_shared") else
+                    if params.get("phase_null_shared") else
                     "each phase-randomised independently")
         options += (f" Its null repeated the correlation {int(params['isc_phase_null_iter'])} "
                     f"times against the second member's channels, {scramble}, and was "

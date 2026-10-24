@@ -274,19 +274,39 @@ def test_a_tree_with_no_draws_says_what_has_to_run(tmp_path):
 
 # ---- the same reading, whichever null drew the draws ----
 
+def _as_phase_tree(root, shared=(False, False)):
+    """The re-paired tree's draws renamed into the phase null's, each with the sidecar it writes."""
+    _write_tree(root)
+    for occ, each in zip(OCCASIONS, shared):
+        d = root / f"group-{occ}" / "nirs"
+        dst = d / name(occ, "main", "wtcbycond-phasenull-draws")
+        (d / name(occ, "main", "wtcbycond-pairnull-draws")).rename(dst)
+        if each is not None:
+            dst.with_suffix(".json").write_text(
+                json.dumps({"parameters": {"phase_null_shared": each}}))
+
+
 def test_the_phase_nulls_draws_are_read_the_same_way(tmp_path):
     """Both nulls differ in what a draw is and in nothing above the cell."""
-    _write_tree(tmp_path)
-    for occ in OCCASIONS:
-        d = tmp_path / f"group-{occ}" / "nirs"
-        src = d / name(occ, "main", "wtcbycond-pairnull-draws")
-        src.rename(d / name(occ, "main", "wtcbycond-phasenull-draws"))
+    _as_phase_tree(tmp_path)
     written = write_group_null(tmp_path, "main", null="phase", n_resample=500, seed=3)
     assert [p.name for p in written] == [
         _cohort("phase", "byoccasion"), _cohort("phase", "cohort")]
-    import json
     side = json.loads(written[1].with_suffix(".json").read_text())
     assert side["parameters"]["null_kind"] == "phase"
+    assert side["parameters"]["phase_null_shared"] is False
+
+
+def test_coherence_phase_draws_that_do_not_say_how_they_scrambled_are_refused(tmp_path):
+    _as_phase_tree(tmp_path, shared=(False, None))
+    with pytest.raises(ValueError, match="whether its phase null shared its phases"):
+        write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
+
+
+def test_coherence_draws_scrambled_both_ways_are_not_pooled(tmp_path):
+    _as_phase_tree(tmp_path, shared=(False, True))
+    with pytest.raises(ValueError, match="scrambled both ways"):
+        write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
 
 
 # ---- every level the draws support, without being asked for one ----
@@ -825,7 +845,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
 # ---- the correlation, read above the cell ----
 
 ISC_SETTINGS = {"isc_band_hz": None, "isc_whiten_s": 0.0, "isc_max_lag_s": 0.0,
-                "isc_phase_null_shared": False, "roi_min_channels": 2}
+                "phase_null_shared": False, "roi_min_channels": 2}
 
 
 def _isc_rows(rs, condition="game"):
@@ -950,14 +970,14 @@ def test_the_phase_nulls_isc_draws_are_read_too(tmp_path):
 
 def test_the_cohort_tables_record_whether_the_phase_null_shared_its_phases(tmp_path):
     _write_isc_tree(tmp_path, [0.3] * 4, null="phase",
-                    settings={**ISC_SETTINGS, "isc_phase_null_shared": True})
+                    settings={**ISC_SETTINGS, "phase_null_shared": True})
     write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
     _, side = _isc_cohort(tmp_path, "signed", null="phase")
-    assert side["parameters"]["isc_phase_null_shared"] is True
+    assert side["parameters"]["phase_null_shared"] is True
 
 
 def test_phase_draws_that_do_not_say_how_they_scrambled_are_refused(tmp_path):
-    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "isc_phase_null_shared"}
+    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "phase_null_shared"}
     _write_isc_tree(tmp_path, [0.3] * 4, null="phase", settings=settings)
     with pytest.raises(ValueError, match="whether its phase null shared its phases"):
         write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
@@ -966,13 +986,13 @@ def test_phase_draws_that_do_not_say_how_they_scrambled_are_refused(tmp_path):
 def test_dyads_scrambled_both_ways_are_not_pooled(tmp_path):
     _write_isc_tree(tmp_path, [0.3] * 4, null="phase")
     side = next(tmp_path.rglob("*_stat-isc_relmat.json"))
-    side.write_text(json.dumps({"parameters": {**ISC_SETTINGS, "isc_phase_null_shared": True}}))
+    side.write_text(json.dumps({"parameters": {**ISC_SETTINGS, "phase_null_shared": True}}))
     with pytest.raises(ValueError, match="not computed alike.*shared phases"):
         write_group_null(tmp_path, "main", null="phase", n_resample=200, seed=3)
 
 
 def test_the_re_paired_null_does_not_ask_how_a_phase_null_scrambled(tmp_path):
-    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "isc_phase_null_shared"}
+    settings = {k: v for k, v in ISC_SETTINGS.items() if k != "phase_null_shared"}
     _write_isc_tree(tmp_path, [0.3] * 4, settings=settings)
     assert write_group_null(tmp_path, "main", n_resample=200, seed=3)
 
@@ -1095,7 +1115,9 @@ def _add_phase_draws(root):
     for occ in OCCASIONS:
         d = root / f"group-{occ}" / "nirs"
         src = d / name(occ, "main", "wtcbycond-pairnull-draws")
-        (d / name(occ, "main", "wtcbycond-phasenull-draws")).write_bytes(src.read_bytes())
+        dst = d / name(occ, "main", "wtcbycond-phasenull-draws")
+        dst.write_bytes(src.read_bytes())
+        dst.with_suffix(".json").write_text(json.dumps({"parameters": {"phase_null_shared": False}}))
 
 
 def test_groupnull_takes_several_nulls_and_chromophores():

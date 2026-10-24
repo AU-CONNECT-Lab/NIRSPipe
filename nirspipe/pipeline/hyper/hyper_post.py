@@ -65,7 +65,7 @@ class HyperPostConfig:
     isc_max_lag_s: float = 0.0
     isc_phase_null: int = 0
     # one shared set of random phases per draw for all of the second member's channels
-    isc_phase_null_shared: bool = False
+    phase_null_shared: bool = False
     isc_band: "tuple[float | None, float | None] | None" = None
     roi_map: dict | None = None
     roi_map_name: str = "custom"
@@ -257,7 +257,7 @@ def run_hyper_post(
     wtc_mask_coi           = config.wtc_mask_coi
     wtc_roi_min_channels   = config.wtc_roi_min_channels
     isc_phase_null         = config.isc_phase_null
-    isc_phase_null_shared  = config.isc_phase_null_shared
+    phase_null_shared      = config.phase_null_shared
     isc_whiten_s           = float(config.isc_whiten_s or 0.0)
     isc_max_lag_s          = config.isc_max_lag_s
     isc_band               = config.isc_band
@@ -823,7 +823,7 @@ def run_hyper_post(
                    if isc_whiten_s else {}),
                 "isc_max_lag_s": isc_max_lag_s,
                 "isc_phase_null_iter": isc_phase_null,
-                "isc_phase_null_shared": bool(isc_phase_null_shared),
+                "phase_null_shared": bool(phase_null_shared),
                 "channel_cross": bool(wtc_channel_cross),
                 "roi_min_channels": int(wtc_roi_min_channels),
                 **_input_params(),
@@ -890,7 +890,7 @@ def run_hyper_post(
                 isc_raws, pair_ids, ch_type, sep_bands, window=window,
                 max_lag_s=isc_max_lag_s,
                 n_null=isc_phase_null, seed=wtc_seed, band=isc_band,
-                shared_phases=isc_phase_null_shared,
+                shared_phases=phase_null_shared,
                 cross=bool(wtc_channel_cross), on_draws=keep, skip_s=isc_whiten_s)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level

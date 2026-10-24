@@ -1091,7 +1091,7 @@ def build_hyper_post_report(
     isc_max_lag_s: float = 0.0,
     isc_band: "tuple[float | None, float | None] | None" = None,
     isc_phase_null: int = 0,
-    isc_phase_null_shared: bool = False,
+    phase_null_shared: bool = False,
     sep_bands=None,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
     analysis_window: "tuple[float, float] | None" = None,
@@ -1529,7 +1529,7 @@ def build_hyper_post_report(
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
                 wtc_chroma=wtc_chroma, wtc_whiten_s=wtc_whiten_s, isc_whiten_s=isc_whiten_s,
                 isc_max_lag_s=isc_max_lag_s, isc_phase_null=isc_phase_null,
-                isc_phase_null_shared=isc_phase_null_shared, isc_band=isc_band,
+                phase_null_shared=phase_null_shared, isc_band=isc_band,
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
                 analysis_window=analysis_window, desc=desc, bads_scope=bads_scope,
                 device=wtc_device,
@@ -1546,7 +1546,7 @@ def build_hyper_post_report(
             seed=wtc_seed, cross=wtc_phase_null_cross, mask_coi=wtc_mask_coi,
             windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
             roi_map_name=roi_map_name, roi_min_channels=wtc_roi_min_channels,
-            whiten_s=wtc_whiten_s, session=session)
+            whiten_s=wtc_whiten_s, session=session, shared=phase_null_shared)
     # Everything above is the analysis and has already written its tables; everything below
     # draws them.
     if no_report:

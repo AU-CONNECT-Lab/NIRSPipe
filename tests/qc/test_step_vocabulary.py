@@ -764,7 +764,9 @@ def test_the_level_file_of_the_phase_null_does_not_fill_the_sentence():
 def test_the_phase_null_sentence_names_the_pairs_the_count_and_the_seed():
     slots = template_slots("hyper_phasenull", {"n_iter": 100, "seed": 1, "cross": True})
     assert slots == {"pairs": "every channel pair", "n_iter": "100",
-                     "seed": " (random seed 1)"}
+                     "seed": " (random seed 1)", "scramble": "drawn independently per channel"}
+    shared = template_slots("hyper_phasenull", {"n_iter": 100, "phase_null_shared": True})
+    assert "shared by all of that member's channels" in shared["scramble"]
     assert template_slots("hyper_phasenull", {"n_iter": 50, "seed": None})["seed"] == ""
 
 
@@ -777,7 +779,7 @@ def test_the_correlation_names_its_own_null_only_when_one_ran():
 def test_the_correlation_null_says_whether_its_phases_were_shared():
     alone = template_slots("hyper_isc", {"isc_phase_null_iter": 50})["options"]
     shared = template_slots("hyper_isc", {"isc_phase_null_iter": 50,
-                                          "isc_phase_null_shared": True})["options"]
+                                          "phase_null_shared": True})["options"]
     assert "each phase-randomised independently" in alone
     assert "one shared set of random phases in each repetition" in shared
 

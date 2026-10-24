@@ -53,6 +53,7 @@ def run_wtc_null(
     roi_min_channels: int = ROI_MIN_CHANNELS,
     device=None,
     reuse: bool = False,
+    shared: bool = False,
 ) -> dict:
     """Draw the null for one dyad and write the level its phase arrows are read against.
 
@@ -79,6 +80,9 @@ def run_wtc_null(
     ``reuse`` keeps a null already on disk when every level it wrote was drawn on these
     recordings with these settings, iterations and seed, and returns ``{}`` so nothing is
     written again; otherwise the null is drawn as usual.
+
+    ``shared`` rotates the scrambled member's channels together in each draw; see
+    :func:`~nirspipe.pipeline.hyper.surrogate.compute_wtc_phase_null`.
     """
     # imported in the call, not at module load: the wiring tests patch these on the module
     # that defines them, which only a lookup made at call time can see
@@ -103,7 +107,7 @@ def run_wtc_null(
 
     drawn_as = {**level_params(aligned_raws, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
                                mask_coi=mask_coi, whiten_s=whiten_s),
-                "n_iter": n_iter, "seed": seed}
+                "n_iter": n_iter, "seed": seed, "phase_null_shared": bool(shared)}
     if reuse:
         wanted = [(_level_path(c), drawn_as) for c in chroma]
         if roi_map:
@@ -117,9 +121,10 @@ def run_wtc_null(
             return {}
 
     logger.info(
-        "Phase-scrambled WTC: %d phase-scrambled iterations, %s pairs, one full WTC run each, "
-        "per chromophore (%s).",
-        n_iter, "crossed" if cross else "homologous", "+".join(chroma))
+        "Phase-scrambled WTC: %d phase-scrambled iterations%s, %s pairs, one full WTC run "
+        "each, per chromophore (%s).",
+        n_iter, " sharing their phases across channels" if shared else "",
+        "crossed" if cross else "homologous", "+".join(chroma))
 
     # whitened before it is scrambled, the order the real table's transform sees it in
     wtc_raws = whiten_raws(aligned_raws, whiten_s, sep_bands) if whiten_s else aligned_raws
@@ -130,7 +135,7 @@ def run_wtc_null(
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            roi_map=roi_map, roi_min_channels=roi_min_channels, device=device)
+            roi_map=roi_map, roi_min_channels=roi_min_channels, device=device, shared=shared)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
             path = save_null_levels(null.levels, _level_path(ch_type))
@@ -187,13 +192,14 @@ def write_wtc_null(
     roi_min_channels: int = ROI_MIN_CHANNELS,
     whiten_s: float = 0.0,
     session: "str | None" = None,
+    shared: bool = False,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
     Writes ``..._null-phase_stat-wtc_relmat.tsv``, one table with a ``chromophore``
     column, matching the real band-mean tables. The sidecar additionally records ``n_iter``,
-    ``cross`` and ``chroma``, without which a 5-iteration probe and a 100-iteration null are
-    indistinguishable on disk.
+    ``cross``, ``chroma`` and ``phase_null_shared``, without which a 5-iteration probe and a
+    100-iteration null are indistinguishable on disk.
 
     ``roi_map`` adds the ``agg-homologous`` twin, the null for the homologous ROI
     means beside it. It is free: the iterations are grouped into
@@ -287,6 +293,7 @@ def write_wtc_null(
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
+        phase_null_shared=bool(shared),
         **({"wtc_whiten_s": float(whiten_s)} if whiten_s else {}),
         **({"roi_min_channels": int(roi_min_channels)} if roi_map else {}),
         chroma=list(chroma), **wtc_grid_params(aligned_raws),

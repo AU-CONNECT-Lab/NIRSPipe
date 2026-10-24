@@ -79,6 +79,21 @@ def phase_rotate(rows: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return np.fft.irfft(rotated, n=n, axis=1)
 
 
+def _surrogate_draw(signals: dict[str, np.ndarray], rng: np.random.Generator,
+                    shared: bool) -> dict[str, np.ndarray]:
+    """One draw of a member's channels: each scrambled on its own, or all rotated together.
+
+    A channel with a non-finite sample has no spectrum to keep and stays as it is.
+    """
+    if not shared:
+        return {label: phase_scramble(sig, rng) for label, sig in signals.items()}
+    finite = [label for label, sig in signals.items() if np.isfinite(sig).all()]
+    out = dict(signals)
+    if finite:
+        out.update(zip(finite, phase_rotate(np.stack([signals[f] for f in finite]), rng)))
+    return out
+
+
 # ---- Phase-scrambled null ----
 
 
@@ -341,6 +356,7 @@ def compute_wtc_phase_null(
     roi_map: "dict[str, list[str]] | None" = None,
     roi_min_channels: int = ROI_MIN_CHANNELS,
     device=None,
+    shared: bool = False,
 ) -> "NullDraws":
     """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -382,6 +398,11 @@ def compute_wtc_phase_null(
 
     ``device`` is the card the transforms run on, None for the CPU; the surrogates are drawn
     on the CPU either way.
+
+    ``shared`` rotates all of the scrambled member's channels by one set of random phases per
+    draw (:func:`phase_rotate`) instead of scrambling each on its own, so they stay as
+    correlated with each other as recorded. The random stream differs between the two, so
+    one seed does not give comparable draws across them.
     """
     if n_iter < 1:
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
@@ -411,10 +432,7 @@ def compute_wtc_phase_null(
     cache1: dict[tuple[str, str], _ChannelWavelet] = {}
     for i in range(n_iter):
         signals = dict(true_signals)
-        signals[scrambled_id] = {
-            label: phase_scramble(sig, rng)
-            for label, sig in true_signals[scrambled_id].items()
-        }
+        signals[scrambled_id] = _surrogate_draw(true_signals[scrambled_id], rng, shared)
         result = _wtc_over_pairs(
             raws, signals, fmin, fmax, significance=False, seed=None,
             cross=cross, limit_scales=limit_scales, cache1=cache1,

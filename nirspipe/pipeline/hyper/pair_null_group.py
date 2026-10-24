@@ -694,11 +694,31 @@ def _write_wtc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
             f"the draws and the real tables are not on one band: {sorted(bands)}. A null "
             f"averaged over one band cannot be subtracted from a value averaged over "
             f"another. Finish whichever rerun is in progress before reading this.")
+    shared = _phase_shared_of(set(draws.source)) if null == "phase" else set()
+    if len(shared) > 1:
+        raise ValueError(
+            "the coherence's phase draws were scrambled both ways, some sharing their phases "
+            "across a member's channels and some not. Rerun `nirspipe-hyper` for every dyad "
+            "with the same --phase-null-shared before reading this.")
     cells = by_cell(output_dir, task, chroma, null, method=p_correction)
     return _write_levels(output_dir, task, chroma, null, "wtc", draws, real, cells, roi_map,
                          n_resample, seed, p_correction, two_sided=False,
                          value_name="coherence",
-                         statistic="mean over channel pairings, then over occasions")
+                         statistic="mean over channel pairings, then over occasions",
+                         extra={"phase_null_shared": next(iter(shared))} if shared else None)
+
+
+def _phase_shared_of(paths: "set[str]") -> set:
+    """Whether each phase-null table's draws shared their phases, refusing one that does not say."""
+    found = set()
+    for tsv in paths:
+        params = _params_of(tsv)
+        if "phase_null_shared" not in params:
+            raise ValueError(
+                f"{Path(tsv).name} does not record whether its phase null shared its phases. "
+                f"Rerun `nirspipe-hyper` for that dyad on current code.")
+        found.add(bool(params["phase_null_shared"]))
+    return found
 
 
 def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_resample: int,
@@ -730,7 +750,7 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
                          statistic=f"mean {magnitude} over channel pairings, then over "
                                    f"occasions",
                          extra={"isc_test": isc_test, "isc_whiten_s": whiten_s,
-                                **({"isc_phase_null_shared": next(iter(settings))[3]}
+                                **({"phase_null_shared": next(iter(settings))[3]}
                                    if null == "phase" and settings else {})})
 
 
@@ -767,14 +787,14 @@ def _isc_settings_of(paths: "set[str]", null: str = "repaired") -> set:
             raise ValueError(
                 f"{Path(tsv).name} does not record how its correlation was computed. Rerun "
                 f"`nirspipe-hyper` (and its null) for that dyad on current code.")
-        if null == "phase" and "isc_phase_null_shared" not in params:
+        if null == "phase" and "phase_null_shared" not in params:
             raise ValueError(
                 f"{Path(tsv).name} does not record whether its phase null shared its phases. "
                 f"Rerun `nirspipe-hyper` for that dyad on current code.")
         band = params.get("isc_band_hz")
         found.add((tuple(band) if band else None, params["isc_whiten_s"],
                    params.get("isc_max_lag_s"),
-                   *([params["isc_phase_null_shared"]] if null == "phase" else [])))
+                   *([params["phase_null_shared"]] if null == "phase" else [])))
     return found
 
 
