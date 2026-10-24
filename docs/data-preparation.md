@@ -159,8 +159,11 @@ G01,sub-02,rest
 | `session` | Optional. Picks the recording where a subject has several, and **keys the group**: a group recorded in two sessions is two dyads, each named `ses-<s>` throughout. |
 | `run` | Optional. Picks the recording where a subject has several runs. |
 | `occasion` | Optional. The sitting, where the members of one group carry different session labels for it. Keys the group in place of `session` and names its outputs `ses-<occasion>`, while each member's `session` still picks that member's file. Letters and digits only; a blank cell falls back to the row's `session`. |
+| `role` | Optional. The part a member plays, e.g. `teacher` or `student`. On every row or on none; letters and digits only. The re-paired null then matches stand-ins by role rather than by row, and `nirspipe-hyper-groupnull` reads each pair of roles on its own ([Groups of three or more](hyperscanning.md#groups-of-three-or-more)). |
 
 - Each group needs at least two members; a group of one raises `GroupCSVError`. A group of three or more is analysed one member pairing at a time.
+- **Row order within a group matters.** The member listed first is `sub1` of its pairings: the one each pairing holds while a null replaces the other, the one a positive `phase_angle` says leads, and the reference of the alignment. Reorder the rows to change it.
+- **Enter a group once, with all its members.** A group split into rows of two is analysed as separate dyads, and its members can then stand in for each other in the re-paired null.
 - A row with an empty `group_id`, `subject_id` or `task` is dropped.
 - A subject can be in several groups, tasks and sessions; each `(group, task, session)` is processed on its own.
 - **One row must name exactly one recording.** When a row still matches several files, the run stops and lists them; add `session` or `run` to that row.
