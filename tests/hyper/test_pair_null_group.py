@@ -180,11 +180,10 @@ def test_each_pairing_is_matched_on_its_own_channels():
     assert pool.tolist() == pytest.approx([0.15])
 
 
-def test_a_pairing_without_draws_leaves_its_group_unranked(caplog):
+def test_a_pairing_without_draws_leaves_its_group_unranked():
     draws, real = _triad({pair: {"a": 0.4} for pair in TRIAD},
                          {pair: {0: {"a": 0.2}} for pair in TRIAD[:2]})
     assert matched_pools(draws, real) == {}
-    assert "no draws for sub-02-sub-03" in caplog.text
 
 
 def test_a_region_thin_in_one_pairing_leaves_out_that_group():
@@ -244,6 +243,23 @@ def test_with_roles_each_role_pair_is_read_on_its_own(tmp_path):
                                              ("rolepair", "student-teacher"): 0.4})
     cohort = pd.read_csv(tmp_path / _cohort("pair", "cohort"), sep="\t")
     assert set(cohort.loc[cohort.granularity == "rolepair", "family"]) == {2}
+
+
+def test_a_whole_brain_level_names_the_occasion_it_cannot_rank(tmp_path, caplog):
+    """G02's student pairing lost every draw: the whole brain says which occasion went, once;
+    a channel level, where that is routine, does not warn."""
+    _write_class_tree(tmp_path)
+    draws_tsv = next((tmp_path / "group-G02").rglob("*_desc-draws_relmat.tsv"))
+    draws = pd.read_csv(draws_tsv, sep="\t")
+    draws[draws.sub1 != "sub-s1G02"].to_csv(draws_tsv, sep="\t", index=False)
+    with caplog.at_level("INFO"):
+        write_group_null(tmp_path, "main", n_resample=200, seed=3)
+
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert [m for m in warned if "level whole over homologous" in m] == [
+        "wtc repaired null, level whole over homologous pairings: 1 occasion-condition(s) "
+        "with no draw to rank against, left out: G02 game"]
+    assert not [m for m in warned if "level S1_D1" in m]
 
 
 def test_one_role_pair_in_the_whole_cohort_adds_no_family(tmp_path):

@@ -355,8 +355,8 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
         drawn = dict(tuple(d.groupby(members))) if members else {(): d}
         missing = [key for key in pairings if key not in drawn]
         if missing:
-            logger.warning("%s %s: no draws for %s, so the mean over its pairings has no "
-                           "null", occ, cond, ", ".join("-".join(k) for k in missing))
+            logger.debug("%s %s: no draws for %s, so the mean over its pairings has no "
+                         "null", occ, cond, ", ".join("-".join(k) for k in missing))
             continue
         got = [_matched(pairings[key], drawn[key]) for key in pairings]
         if any(m is None for m in got):
@@ -364,7 +364,7 @@ def matched_pools(draws: pd.DataFrame, real: pd.DataFrame) -> "dict[tuple, tuple
         value = float(np.mean([v for v, _ in got]))
         pool = pd.concat([p for _, p in got], axis=1).dropna().mean(axis=1)
         if len(got) > 1 and pool.empty:
-            logger.warning("%s %s: no draw covers all %d of its pairings", occ, cond, len(got))
+            logger.debug("%s %s: no draw covers all %d of its pairings", occ, cond, len(got))
         out[(cond, occ)] = (value, pool.to_numpy(dtype=float))
     return out
 
@@ -868,6 +868,16 @@ def _write_levels(output_dir: Path, task: str, chroma: str, null: str, measure: 
         tag = dict(granularity=gran, level=level, pairings=pairings)
         occ = by_occasion(d, r, two_sided=two_sided)
         coh = by_cohort(d, r, n_resample=n_resample, seed=seed, two_sided=two_sided)
+        # once per level and by name: a channel only some pairings kept loses occasions as a
+        # matter of course, a whole-brain level losing one is worth a warning
+        unranked = sorted(set(r[["condition", "occasion"]].itertuples(index=False, name=None))
+                          - set(occ[["condition", "occasion"]].itertuples(index=False,
+                                                                          name=None)))
+        if unranked:
+            (logger.info if gran == "channel" else logger.warning)(
+                "%s %s null, level %s over %s pairings: %d occasion-condition(s) with no draw "
+                "to rank against, left out: %s", measure, null, level, pairings, len(unranked),
+                ", ".join(f"{o} {c}" for c, o in unranked))
         if len(occ):
             occ_parts.append(occ.assign(**tag))
         if len(coh):
