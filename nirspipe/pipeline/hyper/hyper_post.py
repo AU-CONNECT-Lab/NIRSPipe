@@ -879,6 +879,9 @@ def run_hyper_post(
                     sources.setdefault(pr, {}).setdefault(label, {})[c] = n_partners
         return sources
 
+    # unseeded too, a member's stream has to be the same in every pairing it closes
+    isc_seed = wtc_seed if wtc_seed is not None else int(np.random.SeedSequence().entropy)
+
     def _isc_of(ch_type: str, label, window, pair) -> tuple:
         """One scope's ISC: ``((matrix, channels), (matrix, regions), arc level)``."""
         what = f"condition {label}" if label else "whole run"
@@ -889,12 +892,16 @@ def run_hyper_post(
             # per condition only, as the coherence's phase draws are
             keep = (lambda d: isc_draw_frames.append(
                 d.assign(chromophore=ch_type, condition=label))) if label else None
+            # the replaced member's own stream, shared by its pairings: the second member
+            # keeps a dyad's, a later one a stream of its index
+            later = subject_ids.index(pair_ids[1])
             # whitened on the whole record, then cut past the zeroed transient
             isc_mat, isc_ch_names, pairs_df, arc_level = compute_isc_pairs(
                 isc_raws, pair_ids, ch_type, sep_bands, window=window,
-                max_lag_s=isc_max_lag_s,
-                n_null=isc_phase_null, seed=wtc_seed, band=isc_band,
+                max_lag_s=isc_max_lag_s, n_null=isc_phase_null,
+                seed=isc_seed if later == 1 else [isc_seed, later], band=isc_band,
                 shared_phases=phase_null_shared,
+                draw_order=long_axis_over(_members, ch_type, sep_bands),
                 cross=bool(wtc_channel_cross), on_draws=keep, skip_s=isc_whiten_s)
             if isc_mat is None:
                 return channel_level, roi_level, arc_level

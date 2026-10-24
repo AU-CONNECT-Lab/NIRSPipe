@@ -314,13 +314,14 @@ def compute_isc_pairs(
     window: "tuple[float, float] | None" = None,
     max_lag_s: float = 0.0,
     n_null: int = 0,
-    seed: int | None = None,
+    seed: "int | list[int] | None" = None,
     band: "tuple[float | None, float | None] | None" = None,
     cross: bool = True,
     on_draws: "Callable[[pd.DataFrame], None] | None" = None,
     skip_s: float = 0.0,
     excluded: "np.ndarray | None" = None,
     shared_phases: bool = False,
+    draw_order: "list[str] | None" = None,
 ) -> "tuple[np.ndarray, list[str], pd.DataFrame, np.ndarray | None] | tuple[None, None, None, None]":
     """The ISC matrix and the same numbers as one row per channel pair, ranked against a null.
 
@@ -340,6 +341,11 @@ def compute_isc_pairs(
     side of zero. ``shared_phases`` rotates all of the second member's channels by one set of
     random phases per draw (:func:`~nirspipe.pipeline.hyper.surrogate.phase_rotate`) instead
     of scrambling each channel on its own.
+
+    ``draw_order`` is the order, by label, in which the surrogates draw the second member's
+    channels from the stream ``seed`` starts; ``ch_names`` when left at None. A group passes
+    its own axis, so one member on one stream is one surrogate in every pairing it closes,
+    whatever the montage of the member it is paired with.
 
     On whitened recordings the null scrambles the residuals, as the coherence's does.
 
@@ -377,7 +383,12 @@ def compute_isc_pairs(
 
     null_level = None
     if n_null > 0:
-        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed, keep, shared_phases)
+        order = None
+        if draw_order is not None:
+            rank = {name: k for k, name in enumerate(draw_order)}
+            order = sorted(range(len(ch_names)), key=lambda r: rank.get(ch_names[r], len(rank)))
+        draws = _isc_null_draws(data1, data2, max_lag, n_null, seed, keep, shared_phases,
+                                order)
         if off is not None:
             draws[:, off] = np.nan
         null_level = _add_isc_null_columns(frame, isc_mat, ch_names, draws)
@@ -403,24 +414,27 @@ def _draw_rows(frame: pd.DataFrame, ch_names: list[str], draws: np.ndarray) -> p
 
 
 def _isc_null_draws(
-    data1: np.ndarray, data2: np.ndarray, max_lag: int, n_iter: int, seed: int | None,
-    keep: "np.ndarray | None" = None, shared: bool = False,
+    data1: np.ndarray, data2: np.ndarray, max_lag: int, n_iter: int,
+    seed: "int | list[int] | None", keep: "np.ndarray | None" = None, shared: bool = False,
+    order: "list[int] | None" = None,
 ) -> np.ndarray:
     """``n_iter`` ISC matrices against a phase-scrambled second member.
 
     Only the second member is scrambled, as in :func:`compute_wtc_phase_null`, so a real
     recording is tested against a surrogate. A blank row stays blank, having no spectrum to
-    preserve.
+    preserve. ``order`` is the rows in the order they draw from the stream, all rows in
+    turn by default.
     """
     rng = np.random.default_rng(seed)
     finite = np.isfinite(data2).all(axis=1)
+    rows = [r for r in (range(len(finite)) if order is None else order) if finite[r]]
     draws = np.empty((n_iter, data1.shape[0], data2.shape[0]))
     for i in range(n_iter):
         surrogate = data2.copy()
         if shared:
             surrogate[finite] = phase_rotate(data2[finite], rng)
         else:
-            for row in np.flatnonzero(finite):
+            for row in rows:
                 surrogate[row] = phase_scramble(data2[row], rng)
         draws[i] = _isc_matrix(data1, surrogate, max_lag, keep)[0]
     return draws

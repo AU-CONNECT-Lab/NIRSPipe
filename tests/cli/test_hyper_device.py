@@ -64,9 +64,9 @@ def test_nirspipe_hyper_on_the_card_writes_the_cpus_tables(cohort):
     trees = {}
     for device in ("cpu", "cuda"):
         out = root / f"hyper_device_{device}"
-        # the phase null runs per dyad, and G02 is three members
+        # the triad G02 too: its pairings' real sides share one cache of transforms
         hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
-                        "--group-id", "G01", "--roi-mapping", str(write_roi_map(root)),
+                        "--roi-mapping", str(write_roi_map(root)),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--wtc-phase-null", "3",
                         "--wtc-seed", "7", "--wtc-save-maps", "--no-report",

@@ -225,14 +225,6 @@ def test_a_channel_two_rois_list_counts_in_both():
     assert dict(zip(maps["label"], maps["coherence"])) == pytest.approx(means)
 
 
-def test_a_group_of_three_is_refused_rather_than_half_scrambled():
-    """Only one subject is scrambled, so a third member would leave real pairs in the null."""
-    from nirspipe.pipeline.hyper.surrogate import compute_wtc_phase_null
-
-    with pytest.raises(ValueError, match="exactly 2 subjects"):
-        compute_wtc_phase_null({"s1": None, "s2": None, "s3": None}, 0.06, 0.15, n_iter=1)
-
-
 # ---- the null follows the windows the real table was read at ----
 #
 # A whole-run null against a per-condition real table is anticonservative on the short

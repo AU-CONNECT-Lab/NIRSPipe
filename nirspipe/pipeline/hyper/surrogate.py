@@ -4,8 +4,8 @@
 
   phase_scramble             One surrogate trace, the spectrum kept and the phases randomised.
   phase_rotate               Several traces rotated by one shared set of random phases.
-  compute_wtc_phase_null     A dyad against a phase-scrambled partner, computed inside the
-                             per-dyad pass.
+  compute_wtc_phase_null     Each pairing against a phase-scrambled later member, computed
+                             inside the per-group pass.
   compute_wtc_pair_null      The accounting the re-paired null needs, whose draws are real
                              recordings rather than scrambled ones and therefore arrive from
                              outside.
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from itertools import combinations
 
 import mne
 import numpy as np
@@ -360,10 +361,16 @@ def compute_wtc_phase_null(
 ) -> "NullDraws":
     """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
-    One subject's signals are replaced by surrogates and the whole pairwise WTC is rerun, once
-    per iteration; the band means are averaged across iterations. The result has the columns
-    ``wtc_band_mean`` returns, so a true-dyad table and this one subtract or test cell by cell,
-    plus ``null_sd``, ``null_p95`` and ``n_iter``.
+    Each pairing keeps its earlier member real and has its later member replaced by
+    surrogates, and the whole pairwise WTC is rerun, once per iteration; the band means are
+    averaged across iterations. The result has the columns ``wtc_band_mean`` returns, so a
+    true-dyad table and this one subtract or test cell by cell, plus ``null_sd``, ``null_p95``
+    and ``n_iter``.
+
+    In a group of more than two, every member after the first is scrambled once per
+    iteration and that one surrogate serves every pairing it closes, so each pairing's draw
+    is a dyad's while two pairings that share a member keep their covariance in the draws a
+    group mean is ranked against.
 
     Returns a :class:`NullDraws`, which holds the per-iteration draws as well as their
     summary: ranking a real value inside its null needs the draws, and the caller that has
@@ -399,7 +406,7 @@ def compute_wtc_phase_null(
     ``device`` is the card the transforms run on, None for the CPU; the surrogates are drawn
     on the CPU either way.
 
-    ``shared`` rotates all of the scrambled member's channels by one set of random phases per
+    ``shared`` rotates all of a scrambled member's channels by one set of random phases per
     draw (:func:`phase_rotate`) instead of scrambling each on its own, so they stay as
     correlated with each other as recorded. The random stream differs between the two, so
     one seed does not give comparable draws across them.
@@ -408,17 +415,15 @@ def compute_wtc_phase_null(
         raise ValueError(f"n_iter must be at least 1, got {n_iter}")
 
     subject_ids = list(raws.keys())
-    if len(subject_ids) != 2:
-        # refused, not warned: a third member would leave real pairs in a table labelled null
-        raise ValueError(
-            f"phase-scrambled WTC needs exactly 2 subjects, got {len(subject_ids)}: "
-            f"{subject_ids}. Only one side is scrambled, so a larger group would leave "
-            "real-against-real pairs in a table labelled null. Run it per dyad."
-        )
+    if len(subject_ids) < 2:
+        raise ValueError(f"phase-scrambled WTC needs at least 2 subjects, got {subject_ids}")
 
     true_signals = {sid: _long_signals(raw, ch_type, sep_bands) for sid, raw in raws.items()}
-    # scramble the second subject only, so a real recording is tested against a surrogate
-    scrambled_id = subject_ids[1]
+    # one pairing per call, so the later member is the only one scrambled in it
+    pairings = list(combinations(subject_ids, 2))
+    # the same axis the real table is built on, without which the null cannot be subtracted
+    # from it row by row
+    axis = long_axis_over(raws.values(), ch_type, sep_bands)
     rng = np.random.default_rng(seed)
 
     frames: list[pd.DataFrame] = []
@@ -427,18 +432,21 @@ def compute_wtc_phase_null(
     hists: dict[tuple, np.ndarray] = {}
     roi_hists: dict[tuple, np.ndarray] = {}
     roi = (roi_hists, roi_map, roi_min_channels) if roi_map else None
-    # the unscrambled side is the same signal in every iteration, so its transforms are
-    # computed once and reused; one montage of transforms stays resident, whatever n_iter
+    # a pairing's real side is the same signal in every iteration, so its transforms are
+    # computed once and reused; one montage per member that is ever the earlier one stays
+    # resident, whatever n_iter
     cache1: dict[tuple[str, str], _ChannelWavelet] = {}
     for i in range(n_iter):
-        signals = dict(true_signals)
-        signals[scrambled_id] = _surrogate_draw(true_signals[scrambled_id], rng, shared)
-        result = _wtc_over_pairs(
-            raws, signals, fmin, fmax, significance=False, seed=None,
-            cross=cross, limit_scales=limit_scales, cache1=cache1,
-            # the same axis the real table is built on, without which the null cannot be
-            # subtracted from it row by row
-            axis=long_axis_over(raws.values(), ch_type, sep_bands), gpu=device)
+        # in member order from the one stream, so a dyad draws exactly what it always did
+        surrogates = {sid: _surrogate_draw(true_signals[sid], rng, shared)
+                      for sid in subject_ids[1:]}
+        result = _merged([
+            _wtc_over_pairs(
+                {sub1: raws[sub1], sub2: raws[sub2]},
+                {sub1: true_signals[sub1], sub2: surrogates[sub2]}, fmin, fmax,
+                significance=False, seed=None, cross=cross, limit_scales=limit_scales,
+                cache1=cache1, axis=axis, gpu=device)
+            for sub1, sub2 in pairings])
         before = len(cond_frames)
         _collect_draw(result, frames, cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
@@ -454,6 +462,14 @@ def compute_wtc_phase_null(
                       cond_draw_ids=cond_draw_ids,
                       roi_levels=({key: _null_level(hist) for key, hist in roi_hists.items()}
                                   if roi else None))
+
+
+def _merged(results: "list[WTCResult]") -> WTCResult:
+    """The pairings' results as the one result a WTC over the whole group returns."""
+    timed = next((r for r in results if len(r.times)), results[0])
+    return WTCResult(pairs={k: v for r in results for k, v in r.pairs.items()},
+                     freqs=timed.freqs, times=timed.times,
+                     excluded={k: v for r in results for k, v in r.excluded.items()})
 
 
 def compute_wtc_pair_null(

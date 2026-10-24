@@ -55,7 +55,7 @@ def run_wtc_null(
     reuse: bool = False,
     shared: bool = False,
 ) -> dict:
-    """Draw the null for one dyad and write the level its phase arrows are read against.
+    """Draw the null for one group and write the level its phase arrows are read against.
 
     The expensive half: ``n_iter`` full WTC runs per chromophore. Writes
     ``..._chromo-<chroma>_null-phase_stat-wtc_desc-level_relmat.npz``, the coherence a cell has to clear at each
