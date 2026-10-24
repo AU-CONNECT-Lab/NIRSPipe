@@ -21,6 +21,7 @@ from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               get_participant_age, validate_bids)
+from nirspipe.io.head_template import resolve_template
 from nirspipe.io.naming import report_name, roi_map_name
 from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
@@ -209,14 +210,14 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     )
 
 
-def _refuse_missing_ages(dpf: list, bids_dir: Path, subjects: "list[str]") -> None:
-    """With ``--dpf age``, stop before the first subject when any of them has no age."""
+def _refuse_missing_ages(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
+    """With ``--dpf age``, each subject's age, stopping before the first when any has none."""
     try:
         if dpf_from_age(dpf):
-            for subject in subjects:
-                get_participant_age(bids_dir, subject)
+            return {subject: get_participant_age(bids_dir, subject) for subject in subjects}
     except ValueError as exc:
         raise SystemExit(f"Error: {exc}") from None
+    return {}
 
 
 def run_participant_level(args: dict[str, Any]) -> None:
@@ -249,7 +250,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
-    _refuse_missing_ages(args.get("dpf") or [], bids_dir, participant_label)
+    ages = _refuse_missing_ages(args.get("dpf") or [], bids_dir, participant_label)
+    _app_options.templates_for(args.get("template"), participant_label, ages)
     _refuse_bad_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
     _refuse_bad_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
@@ -701,12 +703,14 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     # resolved here so the run record writes the value the method ran with
     motion = motion_settings(_v(args["motion_correction"]), args.get("motion_std_thresh"),
                              args.get("wavelet_iqr"))
+    age = (get_participant_age(args["bids_dir"], subject) if dpf_from_age(args["dpf"])
+           else None)
     return PrepConfig(
         subject=subject,
         session=session,
         dpf=args["dpf"],
-        **({"age": get_participant_age(args["bids_dir"], subject)}
-           if dpf_from_age(args["dpf"]) else {}),
+        **({"age": age} if age is not None else {}),
+        template=resolve_template(args.get("template"), age),
         sci_threshold=args["sci_threshold"],
         **({"psp_threshold": args["psp_threshold"]}
            if args.get("psp_threshold") is not None else {}),

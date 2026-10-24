@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from nirspipe.cli._shared import BidsLabel
+from nirspipe.io.head_template import CHOICES, FSAVERAGE, resolve_template, space_of, template_dir
 from nirspipe.utils import bare_roi_map, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
@@ -118,6 +119,37 @@ def add_dpf(container, required: bool = False) -> None:
         help="Differential pathlength factor: one value, one per wavelength, or age for one "
              "per wavelength from each participant's age in participants.tsv (Scholkmann & "
              "Wolf 2013).")
+
+
+def add_template(container) -> None:
+    """``--template``: the head the optodes are placed on; fsaverage, or by age under ``--dpf age``."""
+    container.add_argument(
+        "--template", choices=CHOICES, default=None,
+        help="Head the optodes are placed on and drawn over: fsaverage (adult) or an MNE infant "
+             "template by age, 2wk to 2yr. Default fsaverage; with --dpf age, the template "
+             "nearest each participant's age, and ages over 2 and under 18 need this option.")
+
+
+def templates_for(template: "str | None", subjects: "list[str]", ages: dict) -> dict:
+    """Each subject's template, every infant one fetched before the first subject runs.
+
+    ``ages`` holds a subject's age only under ``--dpf age``. Exits non-zero on an age no
+    template fits, or a template that cannot be fetched.
+    """
+    chosen = {}
+    for subject in subjects:
+        try:
+            chosen[subject] = resolve_template(template, ages.get(subject))
+        except ValueError as exc:
+            print(f"Error: sub-{subject}: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
+    for name in sorted(set(chosen.values()) - {FSAVERAGE}):
+        try:
+            template_dir(space_of(name))
+        except RuntimeError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            raise SystemExit(1) from None
+    return chosen
 
 
 def add_sci_threshold(container, required: bool = False, note: str = "") -> None:

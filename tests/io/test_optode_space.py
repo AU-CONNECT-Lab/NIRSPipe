@@ -14,12 +14,15 @@ import pytest
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.io.head_template import FSAVERAGE, reference_points
 from nirspipe.io.optode_space import (
-    _reference_landmarks,
+    Placement,
     channel_coords_path,
     head_to_mri,
     place_optodes,
     placement_of,
+    read_placement,
+    write_channel_coords,
 )
 from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.io.tables import read_table
@@ -35,7 +38,7 @@ _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1, resp_h_fr
 
 def _planted_pairs() -> list[tuple[np.ndarray, np.ndarray]]:
     """Source and detector of each pair on fsaverage, in mm."""
-    ref = _reference_landmarks()
+    ref = reference_points(FSAVERAGE)
     pairs = [(ref[s], ref[d]) for s, d in _LONG_PAIRS]
     pairs.append((ref["cz"], ref["cz"] + np.array([0.0, 8.0, 0.0])))
     return pairs
@@ -63,7 +66,7 @@ def _write(path, frame: np.ndarray, landmarks: "list[str] | None" = None,
         src, det = (mne.transforms.apply_trans(frame, p / 1000) for p in (src, det))
         ch["loc"][3:6], ch["loc"][6:9], ch["loc"][0:3] = src, det, (src + det) / 2
     write_snirf(raw, path)
-    ref = _reference_landmarks()
+    ref = reference_points(FSAVERAGE)
     with h5py.File(path, "r+") as f:
         probe = f["nirs/probe"]
         for key in ("landmarkPos3D", "landmarkLabels"):
@@ -180,6 +183,7 @@ def test_prep_writes_each_channel_at_its_planted_midpoint(prepped):
     side = json.loads((nirs_dir / "sub-01_task-rest_space-fsaverage_channels.json").read_text())
     assert side["NIRSCoordinateSystem"] == "fsaverage" and side["NIRSCoordinateUnits"] == "mm"
     assert side["optode_placement"]["method"] == "landmarks"
+    assert side["optode_placement"]["space"] == "fsaverage"
 
 
 def test_a_derivative_is_placed_by_the_record_not_by_its_own_landmarks(prepped):
@@ -225,16 +229,17 @@ def test_a_cropped_recording_keeps_the_landmarks_that_place_it(tmp_path):
 
 # ---- the group copy ----
 
-def _member(derivs, subject, x, method="landmarks"):
+def _member(derivs, subject, x, method="landmarks", space="fsaverage"):
     """A member's preproc file and the record prep would leave beside it, hand-written."""
     nirs = derivs / subject / "nirs"
-    nirs.mkdir(parents=True)
+    nirs.mkdir(parents=True, exist_ok=True)
     (nirs / f"{subject}_task-rest_desc-preproc_nirs.snirf").write_bytes(b"")
-    (nirs / f"{subject}_task-rest_space-fsaverage_channels.tsv").write_text(
+    (nirs / f"{subject}_task-rest_space-{space}_channels.tsv").write_text(
         f"name\tx\ty\tz\nS1_D1 hbo\t{x}\t2.0\t3.0\nS1_D1 hbr\t{x}\t2.0\t3.0\n")
-    (nirs / f"{subject}_task-rest_space-fsaverage_channels.json").write_text(json.dumps(
-        {"optode_placement": {"method": method, "landmarks_used": 3, "scalp_fit_mm": 1.0,
-                              "transform": np.eye(4).tolist(), "note": None}}))
+    (nirs / f"{subject}_task-rest_space-{space}_channels.json").write_text(json.dumps(
+        {"optode_placement": {"method": method, "space": space, "landmarks_used": 3,
+                              "scalp_fit_mm": 1.0, "transform": np.eye(4).tolist(),
+                              "note": None}}))
 
 
 def test_a_group_table_keeps_each_members_positions_under_their_subject_id(tmp_path):
@@ -252,7 +257,8 @@ def test_a_group_table_keeps_each_members_positions_under_their_subject_id(tmp_p
 
     assert path == out / "group-G1" / "nirs" / "group-G1_task-rest_space-fsaverage_channels.tsv"
     table = read_table(path)
-    assert table.columns.tolist() == ["subject_id", "name", "x", "y", "z"]
+    assert table.columns.tolist() == ["subject_id", "space", "name", "x", "y", "z"]
+    assert set(table["space"]) == {"fsaverage"}
     assert table.set_index(["subject_id", "name"])["x"].to_dict() == {
         ("sub-01", "S1_D1 hbo"): 10.0, ("sub-01", "S1_D1 hbr"): 10.0,
         ("sub-02", "S1_D1 hbo"): 12.5, ("sub-02", "S1_D1 hbr"): 12.5}
@@ -273,3 +279,58 @@ def test_a_group_with_a_member_from_an_older_tree_is_refused(tmp_path):
     group = [GroupEntry("G1", "sub-01", "rest"), GroupEntry("G1", "sub-02", "rest")]
     with pytest.raises(StageError, match="predates optode placement"):
         write_group_channel_coords(derivs, tmp_path / "hyper", group, "preproc")
+
+
+# ---- the template a run was placed on ----
+
+_INFANT_SPACE = "ANTS6p0Months3T"
+
+
+def test_a_rerun_on_another_template_leaves_one_table(tmp_path):
+    run_file = tmp_path / "sub-01_task-rest_desc-preproc_nirs.snirf"
+    old = tmp_path / "sub-01_task-rest_space-fsaverage_channels.tsv"
+    old.write_text("name\tx\ty\tz\n")
+    old.with_suffix(".json").write_text("{}")
+    unplaced = Placement("none", note="2-D probe", space=_INFANT_SPACE)
+
+    write_channel_coords(synth_raw("01", "rest"), unplaced,
+                         channel_coords_path(run_file, _INFANT_SPACE))
+
+    assert not old.exists() and not old.with_suffix(".json").exists()
+    placement = read_placement(run_file)
+    assert placement.space == _INFANT_SPACE and not placement.placed
+    side = json.loads(channel_coords_path(run_file, _INFANT_SPACE).with_suffix(".json").read_text())
+    # BIDS has no keyword for an infant template; the description names it
+    assert side["NIRSCoordinateSystem"] == "Other"
+    assert "ANTS6-0Months3T" in side["NIRSCoordinateSystemDescription"]
+
+
+def test_a_run_with_tables_in_two_spaces_is_refused(tmp_path):
+    derivs = tmp_path / "derivatives"
+    _member(derivs, "sub-01", 10.0)
+    _member(derivs, "sub-01", 10.0, space=_INFANT_SPACE)
+    with pytest.raises(StageError, match="more than one space"):
+        read_placement(derivs / "sub-01" / "nirs" / "sub-01_task-rest_desc-preproc_nirs.snirf")
+
+
+def test_a_group_on_two_templates_names_each_members_and_no_shared_space(tmp_path):
+    from nirspipe.io.groups import GroupEntry
+    from nirspipe.pipeline.hyper.group_quality import write_group_channel_coords
+
+    derivs, out = tmp_path / "derivatives", tmp_path / "hyper"
+    write_dataset_description(derivs)
+    write_dataset_description(out, source=derivs)
+    _member(derivs, "sub-01", 10.0)
+    _member(derivs, "sub-02", 12.5, space=_INFANT_SPACE)
+    group = [GroupEntry("G1", "sub-01", "rest"), GroupEntry("G1", "sub-02", "rest")]
+
+    path = write_group_channel_coords(derivs, out, group, "preproc")
+
+    assert path.name == "group-G1_task-rest_channels.tsv"
+    table = read_table(path)
+    assert table.groupby("subject_id")["space"].unique().map(list).to_dict() == {
+        "sub-01": ["fsaverage"], "sub-02": [_INFANT_SPACE]}
+    side = json.loads(path.with_suffix(".json").read_text())
+    assert side["NIRSCoordinateSystem"] == "Other"
+    assert {k: v["space"] for k, v in side["optode_placement"].items()} == {
+        "sub-01": "fsaverage", "sub-02": _INFANT_SPACE}

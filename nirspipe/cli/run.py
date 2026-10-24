@@ -108,6 +108,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt = p.add_argument_group("preprocessing (optional)")
     prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
                           help="Motion correction method.")
+    _app_options.add_template(prep_opt)
     _app_options.add_motion_settings(prep_opt)
     prep_opt.add_argument("--bad-channels",
                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "

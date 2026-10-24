@@ -256,7 +256,7 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
 
 
 def placement_note(raw) -> "str | None":
-    """What to say when no reading placed the optodes on fsaverage, read as the brain views read it.
+    """What to say when no reading placed the optodes on their template, read as the brain views read it.
 
     None for a placed run, and for one with no positions at all, which the separation notes
     already name. One wording for both views, as the separation notes are.

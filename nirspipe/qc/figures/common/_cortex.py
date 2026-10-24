@@ -1,4 +1,4 @@
-"""Channel values projected onto the fsaverage cortex and rendered off-screen, without Qt."""
+"""Channel values projected onto the template's cortex and rendered off-screen, without Qt."""
 
 import os
 from typing import Callable
@@ -6,13 +6,19 @@ from typing import Callable
 import mne
 import numpy as np
 
-from nirspipe.qc.figures.common._brain_utils import to_head
+from nirspipe.io.head_template import (head_to_mri, linear_scale, source_space_path,
+                                       space_of_subject, subject_of, template_dir)
+from nirspipe.qc.figures.common._brain_utils import space_of_run, to_head
 from nirspipe.qc.figures.common._surface_overlay import smoothing_matrix, vertex_normals
+
+# MNE's camera distance for fsaverage, in mm
+_CAMERA_MM = 480
 
 
 def project_to_cortex(raw: mne.io.Raw, columns: np.ndarray) -> tuple:
     """``(stc, subjects_dir)``: each column (a row per channel of ``raw``) spread over the
-    fsaverage pial surface within 3 cm of the channels, as ``plot_glm_surface_projection`` does.
+    run's template pial surface within 3 cm of the channels, as ``plot_glm_surface_projection``
+    does.
 
     ``weighted`` mode gives each vertex its sensors' weights summing to one, so a column of
     ones projects to the share of a vertex the channels cover.
@@ -20,21 +26,21 @@ def project_to_cortex(raw: mne.io.Raw, columns: np.ndarray) -> tuple:
     from mne import EvokedArray, read_source_spaces
     from mne._fiff.constants import FIFF
     from mne.source_estimate import stc_near_sensors
-    from mne.utils import get_subjects_dir
 
+    space = space_of_run(raw)
     ea = EvokedArray(np.asarray(columns, float).reshape(len(raw.ch_names), -1), raw.info.copy())
-    # trans="fsaverage" makes stc_near_sensors read loc as head coords, so move the
+    # the head->MRI trans makes stc_near_sensors read loc as head coords, so move the
     # optodes into that frame rather than just relabelling them
     for idx in range(len(ea.ch_names)):
         loc = ea.info["chs"][idx]["loc"]
         loc[:9] = to_head(loc[:9].reshape(3, 3), raw).reshape(9)
         ea.info["chs"][idx]["coord_frame"] = FIFF.FIFFV_COORD_HEAD
 
-    subjects_dir = get_subjects_dir(raise_error=True)
-    src = read_source_spaces(os.path.join(subjects_dir, "fsaverage", "bem",
-                                          "fsaverage-ico-5-src.fif"))
+    subjects_dir = str(template_dir(space).parent)
+    src = read_source_spaces(source_space_path(space), verbose=False)
     stc = stc_near_sensors(
-        evoked=ea, picks=np.arange(len(ea.ch_names)), subject="fsaverage", trans="fsaverage",
+        evoked=ea, picks=np.arange(len(ea.ch_names)), subject=subject_of(space),
+        trans=mne.transforms.Transform("head", "mri", head_to_mri(space)),
         distance=0.03, mode="weighted", surface="pial",
         subjects_dir=subjects_dir, src=src, project=True, verbose=False,
     )
@@ -58,7 +64,7 @@ def mne_lighting(plotter) -> None:
 def render_cortex(stc: mne.SourceEstimate,
                   colour: Callable[[np.ndarray, np.ndarray], np.ndarray],
                   subjects_dir, size: tuple[int, int], view_configs: list[dict]) -> list[np.ndarray]:
-    """One RGB image per view of ``stc`` on the fsaverage pial surface, as ``stc.plot`` draws it.
+    """One RGB image per view of ``stc`` on its template's pial surface, as ``stc.plot`` draws it.
 
     ``colour(curvature, smoothed)`` turns a hemisphere's curvature and its data, spread from
     the source vertices over 10 smoothing steps (``(n_vertices, n_columns)``), into RGBA.
@@ -67,7 +73,9 @@ def render_cortex(stc: mne.SourceEstimate,
     import pyvista as pv
     from nibabel.freesurfer import read_morph_data
 
-    surf_dir = os.path.join(subjects_dir, "fsaverage", "surf")
+    surf_dir = os.path.join(subjects_dir, stc.subject, "surf")
+    # shrunk with the template, so a smaller brain fills the frame as fsaverage does
+    distance = _CAMERA_MM * linear_scale(space_of_subject(stc.subject))
     plotter = pv.Plotter(off_screen=True, window_size=list(size))
     try:
         plotter.set_background("white")
@@ -88,10 +96,10 @@ def render_cortex(stc: mne.SourceEstimate,
         focal = np.asarray(plotter.center, float)
         images = []
         for cfg in view_configs:
-            # MNE's convention: elevation is the polar angle from +z; camera 480 mm from origin
+            # MNE's convention: elevation is the polar angle from +z
             az, el = np.deg2rad(cfg["azimuth"]), np.deg2rad(cfg["elevation"])
-            position = 480 * np.array([np.sin(el) * np.cos(az), np.sin(el) * np.sin(az),
-                                       np.cos(el)])
+            position = distance * np.array([np.sin(el) * np.cos(az), np.sin(el) * np.sin(az),
+                                            np.cos(el)])
             up = (0, 0, 1) if 5 <= abs(cfg["elevation"]) <= 175 else (0, 1, 0)
             plotter.camera_position = [position, focal, up]
             plotter.render()

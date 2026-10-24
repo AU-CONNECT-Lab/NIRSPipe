@@ -15,6 +15,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from nirspipe.io.head_template import head_sphere
 from nirspipe.io.optode_space import placement_of
 from nirspipe.qc.metrics._helpers import epochable_events
 from nirspipe.utils import is_marker
@@ -66,7 +67,7 @@ def _condition_evokeds(
 
 
 def _placed_info(raw: mne.io.Raw) -> mne.Info:
-    """``raw.info`` with its fNIRS positions moved into fsaverage's head frame by the run's placement.
+    """``raw.info`` with its fNIRS positions moved into its template's head frame by the run's placement.
 
     A recording already in head frame comes back as it is, and one no reading placed keeps its
     coordinates as they stand, as the 3-D views draw it.
@@ -107,7 +108,8 @@ def _projected_optodes(raw: mne.io.Raw) -> "tuple[dict, list, dict] | None":
     try:
         from mne.utils import _check_sphere
         from mne.viz.topomap import _get_pos_outlines
-        sphere = _check_sphere(None, info)
+        own = head_sphere(placement_of(raw).space)
+        sphere = _check_sphere(None, info) if own is None else own
         _, outlines = _get_pos_outlines(info, picks, sphere)
         project = lambda xyz: _topomap_project(xyz, sphere)  # noqa: E731
     except Exception as exc:

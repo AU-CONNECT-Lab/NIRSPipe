@@ -77,7 +77,7 @@ def test_links_are_drawn_in_their_quality_colour():
 
 
 def test_a_failed_render_raises_instead_of_returning_a_blank(monkeypatch):
-    def broken():
+    def broken(space):
         raise RuntimeError("no surface")
 
     monkeypatch.setattr(bv, "load_brain_meshes", broken)
@@ -145,21 +145,29 @@ def test_the_superior_view_reads_like_the_flat_map_beside_it():
     assert centre("green")[1] < 0.5
 
 
+def _clear_template_caches():
+    from nirspipe.io import head_template
+
+    for cached in (head_template.subjects_dir, head_template.template_dir,
+                   head_template.head_to_mri):
+        cached.cache_clear()
+
+
 def test_without_fsaverage_the_views_fail_instead_of_drawing_optodes_off_the_brain(monkeypatch):
-    from nirspipe.io import optode_space
+    from nirspipe.io import head_template
 
     def offline(*a, **k):
         raise OSError("no network")
 
-    optode_space.head_to_mri.cache_clear()
-    monkeypatch.setattr(optode_space.mne.datasets, "fetch_fsaverage", offline)
+    _clear_template_caches()
+    monkeypatch.setattr(head_template.mne.datasets, "fetch_fsaverage", offline)
     raw, sci = _montage()
     try:
         with pytest.raises(RuntimeError, match="fsaverage"):
             bv.quality_brain_views(list(sci), None, np.ones(4, bool), raw=raw, sci_scores=sci,
                                    sci_threshold=0.8)
     finally:
-        optode_space.head_to_mri.cache_clear()
+        _clear_template_caches()
 
 
 def test_the_brain_is_lit_white_and_drawn_matte():

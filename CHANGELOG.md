@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `--wtc-phase-null` runs on groups of three or more, each pairing's later member scrambled once per draw and shared across its pairings
 - pairnull draws groups of three or more: each draw takes one stand-in per later member from one other group, shared across its pairings
 - groupnull reads a group of three or more as the mean over its pairings, and each role pair on its own where the pairs table has roles
+- `--template` places and draws each participant on fsaverage or an MNE infant template; under `--dpf age` the template nearest their age is the default
 
 ### Changed
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given

@@ -186,7 +186,7 @@ def _add_shared_colorbar(fig, clim: dict) -> None:
 
 def _render_activation(stc, clim: dict, subjects_dir, size: tuple[int, int],
                        view_configs: list[dict]) -> list[np.ndarray]:
-    """Draw ``stc`` on the fsaverage pial surface as ``stc.plot`` does, without its Qt window.
+    """Draw ``stc`` on its template's pial surface as ``stc.plot`` does, without its Qt window.
 
     Same defaults as ``stc.plot``: transparent below fmin, 10 smoothing steps, grey binary
     curvature. One RGB image per ``view_configs``.

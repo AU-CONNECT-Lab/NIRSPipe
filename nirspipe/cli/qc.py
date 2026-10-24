@@ -14,6 +14,8 @@ from uuid import uuid4
 from nirspipe import __version__
 
 from nirspipe.io.derivatives import group_label, group_report_dir, read_dataset_description
+from nirspipe.io.head_template import resolve_template, space_of
+from nirspipe.io.optode_space import hold_placement, place_optodes
 from nirspipe.io.naming import report_name
 from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
@@ -45,6 +47,7 @@ def cmd_prep_raw(
     wavelet_iqr: float | None = None,
     run_label: list[str] | None = None,
     nprocs: int | None = None,
+    template: str | None = None,
 ) -> None:
     """Generate static raw QC reports, one per subject."""
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
@@ -74,6 +77,7 @@ def cmd_prep_raw(
     sessions = session_label or [None]
     tasks    = task_label    or [None]
     ages = _ages_for(dpf, bids_dir, participant_label)
+    templates = _app_options.templates_for(template, participant_label, ages)
 
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
@@ -105,6 +109,7 @@ def cmd_prep_raw(
                         "channels_tsv_bads": ([] if "channel-status" in (ignore or [])
                                               else channel_status_bads(layout, snirf_p)),
                         "age": ages.get(subject),
+                        "template": templates[subject],
                     }
                     all_runs.append(run_dict)
                     # a chosen run gets a page of its own rather than replacing its task's page
@@ -213,6 +218,11 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
     # each member's channels.tsv, read off the BIDS tree its recording came from
     layout = _bids_layout(s.bids_dir, s.run_id) if s.read_channel_status else None
     raws_cw = load_group_raw_bids(s.bids_dir, members)
+    ages = _ages_for(s.dpf, s.bids_dir, list(raws_cw))
+    # each member on their own head, held so every page drawn from them uses it
+    for sid, raw in raws_cw.items():
+        space = space_of(resolve_template(s.template, ages.get(sid)))
+        hold_placement(raw, place_optodes(path_from(raw), space))
     tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
                  for sid, raw in raws_cw.items()} if layout is not None else {})
     # the aux group rides only in the source file, on each member's own clock. A file
@@ -231,7 +241,6 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
                                      screen_scope=s.screen_scope,
                                      sep_bands=s.sep_bands, session=ses,
                                      channels_tsv_bads=tsv_bads, imu=member_imu)
-    ages = _ages_for(s.dpf, s.bids_dir, list(raws_cw))
     raws_haemo = {sid: _raw_to_haemo(r, s.dpf, ages.get(sid)) for sid, r in raws_cw.items()}
     # the dyad page says it the way it says a member screening could not judge
     for sid, age in ages.items():
@@ -301,6 +310,7 @@ def cmd_hyper_raw(
     participant_label: list[str] | None = None,
     ignore: list[str] | None = None,
     nprocs: int | None = None,
+    template: str | None = None,
 ) -> None:
     """Generate hyperscanning raw QC report from BIDS raw data."""
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-hyper")
@@ -350,6 +360,8 @@ def cmd_hyper_raw(
         print("[info] no --derivatives-dir: the motion panel shows the recordings before "
               "correction only.", file=sys.stderr)
     roi_map = _app_options.load_roi_mapping(roi_mapping)
+    subjects = sorted({e.subject_id for members in groups.values() for e in members})
+    _app_options.templates_for(template, subjects, _ages_for(dpf, bids_dir, subjects))
 
     settings = SimpleNamespace(
         bids_dir=bids_dir, output_dir=output_dir, derivatives_dir=derivatives_dir,
@@ -357,7 +369,8 @@ def cmd_hyper_raw(
         sci_threshold=sci_threshold, cardiac_l_freq=cardiac_l_freq,
         cardiac_h_freq=cardiac_h_freq, psp_threshold=psp_threshold,
         min_good_frac=min_good_frac, screen_scope=screen_scope, sep_bands=sep_bands, dpf=dpf,
-        no_align=no_align, normalize=normalize, tstart=tstart, tend=tend, roi_map=roi_map)
+        no_align=no_align, normalize=normalize, tstart=tstart, tend=tend, roi_map=roi_map,
+        template=template)
     _run_groups(groups, partial(_raw_one_group, settings), nprocs,
                 log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
                 / f"{group_label(*key)}_desc-raw.log")
@@ -452,6 +465,7 @@ def _ages_for(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
 def _add_dpf_and_cardiac(parser) -> None:
     """The optics and cardiac band both raw reports need, required: they are population values."""
     _app_options.add_dpf(parser, required=True)
+    _app_options.add_template(parser)
     parser.add_argument("--cardiac-l-freq", type=float, required=True,
                         help="Lower bound of cardiac band in Hz (required; population-dependent).")
     parser.add_argument("--cardiac-h-freq", type=float, required=True,

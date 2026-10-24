@@ -54,7 +54,7 @@ derivatives/nirspipe/
         ├── <run>_desc-motcorrected_nirs.snirf      ← prep: motion correction
         ├── <run>_desc-preproc_nirs.snirf           ← prep: Beer-Lambert, end of preprocessing
         ├── <run>_desc-aux_timeseries.tsv.gz        ← aux channels, when the recording has any
-        ├── <run>_space-fsaverage_channels.tsv      ← channel positions on fsaverage, in mm
+        ├── <run>_space-<template>_channels.tsv     ← channel positions on the run's head template, in mm
         ├── <run>_desc-filtered_nirs.snirf          ← post: bandpass
         ├── <run>_desc-resampled_nirs.snirf         ← post: + --resample-sfreq
         ├── <run>_desc-errts_nirs.snirf             ← post: regression residual
@@ -135,7 +135,7 @@ derivatives/nirspipe-hyper/
 | `chromo-<c>[_cond-<c>]_stat-isc_relmat.tsv`, `..._seg-<map>_agg-roi_...` | The correlation matrices, per chromophore and window; they stay in the dyad's folder, `nirspipe-hyper-merge` merging the long tables only |
 | `cond-all_null-phase_stat-isc_desc-draws_relmat.tsv` | Every surrogate of the correlation (with `--isc-phase-null`) |
 | `desc-bad_qc.tsv` | Each member's excluded channels and the runs that rejected them |
-| `space-fsaverage_channels.tsv` | Each member's channel positions on fsaverage, their own tables stacked with a `subject_id` column |
+| `space-<template>_channels.tsv` | Each member's channel positions on their own template, their own tables stacked with `subject_id` and `space` columns; the name drops `space-` when the members sit on different templates |
 
 `nirspipe-hyper-pairnull` writes beside them, all per condition window: `cond-all_null-pair_stat-wtc_relmat.tsv` and its region twins, `cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv`, the correlation's `cond-all_null-pair_stat-isc_relmat.tsv` and its draws, and the level `chromo-<c>_cond-all_null-pair_stat-wtc_desc-level_relmat.npz`. `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map.
 

@@ -473,7 +473,7 @@ _BRAIN_VIEW_PX = (560, 480)
 
 
 def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> "str | None":
-    """mALFF of HbO on the fsaverage cortex in four views, as a base64 PNG.
+    """mALFF of HbO on the template's cortex in four views, as a base64 PNG.
 
     The long channels that were kept and carry a value are projected as the GLM activation
     is, and the scale runs from their lowest value to their highest. None when no channel

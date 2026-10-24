@@ -19,7 +19,7 @@ from PIL import Image as _PILImage
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common._brain_utils import (
-    CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, to_mni,
+    CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, space_of_run, to_template,
 )
 from nirspipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
 
@@ -33,7 +33,7 @@ _NA_COLOR   = "#95a5a6"
 # it re-uses the quality colours, but optodes are dots and channels are lines
 _SRC_COLOR = "#e74c3c"
 _DET_COLOR = "#2980b9"
-# drawn sizes, in mm on the fsaverage surface
+# drawn sizes, in mm on the template's surface
 _LINK_RADIUS = 1.0
 _SRC_RADIUS, _DET_RADIUS, _MARKER_RADIUS = 3.0, 2.5, 3.0
 _VIEW_SIZE = (1400, 1120)
@@ -153,13 +153,13 @@ def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
 
     pair_ids = list(ends)
     flat = np.vstack([np.vstack(ends[p]) for p in pair_ids])
-    mni  = to_mni(flat, raw)
+    placed = to_template(flat, raw)
 
     groups: dict[str, list[np.ndarray]] = {}
     sources: dict[str, np.ndarray] = {}
     detectors: dict[str, np.ndarray] = {}
     for i, pair_id in enumerate(pair_ids):
-        s, d = mni[2 * i], mni[2 * i + 1]
+        s, d = placed[2 * i], placed[2 * i + 1]
         vals = scis.get(pair_id)
         sci  = float(np.mean(vals)) if vals else None
         color = _link_color(sci, goods.get(pair_id), sci_threshold)
@@ -182,10 +182,10 @@ def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
     return meshes
 
 
-def _channel_marker_meshes(ch_names, coords_mni, good_mask) -> list[tuple]:
+def _channel_marker_meshes(ch_names, coords_mm, good_mask) -> list[tuple]:
     """Fallback when optode positions are unavailable: spheres at channel midpoints."""
     good_mask = np.asarray(good_mask, bool)
-    return [(_spheres(coords_mni[mask], _MARKER_RADIUS), color)
+    return [(_spheres(coords_mm[mask], _MARKER_RADIUS), color)
             for mask, color in ((good_mask, _GOOD_COLOR), (~good_mask, _BAD_COLOR))
             if mask.any()]
 
@@ -246,12 +246,12 @@ def quality_brain_views(
     if not data_meshes:
         data_meshes = _channel_marker_meshes(
             ch_names,
-            to_mni(coords_head, raw),
+            to_template(coords_head, raw),
             good_mask,
         )
 
     with RENDER_LOCK:
-        plotter = _build_3d_scene(load_brain_meshes(), data_meshes)
+        plotter = _build_3d_scene(load_brain_meshes(space_of_run(raw)), data_meshes)
         try:
             imgs = _render_views(plotter)
         finally:

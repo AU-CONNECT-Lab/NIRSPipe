@@ -1,29 +1,28 @@
-"""Where a recording's optodes sit on fsaverage, decided once per run and recorded beside it.
+"""Where a recording's optodes sit on its head template, decided once per run and recorded beside it.
 
 SNIRF does not say which space its optode coordinates are in, and a dataset's
 ``_coordsystem.json`` is often wrong about it. So the placement is decided from the file:
-its labelled landmarks registered onto the same points on fsaverage, or, when that leaves
-the cap off the scalp, the reading of the coordinates (head frame or already on fsaverage)
-that puts the optodes on the fsaverage scalp. Prep writes the result as the run's channel
+its labelled landmarks registered onto the same points on the template, or, when that leaves
+the cap off the scalp, the reading of the coordinates (a head frame, or already on fsaverage)
+that puts the optodes on the template's scalp. Prep writes the result as the run's channel
 table, and every later reader takes the placement from that record instead of deciding again.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 import h5py
 import mne
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree
 
 from nirspipe import __version__
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of, read_json, write_sidecar_json
+from nirspipe.io.head_template import (FSAVERAGE, describe, from_fsaverage, head_to_mri,
+                                       reference_points, scalp)
 from nirspipe.io.naming import derivative_path
 from nirspipe.io.tables import write_tsv
 from nirspipe.utils.lineage import path_from
@@ -31,8 +30,7 @@ from nirspipe.utils.logging import get_logger
 
 logger = get_logger("io.optode_space")
 
-SPACE = "fsaverage"
-# a placed cap sits this close to the fsaverage scalp, as the median over its optodes
+# a placed cap sits this close to the template's scalp, as the median over its optodes
 SCALP_FIT_MAX_MM = 5.0
 _MIN_LANDMARKS = 3
 _UNIT_TO_M = {"m": 1.0, "cm": 1e-2, "mm": 1e-3}
@@ -40,67 +38,32 @@ _UNIT_TO_M = {"m": 1.0, "cm": 1e-2, "mm": 1e-3}
 _LANDMARK_ALIASES = {"nz": "nasion", "al": "lpa", "ar": "rpa"}
 _HELD_KEY = "nirspipe_placement"
 _M_TO_MM = np.diag([1000.0, 1000.0, 1000.0, 1.0])
+_READ_AS = {"head": "head frame", "fsaverage_head": "fsaverage head frame", "mni": "fsaverage"}
 
 
-# ---- fsaverage ----
-
-def _fsaverage_dir() -> str:
-    try:
-        return mne.datasets.fetch_fsaverage(verbose=False)
-    except Exception as exc:
-        raise RuntimeError(
-            f"fsaverage is needed to place the optodes on the brain and could not be loaded "
-            f"({exc}); run mne.datasets.fetch_fsaverage() once on a machine with internet "
-            f"access") from exc
-
-
-@lru_cache(maxsize=1)
-def head_to_mri() -> np.ndarray:
-    """fsaverage head->MRI (surface RAS) as a 4x4 in metres; raises when fsaverage cannot be loaded."""
-    trans = mne.read_trans(os.path.join(_fsaverage_dir(), "bem", "fsaverage-trans.fif"))
-    return np.asarray(trans["trans"], float)
-
-
-@lru_cache(maxsize=1)
-def _scalp() -> cKDTree:
-    """The fsaverage scalp surface, in mm, for nearest-point queries."""
-    surface = mne.read_bem_surfaces(
-        os.path.join(_fsaverage_dir(), "bem", "fsaverage-head.fif"), verbose=False)[0]
-    return cKDTree(surface["rr"] * 1000)
-
-
-@lru_cache(maxsize=1)
-def _reference_landmarks() -> dict[str, np.ndarray]:
-    """standard_1005 positions and the three fiducials on fsaverage, in mm, by lower-case label."""
-    montage = mne.channels.make_standard_montage("standard_1005")
-    # the montage sits in its own frame, so its native->head step comes before fsaverage's
-    trans = head_to_mri() @ mne.channels.compute_native_head_t(montage)["trans"]
-    pos = montage.get_positions()
-    points = {**{k.lower(): v for k, v in pos["ch_pos"].items()},
-              **{k: pos[k] for k in ("nasion", "lpa", "rpa")}}
-    return {k: mne.transforms.apply_trans(trans, v) * 1000 for k, v in points.items()}
-
-
-def _scalp_fit(points_mm: np.ndarray) -> float:
-    return float(np.median(_scalp().query(points_mm)[0]))
+def _scalp_fit(points_mm: np.ndarray, space: str) -> float:
+    return float(np.median(scalp(space).query(points_mm)[0]))
 
 
 # ---- The placement ----
 
 @dataclass(frozen=True, eq=False)
 class Placement:
-    """How a recording's optode coordinates reach fsaverage surface RAS (MNI305).
+    """How a recording's optode coordinates reach its template's surface RAS (fsaverage: MNI305).
 
-    ``method`` is ``"landmarks"`` (the file's landmarks registered onto fsaverage's),
-    ``"head"`` or ``"mni"`` (the coordinates read in that frame), or ``"none"`` (no reading
-    puts the cap on the scalp). ``transform`` takes coordinates as MNE holds them, in metres,
-    to fsaverage in millimetres.
+    ``method`` is ``"landmarks"`` (the file's landmarks registered onto the template's),
+    ``"head"`` (the template's own head frame), ``"mni"`` or ``"fsaverage_head"``
+    (fsaverage's surface RAS or head frame, which an infant template reaches through the
+    10-10 system), or ``"none"`` (no reading puts the cap on the scalp). On fsaverage the two
+    head frames are one, ``"head"``. ``transform`` takes coordinates as MNE holds them, in
+    metres, to the template in millimetres; ``space`` names the template.
     """
     method: str
     transform: np.ndarray | None = None
     scalp_fit_mm: float | None = None
     landmarks: int = 0
     note: str | None = None
+    space: str = FSAVERAGE
 
     @property
     def placed(self) -> bool:
@@ -108,11 +71,12 @@ class Placement:
 
     def apply(self, coords_m: np.ndarray) -> np.ndarray:
         if self.transform is None:
-            raise StageError(f"optodes were not placed on fsaverage: {self.note}")
+            raise StageError(f"optodes were not placed on {self.space}: {self.note}")
         return mne.transforms.apply_trans(self.transform, np.asarray(coords_m, float))
 
     def to_json(self) -> dict:
         return {"method": self.method,
+                "space": self.space,
                 "landmarks_used": self.landmarks,
                 "scalp_fit_mm": self.scalp_fit_mm,
                 "transform": None if self.transform is None else self.transform.tolist(),
@@ -125,7 +89,8 @@ class Placement:
                    transform=None if transform is None else np.asarray(transform, float),
                    scalp_fit_mm=record.get("scalp_fit_mm"),
                    landmarks=int(record.get("landmarks_used") or 0),
-                   note=record.get("note"))
+                   note=record.get("note"),
+                   space=record.get("space", FSAVERAGE))
 
 
 def _text(value) -> str:
@@ -197,14 +162,15 @@ def _similarity(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
     return out
 
 
-def place_optodes(snirf_path) -> Placement:
-    """Decide where a recording's optodes sit on fsaverage, from the SNIRF file alone.
+def place_optodes(snirf_path, space: str = FSAVERAGE) -> Placement:
+    """Decide where a recording's optodes sit on the template ``space``, from the SNIRF file alone.
 
-    Landmarks first: every landmark label the file shares with standard_1005 (the three
-    fiducials included) is registered onto its fsaverage position, and the result is kept
-    when the optodes land on the scalp. Otherwise the coordinates are read as head frame and
-    as already on fsaverage, and the reading that lands on the scalp is kept. A file no
-    reading places, or one whose probe cannot be read, gets ``method "none"`` with the reason.
+    Landmarks first: every landmark label the file shares with the template's 10-10
+    positions (10-5 on fsaverage), the three fiducials included, is registered onto its
+    position there, and the result is kept when the optodes land on the scalp. Otherwise the
+    coordinates are read in each frame they could be in, and the reading that lands on the
+    scalp is kept. A file no reading places, or one whose probe cannot be read, gets
+    ``method "none"`` with the reason.
 
     ::
 
@@ -215,18 +181,32 @@ def place_optodes(snirf_path) -> Placement:
     try:
         optodes, landmarks = _read_probe(snirf_path)
     except (OSError, KeyError, ValueError) as exc:
-        return Placement("none", note=f"the probe could not be read ({exc})")
+        return Placement("none", note=f"the probe could not be read ({exc})", space=space)
     if optodes is None:
-        return Placement("none", note="the file has no 3-D optode positions")
+        return Placement("none", note="the file has no 3-D optode positions", space=space)
     try:
-        return _place(optodes, landmarks)
+        return _place(optodes, landmarks, space)
     except RuntimeError as exc:
-        # fsaverage could not be loaded; the run goes on without a placement
-        return Placement("none", note=str(exc))
+        # the template could not be loaded; the run goes on without a placement
+        return Placement("none", note=str(exc), space=space)
 
 
-def _place(optodes: np.ndarray, landmarks: dict[str, np.ndarray]) -> Placement:
-    reference = _reference_landmarks()
+def _readings(space: str) -> dict[str, np.ndarray]:
+    """Each frame a file's coordinates could be in, as its transform onto the template (m -> mm).
+
+    fsaverage reads its head frame and its surface RAS. An infant template adds its own head
+    frame, and reaches fsaverage's two through the 10-10 system, for a cap stored on an
+    adult head.
+    """
+    adult = from_fsaverage(space)
+    mni, adult_head = adult @ _M_TO_MM, adult @ _M_TO_MM @ head_to_mri(FSAVERAGE)
+    if space == FSAVERAGE:
+        return {"mni": mni, "head": adult_head}
+    return {"mni": mni, "fsaverage_head": adult_head, "head": _M_TO_MM @ head_to_mri(space)}
+
+
+def _place(optodes: np.ndarray, landmarks: dict[str, np.ndarray], space: str) -> Placement:
+    reference = reference_points(space)
     shared = {}
     for label, pos in landmarks.items():
         key = label if label in reference else _LANDMARK_ALIASES.get(label)
@@ -236,27 +216,28 @@ def _place(optodes: np.ndarray, landmarks: dict[str, np.ndarray]) -> Placement:
     if len(shared) >= _MIN_LANDMARKS:
         src, dst = (np.array(side) for side in zip(*shared.values()))
         transform = _similarity(src, dst)
-        fit = _scalp_fit(mne.transforms.apply_trans(transform, optodes))
+        fit = _scalp_fit(mne.transforms.apply_trans(transform, optodes), space)
         if fit <= SCALP_FIT_MAX_MM:
-            return Placement("landmarks", transform, fit, len(shared))
+            return Placement("landmarks", transform, fit, len(shared), space=space)
         tried = (f"registering {len(shared)} landmarks left the optodes {fit:.1f} mm off the "
-                 f"fsaverage scalp")
+                 f"{space} scalp")
 
-    readings = {"mni": _M_TO_MM, "head": _M_TO_MM @ head_to_mri()}
-    fits = {name: _scalp_fit(mne.transforms.apply_trans(t, optodes)) for name, t in readings.items()}
+    readings = _readings(space)
+    fits = {name: _scalp_fit(mne.transforms.apply_trans(t, optodes), space)
+            for name, t in readings.items()}
     best = min(fits, key=fits.get)
     if fits[best] <= SCALP_FIT_MAX_MM:
-        return Placement(best, readings[best], fits[best], len(shared), note=tried)
-    reason = (f"no reading puts the optodes on the fsaverage scalp: as head frame "
-              f"{fits['head']:.1f} mm off, as fsaverage {fits['mni']:.1f} mm off")
+        return Placement(best, readings[best], fits[best], len(shared), note=tried, space=space)
+    reason = (f"no reading puts the optodes on the {space} scalp: "
+              + ", ".join(f"as {_READ_AS[name]} {fit:.1f} mm off" for name, fit in fits.items()))
     return Placement("none", landmarks=len(shared),
-                     note=f"{tried}; {reason}" if tried else reason)
+                     note=f"{tried}; {reason}" if tried else reason, space=space)
 
 
 # ---- The run's record ----
 
-def channel_coords_path(run_file) -> Path:
-    """The channel table recording a run's placement, beside any file of that run.
+def channel_coords_path(run_file, space: str = FSAVERAGE) -> Path:
+    """The channel table recording a run's placement on ``space``, beside any file of that run.
 
     ``.../sub-01_ses-02_task-rest_run-01_desc-preproc_nirs.snirf``
         -> ``.../sub-01_ses-02_task-rest_run-01_space-fsaverage_channels.tsv``
@@ -265,12 +246,45 @@ def channel_coords_path(run_file) -> Path:
     keep = {name: entity_of(run_file.name, key)
             for name, key in (("subject", "sub"), ("session", "ses"), ("task", "task"),
                               ("acquisition", "acq"), ("run", "run"))}
-    return run_file.parent / derivative_path(".", "channels", ".tsv", space=SPACE, **keep).name
+    return run_file.parent / derivative_path(".", "channels", ".tsv", space=space, **keep).name
+
+
+def _coords_on_disk(run_file) -> list[Path]:
+    """The run's channel tables in every space, as prep named them."""
+    run_file = Path(run_file)
+    return sorted(p for p in run_file.parent.glob("*_space-*_channels.tsv")
+                  if p == channel_coords_path(run_file, entity_of(p.name, "space")))
+
+
+def recorded_coords_path(run_file) -> Path:
+    """The channel table prep wrote for a run, whichever template it was placed on.
+
+    StageError when there is none (a tree from before the record) or more than one.
+    """
+    found = _coords_on_disk(run_file)
+    if len(found) == 1:
+        return found[0]
+    name = Path(run_file).name
+    if not found:
+        raise StageError(f"{channel_coords_path(run_file).name} is missing beside {name}; "
+                         f"this derivative tree predates optode placement, rerun nirspipe")
+    raise StageError(f"{name} has a channel table in more than one space "
+                     f"({', '.join(p.name for p in found)}); rerun nirspipe to keep one")
+
+
+def _drop_other_spaces(out_path: Path) -> None:
+    """Remove the run's channel tables in other spaces, which a rerun on another template leaves."""
+    for stale in _coords_on_disk(out_path):
+        if stale.name != Path(out_path).name:
+            logger.info("removing %s: the run is now placed on %s", stale.name,
+                        entity_of(Path(out_path).name, "space"))
+            for suffix in (".tsv", ".json"):
+                stale.with_suffix(suffix).unlink(missing_ok=True)
 
 
 def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
                          sources: "list[str | Path]" = ()) -> Path:
-    """One row per fNIRS channel at its source-detector midpoint on fsaverage, and the placement.
+    """One row per fNIRS channel at its source-detector midpoint on the template, and the placement.
 
     ``S1_D1 hbo`` with source (0.01, 0.05, 0.06) and detector (0.04, 0.05, 0.06) m
         -> ``name x y z`` = ``S1_D1 hbo`` and the transformed midpoint in mm; n/a when unplaced
@@ -280,21 +294,30 @@ def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
     mid = np.array([(raw.info["chs"][i]["loc"][3:6] + raw.info["chs"][i]["loc"][6:9]) / 2
                     for i in picks]).reshape(-1, 3)
     xyz = placement.apply(mid) if placement.placed else np.full((len(names), 3), np.nan)
+    _drop_other_spaces(out_path)
     write_tsv(pd.DataFrame({"name": names, "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2]}),
               out_path)
-    write_coords_sidecar(out_path, sources, placement.to_json())
+    write_coords_sidecar(out_path, sources, placement.to_json(), placement.space)
     return Path(out_path)
 
 
-def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict) -> None:
-    """The JSON beside a channel position table: space, units, columns, and the placement record."""
-    column = "Channel position on fsaverage: the midpoint of its source and detector"
+def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict,
+                         space: "str | None") -> None:
+    """The JSON beside a channel position table: space, units, columns, and the placement record.
+
+    ``space`` None is a table whose rows lie on more than one template, named in its own
+    ``space`` column.
+    """
+    column = (f"Channel position on {space or 'the template in the space column'}: the "
+              f"midpoint of its source and detector")
     write_sidecar_json(Path(out_path), {
         "pipeline_version": __version__,
         "step": "optode_placement",
         "Sources": [Path(s).as_posix() for s in sources],
-        "NIRSCoordinateSystem": SPACE,
-        "NIRSCoordinateSystemDescription": "fsaverage surface RAS, which is MNI305",
+        # BIDS names fsaverage and no infant template
+        "NIRSCoordinateSystem": space if space == FSAVERAGE else "Other",
+        "NIRSCoordinateSystemDescription": (
+            describe(space) if space else "each row on the template its space column names"),
         "NIRSCoordinateUnits": "mm",
         **{axis: {"Description": f"{column}, {axis} axis", "Units": "mm"} for axis in "xyz"},
         "optode_placement": placement,
@@ -303,7 +326,7 @@ def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict)
 
 def read_placement(run_file) -> Placement:
     """The placement prep recorded for a run, or StageError when the tree predates the record."""
-    record_path = channel_coords_path(run_file).with_suffix(".json")
+    record_path = recorded_coords_path(run_file).with_suffix(".json")
     record = read_json(record_path).get("optode_placement")
     if record is None:
         raise StageError(f"{record_path.name} is missing beside {Path(run_file).name}; this "
@@ -317,10 +340,12 @@ def copy_placement(source_file, dest_file) -> None:
     ``sub-01_task-rest_desc-preproc`` cut into ``sub-01_task-early_desc-preproc``
         -> ``sub-01_task-early_space-fsaverage_channels.tsv`` and ``.json`` beside it
     """
-    src, dest = channel_coords_path(source_file), channel_coords_path(dest_file)
+    src = recorded_coords_path(source_file)
+    dest = channel_coords_path(dest_file, entity_of(src.name, "space"))
     if src == dest:
         return
     read_placement(source_file)
+    _drop_other_spaces(dest)
     for suffix in (".tsv", ".json"):
         dest.with_suffix(suffix).write_bytes(src.with_suffix(suffix).read_bytes())
 
@@ -348,7 +373,8 @@ def placement_of(raw: mne.io.Raw) -> Placement:
     """The placement of a Raw's optodes: held on it, recorded for its run, or read off its file.
 
     A derivative's own landmarks are the ones mne-nirs wrote, not the recording's, so a
-    derivative always takes the record prep left beside it.
+    derivative always takes the record prep left beside it. A raw file read here is placed
+    on fsaverage; a run on another template holds its placement on the Raw.
     """
     held = (raw.info.get("temp") or {}).get(_HELD_KEY)
     if held is not None:

@@ -18,8 +18,7 @@ import pandas as pd
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
-from nirspipe.io.optode_space import (SPACE, channel_coords_path, read_placement,
-                                      write_coords_sidecar)
+from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
 from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.group_io import _for_task, _hyper_sidecar, _member_sqm_files
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
@@ -88,30 +87,36 @@ def write_group_channel_coords(
     desc: str,
     session: "str | None" = None,
 ) -> Path:
-    """Every member's channel positions on fsaverage in one table, with a subject_id column.
+    """Every member's channel positions on their own template in one table, with subject_id and space columns.
 
-    Kept per member, since two caps need not sit alike; a figure wanting one position per
-    channel averages the members. Each member's rows are prep's record for the run this
-    group reads, and a member whose tree predates that record is refused.
+    Kept per member, since two caps need not sit alike and two members need not share a
+    head (a parent and an infant); a figure wanting one position per channel averages
+    members on one template. Each member's rows are prep's record for the run this group
+    reads, and a member whose tree predates that record is refused. The name carries the
+    space when every member shares it, and none otherwise.
 
     ::
 
       sub-A rows S1_D1 hbo ... + sub-B rows S1_D1 hbo ...
-        -> group-G1_task-rest_space-fsaverage_channels.tsv: subject_id name x y z
+        -> group-G1_task-rest_space-fsaverage_channels.tsv: subject_id space name x y z
     """
     frames, sources, placements = [], [], {}
     for entry in group:
         snirf = find_preproc_snirf(derivatives_dir, entry.subject_id, entry.task, desc=desc,
                                    session=entry.session, run=entry.run)
-        placements[entry.subject_id] = read_placement(snirf).to_json()
-        record = channel_coords_path(snirf)
-        frames.append(read_table(record).assign(subject_id=entry.subject_id))
+        placement = read_placement(snirf)
+        placements[entry.subject_id] = placement.to_json()
+        record = recorded_coords_path(snirf)
+        frames.append(read_table(record).assign(subject_id=entry.subject_id,
+                                                space=placement.space))
         sources.append(record)
+    spaces = {p["space"] for p in placements.values()}
+    shared = spaces.pop() if len(spaces) == 1 else None
     out_path = group_output_path(output_dir, group[0].group_id,
-                                 {"task": group[0].task, "space": SPACE}, "channels", ".tsv",
+                                 {"task": group[0].task, "space": shared}, "channels", ".tsv",
                                  session=session)
-    write_tsv(pd.concat(frames)[["subject_id", "name", "x", "y", "z"]], out_path)
-    write_coords_sidecar(out_path, sources, placements)
+    write_tsv(pd.concat(frames)[["subject_id", "space", "name", "x", "y", "z"]], out_path)
+    write_coords_sidecar(out_path, sources, placements, shared)
     return out_path
 
 

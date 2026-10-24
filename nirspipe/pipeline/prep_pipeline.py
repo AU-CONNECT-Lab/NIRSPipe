@@ -24,7 +24,8 @@ from nirspipe import __version__
 from nirspipe.io.auxiliary import aux_table_path, write_aux_table
 from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,
                                      nirs_required_fields, write_sidecar_json)
-from nirspipe.io.optode_space import SPACE, Placement, place_optodes, write_channel_coords
+from nirspipe.io.head_template import FSAVERAGE, space_of
+from nirspipe.io.optode_space import Placement, hold_placement, place_optodes, write_channel_coords
 from nirspipe.io.snirf import write_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf
 from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
@@ -201,6 +202,7 @@ class PrepConfig:
     resp_h_freq: float
     session: str | None = None
     age: float | None = None                # years, from participants.tsv, for --dpf age
+    template: str = FSAVERAGE               # the head the optodes are placed on, by --template
     psp_threshold: float | None = None      # a second per-window line, off unless given
     min_good_frac: float = GOOD_FRAC_PASS   # share of passing windows a kept channel needs
     screen_scope: str = "run"               # count those windows over "run" or "task" only
@@ -262,6 +264,15 @@ def run_prep(
     """
     entities_base = carry_entities(source_entities)
     ses = config.session
+    # off the recording's own probe: a derivative's landmarks are the ones mne-nirs wrote.
+    # Held on the input, so the report drawn from it later uses the same head
+    space = space_of(config.template)
+    placement = (place_optodes(source_path, space) if source_path is not None
+                 else Placement("none", note="no source file to read the probe from", space=space))
+    if not placement.placed:
+        logger.warning("sub-%s | optodes not placed on %s: %s", config.subject, space,
+                       placement.note)
+    hold_placement(raw, placement)
 
     input_spans = bad_spans(raw)
     if config.keep_spans_from:
@@ -276,12 +287,6 @@ def run_prep(
     rec = Recorder()
     if source_path is not None:
         rec.register_input(source_path, raw)
-    # off the recording's own probe: a derivative's landmarks are the ones mne-nirs wrote
-    placement = (place_optodes(source_path) if source_path is not None
-                 else Placement("none", note="no source file to read the probe from"))
-    if not placement.placed:
-        logger.warning("sub-%s | optodes not placed on fsaverage: %s", config.subject,
-                       placement.note)
 
     def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None,
               extra_parameters: dict | None = None) -> Path:
@@ -472,7 +477,7 @@ def run_prep(
     # named by the haemoglobin channels, as every analysis table after this one is
     write_channel_coords(raw_haemo, placement,
                          build_output_path(output_dir, config.subject,
-                                           {**entities_base, "space": SPACE}, "channels",
+                                           {**entities_base, "space": space}, "channels",
                                            ".tsv", session=ses),
                          sources=[source_path] if source_path is not None else [])
 

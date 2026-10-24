@@ -12,7 +12,9 @@ from nirspipe.utils import pair_of
 from nirspipe.exceptions import StageError
 from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
 from nirspipe.io.derivatives import bids_uris
+from nirspipe.io.head_template import FSAVERAGE, space_of
 from nirspipe.io.naming import report_name
+from nirspipe.io.optode_space import hold_placement, place_optodes
 from nirspipe.io.snirf import read_raw_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_caveat, dpf_from_age, resolve_dpf, wavelengths
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
@@ -232,6 +234,9 @@ def _process_run(
     notes: list[str] = []
 
     raw = read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
+    # on the run's head template, held so every figure below draws on the same one
+    hold_placement(raw, place_optodes(run["snirf_path"],
+                                      space_of(run.get("template") or FSAVERAGE)))
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,

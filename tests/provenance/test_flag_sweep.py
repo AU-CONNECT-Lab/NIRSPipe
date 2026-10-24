@@ -123,6 +123,11 @@ ALLOWED_SAME = {
 }
 # confirmed defects, pinned until they are fixed
 KNOWN: dict = {}
+# settings the sweep cannot change here, with the reason
+NOT_SWEPT = {
+    "template": "any value but fsaverage downloads an infant template, and the suite stays "
+                "offline; tests/io/test_head_template.py covers the choice",
+}
 
 
 # ---- the inputs ----
@@ -199,7 +204,9 @@ def runs(inputs):
 
 def test_every_setting_of_a_run_record_has_a_case():
     keys = run_cli.config_keys()
-    assert set(CASES) == set(keys["prep"]) | set(keys["post"]) | {"ignore", "allow_cropped_input"}
+    assert set(CASES) | set(NOT_SWEPT) == (set(keys["prep"]) | set(keys["post"])
+                                           | {"ignore", "allow_cropped_input"})
+    assert not set(CASES) & set(NOT_SWEPT)
 
 
 def _section(key: str) -> str:
