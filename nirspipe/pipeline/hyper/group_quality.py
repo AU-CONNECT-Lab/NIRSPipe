@@ -180,8 +180,8 @@ def compute_group_sqm_raw(
     per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
     channel set as the same subject's numbers in the individual reports and in `nirspipe-hyper`.
     """
-    from nirspipe.qc.metrics import (imu_section, require_screened, resolve_cutoffs,
-                                     screen_channels, screening_scores)
+    from nirspipe.qc.metrics import (imu_section, resolve_cutoffs, screen_channels,
+                                     screening_gap, screening_scores)
     from nirspipe.qc.common.screen_scope import resolve_screen_scope
     from nirspipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
 
@@ -219,12 +219,13 @@ def compute_group_sqm_raw(
         bad_channels: list[str] = []
         screen: dict = {}
         screen_windows: dict = {}
+        scope = resolve_screen_scope(raw, screen_scope)
         if raw_od is not None:
             # the passing-window grid, kept so the panels shade the windows the verdict used
             from nirspipe.qc.metrics.windowed import passing_windows
             counted = passing_windows(
                 raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
-                scope=resolve_screen_scope(raw, screen_scope))
+                scope=scope)
             if counted["mask"] is not None:
                 screen_windows = {k: counted[k] for k in
                                   ("mask", "centers", "sci", "psp", "channel_order")}
@@ -254,9 +255,13 @@ def compute_group_sqm_raw(
             screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                       have={"sci": sci_cw,
                                             "good_frac": counted["fractions"]},
-                                      cutoffs=cutoffs,
-                                      scope=resolve_screen_scope(raw, screen_scope))
-            require_screened(screen, entry.subject_id)
+                                      cutoffs=cutoffs, scope=scope)
+        # a member screening cannot judge is still shown, and the dyad page says why
+        gap = screening_gap(raw_od, screen, scope)
+        if gap:
+            logger.warning("%s: channel screening could not judge this recording: %s",
+                           entry.subject_id, gap)
+        else:
             bad_channels, _ = screen_channels(screen, cutoffs)
 
         # the member's BIDS channels.tsv rejections, joined as the pipeline joins them
@@ -297,6 +302,7 @@ def compute_group_sqm_raw(
         sqm["channels_tsv_pairs"] = sorted({pair_of(c) for c in tsv_bads})
         sqm["screen_windows"]  = screen_windows
         sqm["screen_cutoffs"]  = dict(cutoffs)
+        sqm["screening_gap"]   = gap
         sqm["per_channel"]     = _per_channel or {}
         sqm["per_channel_all"]  = (_per_channel or {}).get("raw") or {}
         sqm["per_channel_long"] = ((_per_channel or {}).get("raw_long")

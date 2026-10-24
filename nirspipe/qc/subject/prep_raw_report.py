@@ -36,8 +36,8 @@ from nirspipe.qc.common.channel_table import (
 )
 from nirspipe.qc.metrics import (
     IMU_STAT_KEYS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, require_screened,
-    resolve_cutoffs, screen_channels, screening_scores,
+    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
+    screen_channels, screening_gap, screening_scores,
 )
 from nirspipe.qc.metrics._helpers import separation_orphans
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
@@ -239,8 +239,11 @@ def _process_run(
     screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
                                      have={"sci": sci_scores}, cutoffs=cutoffs,
                                      scope=scope)
-    require_screened(screen_scores, label)
-    bad_list, _why = screen_channels(screen_scores, cutoffs)
+    # a recording screening cannot judge is still shown, said so above its channel table
+    gap = screening_gap(raw_od, screen_scores, scope)
+    if gap:
+        logger.warning("%s | channel screening could not judge this recording: %s", label, gap)
+    bad_list = [] if gap else screen_channels(screen_scores, cutoffs)[0]
     bad_channels: set[str] = set(bad_list)
     # the recording's BIDS channels.tsv rejections, joined as the pipeline joins them
     tsv_names = run.get("channels_tsv_bads") or []
@@ -802,7 +805,8 @@ def _process_run(
             "wavelengths": pair_wavelengths(ch_rows),
             "blocks": separation_blocks(pair_cells, sep_bands),
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
-            "notes":  [n for n in (placement_note(raw),
+            "notes":  [n for n in (section_note("caveat.unscreened", reason=gap) if gap else "",
+                                   placement_note(raw),
                                    *separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
                                                      orphan_mm=separation_orphans(raw, sep_bands)),
                                    section_note(

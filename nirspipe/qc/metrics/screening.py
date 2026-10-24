@@ -28,8 +28,11 @@ from nirspipe.qc.metrics._helpers import (
     GOOD_FRAC_PASS, SCI_PASS, require_cardiac_below_nyquist,
 )
 from nirspipe.utils.logging import get_logger
+from nirspipe.utils.spans import bad_spans
 from nirspipe.qc.metrics.coupling import compute_sci_scores, compute_psp_scores
-from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, good_window_fraction
+from nirspipe.qc.metrics.windowed import (
+    SCREEN_WINDOW_S, counted_screen_windows, good_window_fraction,
+)
 
 logger = get_logger("qc.metrics.screening")
 
@@ -174,6 +177,11 @@ def screening_scores(
     return scores
 
 
+def unmeasured(scores: dict[str, dict[str, float]]) -> list[str]:
+    """The labels of the screening criteria that came back empty."""
+    return [c.label for c in CRITERIA if c.screens and not scores.get(c.name)]
+
+
 def require_screened(scores: dict[str, dict[str, float]], name: str) -> None:
     """Refuse a recording whose screening criteria came back unmeasured.
 
@@ -181,13 +189,33 @@ def require_screened(scores: dict[str, dict[str, float]], name: str) -> None:
     nothing; a caller screening a whole recording must not read that as every channel
     passing. Per-trial scoring tolerates it on purpose and does not call this.
     """
-    unmeasured = [c.label for c in CRITERIA if c.screens and not scores.get(c.name)]
-    if unmeasured:
+    missing = unmeasured(scores)
+    if missing:
         raise StageError(
-            f"{name}: channel screening could not measure {', '.join(unmeasured)} (the "
+            f"{name}: channel screening could not measure {', '.join(missing)} (the "
             f"warning above says why), so it cannot tell a passing channel from a "
             f"failing one. A recording needs two {SCREEN_WINDOW_S:g} s windows outside "
             f"its BAD_ spans and a cardiac band its sampling rate can filter.")
+
+
+def screening_gap(raw_od: "mne.io.Raw | None", scores: dict[str, dict[str, float]],
+                  scope=None) -> "str | None":
+    """Why screening cannot judge a recording, or None when it can.
+
+    The two conditions preprocessing refuses on: fewer than two counted windows, or a
+    criterion that came back unmeasured. The raw QC reports print the reason and reject
+    nothing on screening instead of stopping.
+    """
+    if raw_od is None:
+        return "its optical density could not be computed"
+    _, counted = counted_screen_windows(raw_od, scope)
+    if counted.sum() < 2:
+        outside = " outside its BAD_ spans" if bad_spans(raw_od) else ""
+        return (f"it has {int(counted.sum())} window(s) of {SCREEN_WINDOW_S:g} s{outside} to "
+                f"count and needs 2")
+    if missing := unmeasured(scores):
+        return f"{', '.join(missing)} could not be measured; the run log says why"
+    return None
 
 
 def screen_channels(

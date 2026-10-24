@@ -26,6 +26,11 @@ NOTES = {
         "Short-channel regression was requested but all {n} short channels were rejected, so "
         "it did not run. Their scores are in the per-channel table.",
 
+    # ---- Channel screening ----
+    "caveat.unscreened":
+        "Channel screening could not judge this recording: {reason}. No channel was rejected "
+        "by it, so OK here means unscreened; preprocessing refuses the recording.",
+
     # ---- Motion correction ----
     "caveat.motion_overmarked":
         "Motion correction ({method}) marked {share:.0%} of the good channels' samples as "

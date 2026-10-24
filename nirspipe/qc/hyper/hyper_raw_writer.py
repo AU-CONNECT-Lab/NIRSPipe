@@ -33,6 +33,7 @@ from nirspipe.qc.metrics.hyper import (
     compute_hyper_sqm, passing_grid, member_series, motion_summary, shared_screen_windows,
 )
 from nirspipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
+from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.common.report_shell import guard, note
 from nirspipe.qc.common.windows import condition_windows, markers_on_data_axis
 from nirspipe.qc.metrics._helpers import long_short_channels
@@ -138,6 +139,10 @@ def _process_hyper_raw_group(
     markers_list = markers_on_data_axis(first_raw) if first_raw else []
     all_descs    = list(dict.fromkeys(m["description"] for m in markers_list))
     cond_colors_ = _cond_colors(all_descs)
+
+    for sid in subject_ids:
+        if gap := (sqm_data.get(sid) or {}).get("screening_gap"):
+            note(notes, label, f"{sid}: " + section_note("caveat.unscreened", reason=gap))
 
     conditions = _condition_spans(first_raw)
     if not conditions:
