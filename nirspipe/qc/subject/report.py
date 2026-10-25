@@ -156,6 +156,7 @@ from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_la
 from nirspipe.qc.subject.condition_views import (
     condition_view_table, carpet_view_table, slice_record, with_condition_corr,
 )
+from nirspipe.qc.subject.prep_raw_report import _below_cardiac
 
 if TYPE_CHECKING:
     from nirspipe.pipeline.prep_pipeline import PrepConfig
@@ -2223,6 +2224,10 @@ def build_subject_report(
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
     # for its shape, and make the figures under one heading describe two different stages.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
+    # a run with no low-pass (glm without --low-pass) gets the display low-pass prep-raw uses
+    epoch_lowpassed   = epoch_haemo.info["lowpass"] > config.cardiac_l_freq
+    if epoch_lowpassed:
+        epoch_haemo = _below_cardiac(epoch_haemo, config.cardiac_l_freq)
     epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
     if epoch_skip is None:
         singles = _single_trial_conditions(raw_haemo, epoch_tmin, epoch_tmax)
@@ -2345,7 +2350,11 @@ def build_subject_report(
         index_href=(report_name(f"sub-{subject}", desc="index") if sqm_label else None),
         run_command=run_command,
         # the numbers the page's prose and labels quote, from the constants that set them
-        epoch_tmin=epoch_tmin, spike_ch_frac=SPIKE_CH_FRAC, sci_window_s=SCI_WINDOW_S,
+        epoch_tmin=epoch_tmin, epoch_lowpassed=epoch_lowpassed,
+        # whether the residual's PSD row can owe a Mayer or respiration dip to a regressor
+        errts_regressors=design_matrix is not None and any(
+            str(c).startswith(("short", "aux_")) for c in design_matrix.columns),
+        spike_ch_frac=SPIKE_CH_FRAC, sci_window_s=SCI_WINDOW_S,
         psp_window_s=PSP_WINDOW_S, cv_window_s=CV_WINDOW_S, gvtd_band=GVTD_MOTION_BAND,
         filled_by=_filled_by(filled_settings or [], mode),
         n_bad=n_bad,

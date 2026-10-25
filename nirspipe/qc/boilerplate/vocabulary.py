@@ -33,6 +33,11 @@ from nirspipe.utils.spans import EDGE
 
 _DIRECT = ("od_conversion", "beer_lambert", "resample")
 
+# how a placement read the file's coordinates, for each method that is not a registration
+_OPTODE_FRAMES = {"head": "the template's head frame",
+                  "fsaverage_head": "fsaverage's head frame",
+                  "mni": "fsaverage surface coordinates (MNI305)"}
+
 # A dyad's coherence table, the whole run and the conditions in one. The nulls stay out:
 # they record their own crossing, not the table's.
 _WTC_STEPS = ("hyper_wtc",)
@@ -64,6 +69,11 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
         return step
     if step == "sci_pruning":
         return "sci_marking"
+    if step == "optode_placement":
+        method = params.get("method")
+        if method == "landmarks":
+            return "optode_landmarks"
+        return "optode_frame" if method in _OPTODE_FRAMES else None
     if step == "motion_correction":
         method = params.get("motion_correction")
         return f"motion_{method}" if method and method != "none" else None
@@ -541,6 +551,11 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """
     if key == "sci_marking":
         return _screening_slots(params)
+    if key in ("optode_landmarks", "optode_frame"):
+        return {"space": str(params.get("space") or "fsaverage"),
+                "landmarks": str(params.get("landmarks_used") or 0),
+                "fit": f"{float(params.get('scalp_fit_mm') or 0):.1f}",
+                "frame": _OPTODE_FRAMES.get(params.get("method"), "")}
     # motion: constants of the package, read here, bar the two settings a run may change,
     # which its sidecar records
     if key in ("motion_wavelet", "motion_wavelet_tddr"):
@@ -666,6 +681,7 @@ STEP_SUMMARY = {
     "aux_extract": "The recording's auxiliary channels, copied to a table beside the haemoglobin file.",
     "wtc_reband": "Band means re-averaged over a new band from the saved coherence maps.",
     "od_passthrough": "Input was already optical density, so the conversion was skipped.",
+    "optode_placement": "Where the optodes sit on the head template; left unplaced when no reading of the file put them on its scalp.",
     "motion_correction": "Motion correction, using the method named in the settings.",
     "sqm_raw": "Quality metrics measured on the original intensity recording.",
     "sqm": "Quality metrics for this run, grouped by the stage each was measured on.",
@@ -1280,6 +1296,7 @@ def metric_rows(
 # regression before ALFF and FC.
 _RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_isc_crossed": 1, "hyper_roi": 2, "hyper_phasenull": 3,
          "hyper_pairnull": 4, "alff": 3, "fc": 4,
+         "optode_landmarks": -2, "optode_frame": -2,
          "excluded_unselected": -1, "excluded_edge": -0.9, "excluded_manual": -0.75,
          "gvtd_censoring": 0.5,
          "censor_fill": -0.5}

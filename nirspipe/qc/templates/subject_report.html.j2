@@ -305,7 +305,7 @@
            if psd_cardiac_band else '')) }}
       {% if psd_stage_labels %}
         {{ section_note('psd.stage_list', stages='<code>' ~ psd_stage_labels | join('</code>, <code>') ~ '</code>') }}
-        {% if 'desc-errts' in psd_stage_labels %}{{ section_note('psd.errts') }}{% endif %}
+        {% if 'desc-errts' in psd_stage_labels and errts_regressors %}{{ section_note('psd.errts') }}{% endif %}
       {% else %}
         {{ section_note('psd.simulated') }}
       {% endif %}
@@ -351,7 +351,8 @@
     <p class="fig-path">{{ trigger_timeline_path }}</p>
     <h3>Grand mean</h3>
     {% endif %}
-    <p class="step-desc">{{ section_note('epoch.grand_mean', tmin='%g'|format(epoch_tmin)|replace('-', '−')) }}</p>
+    <p class="step-desc">{{ section_note('epoch.grand_mean', tmin='%g'|format(epoch_tmin)|replace('-', '−')) }}
+      {%- if epoch_lowpassed %} {{ section_note('epoch.display_lowpass') }}{% endif %}</p>
     {% if epoch_preview_path %}
       <iframe class="plotly-frame" src="{{ epoch_preview_path }}" title="Epoch preview" style="height:{{ epoch_preview_h }}px"></iframe>
       <p class="fig-path">{{ epoch_preview_path }}</p>

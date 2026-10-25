@@ -36,7 +36,8 @@ _SHORT_SIZE  = 12      # a short channel is too stubby to read as a path; draw o
 
 # ---- Time axis ----
 _FRAME_STEP  = 1.0
-_FRAME_STOP  = 20.0    # past the canonical response; frames beyond this carry nothing
+# a longer window steps in whole seconds coarse enough to stay under this many frames
+_MAX_FRAMES  = 30
 _OPEN_AT     = 6.0     # canonical HbO peak, so the figure opens on the informative frame
 
 # ---- Colour ----
@@ -158,8 +159,9 @@ def evoked_channel_map_figure(
     """Evoked response per channel, one head per condition, with a time slider.
 
     Rows are chromophore x separation (HbO long, HbO short, HbR long, HbR short), columns are
-    conditions, and the slider steps the whole grid through the epoch window a second at a
-    time. Long and short share a colour scale within a chromophore.
+    conditions, and the slider steps the whole grid from onset to the epoch window's end, a
+    second at a time up to 30 s and in coarser whole seconds past it, so a block design's
+    response is followed to its end. Long and short share a colour scale within a chromophore.
 
     ``sep_bands`` is this run's separations from :func:`separation_bands`; every caller in one
     run has to pass the same value or the rows would describe a different montage than the
@@ -202,7 +204,8 @@ def evoked_channel_map_figure(
         return None
 
     lo, hi = next(iter(evokeds.values())).times[[0, -1]]
-    times = np.arange(0.0, min(_FRAME_STOP, float(hi)) + 1e-9, _FRAME_STEP)
+    step = max(_FRAME_STEP, float(np.ceil(float(hi) / _MAX_FRAMES)))
+    times = np.arange(0.0, float(hi) + 1e-9, step)
     times = times[(times >= lo) & (times <= hi)]
     if not len(times):
         times = np.array([float(np.clip(0.0, lo, hi))])

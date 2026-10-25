@@ -62,6 +62,18 @@ def test_the_channel_map_columns_follow_first_appearance_and_name_the_unscaled_o
     assert heads[1:] == ["zeta", "alpha"]
 
 
+@pytest.mark.parametrize("tmax, frames", [
+    (25.0, [f"{t}" for t in range(26)]),            # a second a frame, past the old 20 s stop
+    (140.0, [f"{t}" for t in range(0, 141, 5)]),    # a block window, coarser to stay at 29
+])
+def test_the_channel_map_slider_runs_to_the_end_of_the_epoch_window(tmax, frames):
+    haemo = _haemo([20.0, 180.0], ["a", "a"])
+    fig = evoked_channel_map_figure(haemo, epoch_tmin=-5.0, epoch_tmax=tmax)
+    if fig is None:
+        pytest.skip("synthetic montage has no projectable head")
+    assert [f.name for f in fig.frames] == frames
+
+
 def test_a_design_where_no_condition_repeats_is_still_drawn():
     haemo = _haemo([40.0, 150.0, 260.0], ["a", "b", "c"])
     assert _no_epoch_reason(haemo, -5.0, 25.0) is None

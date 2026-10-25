@@ -226,7 +226,8 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
         if "step" not in meta:                 # not a provenance sidecar
             continue
         key = _key(sidecar)
-        params = meta.get("parameters") or {}
+        # a channel position table keeps its placement record under its own name
+        params = meta.get("parameters") or meta.get("optode_placement") or {}
         data = meta.get("data") or {}
         nodes[key] = Node(
             key=key,

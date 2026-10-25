@@ -145,21 +145,26 @@ NOTES = {
         "0&thinsp;s, a panel per condition on one y scale with the task block shaded. Short "
         "channels are dotted: when the dotted line rises with the solid one, part of the "
         "response is scalp signal.",
+    "epoch.display_lowpass":
+        "This run applied no low-pass, so every figure in this section is low-passed for "
+        "display below <code>--cardiac-l-freq</code>; an average of a few trials would "
+        "otherwise carry the heartbeat as a ripple.",
     "epoch.channel_maps":
         "The condition-averaged response along each channel&rsquo;s path, a head per "
-        "condition, one second per slider step. Short channels have their own row: one as "
+        "condition, the slider running from onset to the end of the epoch window. Short "
+        "channels have their own row: one as "
         "strong as the long row means part of the response is scalp signal.",
     "epoch.signal_by_position":
         "The same averages as curves: each channel's HbO (solid) and HbR (dotted) at its "
         "place on the head, one condition at a time (menu, top left). Click a channel for its "
         "trial images.",
     "epoch.trial_image_roi":
-        "Per ROI, HbO channels averaged first, then each trial a row, on the bandpassed "
-        "signal before confound regression; runs with enough trials are smoothed across "
+        "Per ROI, HbO channels averaged first, then each trial a row, on the signal before "
+        "confound regression; runs with enough trials are smoothed across "
         "neighbouring trials. A panel per condition, the pooled one first. Select an ROI.",
     "epoch.trial_image_single":
         "Each trial is a row against time from onset, coloured by HbO: the response before "
-        "averaging, on the bandpassed signal before confound regression. Runs with enough "
+        "averaging, on the signal before confound regression. Runs with enough "
         "trials are smoothed across neighbouring trials. All trials pooled, then the "
         "condition chosen on the head, each with its HbO and HbR average below.",
     "epoch.trial_image_missing":

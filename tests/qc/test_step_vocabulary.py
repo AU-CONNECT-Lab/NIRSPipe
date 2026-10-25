@@ -56,6 +56,9 @@ def _sidecar(directory, name, step, sources=(), **params):
     ("bandpass", {"high_pass": 0.01}, "highpass"),               # one cutoff, other prose
     ("bandpass", {"low_pass": 0.5}, "lowpass"),
     ("bandpass", {}, None),
+    ("optode_placement", {"method": "landmarks"}, "optode_landmarks"),
+    ("optode_placement", {"method": "head"}, "optode_frame"),   # a reading, not a registration
+    ("optode_placement", {"method": "none"}, None),             # nothing was placed
     ("load", {}, None),                                          # bookkeeping, not method
     ("sqm_raw", {}, None),
     (None, {}, None),
@@ -877,3 +880,14 @@ def test_the_monte_carlo_level_is_described_only_when_one_was_drawn():
     assert "seed" not in template_slots("hyper_wtc", {"wtc_mc_count": 300,
                                                       "wtc_seed": None})["significance"]
     assert template_slots("hyper_wtc", {})["significance"] == ""
+
+
+def test_a_landmark_placement_names_its_landmarks_and_fit_from_the_position_table(tmp_path):
+    placement = {"method": "landmarks", "space": "fsaverage", "landmarks_used": 105,
+                 "scalp_fit_mm": 2.1215}
+    (tmp_path / "sub-01_task-a_space-fsaverage_channels.json").write_text(json.dumps(
+        {"step": "optode_placement", "Sources": [], "optode_placement": placement}))
+    (key, _), = steps_from_sidecars(tmp_path)
+    assert key == "optode_landmarks"
+    sentence = step_sentence("optode_placement", placement)
+    assert "105 labelled 10-5 landmarks" in sentence and "median 2.1 mm" in sentence
