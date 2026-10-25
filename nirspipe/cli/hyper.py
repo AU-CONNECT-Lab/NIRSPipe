@@ -1199,7 +1199,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "person is in several groups; 'any' every other group's member, "
                            "refused when anyone appears twice.")
     pair.add_argument("--wtc-pair-max", type=int, default=None, metavar="N",
-                      help="Stop after N draws. The pool is finite, so this is a ceiling "
+                      help="Stop after N draws; in a group of three or more, the same N draws "
+                           "for every pairing. The pool is finite, so this is a ceiling "
                            "rather than a count: without it every eligible stand-in is "
                            "used, which is what gives the percentile its best resolution.")
     pair.add_argument("--wtc-pair-cross", action=argparse.BooleanOptionalAction, default=None,

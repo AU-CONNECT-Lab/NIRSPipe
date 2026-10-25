@@ -118,6 +118,11 @@ def stand_in_draws(
     return draws
 
 
+def draw_id(draw: dict) -> str:
+    """A draw's name, its stand-ins' recording ids joined by ``+``."""
+    return "+".join(recording_id(entry) for _, entry in sorted(draw.items()))
+
+
 def pairing_stand_ins(ids: "list[str]", draws: "list[dict]") -> dict:
     """Each pairing's ``(draw id, stand-in)`` for its later member, in draw order.
 
@@ -130,8 +135,7 @@ def pairing_stand_ins(ids: "list[str]", draws: "list[dict]") -> dict:
     dyad's is its stand-in's. A stand-in who is the pairing's held member, another session
     of that person, is left out of that pairing only.
     """
-    draw_ids = ["+".join(recording_id(entry) for _, entry in sorted(draw.items()))
-                for draw in draws]
+    draw_ids = [draw_id(draw) for draw in draws]
     return {(i, j): [(draw_ids[k], draw[j]) for k, draw in enumerate(draws)
                      if j in draw and draw[j].subject_id != ids[i]]
             for i, j in combinations(range(len(ids)), 2)}
@@ -259,6 +263,125 @@ def _partner_condition_onsets(partner_raw, labels) -> "dict[str, float]":
     return out
 
 
+def _accept_stand_in(
+    derivatives_dir: Path,
+    entry,
+    fixed_raw,
+    *,
+    desc: str,
+    bads_scope: str,
+    scope_tasks: "list[str] | None",
+    windows: "list[tuple[str, float, float]]",
+    band_fmin: float,
+    refused: dict,
+    window_sources: "dict[str, tuple[str, float]] | None" = None,
+    whiten_s: float = 0.0,
+    sep_bands=None,
+    isc_whiten_s: float = 0.0,
+):
+    """``(id, segments, end, whitened copy, correlation copy)`` of a usable stand-in, or None with the reason in ``refused``."""
+    from nirspipe.pipeline.hyper.group_io import load_group_haemo
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
+
+    margin = cone_margin_s(band_fmin)
+    window_sources = window_sources or {}
+    pid = recording_id(entry)
+    try:
+        partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
+    except Exception as exc:
+        refused.setdefault("unreadable", []).append(pid)
+        logger.debug("%s refused as a stand-in: %s", pid, exc)
+        return None
+
+    partner_raw = next(iter(partner.values()))
+    if abs(float(partner_raw.info["sfreq"]) - float(fixed_raw.info["sfreq"])) > 1e-6:
+        refused.setdefault("sampling_rate", []).append(pid)
+        return None
+
+    try:
+        apply_group_bads(partner, load_group_sqm(derivatives_dir, [entry], bads_scope=bads_scope,
+                                                 scope_tasks=scope_tasks))
+    except Exception as exc:
+        refused.setdefault("no_quality_record", []).append(pid)
+        logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
+        return None
+
+    # asked for the conditions, not the window labels: the annotation carries a condition
+    # description and a window is an offset into one
+    wanted = [window_sources.get(w[0], (w[0], 0.0))[0] for w in windows]
+    onsets = _partner_condition_onsets(partner_raw, wanted)
+    end = float(partner_raw.times[-1])
+    fixed_end = float(fixed_raw.times[-1])
+    segments = []
+    for label, t0, t1 in windows:
+        span = float(t1) - float(t0)
+        cond, offset = window_sources.get(label, (label, 0.0))
+        base = onsets.get(cond)
+        # the stand-in's own condition marker plus the window's offset into it, so each
+        # side is cut at the same place in its own session rather than on one clock
+        start = None if base is None else base + offset
+        if start is None:
+            refused.setdefault(f"no_{cond}", []).append(pid)
+            continue
+        if start + span > end + _DURATION_TOL_S:
+            # the stand-in's own block is shorter than the real one, so there is no
+            # equal-length stretch of it to stand in
+            refused.setdefault(f"short_{label}", []).append(pid)
+            continue
+        # the alignment crop leaves the anchor marker at 0 give or take a rounding
+        # error, and crop refuses a tmin of -1e-14; the tolerance above likewise lets
+        # an end through by up to a millisecond, which crop refuses on the far side
+        start, real_t0 = max(0.0, start), max(0.0, float(t0))
+        span = min(span, end - start, fixed_end - real_t0)
+        # context either side, so the cone of influence reaches into the pad and not
+        # into the condition; equal on both sides so the pair stays aligned
+        lead = min(margin, start, real_t0)
+        trail = min(margin, end - start - span, fixed_end - real_t0 - span)
+        segments.append((label, start, span, real_t0, lead, max(0.0, trail)))
+
+    if not segments:
+        return None
+    try:
+        partner_white = (whiten_raws({pid: partner_raw}, whiten_s, sep_bands)[pid]
+                         if whiten_s else partner_raw)
+        partner_isc = (whiten_raws({pid: partner_raw}, isc_whiten_s, sep_bands)[pid]
+                       if isc_whiten_s else partner_raw)
+    except StageError:
+        # too short for the order the real table was whitened at
+        refused.setdefault("too_short_to_whiten", []).append(pid)
+        return None
+    return pid, segments, end, partner_white, partner_isc
+
+
+def complete_draws(candidates: dict, order: "list[str]", n_max: int, accepts) -> dict:
+    """``candidates`` cut to the first ``n_max`` draws, in ``order``, whose every stand-in ``accepts((i, j), entry)`` takes.
+
+    A group's pairings then share one list of draws, where a cap counted per pairing would
+    let a pairing whose stand-in was refused run on to a later draw than the others:
+
+    ::
+
+        draws d1, d2, d3; d1's stand-in for member 2 refused; n_max 2
+          -> every pairing gets d2 and d3
+    """
+    pairings_of: dict = {}
+    for pairing, got in candidates.items():
+        for did, entry in got:
+            pairings_of.setdefault(did, []).append((pairing, entry))
+    kept: list = []
+    for did in order:
+        if len(kept) == n_max:
+            break
+        if did in pairings_of and all(accepts(pairing, entry)
+                                      for pairing, entry in pairings_of[did]):
+            kept.append(did)
+    if len(kept) < n_max:
+        logger.info("only %d draw(s) usable in every pairing, of the %d asked for",
+                    len(kept), n_max)
+    return {pairing: [(did, entry) for did, entry in got if did in set(kept)]
+            for pairing, got in candidates.items()}
+
+
 def _draw_condition_pairs(
     derivatives_dir: Path,
     task: str,
@@ -299,86 +422,25 @@ def _draw_condition_pairs(
     side (``real_partner_raw`` is the real partner on the aligned clock), and the stand-in's
     own corrupted spans on its side; a pairing excludes the union of the two.
     """
-    from nirspipe.pipeline.hyper.group_io import load_group_haemo
-    from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
-
-    margin = cone_margin_s(band_fmin)
-    window_sources = window_sources or {}
     # fitted on the whole record and then cut, as the real table's transform was
     fixed_white = (whiten_raws({fixed_id: fixed_raw}, whiten_s, sep_bands)[fixed_id]
                    if whiten_s else fixed_raw)
     fixed_isc = (whiten_raws({fixed_id: fixed_raw}, isc_whiten_s, sep_bands)[fixed_id]
                  if isc_whiten_s else fixed_raw)
+    fixed_end = float(fixed_raw.times[-1])
     drawn = 0
     for entry in candidates:
         if n_max is not None and drawn >= n_max:
             logger.info("stopping at %d stand-ins, the limit asked for", drawn)
             break
-        pid = recording_id(entry)
-        try:
-            partner = load_group_haemo(derivatives_dir, [entry], desc=desc)
-        except Exception as exc:
-            refused.setdefault("unreadable", []).append(pid)
-            logger.debug("%s refused as a stand-in: %s", pid, exc)
+        accepted = _accept_stand_in(
+            derivatives_dir, entry, fixed_raw, desc=desc, bads_scope=bads_scope,
+            scope_tasks=scope_tasks, windows=windows, band_fmin=band_fmin, refused=refused,
+            window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
+            isc_whiten_s=isc_whiten_s)
+        if accepted is None:
             continue
-
-        partner_raw = next(iter(partner.values()))
-        if abs(float(partner_raw.info["sfreq"]) - float(fixed_raw.info["sfreq"])) > 1e-6:
-            refused.setdefault("sampling_rate", []).append(pid)
-            continue
-
-        try:
-            apply_group_bads(partner, load_group_sqm(derivatives_dir, [entry], bads_scope=bads_scope,
-                                                     scope_tasks=scope_tasks))
-        except Exception as exc:
-            refused.setdefault("no_quality_record", []).append(pid)
-            logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
-            continue
-
-        # asked for the conditions, not the window labels: the annotation carries a condition
-        # description and a window is an offset into one
-        wanted = [window_sources.get(w[0], (w[0], 0.0))[0] for w in windows]
-        onsets = _partner_condition_onsets(partner_raw, wanted)
-        end = float(partner_raw.times[-1])
-        fixed_end = float(fixed_raw.times[-1])
-        segments = []
-        for label, t0, t1 in windows:
-            span = float(t1) - float(t0)
-            cond, offset = window_sources.get(label, (label, 0.0))
-            base = onsets.get(cond)
-            # the stand-in's own condition marker plus the window's offset into it, so each
-            # side is cut at the same place in its own session rather than on one clock
-            start = None if base is None else base + offset
-            if start is None:
-                refused.setdefault(f"no_{cond}", []).append(pid)
-                continue
-            if start + span > end + _DURATION_TOL_S:
-                # the stand-in's own block is shorter than the real one, so there is no
-                # equal-length stretch of it to stand in
-                refused.setdefault(f"short_{label}", []).append(pid)
-                continue
-            # the alignment crop leaves the anchor marker at 0 give or take a rounding
-            # error, and crop refuses a tmin of -1e-14; the tolerance above likewise lets
-            # an end through by up to a millisecond, which crop refuses on the far side
-            start, real_t0 = max(0.0, start), max(0.0, float(t0))
-            span = min(span, end - start, fixed_end - real_t0)
-            # context either side, so the cone of influence reaches into the pad and not
-            # into the condition; equal on both sides so the pair stays aligned
-            lead = min(margin, start, real_t0)
-            trail = min(margin, end - start - span, fixed_end - real_t0 - span)
-            segments.append((label, start, span, real_t0, lead, max(0.0, trail)))
-
-        if not segments:
-            continue
-        try:
-            partner_white = (whiten_raws({pid: partner_raw}, whiten_s, sep_bands)[pid]
-                             if whiten_s else partner_raw)
-            partner_isc = (whiten_raws({pid: partner_raw}, isc_whiten_s, sep_bands)[pid]
-                           if isc_whiten_s else partner_raw)
-        except StageError:
-            # too short for the order the real table was whitened at
-            refused.setdefault("too_short_to_whiten", []).append(pid)
-            continue
+        pid, segments, end, partner_white, partner_isc = accepted
         drawn += 1
         for label, start, span, real_t0, lead, trail in segments:
             # a pad that reaches a recording's end sums to a hair past its last sample, which
@@ -544,8 +606,8 @@ def run_pair_null(
             f"the tree now aligns to {aligned_duration:.3f} s. Rerun `nirspipe-hyper` for "
             f"group {group_id!r} before drawing its null.")
 
-    candidates = pairing_stand_ins(
-        ids, stand_in_draws(groups, group_id, task, pool=pool, session=session))
+    all_draws = stand_in_draws(groups, group_id, task, pool=pool, session=session)
+    candidates = pairing_stand_ins(ids, all_draws)
     unfilled = ["-".join((ids[i], ids[j])) for (i, j), got in candidates.items() if not got]
     if len(unfilled) == len(candidates):
         raise StageError(
@@ -634,6 +696,20 @@ def run_pair_null(
 
         return _collect
 
+    offered = candidates
+    pairing_max = n_max
+    if n_max is not None and len(candidates) > 1:
+        # counted in draws across the group, so every pairing stops on the same donor
+        def _accepts(pairing: tuple, entry) -> bool:
+            return _accept_stand_in(
+                derivatives_dir, entry, aligned_real[ids[pairing[0]]], desc=desc,
+                bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
+                band_fmin=band_fmin, refused=refused, window_sources=window_sources,
+                whiten_s=whiten_s, sep_bands=sep_bands, isc_whiten_s=isc_whiten_s) is not None
+        candidates = complete_draws(candidates, [draw_id(d) for d in all_draws], n_max,
+                                    _accepts)
+        pairing_max = None
+
     # the draws each pairing got, in draw order
     partners: dict = {}
     cond_levels: dict = {}
@@ -642,7 +718,7 @@ def run_pair_null(
         draws = _as_draw(_draw_condition_pairs(
             derivatives_dir, task, fixed_id, aligned_real[fixed_id], [e for _, e in got],
             desc=desc, bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
-            band_fmin=band_fmin, n_max=n_max, refused=refused,
+            band_fmin=band_fmin, n_max=pairing_max, refused=refused,
             window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
             isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[ids[j]]),
             {recording_id(entry): did for did, entry in got})
@@ -656,8 +732,8 @@ def run_pair_null(
         # keyed by pairing within a condition, so the pairings' levels sit side by side
         for label, levels in (null.cond_levels or {}).items():
             cond_levels.setdefault(ch_type, {}).setdefault(label, {}).update(levels)
-        for draw_id, frame in zip(null.cond_draw_ids or [], null.cond_draws):
-            draw_frames.append(frame.assign(chromophore=ch_type, draw=draw_id))
+        for did, frame in zip(null.cond_draw_ids or [], null.cond_draws):
+            draw_frames.append(frame.assign(chromophore=ch_type, draw=did))
 
         _, by_cond = null.summarise(real=None,
                                     real_by_cond=_for_chroma(real_by_cond, ch_type))
@@ -690,7 +766,7 @@ def run_pair_null(
                     part.insert(0, "chromophore", ch_type)
                     bucket.append(part)
 
-    for (i, j), got in candidates.items():
+    for (i, j), got in offered.items():
         _log_draw_quality((ids[i], ids[j]), list(partners.get((ids[i], ids[j]), [])), len(got))
     for reason, subs in sorted(refused.items()):
         logger.info("  %d refused, %s: %s", len(set(subs)), reason, ", ".join(sorted(set(subs))))

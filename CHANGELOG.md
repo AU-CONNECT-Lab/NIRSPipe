@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - `--dpf age` takes one DPF per wavelength from each participant's age in participants.tsv, by the Scholkmann and Wolf (2013) equation, and warns outside its recommended range
 - An optional `role` column in the pairs table: pairnull's position pool matches stand-ins by role, and the dyad tables record each member's role
 - `--wtc-phase-null` runs on groups of three or more, each pairing's later member scrambled once per draw and shared across its pairings
-- pairnull draws groups of three or more: each draw takes one stand-in per later member from one other group, shared across its pairings
+- pairnull draws groups of three or more: each draw takes one stand-in per later member from one other group, shared across its pairings, which `--wtc-pair-max` caps together
 - groupnull reads a group of three or more as the mean over its pairings, and each role pair on its own where the pairs table has roles
 - `--template` places and draws each participant on fsaverage or an MNE infant template; under `--dpf age` the template nearest their age is the default
 

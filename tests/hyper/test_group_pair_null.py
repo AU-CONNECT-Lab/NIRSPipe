@@ -24,7 +24,7 @@ TARGET = ("sub-01", "sub-02", "sub-03")
 def _recordings() -> dict:
     rng = np.random.default_rng(0)
     n = int(SFREQ * DURATION)
-    out = {f"sub-{k:02d}": _raw(k, rng.standard_normal(n)) for k in range(1, 10)}
+    out = {f"sub-{k:02d}": _raw(k, rng.standard_normal(n)) for k in range(1, 13)}
     out["sub-02"] = out["sub-01"].copy()
     return out
 
@@ -116,3 +116,26 @@ def test_the_any_pool_lets_dyads_stand_in_for_a_triad(run):
                               "null-pair_stat-wtc_desc-draws"), sep="\t")
     assert set(draws.loc[draws["sub2"] == "sub-03", "draw"]) == {"sub-04+sub-05",
                                                                   "sub-05+sub-04"}
+
+
+def test_a_cap_counts_draws_across_the_pairings_so_each_stops_on_the_same_donor(run, monkeypatch):
+    """G2's stand-in for sub-03 is unreadable: a cap of 2 per pairing gave sub-01-sub-02 G2 and
+    G3 but its other pairings G3 and G4, three draws of which the group mean had one whole."""
+    from nirspipe.pipeline.hyper import group_io
+    load = group_io.load_group_haemo
+
+    def unreadable_sub06(out, entries, desc="preproc"):
+        if any(e.subject_id == "sub-06" for e in entries):
+            raise OSError("unreadable")
+        return load(out, entries, desc=desc)
+    monkeypatch.setattr(group_io, "load_group_haemo", unreadable_sub06)
+
+    root = run({**TRIADS, "G4": ("sub-10", "sub-11", "sub-12")}, n_max=2)
+    draws = pd.read_csv(_file(root, "null-pair_stat-wtc_desc-draws"), sep="	")
+    assert {(a, b): set(part["draw"]) for (a, b), part in draws.groupby(["sub1", "sub2"])} == {
+        pair: {"sub-08+sub-09", "sub-11+sub-12"}
+        for pair in (("sub-01", "sub-02"), ("sub-01", "sub-03"), ("sub-02", "sub-03"))}
+    table = _file(root, "task-tap_cond-all_null-pair_stat-wtc_relmat")
+    params = json.loads(table.with_suffix(".json").read_text(encoding="utf-8"))["parameters"]
+    assert params["n_iter"] == 2 and params["pair_candidates"] == 3
+    assert params["pair_refused"] == {"unreadable": ["sub-06"]}
