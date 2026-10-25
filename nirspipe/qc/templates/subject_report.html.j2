@@ -481,7 +481,11 @@
         <p class="fig-path">{{ glm_design_heatmap_path }}</p>
       {% endif %}
     {% else %}
-      <div class="placeholder">Design matrix not available: pass design_matrix to build_subject_report.</div>
+      {% if mode == 'glm' %}
+      <div class="placeholder">No design matrix: the run carries no events to model, or the GLM failed (see Errors).</div>
+      {% else %}
+      <div class="placeholder">No GLM in this run: it runs with --mode glm.</div>
+      {% endif %}
     {% endif %}
 
     {% if glm_activation_conditions %}
