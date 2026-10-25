@@ -923,8 +923,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--verbose", action="store_true")
 
-    # the dyad selection and the alignment window are the same parameters `nirspipe-qc
-    # hyper-raw` takes, so they are declared once for both scripts
+    # the alignment window is the same parameters `nirspipe-qc`'s group level takes, so it
+    # is declared once for both scripts
     pairs = _app_options.pairs_selection()
     window = _app_options.alignment_window()
 
@@ -1276,7 +1276,6 @@ def read_hyper_config(path: Path) -> dict:
     unknown key, an unknown section or a key outside any section is refused, since a
     misspelt setting would otherwise drop out without a word.
     """
-    from nirspipe.cli.run import _coerce
     from nirspipe.utils import load_toml
 
     raw = load_toml(path)
@@ -1297,7 +1296,7 @@ def read_hyper_config(path: Path) -> dict:
     if bad:
         print(f"Error: {path}: [hyper] has no setting {bad[0]!r}.", file=sys.stderr)
         raise SystemExit(1)
-    taken = {k: _coerce(actions[k], k, v, path) for k, v in settings.items()
+    taken = {k: _shared.coerce_setting(actions[k], k, v, path) for k, v in settings.items()
              if k in allowed and k not in _RECORD_ONLY}
     for key, source in _DERIVED_FROM.items():
         if key in taken and source in taken and taken[key] == taken[source]:

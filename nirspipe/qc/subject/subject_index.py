@@ -64,7 +64,7 @@ _COLUMNS = (
 
 
 # The report files a run can leave behind, best first, as (link text, path relative to
-# sub_dir). `nirspipe` writes the first and `nirspipe-qc prep-raw` the second, so a run that
+# sub_dir). `nirspipe` writes the first and `nirspipe-qc` the second, so a run that
 # saw both commands has both pages and a run that saw one has one. The row's title links
 # whichever comes first; the rest join the artefact links beside it.
 _REPORTS = (
@@ -139,7 +139,7 @@ def _flat(record: dict) -> dict[str, float]:
 def _shape(nirs_dir: Path, label: str, record: dict | None = None) -> dict:
     """Channel count, rate and length, from whichever stage sidecar of this run has them.
 
-    A run measured by `prep-raw` alone wrote no stage file, so the count is counted off the
+    A run measured by raw QC alone wrote no stage file, so the count is counted off the
     record's own per-channel block instead and the rest is left absent: the rate and the
     length are not in there under any name, so they stay blank rather than guessed.
     ``channel_retention_rate`` is ``1 - bad/total``, which
@@ -199,7 +199,7 @@ def _records(nirs_dir: Path) -> list[tuple[str, dict]]:
     """One (label, record) per run under nirs_dir, the pipeline record winning.
 
     A run measured by both commands has two files and only the sectioned superset is read,
-    the same rule the cohort page applies; a run measured by `prep-raw` alone is read from
+    the same rule the cohort page applies; a run measured by raw QC alone is read from
     its own record rather than left off the page.
     """
     by_run: dict[str, Path] = {}
@@ -236,7 +236,7 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
     """Which source-detector pair each run rejected, over all of the subject's runs.
 
     Read from each run's channel table, which carries one ``is_bad`` per channel: the
-    pipeline's ``_desc-channel_qc.tsv``, else prep-raw's ``_desc-rawchannel_qc.tsv``.
+    pipeline's ``_desc-channel_qc.tsv``, else raw QC's ``_desc-rawchannel_qc.tsv``.
     The two wavelengths of a pair are collapsed into the pair: rejecting one rejects the
     optode.
 

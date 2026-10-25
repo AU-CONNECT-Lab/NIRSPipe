@@ -94,7 +94,6 @@ def _process_hyper_raw_group(
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     output_dir: Path,
-    sci_threshold: float,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
@@ -102,8 +101,6 @@ def _process_hyper_raw_group(
     full_raws: dict[str, mne.io.Raw] | None = None,
     full_after: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
-    cardiac_l_freq: float | None = None,
-    cardiac_h_freq: float | None = None,
     sep_bands=None,
     errors: list | None = None,
     notes: list | None = None,
@@ -146,6 +143,24 @@ def _process_hyper_raw_group(
         if caveat := (sqm_data.get(sid) or {}).get("dpf_caveat"):
             note(notes, label, f"{sid}: {caveat}")
 
+    # each member screened by its own lines and on its own cardiac band; a figure drawn for
+    # the dyad as one carries a rule or a shaded band only where every member shares it
+    lines = {sid: dict((sqm_data.get(sid) or {}).get("screen_cutoffs") or {})
+             for sid in subject_ids}
+    bands = {sid: (sqm_data.get(sid) or {}).get("screen_band") for sid in subject_ids}
+    cutoffs = next(iter(lines.values()), {}) if len({str(v) for v in lines.values()}) == 1 else {}
+    band = next(iter(bands.values()), None) if len({str(v) for v in bands.values()}) == 1 else None
+    if lines and not cutoffs:
+        note(notes, label, "the members were screened by different lines ("
+             + "; ".join(f"{sid} SCI {line.get('sci')}" for sid, line in lines.items())
+             + "): the series carry no rule")
+    if bands and band is None:
+        note(notes, label, "the members were screened on different cardiac bands ("
+             + "; ".join(f"{sid} {b[0]:g} to {b[1]:g} Hz" for sid, b in bands.items() if b)
+             + "): the spectra shade none")
+    # only read where a member's record lists no rejections, which no raw QC record does
+    sci_threshold = next((line.get("sci") for line in lines.values() if line.get("sci")), None)
+
     conditions = _condition_spans(first_raw)
     if not conditions:
         note(notes, label, "no annotated blocks on the aligned recordings: the panels that "
@@ -160,12 +175,6 @@ def _process_hyper_raw_group(
         }
         for sid in subject_ids
     ]
-
-    # the lines this run screened by, read off the members rather than re-resolved, so the
-    # rules drawn on the series are the ones the carpet under them was masked at
-    cutoffs = next((dict((sqm_data.get(sid) or {}).get("screen_cutoffs") or {})
-                    for sid in subject_ids
-                    if (sqm_data.get(sid) or {}).get("screen_cutoffs")), {})
 
     figure_paths: dict = {}
 
@@ -218,9 +227,8 @@ def _process_hyper_raw_group(
     # by time on the shared clock; each member's verdict stays its own screening's
     shared = {}
     with guard("Screening grid", errors, label):
-        if intensity_raws and cardiac_l_freq is not None and cardiac_h_freq is not None:
-            shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids,
-                                           cardiac_l_freq, cardiac_h_freq)
+        if intensity_raws:
+            shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids)
         grid = passing_grid(shared, subject_ids, {}, duration_s=duration_s) if shared else None
     if grid is None:
         note(notes, label, "no shared screening grid: a member's aligned recording could "
@@ -251,10 +259,8 @@ def _process_hyper_raw_group(
             trace_fig = build_signal_overlay_pair(
                 aligned_raws, subject_ids, pair, markers_list, cond_colors_,
             )
-            psd_fig   = build_psd(
-                aligned_raws, pair, subject_ids,
-                cardiac=(cardiac_l_freq, cardiac_h_freq) if cardiac_l_freq is not None else None,
-            )
+            psd_fig   = build_psd(aligned_raws, pair, subject_ids,
+                                  cardiac=tuple(band) if band else None)
             fname = fig_name("detail", channel=_pair_fname(pair))
             # No epoch panel: this design gives one block per condition, so a "mean epoch"
             # would average a single trial and draw its first seconds as an evoked response.
@@ -280,7 +286,7 @@ def _process_hyper_raw_group(
                 _table(sqm_dir, {"desc": "usable"}, suffix="qc"),
                 grid, subject_ids, conditions,
                 sources=paths_from(aligned_raws.values()),
-                sci_threshold=sci_threshold)
+                screen_lines=lines, screen_bands=bands)
     sqm_path = record_path(sqm_dir, label)
     record = _hyper_sqm_record(sqm, aligned_raws)
     record["Sources"] = bids_uris(record["Sources"], sqm_path)

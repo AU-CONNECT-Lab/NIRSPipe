@@ -34,26 +34,24 @@ def test_a_csv_without_sessions_keys_every_group_under_none(tmp_path):
 
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
-    """One dyad recorded in two sessions, through every dyad command."""
+    """One dyad recorded in two sessions, through every dyad command; its raw QC beside it in qc/."""
     from nirspipe.cli import hyper as hyper_cli
-    from nirspipe.cli import qc as qc_cli
     from nirspipe.cli import run as run_cli
     from tests._fingerprint import CLI_ARGS
+    from tests._raw_qc import raw_qc
     from tests._synth import make_hyper_dataset
 
     root = tmp_path_factory.mktemp("sessions")
     bids, pairs = make_hyper_dataset(root, tasks=(TASK,), sessions=SESSIONS)
     deriv, hyper = root / "deriv", root / "hyper"
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
-    qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", *PHYS])
+    raw_qc(bids, root / "qc", pairs, participant=PHYS)
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                     "--wtc-fmin", "0.02", "--wtc-phase-null", "2", "--wtc-seed", "0"])
     hyper_cli.main_pair_null([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs)])
     hyper_cli.main_group_null([str(hyper), "group", "--task-label", TASK, "--n-resample", "50",
                                "--seed", "0"])
     hyper_cli.main_merge([str(hyper), "group"])
-    qc_cli.main(["cohort-hyper", str(hyper)])
     return hyper
 
 
@@ -67,11 +65,11 @@ def test_each_session_writes_its_own_tables_and_pages(tree):
         for name in (f"{stem}_stat-wtc_relmat.tsv", f"{stem}_null-phase_stat-wtc_relmat.tsv",
                      f"{stem}_stat-isc_relmat.tsv",
                      f"{stem}_chromo-hbo_null-phase_stat-wtc_desc-level_relmat.npz",
-                     f"{stem}_cond-all_null-pair_stat-wtc_relmat.tsv",
-                     f"{stem}_desc-sqm_qc.json"):
+                     f"{stem}_cond-all_null-pair_stat-wtc_relmat.tsv"):
             assert (_nirs(tree, ses) / name).exists(), name
+        assert (_nirs(tree.parent / "qc", ses) / f"{stem}_desc-sqm_qc.json").exists()
         assert (tree / "group-G01" / f"{stem}_report.html").exists()
-        assert (tree / "group-G01" / f"{stem}_desc-raw_report.html").exists()
+        assert (tree.parent / "qc" / "group-G01" / f"{stem}_desc-raw_report.html").exists()
         assert (tree / "group-G01" / "logs" / f"{stem}.toml").exists()
     assert not list((tree / "group-G01").glob("nirs/*_relmat.tsv"))
 
@@ -112,7 +110,7 @@ def test_the_merged_table_carries_the_session(tree):
 
 
 def test_the_cohort_page_has_a_row_per_session(tree):
-    table = pd.read_csv(tree / "desc-groups_qc.tsv", sep="	", dtype=str)
+    table = pd.read_csv(tree.parent / "qc" / "desc-groups_qc.tsv", sep="	", dtype=str)
     assert sorted(table["label"]) == [f"group-G01_ses-{ses}_task-{TASK}" for ses in SESSIONS]
 
 

@@ -136,9 +136,8 @@ SAME_DIR_COMMANDS = {
                                 "--participant-label", "01"]),
     "markers apply":  ("prep", ["edit-markers", "apply", "{b}", "{b}", "--participant-label", "01",
                                 "--shift", "1"]),
-    "prep-raw":       ("qc", ["prep-raw", "{b}", "{b}", "--participant-label", "01", *PHYS]),
-    "hyper-raw":      ("qc", ["hyper-raw", "{b}", "{b}", "group", "--pairs-csv", "{b}/pairs.csv",
-                                *PHYS]),
+    "qc participant": ("qc", ["{b}", "{b}", "participant", "--participant-label", "01", *PHYS]),
+    "qc group":       ("qc", ["{b}", "{b}", "group", "--pairs-csv", "{b}/pairs.csv"]),
 }
 
 

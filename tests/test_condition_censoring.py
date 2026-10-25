@@ -7,8 +7,6 @@ import numpy as np
 import pytest
 
 from nirspipe.cli import run as run_cli
-from nirspipe.io.groups import GroupEntry
-from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
 from nirspipe.qc.metrics.windowed import (condition_window_means, passing_mask_from_matrices,
                                           window_centers, windows_touching)
 from nirspipe.qc.subject.record_io import read_record
@@ -97,28 +95,37 @@ def test_an_unassessed_condition_claims_no_failing_count(tmp_path):
     assert re.search(r'class="badge-\w+">\d+/\d+ \(\d+%\)<', assessed.read_text(encoding="utf-8"))
 
 
-# ---- the dyad screening page ----
+# ---- raw QC's verdict, which the dyad page reads ----
 
-def test_the_dyad_screening_page_leaves_out_an_input_span(tmp_path):
-    raw, truth = fingerprint_raw("01", "tapping", blocks=True)
+def test_raw_qc_leaves_out_an_input_span(tmp_path):
+    from nirspipe.cli import qc as qc_cli
+    from tests._synth import _write_dataset_root, _write_subject
+
+    _raw, truth = fingerprint_raw("01", "tapping", blocks=True)
     decoupled = truth.block_bad[0]        # decoupled 290-370 s, inside the second block
 
-    def rejected(spans):
-        marked = raw.copy()
-        add_bad_spans(marked, spans, "BAD_artifact")
-        sqm = compute_group_sqm_raw([GroupEntry("G01", "01", "tapping")], {"01": marked},
-                                    SCI_CUTOFF, tmp_path, 0.8, 1.9, psp_threshold=PSP_CUTOFF,
-                                    min_good_frac=0.85)
-        return {b.split()[0] for b in sqm["01"]["bad_channels"]}
+    def rejected(name, spans):
+        bids = tmp_path / name / "bids"
+        _write_dataset_root(bids, ["01"])
+        raw, _ = fingerprint_raw("01", "tapping", blocks=True)
+        add_bad_spans(raw, spans, "BAD_artifact")
+        _write_subject(bids, "01", "tapping", raw)
+        out = tmp_path / name / "out"
+        qc_cli.main([str(bids), str(out), "participant", "--dpf", "6",
+                     "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
+                     "--sci-threshold", str(SCI_CUTOFF), "--psp-threshold", str(PSP_CUTOFF),
+                     "--min-good-frac", "0.85", "--skip-bids-validation"])
+        (record,) = out.rglob("*_desc-sqmraw_qc.json")
+        return {b.split()[0] for b in json.loads(record.read_text())["bad_channels"]}
 
-    assert decoupled in rejected([])
-    assert decoupled not in rejected([(280.0, 120.0)])
+    assert decoupled in rejected("whole", [])
+    assert decoupled not in rejected("spanned", [(280.0, 120.0)])
 
 
 # ---- the raw viewer's condition pages ----
 
 def _raw_condition_summaries(tmp_path, spans) -> dict:
-    """`prep-raw --by-condition` on the fingerprint with ``spans`` in its input file."""
+    """Raw QC with `--by-condition` on the fingerprint with ``spans`` in its input file."""
     from nirspipe.cli import qc as qc_cli
     from tests._synth import _write_dataset_root, _write_subject
 
@@ -128,7 +135,7 @@ def _raw_condition_summaries(tmp_path, spans) -> dict:
     add_bad_spans(raw, spans, "BAD_artifact")
     _write_subject(bids, "01", "tapping", raw)
     out = tmp_path / "out"
-    qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01", "--dpf", "6",
+    qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01", "--dpf", "6",
                  "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
                  "--sci-threshold", str(SCI_CUTOFF), "--by-condition", "--skip-bids-validation"])
     summaries = {}

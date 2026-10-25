@@ -267,20 +267,6 @@ def add_bids_filter_file(container) -> None:
                            help="JSON file with extra pybids query filters.")
 
 
-def screening(note: str = "") -> argparse.ArgumentParser:
-    """The screening lines as a parent parser.
-
-    One block for all of them, because they are one decision: SCI, and PSP when given, say
-    which windows pass, and the share says how many of them a channel needs.
-    """
-    p = argparse.ArgumentParser(add_help=False)
-    add_sci_threshold(p, required=True, note=note)
-    add_psp_threshold(p, note)
-    add_min_good_frac(p, note)
-    add_screen_scope(p, note)
-    return p
-
-
 def pairs_selection() -> argparse.ArgumentParser:
     """``--pairs-csv`` / ``--group-id`` / ``--participant-label`` / ``--task-label``: which dyads to process."""
     p = argparse.ArgumentParser(add_help=False)
@@ -300,20 +286,26 @@ def pairs_selection() -> argparse.ArgumentParser:
     return p
 
 
-def alignment_window() -> argparse.ArgumentParser:
+def add_alignment_window(container) -> None:
     """``--normalize`` / ``--no-align`` / ``--tstart`` / ``--tend``: what the metrics see."""
+    container.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
+                           help="Z-score each channel per subject after alignment.")
+    container.add_argument("--no-align", action="store_true",
+                           help="Skip trigger-based alignment; trim all recordings to the "
+                                "shortest duration.")
+    container.add_argument("--tstart", type=float, default=None,
+                           help="Report on this time (s) onward, on the aligned clock, where 0 "
+                                "is the shared trigger. Omit to start at the alignment point.")
+    container.add_argument("--tend", type=float, default=None,
+                           help="Report up to this time (s) on the aligned clock; omit to run to "
+                                "the end. Narrows the synchrony metrics only, not the "
+                                "per-subject quality record. In `nirspipe-hyper` the window is "
+                                "read out of the whole-recording transform, and conditions "
+                                "outside it are dropped.")
+
+
+def alignment_window() -> argparse.ArgumentParser:
+    """:func:`add_alignment_window` as a parent parser."""
     p = argparse.ArgumentParser(add_help=False)
-    p.add_argument("--normalize", action=argparse.BooleanOptionalAction, default=False,
-                   help="Z-score each channel per subject after alignment.")
-    p.add_argument("--no-align", action="store_true",
-                   help="Skip trigger-based alignment; trim all recordings to the shortest "
-                        "duration.")
-    p.add_argument("--tstart", type=float, default=None,
-                   help="Report on this time (s) onward, on the aligned clock, where 0 is "
-                        "the shared trigger. Omit to start at the alignment point.")
-    p.add_argument("--tend", type=float, default=None,
-                   help="Report up to this time (s) on the aligned clock; omit to run to the "
-                        "end. Narrows the synchrony metrics only, not the per-subject quality "
-                        "record. In `nirspipe-hyper` the window is read out of the "
-                        "whole-recording transform, and conditions outside it are dropped.")
+    add_alignment_window(p)
     return p

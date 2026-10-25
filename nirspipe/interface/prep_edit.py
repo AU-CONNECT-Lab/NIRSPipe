@@ -217,7 +217,7 @@ class EditViewer(RawRatingApp):
 
     def __init__(self, html_path: Path, output_dir: Path, bids_dir: Path, report_page: "str | None" = None):
         self.bids_dir = Path(bids_dir)
-        # the app's prep-raw form, which a finished run links to for a report of what it wrote
+        # the app's raw QC form, which a finished run links to for a report of what it wrote
         self.report_page = report_page
         super().__init__(html_path, output_dir)
         self._setup_prep_routes(self.app)
@@ -286,7 +286,7 @@ class EditViewer(RawRatingApp):
 
 
 def report_link(page: str, action: str, argv: list[str]) -> str:
-    """The prep-raw form with the written tree as its dataset and no output folder, so the first report is kept."""
+    """The raw QC form with the written tree as its dataset and no output folder, so the first report is kept."""
     args = parser_for(PREP).parse_args(argv[1:])
     written = Path(args.output_dir) / ACTIONS[action].writes
     return f"{page}?{urlencode({'bids_dir': str(written), 'output_dir': ''})}"

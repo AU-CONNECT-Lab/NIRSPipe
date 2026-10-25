@@ -1,4 +1,4 @@
-"""nirspipe-qc CLI (argparse): quality control for fNIRS data."""
+"""nirspipe-qc CLI (argparse, BIDS App convention): raw quality control for fNIRS data."""
 
 from __future__ import annotations
 
@@ -7,14 +7,13 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 from dataclasses import replace
-from functools import lru_cache, partial
+from functools import partial
 from types import SimpleNamespace
-from uuid import uuid4
 
 from nirspipe import __version__
 
-from nirspipe.io.derivatives import group_label, group_report_dir, read_dataset_description
-from nirspipe.io.head_template import resolve_template, space_of
+from nirspipe.io.derivatives import group_label, group_report_dir
+from nirspipe.io.head_template import space_of
 from nirspipe.io.optode_space import hold_placement, place_optodes
 from nirspipe.io.naming import report_name
 from nirspipe.cli import _app_options
@@ -27,9 +26,20 @@ setup_logging()
 
 logger = get_logger("cli.qc")
 
+# analysis levels and the flags each one cannot run without
+_LEVEL_REQUIRES = {
+    "participant": ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq"),
+    "group":       (),
+}
+# a parser group's title names the level its flags belong to; one typed at the other level
+# is refused rather than silently unused
+_LEVEL_GROUPS = {"participant": "participant level", "group": "group level"}
+# the selection a --config file's [execution] sets, beside its [qc] settings
+_EXECUTION_KEYS = ("participant_label", "session_label", "task_label")
 
-def cmd_prep_raw(
-    bids_dir: Path, output_dir: Path, participant_label: list[str],
+
+def cmd_participant(
+    bids_dir: Path, output_dir: Path, participant_label: list[str] | None,
     session_label: list[str] | None, task_label: list[str] | None,
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
     min_good_frac: float | None, screen_scope: str,
@@ -53,8 +63,9 @@ def cmd_prep_raw(
     keep_spans_from: str | None = None,
     bad_spans: Path | None = None,
     bids_filter_file: Path | None = None,
+    record_settings: "dict | None" = None,
 ) -> None:
-    """Generate static raw QC reports, one per subject."""
+    """One raw QC report per recording, each subject on its own; ``record_settings`` goes in its run record."""
     from nirspipe.cli.workflows import (
         _bad_channels_for, _keep_channels_for, _refuse_bad_span_rows,
         _refuse_unmatched_bad_channel_rows, _spans_for,
@@ -66,7 +77,27 @@ def cmd_prep_raw(
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    from nirspipe.io.derivatives import LINK_RAW, write_bidsignore, write_dataset_description
+    if (epoch_tmin is None) != (epoch_tmax is None):
+        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
+        raise SystemExit(1)
+
+    from nirspipe.cli.run_record import write_raw_qc_record
+    from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
+    from nirspipe.io.derivatives import (
+        LINK_RAW, entity_of, subject_report_dir, write_bidsignore, write_dataset_description,
+    )
+    from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
+
+    layout = get_layout(bids_dir)
+    # as the pipeline reads it: every subject when none is named, a named one that is absent refused
+    if not participant_label:
+        participant_label = layout.get_subjects()
+    else:
+        missing = sorted(set(participant_label) - set(layout.get_subjects()))
+        if missing:
+            print(f"Error: participant label(s) not in {bids_dir}: {', '.join(missing)}",
+                  file=sys.stderr)
+            raise SystemExit(1)
     # the records it writes name the raw recordings, which resolve through this link
     write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
     write_bidsignore(output_dir)
@@ -74,17 +105,7 @@ def cmd_prep_raw(
         "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
         "long_max_dist": long_max_dist,
     })))
-
-    from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
-    from nirspipe.io.derivatives import entity_of, subject_report_dir
-    from nirspipe.qc.subject.prep_raw_report import build_prep_raw_report
-
-    if (epoch_tmin is None) != (epoch_tmax is None):
-        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
-        raise SystemExit(1)
     roi_map = _app_options.load_roi_mapping(roi_mapping)
-
-    layout = get_layout(bids_dir)
     # the same refusals the pipeline makes, before any subject runs
     _refuse_unmatched_bad_channel_rows(bad_channels, layout)
     _refuse_bad_span_rows(keep_spans, layout, marker=keep_spans_from)
@@ -98,6 +119,9 @@ def cmd_prep_raw(
         """Every report this subject's runs produce, plus the index over them."""
         all_runs: list[dict] = []
         groups: dict[tuple, list[dict]] = defaultdict(list)
+        if record_settings is not None:
+            write_raw_qc_record(record_settings["args"], record_settings["keys"], subject,
+                                output_dir)
 
         for session in sessions:
             for task in tasks:
@@ -202,23 +226,29 @@ def cmd_prep_raw(
         raise SystemExit(1)
 
 
-def _generated_by(tree: Path) -> set[str]:
-    """The tool names in a tree's dataset_description.json, empty when there is none."""
-    desc = read_dataset_description(Path(tree))
-    return {str(e.get("Name", "")) for e in desc.get("GeneratedBy") or [] if isinstance(e, dict)}
+def _corrected(raws: dict, params: dict) -> dict:
+    """Each member's recording through the motion correction its raw QC record names, as optical density."""
+    from nirspipe.pipeline.motion import correct_motion
+    from nirspipe.qc.metrics._helpers import as_optical_density
 
-
-@lru_cache(maxsize=1)
-def _bids_layout(bids_dir: Path, run_id: str):
-    """The BIDS layout of one run, built once per process, so each worker indexes the dataset once."""
-    from nirspipe.io.bids import get_layout
-    return get_layout(bids_dir)
+    out = {}
+    for sid, raw in raws.items():
+        method = params[sid].get("motion_correction") or "none"
+        if method == "none":
+            continue
+        try:
+            out[sid] = correct_motion(as_optical_density(raw), method=method,
+                                      std_thresh=params[sid].get("motion_std_thresh"),
+                                      iqr_factor=params[sid].get("wavelet_iqr"))
+        except Exception:
+            logger.warning("%s: %s could not be run; the motion panel shows the recording "
+                           "before correction only", sid, method, exc_info=True)
+    return out
 
 
 def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
-    """One dyad of `nirspipe-qc hyper-raw`: quality record and raw report. ``s`` is the run's settings."""
+    """One dyad of the group level: each member's raw QC record, the aligned recordings, the page."""
     from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
-    from nirspipe.io.bids import channel_status_bads
     from nirspipe.pipeline.hyper.alignment import (
         align_imu_like,
         align_like,
@@ -228,26 +258,23 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         normalize_raws,
         trim_to_shortest,
     )
-    from nirspipe.pipeline.hyper.group_io import (
-        _raw_to_haemo,
-        load_group_raw_bids,
-        load_group_stage,
-    )
+    from nirspipe.pipeline.hyper.group_io import _raw_to_haemo, load_group_raw_bids
     from nirspipe.pipeline.dpf import dpf_caveat, wavelengths
-    from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
+    from nirspipe.pipeline.hyper.group_quality import load_group_sqm_raw, member_raw_record
     from nirspipe.qc.hyper.hyper_report import build_hyper_report
+    from nirspipe.qc.metrics._helpers import bands_from_record
     from nirspipe.utils.lineage import path_from
+    from nirspipe.utils.spans import mark_manual, mark_unselected
 
-    # each member's channels.tsv, read off the BIDS tree its recording came from
-    layout = _bids_layout(s.bids_dir, s.run_id) if s.read_channel_status else None
     raws_cw = load_group_raw_bids(s.bids_dir, members)
-    ages = _ages_for(s.dpf, s.bids_dir, list(raws_cw))
-    # each member on their own head, held so every page drawn from them uses it
+    records = {e.subject_id: member_raw_record(s.output_dir, e, raws_cw[e.subject_id])
+               for e in members}
+    params = {sid: record["parameters"] for sid, (_path, record) in records.items()}
+    # each member on its own head and with its own reviewer stretches, as its record says
     for sid, raw in raws_cw.items():
-        space = space_of(resolve_template(s.template, ages.get(sid)))
-        hold_placement(raw, place_optodes(path_from(raw), space))
-    tsv_bads = ({sid: channel_status_bads(layout, Path(path_from(raw)))
-                 for sid, raw in raws_cw.items()} if layout is not None else {})
+        hold_placement(raw, place_optodes(path_from(raw), space_of(params[sid]["template"])))
+        mark_manual(mark_unselected(raw, params[sid].get("keep_spans") or []),
+                    params[sid].get("bad_spans") or [])
     # the aux group rides only in the source file, on each member's own clock. A file
     # that will not read costs the IMU rows and not the report
     try:
@@ -257,18 +284,20 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         logger.warning("%s: IMU could not be read; the report has no IMU rows",
                        gid, exc_info=True)
         member_imu = {}
-    sqm_data = compute_group_sqm_raw(members, raws_cw, s.sci_threshold, s.output_dir,
-                                     s.cardiac_l_freq, s.cardiac_h_freq,
-                                     psp_threshold=s.psp_threshold,
-                                     min_good_frac=s.min_good_frac,
-                                     screen_scope=s.screen_scope,
-                                     sep_bands=s.sep_bands, session=ses,
-                                     channels_tsv_bads=tsv_bads, imu=member_imu)
-    raws_haemo = {sid: _raw_to_haemo(r, s.dpf, ages.get(sid)) for sid, r in raws_cw.items()}
+    sqm_data = load_group_sqm_raw(s.output_dir, members, raws_cw, records, session=ses)
+    # each member converted with the factors its own raw QC used
+    raws_haemo = {sid: _raw_to_haemo(r, params[sid]["dpf"]) for sid, r in raws_cw.items()}
     # the dyad page says it the way it says a member screening could not judge
-    for sid, age in ages.items():
-        if caveat := dpf_caveat(age, wavelengths(raws_cw[sid])):
-            sqm_data.setdefault(sid, {})["dpf_caveat"] = caveat
+    for sid, raw in raws_cw.items():
+        age = params[sid].get("dpf_age")
+        if age is not None and (caveat := dpf_caveat(age, wavelengths(raw))):
+            sqm_data[sid]["dpf_caveat"] = caveat
+    bands = {sid: bands_from_record(record.get("raw") or {})
+             for sid, (_path, record) in records.items()}
+    sep_bands = bands[members[0].subject_id]
+    if len(set(bands.values())) > 1:
+        logger.warning("%s: the members' records split channels by different separation bands; "
+                       "the dyad page uses %s's", gid, members[0].subject_id)
     if s.no_align:
         aligned_raws, offsets = trim_to_shortest(raws_haemo)
     else:
@@ -280,12 +309,9 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         aligned_raws = normalize_raws(aligned_raws)
     # the motion panel needs optical density, which the haemoglobin conversion above
     # has already left behind, so the intensity copy is cut to the same window rather
-    # than aligned a second time. The corrected file is whatever the member's own
-    # `nirspipe` run left in the tree --derivatives-dir names, and is simply absent for
-    # a member who has not been through one.
+    # than aligned a second time; its corrected side is each member's own correction
     intensity_raws = align_like(raws_cw, aligned_raws)
-    full_after = (load_group_stage(s.derivatives_dir, members, "motcorrected")
-                  if s.derivatives_dir is not None else {})
+    full_after = _corrected(raws_cw, params)
     after_raws = align_like(full_after, aligned_raws) if full_after else {}
     # the panel's IMU, moved by the same shift the intensity copy was cut by
     try:
@@ -309,64 +335,18 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         full_raws=raws_cw,
         full_after=full_after,
         output_dir=s.output_dir,
-        sep_bands=s.sep_bands,
+        sep_bands=sep_bands,
         session=ses,
-        sci_threshold=s.sci_threshold,
-        cardiac_l_freq=s.cardiac_l_freq,
-        cardiac_h_freq=s.cardiac_h_freq,
         roi_map=s.roi_map,
     )
 
 
-def cmd_hyper_raw(
-    bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
-    dpf: list[float], sci_threshold: float, psp_threshold: float | None,
-    min_good_frac: float | None, screen_scope: str,
-    cardiac_l_freq: float, cardiac_h_freq: float,
-    normalize: bool, no_align: bool, tstart: float | None, tend: float | None,
-    session_label: list[str] | None, task_label: list[str] | None,
-    short_max_dist: float | None, long_min_dist: float | None,
-    long_max_dist: float | None,
-    skip_bids_validation: bool,
-    derivatives_dir: Path | None = None,
-    roi_mapping: Path | None = None,
-    participant_label: list[str] | None = None,
-    ignore: list[str] | None = None,
-    nprocs: int | None = None,
-    template: str | None = None,
-) -> None:
-    """Generate hyperscanning raw QC report from BIDS raw data."""
-    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-hyper")
-    if derivatives_dir is not None:
-        _shared.refuse_output_is_source(derivatives_dir, output_dir)
-    made_by = _generated_by(output_dir)
-    if "nirspipe" in made_by:
-        print(f"Error: {output_dir} is a nirspipe tree; the dyad reports go to a tree of their "
-              f"own or to the nirspipe-hyper tree. Pass that as OUTPUT_DIR and this one as "
-              f"--derivatives-dir.", file=sys.stderr)
-        raise SystemExit(1)
-    if not skip_bids_validation:
-        from nirspipe.io.bids import validate_bids
-        validate_bids(bids_dir)
-    from nirspipe.io.derivatives import (
-        LINK_PREPROCESSED, LINK_RAW, write_bidsignore, write_dataset_description,
-    )
-
-    # a dyad QC tree of its own is stamped as this command's; the nirspipe-hyper tree keeps its
-    tool = "nirspipe-hyper" if "nirspipe-hyper" in made_by else "nirspipe-qc hyper-raw"
-    write_dataset_description(output_dir, name=f"{tool} output",
-                              generated_by=tool, source=bids_dir, link=LINK_RAW)
-    if derivatives_dir is not None:
-        write_dataset_description(output_dir, name=f"{tool} output",
-                                  generated_by=tool, source=derivatives_dir,
-                                  link=LINK_PREPROCESSED)
-    write_bidsignore(output_dir)
-
-    sep_bands = separation_bands(type("Bands", (), separation_bands_from_args({
-        "short_max_dist": short_max_dist, "long_min_dist": long_min_dist,
-        "long_max_dist": long_max_dist,
-    })))
-
+def _dyads(bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
+           participant_label: list[str] | None, task_label: list[str] | None,
+           session_label: list[str] | None, normalize: bool, no_align: bool,
+           tstart: float | None, tend: float | None, roi_mapping: Path | None,
+           nprocs: int | None) -> bool:
+    """Every selected dyad's raw page, read from its members' records; False when one failed."""
     from nirspipe.cli.hyper import _run_groups, _select_groups
 
     groups = _select_groups(pairs_csv, group_id, task_label, participant_label)
@@ -379,48 +359,55 @@ def cmd_hyper_raw(
         if not groups:
             print(f"[error] session_label {session_label} not found in CSV", file=sys.stderr)
             raise SystemExit(1)
-    if derivatives_dir is None:
-        print("[info] no --derivatives-dir: the motion panel shows the recordings before "
-              "correction only.", file=sys.stderr)
-    roi_map = _app_options.load_roi_mapping(roi_mapping)
-    subjects = sorted({e.subject_id for members in groups.values() for e in members})
-    _app_options.templates_for(template, subjects, _ages_for(dpf, bids_dir, subjects))
-
     settings = SimpleNamespace(
-        bids_dir=bids_dir, output_dir=output_dir, derivatives_dir=derivatives_dir,
-        read_channel_status="channel-status" not in (ignore or []), run_id=uuid4().hex,
-        sci_threshold=sci_threshold, cardiac_l_freq=cardiac_l_freq,
-        cardiac_h_freq=cardiac_h_freq, psp_threshold=psp_threshold,
-        min_good_frac=min_good_frac, screen_scope=screen_scope, sep_bands=sep_bands, dpf=dpf,
-        no_align=no_align, normalize=normalize, tstart=tstart, tend=tend, roi_map=roi_map,
-        template=template)
-    _run_groups(groups, partial(_raw_one_group, settings), nprocs,
-                log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
-                / f"{group_label(*key)}_desc-raw.log")
+        bids_dir=bids_dir, output_dir=output_dir, no_align=no_align, normalize=normalize,
+        tstart=tstart, tend=tend, roi_map=_app_options.load_roi_mapping(roi_mapping))
+    done = _run_groups(groups, partial(_raw_one_group, settings), nprocs,
+                       log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
+                       / f"{group_label(*key)}_desc-raw.log", exit_on_failure=False)
+    return len(done) == len(groups)
 
 
-def cmd_group_raw(output_dir: Path) -> None:
-    """Aggregate per-subject SQMs into desc-subjects_qc.tsv + desc-subjects_report.html."""
+def cmd_group(
+    bids_dir: Path, output_dir: Path, participant_label: list[str] | None,
+    session_label: list[str] | None, task_label: list[str] | None,
+    skip_bids_validation: bool, roi_mapping: Path | None = None, nprocs: int | None = None,
+    pairs_csv: Path | None = None, group_id: str | None = None, normalize: bool = False,
+    no_align: bool = False, tstart: float | None = None, tend: float | None = None,
+) -> None:
+    """The cohort page over every subject in the tree, and given ``pairs_csv`` each dyad's page first."""
+    from nirspipe.qc.hyper.group_hyper_writer import build_group_hyper_report
     from nirspipe.qc.subject.group_writer import build_group_raw_report
+
+    _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
+    if group_id is not None and pairs_csv is None:
+        print("Error: --group-id selects from --pairs-csv, which was not given.", file=sys.stderr)
+        raise SystemExit(1)
+    dyads_ok = True
+    if pairs_csv is not None:
+        if not skip_bids_validation:
+            from nirspipe.io.bids import validate_bids
+            validate_bids(bids_dir)
+        from nirspipe.io.derivatives import LINK_RAW, write_dataset_description
+        # refuses a BIDS dataset other than the one the participant level linked
+        write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
+        dyads_ok = _dyads(bids_dir, output_dir, pairs_csv, group_id, participant_label,
+                          task_label, session_label, normalize, no_align, tstart, tend,
+                          roi_mapping, nprocs)
 
     path = build_group_raw_report(output_dir)
     if path is None:
-        print(f"Error: no quality records under {output_dir}; run `nirspipe` or "
-              "`nirspipe-qc prep-raw` into it first.", file=sys.stderr)
+        print(f"Error: no raw QC records under {output_dir}; run the participant level into "
+              "it first.", file=sys.stderr)
         raise SystemExit(1)
     print(f"report -> {path}")
-
-
-def cmd_group_hyper_raw(output_dir: Path) -> None:
-    """Aggregate per-group hyper SQMs into desc-groups_qc.tsv + desc-groups_report.html."""
-    from nirspipe.qc.hyper.group_hyper_writer import build_group_hyper_report
-
-    path = build_group_hyper_report(output_dir)
-    if path is None:
-        print(f"Error: no dyad records under {output_dir}; run `nirspipe-qc hyper-raw` "
-              "into it first.", file=sys.stderr)
+    # the dyad cohort page wherever the tree holds dyads, this run's or an earlier one's
+    if any(output_dir.glob("group-*")):
+        dyad_path = build_group_hyper_report(output_dir)
+        if dyad_path is not None:
+            print(f"report -> {dyad_path}")
+    if not dyads_ok:
         raise SystemExit(1)
-    print(f"report -> {path}")
 
 
 def cmd_provenance(output_dir: Path) -> None:
@@ -485,140 +472,211 @@ def _ages_for(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
         raise SystemExit(1) from None
 
 
-def _add_dpf_and_cardiac(parser) -> None:
-    """The optics and cardiac band both raw reports need, required: they are population values."""
-    _app_options.add_dpf(parser, required=True)
-    _app_options.add_template(parser)
-    parser.add_argument("--cardiac-l-freq", type=float, required=True,
-                        help="Lower bound of cardiac band in Hz (required; population-dependent).")
-    parser.add_argument("--cardiac-h-freq", type=float, required=True,
-                        help="Upper bound of cardiac band in Hz (required; population-dependent).")
-
-
-def _add_ignore(parser) -> None:
-    parser.add_argument("--ignore", nargs="+", action="extend", choices=["channel-status"],
-                        help="Aspects to skip. 'channel-status': do not mark bad the channels each "
-                             "recording's BIDS channels.tsv marks bad in its status column. "
-                             "Pass it here when the nirspipe run being checked passed it.")
-
-
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-qc",
-        description="fNIRS quality control: individual, hyperscanning and cohort-level reports.",
+        description="fNIRS raw quality control as a BIDS App: one report per recording at "
+                    "participant level, then the cohort pages and, given a pairs table, each "
+                    "dyad's page at group level, all in one tree.",
     )
     p.add_argument("--version", action="version", version=f"nirspipe-qc {__version__}")
-    sub = p.add_subparsers(required=True)
+    p.add_argument("bids_dir", type=Path, help="BIDS dataset root, read only.")
+    p.add_argument("output_dir", type=Path,
+                   help="The raw QC tree: each subject's reports under sub-<label>/, each "
+                        "dyad's under group-<id>/, the cohort pages at the root.")
+    p.add_argument("analysis_level", choices=list(_LEVEL_REQUIRES),
+                   help="participant: screen and report each recording, subjects independently "
+                        "and in parallel. group: after every participant run, the cohort page "
+                        "and, with --pairs-csv, each dyad's page read from its members' "
+                        "records, so a member keeps its own lines, band and verdict.")
 
-    pr = sub.add_parser("prep-raw", parents=[_app_options.screening()],
-                        help="Static raw QC report for a single participant.")
-    pr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    pr.add_argument("output_dir", type=Path, help="nirspipe derivatives directory")
-    pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend", required=True,
-                    type=_shared.BidsLabel,
-                    help="Subject ID(s) to inspect, e.g. '01'. One report set per subject, "
-                         "and one subject's failure does not stop the rest.")
-    pr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Session label(s) to include.")
-    pr.add_argument("--task-label", "--task_label",    nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Task label(s) to include.")
-    pr.add_argument("--run-label", "--run_label", nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Run label(s) to include. Each chosen run gets a report of its own, named "
-                         "with its run, so the report holding all of a task's runs is kept.")
-    _add_dpf_and_cardiac(pr)
-    pr.add_argument("--window-length", type=float, default=10.0,
-                    help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
-    pr.add_argument("--epoch-qc", action="store_true",
-                    help="Add a per-trial section: score each event window on its own and show "
-                         "them as a trial x metric heatmap.")
-    pr.add_argument("--epoch-tmin", type=float, default=None,
-                    help="Trial window start relative to event onset in s; negative pulls in a "
-                         "baseline. Omit to use each event's own duration.")
-    pr.add_argument("--epoch-tmax", type=float, default=None,
-                    help="Trial window end relative to event onset in s. Given together with "
-                         "--epoch-tmin, or neither.")
-    _app_options.add_separation_bands(pr)
-    pr.add_argument("--by-condition", action="store_true",
-                    help="Also write one report per annotated condition, beside the run's "
-                         "own, as <run>_cond-<condition>_desc-raw_report.html. Their numbers "
-                         "are sliced out "
-                         "of the run's windowed pass, on the same window grid and filter as "
-                         "the run. Each page's screening verdict is that condition's; the "
-                         "run's own page carries the run's.")
-    pr.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES, default="tddr",
-                    help="Run this correction on a copy of the optical density and report the "
-                         "recording before and after it. Nothing is written back and nothing "
-                         "else runs, so screening and coupling still describe the recording as "
-                         "delivered. Default tddr, as nirspipe; none reports it uncorrected only.")
-    _app_options.add_motion_settings(pr)
-    _app_options.add_reviewer_marks(pr)
-    _app_options.add_bids_filter_file(pr)
-    _shared.add_skip_bids_validation(pr)
-    _shared.add_nprocs(pr)
-    _add_ignore(pr)
-    pr.add_argument("--roi-mapping", type=Path, default=None,
-                    help="JSON file mapping ROI labels to lists of channel names. Groups the "
-                         "motion carpet's rows by ROI. Optional.")
-    pr.set_defaults(func=cmd_prep_raw)
+    sel = p.add_argument_group("selection (both levels)")
+    sel.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
+                     type=_shared.BidsLabel,
+                     help="Subject ID(s), e.g. '01'. Participant level: the subjects to report, "
+                          "every one when omitted, one's failure not stopping the rest. Group "
+                          "level: only the dyads with one of them as a member.")
+    sel.add_argument("--session-label", "--session_label", nargs="+", action="extend",
+                     type=_shared.BidsLabel,
+                     help="Session label(s). At group level a group's occasion where the pairs "
+                          "table has one, else its session; a row with neither is read once "
+                          "per listed session.")
+    sel.add_argument("--task-label", "--task_label", nargs="+", action="extend",
+                     type=_shared.BidsLabel, help="Task label(s) to include.")
+    sel.add_argument("--roi-mapping", type=Path, default=None,
+                     help="JSON file mapping ROI labels to lists of channel names. Groups the "
+                          "motion carpet's rows by ROI. Optional.")
+    _shared.add_skip_bids_validation(sel)
+    _shared.add_nprocs(sel, unit="job",
+                       note="A job is a subject at participant level, a dyad at group level.")
 
-    hr = sub.add_parser("hyper-raw",
-                        parents=[_app_options.pairs_selection(),
-                                 _app_options.screening(),
-                                 _app_options.alignment_window()],
-                        help="Hyperscanning raw QC report from BIDS raw data.")
-    hr.add_argument("bids_dir",   type=Path, help="BIDS dataset root")
-    hr.add_argument("output_dir", type=Path,
-                    help="The tree the dyad reports go to: a raw QC tree of their own, or the "
-                         "nirspipe-hyper tree.")
-    hr.add_argument("analysis_level", choices=["group"],
-                    help="Always `group`: every metric here needs both members present.")
-    _add_dpf_and_cardiac(hr)
-    _app_options.add_separation_bands(hr)
-    hr.add_argument("--session-label", "--session_label", nargs="+", action="extend", type=_shared.BidsLabel,
-                    help="Session label(s) to process: a group's occasion where the group "
-                         "CSV has one, else its session. A group-CSV row without either is "
-                         "read once per listed session.")
-    _shared.add_skip_bids_validation(hr)
-    _add_ignore(hr)
-    _shared.add_nprocs(hr, unit="group")
-    hr.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
-                    help="The nirspipe tree holding each member's sub-<id>/nirs/ stages. The "
-                         "motion panel draws its after-correction side from desc-motcorrected "
-                         "there; without it, only the recordings before correction.")
-    hr.add_argument("--roi-mapping", type=Path, default=None,
-                    help="JSON file mapping ROI labels to lists of channel names. Groups each "
-                         "member's motion carpet rows by ROI. Optional.")
-    hr.set_defaults(func=cmd_hyper_raw)
+    part = p.add_argument_group(_LEVEL_GROUPS["participant"])
+    part.add_argument("--run-label", "--run_label", nargs="+", action="extend",
+                      type=_shared.BidsLabel,
+                      help="Run label(s) to include. Each chosen run gets a report of its own, "
+                           "named with its run, so the report holding all of a task's runs is "
+                           "kept.")
+    _app_options.add_bids_filter_file(part)
+    part.add_argument("--config", type=Path,
+                      help="A raw QC run record (sub-<label>/logs/*_desc-raw.toml) or a TOML of "
+                           "its shape: [qc] keyed by flag name. Reruns with its settings; flags "
+                           "given here override it.")
+    _app_options.add_dpf(part)
+    _app_options.add_template(part)
+    _app_options.add_sci_threshold(part)
+    _app_options.add_psp_threshold(part)
+    _app_options.add_min_good_frac(part)
+    _app_options.add_screen_scope(part)
+    part.add_argument("--cardiac-l-freq", type=float,
+                      help="Lower bound of cardiac band in Hz (required at participant level; "
+                           "population-dependent).")
+    part.add_argument("--cardiac-h-freq", type=float,
+                      help="Upper bound of cardiac band in Hz (required at participant level; "
+                           "population-dependent).")
+    part.add_argument("--window-length", type=float, default=10.0,
+                      help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
+    part.add_argument("--epoch-qc", action="store_true",
+                      help="Add a per-trial section: score each event window on its own and "
+                           "show them as a trial x metric heatmap.")
+    part.add_argument("--epoch-tmin", type=float, default=None,
+                      help="Trial window start relative to event onset in s; negative pulls in "
+                           "a baseline. Omit to use each event's own duration.")
+    part.add_argument("--epoch-tmax", type=float, default=None,
+                      help="Trial window end relative to event onset in s. Given together with "
+                           "--epoch-tmin, or neither.")
+    _app_options.add_separation_bands(part)
+    part.add_argument("--by-condition", action="store_true",
+                      help="Also write one report per annotated condition, beside the run's "
+                           "own, as <run>_cond-<condition>_desc-raw_report.html. Their numbers "
+                           "are sliced out of the run's windowed pass, on the same window grid "
+                           "and filter as the run. Each page's screening verdict is that "
+                           "condition's; the run's own page carries the run's.")
+    part.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES,
+                      default="tddr",
+                      help="Run this correction on a copy of the optical density and report the "
+                           "recording before and after it. Nothing is written back and nothing "
+                           "else runs, so screening and coupling still describe the recording "
+                           "as delivered. Default tddr, as nirspipe; none reports it "
+                           "uncorrected only. The group level's motion panel shows each "
+                           "member's.")
+    _app_options.add_motion_settings(part)
+    _app_options.add_reviewer_marks(part)
+    part.add_argument("--ignore", nargs="+", action="extend", choices=["channel-status"],
+                      help="Aspects to skip. 'channel-status': do not mark bad the channels "
+                           "each recording's BIDS channels.tsv marks bad in its status column. "
+                           "Pass it here when the nirspipe run being checked passed it.")
 
-    gr = sub.add_parser(
-        "cohort",
-        help="Every subject in a tree on one page.",
-        description="Aggregates the quality record of every run under OUTPUT_DIR. A run processed by both `nirspipe` and `prep-raw` has two records and the pipeline one is used, so the page carries every stage the run was measured at.")
-    gr.add_argument("output_dir", type=Path,
-                    help="nirspipe derivatives directory (contains sub-*/nirs/ SQM JSONs)")
-    gr.set_defaults(func=cmd_group_raw)
-
-    ghr = sub.add_parser(
-        "cohort-hyper",
-        help="Cohort report over every dyad: shared usable time, where it went, and each "
-             "window against its own null.",
-        description="One page for every dyad in a tree, built from the records and tables "
-                    "the dyad runs already wrote. It reports what a dyad has and a subject "
-                    "cannot; the per-subject quality distributions stay in `cohort`.")
-    ghr.add_argument("output_dir", type=Path,
-                     help="nirspipe derivatives directory (contains group-*/nirs/ SQM JSONs)")
-    ghr.set_defaults(func=cmd_group_hyper_raw)
-
-    pv = sub.add_parser("provenance", help="Render the file provenance graph from existing sidecars.")
-    pv.add_argument("output_dir", type=Path, help="nirspipe derivatives directory")
-    pv.set_defaults(func=cmd_provenance)
-
-
+    grp = p.add_argument_group(_LEVEL_GROUPS["group"])
+    grp.add_argument("--pairs-csv", type=Path,
+                     help="CSV with columns: group_id, subject_id, task, and optionally "
+                          "session, run and occasion. Each unique (group_id, task, session) is "
+                          "one dyad page, read from its members' records; an occasion column "
+                          "joins members whose session labels differ and names the group's "
+                          "outputs ses-<occasion>. Omit for the cohort page alone.")
+    grp.add_argument("--group-id", default=None, type=_shared.BidsLabel,
+                     help="Process only this group_id of --pairs-csv.")
+    _app_options.add_alignment_window(grp)
     return p
 
 
+def _provenance_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="nirspipe-provenance",
+        description="Render the file provenance graph of every subject and dyad in a tree, "
+                    "from the sidecars already on disk.")
+    p.add_argument("--version", action="version", version=f"nirspipe-provenance {__version__}")
+    p.add_argument("output_dir", type=Path, help="Any tree this package wrote.")
+    return p
+
+
+def _level_dests(parser: argparse.ArgumentParser, level: str) -> set[str]:
+    return {a.dest for g in parser._action_groups if g.title == _LEVEL_GROUPS[level]
+            for a in g._group_actions}
+
+
+def dispatched(parser: argparse.ArgumentParser, level: str) -> set[str]:
+    """The dests one level hands its command: the positionals, the shared selection, its own flags."""
+    shared = {a.dest for g in parser._action_groups
+              if g.title not in _LEVEL_GROUPS.values() for a in g._group_actions}
+    return (shared | _level_dests(parser, level)) - {"help", "version", "config", "analysis_level"}
+
+
+def read_config(path: Path) -> dict:
+    """--config as ``{"qc": settings, "execution": selection, "version": writer}``; unknown keys refused."""
+    from nirspipe.utils import load_toml
+
+    raw = load_toml(path)
+    stray = [k for k, v in raw.items() if not isinstance(v, dict)]
+    if stray:
+        print(f"Error: {path}: {stray[0]} sits outside any section; --config takes a [qc] "
+              "section keyed by flag name, as a raw QC run record does.", file=sys.stderr)
+        raise SystemExit(1)
+    unknown = sorted(set(raw) - {"qc", "execution", "environment"})
+    if unknown:
+        print(f"Error: {path}: no section [{unknown[0]}]; expected [qc] or [execution].",
+              file=sys.stderr)
+        raise SystemExit(1)
+    parser = _build_parser()
+    actions = {a.dest: a for a in parser._actions}
+    allowed = _level_dests(parser, "participant") - {"config"}
+    settings = raw.get("qc", {})
+    bad = [k for k in settings if k not in allowed]
+    if bad:
+        print(f"Error: {path}: [qc] has no setting {bad[0]!r}.", file=sys.stderr)
+        raise SystemExit(1)
+    execution = {k: v for k, v in raw.get("execution", {}).items() if k in _EXECUTION_KEYS}
+    return {"version": raw.get("environment", {}).get("nirspipe_version"),
+            "qc": {k: _shared.coerce_setting(actions[k], k, v, path) for k, v in settings.items()},
+            "execution": {k: _shared.coerce_setting(actions[k], k, v, path)
+                          for k, v in execution.items()}}
+
+
+def _apply_config(args: argparse.Namespace, argv: "list[str] | None") -> None:
+    """Fill what the command line left out from --config."""
+    config = read_config(args.config)
+    if config["version"] and config["version"] != __version__:
+        print(f"Warning: {args.config} was written by nirspipe {config['version']} and this is "
+              f"{__version__}; a setting whose meaning or default changed in between runs as "
+              "this version reads it.", file=sys.stderr)
+    given = _shared.typed_flags(_build_parser(), argv)
+    for key, value in {**config["qc"], **config["execution"]}.items():
+        if key not in given:
+            setattr(args, key, value)
+
+
+def _refuse_other_level(args: argparse.Namespace, argv: "list[str] | None") -> None:
+    """Exit non-zero naming a flag typed at the level it does not belong to."""
+    parser = _build_parser()
+    other = "group" if args.analysis_level == "participant" else "participant"
+    typed = _shared.typed_flags(_build_parser(), argv) & _level_dests(parser, other)
+    if typed:
+        flag = next(a.option_strings[0] for a in parser._actions if a.dest in typed)
+        why = (" The group level reads each member's settings from its raw QC record."
+               if other == "participant" else "")
+        print(f"Error: {flag} is a {other}-level setting, and this is the "
+              f"{args.analysis_level} level.{why}", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> None:
-    args = _build_parser().parse_args(argv)
-    # analysis_level only gives hyper-raw the BIDS App shape; `group` is its one value
-    kw = {k: v for k, v in vars(args).items() if k not in ("func", "analysis_level")}
-    args.func(**kw)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    _refuse_other_level(args, argv)
+    if args.analysis_level == "participant" and args.config is not None:
+        _apply_config(args, argv)
+    for flag in _LEVEL_REQUIRES[args.analysis_level]:
+        if getattr(args, flag.lstrip("-").replace("-", "_")) is None:
+            print(f"Error: Missing option '{flag}' (required at {args.analysis_level} level).",
+                  file=sys.stderr)
+            raise SystemExit(1)
+    kw = vars(args)
+    taken = {k: kw[k] for k in dispatched(parser, args.analysis_level)}
+    if args.analysis_level == "participant":
+        keys = tuple(sorted(_level_dests(parser, "participant") - {"config"}))
+        cmd_participant(**taken, record_settings={"args": kw, "keys": keys})
+    else:
+        cmd_group(**taken)
+
+
+def main_provenance(argv: list[str] | None = None) -> None:
+    cmd_provenance(_provenance_parser().parse_args(argv).output_dir)

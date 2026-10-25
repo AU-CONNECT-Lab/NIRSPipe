@@ -206,8 +206,6 @@ def shared_screen_windows(
     intensity_raws: dict[str, mne.io.Raw],
     sqm_data: dict[str, dict],
     subject_ids: list[str],
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
 ) -> dict[str, dict]:
     """``sqm_data`` with each member's ``screen_windows`` measured again on its aligned recording.
 
@@ -221,7 +219,8 @@ def shared_screen_windows(
     never coincide. Measured on the aligned copies, every member's windows start at 0 on the
     shared clock and are the same stretches of it, so :func:`passing_grid` compares like with
     like at zero offset. The verdict a member was rejected by is untouched: that stays the
-    one from its own screening, which its own report shows.
+    one from its own screening, which its own report shows. The lines and the cardiac band
+    are each member's own, ``screen_cutoffs`` and ``screen_band``.
     """
     from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
     from nirspipe.qc.metrics.windowed import compute_windowed_cv, passing_windows
@@ -231,13 +230,14 @@ def shared_screen_windows(
         member = dict(sqm_data.get(sid) or {})
         raw = intensity_raws.get(sid)
         cutoffs = member.get("screen_cutoffs") or {}
-        if raw is None or cutoffs.get("sci") is None:
-            logger.warning("%s: no aligned recording or screening lines; the dyad grid is "
-                           "empty", sid)
+        band = member.get("screen_band")
+        if raw is None or cutoffs.get("sci") is None or band is None:
+            logger.warning("%s: no aligned recording, screening lines or cardiac band; the "
+                           "dyad grid is empty", sid)
             return {}
         od = as_optical_density(raw)
-        counted = passing_windows(od, cardiac_l_freq, cardiac_h_freq,
-                                  cutoffs["sci"], cutoffs.get("psp"))
+        # each member on its own band, so a parent and a child are each measured on theirs
+        counted = passing_windows(od, *band, cutoffs["sci"], cutoffs.get("psp"))
         if counted["mask"] is None:
             return {}
         windows = {k: counted[k] for k in ("mask", "centers", "sci", "psp", "channel_order")}

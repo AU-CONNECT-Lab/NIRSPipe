@@ -14,6 +14,7 @@ COMMANDS: dict[str, tuple[str, str, "str | None"]] = {
     "nirspipe-snirf2bids":      ("nirspipe.cli.snirf2bids", "_build_parser", None),
     "nirspipe-prep":            ("nirspipe.cli.prep", "_build_parser", None),
     "nirspipe-qc":              ("nirspipe.cli.qc", "_build_parser", None),
+    "nirspipe-provenance":      ("nirspipe.cli.qc", "_provenance_parser", None),
     "nirspipe":                 ("nirspipe.cli.run", "_build_parser", None),
     "nirspipe-hyper":           ("nirspipe.cli.hyper", "_parsers", "nirspipe-hyper"),
     "nirspipe-hyper-pairnull":  ("nirspipe.cli.hyper", "_parsers", "nirspipe-hyper-pairnull"),

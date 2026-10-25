@@ -11,7 +11,7 @@ import pytest
 from nirspipe.interface.commands import preview_text
 
 _ARGVS = [
-    ["nirspipe-qc", "prep-raw", "C:\\data\\bids", "C:\\out\\", "--sci-threshold", "0.8",
+    ["nirspipe-qc", "C:\\data\\bids", "C:\\out\\", "participant", "--sci-threshold", "0.8",
      "--participant-label", "01", "02", "--skip-bids-validation"],
     ["nirspipe-prep", "edit-markers", "apply", "/data/my bids", "/out",
      "--rename", "1:alone", "2.0:collab", "--shift", "-2.5"],
@@ -39,15 +39,15 @@ def test_the_cmd_preview_parses_back_to_the_same_argv(argv):
 
 
 def test_a_flag_keeps_its_values_and_a_positional_takes_a_line():
-    text = preview_text(["nirspipe-qc", "hyper-raw", "/bids", "/out", "group",
-                         "--cardiac-l-freq", "0.7", "--participant-label", "101", "201",
+    text = preview_text(["nirspipe-qc", "/bids", "/out", "group",
+                         "--pairs-csv", "pairs.csv", "--participant-label", "101", "201",
                          "--skip-bids-validation"], "bash")
     assert text.splitlines() == [
-        "nirspipe-qc hyper-raw \\",
+        "nirspipe-qc \\",
         "  '/bids' \\",
         "  '/out' \\",
         "  group \\",
-        "  --cardiac-l-freq 0.7 \\",
+        "  --pairs-csv pairs.csv \\",
         "  --participant-label 101 201 \\",
         "  --skip-bids-validation",
     ]
@@ -59,6 +59,6 @@ def test_a_flag_keeps_its_values_and_a_positional_takes_a_line():
     ("cmd", "^", '"C:\\x y\\\\"'),
 ])
 def test_each_shell_quotes_a_path_its_own_way(shell, cont, quoted):
-    first, path = preview_text(["nirspipe-qc", "cohort", "C:\\x y\\"], shell).splitlines()
-    assert first == f"nirspipe-qc cohort {cont}"
+    first, path = preview_text(["nirspipe-provenance", "C:\\x y\\"], shell).splitlines()
+    assert first == f"nirspipe-provenance {cont}"
     assert path == f"  {quoted}"

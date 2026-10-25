@@ -37,7 +37,7 @@ def both(tmp_path_factory):
     flags = ("--bad-channels", str(marks), "--bad-spans", str(spans), "--skip-bids-validation")
     run_cli.main([str(bids), str(tmp / "pipe"), "participant", *SCREENING,
                   "--resp-l-freq", "0.15", "--resp-h-freq", "0.45", "--no-report", *flags])
-    qc_cli.main(["prep-raw", str(bids), str(tmp / "qc"), "--participant-label", "01",
+    qc_cli.main([str(bids), str(tmp / "qc"), "participant", "--participant-label", "01",
                  *SCREENING, *flags])
     (sci,) = (tmp / "pipe").rglob("*_desc-sci_nirs.json")
     return {"pipeline": json.loads(sci.read_text(encoding="utf-8")),
@@ -60,7 +60,7 @@ def test_the_marks_and_spans_land_where_the_truth_says(both):
 
 def test_the_record_carries_the_settings_it_screened_with(tmp_path):
     bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",))
-    qc_cli.main(["prep-raw", str(bids), str(tmp_path / "qc"), "--participant-label", "01",
+    qc_cli.main([str(bids), str(tmp_path / "qc"), "participant", "--participant-label", "01",
                  "--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
                  "--cardiac-h-freq", "1.5", "--skip-bids-validation"])
     params = _record(tmp_path / "qc")["parameters"]

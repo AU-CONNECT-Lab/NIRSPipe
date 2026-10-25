@@ -122,22 +122,21 @@ def test_nirspipe_hyper_writes_the_same_tree_on_two_processes(cohort):
             assert f"group-{own}" in text and f"group-{other}" not in text
 
 
-def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort):
+def test_raw_qc_and_the_pair_null_write_the_same_on_two_processes(cohort):
     from nirspipe.cli import hyper as hyper_cli
-    from nirspipe.cli import qc as qc_cli
+    from tests._raw_qc import raw_qc
 
     root, bids, pairs, deriv = cohort
     trees = {}
     for nprocs in ("1", "2"):
         out = root / f"raw_pair_{nprocs}"
-        qc_cli.main(["hyper-raw", str(bids), str(out), "group", "--pairs-csv", str(pairs),
-                     "--derivatives-dir", str(deriv), "--skip-bids-validation", *_RAW_ARGS,
-                     "--nprocs", nprocs])
-        hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
+        raw_qc(bids, out / "qc", pairs, participant=(*_RAW_ARGS, "--nprocs", nprocs),
+               group=("--nprocs", nprocs))
+        hyper_cli.main([str(deriv), str(out / "hyper"), "group", "--pairs-csv", str(pairs),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--no-report", "--nprocs", nprocs])
         # by row order nobody stands in for the triad G02's third member, so any member may
-        hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
+        hyper_cli.main_pair_null([str(deriv), str(out / "hyper"), "group", "--pairs-csv", str(pairs),
                                   "--chroma", "hbo", "--nprocs", nprocs,
                                   "--wtc-pair-pool", "any"])
         trees[nprocs] = out
@@ -146,6 +145,6 @@ def test_hyper_raw_and_the_pair_null_write_the_same_on_two_processes(cohort):
     assert any("null-pair" in n for n in names) and any("desc-usable_qc" in n for n in names)
     assert _differences(trees["1"], trees["2"]) == []
     for tree in trees.values():
-        assert {p.name for p in _logs(tree)} >= {
+        assert {p.name for p in _logs(tree / "qc") + _logs(tree / "hyper")} >= {
             "group-G01_task-main_desc-raw.log", "group-G02_task-main_desc-raw.log",
             "group-G01_task-main_null-pair.log", "group-G02_task-main_null-pair.log"}

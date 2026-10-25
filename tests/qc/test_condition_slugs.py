@@ -90,7 +90,7 @@ def test_a_subject_report_keeps_the_record_and_draws_no_condition_pages(tmp_path
     raw.set_annotations(mne.Annotations([20.0, 150.0], [100.0, 100.0], ["game 1", "game1"]))
     _write_subject(bids, "01", "tap", raw)
     out = tmp_path / "out"
-    qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01",
+    qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01",
                  "--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
                  "--sci-threshold", "0.8", "--by-condition", "--skip-bids-validation"])
 

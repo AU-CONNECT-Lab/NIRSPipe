@@ -55,30 +55,28 @@ def test_an_occasion_that_is_not_a_bids_label_is_refused(tmp_path):
 def tree(tmp_path_factory):
     """Two dyads whose members each carry their own session label, through every dyad command."""
     from nirspipe.cli import hyper as hyper_cli
-    from nirspipe.cli import qc as qc_cli
     from nirspipe.cli import run as run_cli
     from tests._fingerprint import CLI_ARGS
+    from tests._raw_qc import raw_qc
     from tests._synth import make_hyper_dataset
 
     root = tmp_path_factory.mktemp("occasion")
     bids, pairs = make_hyper_dataset(root, groups=GROUPS, tasks=(TASK,),
                                      member_sessions=MEMBER_SESSIONS, occasion=OCCASION)
-    deriv, hyper = root / "deriv", root / "hyper"
+    deriv, hyper, qc = root / "deriv", root / "hyper", root / "qc"
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
-    qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", "--session-label", OCCASION, *PHYS])
+    raw_qc(bids, qc, pairs, participant=PHYS, group=("--session-label", OCCASION))
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                     "--wtc-fmin", "0.02", "--wtc-phase-null", "2", "--wtc-seed", "0"])
     hyper_cli.main_pair_null([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs)])
     hyper_cli.main_group_null([str(hyper), "group", "--task-label", TASK, "--n-resample", "50",
                                "--seed", "0"])
     hyper_cli.main_merge([str(hyper), "group"])
-    qc_cli.main(["cohort-hyper", str(hyper)])
-    return {"bids": bids, "pairs": pairs, "hyper": hyper}
+    return {"bids": bids, "pairs": pairs, "hyper": hyper, "qc": qc}
 
 
 def test_every_dyad_output_is_named_by_the_occasion(tree):
-    hyper = tree["hyper"]
+    hyper, qc = tree["hyper"], tree["qc"]
     for gid in GROUPS:
         stem = f"group-{gid}_ses-{OCCASION}_task-{TASK}"
         nirs = hyper / f"group-{gid}" / f"ses-{OCCASION}" / "nirs"
@@ -86,15 +84,20 @@ def test_every_dyad_output_is_named_by_the_occasion(tree):
                      f"{stem}_stat-isc_relmat.tsv",
                      f"{stem}_chromo-hbo_null-phase_stat-wtc_desc-level_relmat.npz",
                      f"{stem}_cond-all_null-pair_stat-wtc_relmat.tsv",
-                     f"{stem}_desc-bad_qc.tsv", f"{stem}_desc-subject_qc.tsv",
-                     f"{stem}_desc-channel_qc.tsv", f"{stem}_desc-sqm_qc.json"):
+                     f"{stem}_desc-bad_qc.tsv"):
             assert (nirs / name).exists(), name
+        qc_nirs = qc / f"group-{gid}" / f"ses-{OCCASION}" / "nirs"
+        for name in (f"{stem}_desc-subject_qc.tsv", f"{stem}_desc-channel_qc.tsv",
+                     f"{stem}_desc-sqm_qc.json"):
+            assert (qc_nirs / name).exists(), name
         assert (hyper / f"group-{gid}" / f"{stem}_report.html").exists()
-        assert (hyper / f"group-{gid}" / f"{stem}_desc-raw_report.html").exists()
+        assert (qc / f"group-{gid}" / f"{stem}_desc-raw_report.html").exists()
         assert (hyper / f"group-{gid}" / "logs" / f"{stem}.toml").exists()
         # nothing under a member's own session, and nothing session-less
-        assert [p.name for p in (hyper / f"group-{gid}").glob("ses-*")] == [f"ses-{OCCASION}"]
-        assert not (hyper / f"group-{gid}" / "nirs").exists()
+        for tree_dir in (hyper, qc):
+            assert [p.name for p in (tree_dir / f"group-{gid}").glob("ses-*")] == [
+                f"ses-{OCCASION}"]
+            assert not (tree_dir / f"group-{gid}" / "nirs").exists()
 
 
 def test_each_member_is_read_from_its_own_session(tree):
@@ -128,16 +131,17 @@ def test_the_group_null_ranks_each_dyad_under_its_occasion(tree):
 def test_the_merged_table_and_the_cohort_page_carry_the_occasion(tree):
     merged = pd.read_csv(tree["hyper"] / "stat-wtc_relmat.tsv", sep="\t", dtype=str)
     assert set(merged["session"]) == {OCCASION}
-    table = pd.read_csv(tree["hyper"] / "desc-groups_qc.tsv", sep="\t", dtype=str)
+    table = pd.read_csv(tree["qc"] / "desc-groups_qc.tsv", sep="\t", dtype=str)
     assert sorted(table["label"]) == [f"group-{gid}_ses-{OCCASION}_task-{TASK}" for gid in GROUPS]
 
 
-def test_hyper_raw_session_label_selects_occasions_not_member_sessions(tree, tmp_path):
+def test_the_group_level_session_label_selects_occasions_not_member_sessions(tree):
     from nirspipe.cli import qc as qc_cli
 
+    before = sorted(p.relative_to(tree["qc"]) for p in tree["qc"].rglob("*"))
     with pytest.raises(SystemExit) as exc:
-        qc_cli.main(["hyper-raw", str(tree["bids"]), str(tmp_path), "group",
+        qc_cli.main([str(tree["bids"]), str(tree["qc"]), "group",
                      "--pairs-csv", str(tree["pairs"]), "--skip-bids-validation",
-                     "--session-label", MEMBER_SESSIONS["11"], *PHYS])
+                     "--session-label", MEMBER_SESSIONS["11"]])
     assert exc.value.code == 1
-    assert not list(tmp_path.glob("group-*"))
+    assert sorted(p.relative_to(tree["qc"]) for p in tree["qc"].rglob("*")) == before

@@ -204,6 +204,37 @@ def write_run_record(
     return out
 
 
+def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: str,
+                        output_dir: Path) -> Path:
+    """Write one subject's raw QC run record, ``sub-<label>/logs/<record_stem>_desc-raw.toml``.
+
+    [qc] holds the participant-level flags as typed and is what ``nirspipe-qc --config`` reads
+    back; [execution] the invocation. Its own name, so a pipeline record in the same tree is
+    never replaced.
+    """
+    timestamp = datetime.now()
+    execution = {
+        "run_timestamp": timestamp.isoformat(timespec="seconds"),
+        "run_command": _command_line(),
+        "bids_dir": _fwd(args["bids_dir"]),
+        "output_dir": _fwd(output_dir),
+        "analysis_level": "participant",
+        "participant_label": [subject],
+        "session_label": args.get("session_label"),
+        "task_label": args.get("task_label"),
+        "nprocs": args.get("nprocs"),
+        "skip_bids_validation": args.get("skip_bids_validation", False),
+    }
+    sub_dir = output_dir / f"sub-{subject}"
+    out = sub_dir / "logs" / (record_stem(subject, args.get("session_label"),
+                                          args.get("task_label")) + "_desc-raw.toml")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join([_section("environment", _environment()),
+                              _section("execution", execution),
+                              _section("qc", _settings(keys, args, None))]), encoding="utf-8")
+    return out
+
+
 def record_stem(subject: str, sessions: "list[str] | None" = None,
                 tasks: "list[str] | None" = None) -> str:
     """The name a subject's run record and log share: the subject and the run's selection.

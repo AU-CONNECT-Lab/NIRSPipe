@@ -33,7 +33,7 @@ def _tree(out):
     _channel_table(s1, "sub-01_task-nback", {"S2_D2 760", "S2_D2 850"})
     # sub-02's montage has no S3_D3, and it rejects S1_D1 in its one run
     _channel_table(s2, "sub-02_task-rest", {"S1_D1 760"}, pairs=("S1_D1", "S2_D2"))
-    # sub-03: prep-raw rejects S2_D2, the pipeline's own table keeps it and wins
+    # sub-03: raw QC rejects S2_D2, the pipeline's own table keeps it and wins
     _channel_table(s3, "sub-03_task-rest", {"S2_D2 760"}, suffix="_desc-rawchannel_qc.tsv")
     _channel_table(s3, "sub-03_task-rest", set())
     for nirs, label in ((s1, "sub-01_task-rest_run-1"), (s2, "sub-02_task-rest"),

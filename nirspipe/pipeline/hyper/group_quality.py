@@ -17,7 +17,6 @@ import pandas as pd
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
 from nirspipe.io.head_template import CORTEX_ATLASES
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
@@ -158,44 +157,52 @@ def apply_group_bads(
                     subject_id, len(marked), ", ".join(sorted(labels)))
 
 
-def compute_group_sqm_raw(
+def member_raw_record(output_dir: Path, entry: GroupEntry, raw: mne.io.Raw) -> "tuple[Path, dict]":
+    """The member's raw QC record for the recording ``raw`` holds, as ``(path, record)``.
+
+    Matched by the recording its Sources name rather than by label, so a member with several
+    runs of a task gets the record of the run the pairs table chose. Refused when there is
+    none, or when it predates records that carry their parameters.
+    """
+    from nirspipe.exceptions import StageError
+    from nirspipe.qc.subject.record_io import read_record
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
+
+    source = Path(path_from(raw) or "").name
+    for path in _member_sqm_files(output_dir, entry,
+                                  f"{entry.subject_id}*{RECORD_SUFFIXES['sqmraw']}"):
+        if any(Path(str(uri)).name == source for uri in read_json(path).get("Sources") or []):
+            record = read_record(path)
+            if "parameters" not in record:
+                raise StageError(f"{path.name} was written before raw QC records carried their "
+                                 f"settings; run `nirspipe-qc ... participant` on "
+                                 f"{entry.subject_id} again")
+            return path, record
+    raise StageError(f"{entry.subject_id}: no raw QC record for {source} under {output_dir}; "
+                     f"run `nirspipe-qc ... participant` on it first")
+
+
+def load_group_sqm_raw(
+    output_dir: Path,
     group: list[GroupEntry],
     raws: dict[str, mne.io.Raw],
-    sci_threshold: float,
-    output_dir: Path,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    psp_threshold: float | None = None,
-    sep_bands=None,
-    min_good_frac: float | None = None,
-    screen_scope: str = "run",
+    records: "dict[str, tuple[Path, dict]]",
     session: "str | None" = None,
-    channels_tsv_bads: "dict[str, list[str]] | None" = None,
-    imu: "dict[str, dict] | None" = None,
 ) -> dict[str, dict]:
-    """Compute raw-level SQM (SCI, bad channels) for each group member.
+    """Each member's raw QC record in the dyad page's shape, and the dyad's two quality tables.
 
-    ``imu`` is each member's IMU traces on its own clock, summarised over its recording as
-    the subject record's ``imu`` section is.
+    The verdict, the screening lines and the cardiac band are each member's own, as the
+    participant level recorded them, so nothing is screened here and a parent-child dyad
+    keeps two bands. ``records`` is :func:`member_raw_record` per member.
 
     Writes two TSVs under group-{gid}/nirs/, where a subject's own tables sit:
       group-{gid}_task-{task}_desc-subject_qc.tsv: one row per subject (scalars)
       group-{gid}_task-{task}_desc-channel_qc.tsv: one row per subject × channel
 
-    Returns {subject_id: sqm_dict} for use in the HTML report.
-
-    The dict is the long-channel verdict, assembled by
-    :func:`~nirspipe.qc.subject.sqm_record.raw_verdict_view` from the same three sections the
-    per-subject record holds, so a subject's SCI, CV, SNR and GVTD here sit on the same
-    channel set as the same subject's numbers in the individual reports and in `nirspipe-hyper`.
+    Returns {subject_id: sqm_dict} for the HTML report, with ``screen_cutoffs``,
+    ``screen_band`` and ``parameters`` beside the record's own numbers.
     """
-    from nirspipe.qc.metrics import (imu_section, resolve_cutoffs, screen_channels,
-                                     screening_gap, screening_scores)
-    from nirspipe.qc.common.screen_scope import resolve_screen_scope
-    from nirspipe.qc.subject.sqm_record import raw_sections, raw_verdict_view
-
-    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
-                              good_frac=min_good_frac)
+    from nirspipe.qc.subject.sqm_record import raw_verdict_view
 
     gid  = group[0].group_id
     task = group[0].task
@@ -203,128 +210,53 @@ def compute_group_sqm_raw(
     sqm_data: dict[str, dict] = {}
     scalar_rows: list[dict] = []
     channel_rows: list[dict] = []
+    members: dict[str, dict] = {}
 
     for entry in group:
-        raw = raws[entry.subject_id]
+        sid = entry.subject_id
+        _path, record = records[sid]
+        params = record["parameters"]
+        cutoffs = {"sci": params["sci_threshold"], "psp": params.get("psp_threshold"),
+                   "good_frac": params.get("min_good_frac")}
 
-        # raw_od stays None when the conversion itself failed, which is the one case where
-        # nothing can be screened: everything below reads optical density
-        raw_od: "mne.io.Raw | None" = None
-        sci_cw = {ch: float("nan") for ch in raw.ch_names}
-        try:
-            raw_od  = as_optical_density(raw)
-            sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
-                raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
-            sci_cw  = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}
-        except Exception:
-            logger.warning("%s: SCI could not be measured", entry.subject_id, exc_info=True)
-
-        sci_scores: dict[str, float] = {}
-        for ch, val in sci_cw.items():
-            pair = pair_of(ch)
-            sci_scores[f"{pair} hbo"] = val
-            sci_scores[pair] = val
-
-        bad_channels: list[str] = []
-        screen: dict = {}
-        screen_windows: dict = {}
-        scope = resolve_screen_scope(raw, screen_scope)
-        if raw_od is not None:
-            # the passing-window grid, kept so the panels shade the windows the verdict used
-            from nirspipe.qc.metrics.windowed import passing_windows
-            counted = passing_windows(
-                raw_od, cardiac_l_freq, cardiac_h_freq, cutoffs["sci"], cutoffs["psp"],
-                scope=scope)
-            if counted["mask"] is not None:
-                screen_windows = {k: counted[k] for k in
-                                  ("mask", "centers", "sci", "psp", "channel_order")}
-                # CV on the same grid, off raw intensity: after OD sigma/mu is not relative
-                try:
-                    from nirspipe.qc.metrics.windowed import compute_windowed_cv
-                    cv_m, cv_t = compute_windowed_cv(raw)
-                    if cv_m is not None and len(cv_t) == len(counted["centers"]):
-                        screen_windows["cv"] = cv_m
-                except Exception:
-                    logger.warning("%s: windowed CV could not be measured",
-                                   entry.subject_id, exc_info=True)
-                # motion on the same window grid, which the screening pass does not measure
-                try:
-                    from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
-                    means, _p95, gvtd_t = compute_windowed_filtered_gvtd(raw_od)
-                    if len(gvtd_t) == len(counted["centers"]):
-                        screen_windows["gvtd"] = means
-                    else:
-                        logger.warning("%s: windowed GVTD landed on %d windows against the "
-                                       "screening's %d; dropping the motion row rather than "
-                                       "drawing it on the wrong axis", entry.subject_id,
-                                       len(gvtd_t), len(counted["centers"]))
-                except Exception:
-                    logger.warning("%s: windowed GVTD could not be measured",
-                                   entry.subject_id, exc_info=True)
-            screen = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                      have={"sci": sci_cw,
-                                            "good_frac": counted["fractions"]},
-                                      cutoffs=cutoffs, scope=scope)
-        # a member screening cannot judge is still shown, and the dyad page says why
-        gap = screening_gap(raw_od, screen, scope)
-        if gap:
-            logger.warning("%s: channel screening could not judge this recording: %s",
-                           entry.subject_id, gap)
-        else:
-            bad_channels, _ = screen_channels(screen, cutoffs)
-
-        # the member's BIDS channels.tsv rejections, joined as the pipeline joins them
-        tsv_names = (channels_tsv_bads or {}).get(entry.subject_id) or []
-        tsv_bads = _expand_bad_pairs(raw, tsv_names)
-        missing = sorted({pair_of(c) for c in tsv_names} - {pair_of(c) for c in tsv_bads})
-        if missing:
-            logger.warning("%s: channels.tsv marks bad channels the recording does not have: %s",
-                           entry.subject_id, missing)
-        if tsv_bads:
-            logger.info("%s: bad channels from channels.tsv: %s", entry.subject_id, tsv_bads)
-            bad_channels = [*bad_channels, *(c for c in tsv_bads if c not in bad_channels)]
-
-        try:
-            sections, _per_channel = raw_sections(
-                raw, sci_cw, bad_channels, cardiac_l_freq, cardiac_h_freq, sep_bands,
-                screen.get("good_frac"))
-            sqm = raw_verdict_view(sections)
-        except Exception:
-            logger.warning("%s: quality metrics failed", entry.subject_id, exc_info=True)
-            sections, sqm, _per_channel = {}, {}, {}
-
-        imu_sec: dict = {}
-        if (imu or {}).get(entry.subject_id):
-            try:
-                imu_sec = imu_section(imu[entry.subject_id], raw, sep_bands)
-            except Exception:
-                logger.warning("%s: IMU summary failed", entry.subject_id, exc_info=True)
+        sqm = raw_verdict_view(record)
+        imu_sec = record.get("imu") or {}
         sqm.update(imu_sec)
+        per_channel = record.get("per_channel") or {}
+        per_all = per_channel.get("raw") or {}
+        sci_cw = per_all.get("sci_per_channel") or {}
+        sci_win = per_all.get("sci_win_per_channel") or {}
+        bad_channels = list(record.get("bad_channels") or [])
+        tsv_bads = _expand_bad_pairs(raws[sid], params.get("channels_tsv_bads") or [])
 
         # which channel set the row above describes, so a table read on its own says so
-        sqm["channel_set"] = "long" if sections.get("raw_long") else "all"
-        sqm["sci_per_channel"] = sci_scores
-        # per-channel values are filed under per_channel; the sections hold scalars only
-        sci_win = ((_per_channel or {}).get("raw") or {}).get("sci_win_per_channel") or {}
+        sqm["channel_set"] = "long" if record.get("raw_long") else "all"
+        sqm["sci_per_channel"] = {k: float(v) for ch, v in sci_cw.items()
+                                  for k in (f"{pair_of(ch)} hbo", pair_of(ch))}
         sqm["sci_win_per_channel"] = _pairwise(sci_win)
         sqm["bad_channels"]    = bad_channels
         sqm["channels_tsv_pairs"] = sorted({pair_of(c) for c in tsv_bads})
-        sqm["screen_windows"]  = screen_windows
-        sqm["screen_cutoffs"]  = dict(cutoffs)
-        sqm["screening_gap"]   = gap
-        sqm["per_channel"]     = _per_channel or {}
-        sqm["per_channel_all"]  = (_per_channel or {}).get("raw") or {}
-        sqm["per_channel_long"] = ((_per_channel or {}).get("raw_long")
-                                   or sqm["per_channel_all"])
+        sqm["screen_windows"]  = _screen_windows(record, cutoffs)
+        sqm["screen_cutoffs"]  = cutoffs
+        sqm["screen_band"]     = (params["cardiac_l_freq"], params["cardiac_h_freq"])
+        sqm["screening_gap"]   = record.get("screening_gap")
+        sqm["parameters"]      = params
+        sqm["per_channel"]     = per_channel
+        sqm["per_channel_all"]  = per_all
+        sqm["per_channel_long"] = per_channel.get("raw_long") or per_all
         # the three sections side by side, the shape `load_group_sqm` gives the post report
-        sqm["by_set"] = {name: sections.get(section) or {}
-                         for name, (section, *_rest) in _SET_SECTIONS.items()}
-        sqm_data[entry.subject_id] = sqm
+        sqm["by_set"] = {name: {k: v for section in sections
+                                for k, v in (record.get(section) or {}).items()}
+                         for name, sections in _SET_SECTIONS.items()}
+        sqm_data[sid] = sqm
+        members[sid] = {k: params.get(k) for k in ("sci_threshold", "psp_threshold",
+                                                   "min_good_frac", "cardiac_l_freq",
+                                                   "cardiac_h_freq")}
 
         # every scalar the record holds, not a whitelist that would leave SCI alone
         scalar_rows.append({
             "group_id":       gid,
-            "subject_id":     entry.subject_id,
+            "subject_id":     sid,
             "task":           task,
             "channel_set":    sqm["channel_set"],
             "n_bad_channels": len(bad_channels),
@@ -333,11 +265,10 @@ def compute_group_sqm_raw(
             # the unit each IMU number was read in, which differs between devices
             **{k: v for k, v in imu_sec.items() if isinstance(v, str)},
         })
-
         for ch, sci_val in sci_cw.items():
             channel_rows.append({
                 "group_id":   gid,
-                "subject_id": entry.subject_id,
+                "subject_id": sid,
                 "task":       task,
                 "channel":    ch,
                 # the subject table's names, windowed first
@@ -346,31 +277,25 @@ def compute_group_sqm_raw(
                 "is_bad":     ch in bad_channels,
             })
 
-    sources = [p for p in (path_from(raws[e.subject_id]) for e in group) if p]
-
+    # each member's recording and the record its numbers were read from
+    sources = [p for e in group for p in (path_from(raws[e.subject_id]),
+                                          str(records[e.subject_id][0])) if p]
     # the members whose channels.tsv rejected something, named in both sidecars
-    listed = {sid: names for sid, names in (channels_tsv_bads or {}).items() if names}
-    tsv_params = {"channels_tsv_bads": listed} if listed else {}
+    listed = {e.subject_id: names for e in group
+              if (names := records[e.subject_id][1]["parameters"].get("channels_tsv_bads"))}
+    tsv_params = {"members": members, **({"channels_tsv_bads": listed} if listed else {})}
 
     scalar_path = group_output_path(output_dir, gid, {"task": task, "desc": "subject"},
                                     "qc", ".tsv", session=session)
     write_tsv(pd.DataFrame(scalar_rows), scalar_path)
-    _hyper_sidecar(scalar_path, "group_sqm_raw", sources,
-                   sci_threshold=sci_threshold,
-                   psp_threshold=cutoffs["psp"],
-                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-                   **tsv_params)
+    _hyper_sidecar(scalar_path, "group_sqm_raw", sources, **tsv_params)
 
     # not `_channels.tsv`: that name is BIDS's own channel description, and this holds
     # one row per subject and channel of cross-subject quality
     channel_path = group_output_path(output_dir, gid, {"task": task, "desc": "channel"},
                                      "qc", ".tsv", session=session)
     write_tsv(pd.DataFrame(channel_rows), channel_path)
-    _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources,
-                   sci_threshold=sci_threshold,
-                   psp_threshold=cutoffs["psp"],
-                   cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
-                   **tsv_params)
+    _hyper_sidecar(channel_path, "group_sqm_raw_channels", sources, **tsv_params)
 
     return sqm_data
 
@@ -454,9 +379,9 @@ def load_group_sqm(
                                                    .get("sci_win_per_channel") or {})
             # an all-long montage writes no `raw_long`, so the whole-file section stands in
             sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel_all"]
-            # the same screening grid `compute_group_sqm_raw` keeps when it measures one
-            # itself, rebuilt here from the matrices the record stored. One shape, so a dyad
-            # panel does not care which command produced the members' numbers.
+            # the screening grid rebuilt from the matrices the record stored, the same shape
+            # `load_group_sqm_raw` gives, so a dyad panel does not care which command
+            # produced the members' numbers
             sqm["screen_windows"] = _screen_windows(record, sqm.get("screen_cutoffs"))
             # the per-condition numbers the record already holds, so the dyad pages read
             # them rather than cutting the matrices above a second time
@@ -636,7 +561,7 @@ def _pairwise(per_wavelength: dict) -> dict[str, float]:
 
       {"S1_D1 760": 0.86, "S1_D1 850": 0.86} -> {"S1_D1": 0.86, "S1_D1 hbo": 0.86}
 
-    The whole-run SCI is built with both spellings in ``compute_group_sqm_raw``, because the pages ask
+    The whole-run SCI is built with both spellings in ``load_group_sqm_raw``, because the pages ask
     for ``"<pair> hbo"`` and fall back to the bare pair. The windowed estimate comes out of
     the metric registry keyed by the recording's own channel names instead, so handing it
     over unchanged makes every lookup miss and every channel read as unmeasured, with
@@ -660,8 +585,8 @@ def resolve_group_bands(
     ``nirspipe-hyper`` works on derivatives that prep has already split into long and short
     channels and stamped with the bands it split them by, so the bands are read back rather
     than taken again from the command line.
-    ``nirspipe-qc hyper-raw`` is not a caller: it reads BIDS raw data and computes the record
-    itself, so there is nothing on disk to read back and its flags stay the source of truth.
+    ``nirspipe-qc``'s group level is not a caller: it takes each member's bands from that
+    member's raw QC record.
 
     Two members are two prep runs, so they can disagree. **That is refused, not
     reconciled**: the bands also chose what short-channel regression removed from each

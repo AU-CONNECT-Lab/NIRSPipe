@@ -15,12 +15,10 @@ from nirspipe.interface.report_serve import REPORT_PATTERNS, find_report
 # with REPORT_PATTERNS while both disagree with the writers.
 WRITTEN = {
     "participant":  "sub-01/" + report_name("sub-01", desc="index"),
-    "prep-raw":     "sub-01/" + report_name("sub-01_task-rest", desc="raw"),
-    "hyper-raw":    "group-G1/" + report_name("group-G1_task-rest", desc="raw"),
+    "raw-qc":       "sub-01/" + report_name("sub-01_task-rest", desc="raw"),
     "run":          "group-G1/" + report_name("group-G1_task-rest"),
     "index":        "group-G1/" + report_name("group-G1", desc="index"),
     "cohort":       derivative_path("", "report", ".html", desc="subjects").name,
-    "cohort-hyper": derivative_path("", "report", ".html", desc="groups").name,
     "groupnull":    derivative_path("", "report", ".html", task="rest", desc="groupnull").name,
 }
 

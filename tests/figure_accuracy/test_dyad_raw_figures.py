@@ -1,4 +1,4 @@
-"""The dyad raw page (nirspipe-qc hyper-raw): each figure against its table and against the planted truth."""
+"""The dyad raw page (raw QC's group level): each figure against its table and against the planted truth."""
 
 import re
 

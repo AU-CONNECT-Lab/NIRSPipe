@@ -612,7 +612,7 @@ def carpet_gvtd_figure(
     n_ch      = len(carpet_rows)
     n_carpets = 2 if has_after else 1
     # the strip is the correction's own row, so it is there only when there is a correction
-    # to draw; prep-raw runs before any and would otherwise get a labelled empty band
+    # to draw; raw QC runs before any and would otherwise get a labelled empty band
     has_strip = bool(corrected_segments)
     sensors   = _imu_sensors(imu)
     n_rows    = len(sensors) + int(has_strip) + len(rows) + n_carpets

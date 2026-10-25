@@ -1,4 +1,4 @@
-"""nirspipe-qc prep-raw and hyper-raw take each recording's channels.tsv status as the pipeline does."""
+"""Raw QC takes each recording's channels.tsv status as the pipeline does, and the dyad page keeps it."""
 
 import json
 import logging
@@ -8,6 +8,7 @@ import pytest
 
 from nirspipe.cli import qc as qc_cli
 
+from tests._raw_qc import raw_qc
 from tests._synth import make_bids_dataset, make_hyper_dataset
 
 LISTED = "S1_D1 760"     # one wavelength of a pair the screening keeps
@@ -42,7 +43,7 @@ def _same_files(a, b, pattern):
             assert (a / rel).read_bytes() == (b / rel).read_bytes(), rel
 
 
-# ---- prep-raw ----
+# ---- participant level ----
 
 @pytest.fixture(scope="module")
 def prep_raw(tmp_path_factory):
@@ -54,7 +55,7 @@ def prep_raw(tmp_path_factory):
     for name, bids, extra in (("plain", plain, ()), ("listed", listed, ()),
                               ("ignored", listed, ("--ignore", "channel-status"))):
         outs[name] = root / f"out_{name}"
-        qc_cli.main(["prep-raw", str(bids), str(outs[name]), "--participant-label", "01",
+        qc_cli.main([str(bids), str(outs[name]), "participant", "--participant-label", "01",
                      *RAW_ARGS, *extra])
     return outs
 
@@ -86,7 +87,7 @@ def test_prep_raw_warns_about_a_listed_pair_the_recording_lacks(tmp_path, caplog
     bids = _with_status(make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",)),
                         "01", "tapping")
     with caplog.at_level(logging.WARNING, logger="nirspipe.qc.prep_raw_report"):
-        qc_cli.main(["prep-raw", str(bids), str(tmp_path / "out"), "--participant-label", "01",
+        qc_cli.main([str(bids), str(tmp_path / "out"), "participant", "--participant-label", "01",
                      *RAW_ARGS])
     assert "channels.tsv marks bad channels the recording does not have: ['S9_D9']" in caplog.text
 
@@ -97,7 +98,7 @@ def test_prep_raw_ignoring_the_column_comes_out_bit_identical_to_no_column(prep_
                     pattern)
 
 
-# ---- hyper-raw ----
+# ---- group level ----
 
 @pytest.fixture(scope="module")
 def hyper_raw(tmp_path_factory):
@@ -109,8 +110,7 @@ def hyper_raw(tmp_path_factory):
     for name, bids, extra in (("plain", plain, ()), ("listed", listed, ()),
                               ("ignored", listed, ("--ignore", "channel-status"))):
         outs[name] = root / f"out_{name}"
-        qc_cli.main(["hyper-raw", str(bids), str(outs[name]), "group", "--pairs-csv", str(pairs),
-                     *RAW_ARGS, *extra])
+        raw_qc(bids, outs[name], pairs, participant=(*RAW_ARGS, *extra))
     return outs
 
 
@@ -141,7 +141,7 @@ def test_hyper_raw_counts_and_records_the_listed_channels(hyper_raw):
 
 
 def test_hyper_raw_names_the_listed_pairs_per_member(hyper_raw):
-    report = lambda out: next(out.rglob("*_desc-raw_report.html")).read_text(  # noqa: E731
+    report = lambda out: next(out.glob("group-*/*_desc-raw_report.html")).read_text(  # noqa: E731
         encoding="utf-8")
     listed = report(hyper_raw["listed"])
     assert ("sub-11: marked bad by the recording&rsquo;s BIDS channels.tsv, whatever the "

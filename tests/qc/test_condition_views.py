@@ -23,7 +23,7 @@ def _src(name: str) -> dict:
 
 
 def test_a_figure_named_for_the_condition_is_kept():
-    """The name `prep-raw` gives a condition's own figure is the one this check accepts."""
+    """The name raw QC gives a condition's own figure is the one this check accepts."""
     name = figure_namer("sub-01_task-rest", "game1", prefix="raw")("psd")
     assert figure_leaks({"psd": _src(name)}, "game1") == []
 

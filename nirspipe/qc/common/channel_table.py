@@ -735,7 +735,7 @@ def format_rows(
 # optode pairing and channel properties of one recording, and this is scores and the
 # reason a channel was rejected.
 CHANNEL_METRICS_SUFFIX = "_desc-channel_qc.tsv"
-# prep-raw's, raw-prefixed like its record, so neither command's verdict replaces the other's
+# raw QC's, raw-prefixed like its record, so neither command's verdict replaces the other's
 RAW_CHANNEL_METRICS_SUFFIX = "_desc-rawchannel_qc.tsv"
 # best first, the order a reader wanting one verdict per run takes them in
 CHANNEL_METRICS_SUFFIXES = (CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX)

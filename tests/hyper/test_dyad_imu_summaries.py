@@ -8,14 +8,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nirspipe.cli import qc as qc_cli
-from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.io.naming import parse_path
 from nirspipe.io.groups import GroupEntry
-from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw, load_group_sqm
+from nirspipe.pipeline.hyper.group_quality import load_group_sqm
 from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, format_metric
 from nirspipe.qc.hyper.hyper_report import imu_member_rows
-from tests._synth import make_hyper_dataset, synth_raw
+from tests._raw_qc import raw_qc
+from tests._synth import make_hyper_dataset
 
 SIDS = ["sub-11", "sub-12"]
 RAW_ARGS = ("--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
@@ -42,21 +41,6 @@ def test_no_member_with_an_imu_gives_no_rows():
 
 # ---- the raw pass ----
 
-def test_the_raw_pass_summarises_each_member_over_its_recording(tmp_path):
-    raws = {sid: synth_raw(sid.removeprefix("sub-"), "hold") for sid in SIDS}
-    t = np.arange(0.0, raws["sub-11"].times[-1] + 10.0, 0.02)
-    imu = {"sub-11": {"gyro": ImuTrace(t, np.full(len(t), 2.0), "°/s")}}
-    sqm = compute_group_sqm_raw([GroupEntry("G01", sid, "hold") for sid in SIDS], raws, 0.8,
-                                tmp_path, 0.7, 1.5, imu=imu)
-    assert sqm["sub-11"]["gyro_speed_mean"] == pytest.approx(2.0)
-    assert "gyro_speed_mean" not in sqm["sub-12"]
-    (path,) = tmp_path.rglob("*_desc-subject_qc.tsv")
-    table = pd.read_csv(path, sep="\t").set_index("subject_id")
-    assert table.loc["sub-11", "gyro_speed_mean"] == pytest.approx(2.0)
-    assert table.loc["sub-11", "gyro_speed_unit"] == "°/s"
-    assert pd.isna(table.loc["sub-12", "gyro_speed_mean"])
-
-
 def _add_gyro(snirf):
     # longer than the recording: the summary reads only the optical span
     n = 50 * 2000
@@ -75,18 +59,18 @@ def raw_pass(tmp_path_factory):
     bids, pairs = make_hyper_dataset(root, tasks=("hold",))
     _add_gyro(next((bids / "sub-11" / "nirs").glob("*.snirf")))
     out = root / "out"
-    qc_cli.main(["hyper-raw", str(bids), str(out), "group", "--pairs-csv", str(pairs),
-                 *RAW_ARGS])
+    raw_qc(bids, out, pairs, participant=RAW_ARGS)
     return out
 
 
 def test_hyper_raw_records_and_prints_the_member_with_a_gyroscope(raw_pass):
-    (path,) = raw_pass.rglob("*_desc-subject_qc.tsv")
+    (path,) = raw_pass.glob("group-*/nirs/*_desc-subject_qc.tsv")
     table = pd.read_csv(path, sep="\t").set_index("subject_id")
     assert np.isfinite(table.loc["sub-11", "gyro_speed_mean"])
     assert table.loc["sub-11", "gyro_speed_unit"] == "°/s"
     assert pd.isna(table.loc["sub-12", "gyro_speed_mean"])
-    section = _section(next(raw_pass.rglob("*_desc-raw_report.html")).read_text(encoding="utf-8"))
+    section = _section(next(raw_pass.glob("group-*/*_desc-raw_report.html")).read_text(
+        encoding="utf-8"))
     assert "Gyroscope speed mean" in section
     assert "Accelerometer jerk" not in section
 

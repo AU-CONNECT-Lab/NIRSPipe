@@ -186,7 +186,7 @@ def test_the_mean_psd_shades_the_run_s_cardiac_band(raw_viewer_run):
     fig = one_figure(raw_viewer_run.figure("rawpsd"))
     spans = [(s["x0"], s["x1"]) for s in fig["layout"]["shapes"] if s["type"] == "rect"]
     named = dict(zip([a["text"] for a in fig["layout"]["annotations"]], spans))
-    # prep-raw takes no respiration band, so it draws none
+    # raw QC takes no respiration band, so it draws none
     assert named == {"Mayer": (0.07, 0.13),
                      "Cardiac": (_arg("--cardiac-l-freq"), _arg("--cardiac-h-freq"))}
 

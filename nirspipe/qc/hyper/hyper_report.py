@@ -768,7 +768,6 @@ def build_hyper_report(
     aligned_raws: dict[str, mne.io.Raw],
     offsets: dict[str, float],
     output_dir: Path,
-    sci_threshold: float,
     raw_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
@@ -776,8 +775,6 @@ def build_hyper_report(
     full_raws: dict[str, mne.io.Raw] | None = None,
     full_after: dict[str, mne.io.Raw] | None = None,
     session: str | None = None,
-    cardiac_l_freq: float | None = None,
-    cardiac_h_freq: float | None = None,
     sep_bands=None,
     roi_map: "dict | None" = None,
 ) -> Path:
@@ -791,8 +788,7 @@ def build_hyper_report(
         output_dir=output_dir,
         raw_raws=raw_raws, intensity_raws=intensity_raws, after_raws=after_raws, imu=imu,
         full_raws=full_raws, full_after=full_after,
-        session=session, sci_threshold=sci_threshold,
-        cardiac_l_freq=cardiac_l_freq, cardiac_h_freq=cardiac_h_freq,
+        session=session,
         sep_bands=sep_bands, errors=errors, notes=notes, roi_map=roi_map,
     )
 
@@ -1717,7 +1713,7 @@ def build_hyper_post_report(
 
     # Rendered here rather than by the caller: every sidecar the scan reads was written by
     # the passes above, so this is the first moment the graph is complete. Same namer
-    # `nirspipe-qc provenance` uses, so re-running that refreshes the image this report links.
+    # `nirspipe-provenance` uses, so re-running that refreshes the image this report links.
     provenance_path = None
     with guard("Provenance diagram", errors, scope):
         for written in write_provenance(

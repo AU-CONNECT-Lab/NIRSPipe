@@ -22,12 +22,8 @@ from nirspipe.interface.stages import pipeline_stages
 
 DEFAULT_SHELL = "powershell" if os.name == "nt" else "bash"
 
-# (prog, sub) -> the REPORT_PATTERNS entry for what it writes; nirspipe's depends on the level
+# (prog, sub) -> the REPORT_PATTERNS entry for what it writes; nirspipe's and nirspipe-qc's depend on the level
 _REPORTS = {
-    ("nirspipe-qc", "prep-raw"): "prep-raw",
-    ("nirspipe-qc", "hyper-raw"): "hyper-raw",
-    ("nirspipe-qc", "cohort"): "cohort",
-    ("nirspipe-qc", "cohort-hyper"): "cohort-hyper",
     ("nirspipe-hyper", None): "run",
     ("nirspipe-hyper-index", None): "index",
     ("nirspipe-hyper-groupnull", None): "groupnull",
@@ -35,7 +31,7 @@ _REPORTS = {
 
 # run id -> (what the run writes, where), read when the page asks for the report
 _RUNS: dict[str, tuple["str | None", "Path | None"]] = {}
-# run id -> the BIDS dataset a prep-raw run read, which its reports are edited against
+# run id -> the BIDS dataset a raw QC run read, which its reports are edited against
 _SOURCES: dict[str, Path] = {}
 
 
@@ -85,7 +81,7 @@ def _record(path: str) -> "tuple[dict, list[str]]":
 
 def raw_reports(tree: Path) -> list[Path]:
     """A Raw QC tree's run pages; a condition page is a slice of one and edits nothing."""
-    return sorted(p for p in tree.glob(REPORT_PATTERNS["prep-raw"][0]) if "_cond-" not in p.name)
+    return sorted(p for p in tree.glob(REPORT_PATTERNS["raw-qc"][0]) if "_cond-" not in p.name)
 
 
 def _edit_links(tree: Path, bids_dir: Path) -> list[dict]:
@@ -106,7 +102,8 @@ def _data_prep_context() -> dict:
     """The reports a Raw QC tree already holds, each linked to open for editing; folders a link gave the form."""
     # a finished edit links here with the tree it wrote and an empty output folder
     given = [name for name in ("bids_dir", "output_dir") if name in request.args]
-    values = {name: [request.args[name]] for name in given}
+    # the page makes reports, which is the participant level
+    values = {"analysis_level": ["participant"], **{name: [request.args[name]] for name in given}}
     tree = request.args.get("tree", "").strip().strip('"')
     bids = request.args.get("bids", "").strip().strip('"')
     found, note = [], ""
@@ -128,6 +125,8 @@ _TEMPLATE_CONTEXT = {"snirf2bids_batch.html": _snirf2bids_context, "data_prep.ht
 def _report_key(prog: str, sub: "str | None", args) -> "str | None":
     if prog == "nirspipe":
         return "participant" if args.analysis_level == "participant" else "cohort"
+    if prog == "nirspipe-qc":
+        return "raw-qc" if args.analysis_level == "participant" else "cohort"
     return _REPORTS.get((prog, sub))
 
 
@@ -226,7 +225,7 @@ def blueprint(web) -> Blueprint:
         args = top.parse_args(argv[1:])
         output_dir = getattr(args, "output_dir", None)
         _RUNS[run_id] = (_report_key(prog, sub, args), Path(output_dir) if output_dir else None)
-        if _RUNS[run_id][0] == "prep-raw":
+        if _RUNS[run_id][0] == "raw-qc":
             _SOURCES[run_id] = Path(args.bids_dir)
         return jsonify(events=url_for("commands.events", run_id=run_id),
                        stop=url_for("commands.stop", run_id=run_id),
@@ -272,10 +271,10 @@ def blueprint(web) -> Blueprint:
             return jsonify(message=f"The run finished but its report is missing: looked for "
                                    f"{', '.join(REPORT_PATTERNS[key])} under {output_dir}.")
         rate = []
-        if key == "prep-raw":
+        if key == "raw-qc":
             rate = [{"label": page.stem.removesuffix("_desc-raw_report"),
                      "href": url_for("commands.rate_raw", report=str(page), tree=str(output_dir))}
-                    for page in sorted(output_dir.glob(REPORT_PATTERNS["prep-raw"][0]))]
+                    for page in sorted(output_dir.glob(REPORT_PATTERNS["raw-qc"][0]))]
         edit = _edit_links(output_dir, _SOURCES[run_id]) if run_id in _SOURCES else []
         return jsonify(url=report_url(found), path=str(found), rate=rate, edit=edit)
 
@@ -306,7 +305,7 @@ def blueprint(web) -> Blueprint:
         key = (report_path.resolve(), tree.resolve(), bids.resolve())
         if key not in edited:
             viewer = EditViewer(report_path, tree, bids,
-                                report_page=url_for("commands.data-prep", tab="prep-raw"))
+                                report_page=url_for("commands.data-prep", tab="raw-qc"))
             [edited[key]] = web.mount(viewer.app, f"Edit {report_path.stem}")
         return redirect("/" + edited[key])
 

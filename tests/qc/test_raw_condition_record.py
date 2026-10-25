@@ -33,7 +33,7 @@ def test_the_record_reads_back_with_each_condition_share(tmp_path):
 def test_by_condition_writes_a_page_per_condition(tmp_path):
     bids, _ = _bids(tmp_path)
     out = tmp_path / "out"
-    qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01",
+    qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01",
                  "--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
                  "--sci-threshold", "0.8", "--by-condition", "--skip-bids-validation"])
     pages = sorted(p.name for p in out.rglob("*cond-*_report.html"))

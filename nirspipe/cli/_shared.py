@@ -70,12 +70,13 @@ def _positive_int(text: str) -> int:
     return value
 
 
-def add_nprocs(container, unit: str = "subject") -> None:
+def add_nprocs(container, unit: str = "subject", note: str = "") -> None:
     """``--nprocs``, the cores a command may use in all, spelled as the BIDS Apps interface spells it."""
     container.add_argument(
         "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=_positive_int, default=None,
         help=f"CPU cores to use in all. Up to this many {unit}s run at once and spare cores go "
-             f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core.")
+             f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core."
+             + (f" {note}" if note else ""))
 
 
 def seed_or_drawn(seed: int | None, flag: str) -> int:
@@ -112,3 +113,33 @@ def map_subjects(fn, subjects: list[str], nprocs: int | None) -> list:
         if jobs == 1:
             return [fn(subject) for subject in subjects]
         return Parallel(n_jobs=jobs, prefer="threads")(delayed(fn)(s) for s in subjects)
+
+
+def coerce_setting(action: argparse.Action, key: str, value, path: Path):
+    """A TOML value through the flag's own type and choices, as argparse would have."""
+    def fail(why: str):
+        print(f"Error: {path}: {key} = {value!r}: {why}", file=sys.stderr)
+        raise SystemExit(1)
+
+    if action.nargs == 0:
+        if not isinstance(value, bool):
+            fail("expected true or false")
+        return value
+    many = action.nargs in ("+", "*")
+    items = value if isinstance(value, list) else [value]
+    if isinstance(value, list) and not many:
+        fail("expected one value, not a list")
+    try:
+        items = [action.type(str(item)) if action.type else item for item in items]
+    except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
+        fail(str(exc))
+    if action.choices is not None and any(item not in action.choices for item in items):
+        fail(f"expected one of {', '.join(map(str, action.choices))}")
+    return items if many else items[0]
+
+
+def typed_flags(parser: argparse.ArgumentParser, argv: "list[str] | None") -> set[str]:
+    """The dests of the flags actually typed, which argparse's own defaults would otherwise hide."""
+    for action in parser._actions:
+        action.default = argparse.SUPPRESS
+    return set(vars(parser.parse_args(argv)))

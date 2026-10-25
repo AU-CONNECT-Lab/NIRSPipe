@@ -163,7 +163,7 @@ def test_an_uncrossed_run_prints_dashes_in_the_index_s_crossed_columns(dyad_vari
         float(cells[head.index("WTC HbO")])
 
 
-# ---- nirspipe-qc hyper-raw --tstart / --normalize ----
+# ---- raw QC's group level --tstart / --normalize ----
 
 def test_the_record_s_offsets_are_the_page_s_under_tstart(dyad_variants):
     g = dyad_variants["tstart"]
@@ -185,7 +185,7 @@ def test_a_normalized_detail_trace_is_not_labelled_in_concentration(dyad_variant
     assert not any("mol" in t for t in titles), titles
 
 
-# ---- nirspipe-qc cohort-hyper with a block one dyad lacks ----
+# ---- the dyad cohort page with a block one dyad lacks ----
 
 def test_a_block_a_dyad_lacks_draws_no_arc(dyad_variants):
     g = dyad_variants["cohortgap"]

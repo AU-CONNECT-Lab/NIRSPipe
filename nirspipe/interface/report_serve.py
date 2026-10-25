@@ -26,8 +26,7 @@ _ROOTS: dict[str, Path] = {}
 # not a quiet "not found".
 REPORT_PATTERNS: dict[str, list[str]] = {
     "participant":  ["sub-*/sub-*_desc-index_report.html"],
-    "prep-raw":     ["sub-*/sub-*_desc-raw_report.html"],
-    "hyper-raw":    ["group-*/group-*_desc-raw_report.html"],
+    "raw-qc":       ["sub-*/sub-*_desc-raw_report.html"],
     # the dyad's landing page is its index, which `nirspipe-hyper` writes too; the task page is the
     # fallback for a tree whose index failed. A bare `_task-*_report.html` glob would also
     # match the per-condition and per-pairing pages, and those are not where to land
@@ -35,7 +34,6 @@ REPORT_PATTERNS: dict[str, list[str]] = {
                      "group-*/group-*_task-*_report.html"],
     "index":        ["group-*/group-*_desc-index_report.html"],
     "cohort":       ["desc-subjects_report.html"],
-    "cohort-hyper": ["desc-groups_report.html"],
     "groupnull":    ["task-*_desc-groupnull_report.html"],
 }
 

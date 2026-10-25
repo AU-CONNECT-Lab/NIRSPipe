@@ -26,7 +26,7 @@ class Page:
 
 PAGES = (
     Page("data-prep", "Data Preparation", (
-        Tab("prep-raw", "nirspipe-qc", "prep-raw", template="data_prep.html"),
+        Tab("raw-qc", "nirspipe-qc", template="data_prep.html"),
     ), family="Interactive"),
     Page("snirf2bids", "SNIRF to BIDS", (
         Tab("snirf2bids", "nirspipe-snirf2bids"),
@@ -39,8 +39,7 @@ PAGES = (
         Tab("keep-spans", "nirspipe-prep", "keep-spans"),
     )),
     Page("raw-qc", "Raw QC", (
-        Tab("prep-raw", "nirspipe-qc", "prep-raw"),
-        Tab("hyper-raw", "nirspipe-qc", "hyper-raw"),
+        Tab("qc", "nirspipe-qc"),
         Tab("rate-raw", "nirspipe-rate", "raw"),
         Tab("rate-hyper", "nirspipe-rate", "hyper"),
         Tab("export", "nirspipe-rate", "export"),
@@ -55,9 +54,7 @@ PAGES = (
         Tab("index", "nirspipe-hyper-index"),
     )),
     Page("cohort", "Cohort Reports", (
-        Tab("cohort", "nirspipe-qc", "cohort"),
-        Tab("cohort-hyper", "nirspipe-qc", "cohort-hyper"),
-        Tab("provenance", "nirspipe-qc", "provenance"),
+        Tab("provenance", "nirspipe-provenance"),
         Tab("rate", "nirspipe-rate", "rate"),
     )),
 )

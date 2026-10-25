@@ -169,7 +169,7 @@ def long_short_channels(
 ) -> "tuple[list[str], list[str]]":
     """Split channel names by source-detector separation, returning ``(long, short)``.
 
-    One definition for the whole package, so the report, the prep-raw figures and the SQM
+    One definition for the whole package, so the report, the raw QC figures and the SQM
     record agree on which channels are which. Because the two ranges do not meet (see
     SHORT_MAX_DIST / LONG_MIN_DIST), the two lists need not cover every channel::
 

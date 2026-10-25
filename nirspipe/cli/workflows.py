@@ -892,7 +892,7 @@ def _warn_on_split_tree(output_dir: Path) -> None:
     """Say so when quality records sit in a subtree this aggregation does not reach.
 
     Two output directories means two records for one run, and the rule preferring the
-    pipeline record over the `prep-raw` one can only choose between records one glob found.
+    pipeline record over the raw QC one can only choose between records one glob found.
     """
     from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
 
@@ -901,8 +901,8 @@ def _warn_on_split_tree(output_dir: Path) -> None:
                                 for suffix in RECORD_SUFFIXES.values()):
             logger.warning(
                 "quality records under %s are not part of this cohort page; point both "
-                "`nirspipe` and `nirspipe-qc prep-raw` at one output directory, or aggregate "
-                "that one separately with `nirspipe-qc cohort %s`", sub, sub)
+                "`nirspipe` and `nirspipe-qc ... participant` at one output directory, or "
+                "aggregate that one separately with `nirspipe-qc <bids> %s group`", sub, sub)
 
 
 def run_group_level(args: dict[str, Any]) -> None:

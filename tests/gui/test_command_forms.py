@@ -93,20 +93,20 @@ def test_each_field_round_trips_through_the_command_s_own_parser(label, prefix, 
 
 def test_an_empty_field_leaves_the_command_s_default():
     parser = parser_for("nirspipe-qc")
-    prep_raw = subcommands(parser)["prep-raw"]
-    argv = to_argv(["nirspipe-qc", "prep-raw"], prep_raw,
-                   _form({"bids_dir": "/bids", "output_dir": "/out", "--psp-threshold": ""}))
+    argv = to_argv(["nirspipe-qc"], parser,
+                   _form({"bids_dir": "/bids", "output_dir": "/out",
+                          "analysis_level": "participant", "--psp-threshold": ""}))
     assert "--psp-threshold" not in argv
 
 
 def test_a_command_line_that_does_not_parse_is_named_by_argparse():
     parser = parser_for("nirspipe-qc")
-    message = check(parser, ["prep-raw", "/bids", "/out", "--sci-threshold", "high"])
+    message = check(parser, ["/bids", "/out", "participant", "--sci-threshold", "high"])
     assert message is not None and "--sci-threshold" in message
 
 
 def test_required_fields_lead_and_none_is_lost():
-    groups = fields(subcommands(parser_for("nirspipe-qc"))["prep-raw"])
+    groups = fields(parser_for("nirspipe-qc"))
     ordered = required_first(groups)
     assert ordered[0][0] == "Required"
     assert all(f.required for f in ordered[0][1])

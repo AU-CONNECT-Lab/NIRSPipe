@@ -5,7 +5,7 @@ import pytest
 from nirspipe.cli import qc as qc_cli
 from nirspipe.cli import rate as rate_cli
 from nirspipe.cli.hyper import _parsers as hyper_parsers
-from nirspipe.interface.commands import parser_for, subcommands
+from nirspipe.interface.commands import parser_for
 from nirspipe.interface.forms import fields, required_first
 from nirspipe.qc.common.channel_table import format_rows
 from nirspipe.qc.rating.app import HyperRatingApp, RawRatingApp
@@ -13,15 +13,12 @@ from nirspipe.qc.rating.app import HyperRatingApp, RawRatingApp
 SCREEN = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
 
 
-@pytest.mark.parametrize("command, positionals", [
-    ("prep-raw", ["/bids", "/out", "--participant-label", "01"]),
-    ("hyper-raw", ["/bids", "/out", "group", "--pairs-csv", "pairs.csv"]),
-])
-def test_a_screening_command_refuses_to_run_without_a_line(command, positionals):
-    parser = qc_cli._build_parser()
+def test_the_participant_level_refuses_to_run_without_a_line(capsys):
+    positionals = ["/bids", "/out", "participant", "--participant-label", "01"]
     with pytest.raises(SystemExit):
-        parser.parse_args([command, *positionals, *SCREEN])
-    args = parser.parse_args([command, *positionals, *SCREEN, "--sci-threshold", "0.7"])
+        qc_cli.main([*positionals, *SCREEN])
+    assert "Missing option '--sci-threshold'" in capsys.readouterr().err
+    args = qc_cli._build_parser().parse_args([*positionals, *SCREEN, "--sci-threshold", "0.7"])
     assert args.sci_threshold == 0.7
 
 
@@ -60,8 +57,7 @@ def test_the_rating_servers_hand_the_page_the_rater_s_line(tmp_path):
     assert line(HyperRatingApp(html, tmp_path, ["01", "02"], 0.6)) == 0.6
 
 
-@pytest.mark.parametrize("command", ["prep-raw", "hyper-raw"])
-def test_the_gui_asks_for_the_line_before_running_a_raw_report(command):
-    [(title, required), *_] = required_first(fields(subcommands(parser_for("nirspipe-qc"))[command]))
-    assert title == "Required" and "--sci-threshold" in [f.name for f in required]
+def test_the_gui_shows_the_line_among_the_participant_level_settings():
+    groups = dict(required_first(fields(parser_for("nirspipe-qc"))))
+    assert "--sci-threshold" in [f.name for f in groups["participant level"]]
 

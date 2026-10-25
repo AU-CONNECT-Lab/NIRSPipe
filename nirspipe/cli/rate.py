@@ -181,14 +181,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
     ph.add_argument("output_dir", type=Path,
-                    help="The tree holding the group-<id>/ raw report, as nirspipe-qc hyper-raw "
-                         "wrote it.")
+                    help="The tree holding the group-<id>/ raw report, as nirspipe-qc's group "
+                         "level wrote it.")
     ph.add_argument("--group-id", required=True, type=_shared.BidsLabel,
                     help="Group ID to open, e.g. 'A'.")
     ph.add_argument("--task-label", "--task_label", required=True, type=_shared.BidsLabel,
                     help="Task label, e.g. 'tapping'.")
     ph.add_argument("--pairs-csv", type=Path, required=True,
-                    help="CSV with columns: group_id, subject_id, task (same as nirspipe-qc hyper-raw). "
+                    help="CSV with columns: group_id, subject_id, task (same as nirspipe-qc's group level). "
                          "Used to look up subject IDs in this group.")
     ph.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")

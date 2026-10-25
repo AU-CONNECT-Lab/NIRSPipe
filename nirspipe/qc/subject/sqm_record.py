@@ -105,13 +105,13 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # without either is correct, not incomplete.
 # The group table still descends into these.
 # The two records a run can leave behind, best first. `sqm` is what the pipeline writes,
-# `sqmraw` what `nirspipe-qc prep-raw` writes, measuring the original recording only. A run
+# `sqmraw` what raw QC (`nirspipe-qc`) writes, measuring the original recording only. A run
 # that saw both commands has both files. Both are sectioned; the shape is what is read,
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
 OPTIONAL_SECTIONS = ("censor", "imu", "whitening",
-                     # `nirspipe-qc prep-raw` only: its in-memory Beer-Lambert, before and after
+                     # raw QC only: its in-memory Beer-Lambert, before and after
                      # the correction it may run
                      "rawhaemo", "rawhaemo_long", "rawhaemo_short",
                      "rawhaemo_post", "rawhaemo_post_long", "rawhaemo_post_short")
@@ -608,7 +608,7 @@ def motion_sections(
 
     Written in place through ``section``, the same writer the rest of the record uses, so a
     family that fails costs that family alone. One function because two callers assemble it:
-    the pipeline's record reads the two files off disk, and ``nirspipe-qc prep-raw`` corrects a
+    the pipeline's record reads the two files off disk, and raw QC (``nirspipe-qc``) corrects a
     copy in memory and never writes it.
     """
     from nirspipe.qc.metrics import (

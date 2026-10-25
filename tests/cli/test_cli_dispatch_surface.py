@@ -33,6 +33,13 @@ def _commands(module_name):
     """[(command path, function, {dest names the parser produces})] for one CLI module."""
     module = importlib.import_module(module_name)
 
+    # a BIDS App with levels hands each level's command the flags of that level
+    if hasattr(module, "dispatched"):
+        parser = module._build_parser()
+        return [(f"qc {level}", func, module.dispatched(parser, level))
+                for level, func in (("participant", module.cmd_participant),
+                                    ("group", module.cmd_group))]
+
     # a CLI that ships one console script per command names them in COMMANDS instead of
     # hanging them off subparsers, so there is no tree to walk
     if hasattr(module, "COMMANDS"):
@@ -63,7 +70,7 @@ ALL = [case for m in MODULES for case in _commands(m)]
 def test_the_walk_found_the_commands():
     """A guard that finds nothing passes for the wrong reason."""
     assert len(ALL) >= 10
-    assert any("prep-raw" in path for path, _f, _d in ALL)
+    assert {"qc participant", "qc group"} <= {path for path, _f, _d in ALL}
 
 
 @pytest.mark.parametrize("path,func,dests",

@@ -50,7 +50,7 @@ def test_an_unknown_run_is_not_found():
 
 def test_a_form_that_does_not_parse_is_not_run():
     client = WebApp().flask.test_client()
-    r = client.post("/run/nirspipe-qc/prep-raw/", data={"bids_dir": "/bids", "output_dir": "/out"})
+    r = client.post("/run/nirspipe-qc/", data={"bids_dir": "/bids", "output_dir": "/out"})
     assert r.status_code == 400 and "required" in r.get_json()["error"]
 
 

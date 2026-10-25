@@ -13,7 +13,7 @@ What it reports is what a dyad has and a subject cannot:
 - where that time went, per channel pair and per condition
 
 Deliberately not here: SCI, PSP, CV, retention and motion distributions across the cohort.
-Those are ``nirspipe-qc cohort``'s, measured per subject, and a second copy of them here
+Those are the subject cohort page's, measured per subject, and a second copy of them here
 would be the same numbers under a heading that implies they are about the dyad.
 
 Nor synchrony. Whether a dyad is coupled is ``nirspipe-hyper``'s question, asked of the
@@ -191,7 +191,8 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     output_dir = Path(output_dir)
     rows = collect_rows(output_dir)
     if not rows:
-        logger.warning("no dyad records under %s; run `nirspipe-qc hyper-raw` first", output_dir)
+        logger.warning("no dyad records under %s; run `nirspipe-qc ... group --pairs-csv` first",
+                       output_dir)
         return None
 
     errors: list[str] = []

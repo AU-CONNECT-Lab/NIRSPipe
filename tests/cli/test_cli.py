@@ -214,11 +214,8 @@ def test_gui_default_port():
 
 def test_the_dyad_analysis_left_nirspipe_qc():
     """nirspipe-qc carries none of the dyad analysis; that is nirspipe-hyper's."""
-    import argparse
-
-    sub = next(a for a in qc_cli._build_parser()._actions if isinstance(a, argparse._SubParsersAction))
-    gone = {"hyper-post", "hyper-null", "wtc-band", "group-hyper-wtc"} & set(sub.choices)
-    assert not gone, f"nirspipe-qc still carries {sorted(gone)}"
+    flags = {f for a in qc_cli._build_parser()._actions for f in a.option_strings}
+    assert not {f for f in flags if f.startswith(("--wtc", "--isc", "--phase-null"))}
 
 
 def test_snirf2bids_requires_subject_and_task():
@@ -243,12 +240,11 @@ def test_prep_participant_label_required():
         prep_cli._build_parser().parse_args(["crop", "/b", "/d", "--tmin", "5"])
 
 
-def test_qc_hyper_raw_dispatches():
-    args = qc_cli._build_parser().parse_args(
-        ["hyper-raw", "/b", "/o", "group", "--pairs-csv", "p.csv", "--dpf", "6.0",
-         "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
-    )
-    assert args.func is qc_cli.cmd_hyper_raw
+def test_qc_takes_the_two_bids_app_levels():
+    args = qc_cli._build_parser().parse_args(["/b", "/o", "group", "--pairs-csv", "p.csv"])
+    assert (args.analysis_level, args.pairs_csv) == ("group", Path("p.csv"))
+    with pytest.raises(SystemExit):
+        qc_cli._build_parser().parse_args(["/b", "/o", "session"])
 
 
 def test_hyper_stage_and_band_flags():
@@ -312,12 +308,10 @@ def test_band_needs_a_band(capsys):
     assert "--wtc-band-fmin" in capsys.readouterr().err
 
 
-def test_moved_commands_are_gone_from_qc():
+def test_qc_has_no_subcommands():
     import argparse as _ap
-    sub = [a for a in qc_cli._build_parser()._actions
-           if isinstance(a, _ap._SubParsersAction)][0]
-    assert set(sub.choices) == {
-        "prep-raw", "hyper-raw", "cohort", "cohort-hyper", "provenance"}
+    assert not [a for a in qc_cli._build_parser()._actions
+                if isinstance(a, _ap._SubParsersAction)]
 
 
 def test_rate_subcommands():
@@ -333,25 +327,21 @@ def test_missing_subcommand_errors():
             mod._build_parser().parse_args([])
 
 
-def test_qc_provenance_dispatch():
-    args = qc_cli._build_parser().parse_args(["provenance", "/out"])
-    assert args.func is qc_cli.cmd_provenance
-    assert args.output_dir == Path("/out")
-
-
-def test_qc_provenance_requires_output_dir():
+def test_provenance_takes_the_tree_alone():
+    assert qc_cli._provenance_parser().parse_args(["/out"]).output_dir == Path("/out")
     with pytest.raises(SystemExit):
-        qc_cli._build_parser().parse_args(["provenance"])
+        qc_cli._provenance_parser().parse_args([])
 
 
-@pytest.mark.parametrize("command", ["cohort", "cohort-hyper"])
-def test_a_cohort_over_a_tree_without_records_fails_and_writes_nothing(tmp_path, capsys, command):
-    (tmp_path / "sub-01" / "logs").mkdir(parents=True)
+def test_a_qc_group_level_over_a_tree_without_records_fails_and_writes_nothing(tmp_path,
+                                                                              capsys):
+    (tmp_path / "bids").mkdir()
+    (tmp_path / "qc" / "sub-01" / "logs").mkdir(parents=True)
     with pytest.raises(SystemExit) as exit_info:
-        qc_cli.main([command, str(tmp_path)])
+        qc_cli.main([str(tmp_path / "bids"), str(tmp_path / "qc"), "group"])
     assert exit_info.value.code == 1
-    assert "no " in capsys.readouterr().err
-    assert not list(tmp_path.glob("desc-*"))
+    assert "no raw QC records" in capsys.readouterr().err
+    assert not list((tmp_path / "qc").glob("desc-*"))
 
 
 def test_the_group_level_over_a_tree_without_records_fails_and_writes_nothing(tmp_path):
@@ -362,24 +352,19 @@ def test_the_group_level_over_a_tree_without_records_fails_and_writes_nothing(tm
     assert not list(tmp_path.glob("desc-*"))
 
 
-def test_qc_provenance_accepts_no_options():
+def test_provenance_accepts_no_options():
     # it rebuilds the graph from sidecars alone; an option here would mean the picture
     # depends on something the run did not record
     with pytest.raises(SystemExit):
-        qc_cli._build_parser().parse_args(["provenance", "/out", "--cardiac-l-freq", "0.7"])
+        qc_cli._provenance_parser().parse_args(["/out", "--cardiac-l-freq", "0.7"])
 
 
-@pytest.mark.parametrize("argv", [
-    pytest.param(["prep-raw", "/b", "/o", "--participant-label", "01", "--dpf", "6.0",
-                  "--sci-threshold", "0.8"], id="prep-raw"),
-    pytest.param(["hyper-raw", "/b", "/o", "group", "--pairs-csv", "p.csv", "--dpf", "6.0",
-                  "--sci-threshold", "0.8"], id="hyper-raw"),
-])
-def test_cardiac_band_stays_required(argv, capsys):
+def test_cardiac_band_stays_required_at_participant_level(capsys):
     # The band is population-dependent and drives SCI, PSP and Cardiac Power. A default
     # would compute all three against the wrong band instead of asking.
     with pytest.raises(SystemExit):
-        qc_cli._build_parser().parse_args(argv)
+        qc_cli.main(["/b", "/o", "participant", "--participant-label", "01", "--dpf", "6.0",
+                     "--sci-threshold", "0.8"])
     assert "--cardiac-l-freq" in capsys.readouterr().err
 
 

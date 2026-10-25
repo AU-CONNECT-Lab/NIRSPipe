@@ -760,6 +760,7 @@ def _process_run(
         record["by_condition"] = by_cond
     # what the dyad level reads this member by, so it never screens or converts it again
     record["bad_channels"] = sorted(bad_channels)
+    record["screening_gap"] = gap
     record["parameters"] = {
         "sci_threshold": cutoffs["sci"],
         "psp_threshold": cutoffs["psp"],

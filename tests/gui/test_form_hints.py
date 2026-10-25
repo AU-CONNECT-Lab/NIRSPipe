@@ -22,7 +22,7 @@ def test_detect_says_why_it_found_nothing(tmp_path):
 
 
 def test_every_field_names_its_kind_and_the_form_names_detect():
-    html = WebApp().flask.test_client().get("/raw-qc/prep-raw/").get_data(as_text=True)
+    html = WebApp().flask.test_client().get("/raw-qc/qc/").get_data(as_text=True)
 
     assert 'data-subjects="/subjects"' in html
     assert html.count('class="field ') == html.count("data-kind=")
@@ -101,4 +101,4 @@ def test_the_preview_leaves_out_what_the_form_hides():
     shown = client.post("/preview/nirspipe/", data=form).get_json()
     assert "--hrf-model" in shown["hints"]["inactive"]
     assert "--hrf-model" not in shown["preview"] and "--high-pass" in shown["preview"]
-    assert client.post("/preview/nirspipe-qc/prep-raw/", data={}).get_json()["hints"] is None
+    assert client.post("/preview/nirspipe-qc/", data={}).get_json()["hints"] is None

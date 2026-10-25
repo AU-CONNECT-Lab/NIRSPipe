@@ -1,4 +1,4 @@
-"""The cohort page over groups (nirspipe-qc cohort-hyper): each figure against each group's record."""
+"""The cohort page over groups (raw QC's group level): each figure against each group's record."""
 
 import pytest
 
@@ -12,7 +12,7 @@ def _label(group):
 
 
 def _table(groups):
-    rows = next(rows for _, rows in html_tables(groups.hyper / "desc-groups_report.html")
+    rows = next(rows for _, rows in html_tables(groups.qc / "desc-groups_report.html")
                 if rows and rows[0][0].rstrip("⇅") == "Dyad")
     head = [h.rstrip("⇅") for h in rows[0]]
     return {r[0]: dict(zip(head, r)) for r in rows[1:]}
@@ -29,7 +29,7 @@ def test_the_table_carries_each_group_s_alignment(groups):
 
 @pytest.mark.parametrize("desc", ["groupsusablebars", "groupspairfield", "groupsconditiondials"])
 def test_the_usable_time_panels_are_drawn(groups, desc):
-    assert (groups.hyper / "figures" / f"desc-{desc}_nirs.html").exists()
+    assert (groups.qc / "figures" / f"desc-{desc}_nirs.html").exists()
 
 
 def test_the_table_prints_the_share_of_channels_good_in_every_member(groups):
@@ -40,5 +40,5 @@ def test_the_table_prints_the_share_of_channels_good_in_every_member(groups):
 
 def test_the_table_keeps_its_header_in_view(groups):
     # its scroll box captures position: sticky, so the page copies the header and binds it
-    html = (groups.hyper / "desc-groups_report.html").read_text(encoding="utf-8")
+    html = (groups.qc / "desc-groups_report.html").read_text(encoding="utf-8")
     assert "function stickyHead(table)" in html and "stickyHead(table);" in html

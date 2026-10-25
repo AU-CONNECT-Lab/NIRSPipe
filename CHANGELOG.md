@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject
 - Raw QC's `--motion-correction` defaults to `tddr`, as the pipeline's, so its before and after panels show by default
+- **Breaking**: `nirspipe-qc bids_dir output_dir participant|group` replaces `prep-raw`, `hyper-raw`, `cohort` and `cohort-hyper`; dyad pages sit beside the subjects in one tree
+- **Breaking**: the dyad raw page reads each member's raw QC record (lines, cardiac band, DPF, verdict, motion correction) instead of screening again; it takes no screening flags
+- Raw QC writes a run record, `sub-<label>/logs/*_desc-raw.toml`, that `nirspipe-qc --config` reruns
+- **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
 
 ## [0.76.0] - 2026-10-25
 

@@ -1119,7 +1119,7 @@ def _section_trial_qc(
 
     Scored over the same window the epoch figures average, and on the intensity recording,
     so a trial's SCI and SNR are on the scale the metrics table prints rather than on the
-    haemoglobin one. The scoring is shared with ``nirspipe-qc prep-raw``, which is where this
+    haemoglobin one. The scoring is shared with raw QC (``nirspipe-qc``), which is where this
     panel came from, and so is the meaning of an unset window: the figures fall back to
     ``_EPOCH_TMIN`` / ``_EPOCH_TMAX`` while the scoring uses each event's own duration,
     which is what a block design records and a fixed window would cut off.
@@ -2235,7 +2235,7 @@ def build_subject_report(
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
     # for its shape, and make the figures under one heading describe two different stages.
     epoch_haemo       = after_haemo if after_haemo is not None else raw_haemo
-    # a run with no low-pass (glm without --low-pass) gets the display low-pass prep-raw uses
+    # a run with no low-pass (glm without --low-pass) gets the display low-pass raw QC uses
     epoch_lowpassed   = epoch_haemo.info["lowpass"] > config.cardiac_l_freq
     if epoch_lowpassed:
         epoch_haemo = _below_cardiac(epoch_haemo, config.cardiac_l_freq)

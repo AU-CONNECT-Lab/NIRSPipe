@@ -30,28 +30,35 @@ class Groups:
     # every call to a spied builder: (args, kwargs, return value)
     calls: dict = field(default_factory=dict, repr=False)
     _stages: dict = field(default_factory=dict, repr=False)
+    # the raw QC tree, its dyad pages beside its subjects; the hyper tree when None
+    qc: "Path | None" = None
 
-    # ---- the group tree ----
+    # ---- the group trees ----
     def gdir(self, group: str) -> Path:
         return self.hyper / f"group-{group}"
+
+    def _at(self, group: str, *parts: str) -> Path:
+        """A dyad file in the raw QC tree where it is there, else in the hyper tree: no name is in both."""
+        raw = (self.qc or self.hyper) / f"group-{group}" / Path(*parts)
+        return raw if raw.exists() else self.gdir(group) / Path(*parts)
 
     def page(self, group: str, pair: "tuple[str, str] | None" = None,
              cond: str | None = None, raw: bool = False) -> Path:
         middle = f"_pair-{pair[0].replace('-', '')}x{pair[1].replace('-', '')}" if pair else ""
         middle += f"_cond-{cond}" if cond else ""
         suffix = "_desc-raw_report.html" if raw else "_report.html"
-        return self.gdir(group) / f"group-{group}_task-{TASK}{middle}{suffix}"
+        return self._at(group, f"group-{group}_task-{TASK}{middle}{suffix}")
 
     def figure(self, group: str, name: str) -> Path:
         """``name`` is everything after the task entity, e.g. ``desc-rawalignment_nirs.html``."""
-        return self.gdir(group) / "figures" / f"group-{group}_task-{TASK}_{name}"
+        return self._at(group, "figures", f"group-{group}_task-{TASK}_{name}")
 
     def table(self, group: str, name: str) -> pd.DataFrame:
-        return pd.read_csv(self.gdir(group) / "nirs" / f"group-{group}_task-{TASK}_{name}",
+        return pd.read_csv(self._at(group, "nirs", f"group-{group}_task-{TASK}_{name}"),
                            sep="\t", dtype={"condition": str})
 
     def record(self, group: str) -> dict:
-        path = self.gdir(group) / "nirs" / f"group-{group}_task-{TASK}_desc-sqm_qc.json"
+        path = self._at(group, "nirs", f"group-{group}_task-{TASK}_desc-sqm_qc.json")
         return json.loads(path.read_text())
 
     # ---- each member's own derivatives ----

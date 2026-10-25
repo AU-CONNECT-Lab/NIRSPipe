@@ -269,7 +269,7 @@ def test_a_run_in_a_session_folder_is_listed_and_linked_there(tmp_path):
 
 
 def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
-    """prep-raw used to write the pipeline's name, so whichever ran last set the index's marks."""
+    """Raw QC used to write the pipeline's name, so whichever ran last set the index's marks."""
     from nirspipe.cli import qc as qc_cli, run as run_cli
     from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
@@ -284,7 +284,7 @@ def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
     pipeline_table = out / "sub-01" / "nirs" / ("sub-01_task-tap" + CHANNEL_METRICS_SUFFIX)
     before = pipeline_table.read_text(encoding="utf-8")
 
-    qc_cli.main(["prep-raw", str(bids), str(out), *shared, "--sci-threshold", "0.8"])
+    qc_cli.main([str(bids), str(out), "participant", *shared, "--sci-threshold", "0.8"])
 
     assert pipeline_table.read_text(encoding="utf-8") == before
     assert (pipeline_table.parent / ("sub-01_task-tap" + RAW_CHANNEL_METRICS_SUFFIX)).exists()

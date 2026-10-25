@@ -298,7 +298,7 @@ NOTES = {
     # ---- Subject index ----
     "subject_index.runs":
         "Read from each run&rsquo;s quality record (<code>desc-sqm</code>, or "
-        "<code>desc-sqmraw</code> for a run only <code>nirspipe-qc prep-raw</code> "
+        "<code>desc-sqmraw</code> for a run only raw QC (<code>nirspipe-qc</code>) "
         "measured). Open a run for its figures, provenance and full metric table.",
     "subject_index.outlier":
         "A marked cell sits at least {z} robust SDs (1.4826 &times; MAD) from this "
@@ -320,7 +320,7 @@ NOTES = {
         "{n_clean} of {n_pairs} source-detector pairs survived every run. A pair is one row, "
         "rejected if either wavelength is. Read from each run&rsquo;s "
         "<code>_desc-channel_qc.tsv</code>, whose union <code>--bads-scope subject</code> "
-        "takes, or <code>_desc-rawchannel_qc.tsv</code> for a run only prep-raw saw.",
+        "takes, or <code>_desc-rawchannel_qc.tsv</code> for a run only raw QC saw.",
     "subject_index.combined":
         "Joined by <code>--combine-runs</code> from {runs}: each run z-scored per channel over "
         "its kept frames, the runs joined in order, a channel only from the runs where it is "
@@ -374,7 +374,7 @@ NOTES = {
         "list it. A subject keeps a pair when any of its runs of the task did, sessions "
         "included; a pair is rejected if either wavelength is. Read from each run&rsquo;s "
         "<code>_desc-channel_qc.tsv</code>, or <code>_desc-rawchannel_qc.tsv</code> for a run "
-        "only prep-raw saw.",
+        "only raw QC saw.",
     "group.table":
         "Every scalar the records carry, the check-only ones aside. Click a column header to "
         "sort; the first column stays in view.",

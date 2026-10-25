@@ -840,7 +840,7 @@ def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -
     The three channel sets of a metric sit side by side over one x position rather than at
     three x positions of their own, so a metric's all / long / short read as one comparison
     and the chart is a third as wide. The stage is dropped from the x label when the group
-    only holds one, which is what a cohort measured by `prep-raw` alone looks like.
+    only holds one, which is what a cohort measured by raw QC alone looks like.
     """
     cats: list[tuple[str, str]] = []          # (stage, metric), in the group's order
     columns: dict[tuple[str, str], dict[str, str]] = {}   # cat -> {channel set: column}

@@ -334,29 +334,6 @@ def config_keys() -> dict[str, tuple[str, ...]]:
     return keys
 
 
-def _coerce(action: argparse.Action, key: str, value, path: Path):
-    """A TOML value through the flag's own type and choices, as argparse would have."""
-    def fail(why: str):
-        print(f"Error: {path}: {key} = {value!r}: {why}", file=sys.stderr)
-        raise SystemExit(1)
-
-    if action.nargs == 0:
-        if not isinstance(value, bool):
-            fail("expected true or false")
-        return value
-    many = action.nargs in ("+", "*")
-    items = value if isinstance(value, list) else [value]
-    if isinstance(value, list) and not many:
-        fail("expected one value, not a list")
-    try:
-        items = [action.type(str(item)) if action.type else item for item in items]
-    except (argparse.ArgumentTypeError, TypeError, ValueError) as exc:
-        fail(str(exc))
-    if action.choices is not None and any(item not in action.choices for item in items):
-        fail(f"expected one of {', '.join(map(str, action.choices))}")
-    return items if many else items[0]
-
-
 def read_config(path: Path) -> dict:
     """--config as the settings of each section, plus the version that wrote it.
 
@@ -388,17 +365,9 @@ def read_config(path: Path) -> dict:
             if bad:
                 print(f"Error: {path}: [{section}] has no setting {bad[0]!r}.", file=sys.stderr)
                 raise SystemExit(1)
-        out[section] = {k: _coerce(actions[k], k, v, path)
+        out[section] = {k: _shared.coerce_setting(actions[k], k, v, path)
                         for k, v in settings.items() if k in allowed}
     return out
-
-
-def _given_on_command_line(argv: list[str] | None) -> set[str]:
-    """The flags actually typed, which argparse's own defaults would otherwise hide."""
-    quiet = _build_parser()
-    for action in quiet._actions:
-        action.default = argparse.SUPPRESS
-    return set(vars(quiet.parse_args(argv)))
 
 
 def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
@@ -408,7 +377,7 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
         print(f"Warning: {args.config} was written by nirspipe {config['version']} and this is "
               f"{__version__}; a setting whose meaning or default changed in between runs as "
               "this version reads it.", file=sys.stderr)
-    given = _given_on_command_line(argv)
+    given = _shared.typed_flags(_build_parser(), argv)
     taken = {**config["prep"], **config["execution"],
              **{k: v for k, v in config["post"].items() if k in ("mode", "roi_mapping")}}
     for key, value in taken.items():

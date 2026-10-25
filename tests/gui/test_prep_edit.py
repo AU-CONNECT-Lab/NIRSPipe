@@ -188,7 +188,7 @@ def test_data_preparation_finds_a_trees_reports_and_opens_one_for_editing(tmp_pa
     _data_prep_tree(tree)
     client = WebApp().flask.test_client()
 
-    page = client.get("/data-prep/prep-raw/", query_string={"tree": str(tree), "bids": str(bids)})
+    page = client.get("/data-prep/raw-qc/", query_string={"tree": str(tree), "bids": str(bids)})
     html = page.get_data(as_text=True)
     assert page.status_code == 200
     assert "sub-01_task-rest</a>" in html and "sub-02_task-rest</a>" in html
@@ -206,9 +206,9 @@ def test_data_preparation_says_what_it_could_not_find(tmp_path):
     from nirspipe.interface.server import WebApp
 
     client = WebApp().flask.test_client()
-    one = client.get("/data-prep/prep-raw/", query_string={"tree": str(tmp_path)}).get_data(as_text=True)
+    one = client.get("/data-prep/raw-qc/", query_string={"tree": str(tmp_path)}).get_data(as_text=True)
     assert "Give both folders" in one
-    empty = client.get("/data-prep/prep-raw/",
+    empty = client.get("/data-prep/raw-qc/",
                        query_string={"tree": str(tmp_path), "bids": "x"}).get_data(as_text=True)
     assert f"No raw reports under {tmp_path}" in empty
 
@@ -219,7 +219,7 @@ def test_a_prep_raw_run_links_its_reports_for_editing_against_the_dataset_it_rea
 
     tree = tmp_path / "tree"
     _data_prep_tree(tree)
-    command_pages._RUNS["prep"] = ("prep-raw", tree)
+    command_pages._RUNS["prep"] = ("raw-qc", tree)
     command_pages._SOURCES["prep"] = tmp_path / "bids"
 
     edit = WebApp().flask.test_client().get("/runs/prep/report").get_json()["edit"]
@@ -290,7 +290,7 @@ def test_a_stretch_drawn_on_the_plot_is_cropped_and_links_a_report_of_the_result
     lines, code = _wait(started["events"].split("/")[2])
     assert code == 0, "\n".join(lines)
     link = urlparse(started["report"])
-    assert link.path == "/data-prep/prep-raw/"
+    assert link.path == "/data-prep/raw-qc/"
     assert parse_qs(link.query, keep_blank_values=True) == {"bids_dir": [str(out / "cropped")],
                                                             "output_dir": [""]}
 
@@ -310,7 +310,7 @@ def test_a_crop_without_a_span_is_refused_before_anything_runs(tmp_path):
 def test_the_report_link_fills_the_new_tree_and_clears_the_output_folder(tmp_path):
     from nirspipe.interface.server import WebApp
 
-    html = WebApp().flask.test_client().get("/data-prep/prep-raw/", query_string={
+    html = WebApp().flask.test_client().get("/data-prep/raw-qc/", query_string={
         "bids_dir": str(tmp_path / "out" / "marker_edited"), "output_dir": ""}).get_data(as_text=True)
 
     assert f'name="bids_dir" value="{tmp_path / "out" / "marker_edited"}"' in html

@@ -3,14 +3,14 @@ import pytest
 from tests._fingerprint import CLI_ARGS, EVENT_DURATION, make_fingerprint_dataset
 from tests.figure_accuracy._run import Run
 
-# prep-raw takes no respiration band
+# raw QC takes no respiration band
 RAW_VIEWER_ARGS = [a for i, a in enumerate(CLI_ARGS)
                    if not (a.startswith("--resp-") or (i and CLI_ARGS[i - 1].startswith("--resp-")))]
 
 
 def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: bool = False,
                   blocks: bool = False, raw_viewer: bool = False, aux: bool = False) -> dict:
-    """Run nirspipe, or nirspipe-qc prep-raw, on a fresh fingerprint dataset, recording what each
+    """Run nirspipe, or raw QC's participant level, on a fresh fingerprint dataset, recording what each
     named figure builder was handed: its last call by name, every call under ``"_calls"``."""
     import nirspipe.qc.figures as figures
     import nirspipe.qc.figures.common.provenance_figure as provenance
@@ -36,7 +36,7 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
         setattr(module, name, spy(name, original))
     try:
         if raw_viewer:
-            qc_cli.main(["prep-raw", str(bids), str(root / "out"), *RAW_VIEWER_ARGS, *args,
+            qc_cli.main([str(bids), str(root / "out"), "participant", *RAW_VIEWER_ARGS, *args,
                          "--skip-bids-validation"])
         else:
             run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, *args,
@@ -120,7 +120,7 @@ def prep_condition_run(tmp_path_factory) -> Run:
 
 @pytest.fixture(scope="session")
 def raw_condition_run(tmp_path_factory) -> Run:
-    """The two-level design through nirspipe-qc prep-raw, with condition pages."""
+    """The two-level design through raw QC, with condition pages."""
     root = tmp_path_factory.mktemp("fingerprint_raw_blocks")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc", "--by-condition"],
                          ("_section_brain",), task="main", blocks=True, raw_viewer=True)
@@ -136,7 +136,7 @@ def _flag(name: str) -> list[str]:
     return [name, *CLI_ARGS[i:j]]
 
 
-# hyper-raw takes the physiology and the SCI line, and none of the pipeline's other settings
+# the members' raw QC takes the physiology and the SCI line, and none of the pipeline's other settings
 DYAD_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq")
                  for a in _flag(flag)]
 DYAD_HYPER_ARGS = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
@@ -145,18 +145,18 @@ DYAD_HYPER_ARGS = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-
 @pytest.fixture(scope="session")
 def groups(tmp_path_factory):
     """The dyad and the triad through every command that draws a group or cohort page:
-    nirspipe, nirspipe-qc cohort, nirspipe-qc hyper-raw, nirspipe-hyper, its index, and
-    nirspipe-qc cohort-hyper, with the channel coherence maps' builder inputs captured."""
+    nirspipe at both levels, raw QC at both levels into its own tree, nirspipe-hyper and its
+    index, with the channel coherence maps' builder inputs captured."""
     from tests._dyad_fingerprint import make_group_dataset, write_roi_map
+    from tests._raw_qc import raw_qc
     from tests.figure_accuracy._dyad import Groups
     from nirspipe.cli import hyper as hyper_cli
-    from nirspipe.cli import qc as qc_cli
     from nirspipe.cli import run as run_cli
     from nirspipe.qc.hyper import hyper_report
 
     root = tmp_path_factory.mktemp("dyad")
     bids, pairs, truth = make_group_dataset(root)
-    deriv, hyper = root / "deriv", root / "hyper"
+    deriv, hyper, qc = root / "deriv", root / "hyper", root / "qc"
     calls: dict = {}
     spied = [(hyper_report, "build_wtc_channel")]
 
@@ -173,22 +173,20 @@ def groups(tmp_path_factory):
     try:
         run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--by-condition",
                       "--skip-bids-validation"])
-        qc_cli.main(["cohort", str(deriv)])
-        qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                     "--derivatives-dir", str(deriv), "--skip-bids-validation", *DYAD_RAW_ARGS])
+        run_cli.main([str(bids), str(deriv), "group"])
+        raw_qc(bids, qc, pairs, participant=DYAD_RAW_ARGS)
         hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                         "--roi-mapping", str(write_roi_map(root)), *DYAD_HYPER_ARGS])
         hyper_cli.main_index([str(hyper), "group"])
-        qc_cli.main(["cohort-hyper", str(hyper)])
     finally:
         for module, name, original in originals:
             setattr(module, name, original)
-    return Groups(root, bids, deriv, hyper, truth, calls=calls)
+    return Groups(root, bids, deriv, hyper, truth, calls=calls, qc=qc)
 
 
 @pytest.fixture(scope="session")
 def raw_viewer_run(tmp_path_factory) -> Run:
-    """The task recording through nirspipe-qc prep-raw, with motion correction, trial scoring and the ROI map."""
+    """The task recording through raw QC, with motion correction, trial scoring and the ROI map."""
     root = tmp_path_factory.mktemp("fingerprint_raw")
     done = run_capturing(root, ["--participant-label", "01", "--epoch-qc",
                                 "--roi-mapping", _roi_file(root)], ("_section_brain",),
@@ -199,7 +197,7 @@ def raw_viewer_run(tmp_path_factory) -> Run:
 @pytest.fixture(scope="session")
 def dyad_variants(groups):
     """G01 again through the flags the main run leaves at their defaults, one tree each, off the
-    same derivatives; and the cohort-hyper page over a copy of the tree with one dyad's block
+    same derivatives; and the dyad cohort page over a copy of the raw QC tree with one dyad's block
     missing from its usable table."""
     import shutil
 
@@ -235,11 +233,12 @@ def dyad_variants(groups):
         out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth, calls=calls)
 
     def _raw(name, *flags):
-        tree = groups.root / f"hyper_{name}"
-        qc_cli.main(["hyper-raw", str(groups.bids), str(tree), "group", "--pairs-csv", pairs,
-                     "--group-id", "G01", "--derivatives-dir", str(groups.deriv),
-                     "--skip-bids-validation", *DYAD_RAW_ARGS, *flags])
-        out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth)
+        # the members' participant runs are the main tree's; only the group level changes
+        tree = groups.root / f"qc_{name}"
+        shutil.copytree(groups.qc, tree, ignore=shutil.ignore_patterns("group-*", "desc-*"))
+        qc_cli.main([str(groups.bids), str(tree), "group", "--pairs-csv", pairs,
+                     "--group-id", "G01", "--skip-bids-validation", *flags])
+        out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth, qc=tree)
 
     _post("condtransform", "--wtc-cond-transform")
     _post("phasenull", "--wtc-phase-null", "10", "--wtc-seed", "0")
@@ -249,11 +248,11 @@ def dyad_variants(groups):
     _raw("tstart", "--tstart", "20", "--tend", "380")
     _raw("normalize", "--normalize")
 
-    gap = groups.root / "hyper_cohortgap"
-    shutil.copytree(groups.hyper, gap, ignore=shutil.ignore_patterns("figures", "*.html"))
+    gap = groups.root / "qc_cohortgap"
+    shutil.copytree(groups.qc, gap, ignore=shutil.ignore_patterns("figures", "*.html"))
     usable = gap / "group-G01" / "nirs" / "group-G01_task-main_desc-usable_qc.tsv"
     table = pd.read_csv(usable, sep="\t")
     table[table["condition"] != "cb"].to_csv(usable, sep="\t", index=False)
-    qc_cli.main(["cohort-hyper", str(gap)])
-    out["cohortgap"] = Groups(groups.root, groups.bids, groups.deriv, gap, groups.truth)
+    qc_cli.main([str(groups.bids), str(gap), "group"])
+    out["cohortgap"] = Groups(groups.root, groups.bids, groups.deriv, gap, groups.truth, qc=gap)
     return out

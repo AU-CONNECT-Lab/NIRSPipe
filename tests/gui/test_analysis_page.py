@@ -95,4 +95,4 @@ def test_only_the_analysis_preview_carries_stages():
     client = WebApp().flask.test_client()
     rest = client.post("/preview/nirspipe/", data={"--mode": "rest"}).get_json()
     assert rest["stages"][-1] == ["ALFF", "Connectivity"]
-    assert client.post("/preview/nirspipe-qc/prep-raw/", data={}).get_json()["stages"] is None
+    assert client.post("/preview/nirspipe-qc/", data={}).get_json()["stages"] is None

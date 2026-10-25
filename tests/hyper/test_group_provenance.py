@@ -18,10 +18,10 @@ def _only_its_own(text, own, others):
 
 @pytest.fixture(scope="module")
 def tree(tmp_path_factory):
-    """One dyad, two tasks, through hyper-raw and nirspipe-hyper."""
+    """One dyad, two tasks, through raw QC and nirspipe-hyper, each in its own tree."""
     from nirspipe.cli import hyper as hyper_cli
-    from nirspipe.cli import qc as qc_cli
     from nirspipe.cli import run as run_cli
+    from tests._raw_qc import raw_qc
     from tests._fingerprint import CLI_ARGS
     from tests._synth import make_hyper_dataset
 
@@ -30,10 +30,9 @@ def tree(tmp_path_factory):
     deriv, hyper = root / "deriv", root / "hyper"
     figures = hyper / "group-G01" / "figures"
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
-    qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", "--no-align", *PHYS])
-    # the raw page draws none, so every graph on disk is the post page's
-    assert not list(figures.glob("*_desc-provenance_*"))
+    raw_qc(bids, root / "qc", pairs, participant=PHYS, group=("--no-align",))
+    # the raw page draws none, and it sits in a tree of its own
+    assert not list((root / "qc" / "group-G01" / "figures").glob("*_desc-provenance_*"))
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
                     "--no-align", "--wtc-fmin", "0.02"])
     post = {task: _mmd(figures, f"group-G01_task-{task}") for task in TASKS}
@@ -51,7 +50,7 @@ def test_the_provenance_command_draws_each_dyad_task_apart(tree):
 
     for path in tree["figures"].glob("*_desc-provenance_*"):
         path.unlink()
-    qc_cli.main(["provenance", str(tree["hyper"])])
+    qc_cli.main_provenance([str(tree["hyper"])])
     for task in TASKS:
         text = _mmd(tree["figures"], f"group-G01_task-{task}")
         assert _only_its_own(text, f"task_{task}", [f"task_{t}" for t in TASKS if t != task])
@@ -59,16 +58,16 @@ def test_the_provenance_command_draws_each_dyad_task_apart(tree):
 
 def test_the_provenance_command_reaches_a_dyad_recorded_per_session(tmp_path):
     from nirspipe.cli import qc as qc_cli
+    from tests._raw_qc import raw_qc
     from tests._synth import make_hyper_dataset
 
     bids, pairs = make_hyper_dataset(tmp_path, tasks=("hold",), sessions=("a", "b"))
-    hyper = tmp_path / "hyper"
-    qc_cli.main(["hyper-raw", str(bids), str(hyper), "group", "--pairs-csv", str(pairs),
-                 "--skip-bids-validation", *PHYS])
-    figures = hyper / "group-G01" / "figures"
+    tree = tmp_path / "qc"
+    raw_qc(bids, tree, pairs, participant=PHYS)
+    figures = tree / "group-G01" / "figures"
     for path in figures.glob("*_desc-provenance_*"):
         path.unlink()
-    qc_cli.main(["provenance", str(hyper)])
+    qc_cli.main_provenance([str(tree)])
     for ses, other in (("a", "b"), ("b", "a")):
         text = _mmd(figures, f"group-G01_ses-{ses}_task-hold")
         assert _only_its_own(text, f"ses_{ses}", [f"ses_{other}"]), text

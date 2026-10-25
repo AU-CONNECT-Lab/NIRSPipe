@@ -37,7 +37,7 @@ def test_the_dyad_raw_report_carries_no_provenance_section(tmp_path, monkeypatch
     monkeypatch.setattr(hyper_report, "_process_hyper_raw_group", lambda **_: meta)
     monkeypatch.setattr(hyper_report, "group_methods", lambda *a, **k: None)
 
-    path = hyper_report.build_hyper_report("G1", "hold", [], {}, {}, {}, tmp_path, sci_threshold=0.8)
+    path = hyper_report.build_hyper_report("G1", "hold", [], {}, {}, {}, tmp_path)
 
     assert path == group_report_dir(tmp_path, "G1") / report_name("group-G1_task-hold",
                                                                     desc="raw")

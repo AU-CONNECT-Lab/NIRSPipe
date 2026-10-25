@@ -83,14 +83,14 @@ _HEADLINE_METRICS = ("sci_win_mean", "psp_mean", "snr_mean", "cv_mean",
 _STAGE_ORDER = ("raw", "motion", "motion_post", "preproc", "filtered", "resampled", "errts")
 
 # How a record's desc reads in the summary.
-_DESC_LABELS = {"sqm": "pipeline", "sqmraw": "prep-raw"}
+_DESC_LABELS = {"sqm": "pipeline", "sqmraw": "raw QC"}
 
 
 
 def _warn_on_mixed_windows(rows: list) -> None:
     """A time x subject heatmap only reads straight if every subject was binned the same way.
 
-    prep-raw rows carry the scalar under a ``raw_`` prefix and pipeline rows do not, so both
+    raw QC rows carry the scalar under a ``raw_`` prefix and pipeline rows do not, so both
     names are checked. Silence means either one window length across the cohort or records
     written before the length was stored.
     """
@@ -194,7 +194,7 @@ def _collect_sqm(
     """Glob SQM JSONs under output_dir matching entity prefix (e.g. 'sub-*' or 'group-*').
 
     One row per run, never one per file: a run that was processed by both the pipeline and
-    `prep-raw` has two records, and the sectioned one wins because it is a superset.
+    raw QC has two records, and the sectioned one wins because it is a superset.
 
     Returns (df, full_rows, descs):
       - df:        scalar SQM columns (bids_name + numeric scalars), for TSV/heatmap/boxplot

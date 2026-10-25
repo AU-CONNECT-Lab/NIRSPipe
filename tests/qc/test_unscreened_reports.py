@@ -5,7 +5,7 @@ import pytest
 
 from nirspipe.cli import qc as qc_cli
 from nirspipe.io.groups import GroupEntry
-from nirspipe.pipeline.hyper.group_quality import compute_group_sqm_raw
+from nirspipe.pipeline.hyper.group_quality import load_group_sqm_raw, member_raw_record
 from nirspipe.pipeline.prep_pipeline import intensity_to_od
 from nirspipe.qc.metrics import screening_gap
 
@@ -45,7 +45,7 @@ def short_raw_qc(tmp_path_factory):
     root = tmp_path_factory.mktemp("unscreened")
     bids = make_bids_dataset(root, subjects=("01",), tasks=("rest",), duration=15.0)
     out = root / "out"
-    qc_cli.main(["prep-raw", str(bids), str(out), "--participant-label", "01", *RAW_ARGS])
+    qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01", *RAW_ARGS])
     return out
 
 
@@ -62,10 +62,13 @@ def test_the_raw_report_rejects_nothing_on_screening(short_raw_qc):
 
 # ---- the dyad raw pass ----
 
-def test_a_member_screening_cannot_judge_carries_the_reason_and_rejects_nothing(tmp_path):
-    raws = {"sub-11": synth_raw("11", "hold", duration=15.0), "sub-12": synth_raw("12", "hold")}
-    sqm = compute_group_sqm_raw([GroupEntry("G01", sid, "hold") for sid in raws], raws, 0.8,
-                                tmp_path, 0.7, 1.5)
-    assert sqm["sub-11"]["screening_gap"] == "it has 1 window(s) of 10 s to count and needs 2"
-    assert sqm["sub-11"]["bad_channels"] == []
-    assert sqm["sub-12"]["screening_gap"] is None
+def test_the_dyad_level_reads_the_reason_and_the_empty_verdict_off_the_record(short_raw_qc):
+    from nirspipe.io.snirf import read_snirf
+
+    entry = GroupEntry("G01", "sub-01", "rest")
+    (snirf,) = (short_raw_qc.parent / "bids").rglob("*.snirf")
+    raws = {"sub-01": read_snirf(snirf)}
+    records = {"sub-01": member_raw_record(short_raw_qc, entry, raws["sub-01"])}
+    sqm = load_group_sqm_raw(short_raw_qc, [entry], raws, records)
+    assert sqm["sub-01"]["screening_gap"] == "it has 1 window(s) of 10 s to count and needs 2"
+    assert sqm["sub-01"]["bad_channels"] == []
