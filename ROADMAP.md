@@ -38,7 +38,6 @@ Ordered by how often each has come up, not by when it might happen.
 
 **Quality control**
 
-- Deriving region mappings from the montage automatically, instead of writing them by hand
 - Comparing one subject's repeated runs side by side, to show how stable a measure is within a person
 
 ---
