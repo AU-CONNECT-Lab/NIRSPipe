@@ -337,7 +337,7 @@ The two kinds part ways only before the filters: corrupted time is filled first 
 | Channel screening | A window touching a span is not counted. `BAD_gvtd` is made after screening, so it never changes the channel set. A run left with fewer than two windows stops. |
 | Motion correction | Runs over the whole recording. |
 | Fill, bandpass, resampling | Corrupted spans are filled, then everything is filtered whole. |
-| GLM and confound regression | The design is built on the full time axis, and the `BAD_` rows are dropped from data and design at fit time. AR coefficients come only from samples whose lags lie in kept time. The fit is applied to the whole run, so `desc-errts` stays full length. A fit with fewer than three kept frames per regressor is refused, and a condition with no kept rows is dropped and named. |
+| GLM and confound regression | The design is built on the full time axis, and the `BAD_` rows are dropped from data and design at fit time. AR coefficients come only from samples whose lags lie in kept time. The fit is applied to the whole run, so `desc-errts` stays full length. A fit with fewer than three kept frames per regressor is refused, and a condition with no kept rows is dropped and named; a contrast that weights it is not computed, and the report's notes and the Methods say which. |
 | Connectivity | Pearson r over the kept frames. |
 | ALFF, fALFF | A Lomb-Scargle periodogram of the kept samples. |
 | `--min-time` | A run with fewer kept seconds than this gets no connectivity or ALFF file. Off by default. |
