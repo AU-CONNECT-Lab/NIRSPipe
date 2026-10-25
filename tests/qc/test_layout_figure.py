@@ -1,7 +1,7 @@
 """The montage figures: what each channel is drawn as.
 
-The colours follow the one long/short split the reports use, so a channel in the gap between
-the two ranges is neither.
+The dashes follow the one long/short split the reports use, so a channel in the gap between
+the two ranges is neither; the colours follow the wavelength.
 """
 
 from __future__ import annotations
@@ -9,11 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nirspipe.qc.figures.common._utils import (BAND_COLORS, LONG_COLOR, SHORT_COLOR,
-                                                  UNCLASSIFIED_COLOR)
+from nirspipe.qc.figures.common._utils import BAND_COLORS
 from nirspipe.qc.figures.hyper.hyper_figures import _psd_band_shapes
 from nirspipe.qc.figures.subject.brain_views import _lookup_sci
-from nirspipe.qc.figures.subject.raw_figures import _ch_colors, _hex_to_rgba
+from nirspipe.qc.figures.subject.raw_figures import _ch_styles
 from tests._synth import synth_raw
 
 
@@ -22,26 +21,23 @@ def raw():
     return synth_raw("01", "hold", duration=20.0, motion_onset=None)
 
 
-def test_channel_colours_follow_the_long_short_split(raw):
+def test_channel_dashes_follow_the_long_short_split(raw):
     # move the first pair's detector into the gap the two ranges leave between them
     for ch in raw.info["chs"][:2]:
         ch["loc"][6:9] = ch["loc"][3:6] + np.array([0.012, 0.0, 0.0])
-    colours = dict(zip(raw.ch_names, _ch_colors(raw)))
+    dashes = {name: dash for name, (_, dash) in zip(raw.ch_names, _ch_styles(raw))}
 
-    assert colours[raw.ch_names[0]] == _hex_to_rgba(UNCLASSIFIED_COLOR, 0.78)
-    assert colours[raw.ch_names[2]] == _hex_to_rgba(LONG_COLOR, 0.78)
+    assert dashes[raw.ch_names[0]] == "dot"
+    assert dashes[raw.ch_names[2]] == "solid"
     short = next(n for n, ch in zip(raw.ch_names, raw.info["chs"])
                  if np.linalg.norm(ch["loc"][6:9] - ch["loc"][3:6]) < 0.01)
-    assert colours[short] == _hex_to_rgba(SHORT_COLOR, 0.78)
+    assert dashes[short] == "dash"
 
 
-def test_a_pairs_two_wavelengths_take_two_shades_of_its_colour(raw):
-    pair = raw.ch_names[2].rsplit(" ", 1)[0]
-    first, second = (colours for name, colours in zip(raw.ch_names, _ch_colors(raw))
-                     if name.startswith(pair + " "))
-    # #f37d7d darkened by 0.4 is (146, 75, 75)
-    assert first == _hex_to_rgba(LONG_COLOR, 0.78)
-    assert second == "rgba(146,75,75,0.78)"
+def test_a_pairs_shorter_wavelength_is_orange_and_its_longer_blue(raw):
+    colours = {name: colour for name, (colour, _) in zip(raw.ch_names, _ch_styles(raw))}
+    assert colours["S1_D1 760"] == "#e66101"
+    assert colours["S1_D1 850"] == "#2166ac"
 
 
 def test_an_sci_of_zero_is_kept_rather_than_passed_over():

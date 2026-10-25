@@ -36,30 +36,24 @@ EPOCH_MIN_TRIALS = 2
 
 
 
-# how far a pair's longest wavelength is darkened toward black, the shortest kept as is
-_WAVELENGTH_DARKEN = 0.4
+# a pair's wavelengths, shortest first; the separation is carried by the dash instead
+WAVELENGTH_COLORS = ("#e66101", "#2166ac", "#4d9221")
+_SEPARATION_DASH = {"long": "solid", "short": "dash", "unclassified": "dot"}
 
 
-def _darken(hex_color: str, share: float) -> str:
-    h = hex_color.lstrip("#")
-    return "#" + "".join(f"{round(int(h[i:i + 2], 16) * (1 - share)):02x}" for i in (0, 2, 4))
-
-
-def _ch_colors(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[str]:
-    """Long, short or unclassified per channel, by the split every report uses; within a pair, longer wavelengths darker."""
+def _ch_styles(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[tuple[str, str]]:
+    """``(colour, dash)`` per channel: colour by its rank among its pair's wavelengths, dash by long, short or unclassified."""
     long_names, short_names = map(set, long_short_channels(raw, sep_bands))
     by_pair: dict[str, set[float]] = {}
     for ch in raw.info["chs"]:
         by_pair.setdefault(pair_of(ch["ch_name"]), set()).add(float(ch["loc"][9]))
-    colors = []
+    styles = []
     for ch in raw.info["chs"]:
         name = ch["ch_name"]
-        base = (LONG_COLOR if name in long_names
-                else SHORT_COLOR if name in short_names else UNCLASSIFIED_COLOR)
-        waves = sorted(by_pair[pair_of(name)])
-        share = _WAVELENGTH_DARKEN * waves.index(float(ch["loc"][9])) / max(len(waves) - 1, 1)
-        colors.append(_hex_to_rgba(_darken(base, share), 0.78))
-    return colors
+        rank = sorted(by_pair[pair_of(name)]).index(float(ch["loc"][9]))
+        sep = "long" if name in long_names else "short" if name in short_names else "unclassified"
+        styles.append((WAVELENGTH_COLORS[rank % len(WAVELENGTH_COLORS)], _SEPARATION_DASH[sep]))
+    return styles
 
 
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
@@ -144,7 +138,7 @@ def build_ts_figure(
 
     data, times = raw.get_data(picks=picks, return_times=True)
 
-    all_colors = _ch_colors(raw, sep_bands)
+    all_styles = _ch_styles(raw, sep_bands)
     cond_colors_ = condition_colors(markers)
 
     traces = []
@@ -156,10 +150,11 @@ def build_ts_figure(
         std = float(np.std(row))
         normed = ((arr - row.mean()) / std).tolist() if std > 0 else (arr - row.mean()).tolist()
         shifted = [v + i * 3 for v in normed]
-        color = "#b2bec3" if ch in bad_channels else (all_colors[pick] if pick < len(all_colors) else "#aaa")
+        color, dash = all_styles[pick] if pick < len(all_styles) else ("#aaa", "solid")
+        color = "#b2bec3" if ch in bad_channels else _hex_to_rgba(color, 0.85)
         traces.append(go.Scatter(
             x=t_row.tolist(), y=shifted, name=ch, mode="lines",
-            line=dict(width=0.9, color=color),
+            line=dict(width=0.9, color=color, dash=dash),
             customdata=[ch] * len(t_row),
             hovertemplate="<b>%{customdata}</b><extra></extra>",
         ))
