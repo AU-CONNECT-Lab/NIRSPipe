@@ -1177,11 +1177,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "Unlike --wtc-phase-null, a re-paired partner did the same task, so the "
                     "null keeps the shared task response. Needs a cohort: the number of "
                     "draws is the number of other groups, which is what limits how finely "
-                    "the percentile can rank. Groups of two only for now; a larger group "
-                    "is refused. Run it after `nirspipe-hyper`, whose tables "
-                    "it reads its band, its mask, its frequency range and its window off, "
-                    "and by default its stage, its rejection scope, its crossing and its "
-                    "ROI minimum.")
+                    "the percentile can rank. In a group of three or more the first member "
+                    "is held and each later one replaced. Run it after `nirspipe-hyper`, "
+                    "whose tables it reads its band, its mask, its frequency range and its "
+                    "window off, and by default its stage, its rejection scope, its crossing "
+                    "and its ROI minimum.")
     pair.add_argument("--desc", default=None,
                       help="desc entity of the per-subject stage the null reads. Unset, it "
                            "is the one the real tables recorded; a different one is refused.")
