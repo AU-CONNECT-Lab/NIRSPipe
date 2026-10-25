@@ -459,6 +459,51 @@ def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) 
     return RegressionResults(haemo.info, results, design_matrix)
 
 
+def read_contrasts(path: str | Path) -> dict[str, dict[str, float]]:
+    """A ``--contrast-file`` as ``{contrast: {condition: weight}}``: a TOML file, or a TSV/CSV table.
+
+    A table holds one row per contrast, its name in a ``contrast`` column and a weight under
+    each condition's column; an empty cell leaves the condition out, as an absent TOML key does::
+
+        contrast            Tapping_Left  Tapping_Right  Control
+        tapping_vs_control  0.5           0.5            -1
+        left_minus_right    1             -1
+
+    gives ``{"tapping_vs_control": {"Tapping_Left": 0.5, "Tapping_Right": 0.5, "Control": -1.0},
+    "left_minus_right": {"Tapping_Left": 1.0, "Tapping_Right": -1.0}}``. ValueError names the
+    line of a cell that is not a number, a name given twice, or a row that weights nothing.
+    """
+    path = Path(path)
+    if path.suffix.lower() == ".toml":
+        from nirspipe.utils import load_toml
+        return load_toml(path)
+    table = read_table(path, dtype=str).fillna("")
+    if "contrast" not in table.columns:
+        raise ValueError(f"--contrast-file {path} needs a contrast column, then one column "
+                         f"per condition")
+    contrasts: dict[str, dict[str, float]] = {}
+    for line, row in enumerate(table.to_dict("records"), start=2):
+        name = str(row.pop("contrast")).strip()
+        where = f"--contrast-file {path} line {line}"
+        if not name:
+            raise ValueError(f"{where}: no contrast name")
+        if name in contrasts:
+            raise ValueError(f"{where}: contrast {name!r} is named twice")
+        weights = {}
+        for condition, cell in row.items():
+            cell = str(cell).strip()
+            if not cell:
+                continue
+            try:
+                weights[condition] = float(cell)
+            except ValueError:
+                raise ValueError(f"{where}: {condition} {cell!r} is not a number") from None
+        if not weights:
+            raise ValueError(f"{where}: contrast {name!r} weights no condition")
+        contrasts[name] = weights
+    return contrasts
+
+
 def compute_contrasts(
     glm_est: Any,
     contrast_def: dict[str, Any],

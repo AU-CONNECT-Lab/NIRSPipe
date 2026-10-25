@@ -270,7 +270,11 @@ def _build_parser() -> argparse.ArgumentParser:
                           "and its residual's sidecar says why. The GLM fit is not affected.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
-    glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")
+    glm.add_argument("--contrast-file", type=Path,
+                     help="GLM contrasts: a TSV or CSV with one row per contrast, its name in a "
+                          "contrast column and a weight under each condition's column (an "
+                          "empty cell leaves it out), or a TOML of contrast = {condition = "
+                          "weight}.")
     glm.add_argument("--p-correction", choices=P_CORRECTIONS,
                      help="Multiple-comparison correction of the GLM and contrast p values "
                           "(default none), within one regressor or contrast and one "

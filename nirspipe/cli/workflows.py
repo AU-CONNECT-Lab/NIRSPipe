@@ -63,12 +63,12 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
     sc = pick("short_channel", default=SHORT_CHANNEL_AUTO)
     raw_fir = pick("fir_delays")  # CLI passes a comma-separated string, e.g. "0,1,2"
 
-    # contrast_def can live in a separate TOML file referenced by --contrast-file or config key.
+    # contrast_def lives in the file --contrast-file or the config key names
     contrast_def = None
     contrast_file = args.get("contrast_file") or (Path(toml["contrast_file"]) if "contrast_file" in toml else None)
     if contrast_file:
-        from nirspipe.utils import load_toml
-        contrast_def = load_toml(contrast_file)
+        from nirspipe.pipeline.glm import read_contrasts
+        contrast_def = read_contrasts(contrast_file)
 
     return PostConfig(
         subject=subject,
@@ -189,6 +189,17 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
         "--events-path (a table of onsets and durations).")
 
 
+def _refuse_bad_contrast_file(args: dict[str, Any]) -> None:
+    """Stop before any subject runs on a --contrast-file that cannot be read."""
+    if not args.get("contrast_file"):
+        return
+    from nirspipe.pipeline.glm import read_contrasts
+    try:
+        read_contrasts(args["contrast_file"])
+    except (ValueError, OSError) as exc:
+        raise SystemExit(f"[error] {exc}") from None
+
+
 def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     """Stop a run whose input was cut into one file per condition before preprocessing.
 
@@ -281,6 +292,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     if args.get("mode"):
         _refuse_cosine_without_cutoff(args, post_sources)
         _refuse_glm_without_durations(args)
+        _refuse_bad_contrast_file(args)
         # a cutoff a file switched off was popped from the layers, so it is absent there
         filled_settings = [(arg, toml.get(arg, "none"), post_sources[field])
                            for field, arg in _post_setting_args().items()
