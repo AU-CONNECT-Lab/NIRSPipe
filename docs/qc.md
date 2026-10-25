@@ -238,7 +238,7 @@ The page reads in the run report's order: the raw signal beside its events, each
 | By condition | Where the records carry conditions: each metric per condition, one line per run, and a run-by-condition matrix of robust z. |
 | Over time | Windowed SCI, CV and motion-band GVTD per channel set, every run pale under the cohort median and interquartile band. |
 | Outliers | One test per run rather than per metric: a run is flagged when its mean \|z\| over every charted metric exceeds 2, with the metrics that put it there. The place to start triage. |
-| Quality Metrics | The cohort summary and every scalar in a sortable table. |
+| Quality Metrics | The cohort summary; Channels kept, per task how many subjects kept each source-detector pair, out of those whose runs of the task list it (a subject keeps a pair when any of its runs of the task did, and a pair is rejected when either wavelength is); and every scalar in a sortable table. |
 
 ```{figure} figures/qc_cohort_distributions.png
 :alt: Box plots of coupling and retention metrics across a cohort, one point per run
