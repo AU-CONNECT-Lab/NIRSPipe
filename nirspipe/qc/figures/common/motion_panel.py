@@ -559,7 +559,7 @@ def carpet_gvtd_figure(
     ``segments`` labels, since it is the one the reported scalars come from.
     Omitting ``blocks`` draws the single row ``channel_set`` names, over ``ch_names``.
     """
-    raw_od = mne.preprocessing.nirs.optical_density(raw.copy())
+    raw_od = as_optical_density(raw)
     sfreq = float(raw_od.info["sfreq"])
 
     # one block unless the caller split the montage; either way the carpet keeps the block

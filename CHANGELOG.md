@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - In a group of three or more, `--isc-phase-null` gave different members identical phase draws when seeded, and one member different surrogates across its pairings when not
 - Every AR `--noise-model` failed on a recording with a constant channel; such channels are now fitted by OLS and named in the record
 - Edge frames without light in most channels are held at the nearest lit frame and marked `BAD_edge`; one NaN first frame had cost whole channels
+- Raw QC reports and the dyad raw pages hold those edge frames as prep does, so they no longer lose those channels either
 
 ## [0.74.0] - 2026-10-23
 

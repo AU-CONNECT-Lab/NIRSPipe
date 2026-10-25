@@ -8,9 +8,10 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from nirspipe.pipeline.prep_pipeline import (PrepConfig, dark_edge_frames, repair_dark_edges,
-                                             run_prep)
+from nirspipe.pipeline.censor_fill import dark_edge_frames, repair_dark_edges
+from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.qc.boilerplate.vocabulary import span_keys
+from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.utils.spans import EDGE, bad_spans, excluded_spans, frames_under
 
 from tests._synth import synth_raw
@@ -109,6 +110,17 @@ def test_prep_keeps_every_channel_and_records_the_repair(raw, tmp_path):
     assert side["dark_edge_frames"] == {"start": 1, "end": 0}
     assert "non_finite_samples" not in side
     assert [s["description"] for s in side["excluded_spans"]] == [EDGE]
+
+
+def test_the_qc_conversion_holds_them_too_and_leaves_its_input_alone(raw):
+    dark = _with(raw, _first_frame_dark)
+    od = as_optical_density(dark)
+    assert np.isfinite(od.get_data()).all()
+    assert [d for _, _, d in bad_spans(od)] == [EDGE]
+    assert np.isnan(dark.get_data()[0, 0]) and not dark.annotations
+    # a lit recording converts exactly as before
+    assert_array_equal(as_optical_density(raw).get_data(),
+                       mne.preprocessing.nirs.optical_density(raw, verbose=False).get_data())
 
 
 def test_the_methods_say_so_on_the_screening_step():

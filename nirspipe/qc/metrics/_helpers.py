@@ -10,6 +10,7 @@ import functools
 import mne
 import numpy as np
 
+from nirspipe.pipeline.censor_fill import repair_dark_edges
 from nirspipe.utils import is_marker, is_optical_density
 from nirspipe.utils.logging import get_logger
 
@@ -281,11 +282,13 @@ def as_optical_density(raw: mne.io.Raw) -> mne.io.Raw:
     """The recording in optical density: itself when it already is, else a converted copy.
 
     The same metric can then be taken on a motion-corrected file, which is OD already, and on
-    the raw intensity it came from. The input is never modified.
+    the raw intensity it came from. The input is never modified. Intensity has its dark edge
+    frames held and marked ``BAD_edge`` first, as prep does.
     """
     if is_optical_density(raw):
         return raw
-    return mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+    return mne.preprocessing.nirs.optical_density(repair_dark_edges(raw)[0].copy(),
+                                                  verbose=False)
 
 
 def require_cardiac_below_nyquist(sfreq: float, cardiac_h_freq: float) -> None:

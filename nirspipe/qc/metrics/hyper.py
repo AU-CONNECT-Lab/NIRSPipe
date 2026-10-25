@@ -11,6 +11,7 @@ import warnings
 import mne
 import numpy as np
 
+from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
@@ -234,7 +235,7 @@ def shared_screen_windows(
             logger.warning("%s: no aligned recording or screening lines; the dyad grid is "
                            "empty", sid)
             return {}
-        od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+        od = as_optical_density(raw)
         counted = passing_windows(od, cardiac_l_freq, cardiac_h_freq,
                                   cutoffs["sci"], cutoffs.get("psp"))
         if counted["mask"] is None:

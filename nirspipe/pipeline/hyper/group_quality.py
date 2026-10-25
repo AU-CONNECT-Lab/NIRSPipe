@@ -17,6 +17,7 @@ import pandas as pd
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
 from nirspipe.io.groups import GroupEntry
@@ -208,7 +209,7 @@ def compute_group_sqm_raw(
         raw_od: "mne.io.Raw | None" = None
         sci_cw = {ch: float("nan") for ch in raw.ch_names}
         try:
-            raw_od  = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+            raw_od  = as_optical_density(raw)
             sci_arr = mne.preprocessing.nirs.scalp_coupling_index(
                 raw_od, l_freq=cardiac_l_freq, h_freq=cardiac_h_freq, verbose=False)
             sci_cw  = {ch: float(sci_arr[i]) for i, ch in enumerate(raw.ch_names)}

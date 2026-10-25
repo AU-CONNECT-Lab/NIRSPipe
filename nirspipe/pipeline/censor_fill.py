@@ -1,7 +1,8 @@
 """Corrupted ``BAD_`` spans filled before the continuous steps (bandpass, resample, regression).
 
 Only corrupted spans are filled; ``BAD_unselected`` is real data and stays as measured. The
-filled samples remain under their spans, so every estimate still leaves them out.
+filled samples remain under their spans, so every estimate still leaves them out. Frames at
+either end that measured no light are held and marked here too, before any OD conversion.
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 from nirspipe.exceptions import StageError
+from nirspipe.utils import is_optical_density
 from nirspipe.utils.lineage import stamp
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans, frames_under, span_kind
+from nirspipe.utils.spans import EDGE, add_bad_spans, bad_spans, frames_under, span_kind
 
 logger = get_logger("pipeline.censor_fill")
 
@@ -136,3 +138,33 @@ def fill_corrupted(raw: mne.io.BaseRaw, method: str = DEFAULT_CENSOR_FILL) -> mn
                        sfreq=sfreq)
     return stamp(raw, stage="filled", step="censor_fill", source=raw, censor_fill=method,
                  censor_filled_s=float(gap.sum() / sfreq))
+
+
+def dark_edge_frames(raw: mne.io.BaseRaw) -> tuple[int, int]:
+    """How many frames at the start and at the end measured no light in most channels."""
+    x = raw.get_data(picks="fnirs")
+    measured = np.isfinite(x) if is_optical_density(raw) else np.isfinite(x) & (x > 0)
+    # a channel dark for most of the record would darken every frame, so it has no vote
+    voters = measured.mean(axis=1) > 0.5
+    if not voters.any():
+        return 0, 0
+    # more than half of every voter's frames are lit, so at least one frame is too
+    lit = measured[voters].mean(axis=0) >= 0.5
+    return int(np.argmax(lit)), int(np.argmax(lit[::-1]))
+
+
+def repair_dark_edges(raw: mne.io.BaseRaw) -> tuple[mne.io.BaseRaw, tuple[int, int]]:
+    """``raw`` with its dark edge frames held at the nearest lit frame and marked ``BAD_edge``."""
+    lead, trail = dark_edge_frames(raw)
+    if not (lead or trail):
+        return raw, (0, 0)
+    raw = raw.copy().load_data()
+    sfreq, n = float(raw.info["sfreq"]), raw.n_times
+    gap = np.zeros(n, bool)
+    gap[:lead] = True
+    gap[n - trail:] = True
+    picks = mne.pick_types(raw.info, fnirs=True, exclude=[])
+    raw._data[picks] = fill_values(raw._data[picks], gap, "linear", sfreq)
+    add_bad_spans(raw, [(start / sfreq, count / sfreq)
+                        for start, count in ((0, lead), (n - trail, trail)) if count], EDGE)
+    return raw, (lead, trail)

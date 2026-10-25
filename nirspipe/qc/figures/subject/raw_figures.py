@@ -19,7 +19,8 @@ from nirspipe.qc.figures.common._utils import (
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
 )
-from nirspipe.qc.metrics._helpers import Bands, epochable_events, long_short_channels
+from nirspipe.qc.metrics._helpers import (Bands, as_optical_density, epochable_events,
+                                          long_short_channels)
 from nirspipe.qc.common.channel_table import _neither_range_title
 from nirspipe.qc.common.figure_io import extract_markers
 
@@ -430,7 +431,7 @@ def build_psd_mean_figure(
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
         if len(picks) == 0:
             picks = list(range(len(raw.ch_names)))
-        raw_od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+        raw_od = as_optical_density(raw)
         sfreq = raw_od.info["sfreq"]
         spectrum = _kept_psd(raw_od, picks)
         if spectrum is None:

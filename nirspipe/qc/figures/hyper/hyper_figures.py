@@ -35,6 +35,7 @@ from nirspipe.qc.figures.subject.raw_figures import _kept_psd
 from nirspipe.qc.metrics import (
     GVTD_MOTION_BAND, gvtd_channel_blocks, gvtd_timetrace, spike_segments,
 )
+from nirspipe.qc.metrics._helpers import as_optical_density
 
 logger = get_logger("qc.figures.hyper")
 
@@ -435,7 +436,7 @@ def motion_series(
     for sid in have:
         raw = intensity_raws[sid]
         try:
-            od = mne.preprocessing.nirs.optical_density(raw.copy(), verbose=False)
+            od = as_optical_density(raw)
         except Exception:
             logger.warning("%s: optical density failed; no motion row", sid, exc_info=True)
             continue
@@ -460,7 +461,7 @@ def motion_series(
         full = (full_raws or {}).get(sid)
         src_od, src_after, shift = od, after_od, 0
         if full is not None:
-            src_od = mne.preprocessing.nirs.optical_density(full.copy(), verbose=False)
+            src_od = as_optical_density(full)
             shift = int(round((raw.first_time - full.first_time) * sfreq))
             src_after = (full_after or {}).get(sid) if after_data is not None else None
         src_data = src_od.get_data(picks=ordered)
