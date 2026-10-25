@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Every AR `--noise-model` failed on a recording with a constant channel; such channels are now fitted by OLS and named in the record
 - Edge frames without light in most channels are held at the nearest lit frame and marked `BAD_edge`; one NaN first frame had cost whole channels
 - Raw QC reports and the dyad raw pages hold those edge frames as prep does, so they no longer lose those channels either
+- `--noise-model` help named `auto` as every mode's default; rest and denoise default to `ols`
 
 ## [0.74.0] - 2026-10-23
 

@@ -239,7 +239,8 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
     glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",
-                     help="Residual autocorrelation model, default 'auto': 'ols', 'auto' (an AR "
+                     help="Residual autocorrelation model, default 'auto' in glm mode and "
+                          "'ols' in rest and denoise: 'ols', 'auto' (an AR "
                           "order of 4x the sampling rate), 'arN' for order N, or 'ar_irls', "
                           "which adds a robust norm so residual motion is down-weighted "
                           "('ar_irlsN' caps its order), or 'worsley', auto's order with the "
