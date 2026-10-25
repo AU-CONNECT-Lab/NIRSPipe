@@ -107,16 +107,20 @@ citations = ["Pinti2018"]
 plain = "Nuisance signals were removed by regressing {regressors} out of each channel in a model with no task regressors, fitted with {noise_model}; all subsequent analysis used the residuals {citations}.{censoring}"
 citations = ["Yucel2021"]
 
+[hbt]
+plain = "Total haemoglobin (HbT) was the sum of HbO and HbR of each channel, formed from the processed pair before any step specific to an analysis, and marked bad wherever either half was."
+citations = []
+
 [glm]
-plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}.{censoring} Channels marked as bad were fitted as well and flagged in the results."
+plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}.{censoring} Channels marked as bad were fitted as well and flagged in the results.{hbt}"
 citations = ["Santosa2018"]
 
 [alff]
-plain = "The amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF) were computed for each channel over {l_freq}–{h_freq} Hz{kept}.{min_time}"
+plain = "The amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF) were computed for each channel of {chroma} over {l_freq}–{h_freq} Hz{kept}.{min_time}"
 citations = []
 
 [fc]
-plain = "Functional connectivity was computed as the Pearson correlation between channels{kept}, separately for HbO and HbR.{min_time}"
+plain = "Functional connectivity was computed as the Pearson correlation r between channels{kept}, separately for {chroma}, and reported both as r and as its Fisher z transform, z = arctanh(r).{min_time}"
 citations = []
 
 # A tree written before the regression recorded its conditions; it cannot say which model ran.

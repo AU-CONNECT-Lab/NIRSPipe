@@ -201,3 +201,28 @@ def test_the_roi_tables_name_their_hbt_members(runs):
     members = _sidecar(nirs, "*agg-roi_stat-alff_nirsmap.tsv")["parameters"]["roi_channels"]
     # S2_D2 hbt is bad through its HbR half, so it is no member
     assert members["hbt"]["A"] == ["S1_D1 hbt"]
+
+
+# ---- the Methods ----
+
+def test_the_methods_define_hbt_once_before_the_glm_that_fits_it(runs):
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
+
+    keys = [k for k, _ in steps_from_sidecars(runs["ols_hbt"])]
+    assert keys.count("hbt") == 1 and keys.index("hbt") < keys.index("glm")
+    assert "fitted as a series of its own" in dict(steps_from_sidecars(runs["ols_hbt"]))["glm"]["hbt"]
+    plain = steps_from_sidecars(runs["ols"])
+    assert "hbt" not in dict(plain) and dict(plain)["glm"]["hbt"] == ""
+
+
+def test_the_rest_methods_name_each_analysis_s_chromophores(runs):
+    from nirspipe.qc.boilerplate.generate import step_sentence
+    from nirspipe.qc.boilerplate.vocabulary import steps_from_sidecars
+
+    steps = steps_from_sidecars(runs["rest_hbt"])
+    keys = [k for k, _ in steps]
+    assert keys.index("hbt") < min(keys.index("alff"), keys.index("fc"))
+    assert dict(steps)["fc"]["chroma"] == dict(steps)["alff"]["chroma"] == "HbO, HbR and HbT"
+    assert dict(steps_from_sidecars(runs["rest"]))["fc"]["chroma"] == "HbO and HbR"
+    fc = _sidecar(runs["rest_hbt"], "*chromo-hbo_stat-pearson_relmat.tsv")["parameters"]
+    assert "Fisher z transform, z = arctanh(r)" in step_sentence("fc", fc)

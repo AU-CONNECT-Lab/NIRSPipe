@@ -44,8 +44,9 @@ def test_the_span_slots_are_empty_without_spans():
     assert span_keys("bandpass", {"censor_fill": "linear"}, []) == []
     assert template_slots("sci_marking", {"sci_threshold": 0.8})["spans"] == ""
     assert template_slots("glm", {"noise_model": "ar1"})["censoring"] == ""
-    assert template_slots("fc", {})["kept"] == "" and template_slots("fc", {})["min_time"] == ""
-    assert template_slots("alff", {})["kept"] == ""
+    fc = template_slots("fc", {"chromophores": ["hbo"]})
+    assert fc["kept"] == "" and fc["min_time"] == ""
+    assert template_slots("alff", {"chromophores": ["hbo"]})["kept"] == ""
     assert template_slots("hyper_wtc", {"excluded_spans_s": {"a": [], "b": []}})["excluded"] == ""
 
 

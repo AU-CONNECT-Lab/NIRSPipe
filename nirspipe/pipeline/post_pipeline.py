@@ -712,7 +712,7 @@ def _write_fc_derivatives(
     def _sidecar(path: Path, step: str, **params) -> None:
         write_step_sidecar(path, step, src_bp, bads,
                            excluded_spans=excluded_spans(raw_resid, known=known_spans or ()),
-                           **params, **kept)
+                           chromophores=list(config.chromophores), **params, **kept)
 
     # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix
     for chromo in config.chromophores:

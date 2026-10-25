@@ -674,7 +674,8 @@ def _load_steps_plain(key):
 @pytest.mark.parametrize("step", ["alff", "alff_roi"])
 def test_every_alff_table_maps_to_one_sentence_with_its_band(step):
     assert boilerplate_key(step, {}) == "alff"
-    slots = template_slots("alff", {"high_pass": 0.01, "low_pass": 0.08})
+    slots = template_slots("alff", {"high_pass": 0.01, "low_pass": 0.08,
+                                    "chromophores": ["hbo", "hbr"]})
     assert (slots["l_freq"], slots["h_freq"]) == ("0.01", "0.08")
 
 
@@ -696,7 +697,7 @@ def test_a_rest_run_reads_regression_then_alff_then_connectivity(tmp_path):
              sources=[pre])
     broad = str(tmp_path / "sub-01_task-rest_desc-errtsbroad_nirs.snirf")
     _sidecar(tmp_path, "sub-01_task-rest_stat-alff_nirsmap", "alff", sources=[broad],
-             high_pass=0.01, low_pass=0.08)
+             high_pass=0.01, low_pass=0.08, chromophores=["hbo", "hbr"])
     keys = [k for k, _ in steps_from_sidecars(tmp_path)]
     assert keys[-2:] == ["confound_regression", "alff"]
 
@@ -891,3 +892,21 @@ def test_a_landmark_placement_names_its_landmarks_and_fit_from_the_position_tabl
     assert key == "optode_landmarks"
     sentence = step_sentence("optode_placement", placement)
     assert "105 labelled 10-5 landmarks" in sentence and "median 2.1 mm" in sentence
+
+
+# ---- the chromophores ----
+
+@pytest.mark.parametrize("key", ["fc", "alff"])
+def test_an_analysis_sidecar_without_its_chromophores_is_refused(key):
+    with pytest.raises(ValueError, match="no chromophores"):
+        template_slots(key, {"high_pass": 0.01, "low_pass": 0.1})
+
+
+def test_a_dyad_run_on_hbt_defines_it_once_before_the_coherence(tmp_path):
+    _sidecar(tmp_path, "group-G1_task-a_stat-wtc_relmat", "hyper_wtc",
+             sources=["/out/sub-01_desc-preproc_nirs.snirf"], chroma=["hbo", "hbt"])
+    _sidecar(tmp_path, "group-G1_task-a_stat-isc_relmat", "hyper_isc",
+             sources=["/out/sub-01_desc-preproc_nirs.snirf"], chroma=["hbo", "hbt"])
+    steps = steps_from_sidecars(tmp_path)
+    assert [k for k, _ in steps] == ["hbt", "hyper_wtc", "hyper_isc"]
+    assert dict(steps)["hyper_wtc"]["chroma"] == "HbO and HbT"

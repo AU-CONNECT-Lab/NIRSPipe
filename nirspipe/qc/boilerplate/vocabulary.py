@@ -289,6 +289,18 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
 
 _CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR", "hbt": "HbT"}
 
+def _chromophores(params: dict[str, Any]) -> str:
+    """The analysis's ``--chromophores`` as prose; a tree written before they were recorded is refused."""
+    if params.get("chromophores") is None:
+        raise ValueError("The sidecar records no chromophores; it was written by an older "
+                         "nirspipe. Rerun nirspipe on this subject.")
+    return _series([_CHROMA_NAME.get(c, c) for c in params["chromophores"]])
+
+def _holds_hbt(params: dict[str, Any]) -> bool:
+    """Whether a subject analysis (``chromophores``) or a dyad one (``chroma``) ran on HbT."""
+    chosen = params.get("chromophores") or params.get("chroma") or ()
+    return "hbt" in ([chosen] if isinstance(chosen, str) else chosen)
+
 def _screening_scope(params: dict[str, Any]) -> str:
     """Which windows the passing share was counted over, as the run recorded it."""
     counted = params.get("screen_scope_counted")
@@ -613,7 +625,9 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "noise_model": _noise_phrase(params.get("noise_model"),
                                              params.get("worsley_fitted_as_auto"),
                                              params.get("constant_fitted_as_ols")),
-                "censoring": _censoring_phrase(params)}
+                "censoring": _censoring_phrase(params),
+                "hbt": (" HbT was fitted as a series of its own, with the same design and noise "
+                        "model." if "hbt" in (params.get("chromophores") or ()) else "")}
     if key == "gvtd_censoring":
         return {"channel_set": str(params.get("gvtd_censor_channel_set")
                                    or params.get("gvtd_censor") or "long"),
@@ -625,6 +639,7 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "fc":
         return {"kept": " over the frames outside BAD_ spans"
                 if params.get("excluded_spans") else "",
+                "chroma": _chromophores(params),
                 "min_time": _min_time_phrase(params, "Connectivity was")}
     if key in ("hyper_wtc", "hyper_wtc_crossed"):
         return _wtc_slots(params)
@@ -643,7 +658,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":
-        return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
+        return {"chroma": _chromophores(params),
+                "l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
                 "kept": (", from a Lomb-Scargle periodogram of the samples outside BAD_ spans, "
                          "whose fALFF denominator ran up to the Nyquist frequency on the same "
                          "samples" if params.get("excluded_spans") else ""),
@@ -1295,7 +1311,7 @@ def metric_rows(
 # phase, its correlation, how both were grouped into regions, then its nulls; a run's
 # regression before ALFF and FC.
 _RANK = {"hyper_phasescale": 0.5, "hyper_isc": 1, "hyper_isc_crossed": 1, "hyper_roi": 2, "hyper_phasenull": 3,
-         "hyper_pairnull": 4, "alff": 3, "fc": 4,
+         "hyper_pairnull": 4, "alff": 3, "fc": 4, "hbt": -0.25,
          "optode_landmarks": -2, "optode_frame": -2,
          "excluded_unselected": -1, "excluded_edge": -0.9, "excluded_manual": -0.75,
          "gvtd_censoring": 0.5,
@@ -1331,7 +1347,9 @@ def _describe(nodes) -> list[tuple[str, dict[str, str]]]:
     """
     keyed = [(node, key) for node in nodes
              for key in [boilerplate_key(node.step, node.params),
-                         *span_keys(node.step, node.params, node.excluded_spans)]]
+                         *span_keys(node.step, node.params, node.excluded_spans),
+                         # defined once, before the first sentence that reads HbT
+                         *(["hbt"] if _holds_hbt(node.params) else [])]]
     keyed = sorted(((node, key) for node, key in keyed if key is not None),
                    key=lambda nk: (nk[0].depth, _RANK.get(nk[1], 0), nk[0].label))
     merged: dict[str, dict[str, Any]] = {}

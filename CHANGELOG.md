@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - The run report's GLM activation and ALFF brains draw every chromophore of the run, HbR included, and its connectivity figures follow `--chromophores`
 - `--wtc-chroma` and pairnull's `--chroma` take a list of `hbo`, `hbr`, `hbt`, default `hbo hbr`, replacing `both`; groupnull's `--chroma` takes `hbt`
+- Methods define HbT where a run uses it, name the chromophores of ALFF and FC, and say FC is reported as r and Fisher z
 
 ## [0.75.0] - 2026-10-25
 
