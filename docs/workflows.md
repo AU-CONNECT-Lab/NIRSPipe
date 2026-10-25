@@ -180,9 +180,11 @@ Applies the bandpass and resampling and stops there, for analyses done outside t
 
 ### Mode: glm
 
-A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual as `desc-errts`, the design matrix as `design.tsv` and the fit as `desc-glm_nirsmap.tsv`.
+A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual as `desc-errts`, the design matrix as `design.tsv`, the fit as `desc-glm_nirsmap.tsv` and each condition's block average as `desc-blockavg_timeseries.tsv`.
 
-**Events.** The design is built from the SNIRF annotations with every event given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path` with its own onsets and durations. One of the two is required, and they are mutually exclusive.
+**Events.** The design is built from the SNIRF annotations with every event given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path` with its own onsets and durations. One of the two is required, and they are mutually exclusive. Every duration must be above 0: nilearn models a zero-duration event as a single sample, so its beta would grow with the sampling rate and would not be in concentration units, and the run refuses such an event. Give each event its real length; a button press can take 0.1 s.
+
+**Block average.** Each condition's trials averaged per channel, on the series the model is fitted to, over `--epoch-tmin` to `--epoch-tmax` (-5 to 25 s when neither is given, the report's epoch window), each trial less its mean before onset. The trials are the design's, so the `--events-path` table when one is given, cut by `--epoch-chunk-duration` when set. A trial whose window runs off the recording or touches a `BAD_` span is left out. The table gives, per condition, channel, chromophore and time, the mean, its standard error and the number of trials, with rejected channels flagged as in the GLM tables. Unlike the report's epoch figures, it is not low-passed for display.
 
 **Design.** `--hrf-model` sets the HRF basis (`spm` by default; `glover`, the derivative and dispersion variants, or `fir` with `--fir-delays`). `--drift-model` sets the drift basis (`cosine` by default, or `polynomial` of order `--drift-order`, or `none`).
 

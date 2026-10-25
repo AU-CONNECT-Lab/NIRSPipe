@@ -69,6 +69,7 @@ derivatives/nirspipe/
         ├── <run>_design.tsv                        ← design matrix, whenever a regression ran
         ├── <run>_desc-glm_nirsmap.tsv              ← fit results, one row per channel and regressor
         ├── <run>_desc-contrast_nirsmap.tsv         ← glm + --contrast-file
+        ├── <run>_desc-blockavg_timeseries.tsv      ← glm: each condition's trial average per channel
         ├── <run>_stat-alff_nirsmap.tsv             ← rest: alff, falff, malff, zalff per channel
         ├── <run>_seg-<map>_agg-roi_stat-alff_nirsmap.tsv                ← + --roi-mapping
         ├── <run>_chromo-{hbo,hbr}_stat-{pearson,fisherz}_relmat.tsv     ← rest or --fc
