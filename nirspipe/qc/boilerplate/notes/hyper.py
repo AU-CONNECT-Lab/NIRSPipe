@@ -109,13 +109,13 @@ NOTES = {
         "The channel-to-region mapping from <code>--roi-mapping</code>, which the per-ROI "
         "panels average over.",
     "hyper_post.chromophores":
-        "Maps stack {stacked}; matrices and tables carry {listed} side by side. <b>HbO and "
-        "HbR are separate passes, never mixed.</b> Coupling in HbO but not HbR is a caution "
-        "flag.",
+        "Maps stack {stacked}; matrices and tables carry them side by side. <b>Each "
+        "chromophore is a separate pass, never mixed with another.</b> Coupling in HbO but not "
+        "HbR is a caution flag.",
     "hyper_post.chromophore_one":
         "Only {chroma} was run (<code>--wtc-chroma {flag}</code>), for coherence and "
-        "correlation alike; <code>--wtc-chroma both</code> adds the other as a consistency "
-        "check.",
+        "correlation alike; HbO and HbR together (<code>--wtc-chroma hbo hbr</code>) check "
+        "each other.",
     "hyper_post.wtc_channel":
         "Morlet wavelet. Arrows are relative phase: right is in phase, up is {lead} leading. "
         "Above the white dash (low frequencies) is the cone of influence, where the edges "
@@ -134,7 +134,8 @@ NOTES = {
         "Band mean per ROI pair, outside the cone of influence by default, as in "
         "<code>agg-roi_stat-wtc_relmat.tsv</code>.",
     "hyper_post.wtc_roi_matrix_chroma":
-        "{sides} right, on one colour scale, so the two can be checked against each other.",
+        "{sides} from left to right, on one colour scale, so they can be checked against "
+        "each other.",
     "hyper_post.wtc_roi_matrix_live":
         "Hover a cell for its pairing and value.",
     "hyper_post.wtc_chan_matrix":
@@ -152,7 +153,7 @@ NOTES = {
         "Channel correlations averaged in Fisher z within each ROI pair. Rows {row}, columns "
         "{col}; the diagonal is the homologous region.",
     "hyper_post.isc_roi_matrix_chroma":
-        "{sides} right, on one colour scale.",
+        "{sides} from left to right, on one colour scale.",
     "hyper_post.hover_pairing":
         "Hover a cell for its pairing.",
     "hyper_post.numbers_window":

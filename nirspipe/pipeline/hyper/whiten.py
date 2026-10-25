@@ -16,6 +16,7 @@ from scipy.linalg import solve_toeplitz
 from scipy.signal import lfilter
 
 from nirspipe.exceptions import StageError
+from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.qc.metrics._helpers import long_channel_picks
 from nirspipe.pipeline.glm_censored import gap_ar_coefficients, kept_frames
 from nirspipe.pipeline.hyper._helpers import _shared_sfreq
@@ -88,7 +89,7 @@ def whiten_order(raws: dict, order_s: float) -> int:
 
 
 def whiten_raws(raws: dict, order_s: float, sep_bands=None) -> dict:
-    """Copies of ``raws`` whose long HbO and HbR channels hold their AR residuals.
+    """Copies of ``raws`` whose long channels, HbT among them where loaded, hold their AR residuals.
 
     ::
 
@@ -113,7 +114,7 @@ def whiten_raws(raws: dict, order_s: float, sep_bands=None) -> dict:
         # the member's own BAD_ frames, so one whitened copy serves every pairing it is in
         keep = kept_frames(copy)
         failed = []
-        for ch_type in ("hbo", "hbr"):
+        for ch_type in CHROMOPHORES:
             for idx in long_channel_picks(copy, ch_type, sep_bands=sep_bands):
                 try:
                     resid = ar_whiten_fixed(copy._data[idx], order, keep)

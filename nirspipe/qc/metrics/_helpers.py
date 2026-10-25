@@ -11,6 +11,7 @@ import mne
 import numpy as np
 
 from nirspipe.pipeline.censor_fill import repair_dark_edges
+from nirspipe.pipeline.chromophores import chroma_of
 from nirspipe.utils import is_marker, is_optical_density
 from nirspipe.utils.logging import get_logger
 
@@ -246,14 +247,18 @@ def long_channel_picks(
     :func:`~nirspipe.qc.metrics._helpers.separation_bands`, and a channel outside both
     bands is in neither list; ``long_short_channels`` names such a channel in a warning.
 
+    The chromophore is read off the channel name, not the MNE type, since an HbT channel
+    ("S1_D1 hbt") is typed hbo; ``ch_type`` is "hbo", "hbr" or "hbt".
+
     ``exclude`` is pick_types', so rejected channels are dropped by default, which is what a
     metric wants. ``exclude=[]`` keeps them, which is what the *axis* of a channel-by-channel
     matrix wants: an axis over the montage rather than over the survivors gives every subject
     and every dyad a matrix of one shape.
     """
+    dropped = set(raw.info["bads"] if exclude == "bads" else exclude)
     long_names = set(long_short_channels(raw, sep_bands)[0])
-    return [p for p in mne.pick_types(raw.info, fnirs=ch_type, exclude=exclude)
-            if raw.ch_names[p] in long_names]
+    return [p for p, name in enumerate(raw.ch_names)
+            if chroma_of(name) == ch_type and name in long_names and name not in dropped]
 
 
 def separation_orphans(

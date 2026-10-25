@@ -670,9 +670,9 @@ def compute_wtc(
     significance adds a Monte Carlo significance level per pair (slow; see _wtc_over_pairs),
     and seed makes it reproducible.
 
-    ``ch_type`` is one chromophore, "hbo" or "hbr". Running both is this function called
-    twice and costs exactly twice as much: nothing about the statistic changes, and the two
-    never mix, since a member's HbO pairs only with the other member's HbO.
+    ``ch_type`` is one chromophore, "hbo", "hbr" or "hbt". Running several is this function
+    called once each, at the cost of one call each: nothing about the statistic changes, and
+    they never mix, since a member's HbO pairs only with the other member's HbO.
 
     ``cross`` crosses every channel with every other rather than pairing like with like, so
     n channels give n**2 results keyed by ``(label_sub1, label_sub2)`` instead of n keyed by

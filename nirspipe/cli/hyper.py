@@ -39,6 +39,7 @@ from nirspipe.io.derivatives import (
     write_dataset_description,
 )
 from nirspipe.io.groups import parse_group_csv
+from nirspipe.pipeline.chromophores import CHROMOPHORES, DEFAULT_CHROMOPHORES, in_order, with_hbt
 from nirspipe.pipeline.hyper._gpu import INSTALL_HINT, check_card, open_device
 from nirspipe.pipeline.hyper.alignment import resolve_analysis_window
 from nirspipe.pipeline.hyper.group_quality import (resolve_group_bands, write_group_bads,
@@ -176,12 +177,13 @@ def _run_groups(groups: dict, process, nprocs: "int | None" = None, verbose: boo
 
 
 def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normalize, bads_scope,
-                        passband_check=None, scope_tasks=None):
+                        passband_check=None, scope_tasks=None, chroma=()):
     """Load one dyad, put both recordings on one time axis, and mark the rejected channels.
 
     Returns (aligned_raws, offsets, group_sqm). The rejections are applied here rather than
     in each metric because --bads-scope decides them: one file's sidecar holds only that
-    run's own rejections.
+    run's own rejections. HbT is added after them, so a pair rejected in either half is
+    rejected in HbT, and before the per-channel z-score and whitening.
 
     --tstart/--tend are not applied here. They name a window of the analysis, and the report
     takes it out of the transform of the whole recording rather than cutting the recording
@@ -210,6 +212,7 @@ def _load_aligned_group(derivatives_dir, members, task, desc, no_align, normaliz
     group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
                                scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
+    raws = {sid: with_hbt(raw, chroma) for sid, raw in raws.items()}
     if no_align:
         aligned_raws, offsets = trim_to_shortest(raws)
     else:
@@ -308,7 +311,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
 
     aligned_raws, offsets, group_sqm = _load_aligned_group(
         s.derivatives_dir, members, task, s.desc, s.no_align, s.normalize, s.bads_scope,
-        passband_check=(s.wtc_fmin, s.wtc_fmax), scope_tasks=s.scope_tasks)
+        passband_check=(s.wtc_fmin, s.wtc_fmax), scope_tasks=s.scope_tasks, chroma=s.chroma)
     analysis_window = resolve_analysis_window(aligned_raws, s.tstart, s.tend)
     sep_bands = resolve_group_bands(members, group_sqm, s.bands_override)
     _quality_summary(aligned_raws, group_sqm, sep_bands)
@@ -452,7 +455,7 @@ def cmd_run(
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
-    wtc_by_condition: bool, wtc_chroma: str, wtc_window_s: "float | None",
+    wtc_by_condition: bool, wtc_chroma: "list[str]", wtc_window_s: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
@@ -527,10 +530,10 @@ def cmd_run(
         print("[warn] --channel-cross without --roi-mapping: the crossed channel table "
               "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
 
-    chroma = ("hbo", "hbr") if wtc_chroma == "both" else (wtc_chroma,)
+    chroma = in_order(wtc_chroma)
     if len(chroma) > 1:
-        print("[info] --wtc-chroma both: two full WTC passes per dyad, so roughly twice "
-              "the runtime. Pass hbo or hbr for one.", file=sys.stderr)
+        print(f"[info] --wtc-chroma {' '.join(chroma)}: {len(chroma)} full WTC passes per "
+              f"dyad, so roughly {len(chroma)} times the runtime of one.", file=sys.stderr)
     if wtc_phase_null and wtc_phase_null_cross:
         print("[info] the phase-scrambled null is crossed: every iteration covers every "
               "channel pairing, the squared pair count, and dominates the runtime. "
@@ -745,7 +748,7 @@ def cmd_pair_null(
     desc: str | None,
     roi_mapping: str | None,
     bads_scope: str | None,
-    chroma: str,
+    chroma: "list[str]",
     wtc_pair_pool: str,
     wtc_pair_max: int | None,
     wtc_pair_cross: bool | None,
@@ -772,7 +775,7 @@ def cmd_pair_null(
 
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
-    chroma = ("hbo", "hbr") if chroma == "both" else (chroma,)
+    chroma = in_order(chroma)
     scope_tasks = sorted({key[1] for key in all_groups})
 
     settings = SimpleNamespace(
@@ -956,11 +959,12 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Seed the --wtc-significance surrogates and the --wtc-phase-null and "
                           "--isc-phase-null draws. Omitted with any of them on, one is drawn "
                           "and written to the run record, so a --config rerun repeats them.")
-    run.add_argument("--wtc-chroma", choices=("hbo", "hbr", "both"), default="both",
-                     help="Chromophore(s) the coherence and the correlation run on (default "
-                          "both). HbO and HbR are separate passes, never mixed, so 'both' costs "
-                          "twice as much; the tables gain a chromophore column and the report a "
-                          "switch.")
+    run.add_argument("--wtc-chroma", nargs="+", choices=CHROMOPHORES,
+                     default=list(DEFAULT_CHROMOPHORES),
+                     help=f"Chromophores the coherence and the correlation run on, default "
+                          f"{' '.join(DEFAULT_CHROMOPHORES)}. Each is a separate pass, never "
+                          f"mixed, so each costs a full run. hbt, total haemoglobin, is HbO + "
+                          f"HbR of each channel.")
     run.add_argument("--wtc-roi-min-channels", type=int, default=ROI_MIN_CHANNELS, metavar="N",
                      help="Drop an ROI cell where either member contributes fewer than N "
                           f"channels (default {ROI_MIN_CHANNELS}). The default keeps a region "
@@ -1118,7 +1122,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
                             required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
-    group_null.add_argument("--chroma", nargs="+", choices=("hbo", "hbr"), default=None,
+    group_null.add_argument("--chroma", nargs="+", choices=CHROMOPHORES, default=None,
                             help="Chromophores to read, each into its own tables (default "
                                  "every chromophore the null's draws hold). One the draws do "
                                  "not hold is refused.")
@@ -1190,8 +1194,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "it is the scope the real tables recorded; a different one is "
                            "refused. A stand-in with no quality record is refused rather than "
                            "kept whole.")
-    pair.add_argument("--chroma", choices=("hbo", "hbr", "both"), default="both",
-                      help="Chromophore(s) to draw the null on, coherence and correlation alike (default both).")
+    pair.add_argument("--chroma", nargs="+", choices=CHROMOPHORES,
+                      default=list(DEFAULT_CHROMOPHORES),
+                      help=f"Chromophores to draw the null on, coherence and correlation alike "
+                           f"(default {' '.join(DEFAULT_CHROMOPHORES)}).")
     pair.add_argument("--wtc-pair-pool", choices=("position", "any"), default="position",
                       help="Who may stand in: 'position' (default) only another group's member "
                            "at the same index, or in the same role where the pairs table has a "

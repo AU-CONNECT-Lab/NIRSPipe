@@ -202,7 +202,7 @@ def test_asking_for_one_chromophore_writes_only_that_one(dyad, tmp_path):
     assert not (nirs / name("G1", "tap", "iscpairs", chromophore="hbo")).exists()
 
 
-@pytest.mark.parametrize("bad", [(), ("hbt",), ("hbo", "total")])
+@pytest.mark.parametrize("bad", [(), ("both",), ("hbo", "total")])
 def test_an_unknown_chromophore_is_refused(dyad, tmp_path, bad):
     from nirspipe.io.groups import GroupEntry
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
@@ -258,35 +258,36 @@ def test_the_null_refuses_an_unknown_chromophore(dyad, tmp_path):
     from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
 
     with pytest.raises(ValueError, match="chroma"):
-        run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("hbt",))
+        run_wtc_null("G1", "tap", dyad, tmp_path, n_iter=1, chroma=("both",))
 
 
 # ---- the CLI surface ----
 
-def test_the_flag_defaults_to_both():
-    """Both chromophores by default, at twice the runtime of HbO alone."""
+def test_the_flag_defaults_to_hbo_and_hbr():
+    """HbO and HbR by default, at twice the runtime of HbO alone; HbT only when asked."""
     from nirspipe.cli.hyper import _parsers
 
     args = _parsers()["nirspipe-hyper"].parse_args(
         ["deriv", "out", "group", "--pairs-csv", "pairs.csv"])
-    assert args.wtc_chroma == "both"
+    assert args.wtc_chroma == ["hbo", "hbr"]
 
 
-@pytest.mark.parametrize("value", ["hbo", "hbr", "both"])
-def test_the_flag_takes_the_three_settings(value):
+@pytest.mark.parametrize("value", [["hbo"], ["hbr"], ["hbt"], ["hbo", "hbr", "hbt"]])
+def test_the_flag_takes_any_of_the_three_chromophores(value):
     from nirspipe.cli.hyper import _parsers
 
     args = _parsers()["nirspipe-hyper"].parse_args(
-        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", value])
+        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", *value])
     assert args.wtc_chroma == value
 
 
 def test_the_flag_refuses_anything_else():
+    """``both`` included: it was a setting once and is gone, not kept as an alias."""
     from nirspipe.cli.hyper import _parsers
 
     with pytest.raises(SystemExit):
         _parsers()["nirspipe-hyper"].parse_args(
-            ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", "hbt"])
+            ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", "both"])
 
 
 # ---- the traps the structure exists to avoid ----

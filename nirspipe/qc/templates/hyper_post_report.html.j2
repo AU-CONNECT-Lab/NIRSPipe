@@ -124,7 +124,7 @@
 
 {#- the chromophore note: about every panel in this section rather than about any one of
     them, so it opens the section instead of standing as a panel of its own -#}
-<p class="step-desc">{% if wtc_chroma_labels | length > 1 %}{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above "), listed=wtc_chroma_labels | join(" and ")) }}
+<p class="step-desc">{% if wtc_chroma_labels | length > 1 %}{{ section_note('hyper_post.chromophores', stacked=wtc_chroma_labels | join(" above ")) }}
   {%- else %}{{ section_note('hyper_post.chromophore_one', chroma=wtc_chroma_labels[0], flag=wtc_chroma_labels[0] | lower) }}{% endif %}</p>
 
 <section id="WTCChannel" class="step">
@@ -178,7 +178,7 @@
   <h3 class="step-title">ROI &times; ROI</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.wtc_roi_matrix') }}
-      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.wtc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.wtc_roi_matrix_live') }}</p>
+      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.wtc_roi_matrix_chroma', sides=wtc_chroma_labels | join(", ")) }}{% endif %} {{ section_note('hyper_post.wtc_roi_matrix_live') }}</p>
     <iframe class="plotly-frame" src="{{ wtc_roi_matrix.wtc }}"
             title="ROI by ROI coherence"
             style="height:{{ wtc_roi_matrix.h or 720 }}px"></iframe>
@@ -202,7 +202,7 @@
 {% endif %}
 
 <!-- ================================================= inter-brain synchrony -->
-{% if isc_panel_hbo.wtc or isc_panel_hbr.wtc %}
+{% if isc_chroma_panels %}
 <h2 id="ISC">Inter-brain Synchrony</h2>
 <p class="step-desc">
   {% if condition_label %}{{ section_note('hyper_post.isc_window', arc_rule=isc_arc_rule) }}
@@ -217,7 +217,7 @@
   <h3 class="step-title">ROI &times; ROI</h3>
   <div class="details-body">
     <p class="step-desc">{{ section_note('hyper_post.isc_roi_matrix', row=subject_ids[0], col=subject_ids[1]) }}
-      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.isc_roi_matrix_chroma', sides=wtc_chroma_labels | join(" left, ")) }}{% endif %} {{ section_note('hyper_post.hover_pairing') }}</p>
+      {%- if wtc_chroma_labels | length > 1 %} {{ section_note('hyper_post.isc_roi_matrix_chroma', sides=wtc_chroma_labels | join(", ")) }}{% endif %} {{ section_note('hyper_post.hover_pairing') }}</p>
     <iframe class="plotly-frame" src="{{ isc_roi_matrix.wtc }}"
             title="ROI by ROI inter-brain synchrony"
             style="height:{{ isc_roi_matrix.h or 720 }}px"></iframe>
@@ -226,29 +226,17 @@
 </section>
 {% endif %}
 
-{% if isc_panel_hbo.wtc %}
-<section id="ISCHbo" class="step">
-  <h3 class="step-title">HbO</h3>
+{% for c, name, panel in isc_chroma_panels %}
+<section id="ISC{{ c | capitalize }}" class="step">
+  <h3 class="step-title">{{ name }}</h3>
   <div class="details-body">
-    <iframe class="plotly-frame" src="{{ isc_panel_hbo.wtc }}"
-            title="inter-brain synchrony, HBO"
-            style="height:{{ isc_panel_hbo.h or 720 }}px"></iframe>
-    <p class="fig-path">{{ isc_panel_hbo.wtc }}</p>
+    <iframe class="plotly-frame" src="{{ panel.wtc }}"
+            title="inter-brain synchrony, {{ c | upper }}"
+            style="height:{{ panel.h or 720 }}px"></iframe>
+    <p class="fig-path">{{ panel.wtc }}</p>
   </div>
 </section>
-{% endif %}
-
-{% if isc_panel_hbr.wtc %}
-<section id="ISCHbr" class="step">
-  <h3 class="step-title">HbR</h3>
-  <div class="details-body">
-    <iframe class="plotly-frame" src="{{ isc_panel_hbr.wtc }}"
-            title="inter-brain synchrony, HBR"
-            style="height:{{ isc_panel_hbr.h or 720 }}px"></iframe>
-    <p class="fig-path">{{ isc_panel_hbr.wtc }}</p>
-  </div>
-</section>
-{% endif %}
+{% endfor %}
 {% endif %}
 
 <!-- ============================================================== numbers -->

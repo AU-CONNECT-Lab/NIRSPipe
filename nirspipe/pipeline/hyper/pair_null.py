@@ -22,6 +22,7 @@ import pandas as pd
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import group_output_path, occasion_label
+from nirspipe.pipeline.chromophores import with_hbt
 from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
@@ -278,8 +279,12 @@ def _accept_stand_in(
     whiten_s: float = 0.0,
     sep_bands=None,
     isc_whiten_s: float = 0.0,
+    chroma: "tuple[str, ...]" = (),
 ):
-    """``(id, segments, end, whitened copy, correlation copy)`` of a usable stand-in, or None with the reason in ``refused``."""
+    """``(id, segments, end, whitened copy, correlation copy)`` of a usable stand-in, or None with the reason in ``refused``.
+
+    HbT is added to the stand-in when ``chroma`` holds it, after its rejections, as on the real side.
+    """
     from nirspipe.pipeline.hyper.group_io import load_group_haemo
     from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
 
@@ -305,6 +310,7 @@ def _accept_stand_in(
         refused.setdefault("no_quality_record", []).append(pid)
         logger.warning("%s refused as a stand-in, no quality record: %s", pid, exc)
         return None
+    partner_raw = with_hbt(partner_raw, chroma)
 
     # asked for the conditions, not the window labels: the annotation carries a condition
     # description and a window is an offset into one
@@ -401,6 +407,7 @@ def _draw_condition_pairs(
     sep_bands=None,
     isc_whiten_s: float = 0.0,
     real_partner_raw=None,
+    chroma: "tuple[str, ...]" = (),
 ):
     """Yield ``(partner_id, label, segments, the condition's place in them, whitened segments,
     the correlation's place in them, each side's excluded samples)``.
@@ -437,7 +444,7 @@ def _draw_condition_pairs(
             derivatives_dir, entry, fixed_raw, desc=desc, bads_scope=bads_scope,
             scope_tasks=scope_tasks, windows=windows, band_fmin=band_fmin, refused=refused,
             window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
-            isc_whiten_s=isc_whiten_s)
+            isc_whiten_s=isc_whiten_s, chroma=chroma)
         if accepted is None:
             continue
         pid, segments, end, partner_white, partner_isc = accepted
@@ -591,6 +598,7 @@ def run_pair_null(
     group_sqm = load_group_sqm(derivatives_dir, members, bads_scope=bads_scope,
                                scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
+    raws = {sid: with_hbt(raw, chroma) for sid, raw in raws.items()}
     sep_bands = resolve_group_bands(members, group_sqm)
 
     aligned_real, offsets = align_recordings(raws, task)
@@ -720,7 +728,8 @@ def run_pair_null(
             desc=desc, bads_scope=bads_scope, scope_tasks=scope_tasks, windows=windows,
             band_fmin=band_fmin, n_max=pairing_max, refused=refused,
             window_sources=window_sources, whiten_s=whiten_s, sep_bands=sep_bands,
-            isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[ids[j]]),
+            isc_whiten_s=isc_whiten_s, real_partner_raw=aligned_real[ids[j]],
+            chroma=(ch_type,)),
             {recording_id(entry): did for did, entry in got})
         null = compute_wtc_pair_null(
             draws, true_pair, long_axis_over(aligned_real.values(), ch_type, sep_bands),

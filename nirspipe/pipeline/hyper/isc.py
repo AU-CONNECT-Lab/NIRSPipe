@@ -264,7 +264,7 @@ def compute_isc(
     excluded samples on the pair's clock, stands in for those spans when given.
 
     Args:
-        ch_type: "hbo" or "hbr".
+        ch_type: "hbo", "hbr" or "hbt".
     """
     data1, data2, ch_names, keep = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
                                              window, band, skip_s, excluded)

@@ -104,7 +104,7 @@ class HyperPostConfig:
 class HyperPostResult:
     """What one dyad's post run produced: the transforms, the numbers, and where they went.
 
-    ``passes`` is keyed ``hbo`` / ``hbr``, each holding the whole-run ``WTCResult`` under
+    ``passes`` is keyed by chromophore, each holding the whole-run ``WTCResult`` under
     ``result``, its band means under ``chan`` and ``roichan``, and the windows under
     ``cond_wtc`` / ``cond_bands`` positionally over ``cond_windows`` -- positional so the
     chromophores line up even where a guard failed on one.

@@ -8,6 +8,7 @@ import mne
 import numpy as np
 
 from nirspipe.exceptions import StageError
+from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.utils import pair_of
 from nirspipe.qc.metrics._helpers import long_channel_picks
 
@@ -39,8 +40,8 @@ def _long_by_label(
     The label is the key every inter-brain metric matches on. Position cannot be: two
     participants with different channels rejected no longer agree on what index 3 is.
 
-    ``ch_type`` is "hbo" or "hbr", and the two are parallel from here down: a member's HbO
-    pairs only with the other member's HbO, and the two results are never averaged, since
+    ``ch_type`` is "hbo", "hbr" or "hbt", and they are parallel from here down: a member's
+    HbO pairs only with the other member's HbO, and the results are never averaged, since
     HbO and HbR anti-correlate by construction.
     """
     picks = long_channel_picks(raw, ch_type, sep_bands=sep_bands)
@@ -95,6 +96,6 @@ def long_axis_over(
 def _chroma_tuple(chroma, name: str) -> "tuple[str, ...]":
     """The chromophores asked for, in order and once each, or a ValueError naming ``name``."""
     out = tuple(dict.fromkeys(chroma))
-    if not out or set(out) - {"hbo", "hbr"}:
-        raise ValueError(f"{name} must be some of ('hbo', 'hbr'), got {chroma!r}")
+    if not out or set(out) - set(CHROMOPHORES):
+        raise ValueError(f"{name} must be some of {CHROMOPHORES}, got {chroma!r}")
     return out

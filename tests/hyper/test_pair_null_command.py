@@ -103,6 +103,13 @@ def test_what_the_real_table_recorded_is_left_unset_to_be_read_off_it(dest):
     assert getattr(_parse(), dest) is None
 
 
+def test_the_chromophores_default_to_hbo_and_hbr_and_take_hbt():
+    assert _parse().chroma == ["hbo", "hbr"]
+    assert _parse("--chroma", "hbt").chroma == ["hbt"]
+    with pytest.raises(SystemExit):
+        _parse("--chroma", "both")
+
+
 def test_the_crossing_can_still_be_set_either_way():
     """A homologous null over a crossed table is a cheaper one, not a different statistic."""
     assert _parse("--wtc-pair-cross").wtc_pair_cross is True

@@ -970,7 +970,7 @@ def build_isc_panel(
         isc_mat:       n × n ISC matrix from compute_isc().
         ch_names:      Channel labels (n,), without type suffix.
         subject_ids:   [sub1_id, sub2_id, ...].
-        ch_type:       "hbo" or "hbr", shown in titles.
+        ch_type:       "hbo", "hbr" or "hbt", shown in titles.
         isc_threshold: Absolute ``|ISC|`` a pairing must clear for a chord. None, the
                        default, leaves the choice to :func:`_arc_rule`.
         arc_level:     Per-cell ``|r|`` level out of a null, when one was drawn.

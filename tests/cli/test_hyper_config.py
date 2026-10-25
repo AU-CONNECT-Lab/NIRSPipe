@@ -23,8 +23,9 @@ def test_a_record_s_own_inputs_and_bands_are_skipped(tmp_path):
     path = _record(tmp_path, '[execution]\ngroup_id = "G01"\n[hyper]\n'
                              'derivatives_dir = "C:/d"\npairs_csv = "C:/p.csv"\n'
                              'check_only = false\nno_report = true\nsep_short_max_mm = 12.0\n'
-                             'wtc_fmin = 0.02\nwtc_chroma = "hbo"\ntask_label = ["hold"]\n')
-    assert read_hyper_config(path)["hyper"] == {"wtc_fmin": 0.02, "wtc_chroma": "hbo",
+                             'wtc_fmin = 0.02\nwtc_chroma = ["hbo", "hbt"]\n'
+                             'task_label = ["hold"]\n')
+    assert read_hyper_config(path)["hyper"] == {"wtc_fmin": 0.02, "wtc_chroma": ["hbo", "hbt"],
                                                 "task_label": ["hold"]}
 
 
@@ -42,7 +43,7 @@ def test_a_value_the_run_derived_from_the_shorthand_is_dropped_and_a_typed_one_k
     ("[hyper]\nwtc_fmn = 0.02\n", "[hyper] has no setting 'wtc_fmn'"),
     ("[post]\nmode = \"rest\"\n", "no section [post]"),
     ("wtc_fmin = 0.02\n", "wtc_fmin sits outside any section"),
-    ("[hyper]\nwtc_chroma = \"hbt\"\n", "expected one of"),
+    ("[hyper]\nwtc_chroma = \"both\"\n", "expected one of"),
 ])
 def test_a_file_that_would_drop_a_setting_is_refused(tmp_path, capsys, body, said):
     with pytest.raises(SystemExit):

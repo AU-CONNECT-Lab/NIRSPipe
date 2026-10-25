@@ -25,6 +25,7 @@ from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.exceptions import StageError
 from nirspipe.io.tables import read_tsv_or_none, split_whole_run
 from nirspipe.io.naming import report_name, derivative_path, parse_path
+from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.qc.common.figure_io import _pair_fname, figure_namer, pair_slug
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, outlier_flags, page_vars, render)
@@ -37,7 +38,7 @@ logger = get_logger("qc.hyper_index")
 # what an unreadable table costs this page, for the warning
 _LOST = "its rows go unlisted"
 
-_CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
+_CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR", "hbt": "HbT"}
 
 # What a value has to beat to be counted past its own null. The same 95 the null tables'
 # `null_p95` column is drawn at, so the count and that column say one thing.
@@ -195,7 +196,7 @@ def _isc_mean(nirs_dir: Path, stem: str, label: "str | None" = None,
     ``slug`` picks one pairing's matrices out of a group that wrote several.
     """
     out: dict = {}
-    for chroma in ("hbo", "hbr"):
+    for chroma in CHROMOPHORES:
         df = read_tsv_or_none(nirs_dir / _table(
             stem, pairing=slug.lstrip("_") or None, chromophore=chroma,
             condition=_pair_fname(label) if label else None, statistic="isc"), _LOST)
@@ -265,8 +266,8 @@ def collect_rows(group_dir: Path, group_id: str) -> "list[dict]":
         rows += _session_rows(group_dir, group_id, session, nirs_dir)
 
     # a window is marked against the dyad's other windows, so this waits until every row is
-    # in hand. Flagged per chromophore, the two being separate measurements
-    for chroma in ("hbo", "hbr"):
+    # in hand. Flagged per chromophore, each a separate measurement
+    for chroma in CHROMOPHORES:
         for key, flag_key in (("coherence", "flagged"), ("coherence_crossed", "flagged_crossed")):
             flags = outlier_flags([r[key].get(chroma) for r in rows])
             for row, flagged in zip(rows, flags):
@@ -366,7 +367,7 @@ def write_hyper_index(
         logger.warning("group-%s | no coherence table found, index not written", group_id)
         return None
 
-    chroma = [c for c in ("hbo", "hbr")
+    chroma = [c for c in CHROMOPHORES
               if any(c in row["coherence"] for row in rows)]
     first = rows[0]
     band = _band(group_dir / (f"ses-{first['session']}/nirs" if first["session"] else "nirs")

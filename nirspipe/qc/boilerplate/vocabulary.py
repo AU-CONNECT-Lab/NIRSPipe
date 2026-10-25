@@ -287,7 +287,7 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
     # neither flag was given, and the sentence stays true rather than naming absent columns
     return _series(parts) if parts else "only a constant term"
 
-_CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR"}
+_CHROMA_NAME = {"hbo": "HbO", "hbr": "HbR", "hbt": "HbT"}
 
 def _screening_scope(params: dict[str, Any]) -> str:
     """Which windows the passing share was counted over, as the run recorded it."""

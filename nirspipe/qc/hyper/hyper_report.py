@@ -112,7 +112,7 @@ def _empty_figures() -> dict:
     """A figure set with every key present and its own empty value."""
     return {key: factory() for key, factory in _FIGURE_SET.items()}
 
-_CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR"}
+_CHROMA_LABEL = {"hbo": "HbO", "hbr": "HbR", "hbt": "HbT"}
 
 
 def member_sci_lines(sqm_data: dict, subject_ids: "list[str]") -> "dict[str, float | None]":
@@ -1151,10 +1151,10 @@ def build_hyper_post_report(
     ``wtc_mask_coi`` leaves the cone of influence out of each band mean. On by default; the
     share outside the cone is reported either way as ``n_valid_frac``.
 
-    ``wtc_chroma`` is the chromophores to run, ``("hbo",)``, ``("hbr",)`` or both. Both is
-    the default and costs exactly twice as much, since the two are the same computation run
-    twice: a member's HbO pairs only with the other member's HbO, and the two are never
-    mixed and never averaged. Every band-mean table gains a
+    ``wtc_chroma`` is the chromophores to run, some of ``("hbo", "hbr", "hbt")``; HbO and
+    HbR are the default. Each costs a full pass, since they are the same computation run
+    once each: a member's HbO pairs only with the other member's HbO, and they are never
+    mixed and never averaged. HbT has to be on ``aligned_raws`` already. Every band-mean table gains a
     ``chromophore`` column rather than splitting per chromophore, the tables being
     long-format. The figures are keyed by chromophore instead and the page carries all of
     them, switched together by one control; ``wtc_chroma[0]`` is only what the page opens on.
@@ -1470,7 +1470,7 @@ def build_hyper_post_report(
             -> {"chan_matrix": {...}, "roi_matrix": {...}}
 
         One figure per matrix rather than one per chromophore, which is the one thing on
-        this page that is not built per chromophore: HbO and HbR sit side by side on one
+        this page that is not built per chromophore: the chromophores sit side by side on one
         colour scale. The maps above stay per chromophore because a map is a picture of one
         pairing.
 
@@ -1601,10 +1601,10 @@ def build_hyper_post_report(
         return panel
 
     def _isc_roi_matrix_of(pair, label) -> dict:
-        """The ROI ISC of both chromophores as one figure, the way the WTC matrices are.
+        """The ROI ISC of every chromophore as one figure, the way the WTC matrices are.
 
-        One figure rather than one per chromophore, as in `_matrix_set`: HbO and HbR side by
-        side on one scale. Nothing is drawn where the run had no ROI map, since `isc_roi` is then empty.
+        One figure rather than one per chromophore, as in `_matrix_set`: side by side on one
+        scale. Nothing is drawn where the run had no ROI map, since `isc_roi` is then empty.
         """
         mats = {_CHROMA_LABEL[c]: result.isc_roi.get(pair, {}).get(label, {}).get(
                                       c, (None, None))
@@ -1904,8 +1904,9 @@ def build_hyper_post_report(
                            "current": pr == pair} for pr in pairings]),
             isc_unfiltered_note=isc_unfiltered_note,
             isc_roi_matrix=(isc_roi_matrices.get(pair) or {}).get(label) or {},
-            isc_panel_hbo=(isc_panels.get(pair) or {}).get(label, {}).get("hbo") or {},
-            isc_panel_hbr=(isc_panels.get(pair) or {}).get(label, {}).get("hbr") or {},
+            isc_chroma_panels=[(c, _CHROMA_LABEL[c], panel) for c in chroma
+                               if (panel := (isc_panels.get(pair) or {}).get(label, {}).get(c))
+                               and panel.get("wtc")],
             subject_metrics_rows=member_metric_table(member_rows, {"Motion": imu_rows}),
             condition_grid=_condition_grid(pair, label) if pair else {},
         )
