@@ -103,3 +103,10 @@ def test_psp_with_no_line_spans_its_own_values_on_one_hue():
 def test_sci_with_no_line_gets_no_column():
     fig, _, _ = _slider({"psp": 0.15})
     assert _titles(fig)[0] == ["Passing", "PSP"]
+
+
+def test_a_run_without_events_titles_each_frame_by_time_alone(slider):
+    fig, _, _ = slider
+    titles = [frame.layout.title.text for frame in fig.frames]
+    assert titles[0] == "<span style='color:#8a949e'>t = 5 s</span>"
+    assert not [t for t in titles if "between blocks" in t]

@@ -354,8 +354,9 @@ def build_head_slider(
         sitting at index 2, never updates: the first head loses its name and the caption is
         frozen at the first frame. A title has no index to collide with.
         """
-        return dict(text=f"<b>{task_at(t[k])}</b>"
-                         f"<span style='color:#8a949e'> &nbsp;t = {t[k]:.0f} s</span>",
+        # a run without events has no blocks to be between
+        where = f"<b>{task_at(t[k])}</b> &nbsp;" if spans else ""
+        return dict(text=f"{where}<span style='color:#8a949e'>t = {t[k]:.0f} s</span>",
                     x=0.5, xanchor="center", y=0.98, yanchor="top",
                     font=dict(size=13, color="#34495e"))
 
