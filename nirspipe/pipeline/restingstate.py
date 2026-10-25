@@ -161,15 +161,15 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
         total_sum = np.nansum(power_sqrt[1:])  # skip DC
         falff_vals[i] = np.nansum(band_amp) / total_sum if total_sum > 0 else 0.0
 
-    # mALFF/zALFF standardize within each chromophore: HbO and HbR sit on different amplitude
-    # scales, so a pooled mean/std would distort both; each chromophore is normalized on its own.
+    # mALFF/zALFF standardize within each chromophore: HbO, HbR and HbT sit on different
+    # amplitude scales, so a pooled mean/std would distort them; each is normalized on its own.
     malff_vals = np.zeros_like(alff_vals)
     zalff_vals = np.zeros_like(alff_vals)
     bads = set(raw.info["bads"])
     is_bad = np.array([c in bads for c in raw.ch_names])
     # blanked covers both reasons a channel carries no value; is_bad stays rejection-only
     blanked = np.array([c in bads or c in set(exclude or ()) for c in raw.ch_names])
-    for suffix in (" hbo", " hbr"):
+    for suffix in (" hbo", " hbr", " hbt"):
         idx = np.array([c.endswith(suffix) for c in raw.ch_names])
         if not idx.any():
             continue
@@ -205,7 +205,8 @@ _ALFF_COLUMNS = ("alff", "falff", "malff", "zalff")
 
 
 def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
-                     roi_map: "dict[str, list[str]]") -> pd.DataFrame:
+                     roi_map: "dict[str, list[str]]",
+                     chromophores: "tuple[str, ...]" = ("hbo", "hbr")) -> pd.DataFrame:
     r"""ROI-level amplitude: the mean of each ROI's member channels, per chromophore.
 
     .. math::
@@ -230,7 +231,7 @@ def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
         return pd.DataFrame()
     by_channel = alff_df.set_index("channel")
     rows = []
-    for chromophore in ("hbo", "hbr"):
+    for chromophore in chromophores:
         members = _roi_members(raw, roi_map, chromophore)
         for roi in roi_map:
             picks = [c for c in members.get(roi, []) if c in by_channel.index]
@@ -254,8 +255,8 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
 
         \rho_{ij} = \operatorname{corr}(x_i, x_j)
 
-    over the channels of a single chromophore (``chromophore`` is "hbo" or "hbr"); HbO and HbR
-    anti-correlate, so a mixed matrix has no clean meaning and the two are kept separate. Diagonal
+    over the channels of a single chromophore (``chromophore`` is "hbo", "hbr" or "hbt"); HbO and
+    HbR anti-correlate, so a mixed matrix has no clean meaning and each is kept separate. Diagonal
     is 1. Empty frame if the chromophore has < 2 channels. Only frames outside every ``BAD_``
     span enter the correlation, here and in the ROI and seed products. Where a channel has NaN
     frames (a ``--combine-runs`` series, in the runs it was bad) each pair is taken over the
@@ -367,7 +368,7 @@ def _roi_members(
     for roi, chans in roi_map.items():
         picks = []
         for c in chans:
-            base = c[:-4] if (c.endswith(" hbo") or c.endswith(" hbr")) else c
+            base = c[:-4] if c.endswith((" hbo", " hbr", " hbt")) else c
             name = f"{base}{suffix}"
             if name in chan_set:
                 picks.append(name)
@@ -395,7 +396,7 @@ def compute_fc_seed(raw: mne.io.Raw, roi_map: dict[str, list[str]], chromophore:
     roi_map : dict[str, list[str]]
         {ROI label: [channel names]}; every ROI becomes one seed, i.e. one row.
     chromophore : str, optional
-        "hbo" or "hbr". HbO and HbR anti-correlate, so they never share a map.
+        "hbo", "hbr" or "hbt". HbO and HbR anti-correlate, so they never share a map.
     signals, members : dict, optional
         {ROI: seed series} and {ROI: the channels averaged into it}, given together for a
         joined series whose seeds were averaged run by run; by default both come from ``raw``.

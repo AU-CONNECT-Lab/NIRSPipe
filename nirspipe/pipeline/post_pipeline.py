@@ -19,6 +19,8 @@ import pandas as pd
 from nirspipe.io.auxiliary import find_aux_table
 from nirspipe.pipeline.block_average import write_block_average
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL, fill_corrupted
+from nirspipe.pipeline.chromophores import (DEFAULT_CHROMOPHORES, chroma_of, hbt_names, hbt_of,
+                                            in_order, with_hbt)
 from nirspipe.pipeline.glm_censored import kept_frames
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.pipeline.denoise import (
@@ -100,7 +102,11 @@ class PostConfig:
 
     combine_runs: bool | None = None
 
+    # what the GLM tables, block average, FC and ALFF carry; the stage files keep HbO and HbR
+    chromophores: tuple[str, ...] = DEFAULT_CHROMOPHORES
+
     def __post_init__(self) -> None:
+        self.chromophores = in_order(self.chromophores)
         # nilearn multiplies the cutoff by the frame times, so a missing one dies deep
         # inside it as "unsupported operand type(s) for *: 'NoneType' and 'float'"
         if self.drift_model == "cosine" and self.drift_high_pass is None:
@@ -380,13 +386,15 @@ def run_post(
             contrast_def=config.contrast_def,
             output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
+            chromophores=config.chromophores,
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                           inputs=glm_inputs(config.events_path, aux_path))
         # on the series the model was fitted to, over the trial window the report's epoch figures use
         write_block_average(result, nirs_dir, rec.path_of(result), epoch_tmin, epoch_tmax,
                             epoch_chunk_duration, events=design_events,
-                            inputs=glm_inputs(config.events_path, None))
+                            inputs=glm_inputs(config.events_path, None),
+                            chromophores=config.chromophores)
 
         # FC on the task residual: the task is in the design matrix, so what correlates here
         # is what the model did not explain.
@@ -412,6 +420,7 @@ def run_post(
             sep_bands=separation_bands(config),
             **aux_kwargs,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
+            chromophores=config.chromophores,
         )
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
@@ -493,6 +502,7 @@ def run_post(
                 events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
                 output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
+                chromophores=config.chromophores,
             )
             _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                               inputs=glm_inputs(None, aux_path))
@@ -596,10 +606,15 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
         logger.warning("sub-%s | --combine-runs: no optode placement carried over: %s",
                        config.subject, exc)
     if mode == "rest" or config.fc:
-        rois = ({c: join_roi_signals(raws, labels, config.roi_map, c) for c in ("hbo", "hbr")}
-                if config.roi_map else None)
+        # each run is z-scored before the join, so HbT is summed in each run, not after
+        hbt_runs = [hbt_of(raw) for raw in raws] if "hbt" in config.chromophores else []
+        joined_hbt = (join_runs(hbt_runs, [set(h.info["bads"]) | set(hbt_names(gone))
+                                           for h, gone in zip(hbt_runs, absent)])[0]
+                      if hbt_runs else None)
+        rois = ({c: join_roi_signals(hbt_runs if c == "hbt" else raws, labels, config.roi_map, c)
+                 for c in config.chromophores} if config.roi_map else None)
         _write_fc_derivatives(joined, config, output_dir, rec, source_entities=entities,
-                              known_spans=known, joined_rois=rois)
+                              known_spans=known, joined_rois=rois, joined_hbt=joined_hbt)
     return written
 
 
@@ -641,13 +656,15 @@ def _write_fc_derivatives(
     source_entities: dict[str, str] | None = None,
     known_spans: "list[dict] | None" = None,
     joined_rois: "dict[str, tuple[dict, dict]] | None" = None,
+    joined_hbt: "mne.io.BaseRaw | None" = None,
 ) -> tuple:
     """Write the FC, ROI FC and seed-map TSVs for one residual.
 
     Returns (fc_hbo_df, fc_hbr_df, fc_roi, fc_seed). The last two are
     {chromophore: frame} and stay empty without a roi_map. ``joined_rois`` is
     {chromophore: (ROI signals, members per run)} from
-    :func:`~nirspipe.pipeline.combine_runs.join_roi_signals`, for a joined series.
+    :func:`~nirspipe.pipeline.combine_runs.join_roi_signals`, for a joined series, and
+    ``joined_hbt`` that series' HbT, joined from each run's own.
 
     All three modes land here, and the only thing that differs is what arrives: rest
     regresses confounds alone, glm regresses the task as well, and denoise passes either its
@@ -660,13 +677,16 @@ def _write_fc_derivatives(
 
     entities = carry_entities(source_entities)
 
+    series = (raw_resid.copy().add_channels([joined_hbt]) if joined_hbt is not None
+              else with_hbt(raw_resid, config.chromophores))
     # the FC matrices keep their bad rows and columns so the shape stays predictable;
     # the sidecar names them so a consumer can drop or ignore them
-    bads = list(raw_resid.info["bads"])
+    bads = list(series.info["bads"])
     # a channel that was the whole short-channel regressor was fitted against a copy of
     # itself, so its residual is zero and every correlation it takes part in is noise
     empty = sole_regressor_channels(raw_resid, config.short_channel,
                                     separation_bands(config))
+    empty += hbt_names(empty) if "hbt" in config.chromophores else []
     src_bp = rec.path_of(raw_resid)
 
     def _path(extra: dict, statistic: str) -> Path:
@@ -693,10 +713,9 @@ def _write_fc_derivatives(
                            excluded_spans=excluded_spans(raw_resid, known=known_spans or ()),
                            **params, **kept)
 
-    # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix. Both are
-    # written and both reach the report.
-    for chromo in ("hbo", "hbr"):
-        fc_df = compute_fc(raw_resid, chromo)
+    # FC per chromophore: HbO and HbR anti-correlate, so they never share a matrix
+    for chromo in config.chromophores:
+        fc_df = compute_fc(series, chromo)
         if fc_df.empty:
             continue
         for ch in (c for c in empty if c in fc_df.index):
@@ -719,12 +738,12 @@ def _write_fc_derivatives(
             if joined_rois:
                 signals, members = joined_rois[chromo]
                 # a seed's own channels are those averaged into it in any run
-                seeds = {roi: [ch for ch in raw_resid.ch_names
+                seeds = {roi: [ch for ch in series.ch_names
                                if any(ch in run.get(roi, ()) for run in members.values())]
                          for roi in signals}
             else:
-                members = _roi_members(raw_resid, config.roi_map, chromo)
-            fc_roi_df = compute_fc_roi(raw_resid, config.roi_map, chromo, signals=signals)
+                members = _roi_members(series, config.roi_map, chromo)
+            fc_roi_df = compute_fc_roi(series, config.roi_map, chromo, signals=signals)
             if not fc_roi_df.empty:
                 fc_roi_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "pearson")
                 write_tsv(fc_roi_df, fc_roi_path, index=True, index_label="roi")
@@ -743,7 +762,7 @@ def _write_fc_derivatives(
 
             # seed map: one side averaged, so it is a third product rather than a view of the
             # two above. Cells for a seed's own channels are NaN, not zero.
-            fc_seed_df = compute_fc_seed(raw_resid, config.roi_map, chromo, signals=signals,
+            fc_seed_df = compute_fc_seed(series, config.roi_map, chromo, signals=signals,
                                          members=seeds)
             for ch in (c for c in empty if c in fc_seed_df.columns):
                 fc_seed_df[ch] = np.nan
@@ -765,7 +784,7 @@ def _write_fc_derivatives(
 
         if chromo == "hbo":
             fc_hbo_df = fc_df
-        else:
+        elif chromo == "hbr":
             fc_hbr_df = fc_df
 
     return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
@@ -793,12 +812,16 @@ def _write_rest_derivatives(
     alff_df = None
     kept = _kept_time(raw_resid_bb, config, "ALFF", rec) if raw_resid_bb is not None else None
     if kept is not None:
+        series = with_hbt(raw_resid_bb, config.chromophores)
         # handed in rather than blanked afterwards: a channel fitted against a copy of
         # itself must also stay out of the mALFF/zALFF reference mean
         empty = sole_regressor_channels(raw_resid_bb, config.short_channel,
                                         separation_bands(config))
-        alff_df = compute_alff(raw_resid_bb, low_pass=config.low_pass,
+        empty += hbt_names(empty) if "hbt" in config.chromophores else []
+        alff_df = compute_alff(series, low_pass=config.low_pass,
                                high_pass=config.high_pass, exclude=empty)
+        alff_df = alff_df[alff_df["channel"].map(chroma_of).isin(config.chromophores)]
+        alff_df = alff_df.reset_index(drop=True)
         alff_path = build_output_path(
             output_dir=output_dir, subject=config.subject, session=config.session,
             entities={**entities, "statistic": "alff"}, suffix="nirsmap", extension=".tsv",
@@ -806,12 +829,13 @@ def _write_rest_derivatives(
         write_tsv(alff_df, alff_path)
         spans = excluded_spans(raw_resid_bb, known=known_spans or ())
         write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
-                       list(raw_resid.info["bads"]), excluded_spans=spans,
-                       low_pass=config.low_pass, high_pass=config.high_pass, **kept)
+                       list(series.info["bads"]), excluded_spans=spans,
+                       low_pass=config.low_pass, high_pass=config.high_pass,
+                       chromophores=list(config.chromophores), **kept)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
 
         if config.roi_map:
-            alff_roi_df = compute_alff_roi(alff_df, raw_resid_bb, config.roi_map)
+            alff_roi_df = compute_alff_roi(alff_df, series, config.roi_map, config.chromophores)
             if not alff_roi_df.empty:
                 alff_roi_path = build_output_path(
                     output_dir=output_dir, subject=config.subject, session=config.session,
@@ -821,10 +845,11 @@ def _write_rest_derivatives(
                 )
                 write_tsv(alff_roi_df, alff_roi_path)
                 write_step_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
-                               list(raw_resid.info["bads"]), excluded_spans=spans,
+                               list(series.info["bads"]), excluded_spans=spans,
                                low_pass=config.low_pass, high_pass=config.high_pass,
-                               roi_channels={c: _roi_members(raw_resid_bb, config.roi_map, c)
-                                             for c in ("hbo", "hbr")}, **kept)
+                               roi_channels={c: _roi_members(series, config.roi_map, c)
+                                             for c in config.chromophores},
+                               chromophores=list(config.chromophores), **kept)
                 logger.info("sub-%s | alff_roi -> %s", config.subject, alff_roi_path)
     elif raw_resid_bb is None:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)

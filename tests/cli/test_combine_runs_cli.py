@@ -49,7 +49,8 @@ def _tree(root, runs, report=False, mode="rest", extra=()):
 
 @pytest.fixture(scope="module")
 def two(tmp_path_factory):
-    return _tree(tmp_path_factory.mktemp("combine_two"), (("01", 1), ("02", 2)), report=True)
+    return _tree(tmp_path_factory.mktemp("combine_two"), (("01", 1), ("02", 2)), report=True,
+                 extra=("--chromophores", "hbo", "hbr", "hbt"))
 
 
 def _side(path):
@@ -112,6 +113,27 @@ def test_the_joined_fc_is_the_runs_z_scored_joined_and_correlated(two, pair):
     fc = pd.read_csv(two / "sub-01_task-tapping_chromo-hbo_stat-pearson_relmat.tsv", sep="\t",
                      index_col=0)
     assert fc.loc[pair] == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize("pair", [("S1_D1", "S2_D2"), ("S2_D2", "S4_D4")])
+def test_the_joined_hbt_fc_sums_each_run_before_its_z_score(two, pair):
+    parts, keeps = [], []
+    for path in _runs(two):
+        raw = read_snirf(path)
+        keep = kept_frames(raw)
+        data = np.vstack([raw.get_data(picks=[f"{p} hbo"])[0] + raw.get_data(picks=[f"{p} hbr"])[0]
+                          for p in pair])
+        kept = data[:, keep]
+        part = ((data.T - kept.mean(axis=1)) / kept.std(axis=1)).T
+        part[[bool({f"{p} hbo", f"{p} hbr"} & set(raw.info["bads"])) for p in pair]] = np.nan
+        parts.append(part)
+        keeps.append(keep)
+    joined = np.hstack(parts)
+    both = np.concatenate(keeps) & np.isfinite(joined).all(axis=0)
+    expected = np.corrcoef(joined[0, both], joined[1, both])[0, 1]
+    fc = pd.read_csv(two / "sub-01_task-tapping_chromo-hbt_stat-pearson_relmat.tsv", sep="\t",
+                     index_col=0)
+    assert fc.loc[f"{pair[0]} hbt", f"{pair[1]} hbt"] == pytest.approx(expected, abs=1e-6)
 
 
 def test_the_joined_roi_fc_averages_each_run_over_its_own_good_members(two):

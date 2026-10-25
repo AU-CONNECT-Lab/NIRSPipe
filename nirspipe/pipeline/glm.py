@@ -16,6 +16,7 @@ from nirspipe.pipeline.denoise import (
 )
 from nirspipe.exceptions import StageError
 from nirspipe.utils import is_marker
+from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, chroma_of, hbt_names, hbt_of
 from nirspipe.pipeline.glm_censored import (censor_summary, condition_columns, events_left,
                                            fit_censored, kept_frames, refuse_too_few_frames,
                                            silent_conditions)
@@ -509,6 +510,7 @@ def run_glm_pipeline(
     output_dir: str | None = None,
     source_path: str | None = None,
     sep_bands=None,
+    chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
 ) -> tuple:
     if output_dir and not source_path:
         raise ValueError(
@@ -570,16 +572,7 @@ def run_glm_pipeline(
     if conditions:
         censor_params["events_left"] = events_left(events, bad_spans(haemo))
     worsley = noise_model.startswith(WORSLEY_PREFIX)
-    if keep.all():
-        glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
-        # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
-        # design's fit instead, which differs from this under any AR noise model
-        # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
-        resid_data = np.array([
-            np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
-            for res in (glm_est.data[ch] for ch in glm_est.ch_names)
-        ]).squeeze(-1)
-    else:
+    if not keep.all():
         name = Path(source_path).name if source_path else "the recording"
         dropped = silent_conditions(dm, conditions, keep)
         if dropped:
@@ -597,11 +590,8 @@ def run_glm_pipeline(
                     censor_params["censored_n_spans"],
                     "; events left " + ", ".join(f"{c} {n['left']}/{n['total']}"
                                                  for c, n in left.items()) if left else "")
-        glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
-        theta = np.column_stack([np.asarray(glm_est.data[ch].theta).ravel()
-                                 for ch in haemo.ch_names])
-        # estimated on the kept rows, applied to the whole run, so the residual is full length
-        resid_data = haemo.get_data() - (dm.values @ theta).T
+    glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
+    resid_data = _data_residual(glm_est, haemo, dm, keep)
     raw_resid = haemo.copy()
     raw_resid._data[:] = resid_data
     # spelled drift_high_pass, not high_pass: the sidecar merges these with the bandpass
@@ -632,21 +622,43 @@ def run_glm_pipeline(
         if lost := sorted(set(weights) & set(dropped)):
             raise StageError(f"contrast {name!r} weights {lost}, dropped from the design "
                              f"because no kept frame carries any of their signal")
-    contrasts = compute_contrasts(glm_est, contrast_def, dm) if contrast_def else None
+
+    # what the tables report: HbT, when asked for, fitted as a series of its own beside the
+    # pair, whose residual alone is the one returned and written
+    tables_est, tables_raw, tables_resid = glm_est, haemo, resid_data
+    self_fitted = sole_regressor_channels(haemo, short_channel_used, sep_bands)
+    table_noise = dict(noise_params)
+    if output_dir and "hbt" in chromophores:
+        from mne_nirs.statistics._glm_level_first import RegressionResults
+
+        hbt = hbt_of(haemo)
+        hbt_est, hbt_auto, hbt_ols = fit_noise_model(hbt, dm, noise_model, keep)
+        tables_raw = haemo.copy().add_channels([hbt])
+        fits = {**glm_est.data, **hbt_est.data}
+        # keyed by the info's own name objects: the container checks identity, not equality
+        tables_est = RegressionResults(tables_raw.info,
+                                       {ch: fits[ch] for ch in tables_raw.ch_names}, dm)
+        tables_resid = np.vstack([resid_data, _data_residual(hbt_est, hbt, dm, keep)])
+        self_fitted = self_fitted + hbt_names(self_fitted)
+        if worsley:
+            table_noise["worsley_fitted_as_auto"] = fitted_as_auto + hbt_auto
+        if fitted_as_ols or hbt_ols:
+            table_noise["constant_fitted_as_ols"] = fitted_as_ols + hbt_ols
+    contrasts = compute_contrasts(tables_est, contrast_def, dm) if contrast_def else None
 
     # only a task GLM's t values lean on the whitening being complete
-    whitening = (_whitening_of(glm_est, haemo, resid_data, keep, sep_bands, short_channel_used)
+    whitening = (_whitening_of(tables_est, tables_raw, tables_resid, keep, sep_bands, self_fitted)
                  if output_dir and conditions else None)
 
     if output_dir:
-        _save_glm_outputs(glm_est, dm, Path(output_dir), contrasts=contrasts,
+        _save_glm_outputs(tables_est, dm, Path(output_dir), contrasts=contrasts,
                           contrast_def=contrast_def, source_path=source_path,
                           inputs=glm_inputs(events_path if not from_annotations else None, aux_path),
-                          bads=list(haemo.info["bads"]),
-                          self_fitted=sole_regressor_channels(haemo, short_channel_used, sep_bands),
+                          bads=list(tables_raw.info["bads"]),
+                          self_fitted=self_fitted, chromophores=chromophores,
                           censored=~keep, whitening=whitening, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
-                          noise_model=noise_model, **noise_params, drift_model=drift_model,
+                          noise_model=noise_model, **table_noise, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
                           short_channel=short_channel_used,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
@@ -654,15 +666,30 @@ def run_glm_pipeline(
     return haemo, glm_est, dm, raw_resid
 
 
+def _data_residual(glm_est: Any, haemo: mne.io.Raw, design_matrix: pd.DataFrame,
+                   keep: np.ndarray) -> np.ndarray:
+    """The fit's residual in the data's units, full length; nilearn's `.residuals` subtracts the whitened design's fit instead."""
+    if keep.all():
+        # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
+        return np.array([
+            np.asarray(res.Y) - np.asarray(res.model.design) @ np.asarray(res.theta)
+            for res in (glm_est.data[ch] for ch in glm_est.ch_names)
+        ]).squeeze(-1)
+    theta = np.column_stack([np.asarray(glm_est.data[ch].theta).ravel()
+                             for ch in haemo.ch_names])
+    # estimated on the kept rows, applied to the whole run, so the residual is full length
+    return haemo.get_data() - (design_matrix.values @ theta).T
+
+
 def _whitening_of(glm_est: Any, haemo: mne.io.Raw, residual: np.ndarray, keep: np.ndarray,
-                  sep_bands, short_channel) -> tuple[pd.DataFrame, pd.DataFrame]:
+                  sep_bands, self_fitted: "list[str]") -> tuple[pd.DataFrame, pd.DataFrame]:
     from nirspipe.qc.metrics._helpers import long_short_channels
 
     return whitening_tables(
-        glm_est, residual, keep, float(haemo.info["sfreq"]), haemo.get_channel_types(),
+        glm_est, residual, keep, float(haemo.info["sfreq"]),
+        [chroma_of(ch) for ch in haemo.ch_names],
         long_channels=set(long_short_channels(haemo, sep_bands)[0]),
-        bads=set(haemo.info["bads"]),
-        self_fitted=set(sole_regressor_channels(haemo, short_channel, sep_bands)))
+        bads=set(haemo.info["bads"]), self_fitted=set(self_fitted))
 
 
 _GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", "Detector",
@@ -717,13 +744,18 @@ def _save_glm_outputs(
     self_fitted: "list[str]" = (),
     censored: "np.ndarray | None" = None,
     whitening: "tuple[pd.DataFrame, pd.DataFrame] | None" = None,
+    chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
     **params: Any,
 ) -> None:
     bads = bads or []
+    table_params = {**params, "chromophores": list(chromophores)}
 
     def _mark_bads(df: pd.DataFrame) -> pd.DataFrame:
-        # the fit runs on every channel, so the rejected ones are kept and flagged rather
-        # than dropped: removing rows would change the shape group analysis expects
+        # the fit runs on every channel; the tables carry the chromophores asked for
+        if "Chroma" in df.columns:
+            df = df[df["Chroma"].isin(chromophores)].reset_index(drop=True)
+        # the rejected ones are kept and flagged rather than dropped: removing rows would
+        # change the shape group analysis expects
         if "ch_name" in df.columns:
             df["bad"] = df["ch_name"].isin(bads)
         return blank_self_fitted(df, self_fitted)
@@ -746,7 +778,7 @@ def _save_glm_outputs(
 
     res_path = _named("nirsmap", desc="glm")
     write_tsv(_mark_bads(glm_est.to_dataframe()), res_path)
-    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **params)
+    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **table_params)
 
     if contrasts:
         frames = []
@@ -758,14 +790,18 @@ def _save_glm_outputs(
         write_tsv(pd.concat(frames, ignore_index=True), con_path)
         # the weights as the file gave them: the TSV names each contrast, nothing else does
         write_step_sidecar(con_path, "contrasts", source_path, bads, inputs=inputs,
-                           contrast_weights=contrast_def, **params)
+                           contrast_weights=contrast_def, **table_params)
 
     if whitening is not None:
-        spectrum_params = {**params, "whitening_lowband": list(WHITENING_LOWBAND),
+        channels, spectrum = whitening
+        channels = channels[channels["Chroma"].isin(chromophores)]
+        spectrum = spectrum[[c for c in spectrum.columns
+                             if c == "freq" or c.split("_")[0] in chromophores]]
+        spectrum_params = {**table_params, "whitening_lowband": list(WHITENING_LOWBAND),
                            "whitening_psd_segment_s": WHITENING_PSD_SEGMENT_S}
-        for table, path in zip(whitening, (_named("nirsmap", desc="whitening"),
-                                           _named("timeseries", desc="whitening",
-                                                  statistic="psd"))):
+        for table, path in zip((channels, spectrum),
+                               (_named("nirsmap", desc="whitening"),
+                                _named("timeseries", desc="whitening", statistic="psd"))):
             write_tsv(table, path)
             write_step_sidecar(path, "glm_whitening", source_path, bads, inputs=inputs,
                                **spectrum_params)

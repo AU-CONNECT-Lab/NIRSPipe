@@ -10,6 +10,7 @@ import pandas as pd
 
 from nirspipe.io.derivatives import write_step_sidecar
 from nirspipe.io.tables import write_tsv
+from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, chroma_of, with_hbt
 from nirspipe.pipeline.glm import _glm_name
 from nirspipe.qc.figures.common._utils import chunk_annotations
 from nirspipe.qc.metrics._helpers import EPOCH_TMAX, EPOCH_TMIN, condition_epochs
@@ -45,7 +46,8 @@ def block_average_table(raw: mne.io.Raw, tmin: float, tmax: float) -> pd.DataFra
         frames.append(pd.DataFrame({
             "condition": cond,
             "ch_name": np.repeat(epochs.ch_names, n_t),
-            "chroma": np.repeat(epochs.get_channel_types(), n_t),
+            # off the name: an HbT channel is typed hbo
+            "chroma": np.repeat([chroma_of(ch) for ch in epochs.ch_names], n_t),
             "time": np.tile(epochs.times, n_ch),
             "mean": mean.ravel(),
             "se": se.ravel(),
@@ -63,7 +65,7 @@ def write_block_average(
     raw: mne.io.Raw, output_dir: Path, source_path: str,
     tmin: "float | None" = None, tmax: "float | None" = None,
     chunk_duration: "float | None" = None, events: "pd.DataFrame | None" = None,
-    inputs: "list[Path]" = (),
+    inputs: "list[Path]" = (), chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
 ) -> "Path | None":
     """``<run>_desc-blockavg_timeseries.tsv`` beside the GLM tables, or None when no trial fits the window.
 
@@ -74,8 +76,9 @@ def write_block_average(
     tmax = EPOCH_TMAX if tmax is None else tmax
     if events is not None:
         raw = with_table_events(raw, events)
-    raw = chunk_annotations(raw, chunk_duration)
+    raw = with_hbt(chunk_annotations(raw, chunk_duration), chromophores)
     table = block_average_table(raw, tmin, tmax)
+    table = table[table["chroma"].isin(chromophores)].reset_index(drop=True)
     if table.empty:
         logger.warning("no trial leaves a full %g to %g s window inside the recording and clear "
                        "of BAD_ spans, so no block average is written", tmin, tmax)
@@ -88,5 +91,6 @@ def write_block_average(
                        epoch_tmin=tmin, epoch_tmax=tmax,
                        baseline=[tmin, 0.0] if tmin < 0 else None,
                        epoch_chunk_duration=chunk_duration, unit="M",
-                       trials={str(c): int(n) for c, n in trials.items()})
+                       trials={str(c): int(n) for c, n in trials.items()},
+                       chromophores=list(chromophores))
     return path

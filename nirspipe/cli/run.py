@@ -13,6 +13,7 @@ from nirspipe.pipeline.censor_fill import (
     FILL_METHODS,
     LOMB_FMAX_HZ,
 )
+from nirspipe.pipeline.chromophores import CHROMOPHORES, DEFAULT_CHROMOPHORES
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -232,6 +233,10 @@ def _build_parser() -> argparse.ArgumentParser:
                            "channel over its kept frames, into one series written without the "
                            "run entity, and compute FC on it. A channel joins only from the runs "
                            "where it is good. ALFF and GLM tables stay per run.")
+    post.add_argument("--chromophores", nargs="+", action="extend", choices=CHROMOPHORES,
+                      help=f"Chromophores the GLM tables, block average, FC and ALFF carry, "
+                           f"default {' '.join(DEFAULT_CHROMOPHORES)}. hbt, total haemoglobin, "
+                           f"is HbO + HbR of each channel; the stage files keep HbO and HbR.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", type=float,

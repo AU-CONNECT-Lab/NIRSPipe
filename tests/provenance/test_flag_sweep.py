@@ -95,6 +95,7 @@ CASES = {
     "censor_fill": Case("denoise", {"--censor-fill": ["spline"]}, ("filtered",), BAD_SPANS),
     "resample_sfreq": Case("denoise", {"--resample-sfreq": ["5"]}, ("resampled",)),
     "combine_runs": Case("denoise", {"--combine-runs": []}, (), dataset="two_runs"),
+    "chromophores": Case("rest", {"--chromophores": ["hbo", "hbr", "hbt"]}, ("glm", "alff")),
     "stim_dur": Case("glm", {"--stim-dur": ["5"]}, ("errts", "design")),
     "hrf_model": Case("glm", {"--hrf-model": ["glover"]}, ("errts", "design")),
     "noise_model": Case("glm", {"--noise-model": ["ar1"]}, ("errts", "design")),

@@ -13,10 +13,11 @@ from tests._fingerprint import CLI_ARGS, make_fingerprint_dataset
 
 QUIET = ("--participant-label", "01", "--no-report", "--skip-bids-validation")
 # every kind of value a record holds: a switched-off mode default, a table, a plain list,
-# a band in mm, a flag with an argparse default, a comma list
+# a band in mm, a flag with an argparse default, a comma list, a list of choices
 RUN = (*CLI_ARGS, "--mode", "denoise", "--low-pass", "none", "--drift-model", "polynomial",
        "--short-channel", "mean", "--short-max-dist", "12", "--bad-channels", "S2_D2",
-       "--motion-correction", "wavelet", "--fir-delays", "0,1", "--export-mean-filled")
+       "--motion-correction", "wavelet", "--fir-delays", "0,1", "--export-mean-filled",
+       "--chromophores", "hbt", "hbo")
 
 
 def _record(out):

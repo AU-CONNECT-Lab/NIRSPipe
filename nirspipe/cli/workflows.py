@@ -29,6 +29,7 @@ from nirspipe.io.derivatives import (
 from nirspipe.io.snirf import read_raw_snirf, read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
+from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES
 from nirspipe.pipeline.dpf import dpf_from_age
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -98,6 +99,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         min_time=float(pick("min_time", default=0.0)),
         export_mean_filled=bool(pick("export_mean_filled", default=False)),
         combine_runs=pick("combine_runs"),
+        chromophores=tuple(pick("chromophores", default=DEFAULT_CHROMOPHORES)),
         roi_map=roi_map,
         roi_map_name=_roi_map_name(args),
         # the same bands prep split with, so the regression and the reports agree
