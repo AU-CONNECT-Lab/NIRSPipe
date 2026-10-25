@@ -50,10 +50,12 @@ def test_nothing_recorded_is_no_edge():
 # ---- what the hyper seam does with it ----
 
 def test_a_band_below_the_drift_cutoff_is_warned_about(caplog):
-    raws = {"01": _raw_stamped(drift_model="cosine", drift_high_pass=0.02)}
+    raws = {"sub-01": _raw_stamped(drift_model="cosine", drift_high_pass=0.02)}
     with caplog.at_level("WARNING"):
         warn_outside_passband(raws, 0.01, 0.2)
     assert "drift basis" in caplog.text
+    # members are keyed by their sub- label already
+    assert "sub-01 | requested" in caplog.text and "sub-sub-" not in caplog.text
 
 
 def test_a_band_inside_the_drift_cutoff_is_quiet(caplog):

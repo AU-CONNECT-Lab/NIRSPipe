@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - An event annotated twice, or two conditions starting on one sample, failed the subject's glm post in the block average; the evoked channel map shared it
+- The hyper warning about a band past the recorded filter named each member `sub-sub-<label>`
 
 ## [0.75.0] - 2026-10-25
 

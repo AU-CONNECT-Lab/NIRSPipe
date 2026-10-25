@@ -180,7 +180,7 @@ def warn_outside_passband(raws: dict[str, mne.io.Raw], fmin: float, fmax: float)
         if high is not None and fmax > high:
             outside.append(f"{fmax} Hz is above its {high} Hz low-pass")
         if outside:
-            logger.warning("sub-%s | requested %s-%s Hz but %s. Those scales carry what the "
+            logger.warning("%s | requested %s-%s Hz but %s. Those scales carry what the "
                            "filter removed, not signal",
                            subject_id, fmin, fmax, " and ".join(outside))
 
