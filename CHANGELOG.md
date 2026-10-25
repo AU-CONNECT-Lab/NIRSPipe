@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - An event annotated twice, or two conditions starting on one sample, failed the subject's glm post in the block average; the evoked channel map shared it
 - The hyper warning about a band past the recorded filter named each member `sub-sub-<label>`
+- CNR on a recording that annotates an event twice failed with a warning and was left empty; it is computed, the repeat counted once
 
 ## [0.75.0] - 2026-10-25
 
