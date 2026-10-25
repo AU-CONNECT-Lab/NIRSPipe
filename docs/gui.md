@@ -19,13 +19,13 @@ The sidebar has two groups. **Interactive** holds Data Preparation, which opens 
 
 | Page | Tabs | Runs |
 |------|------|------|
-| **Data Preparation** | prep-raw | `nirspipe-qc prep-raw`, then the raw viewer's edit mode: `nirspipe-prep edit-markers apply` and `nirspipe-prep crop` |
+| **Data Preparation** | raw-qc | `nirspipe-qc ... participant`, then the raw viewer's edit mode: `nirspipe-prep edit-markers apply` and `nirspipe-prep crop` |
 | **SNIRF to BIDS** | snirf2bids, batch | `nirspipe-snirf2bids`, once per file on the batch tab |
 | **Batch Prep** | crop, align, edit-markers, keep-spans | `nirspipe-prep` |
-| **Raw QC** | prep-raw, hyper-raw, rate-raw, rate-hyper, export | `nirspipe-qc prep-raw` / `hyper-raw`, the rating viewers, `nirspipe-rate export` |
+| **Raw QC** | qc, rate-raw, rate-hyper, export | `nirspipe-qc` at either level, the rating viewers, `nirspipe-rate export` |
 | **Analysis** | run | `nirspipe` |
 | **Hyper Analysis** | run, pair-null, group-null, band, merge, index | `nirspipe-hyper` and its companions |
-| **Cohort Reports** | cohort, cohort-hyper, provenance, rate | `nirspipe-qc cohort` / `cohort-hyper` / `provenance`, `nirspipe-rate rate` |
+| **Cohort Reports** | provenance, rate | `nirspipe-provenance`, `nirspipe-rate rate` |
 
 **Commands**, under **All**, lists every command and subcommand with a form for each, including the few no page has a tab for.
 
@@ -61,14 +61,14 @@ The rating tabs (Raw QC's rate-raw and rate-hyper, Cohort Reports' rate) have **
 
 The **Data Preparation** page opens a run's raw report in edit mode, where its events can be edited and the recording cropped. The report must exist first: either find it in a Raw QC tree, or make it on the page.
 
-- **Find reports** takes a Raw QC tree (the output folder `prep-raw` wrote) and the BIDS dataset it read, and lists the tree's run pages. Each link opens one in edit mode in a new tab.
-- **Make reports** is the `nirspipe-qc prep-raw` form. When the run finishes, each report it wrote is listed under **Edit events** above the framed report. `--run-label` gives one run a page of its own.
+- **Find reports** takes a Raw QC tree (the output folder `nirspipe-qc ... participant` wrote) and the BIDS dataset it read, and lists the tree's run pages. Each link opens one in edit mode in a new tab.
+- **Make reports** is the `nirspipe-qc` form, opened on the participant level. When the run finishes, each report it wrote is listed under **Edit events** above the framed report. `--run-label` gives one run a page of its own.
 
 ```{figure} figures/gui_dataprep.png
-:alt: The Data Preparation page after a prep-raw run, with the Edit events link and the raw report framed below the form
+:alt: The Data Preparation page after a raw QC run, with the Edit events link and the raw report framed below the form
 :width: 100%
 
-Data Preparation after `prep-raw` on sub-101: the run panel on the right, the Edit events link and the framed raw report below.
+Data Preparation after the raw QC participant level on sub-101: the run panel on the right, the Edit events link and the framed raw report below.
 ```
 
 In edit mode the page is the raw report as the rating viewer shows it, read only for ratings and channel decisions, which are taken in `nirspipe-rate raw`. Two sections are added under **Raw Signal**.
@@ -111,7 +111,7 @@ Both actions run on the shown recording alone: its subject, session, task and ru
 | Save | `<output_dir>/marker_edited/sub-<id>/[ses-<id>/]nirs/`, the recording with its sidecars and the new `events.tsv` |
 | Crop | `<output_dir>/cropped/sub-<id>/[ses-<id>/]nirs/`, one recording, or one per segment |
 
-When either finishes, a link opens the `prep-raw` form on the tree it wrote, with the output folder cleared: pick a new one, since the edited recording's report has the same name as the first. The recordings in the BIDS dataset are never modified.
+When either finishes, a link opens the raw QC form on the tree it wrote, with the output folder cleared: pick a new one, since the edited recording's report has the same name as the first. The recordings in the BIDS dataset are never modified.
 
 ## SNIRF to BIDS
 
@@ -138,16 +138,16 @@ The **Batch Prep** tabs apply one data-preparation step to many subjects at once
 
 ## Raw QC
 
-The **Raw QC** page writes the quality reports on the recordings as delivered: one per subject with **prep-raw**, one per dyad with **hyper-raw**. See [Raw QC reports](qc.md) for what they hold.
+The **Raw QC** page writes the quality reports on the recordings as delivered. Its **qc** tab is the `nirspipe-qc` form: the `participant` level writes one report per recording, and the `group` level, run afterwards on the same output folder, the cohort pages and, given a pairs file, one report per dyad read from its members' records. See [Raw QC reports](qc.md) for what they hold.
 
 ```{figure} figures/gui_rawqc.png
-:alt: The Raw QC hyper-raw tab after a dyad run, with the form, the run panel and the dyad report framed below
+:alt: The Raw QC qc tab after a group-level run, with the form, the run panel and the dyad report framed below
 :width: 100%
 
-Raw QC after `nirspipe-qc hyper-raw` on the tutorial's three dyads, with the newest dyad report below the form.
+Raw QC after the group level on the tutorial's three dyads, with the newest dyad report below the form.
 ```
 
-After a prep-raw run, a **Rate** link per report opens it in the rating viewer in the app. There, bad stretches can be marked on the raw signal of a run page. The **rate-hyper** tab opens a dyad report, and **export** runs `nirspipe-rate export`, which writes the `--bad-channels` table for Analysis, and the `--bad-spans` table when stretches were marked ([Rating](qc.md#rating)).
+After a participant-level run, a **Rate** link per report opens it in the rating viewer in the app. There, bad stretches can be marked on the raw signal of a run page. The **rate-hyper** tab opens a dyad report, and **export** runs `nirspipe-rate export`, which writes the `--bad-channels` table for Analysis, and the `--bad-spans` table when stretches were marked ([Rating](qc.md#rating)).
 
 ## Analysis
 
@@ -208,18 +208,9 @@ Hyper Analysis after the tutorial's dyad analysis, with the newest dyad's landin
 
 ## Cohort Reports
 
-The **Cohort Reports** page rolls the quality records of a finished tree up into cohort pages, and redraws provenance graphs.
-
-```{figure} figures/gui_cohort.png
-:alt: The Cohort Reports cohort tab after a run, with the cohort report framed below
-:width: 100%
-
-Cohort Reports after `nirspipe-qc cohort` on the tutorial's six members.
-```
+The **Cohort Reports** page redraws the provenance graphs of a finished tree and opens its reports for rating. The cohort pages themselves are written by the group level, on the Raw QC page for a raw QC tree and on the Analysis page (`nirspipe ... group`) for a `nirspipe` tree.
 
 | Tab | Runs | After a run |
 |-----|------|-------------|
-| cohort | `nirspipe-qc cohort` | `desc-subjects_report.html` |
-| cohort-hyper | `nirspipe-qc cohort-hyper` | `desc-groups_report.html` |
-| provenance | `nirspipe-qc provenance` | graphs, no page |
+| provenance | `nirspipe-provenance` | graphs, no page |
 | rate | `nirspipe-rate rate` | the rating viewer for any report |

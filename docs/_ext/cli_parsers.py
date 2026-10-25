@@ -50,6 +50,10 @@ def nirspipe_qc():
     return _escaped(qc._build_parser())
 
 
+def nirspipe_provenance():
+    return _escaped(qc._provenance_parser())
+
+
 def nirspipe_hyper():
     return _escaped(hyper._parsers()["nirspipe-hyper"])
 

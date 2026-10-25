@@ -50,22 +50,20 @@ From here on the input dataset is `timed/marker_edited`.
 ```bash
 nirspipe timed/marker_edited derivatives participant \
     --participant-label 101 201 102 202 105 203 \
-    --dpf 6.0 --sci-threshold 0.8 \
-    --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
-    --resp-l-freq 0.1 --resp-h-freq 0.5 \
+    --population adult --sci-threshold 0.8 \
     --short-max-dist 12 \
-    --mode denoise --short-channel pca \
+    --mode denoise \
     --high-pass 0.01 --low-pass none \
     --resample-sfreq 5 \
     --by-condition --fc --roi-mapping roi.json \
     --skip-bids-validation --nprocs 3
 ```
 
-About 2.5 minutes. Three settings are specific to this dataset:
+About 2.5 minutes. `--population adult` sets the cardiac and respiration bands and the DPF for adults ([Population](usage.md#population)); short-channel regression runs by default, since the montage has short channels. Three settings are specific to this dataset:
 
 | Option | Why |
 |---|---|
-| `--short-max-dist 12` | The short channels sit right at the 10 mm default edge |
+| `--short-max-dist 12` | The short channels sit right at the 10 mm default edge, so they count as short only with it |
 | `--resample-sfreq 5` | The two caps of a pair recorded at slightly different rates, and the dyad analysis needs one rate |
 | `--by-condition` | Writes a report page per condition as well as per run |
 
@@ -91,14 +89,15 @@ nirspipe-hyper derivatives hyper group \
 
 About 6 minutes. Two settings only save time here. Five coherence scrambles is far too few; a study uses about 100, as the correlation does. `--wtc-chroma hbo` limits both measures to HbO; without it HbO and HbR are both computed, which doubles the time. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
 
-Then the raw quality page for each dyad, under a minute:
+Then the raw quality pages, in a tree of their own: each person's first, then each dyad's and the two cohort pages from those records, under two minutes:
 
 ```bash
-nirspipe-qc hyper-raw timed/marker_edited hyper group \
-    --pairs-csv pairs.csv --derivatives-dir derivatives \
-    --dpf 6.0 --sci-threshold 0.8 \
-    --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
+nirspipe-qc timed/marker_edited qc participant \
+    --participant-label 101 201 102 202 105 203 \
+    --population adult --sci-threshold 0.8 \
     --short-max-dist 12 --skip-bids-validation
+nirspipe-qc timed/marker_edited qc group \
+    --pairs-csv pairs.csv --skip-bids-validation
 ```
 
 ```{note}
@@ -118,11 +117,10 @@ nirspipe-hyper-groupnull hyper group --task-label drawing \
 
 The cohort test writes `hyper/task-drawing_desc-groupnull_report.html` and its `chromo-hbo_*` tables.
 
-## 7. Merge and the dyad cohort page
+## 7. Merge
 
 ```bash
 nirspipe-hyper-merge hyper group
-nirspipe-qc cohort-hyper hyper
 ```
 
 ## What was written
@@ -132,9 +130,9 @@ nirspipe-qc cohort-hyper hyper
 | `derivatives/sub-101/sub-101_desc-index_report.html` | One person: every run and condition page | [The run report](qc.md#the-run-report), [Condition pages](qc.md#condition-pages) |
 | `derivatives/desc-subjects_report.html` | All six people compared | [Cohort of runs](qc.md#cohort-of-runs) |
 | `hyper/group-1001/group-1001_desc-index_report.html` | One dyad: coherence, correlation, nulls | [Dyad analysis report](qc.md#dyad-analysis-report) |
-| `hyper/group-1001/group-1001_ses-02_task-drawing_desc-raw_report.html` | One dyad: raw quality and shared usable time | [Raw dyad report](qc.md#raw-dyad-report) |
-| `hyper/desc-groups_report.html` | All three dyads' quality compared | [Cohort of dyads](qc.md#cohort-of-dyads) |
+| `qc/group-1001/group-1001_ses-02_task-drawing_desc-raw_report.html` | One dyad: raw quality and shared usable time | [Raw dyad report](qc.md#raw-dyad-report) |
+| `qc/desc-groups_report.html` | All three dyads' quality compared | [Cohort of dyads](qc.md#cohort-of-dyads) |
 | `hyper/task-drawing_desc-groupnull_report.html` | The cohort tests against both nulls | [Above the channel](hyperscanning.md#above-the-channel-nirspipe-hyper-groupnull) |
 | `hyper/stat-wtc_relmat.tsv`, `hyper/stat-isc_relmat.tsv`, ... | Merged tables, one per kind, one row per dyad, pairing and condition | [The nirspipe-hyper tree](outputs.md#the-nirspipe-hyper-tree) |
 
-[Outputs](outputs.md) lists every file both trees hold.
+[Outputs](outputs.md) lists every file the three trees hold.

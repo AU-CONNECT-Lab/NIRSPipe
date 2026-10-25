@@ -9,19 +9,19 @@ Every run gets a quality record, a set of scalar, per-channel and per-window met
 | Report | Command | File |
 |--------|---------|------|
 | Run report | `nirspipe ... participant`, automatically | `sub-<label>/<run>_report.html` |
-| Condition pages | `--by-condition` on `nirspipe` or `nirspipe-qc prep-raw` | `<run>_cond-<condition>_report.html`, `..._desc-raw_report.html` |
-| Subject index | `nirspipe` or `nirspipe-qc prep-raw` | `sub-<label>/sub-<label>_desc-index_report.html` |
-| Raw report | `nirspipe-qc prep-raw` | `sub-<label>/<run>_desc-raw_report.html` |
-| Cohort of runs | `nirspipe-qc cohort` or `nirspipe ... group` | `desc-subjects_report.html` at the tree root |
-| Dyad raw report | `nirspipe-qc hyper-raw` | `group-<id>/<group run>_desc-raw_report.html` |
+| Condition pages | `--by-condition` on `nirspipe` or `nirspipe-qc ... participant` | `<run>_cond-<condition>_report.html`, `..._desc-raw_report.html` |
+| Subject index | `nirspipe` or `nirspipe-qc ... participant` | `sub-<label>/sub-<label>_desc-index_report.html` |
+| Raw report | `nirspipe-qc ... participant` | `sub-<label>/<run>_desc-raw_report.html` |
+| Cohort of runs | `nirspipe-qc ... group` or `nirspipe ... group` | `desc-subjects_report.html` at the tree root |
+| Dyad raw report | `nirspipe-qc ... group --pairs-csv` | `group-<id>/<group run>_desc-raw_report.html` |
 | Dyad analysis report | `nirspipe-hyper` | `group-<id>/<group run>_report.html`, one page per condition, and the dyad index |
-| Cohort of dyads | `nirspipe-qc cohort-hyper` or `nirspipe ... group` | `desc-groups_report.html` at the root of the tree `hyper-raw` wrote |
+| Cohort of dyads | `nirspipe-qc ... group --pairs-csv` or `nirspipe ... group` | `desc-groups_report.html` at the tree root |
 
 The metrics assume no task model: every one of them can be computed on any recording, whatever its design. CNR is the one that needs events, and it is measured from windows around the annotations rather than from a fitted model; a run without annotations has no CNR.
 
 ## The quality record
 
-`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, after preprocessing and postprocessing have both finished, by reading the files they left behind. `nirspipe-qc prep-raw` writes the raw sections of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc hyper-raw` a dyad record under `group-<id>/nirs/`. The cohort pages aggregate all of them.
+`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, after preprocessing and postprocessing have both finished, by reading the files they left behind. `nirspipe-qc ... participant` writes the raw sections of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` a dyad record under `group-<id>/nirs/`. The cohort pages aggregate all of them.
 
 The record is divided into sections, each named after the file it was measured on, so a section exists only when its file does:
 
@@ -218,9 +218,9 @@ A condition page is a view of the run, not a second measurement: its numbers are
 
 ## Raw report
 
-`nirspipe-qc prep-raw` reports on raw recordings without running the pipeline: it screens the channels with the same criteria and draws the recording, one page per session and task, for as many subjects as you name. It writes the raw sections of the quality record, a per-channel table and the subject index, and takes the same screening and separation flags as `nirspipe`. A recording screening cannot judge, which preprocessing refuses, is still drawn, with the reason above its channel table and no channel rejected on screening; pass what the run was preprocessed with, or the two reports describe different montages. Its figures share the subject's `figures/` folder with a `raw` prefix on `desc-`.
+`nirspipe-qc bids_dir output_dir participant` reports on raw recordings without running the pipeline: it screens the channels with the same criteria and draws the recording, one page per session and task, for every subject or the ones `--participant-label` names, each subject on its own so one failure does not stop the rest. It writes the raw sections of the quality record, a per-channel table, the subject index and a run record, `sub-<label>/logs/<stem>_desc-raw.toml`, that `nirspipe-qc --config` reruns. It takes the same screening, separation, `--population`, `--bad-channels`, `--keep-spans`, `--bad-spans` and `--bids-filter-file` flags as `nirspipe`, and its verdict joins the marks and spans as the pipeline's does. The record carries the lines, cardiac band, DPF, template and motion correction it screened with, which is what the group level reads each member by. A recording screening cannot judge, which preprocessing refuses, is still drawn, with the reason above its channel table and no channel rejected on screening; pass what the run was preprocessed with, or the two reports describe different montages. Its figures share the subject's `figures/` folder with a `raw` prefix on `desc-`.
 
-Its run summary is the same one table, grouped Optical density, Motion and Haemoglobin, the haemoglobin rows from its own Beer-Lambert conversion of the unfiltered recording. Frames at either end in which most channels measured no light are held and marked `BAD_edge` before its conversion to optical density, as preprocessing holds them ([Optical density](workflows.md#optical-density)); the dyad raw report does the same. `--motion-correction` runs a correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening still describes the recording as delivered; pass the pipeline's method to read the values the run report will show. `--epoch-qc` adds the per-trial section, and `--by-condition` one page per condition. It writes no Methods paragraph, since it describes a recording rather than an analysis.
+Its run summary is the same one table, grouped Optical density, Motion and Haemoglobin, the haemoglobin rows from its own Beer-Lambert conversion of the unfiltered recording. Frames at either end in which most channels measured no light are held and marked `BAD_edge` before its conversion to optical density, as preprocessing holds them ([Optical density](workflows.md#optical-density)); the dyad raw report does the same. `--motion-correction` (default `tddr`, as the pipeline's) runs a correction on a copy of the optical density and reports the recording either side of it, writing nothing back, so the screening still describes the recording as delivered; `none` reports it uncorrected only. `--epoch-qc` adds the per-trial section, and `--by-condition` one page per condition. It writes no Methods paragraph, since it describes a recording rather than an analysis.
 
 The page reads in the run report's order: the raw signal beside its events, each channel's trace and spectrum, signal quality with the slider and the brain views, motion, the HbO–HbR correlation, the mean spectrum, then the events and epochs, with Signal by position beside the trial images as in the run report. This stage is unfiltered, so its grand mean, Signal by position and trial images are low-passed for display, stopping at `--cardiac-l-freq`; an average of a few trials would otherwise carry the heartbeat as a ripple. On a condition page the slider and the brain views are drawn again on that condition's own windows, and its trial images hold that condition's trials.
 
@@ -228,7 +228,7 @@ The page reads in the run report's order: the raw signal beside its events, each
 
 ### Cohort of runs
 
-`nirspipe-qc cohort` (or `nirspipe ... group`) reads every quality record under `sub-*/` into `desc-subjects_qc.tsv`, one row per run, a column per `section_metric`, and renders `desc-subjects_report.html`. A run with both a pipeline and a raw record contributes the pipeline's. `desc-subjects_qc.json` describes every column.
+`nirspipe-qc ... group` (or `nirspipe ... group`) reads every quality record under `sub-*/` into `desc-subjects_qc.tsv`, one row per run, a column per `section_metric`, and renders `desc-subjects_report.html`. A run with both a pipeline and a raw record contributes the pipeline's. `desc-subjects_qc.json` describes every column.
 
 | Panel | Shows |
 |-------|-------|
@@ -253,7 +253,7 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 
 ### Cohort of dyads
 
-`nirspipe-qc cohort-hyper` reads each dyad's raw quality record and usable-time table into `desc-groups_qc.tsv`, one row per dyad, task and session, and renders `desc-groups_report.html`. It reports what a dyad has and a subject cannot, and measures no synchrony.
+With `--pairs-csv`, `nirspipe-qc ... group` also reads each dyad's raw quality record and usable-time table into `desc-groups_qc.tsv`, one row per dyad, task and session, and renders `desc-groups_report.html`. It reports what a dyad has and a subject cannot, and measures no synchrony.
 
 | Panel | Shows |
 |-------|-------|
@@ -267,14 +267,14 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 
 ### Raw dyad report
 
-`nirspipe-qc hyper-raw` reads each group's raw recordings, screens each member, converts to haemoglobin internally and aligns them, one page per group, task and session. It measures no synchrony; that is the analysis, on the preprocessed signal.
+`nirspipe-qc bids_dir output_dir group --pairs-csv pairs.csv` writes one page per group, task and session, after the participant level has run on every member into the same `output_dir`. It does not screen again: each member is read by the recording its raw QC record names, with that record's lines, cardiac band, DPF, verdict, spans and motion correction, so a member keeps what its own page says, and it takes no screening flags. A member without a record fails its dyad with a message naming the participant run to do first, while the cohort page is still written. It converts each member to haemoglobin with its recorded DPF and aligns them. It measures no synchrony; that is the analysis, on the preprocessed signal.
 
 | Section | Content |
 |---------|---------|
 | Alignment | Each member's offset onto the shared clock, and each block's onset difference from the first member, red beyond two samples. |
 | Per-channel signals | Both members' traces and spectra, one channel at a time. |
 | Shared usable time | The usable share per channel pair and condition, screened again on the aligned grid. |
-| Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present, above the uncorrected rows only, since a correction leaves them unchanged. With `--derivatives-dir`, each member after motion correction too. |
+| Motion | A GVTD row per channel set with both members, over each member's carpet; simultaneous movement is the pointwise minimum of the two traces. IMU rows where present, above the uncorrected rows only, since a correction leaves them unchanged. Each member after the motion correction its record names, too. |
 | Where on the head | Each member's passing-window share on the montage per block, then a slider through the recording: whether each window passed, its SCI and its PSP. |
 | Member and dyad metrics | Each member's numbers side by side, its IMU summaries where the recording carries one, and the dyad's own: pairs good in every member, mixed and bad, simultaneous movement before and after correction, the largest offset. |
 | Channel decisions | Each member's per-channel table side by side, with the rating decision, and the pairs each member's `channels.tsv` marked bad. |
@@ -286,7 +286,7 @@ There is no windowed variant: for a cohort report over one window of time, crop 
 Shared usable time of one dyad: each channel pair's windows passing in both members, in one member only or in neither, below the members' windowed SCI, PSP and CV and the condition blocks, on the shared clock.
 ```
 
-It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `desc-channel_qc.tsv` and `desc-usable_qc.tsv`. They go into the dyad tree or into a raw QC tree of its own, as `prep-raw` writes the subjects' raw reports; `nirspipe-qc cohort-hyper` reads the quality records, so it runs on whichever tree `hyper-raw` wrote.
+It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `desc-channel_qc.tsv` and `desc-usable_qc.tsv`, under `group-<id>/` beside the subjects' `sub-<label>/` in the one raw QC tree, and the cohort of dyads from them. Where a figure draws a line or a shaded cardiac band, it draws one only when every member shares it, and a note names each member's otherwise.
 
 ### Dyad analysis report
 
@@ -312,7 +312,7 @@ The dyad index, `group-<id>_desc-index_report.html`, lists every analysed window
 |---------|--------|--------------|
 | `nirspipe-rate rate OUTPUT_DIR` | Every subject's index and the run reports it links | 8765 |
 | `nirspipe-rate raw OUTPUT_DIR --participant-label <id>` | One subject's raw report and its condition pages | 5052 |
-| `nirspipe-rate hyper OUTPUT_DIR --group-id <id> --task-label <t> --pairs-csv <file>` | One dyad's raw report, in the tree `nirspipe-qc hyper-raw` wrote | 5053 |
+| `nirspipe-rate hyper OUTPUT_DIR --group-id <id> --task-label <t> --pairs-csv <file>` | One dyad's raw report, in the raw QC tree `nirspipe-qc ... group` wrote it into | 5053 |
 
 When the default port is busy the server takes the next free one; a port given with `--port` is used as given or the command stops. Clicking a section's cell cycles unrated, good, bad and other; ctrl-click adds a comment. A channel chip cycles undecided, good and bad; a red tint marks a pair the screening rejected but sets no decision.
 

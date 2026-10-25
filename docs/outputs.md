@@ -31,7 +31,7 @@ derivatives/nirspipe/
 ├── dataset_description.json             ← links the input as raw under DatasetLinks and SourceDatasets
 ├── .bidsignore
 ├── plotly-<version>.min.js             ← the reports' Plotly.js when the CDN does not load
-├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc cohort)
+├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc group)
 ├── desc-subjects_qc.json                ← what each of its columns holds
 ├── desc-subjects_report.html            ← cohort page
 ├── desc-ratedchannels_qc.tsv            ← nirspipe-rate export: the --bad-channels table
@@ -42,7 +42,7 @@ derivatives/nirspipe/
     ├── sub-<label>_desc-index_report.html          ← index over the subject's runs
     ├── <run>_report.html                           ← run report
     ├── <run>_cond-<condition>_report.html          ← + --by-condition
-    ├── <run>_desc-raw_report.html                  ← nirspipe-qc prep-raw
+    ├── <run>_desc-raw_report.html                  ← nirspipe-qc participant, pointed at this tree
     ├── <run>_desc-mne_report.html                  ← MNE's own report of the run
     ├── figures/                                    ← every figure of every run, one flat folder
     ├── logs/
@@ -65,7 +65,7 @@ derivatives/nirspipe/
         ├── <run>_stat-summary_desc-sqm_timeseries.tsv        ← its per-window series
         ├── <run>_desc-sqm_nirsmap.tsv              ← its per-channel values
         ├── <run>_desc-channel_qc.tsv               ← per-channel metrics and verdicts
-        ├── <run>_desc-sqmraw_qc.json, <run>_desc-rawchannel_qc.tsv   ← the same from prep-raw
+        ├── <run>_desc-sqmraw_qc.json, <run>_desc-rawchannel_qc.tsv   ← the same from nirspipe-qc participant
         ├── <run>_design.tsv                        ← design matrix, whenever a regression ran
         ├── <run>_desc-glm_nirsmap.tsv              ← fit results, one row per channel and regressor
         ├── <run>_desc-contrast_nirsmap.tsv         ← glm + --contrast-file
@@ -84,16 +84,50 @@ A step that did not run writes nothing: `desc-motcorrected` is absent under `--m
 
 **Tables.** Every table is tab-separated and writes a missing or non-applicable value as `n/a`, as BIDS requires. pandas reads that as missing by default; R's `read.delim` and `readr::read_tsv` only when told (`na = c("", "NA", "n/a")`). pandas needs `float_precision="round_trip"` to read values back bit for bit. A connectivity matrix keeps every channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have one shape. The quality record's layout is in [QC](qc.md#the-quality-record).
 
+## The raw QC tree
+
+`nirspipe-qc` writes one tree at both levels, as a BIDS App's group level writes into its participant level's output: each subject under `sub-<label>/`, each dyad under `group-<id>/`, and the cohort pages at the root. Its `dataset_description.json` links the raw dataset as `raw`. It can be the `nirspipe` tree itself, so the raw and run reports of a subject sit side by side and the cohort page reads the pipeline's record where a run has both. `group-<id>/` is not a BIDS entity, and a validator flags the folder.
+
+```
+derivatives/nirspipe-qc/
+├── dataset_description.json
+├── .bidsignore
+├── desc-subjects_qc.tsv, desc-subjects_report.html    ← group level: the cohort of runs
+├── desc-groups_qc.tsv, desc-groups_report.html        ← group level + --pairs-csv: the cohort of dyads
+├── sub-<label>/
+│   ├── sub-<label>_desc-index_report.html
+│   ├── <run>_desc-raw_report.html                     ← participant level
+│   ├── <run>_cond-<condition>_desc-raw_report.html    ← + --by-condition
+│   ├── figures/
+│   ├── logs/<stem>_desc-raw.toml                      ← its run record, which --config reruns
+│   └── [ses-<label>/]nirs/
+│       ├── <run>_desc-sqmraw_qc.json                  ← the raw quality record and the settings it screened with
+│       └── <run>_desc-rawchannel_qc.tsv               ← per-channel metrics and verdicts
+└── group-<id>/
+    ├── group-<id>_task-<t>_desc-raw_report.html      ← group level + --pairs-csv
+    ├── figures/
+    ├── logs/group-<id>_task-<t>_desc-raw.log         ← its live log
+    └── nirs/                                         ← every table has a .json sidecar
+```
+
+Per group and task the group level writes:
+
+| File | Holds |
+|------|-------|
+| `desc-sqm_qc.json` | The dyad's quality record, which the cohort of dyads reads |
+| `desc-subject_qc.tsv` | One row per member: every scalar of its raw quality view |
+| `desc-channel_qc.tsv` | One row per member and channel: `sci_win`, `sci_whole`, `is_bad` |
+| `desc-usable_qc.tsv` | One row per channel pair and condition: `usable_frac`, `one_member_frac`, `neither_frac`, `n_windows` |
+
 ## The `nirspipe-hyper` tree
 
-The dyad commands write a tree apart from the one `nirspipe` wrote. Its `dataset_description.json` links that tree as `preprocessed` (and, after `nirspipe-qc hyper-raw`, the raw dataset as `raw`), so the dyad tables name their member files as `bids:preprocessed:...`. A group the pairs file records per session puts `ses-<s>` after `group-<id>` in every name and its tables in `group-<id>/ses-<s>/nirs/`.
+The dyad commands write a tree apart from the one `nirspipe` wrote. Its `dataset_description.json` links that tree as `preprocessed`, so the dyad tables name their member files as `bids:preprocessed:...`. A group the pairs file records per session puts `ses-<s>` after `group-<id>` in every name and its tables in `group-<id>/ses-<s>/nirs/`.
 
 ```
 derivatives/nirspipe-hyper/
 ├── dataset_description.json
 ├── .bidsignore
 ├── plotly-<version>.min.js
-├── desc-groups_qc.tsv, desc-groups_report.html    ← nirspipe-qc cohort-hyper
 ├── stat-wtc_relmat.tsv, stat-isc_relmat.tsv, ...  ← nirspipe-hyper-merge, one per long-table kind
 ├── chromo-<c>_task-<t>_cond-all_null-<n>_stat-<s>_desc-{bycell,byoccasion,cohort}_relmat.tsv  ← nirspipe-hyper-groupnull
 ├── task-<t>_desc-groupnull_report.html            ← nirspipe-hyper-groupnull
@@ -102,23 +136,12 @@ derivatives/nirspipe-hyper/
     ├── group-<id>_desc-index_report.html          ← one row per analysed window
     ├── group-<id>_task-<t>_report.html            ← dyad analysis report
     ├── group-<id>_task-<t>_cond-<c>_report.html   ← one per condition window
-    ├── group-<id>_task-<t>_desc-raw_report.html   ← nirspipe-qc hyper-raw
     ├── figures/
     ├── logs/group-<id>_task-<t>.{log,toml}        ← nirspipe-hyper's live log and run record
-    ├── logs/group-<id>_task-<t>_desc-raw.log      ← nirspipe-qc hyper-raw's live log
     ├── logs/group-<id>_task-<t>_null-pair.log     ← nirspipe-hyper-pairnull's live log
     ├── logs/group-<id>_task-<t>_redraw.log        ← its redraw of the dyad's pages
     └── nirs/                                      ← every table has a .json sidecar
 ```
-
-`nirspipe-qc hyper-raw` writes into the dyad tree or into a raw QC tree of its own, as `nirspipe-qc prep-raw` does for subjects. A tree it creates is stamped `GeneratedBy: nirspipe-qc hyper-raw`; a `nirspipe` tree is refused. `nirspipe-qc cohort-hyper` reads its quality records, so it runs on whichever tree `hyper-raw` wrote. Per group and task it writes:
-
-| File | Holds |
-|------|-------|
-| `desc-sqm_qc.json` | The dyad's quality record, which `nirspipe-qc cohort-hyper` reads |
-| `desc-subject_qc.tsv` | One row per member: every scalar of its raw quality view |
-| `desc-channel_qc.tsv` | One row per member and channel: `sci_win`, `sci_whole`, `is_bad` |
-| `desc-usable_qc.tsv` | One row per channel pair and condition: `usable_frac`, `one_member_frac`, `neither_frac`, `n_windows` |
 
 `nirspipe-hyper` writes, per group and task (the names below drop the leading `group-<id>_task-<t>_`):
 
@@ -175,7 +198,7 @@ The stage is carried by the file name, so renaming a `desc-` entity by hand brea
 
 **BIDS URIs.** Each `Sources` entry is a BIDS URI, never a local path, so a tree can be moved or shared without its lineage breaking: `bids::sub-01/nirs/...` names a file in the same tree, `bids:raw:...` one in the raw dataset, `bids:preprocessed:...` one in the subject-level tree a dyad tree was computed from. The names resolve through `DatasetLinks` in the tree's `dataset_description.json`, written with a relative path where both trees sit on one drive. A tree whose `Sources` are not BIDS URIs is refused where they are read.
 
-**The provenance graph.** At the end of each subject, `nirspipe` draws one graph per run from the sidecars, `figures/<run>_desc-provenance_nirs.png` with its Mermaid source `.mmd`, and the run report embeds it. Nodes are files, labelled by their entities; edges are labelled with the step; three or more outputs one step made from the same inputs are drawn as one box. A node whose file is missing keeps its place with a dashed red outline. `nirspipe-qc provenance OUTPUT_DIR` redraws the graphs from the sidecars on disk, for subjects, dyads and the tree root alike, so it works on any past run and refreshes the image a written report points at.
+**The provenance graph.** At the end of each subject, `nirspipe` draws one graph per run from the sidecars, `figures/<run>_desc-provenance_nirs.png` with its Mermaid source `.mmd`, and the run report embeds it. Nodes are files, labelled by their entities; edges are labelled with the step; three or more outputs one step made from the same inputs are drawn as one box. A node whose file is missing keeps its place with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs from the sidecars on disk, for subjects, dyads and the tree root alike, so it works on any past run and refreshes the image a written report points at.
 
 ```{figure} figures/provenance.png
 :alt: A provenance graph of one run, one box per file
@@ -189,7 +212,7 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 | Layer | Format | Path | For |
 |-------|--------|------|-----|
 | Live log | Text | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].log` | Following a run; `--verbose` adds debug output |
-| Dyad live log | Text | `group-<id>/logs/group-<id>_task-<t>.log`, `_desc-raw.log` for `hyper-raw`, `_null-pair.log` for the re-paired null, `_redraw.log` for the pages it redraws | Following one group of a dyad command |
+| Dyad live log | Text | `group-<id>/logs/group-<id>_task-<t>.log`, `_desc-raw.log` for the raw QC group level, `_null-pair.log` for the re-paired null, `_redraw.log` for the pages it redraws | Following one group of a dyad command |
 | Run record | TOML | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].toml` | What a subject was run with, and rerunning it |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
 
