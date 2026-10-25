@@ -39,7 +39,9 @@ def _tree(root, runs, report=False, mode="rest", extra=()):
     bads.write_text("run\tbad_channels\n01\tS1_D1\n", encoding="utf-8")
     spans = root / "spans.tsv"
     spans.write_text(f"run\tonset\tduration\n02\t{SPAN[0]}\t{SPAN[1]}\n", encoding="utf-8")
+    # no short-channel regression: pca would leave the short channels empty and out of the join
     run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, "--mode", mode,
+                  "--short-channel", "none",
                   "--skip-bids-validation", "--combine-runs", "--roi-mapping", str(roi),
                   "--bad-channels", str(bads), *extra,
                   *(["--bad-spans", str(spans)] if len(runs) > 1 else []),
