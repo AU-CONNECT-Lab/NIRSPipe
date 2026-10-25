@@ -8,9 +8,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
+- Raw QC takes `--bad-channels`, `--keep-spans`, `--keep-spans-from`, `--bad-spans` and `--bids-filter-file` as the pipeline does, and its verdict is the pipeline's for them
+- The raw QC record carries the settings it screened with: lines, cardiac band, DPF, template, motion correction and the final bad channels
 
 ### Changed
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject
+- Raw QC's `--motion-correction` defaults to `tddr`, as the pipeline's, so its before and after panels show by default
 
 ## [0.76.0] - 2026-10-25
 

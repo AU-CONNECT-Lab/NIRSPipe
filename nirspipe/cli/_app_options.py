@@ -193,6 +193,10 @@ def add_screen_scope(container, note: str = "") -> None:
              + (f" {note}" if note else ""))
 
 
+MOTION_CHOICES = ["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
+                  "spline_wavelet", "none"]
+
+
 def add_motion_settings(container) -> None:
     """``--motion-std-thresh`` and ``--wavelet-iqr``: the two settings some correction methods read."""
     from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
@@ -225,6 +229,42 @@ def check_motion_settings(method: str | None, std_thresh: float | None,
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1)
+
+
+def add_reviewer_marks(container, bad_spans_note: str = "") -> None:
+    """``--bad-channels``, ``--keep-spans``, ``--keep-spans-from``, ``--bad-spans``: what a reviewer marked."""
+    container.add_argument("--bad-channels",
+                           help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "
+                                "every subject; or a table with a bad_channels column, rows "
+                                "optionally limited by participant_id, session, task, acq and "
+                                "run as in --keep-spans. Either wavelength marks the pair. "
+                                "Marked, not removed, and added to the SCI-detected bad channels.")
+    container.add_argument("--keep-spans", type=Path, metavar="TABLE",
+                           help="Table of the stretches to use (onset and duration in s on each "
+                                "recording's own time axis), rows optionally limited by "
+                                "participant_id, session, task, acq and run. The rest is marked "
+                                "BAD_unselected and left out of screening and every estimate; a "
+                                "recording no row matches is used whole. See --keep-spans-from.")
+    container.add_argument("--keep-spans-from", metavar="MARKER",
+                           help="Measure each --keep-spans onset from the first annotation named "
+                                "MARKER instead of the recording's start, so one row serves "
+                                "recordings that did not start time-locked; an onset may be "
+                                "negative. --bad-spans stays on the recording's own axis.")
+    container.add_argument("--bad-spans", type=Path, metavar="TABLE",
+                           help="Table of corrupted stretches (motion, a loose optode) in the "
+                                "--keep-spans format. Each is marked BAD_manual: left out of "
+                                "screening and of every estimate." + bad_spans_note)
+
+
+def check_keep_spans_from(keep_spans: "Path | None", keep_spans_from: "str | None") -> None:
+    if keep_spans_from is not None and keep_spans is None:
+        print("Error: --keep-spans-from needs --keep-spans.", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def add_bids_filter_file(container) -> None:
+    container.add_argument("--bids-filter-file", "--bids_filter_file", type=Path,
+                           help="JSON file with extra pybids query filters.")
 
 
 def screening(note: str = "") -> argparse.ArgumentParser:

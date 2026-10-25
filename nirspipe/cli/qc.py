@@ -48,9 +48,20 @@ def cmd_prep_raw(
     run_label: list[str] | None = None,
     nprocs: int | None = None,
     template: str | None = None,
+    bad_channels: str | None = None,
+    keep_spans: Path | None = None,
+    keep_spans_from: str | None = None,
+    bad_spans: Path | None = None,
+    bids_filter_file: Path | None = None,
 ) -> None:
     """Generate static raw QC reports, one per subject."""
+    from nirspipe.cli.workflows import (
+        _bad_channels_for, _keep_channels_for, _refuse_bad_span_rows,
+        _refuse_unmatched_bad_channel_rows, _spans_for,
+    )
+
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
+    _app_options.check_keep_spans_from(keep_spans, keep_spans_from)
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
@@ -74,6 +85,10 @@ def cmd_prep_raw(
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
     layout = get_layout(bids_dir)
+    # the same refusals the pipeline makes, before any subject runs
+    _refuse_unmatched_bad_channel_rows(bad_channels, layout)
+    _refuse_bad_span_rows(keep_spans, layout, marker=keep_spans_from)
+    _refuse_bad_span_rows(bad_spans, layout, flag="--bad-spans")
     sessions = session_label or [None]
     tasks    = task_label    or [None]
     ages = _ages_for(dpf, bids_dir, participant_label)
@@ -86,7 +101,8 @@ def cmd_prep_raw(
 
         for session in sessions:
             for task in tasks:
-                files = get_nirs_files(layout, subject=subject, session=session, task=task)
+                files = get_nirs_files(layout, subject=subject, session=session, task=task,
+                                       filter_file=bids_filter_file)
                 for f in files:
                     run = entity_of(Path(f), "run")
                     if run_label and run not in run_label:
@@ -95,19 +111,26 @@ def cmd_prep_raw(
                     actual_ses = entities.get("session")
                     actual_task = entities.get("task")
                     label = bids_label(subject, entities)
+                    keep = _spans_for(keep_spans, subject, entities,
+                                      relative=bool(keep_spans_from))
 
                     snirf_p = Path(f)
-                    events_p = snirf_p.parent / (snirf_p.name.replace("_nirs.snirf",
-                                                                     "_events.tsv"))
                     run_dict = {
                         "label":       label,
                         "subject_id":  subject,
                         "snirf_path":  str(f),
-                        "events_path": str(events_p) if events_p.exists() else None,
                         "session":     actual_ses,
                         "task":        actual_task,
                         "channels_tsv_bads": ([] if "channel-status" in (ignore or [])
                                               else channel_status_bads(layout, snirf_p)),
+                        "ignore": list(ignore or []),
+                        "bad_channels": _bad_channels_for(bad_channels, subject, entities),
+                        "keep_channels": _keep_channels_for(bad_channels, subject, entities),
+                        "keep_spans": keep,
+                        # a recording no row names is used whole, so no marker applies to it
+                        "keep_spans_from": keep_spans_from if keep else None,
+                        "bad_spans": _spans_for(bad_spans, subject, entities,
+                                                flag="--bad-spans"),
                         "age": ages.get(subject),
                         "template": templates[subject],
                     }
@@ -522,15 +545,14 @@ def _build_parser() -> argparse.ArgumentParser:
                          "of the run's windowed pass, on the same window grid and filter as "
                          "the run. Each page's screening verdict is that condition's; the "
                          "run's own page carries the run's.")
-    pr.add_argument("--motion-correction",
-                    choices=["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
-                             "spline_wavelet", "none"],
-                    default="none",
+    pr.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES, default="tddr",
                     help="Run this correction on a copy of the optical density and report the "
                          "recording before and after it. Nothing is written back and nothing "
                          "else runs, so screening and coupling still describe the recording as "
-                         "delivered. Default none: report it uncorrected.")
+                         "delivered. Default tddr, as nirspipe; none reports it uncorrected only.")
     _app_options.add_motion_settings(pr)
+    _app_options.add_reviewer_marks(pr)
+    _app_options.add_bids_filter_file(pr)
     _shared.add_skip_bids_validation(pr)
     _shared.add_nprocs(pr)
     _add_ignore(pr)

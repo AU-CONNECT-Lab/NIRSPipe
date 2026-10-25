@@ -17,7 +17,8 @@ from nirspipe.io.naming import report_name
 from nirspipe.io.optode_space import hold_placement, place_optodes
 from nirspipe.io.snirf import read_raw_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_caveat, dpf_from_age, resolve_dpf, wavelengths
-from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs
+from nirspipe.pipeline.motion import motion_settings
+from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs, join_marks
 from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
@@ -52,7 +53,7 @@ from nirspipe.qc.subject.trial_qc import (
 )
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans
+from nirspipe.utils.spans import bad_spans, mark_manual, mark_unselected, measured_from
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.vocabulary import metric_rows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
@@ -236,6 +237,11 @@ def _process_run(
     # on the run's head template, held so every figure below draws on the same one
     hold_placement(raw, place_optodes(run["snirf_path"],
                                       space_of(run.get("template") or FSAVERAGE)))
+    # the reviewer's stretches, marked before anything is measured, as the pipeline marks them
+    keep_spans = run.get("keep_spans") or []
+    if keep_spans and run.get("keep_spans_from"):
+        keep_spans = measured_from(raw, keep_spans, run["keep_spans_from"])
+    mark_manual(mark_unselected(raw, keep_spans), run.get("bad_spans") or [])
 
     sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
@@ -249,24 +255,19 @@ def _process_run(
     if gap:
         logger.warning("%s | channel screening could not judge this recording: %s", label, gap)
     bad_list = [] if gap else screen_channels(screen_scores, cutoffs)[0]
-    bad_channels: set[str] = set(bad_list)
-    # the recording's BIDS channels.tsv rejections, joined as the pipeline joins them
     tsv_names = run.get("channels_tsv_bads") or []
+    joined, kept = join_marks(raw, bad_list, keep=run.get("keep_channels") or [],
+                              manual=run.get("bad_channels") or [], listed=tsv_names,
+                              label=label)
+    bad_channels: set[str] = set(joined)
     tsv_bads = _expand_bad_pairs(raw, tsv_names)
-    missing = sorted({pair_of(c) for c in tsv_names} - {pair_of(c) for c in tsv_bads})
-    if missing:
-        logger.warning("%s | channels.tsv marks bad channels the recording does not have: %s",
-                       label, missing)
-    if tsv_bads:
-        logger.info("%s | bad channels from channels.tsv: %s", label, tsv_bads)
-    bad_channels |= set(tsv_bads)
 
     # The one preprocessing step this report runs, for the motion panels' before and after.
     # Nothing is written back; the corrected copy lives for the length of this function.
     raw_motcorr = None
     if motion_correction and motion_correction != "none":
         with guard("Motion correction", errors, label):
-            from nirspipe.pipeline.motion import correct_motion, motion_settings, overmarked
+            from nirspipe.pipeline.motion import correct_motion, overmarked
             raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction,
                                          std_thresh=motion_std_thresh, iqr_factor=wavelet_iqr)
             summary = (lineage_of(raw_motcorr).params or {}).get(motion_correction)
@@ -757,6 +758,31 @@ def _process_run(
     record = sqm_record_dict(sections, bids_uris([run["snirf_path"]], sqm_path))
     if by_cond:
         record["by_condition"] = by_cond
+    # what the dyad level reads this member by, so it never screens or converts it again
+    record["bad_channels"] = sorted(bad_channels)
+    record["parameters"] = {
+        "sci_threshold": cutoffs["sci"],
+        "psp_threshold": cutoffs["psp"],
+        "min_good_frac": cutoffs["good_frac"],
+        "screen_scope": screen_scope,
+        "screen_scope_counted": "task" if scope else "run",
+        "cardiac_l_freq": cardiac_l_freq,
+        "cardiac_h_freq": cardiac_h_freq,
+        "qc_window_s": window_s,
+        "dpf": [float(f) for f in factors],
+        **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
+        "template": run.get("template") or FSAVERAGE,
+        "motion_correction": motion_correction or "none",
+        **motion_settings(motion_correction, motion_std_thresh, wavelet_iqr),
+        "bad_channels": list(run.get("bad_channels") or []),
+        "keep_channels": list(run.get("keep_channels") or []),
+        "kept_channels": kept,
+        "channels_tsv_bads": list(tsv_names),
+        "ignore": list(run.get("ignore") or []),
+        "keep_spans": [list(span) for span in keep_spans],
+        "keep_spans_from": run.get("keep_spans_from"),
+        "bad_spans": [list(span) for span in run.get("bad_spans") or []],
+    }
     write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"],

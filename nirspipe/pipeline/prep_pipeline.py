@@ -174,6 +174,51 @@ def release_kept(screened: list[str], keep: list[str]) -> tuple[list[str], list[
     return [c for c in screened if c not in kept], kept
 
 
+def join_marks(raw_od: mne.io.Raw, screened: list[str], *, keep=(), manual=(), listed=(),
+               forced=(), label: str = "run") -> tuple[list[str], list[str]]:
+    """Screening's rejections with a reviewer's keeps released and every mark added, as ``(bad, kept)``.
+
+    ``keep`` holds the pairs a reviewer kept, ``manual`` the --bad-channels labels, ``listed``
+    the channels.tsv rejections and ``forced`` channels marked for another reason. A mark
+    outranks a keep; a pair --bad-channels both marks and keeps is refused. One function for
+    the pipeline and raw QC, so the same inputs give both the same verdict.
+    """
+    bad, kept = list(screened), []
+    if keep:
+        both = sorted({pair_of(c) for c in keep} & {pair_of(c) for c in manual})
+        if both:
+            raise StageError(f"--bad-channels both marks bad and keeps {', '.join(both)} for "
+                             f"this recording; settle each in the rating viewer")
+        bad, kept = release_kept(bad, list(keep))
+        if kept:
+            logger.info("%s | kept on review despite screening: %s", label, kept)
+    marks = _expand_bad_pairs(raw_od, list(forced))
+    if manual:
+        named = _expand_bad_pairs(raw_od, list(manual))
+        if not named:
+            logger.warning("%s | --bad-channels matched no channels: %s", label, list(manual))
+        else:
+            logger.info("%s | manual bad channels: %s", label, named)
+        marks += named
+    if listed:
+        found = _expand_bad_pairs(raw_od, list(listed))
+        unmatched = sorted({pair_of(c) for c in listed} - {pair_of(c) for c in found})
+        if unmatched:
+            logger.warning("%s | channels.tsv marks bad channels the recording does not "
+                           "have: %s", label, unmatched)
+        if found:
+            logger.info("%s | bad channels from channels.tsv: %s", label, found)
+        marks += found
+    if marks:
+        bad = sorted(set(bad) | set(marks))
+        overruled = sorted({pair_of(c) for c in keep} & {pair_of(c) for c in marks})
+        if overruled:
+            logger.warning("%s | kept on review but marked bad by channels.tsv or for "
+                           "non-finite samples, so still bad: %s", label, overruled)
+            kept = [c for c in kept if pair_of(c) not in overruled]
+    return bad, kept
+
+
 # Step 4: Beer-Lambert
 def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float],
                 age: "float | None" = None) -> mne.io.Raw:
@@ -352,51 +397,19 @@ def run_prep(
         min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq,
         keep=config.keep_channels)
-    kept: list[str] = []
-    if config.keep_channels:
-        both = sorted({pair_of(c) for c in config.keep_channels}
-                      & {pair_of(c) for c in config.bad_channels})
-        if both:
-            raise StageError(f"--bad-channels both marks bad and keeps {', '.join(both)} for "
-                             f"this recording; settle each in the rating viewer")
-        bad_chs, kept = release_kept(bad_chs, config.keep_channels)
-        if kept:
-            logger.info("sub-%s | kept on review despite screening: %s", config.subject, kept)
-        raw_od.info["bads"] = bad_chs
-    forced = _expand_bad_pairs(raw_od, list(non_finite))
-    if config.bad_channels:
-        manual = _expand_bad_pairs(raw_od, config.bad_channels)
-        if not manual:
-            logger.warning("sub-%s | --bad-channels matched no channels: %s", config.subject, config.bad_channels)
-        else:
-            logger.info("sub-%s | manual bad channels: %s", config.subject, manual)
-        forced += manual
-    if config.channels_tsv_bads:
-        listed = _expand_bad_pairs(raw_od, config.channels_tsv_bads)
-        unmatched = sorted({pair_of(c) for c in config.channels_tsv_bads}
-                           - {pair_of(c) for c in listed})
-        if unmatched:
-            logger.warning("sub-%s | channels.tsv marks bad channels the recording does not "
-                           "have: %s", config.subject, unmatched)
-        if listed:
-            logger.info("sub-%s | bad channels from channels.tsv: %s", config.subject, listed)
-        forced += listed
-    if forced:
-        bad_chs = sorted(set(bad_chs) | set(forced))
-        overruled = sorted({pair_of(c) for c in config.keep_channels} & {pair_of(c) for c in forced})
-        if overruled:
-            logger.warning("sub-%s | kept on review but marked bad by channels.tsv or for "
-                           "non-finite samples, so still bad: %s", config.subject, overruled)
-            kept = [c for c in kept if pair_of(c) not in overruled]
-        if len(bad_chs) == len(sci_scores):
-            why = [w for w, on in (("--bad-channels", config.bad_channels),
-                                   ("channels.tsv", config.channels_tsv_bads),
-                                   ("non-finite samples", non_finite)) if on]
-            raise StageError(
-                f"{' and '.join(why)} leave{'' if len(why) > 1 else 's'} no usable channel: "
-                f"all {len(bad_chs)} are marked bad."
-            )
-        raw_od.info["bads"] = bad_chs
+    bad_chs, kept = join_marks(raw_od, bad_chs, keep=config.keep_channels,
+                               manual=config.bad_channels, listed=config.channels_tsv_bads,
+                               forced=list(non_finite), label=f"sub-{config.subject}")
+    # screening alone cannot reach here with every channel bad: mark_bad_channels refuses that
+    if len(bad_chs) == len(sci_scores):
+        why = [w for w, on in (("--bad-channels", config.bad_channels),
+                               ("channels.tsv", config.channels_tsv_bads),
+                               ("non-finite samples", non_finite)) if on]
+        raise StageError(
+            f"{' and '.join(why)} leave{'' if len(why) > 1 else 's'} no usable channel: "
+            f"all {len(bad_chs)} are marked bad."
+        )
+    raw_od.info["bads"] = bad_chs
     n_bad, n_total = len(bad_chs), len(sci_scores)
     logger.info(
         "sub-%s | bad channels: %d/%d%s",

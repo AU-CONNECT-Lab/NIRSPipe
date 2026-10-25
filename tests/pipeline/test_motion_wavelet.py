@@ -249,13 +249,13 @@ def test_every_cli_offers_every_method():
 def test_gui_offers_exactly_the_cli_choices():
     import re
 
-    from nirspipe.cli.run import _MOTION_CHOICES
+    from nirspipe.cli._app_options import MOTION_CHOICES
     from nirspipe.interface.server import WebApp
 
     html = WebApp().flask.test_client().get("/analysis/run/").get_data(as_text=True)
     dropdown = re.search(r'<select id="[^"]*" name="--motion-correction">(.*?)</select>', html, re.S)
     assert dropdown, "no --motion-correction dropdown on the Analysis page"
-    assert re.findall(r'<option value="(\w+)"', dropdown.group(1)) == _MOTION_CHOICES
+    assert re.findall(r'<option value="(\w+)"', dropdown.group(1)) == MOTION_CHOICES
 
 
 @requires_pywt

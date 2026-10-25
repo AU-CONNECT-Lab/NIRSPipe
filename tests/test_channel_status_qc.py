@@ -22,15 +22,22 @@ def _with_status(bids, subject, task):
     return bids
 
 
+def _read_json(path):
+    """The file minus its timestamp and the recorded --ignore, which names the skip itself."""
+    data = {k: v for k, v in json.loads(path.read_text(encoding="utf-8")).items()
+            if k != "timestamp"}
+    if isinstance(data.get("parameters"), dict):
+        data["parameters"] = {k: v for k, v in data["parameters"].items() if k != "ignore"}
+    return data
+
+
 def _same_files(a, b, pattern):
     files = sorted(p.relative_to(a) for p in a.rglob(pattern) if "figures" not in p.parts)
     assert files and files == sorted(p.relative_to(b) for p in b.rglob(pattern)
                                      if "figures" not in p.parts)
     for rel in files:
         if rel.suffix == ".json":
-            read = lambda root: {k: v for k, v in json.loads((root / rel).read_text(  # noqa: E731
-                encoding="utf-8")).items() if k != "timestamp"}
-            assert read(a) == read(b), rel
+            assert _read_json(a / rel) == _read_json(b / rel), rel
         else:
             assert (a / rel).read_bytes() == (b / rel).read_bytes(), rel
 

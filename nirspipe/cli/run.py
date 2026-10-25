@@ -21,8 +21,6 @@ from nirspipe.pipeline.denoise import (
 )
 from nirspipe.utils import P_CORRECTIONS
 
-_MOTION_CHOICES       = ["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
-                          "spline_wavelet", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
 _PRESETS_DIR           = Path(__file__).resolve().parent.parent / "data" / "presets"
 
@@ -104,36 +102,16 @@ def _build_parser() -> argparse.ArgumentParser:
                      type=_shared.BidsLabel, help="Session label(s) to process.")
     sel.add_argument("--task-label", "--task_label", nargs="+", action="extend",
                      type=_shared.BidsLabel, help="Task label(s) to process.")
-    sel.add_argument("--bids-filter-file", "--bids_filter_file", type=Path,
-                     help="JSON file with extra pybids query filters.")
+    _app_options.add_bids_filter_file(sel)
 
     prep_opt = p.add_argument_group("preprocessing (optional)")
-    prep_opt.add_argument("--motion-correction", choices=_MOTION_CHOICES, default="tddr",
+    prep_opt.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES,
+                          default="tddr",
                           help="Motion correction method.")
     _app_options.add_template(prep_opt)
     _app_options.add_motion_settings(prep_opt)
-    prep_opt.add_argument("--bad-channels",
-                          help="Source-detector labels to mark as bad, e.g. 'S1_D1,S2_D3', for "
-                               "every subject; or a table with a bad_channels column, rows "
-                               "optionally limited by participant_id, session, task, acq and "
-                               "run as in --keep-spans. Either wavelength marks the pair. "
-                               "Marked, not removed, and added to the SCI-detected bad channels.")
-    prep_opt.add_argument("--keep-spans", type=Path, metavar="TABLE",
-                          help="Table of the stretches to use (onset and duration in s on each "
-                               "recording's own time axis), rows optionally limited by "
-                               "participant_id, session, task, acq and run. The rest is marked "
-                               "BAD_unselected and left out of screening and every estimate; a "
-                               "recording no row matches is used whole. See --keep-spans-from.")
-    prep_opt.add_argument("--keep-spans-from", metavar="MARKER",
-                          help="Measure each --keep-spans onset from the first annotation named "
-                               "MARKER instead of the recording's start, so one row serves "
-                               "recordings that did not start time-locked; an onset may be "
-                               "negative. --bad-spans stays on the recording's own axis.")
-    prep_opt.add_argument("--bad-spans", type=Path, metavar="TABLE",
-                          help="Table of corrupted stretches (motion, a loose optode) in the "
-                               "--keep-spans format. Each is marked BAD_manual: left out of "
-                               "screening, filled by --censor-fill before any filter, and left "
-                               "out of every estimate.")
+    _app_options.add_reviewer_marks(
+        prep_opt, bad_spans_note=" Filled by --censor-fill before any filter.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
                           help="Lower bound of cardiac band in Hz (required at participant level; "
                                "population-dependent). Adult resting ~0.7; children/infants higher "
@@ -329,12 +307,6 @@ def _check_epoch_window(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
-def _check_keep_spans_from(args: argparse.Namespace) -> None:
-    if args.keep_spans_from is not None and args.keep_spans is None:
-        print("Error: --keep-spans-from needs --keep-spans.", file=sys.stderr)
-        raise SystemExit(1)
-
-
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
     _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "nirspipe")
@@ -463,7 +435,7 @@ def main(argv: list[str] | None = None) -> None:
     # checked before the workflow import: a bad command line should not first pay for mne
     _require(args, *_LEVEL_REQUIRES[level])
     _check_epoch_window(args)
-    _check_keep_spans_from(args)
+    _app_options.check_keep_spans_from(args.keep_spans, args.keep_spans_from)
     _app_options.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)
     _check_dirs(args)
 
