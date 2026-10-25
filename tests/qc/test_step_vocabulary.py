@@ -720,12 +720,27 @@ def test_the_level_file_does_not_fill_the_sentence():
 
 def test_the_null_sentence_names_the_pool_the_pairs_the_count_and_the_pad():
     slots = template_slots("hyper_pairnull", _PAIRNULL)
-    assert slots["pool"] == "the member in the same position of each other group"
+    assert slots["held"] == ("the first-listed member was kept and their partner replaced, one "
+                             "at a time, by the member in the same position of each other "
+                             "group recorded on the same task")
+    assert slots["unit"] == "stand-ins"
     assert slots["pairs"] == "homologous channel pairs"
     assert slots["count"] == "All 22 eligible stand-ins were used."
     assert slots["pad"] == "141.4"
     # no correlation settings recorded: only the coherence was re-paired
     assert slots["measures"] == "coherence was"
+
+
+def test_a_group_null_counts_draws_each_replacing_every_later_member():
+    slots = template_slots("hyper_pairnull", {
+        **_PAIRNULL, "n_iter": 20, "pair_candidates": 59,
+        "pair_partners": ["sub-102p3+sub-102p5", "sub-103p3+sub-103p5"]})
+    assert slots["held"] == (
+        "each pairing kept its earlier-listed member, and in each draw every later-listed "
+        "member was replaced by the member in the same position of one other group recorded "
+        "on the same task, the same stand-in in every pairing that member closes")
+    assert slots["count"] == "20 of the 59 eligible draws were used."
+    assert slots["unit"] == "draws"
 
 
 def test_the_region_sentence_appears_only_with_a_region_map():
@@ -738,7 +753,7 @@ def test_a_capped_any_pool_crossed_null_with_the_correlation_says_so():
     slots = template_slots("hyper_pairnull", {
         **_PAIRNULL, "n_iter": 10, "pair_candidates": 44, "pair_pool": "any", "cross": True,
         "isc_whiten_s": 0.0})
-    assert slots["pool"] == "each member of every other group"
+    assert "by each member of every other group recorded" in slots["held"]
     assert slots["pairs"] == "every channel pair"
     assert slots["count"] == "10 of the 44 eligible stand-ins were used."
     assert slots["measures"] == "coherence and the inter-subject correlation were"

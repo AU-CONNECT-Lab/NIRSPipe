@@ -424,16 +424,31 @@ def _phasenull_slots(params: dict[str, Any]) -> dict[str, str]:
 def _pairnull_slots(params: dict[str, Any]) -> dict[str, str]:
     """Who stood in, how many, and over what, as the re-paired null's sidecars record it."""
     n, pool_size = int(params.get("n_iter") or 0), params.get("pair_candidates")
+    any_pool = params.get("pair_pool") == "any"
+    # a group's draw ids join its stand-ins with "+"; a dyad's is its one stand-in
+    group = any("+" in str(p) for p in params.get("pair_partners") or [])
+    if group:
+        pool = ("a member of one other group" if any_pool
+                else "the member in the same position of one other group")
+        held = ("each pairing kept its earlier-listed member, and in each draw every "
+                f"later-listed member was replaced by {pool} recorded on the same task, the "
+                "same stand-in in every pairing that member closes")
+    else:
+        pool = ("each member of every other group" if any_pool
+                else "the member in the same position of each other group")
+        held = ("the first-listed member was kept and their partner replaced, one at a "
+                f"time, by {pool} recorded on the same task")
+    unit = "draws" if group else "stand-ins"
     return {
-        "pool": ("each member of every other group" if params.get("pair_pool") == "any"
-                 else "the member in the same position of each other group"),
+        "held": held,
+        "unit": unit,
         # the correlation's tables carry its own settings; without them only coherence ran
         "measures": ("coherence and the inter-subject correlation were"
                      if "isc_whiten_s" in params else "coherence was"),
         "pairs": "every channel pair" if params.get("cross") else "homologous channel pairs",
-        "count": (f"{n} of the {pool_size} eligible stand-ins were used."
+        "count": (f"{n} of the {pool_size} eligible {unit} were used."
                   if pool_size is not None and n < int(pool_size)
-                  else f"All {n} eligible stand-ins were used."),
+                  else f"All {n} eligible {unit} were used."),
         "pad": _num(round(float(params.get("pair_cond_pad_s") or 0.0), 1)),
         # written only when a region map was given
         "regions": (" A stand-in's region value was compared with the real dyad's over the "
