@@ -186,6 +186,19 @@ def test_prep_writes_each_channel_at_its_planted_midpoint(prepped):
     assert side["optode_placement"]["space"] == "fsaverage"
 
 
+def test_prep_names_each_channels_region_in_both_fsaverage_atlases(prepped):
+    nirs_dir, _ = prepped
+    path = nirs_dir / "sub-01_task-rest_space-fsaverage_channels.tsv"
+    table = read_table(path)
+    assert table.columns.tolist() == ["name", "x", "y", "z", "aparc", "brodmann"]
+    assert table[["aparc", "brodmann"]].notna().all().all()
+    # one position per pair, so both chromophores sit over one region
+    pair = table["name"].str.rsplit(" ", n=1).str[0]
+    assert (table.groupby(pair)[["aparc", "brodmann"]].nunique() == 1).all().all()
+    side = json.loads(path.with_suffix(".json").read_text())
+    assert {"aparc", "brodmann"} <= set(side)
+
+
 def test_a_derivative_is_placed_by_the_record_not_by_its_own_landmarks(prepped):
     # mne-nirs writes no landmark the recording had, so only the record can place this file
     nirs_dir, source = prepped
@@ -229,13 +242,16 @@ def test_a_cropped_recording_keeps_the_landmarks_that_place_it(tmp_path):
 
 # ---- the group copy ----
 
-def _member(derivs, subject, x, method="landmarks", space="fsaverage"):
+def _member(derivs, subject, x, method="landmarks", space="fsaverage", regions=None):
     """A member's preproc file and the record prep would leave beside it, hand-written."""
     nirs = derivs / subject / "nirs"
     nirs.mkdir(parents=True, exist_ok=True)
     (nirs / f"{subject}_task-rest_desc-preproc_nirs.snirf").write_bytes(b"")
+    head = "".join(f"\t{name}" for name in regions or {})
+    cells = "".join(f"\t{value}" for value in (regions or {}).values())
     (nirs / f"{subject}_task-rest_space-{space}_channels.tsv").write_text(
-        f"name\tx\ty\tz\nS1_D1 hbo\t{x}\t2.0\t3.0\nS1_D1 hbr\t{x}\t2.0\t3.0\n")
+        f"name\tx\ty\tz{head}\nS1_D1 hbo\t{x}\t2.0\t3.0{cells}\n"
+        f"S1_D1 hbr\t{x}\t2.0\t3.0{cells}\n")
     (nirs / f"{subject}_task-rest_space-{space}_channels.json").write_text(json.dumps(
         {"optode_placement": {"method": method, "space": space, "landmarks_used": 3,
                               "scalp_fit_mm": 1.0, "transform": np.eye(4).tolist(),
@@ -266,6 +282,29 @@ def test_a_group_table_keeps_each_members_positions_under_their_subject_id(tmp_p
     assert side["NIRSCoordinateSystem"] == "fsaverage"
     assert {k: v["method"] for k, v in side["optode_placement"].items()} == {
         "sub-01": "landmarks", "sub-02": "mni"}
+
+
+def test_a_group_table_carries_the_members_regions(tmp_path):
+    from nirspipe.io.groups import GroupEntry
+    from nirspipe.pipeline.hyper.group_quality import write_group_channel_coords
+
+    derivs, out = tmp_path / "derivatives", tmp_path / "hyper"
+    write_dataset_description(derivs)
+    write_dataset_description(out, source=derivs)
+    _member(derivs, "sub-01", 10.0, regions={"aparc": "precentral-lh", "brodmann": "Brodmann.4-lh"})
+    _member(derivs, "sub-02", 12.5, space=_INFANT_SPACE, regions={"aparc": "postcentral-lh"})
+    group = [GroupEntry("G1", "sub-01", "rest"), GroupEntry("G1", "sub-02", "rest")]
+
+    path = write_group_channel_coords(derivs, out, group, "preproc")
+
+    table = read_table(path).set_index(["subject_id", "name"])
+    assert table.columns.tolist() == ["space", "x", "y", "z", "aparc", "brodmann"]
+    assert table.loc[("sub-01", "S1_D1 hbo"), "brodmann"] == "Brodmann.4-lh"
+    # an infant template has no Brodmann atlas, so its members' cells are blank
+    assert table.loc[("sub-02", "S1_D1 hbo"), "aparc"] == "postcentral-lh"
+    assert table.loc[[("sub-02", "S1_D1 hbo")], "brodmann"].isna().all()
+    side = json.loads(path.with_suffix(".json").read_text())
+    assert "Brodmann" in side["brodmann"]["Description"] and "aparc" in side["aparc"]["Description"]
 
 
 def test_a_group_with_a_member_from_an_older_tree_is_refused(tmp_path):
@@ -299,6 +338,10 @@ def test_a_rerun_on_another_template_leaves_one_table(tmp_path):
     assert not old.exists() and not old.with_suffix(".json").exists()
     placement = read_placement(run_file)
     assert placement.space == _INFANT_SPACE and not placement.placed
+    # an infant template is labelled in aparc alone, and an unplaced run nowhere
+    table = read_table(channel_coords_path(run_file, _INFANT_SPACE))
+    assert table.columns.tolist() == ["name", "x", "y", "z", "aparc"]
+    assert table["aparc"].isna().all()
     side = json.loads(channel_coords_path(run_file, _INFANT_SPACE).with_suffix(".json").read_text())
     # BIDS has no keyword for an infant template; the description names it
     assert side["NIRSCoordinateSystem"] == "Other"

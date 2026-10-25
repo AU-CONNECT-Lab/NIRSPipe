@@ -177,6 +177,56 @@ def scalp(space: str) -> cKDTree:
     return cKDTree(surface["rr"] * 1000)
 
 
+# FreeSurfer annotation -> the channel-table column naming a channel's region in it
+CORTEX_ATLASES = {"aparc": "aparc", "PALS_B12_Brodmann": "brodmann"}
+_HEMIS = ("lh", "rh")
+
+
+def cortex_atlases(space: str) -> list[str]:
+    """The annotations a template's channels are labelled from: aparc on every template, Brodmann on fsaverage, which alone ships it."""
+    return list(CORTEX_ATLASES) if space == FSAVERAGE else ["aparc"]
+
+
+@lru_cache(maxsize=None)
+def _pial(space: str) -> cKDTree:
+    """Both hemispheres' pial vertices, lh then rh, in surface RAS mm."""
+    surf = template_dir(space) / "surf"
+    return cKDTree(np.vstack([mne.read_surface(surf / f"{hemi}.pial")[0] for hemi in _HEMIS]))
+
+
+@lru_cache(maxsize=None)
+def _vertex_regions(space: str, atlas: str) -> np.ndarray:
+    """Each pial vertex's region in ``atlas``, lh then rh, as ``name-hemi``; None off every region."""
+    import nibabel.freesurfer as fs
+
+    regions = []
+    for hemi in _HEMIS:
+        labels, _, names = fs.read_annot(str(template_dir(space) / "label" / f"{hemi}.{atlas}.annot"))
+        named = np.array([f"{n.decode()}-{hemi}" for n in names] + [None], dtype=object)
+        # -1, a vertex in no region, indexes the trailing None
+        regions.append(named[labels])
+    return np.concatenate(regions)
+
+
+def nearest_cortex_regions(space: str, points_mm: np.ndarray) -> dict[str, list]:
+    """Each point's region in every atlas the template ships, read at the pial vertex nearest it.
+
+    ``{"aparc": ["precentral-lh", None], "brodmann": ["Brodmann.4-lh", None]}`` for a point
+    over the left motor strip and one with no position (NaN).
+    """
+    points = np.asarray(points_mm, float).reshape(-1, 3)
+    placed = np.isfinite(points).all(axis=1)
+    out = {}
+    for atlas in cortex_atlases(space):
+        column = [None] * len(points)
+        if placed.any():
+            nearest = _pial(space).query(points[placed])[1]
+            for i, region in zip(np.flatnonzero(placed), _vertex_regions(space, atlas)[nearest]):
+                column[i] = region
+        out[CORTEX_ATLASES[atlas]] = column
+    return out
+
+
 @lru_cache(maxsize=None)
 def reference_points(space: str) -> dict[str, np.ndarray]:
     """10-10 (fsaverage: 10-5) positions and the three fiducials on the template, in mm, by lower-case label."""

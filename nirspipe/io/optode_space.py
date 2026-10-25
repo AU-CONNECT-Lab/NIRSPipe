@@ -22,7 +22,7 @@ from nirspipe import __version__
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of, read_json, write_sidecar_json
 from nirspipe.io.head_template import (FSAVERAGE, describe, from_fsaverage, head_to_mri,
-                                       reference_points, scalp)
+                                       nearest_cortex_regions, reference_points, scalp)
 from nirspipe.io.naming import derivative_path
 from nirspipe.io.tables import write_tsv
 from nirspipe.utils.lineage import path_from
@@ -288,25 +288,37 @@ def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
 
     ``S1_D1 hbo`` with source (0.01, 0.05, 0.06) and detector (0.04, 0.05, 0.06) m
         -> ``name x y z`` = ``S1_D1 hbo`` and the transformed midpoint in mm; n/a when unplaced
+
+    Each atlas the template ships adds a column naming the region of the pial vertex nearest
+    that midpoint.
     """
     picks = mne.pick_types(raw.info, fnirs=True, exclude=[])
     names = [raw.ch_names[i] for i in picks]
     mid = np.array([(raw.info["chs"][i]["loc"][3:6] + raw.info["chs"][i]["loc"][6:9]) / 2
                     for i in picks]).reshape(-1, 3)
     xyz = placement.apply(mid) if placement.placed else np.full((len(names), 3), np.nan)
+    regions = nearest_cortex_regions(placement.space, xyz)
     _drop_other_spaces(out_path)
-    write_tsv(pd.DataFrame({"name": names, "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2]}),
-              out_path)
-    write_coords_sidecar(out_path, sources, placement.to_json(), placement.space)
+    write_tsv(pd.DataFrame({"name": names, "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2],
+                            **regions}), out_path)
+    write_coords_sidecar(out_path, sources, placement.to_json(), placement.space,
+                         regions=list(regions))
     return Path(out_path)
 
 
+# what each region column names, by the column head_template.CORTEX_ATLASES gives it
+_REGION_COLUMNS = {
+    "aparc": "Desikan-Killiany region (FreeSurfer aparc)",
+    "brodmann": "Brodmann area (PALS_B12_Brodmann)",
+}
+
+
 def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict,
-                         space: "str | None") -> None:
+                         space: "str | None", regions: "list[str]" = ()) -> None:
     """The JSON beside a channel position table: space, units, columns, and the placement record.
 
     ``space`` None is a table whose rows lie on more than one template, named in its own
-    ``space`` column.
+    ``space`` column. ``regions`` are the table's atlas columns.
     """
     column = (f"Channel position on {space or 'the template in the space column'}: the "
               f"midpoint of its source and detector")
@@ -320,6 +332,9 @@ def write_coords_sidecar(out_path, sources: "list[str | Path]", placement: dict,
             describe(space) if space else "each row on the template its space column names"),
         "NIRSCoordinateUnits": "mm",
         **{axis: {"Description": f"{column}, {axis} axis", "Units": "mm"} for axis in "xyz"},
+        **{name: {"Description": f"{_REGION_COLUMNS[name]} of the pial vertex nearest the "
+                                 f"channel position, its hemisphere suffixed; n/a off every "
+                                 f"region or unplaced"} for name in regions},
         "optode_placement": placement,
     })
 

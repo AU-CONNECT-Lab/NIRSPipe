@@ -19,6 +19,7 @@ from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
+from nirspipe.io.head_template import CORTEX_ATLASES
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
 from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.hyper.group_io import _for_task, _hyper_sidecar, _member_sqm_files
@@ -99,7 +100,7 @@ def write_group_channel_coords(
     ::
 
       sub-A rows S1_D1 hbo ... + sub-B rows S1_D1 hbo ...
-        -> group-G1_task-rest_space-fsaverage_channels.tsv: subject_id space name x y z
+        -> group-G1_task-rest_space-fsaverage_channels.tsv: subject_id space name x y z aparc ...
     """
     frames, sources, placements = [], [], {}
     for entry in group:
@@ -116,8 +117,10 @@ def write_group_channel_coords(
     out_path = group_output_path(output_dir, group[0].group_id,
                                  {"task": group[0].task, "space": shared}, "channels", ".tsv",
                                  session=session)
-    write_tsv(pd.concat(frames)[["subject_id", "space", "name", "x", "y", "z"]], out_path)
-    write_coords_sidecar(out_path, sources, placements, shared)
+    table = pd.concat(frames)
+    regions = [c for c in CORTEX_ATLASES.values() if c in table.columns]
+    write_tsv(table[["subject_id", "space", "name", "x", "y", "z", *regions]], out_path)
+    write_coords_sidecar(out_path, sources, placements, shared, regions=regions)
     return out_path
 
 
