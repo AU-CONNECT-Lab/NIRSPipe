@@ -165,9 +165,9 @@ A run with `BAD_` spans gets an **Excluded** section: the kept seconds, the span
 
 ### Postprocessing
 
-- **glm.** The design matrix as condition time series (nuisance columns left out) and as a whole image; an activation map per condition, HbO betas on the cortical surface on one shared colour scale; the beta table and, with `--contrast-file`, the contrasts.
+- **glm.** The design matrix as condition time series (nuisance columns left out) and as a whole image; an activation map per condition, the betas on the cortical surface in one row per chromophore of `--chromophores`, each chromophore on its own colour scale shared across conditions; the beta table and, with `--contrast-file`, the contrasts.
 - **denoise.** The filter settings and the carpet after denoising; with `--fc`, the connectivity step below.
-- **rest.** An ALFF step: mALFF of HbO on the cortex, seen from the left, the right, above and the front, each kept long channel spread over the cortex within 3 cm and coloured from the run's lowest value to its highest. A connectivity step, the HbO and HbR correlation matrices as triangles on one scale with mALFF and fALFF as strips under them on the same channel order; with `--roi-mapping`, the region matrix and the seed maps.
+- **rest.** An ALFF step: mALFF on the cortex, one block per chromophore of `--chromophores`, seen from the left, the right, above and the front, each kept long channel spread over the cortex within 3 cm and each block coloured from its lowest value to its highest. A connectivity step, the correlation matrix of each chromophore as triangles on one scale with mALFF and fALFF as strips under them on the same channel order; with `--roi-mapping`, the region matrix and the seed maps.
 
 **Reading the rest figures.** ALFF is how strongly a channel's signal fluctuates at rest, in the analysis band. mALFF divides it by the mean over the run's kept channels of that chromophore, so 1 is an average channel and 1.5 one half again as strong. The brain map shows where the run's fluctuations are largest; a low value means the signal there is quiet, not that the channel is poor, and since the scale is the run's own, colours compare between runs only as a pattern. A seed map colours each channel by its correlation with the mean signal of the seed's channels: red where it rises and falls with the seed, blue where it moves against it. Without short-channel regression, scalp and systemic signal reaches every channel alike, so every channel can correlate strongly with every seed; a map red throughout then shows that shared signal rather than a network.
 
@@ -296,7 +296,7 @@ It writes the dyad's quality record and three tables: `desc-subject_qc.tsv`, `de
 |---------|---------|
 | Summary | The members, the stage and band, the alignment, the region grouping, and the levels the arrows and chords were drawn against. |
 | Coherence maps | Time-by-frequency coherence per channel pairing, with the cone of influence, the phase arrows and each condition's span. Excluded columns are washed out. Region maps, with `--roi-mapping`, are interactive. |
-| Coherence matrices | HbO and HbR band means side by side, per channel and per region pairing. |
+| Coherence matrices | The band means of each chromophore run side by side, per channel and per region pairing. |
 | ISC | The correlation matrix and a connectivity circle of the pairings that stand out. |
 | All values | Every number behind the panels, one row per pairing, the whole run then each condition. |
 | Member metrics | Each member's quality numbers and IMU summaries; on a condition page, that window's. |

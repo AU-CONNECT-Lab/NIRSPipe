@@ -14,7 +14,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 |--------|-------|
 | `desc-` | The processing stage, or which record a QC file is |
 | `stat-` | The measure in a table: `alff`, `pearson`, `fisherz`, `wtc`, `isc` |
-| `chromo-` | The chromophore, where a file holds one |
+| `chromo-` | The chromophore, where a file holds one: `hbo`, `hbr`, or `hbt` when `--chromophores` or `--wtc-chroma` asks for it |
 | `seg-`, `agg-` | The ROI mapping a table was grouped by (the file's stem reduced to letters and digits) and how channels were aggregated: `roi`, `seed`, `homologous` |
 | `cond-` | A condition window |
 | `group-`, `pair-` | A dyad, and a member pairing inside a group of three or more |
@@ -72,10 +72,10 @@ derivatives/nirspipe/
         ├── <run>_desc-blockavg_timeseries.tsv      ← glm: each condition's trial average per channel
         ├── <run>_stat-alff_nirsmap.tsv             ← rest: alff, falff, malff, zalff per channel
         ├── <run>_seg-<map>_agg-roi_stat-alff_nirsmap.tsv                ← + --roi-mapping
-        ├── <run>_chromo-{hbo,hbr}_stat-{pearson,fisherz}_relmat.tsv     ← rest or --fc
-        ├── <run>_chromo-{hbo,hbr}_seg-<map>_agg-{roi,seed}_stat-{pearson,fisherz}_relmat.tsv  ← + --roi-mapping
+        ├── <run>_chromo-<c>_stat-{pearson,fisherz}_relmat.tsv           ← rest or --fc, one per chromophore
+        ├── <run>_chromo-<c>_seg-<map>_agg-{roi,seed}_stat-{pearson,fisherz}_relmat.tsv  ← + --roi-mapping
         ├── <task>_desc-<stage>_nirs.snirf          ← --combine-runs: the task's runs joined, named without run-
-        ├── <task>_chromo-{hbo,hbr}_..._relmat.tsv  ← --combine-runs: FC of the joined series, as above
+        ├── <task>_chromo-<c>_..._relmat.tsv        ← --combine-runs: FC of the joined series, as above
         ├── <page>_desc-rating_qc.json, <page>_desc-rawrating_qc.json    ← section ratings
         └── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
 ```
