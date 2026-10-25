@@ -256,6 +256,15 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
     }
 
 
+def template_note(population: "str | None", template: "str | None") -> "str | None":
+    """The note a child run on the adult template gets, or None."""
+    from nirspipe.io.head_template import FSAVERAGE
+
+    if population == "child" and (template or FSAVERAGE) == FSAVERAGE:
+        return section_note("caveat.child_template")
+    return None
+
+
 def placement_note(raw) -> "str | None":
     """What to say when no reading placed the optodes on their template, read as the brain views read it.
 

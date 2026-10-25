@@ -20,11 +20,11 @@ latex    = "fNIRS data were processed using NIRSPipe v{ver}."
 # vocabulary.py and are empty when the run did not use that option.
 
 [optode_landmarks]
-plain = "Optode positions were placed on the {space} template by registering the {landmarks} labelled 10-5 landmarks the recording carried onto the same points on the template with a rotation, translation and single scale fitted in least squares; the optodes then lay a median {fit} mm from the template scalp."
+plain = "Optode positions were placed on the {space} template by registering the {landmarks} labelled 10-5 landmarks the recording carried onto the same points on the template with a rotation, translation and single scale fitted in least squares; the optodes then lay a median {fit} mm from the template scalp.{template_note}"
 citations = []
 
 [optode_frame]
-plain = "Optode positions were read as {frame}, the reading of the recorded coordinates that put them on the {space} template scalp (median distance {fit} mm)."
+plain = "Optode positions were read as {frame}, the reading of the recorded coordinates that put them on the {space} template scalp (median distance {fit} mm).{template_note}"
 citations = []
 
 [od_conversion]

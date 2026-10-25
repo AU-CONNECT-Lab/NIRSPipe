@@ -9,6 +9,9 @@ NOTES = {
         "flat maps and topographies draw the coordinates as they stand and are not "
         "anatomical; separations, screening and metrics are unaffected. Landmarks in the "
         "file or a standard montage would fix it.",
+    "caveat.child_template":
+        "--population child places the optodes on fsaverage, an adult head: MNE ships no "
+        "template for 2 to 18 years. Pass --template to put the youngest on an infant one.",
     "caveat.no_separation":
         "No channel fell in either separation range: the recording has no optode positions "
         "(every separation reads as zero) or the ranges exclude every channel. Metrics "

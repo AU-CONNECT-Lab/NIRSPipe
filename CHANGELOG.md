@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
 - Raw QC takes `--bad-channels`, `--keep-spans`, `--keep-spans-from`, `--bad-spans` and `--bids-filter-file` as the pipeline does, and its verdict is the pipeline's for them
 - The raw QC record carries the settings it screened with: lines, cardiac band, DPF, template, motion correction and the final bad channels
+- `--population infant|child|adult|older` on `nirspipe` and `nirspipe-qc` participant fills the cardiac and respiration bands, one DPF for the batch and the head template; typed flags override it
 
 ### Changed
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject

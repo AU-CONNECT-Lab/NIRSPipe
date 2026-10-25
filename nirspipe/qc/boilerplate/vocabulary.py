@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from nirspipe.pipeline import motion
+from nirspipe.pipeline.population import age_span
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, GVTD_N_STD
 from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
@@ -339,6 +340,7 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
         # record's `qc_window_s` is the QC grid and would be the wrong number to quote
         "window_s": f"{SCREEN_WINDOW_S:g}",
         "cardiac_band": (f"in the {_num(low)}–{_num(high)} Hz cardiac band"
+                         f"{_band_population(params)}"
                          if low is not None and high is not None else "in the cardiac band"),
         "scope": _screening_scope(params),
         "manual": (f" {'Channels' if len(manual) > 1 else 'Channel'} {_series(manual)} "
@@ -358,13 +360,25 @@ def _screening_slots(params: dict[str, Any]) -> dict[str, str]:
                          for span in params.get("excluded_spans") or []) else ""),
     }
 
-def _dpf_phrase(dpf: Any, age: Any = None) -> str:
+def _band_population(params: dict[str, Any]) -> str:
+    """Which edges of the cardiac band ``--population`` set, as a clause, or nothing."""
+    filled = set(params.get("from_population") or ())
+    edges = [edge for edge, key in (("lower", "cardiac_l_freq"), ("upper", "cardiac_h_freq"))
+             if key in filled]
+    if not edges:
+        return ""
+    whose = f"the package's value for {age_span(params['population'])}"
+    return f", {whose}" if len(edges) == 2 else f", its {edges[0]} edge {whose}"
+
+def _dpf_phrase(dpf: Any, age: Any = None, population: "str | None" = None) -> str:
     """'a differential pathlength factor (DPF) of 6', or one per wavelength when they differ."""
     if age is not None:
         values = [f"{float(d):.2f}" for d in dpf]
+        whose = (f"at {_num(age)} years, the package's age for {age_span(population)},"
+                 if population else f"from the participant's age of {_num(age)} years")
         return (f"differential pathlength factors (DPF) of {_series(values)}, in ascending "
-                f"order of wavelength, from the participant's age of {_num(age)} years by "
-                f"the general equation of Scholkmann and Wolf (2013)")
+                f"order of wavelength, {whose} by the general equation of Scholkmann and "
+                f"Wolf (2013)")
     values = list(dict.fromkeys(_num(d) for d in (dpf if isinstance(dpf, (list, tuple))
                                                   else [dpf])))
     if len(values) == 1:
@@ -569,7 +583,13 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "sci_marking":
         return _screening_slots(params)
     if key in ("optode_landmarks", "optode_frame"):
-        return {"space": str(params.get("space") or "fsaverage"),
+        space = str(params.get("space") or "fsaverage")
+        return {"space": space,
+                # MNE ships no template between its oldest infant one and fsaverage
+                "template_note": (" MNE-Python provides no template for 2 to 18 years, so the "
+                                  "children's optodes were placed on fsaverage, an adult head."
+                                  if params.get("population") == "child"
+                                  and space == "fsaverage" else ""),
                 "landmarks": str(params.get("landmarks_used") or 0),
                 "fit": f"{float(params.get('scalp_fit_mm') or 0):.1f}",
                 "frame": _OPTODE_FRAMES.get(params.get("method"), "")}
@@ -608,7 +628,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 "frame": f"{motion.SPLINE_SG_FRAME:g}",
                 "sg_cutoff": f"{motion.spline_sg_cutoff():.2f}"}
     if key == "beer_lambert":
-        return {"dpf": _dpf_phrase(params.get("dpf"), params.get("dpf_age"))}
+        return {"dpf": _dpf_phrase(params.get("dpf"), params.get("dpf_age"),
+                                   params.get("dpf_population"))}
     if key == "bandpass":
         return {"l_freq": _num(params.get("high_pass")), "h_freq": _num(params.get("low_pass")),
                 "filter": _filter_phrase(params)}

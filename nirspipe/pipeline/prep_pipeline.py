@@ -247,8 +247,11 @@ class PrepConfig:
     resp_l_freq: float
     resp_h_freq: float
     session: str | None = None
-    age: float | None = None                # years, from participants.tsv, for --dpf age
+    age: float | None = None                # years, for --dpf age: the participant's, or --population's
     template: str = FSAVERAGE               # the head the optodes are placed on, by --template
+    # the --population of the run, and the fields it filled because nothing else set them
+    population: str | None = None
+    from_population: tuple[str, ...] = ()
     psp_threshold: float | None = None      # a second per-window line, off unless given
     min_good_frac: float = GOOD_FRAC_PASS   # share of passing windows a kept channel needs
     screen_scope: str = "run"               # count those windows over "run" or "task" only
@@ -496,13 +499,15 @@ def run_prep(
     aged = config.age if dpf_from_age(config.dpf) else None
     raw_haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
     preproc_path = _save(raw_haemo, "preproc", extra_parameters={
-        "dpf": factors, **({"dpf_age": aged} if aged is not None else {})})
+        "dpf": factors, **({"dpf_age": aged} if aged is not None else {}),
+        **({"dpf_population": config.population} if "dpf" in config.from_population else {})})
     # named by the haemoglobin channels, as every analysis table after this one is
     write_channel_coords(raw_haemo, placement,
                          build_output_path(output_dir, config.subject,
                                            {**entities_base, "space": space}, "channels",
                                            ".tsv", session=ses),
-                         sources=[source_path] if source_path is not None else [])
+                         sources=[source_path] if source_path is not None else [],
+                         population=config.population)
 
     # step 5: the aux channels, if the recording has any. They never enter an mne object, so
     # this is the only chance to carry them forward: the derivative snirfs do not hold them.
@@ -578,4 +583,6 @@ def _screening_parameters(config: PrepConfig) -> dict:
         "keep_spans": [list(span) for span in config.keep_spans],
         "keep_spans_from": config.keep_spans_from,
         "bad_spans": [list(span) for span in config.bad_spans],
+        **({"population": config.population, "from_population": list(config.from_population)}
+           if config.from_population else {}),
     }

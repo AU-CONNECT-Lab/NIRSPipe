@@ -220,14 +220,12 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     )
 
 
-def _refuse_missing_ages(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
-    """With ``--dpf age``, each subject's age, stopping before the first when any has none."""
-    try:
-        if dpf_from_age(dpf):
-            return {subject: get_participant_age(bids_dir, subject) for subject in subjects}
-    except ValueError as exc:
-        raise SystemExit(f"Error: {exc}") from None
-    return {}
+def _population_shown(args: dict[str, Any], key: str) -> Any:
+    """What the report's run command note says --population set ``key`` to."""
+    if key == "dpf":
+        age = _app_options.population_age(args.get("population"), args.get("from_population"))
+        return f"age at {age:g} years"
+    return "by age" if key == "template" else args.get(key)
 
 
 def run_participant_level(args: dict[str, Any]) -> None:
@@ -260,7 +258,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
             raise SystemExit(f"Error: participant label(s) not in {bids_dir}: "
                              f"{', '.join(missing)}")
     _refuse_unmatched_bad_channel_rows(args.get("bad_channels"), layout)
-    ages = _refuse_missing_ages(args.get("dpf") or [], bids_dir, participant_label)
+    ages = _app_options.participant_ages(args.get("dpf"), args.get("from_population"), bids_dir,
+                                         participant_label)
     _app_options.templates_for(args.get("template"), participant_label, ages)
     _refuse_bad_span_rows(args.get("keep_spans"), layout, marker=args.get("keep_spans_from"))
     _refuse_bad_span_rows(args.get("bad_spans"), layout, flag="--bad-spans")
@@ -286,6 +285,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
         filled_settings = [(arg, toml.get(arg, "none"), post_sources[field])
                            for field, arg in _post_setting_args().items()
                            if post_sources[field] in ("config", "mode")]
+    filled_settings += [(key, _population_shown(args, key), "population")
+                        for key in args.get("from_population") or ()]
 
     roi_map = _app_options.load_roi_mapping(args.get("roi_mapping"))
 
@@ -712,14 +713,21 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     # resolved here so the run record writes the value the method ran with
     motion = motion_settings(_v(args["motion_correction"]), args.get("motion_std_thresh"),
                              args.get("wavelet_iqr"))
-    age = (get_participant_age(args["bids_dir"], subject) if dpf_from_age(args["dpf"])
-           else None)
+    from_population = tuple(args.get("from_population") or ())
+    batch_age = _app_options.population_age(args.get("population"), from_population)
+    # the participant's own age, which an age DPF or an age-picked template reads
+    own_age = (get_participant_age(args["bids_dir"], subject)
+               if (dpf_from_age(args["dpf"]) and batch_age is None)
+               or "template" in from_population else None)
+    age = batch_age if batch_age is not None else (own_age if dpf_from_age(args["dpf"]) else None)
     return PrepConfig(
         subject=subject,
         session=session,
         dpf=args["dpf"],
         **({"age": age} if age is not None else {}),
-        template=resolve_template(args.get("template"), age),
+        template=resolve_template(args.get("template"), own_age),
+        population=args.get("population"),
+        from_population=from_population,
         sci_threshold=args["sci_threshold"],
         **({"psp_threshold": args["psp_threshold"]}
            if args.get("psp_threshold") is not None else {}),

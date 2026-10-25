@@ -1,0 +1,40 @@
+# What --population fills where neither the command line nor --config sets it.
+# Bands: the union of the resting-rate rows of the docs' Channel screening table the ages span.
+# dpf_age: the age the DPF equation is evaluated at, one value for the whole batch.
+# template_by_age: each participant on the template nearest their own age in participants.tsv.
+
+[infant]
+ages = [0.0, 1.0]
+cardiac_l_freq = 1.5
+cardiac_h_freq = 3.1
+resp_l_freq = 0.3
+resp_h_freq = 1.1
+dpf_age = 0.5
+template_by_age = true
+
+[child]
+ages = [1.0, 12.0]
+cardiac_l_freq = 0.8
+cardiac_h_freq = 2.6
+resp_l_freq = 0.2
+resp_h_freq = 0.9
+dpf_age = 8.0
+template_by_age = false
+
+[adult]
+ages = [12.0, 65.0]
+cardiac_l_freq = 0.7
+cardiac_h_freq = 1.8
+resp_l_freq = 0.1
+resp_h_freq = 0.5
+dpf_age = 30.0
+template_by_age = false
+
+[older]
+ages = [65.0, inf]
+cardiac_l_freq = 0.7
+cardiac_h_freq = 1.8
+resp_l_freq = 0.1
+resp_h_freq = 0.5
+dpf_age = 70.0
+template_by_age = false

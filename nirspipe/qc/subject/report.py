@@ -85,7 +85,7 @@ from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
-    placement_note, roi_overlap_note, separation_blocks, separation_notes,
+    placement_note, roi_overlap_note, separation_blocks, separation_notes, template_note,
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
@@ -2037,15 +2037,17 @@ def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
-def _filled_by(filled_settings: list[tuple[str, Any, str]], mode: str | None) -> list:
+def _filled_by(filled_settings: list[tuple[str, Any, str]], mode: str | None,
+               population: str | None = None) -> list:
     """Group the settings nobody typed by the layer that set them, for the run command note.
 
     ``[("high_pass", 0.01, "mode"), ("hrf_model", "spm", "config")]`` under rest gives
     ``[("the --mode rest defaults", [("high_pass", 0.01)]), ("--config", [("hrf_model", "spm")])]``.
     """
-    labels = {"mode": f"the --mode {mode} defaults", "config": "--config"}
+    labels = {"population": f"the --population {population} values",
+              "mode": f"the --mode {mode} defaults", "config": "--config"}
     return [(labels[layer], [(arg, val) for arg, val, src in filled_settings if src == layer])
-            for layer in ("mode", "config")
+            for layer in ("population", "mode", "config")
             if any(src == layer for _, _, src in filled_settings)]
 
 
@@ -2301,6 +2303,9 @@ def build_subject_report(
                                            l_freq=l_freq))
 
     unplaced = placement_note(raw_intensity)
+    child = template_note(getattr(config, "population", None), getattr(config, "template", None))
+    if child:
+        _note(notes, subject, child)
     if unplaced:
         _note(notes, subject, unplaced)
     overlap = roi_overlap_note(roi_map)
@@ -2367,7 +2372,7 @@ def build_subject_report(
             str(c).startswith(("short", "aux_")) for c in design_matrix.columns),
         spike_ch_frac=SPIKE_CH_FRAC, sci_window_s=SCI_WINDOW_S,
         psp_window_s=PSP_WINDOW_S, cv_window_s=CV_WINDOW_S, gvtd_band=GVTD_MOTION_BAND,
-        filled_by=_filled_by(filled_settings or [], mode),
+        filled_by=_filled_by(filled_settings or [], mode, getattr(config, "population", None)),
         n_bad=n_bad,
         n_total=n_total,
         bad_rate=bad_rate,

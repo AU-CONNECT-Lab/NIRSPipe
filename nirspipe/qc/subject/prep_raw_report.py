@@ -33,6 +33,7 @@ from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
     channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, placement_note,
+    template_note,
     save_channel_csv,
     separation_blocks,
     separation_notes,
@@ -772,6 +773,8 @@ def _process_run(
         "qc_window_s": window_s,
         "dpf": [float(f) for f in factors],
         **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
+        **({"dpf_population": run["population"]}
+           if "dpf" in (run.get("from_population") or ()) else {}),
         "template": run.get("template") or FSAVERAGE,
         "motion_correction": motion_correction or "none",
         **motion_settings(motion_correction, motion_std_thresh, wavelet_iqr),
@@ -783,6 +786,9 @@ def _process_run(
         "keep_spans": [list(span) for span in keep_spans],
         "keep_spans_from": run.get("keep_spans_from"),
         "bad_spans": [list(span) for span in run.get("bad_spans") or []],
+        **({"population": run["population"],
+            "from_population": list(run["from_population"])}
+           if run.get("from_population") else {}),
     }
     write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
@@ -843,6 +849,7 @@ def _process_run(
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
             "notes":  [n for n in (section_note("caveat.unscreened", reason=gap) if gap else "",
                                    placement_note(raw),
+                                   template_note(run.get("population"), run.get("template")),
                                    *separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
                                                      orphan_mm=separation_orphans(raw, sep_bands)),
                                    section_note(

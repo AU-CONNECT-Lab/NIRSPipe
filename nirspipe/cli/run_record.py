@@ -90,6 +90,21 @@ def _settings(keys: tuple[str, ...], args: dict[str, Any], config: Any) -> dict[
     return out
 
 
+def _settings_sections(settings: dict[str, Any], from_population, name: str) -> list[str]:
+    """``[name]``, and ``[name_sources]`` naming what ``--population`` filled.
+
+    A DPF the population set is left out: written as ``age`` it would read each participant's
+    age on rerun, where the rerun's ``--population`` sets the same one again.
+    """
+    filled = list(from_population or ())
+    if "dpf" in filled:
+        settings = {k: v for k, v in settings.items() if k != "dpf"}
+    sections = [_section(name, settings)]
+    if filled:
+        sections.append(_section(f"{name}_sources", {k: "population" for k in filled}))
+    return sections
+
+
 def _environment() -> dict[str, Any]:
     """Versions and machine, the same for every record a run writes bar free_mem_gb,
     which is read at the moment of writing."""
@@ -134,6 +149,7 @@ def write_run_record(
       [environment]: software versions + system info
       [execution]:   invocation: the verbatim command, paths, selection filters
       [prep]:        preprocessing flags as resolved, keyed and scaled as typed
+      [prep_sources]: the [prep] values --population filled, each named "population"
       [post]:        postprocessing flags as resolved (only with --mode)
       [post_sources]: which layer set each [post] value: cli, config, mode or default
       [outcome]:     success or failed, appended by write_run_outcome when the subject ends
@@ -182,7 +198,8 @@ def write_run_record(
     ]
 
     if prep_config is not None:
-        sections.append(_section("prep", _settings(keys["prep"], args, prep_config)))
+        sections += _settings_sections(_settings(keys["prep"], args, prep_config),
+                                       args.get("from_population"), "prep")
 
     mode = _unwrap(args.get("mode"))
     if mode is not None and post_config is not None:
@@ -211,7 +228,7 @@ def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: st
     """Write one subject's raw QC run record, ``sub-<label>/logs/<record_stem>_desc-raw.toml``.
 
     [qc] holds the participant-level flags as typed and is what ``nirspipe-qc --config`` reads
-    back; [execution] the invocation. Its own name, so a pipeline record in the same tree is
+    back; [qc_sources] names what --population filled; [execution] the invocation. Its own name, so a pipeline record in the same tree is
     never replaced.
     """
     timestamp = datetime.now()
@@ -233,7 +250,9 @@ def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: st
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join([_section("environment", _environment()),
                               _section("execution", execution),
-                              _section("qc", _settings(keys, args, None))]), encoding="utf-8")
+                              *_settings_sections(_settings(keys, args, None),
+                                                  args.get("from_population"), "qc")]),
+                   encoding="utf-8")
     return out
 
 

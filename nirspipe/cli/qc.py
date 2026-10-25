@@ -63,6 +63,8 @@ def cmd_participant(
     keep_spans_from: str | None = None,
     bad_spans: Path | None = None,
     bids_filter_file: Path | None = None,
+    population: str | None = None,
+    from_population: "list[str] | None" = None,
     record_settings: "dict | None" = None,
 ) -> None:
     """One raw QC report per recording, each subject on its own; ``record_settings`` goes in its run record."""
@@ -112,8 +114,9 @@ def cmd_participant(
     _refuse_bad_span_rows(bad_spans, layout, flag="--bad-spans")
     sessions = session_label or [None]
     tasks    = task_label    or [None]
-    ages = _ages_for(dpf, bids_dir, participant_label)
+    ages = _app_options.participant_ages(dpf, from_population, bids_dir, participant_label)
     templates = _app_options.templates_for(template, participant_label, ages)
+    batch_age = _app_options.population_age(population, from_population)
 
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
@@ -155,8 +158,10 @@ def cmd_participant(
                         "keep_spans_from": keep_spans_from if keep else None,
                         "bad_spans": _spans_for(bad_spans, subject, entities,
                                                 flag="--bad-spans"),
-                        "age": ages.get(subject),
+                        "age": batch_age if batch_age is not None else ages.get(subject),
                         "template": templates[subject],
+                        "population": population,
+                        "from_population": list(from_population or []),
                     }
                     all_runs.append(run_dict)
                     # a chosen run gets a page of its own rather than replacing its task's page
@@ -458,20 +463,6 @@ def cmd_provenance(output_dir: Path) -> None:
         print("no provenance sidecars found - run the pipeline first")
 
 
-def _ages_for(dpf: list, bids_dir: Path, subjects: "list[str]") -> dict:
-    """Each subject's age when ``--dpf age`` asks for it, refusing a subject without one."""
-    from nirspipe.io.bids import get_participant_age
-    from nirspipe.pipeline.dpf import dpf_from_age
-
-    try:
-        if not dpf_from_age(dpf):
-            return {}
-        return {s: get_participant_age(bids_dir, s) for s in subjects}
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        raise SystemExit(1) from None
-
-
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-qc",
@@ -523,16 +514,17 @@ def _build_parser() -> argparse.ArgumentParser:
                            "given here override it.")
     _app_options.add_dpf(part)
     _app_options.add_template(part)
+    _app_options.add_population(part, "the two cardiac band edges")
     _app_options.add_sci_threshold(part)
     _app_options.add_psp_threshold(part)
     _app_options.add_min_good_frac(part)
     _app_options.add_screen_scope(part)
     part.add_argument("--cardiac-l-freq", type=float,
-                      help="Lower bound of cardiac band in Hz (required at participant level; "
-                           "population-dependent).")
+                      help="Lower bound of cardiac band in Hz (required at participant level "
+                           "unless --population sets it).")
     part.add_argument("--cardiac-h-freq", type=float,
-                      help="Upper bound of cardiac band in Hz (required at participant level; "
-                           "population-dependent).")
+                      help="Upper bound of cardiac band in Hz (required at participant level "
+                           "unless --population sets it).")
     part.add_argument("--window-length", type=float, default=10.0,
                       help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     part.add_argument("--epoch-qc", action="store_true",
@@ -611,7 +603,7 @@ def read_config(path: Path) -> dict:
         print(f"Error: {path}: {stray[0]} sits outside any section; --config takes a [qc] "
               "section keyed by flag name, as a raw QC run record does.", file=sys.stderr)
         raise SystemExit(1)
-    unknown = sorted(set(raw) - {"qc", "execution", "environment"})
+    unknown = sorted(set(raw) - {"qc", "qc_sources", "execution", "environment"})
     if unknown:
         print(f"Error: {path}: no section [{unknown[0]}]; expected [qc] or [execution].",
               file=sys.stderr)
@@ -664,16 +656,23 @@ def main(argv: list[str] | None = None) -> None:
     _refuse_other_level(args, argv)
     if args.analysis_level == "participant" and args.config is not None:
         _apply_config(args, argv)
+    filled = []
+    if args.analysis_level == "participant":
+        # below the command line and --config, so either overrides any value it fills
+        filled = _app_options.fill_population(args, ("cardiac_l_freq", "cardiac_h_freq"))
     for flag in _LEVEL_REQUIRES[args.analysis_level]:
         if getattr(args, flag.lstrip("-").replace("-", "_")) is None:
-            print(f"Error: Missing option '{flag}' (required at {args.analysis_level} level).",
-                  file=sys.stderr)
+            hint = ("; --population sets it" if flag in ("--dpf", "--cardiac-l-freq",
+                                                          "--cardiac-h-freq") else "")
+            print(f"Error: Missing option '{flag}' (required at {args.analysis_level} "
+                  f"level{hint}).", file=sys.stderr)
             raise SystemExit(1)
     kw = vars(args)
     taken = {k: kw[k] for k in dispatched(parser, args.analysis_level)}
     if args.analysis_level == "participant":
         keys = tuple(sorted(_level_dests(parser, "participant") - {"config"}))
-        cmd_participant(**taken, record_settings={"args": kw, "keys": keys})
+        cmd_participant(**taken, from_population=filled,
+                        record_settings={"args": {**kw, "from_population": filled}, "keys": keys})
     else:
         cmd_group(**taken)
 

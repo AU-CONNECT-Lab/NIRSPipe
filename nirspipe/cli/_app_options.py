@@ -9,6 +9,7 @@ from pathlib import Path
 
 from nirspipe.cli._shared import BidsLabel
 from nirspipe.io.head_template import CHOICES, FSAVERAGE, resolve_template, space_of, template_dir
+from nirspipe.pipeline.population import CHOICES as POPULATIONS, age_span, population_values
 from nirspipe.utils import bare_roi_map, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
@@ -128,6 +129,66 @@ def add_template(container) -> None:
         help="Head the optodes are placed on and drawn over: fsaverage (adult) or an MNE infant "
              "template by age, 2wk to 2yr. Default fsaverage; with --dpf age, the template "
              "nearest each participant's age, and ages over 2 and under 18 need this option.")
+
+
+def add_population(container, bands: str) -> None:
+    """``--population``: an age group's values for ``bands``, the DPF and the template, each overridden by its own flag."""
+    groups = ", ".join(f"{name} ({age_span(name)})" for name in POPULATIONS)
+    container.add_argument(
+        "--population", choices=POPULATIONS, default=None,
+        help=f"Age group whose values fill {bands}, --dpf and --template where they are not "
+             f"given: {groups}. The DPF is the age equation at one age for the whole batch; "
+             f"infant places each participant on the template nearest their age.")
+
+
+def fill_population(args, bands: "tuple[str, ...]") -> "list[str]":
+    """Set on ``args`` what ``--population`` fills where nothing else did, returning those dests.
+
+    ``--population adult --cardiac-h-freq 3`` with ``bands`` the two cardiac edges gives
+    ``["cardiac_l_freq", "dpf"]`` and leaves the 3 in place.
+    """
+    if args.population is None:
+        return []
+    values = population_values(args.population)
+    filled = [key for key in bands if getattr(args, key) is None]
+    for key in filled:
+        setattr(args, key, values[key])
+    if args.dpf is None:
+        # the age equation at the population's age, never a participant's
+        args.dpf = ["age"]
+        filled.append("dpf")
+    if values["template_by_age"] and args.template is None:
+        filled.append("template")
+    return filled
+
+
+def population_age(population: "str | None", from_population) -> "float | None":
+    """The age the DPF is computed at where ``--population`` set it, else None."""
+    return (population_values(population)["dpf_age"]
+            if population and "dpf" in (from_population or ()) else None)
+
+
+def participant_ages(dpf: list, from_population, bids_dir: Path, subjects: "list[str]") -> dict:
+    """Each subject's age where ``--dpf age`` or an age-picked template reads it; exits on one without."""
+    from nirspipe.io.bids import get_participant_age
+    from nirspipe.pipeline.dpf import dpf_from_age
+
+    from_population = from_population or ()
+    try:
+        by_dpf = dpf_from_age(dpf or []) and "dpf" not in from_population
+        by_template = "template" in from_population
+        if not (by_dpf or by_template):
+            return {}
+        fixes = []
+        if by_dpf:
+            fixes.append("pass --dpf as numbers")
+        if by_template:
+            fixes.append("pass --template (--population infant places each participant on "
+                         "the template nearest their age)")
+        return {s: get_participant_age(bids_dir, s, fix=" or ".join(fixes)) for s in subjects}
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 def templates_for(template: "str | None", subjects: "list[str]", ages: dict) -> dict:

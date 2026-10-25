@@ -147,7 +147,7 @@ _AGE_UNITS = {"year": 1.0, "years": 1.0, "y": 1.0, "month": 1 / 12, "months": 1 
               "week": 7 / 365.25, "weeks": 7 / 365.25, "day": 1 / 365.25, "days": 1 / 365.25}
 
 
-def get_participant_age(bids_root: Path, subject: str) -> float:
+def get_participant_age(bids_root: Path, subject: str, fix: str = "pass --dpf as numbers") -> float:
     """A participant's age in years from participants.tsv, converted by participants.json's Units.
 
     Raises ValueError when the row, the column or a number is missing, or the unit is not one
@@ -163,8 +163,7 @@ def get_participant_age(bids_root: Path, subject: str) -> float:
         if not row.empty and "age" in df.columns:
             age = _number(row["age"].iloc[0])
     if age is None:
-        raise ValueError(f"participants.tsv gives no age for sub-{wanted}; add it, or pass "
-                         f"--dpf as numbers")
+        raise ValueError(f"participants.tsv gives no age for sub-{wanted}; add it, or {fix}")
     side = Path(bids_root) / "participants.json"
     units = ((json.loads(side.read_text(encoding="utf-8")).get("age") or {}).get("Units")
              if side.exists() else None)

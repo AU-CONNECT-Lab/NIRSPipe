@@ -19,6 +19,7 @@ from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,
 )
+from nirspipe.pipeline.population import BAND_KEYS
 from nirspipe.utils import P_CORRECTIONS
 
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
@@ -109,23 +110,24 @@ def _build_parser() -> argparse.ArgumentParser:
                           default="tddr",
                           help="Motion correction method.")
     _app_options.add_template(prep_opt)
+    _app_options.add_population(prep_opt, "the four cardiac and respiration band edges")
     _app_options.add_motion_settings(prep_opt)
     _app_options.add_reviewer_marks(
         prep_opt, bad_spans_note=" Filled by --censor-fill before any filter.")
     prep_opt.add_argument("--cardiac-l-freq", type=float,
-                          help="Lower bound of cardiac band in Hz (required at participant level; "
-                               "population-dependent). Adult resting ~0.7; children/infants higher "
-                               "(e.g. 1.0-1.7).")
+                          help="Lower bound of cardiac band in Hz (required at participant level "
+                               "unless --population sets it). Adult resting ~0.7; children and "
+                               "infants higher (e.g. 1.0-1.7).")
     prep_opt.add_argument("--cardiac-h-freq", type=float,
-                          help="Upper bound of cardiac band in Hz (required at participant level; "
-                               "population-dependent). Adult resting ~1.5; children/infants higher "
-                               "(e.g. 2.5-3.0).")
+                          help="Upper bound of cardiac band in Hz (required at participant level "
+                               "unless --population sets it). Adult resting ~1.5; children and "
+                               "infants higher (e.g. 2.5-3.0).")
     prep_opt.add_argument("--resp-l-freq", type=float,
-                          help="Lower bound of respiration band in Hz (required at participant level; "
-                               "population-dependent). Adult ~0.1; infants higher.")
+                          help="Lower bound of respiration band in Hz (required at participant "
+                               "level unless --population sets it). Adult ~0.1; infants higher.")
     prep_opt.add_argument("--resp-h-freq", type=float,
-                          help="Upper bound of respiration band in Hz (required at participant level; "
-                               "population-dependent). Adult ~0.5; infants higher.")
+                          help="Upper bound of respiration band in Hz (required at participant "
+                               "level unless --population sets it). Adult ~0.5; infants higher.")
     # the other screening line, optional unlike --sci-threshold
     _app_options.add_psp_threshold(prep_opt)
     _app_options.add_min_good_frac(prep_opt)
@@ -324,7 +326,7 @@ _CONFIG_EXTRA = {"prep": (), "post": ("roi_mapping",)}
 _EXECUTION_KEYS = ("participant_label", "session_label", "task_label", "bids_filter_file",
                    "ignore", "allow_cropped_input")
 # describe the run that wrote the record rather than set the next one
-_RECORD_ONLY = ("environment", "post_sources", "outcome")
+_RECORD_ONLY = ("environment", "prep_sources", "post_sources", "outcome")
 
 
 def config_keys() -> dict[str, tuple[str, ...]]:
@@ -393,8 +395,10 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
 def _require(args: argparse.Namespace, *flags: str) -> None:
     """Exit non-zero naming the first flag the chosen level needs and did not get."""
     for flag in flags:
-        if getattr(args, flag.lstrip("-").replace("-", "_")) is None:
-            print(f"Error: Missing option '{flag}'.", file=sys.stderr)
+        dest = flag.lstrip("-").replace("-", "_")
+        if getattr(args, dest) is None:
+            hint = " (or --population)" if dest in (*BAND_KEYS, "dpf") else ""
+            print(f"Error: Missing option '{flag}'{hint}.", file=sys.stderr)
             raise SystemExit(1)
 
 
@@ -403,6 +407,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.config is not None:
         _apply_config(args, argv)
     level = args.analysis_level
+    # below the command line and --config, so either overrides any value it fills
+    args.from_population = _app_options.fill_population(args, BAND_KEYS)
 
     # checked before the workflow import: a bad command line should not first pay for mne
     _require(args, *_LEVEL_REQUIRES[level])

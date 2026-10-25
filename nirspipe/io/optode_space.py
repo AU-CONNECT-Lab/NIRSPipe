@@ -304,14 +304,16 @@ def _drop_other_spaces(out_path: Path) -> None:
 
 
 def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
-                         sources: "list[str | Path]" = ()) -> Path:
+                         sources: "list[str | Path]" = (),
+                         population: "str | None" = None) -> Path:
     """One row per fNIRS channel at its source-detector midpoint on the template, and the placement.
 
     ``S1_D1 hbo`` with source (0.01, 0.05, 0.06) and detector (0.04, 0.05, 0.06) m
         -> ``name x y z`` = ``S1_D1 hbo`` and the transformed midpoint in mm; n/a when unplaced
 
     Each atlas the template ships adds a column naming the region of the pial vertex nearest
-    that midpoint.
+    that midpoint. ``population`` is the run's ``--population``, which the Methods name the
+    template by.
     """
     picks = mne.pick_types(raw.info, fnirs=True, exclude=[])
     names = [raw.ch_names[i] for i in picks]
@@ -322,8 +324,8 @@ def write_channel_coords(raw: mne.io.Raw, placement: Placement, out_path: Path,
     _drop_other_spaces(out_path)
     write_tsv(pd.DataFrame({"name": names, "x": xyz[:, 0], "y": xyz[:, 1], "z": xyz[:, 2],
                             **regions}), out_path)
-    write_coords_sidecar(out_path, sources, placement.to_json(), placement.space,
-                         regions=list(regions))
+    record = {**placement.to_json(), **({"population": population} if population else {})}
+    write_coords_sidecar(out_path, sources, record, placement.space, regions=list(regions))
     return Path(out_path)
 
 
