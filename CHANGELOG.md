@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.75.0] - 2026-10-25
+
 ### Added
 - `--dpf age` takes one DPF per wavelength from each participant's age in participants.tsv, by the Scholkmann and Wolf (2013) equation, and warns outside its recommended range
 - An optional `role` column in the pairs table: pairnull's position pool matches stand-ins by role, and the dyad tables record each member's role
