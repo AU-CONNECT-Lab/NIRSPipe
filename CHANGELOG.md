@@ -31,6 +31,11 @@ All notable changes to this project will be documented in this file.
 - Edge frames without light in most channels are held at the nearest lit frame and marked `BAD_edge`; one NaN first frame had cost whole channels
 - Raw QC reports and the dyad raw pages hold those edge frames as prep does, so they no longer lose those channels either
 - `--noise-model` help named `auto` as every mode's default; rest and denoise default to `ols`
+- The raw signal figure drew both wavelengths in one colour; each pair's shorter wavelength is now orange, its longer blue, short channels dashed
+- The stage carpet quoted a stage's SD against itself, and the head slider read "between blocks" on a run without events
+- A run without `--mode glm` showed a developer hint in its GLM section; it now says no GLM was run
+- The channel map stopped at 20 s whatever the epoch window; a run without a low-pass now gets epoch figures low-passed for display
+- Methods never said how the optodes were placed; the PSD note credited short and aux regressors to runs without them
 
 ## [0.74.0] - 2026-10-23
 
