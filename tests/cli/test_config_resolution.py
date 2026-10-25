@@ -92,7 +92,7 @@ def test_fir_delays_can_come_from_the_toml():
     ("all", "all"),
     ("none", None),   # the literal string a user types, not Python's None
     ("", None),
-    (None, None),
+    (None, "auto"),   # left out: decided per run on its montage
 ])
 def test_short_channel_none_is_normalized_away(raw, expected):
     assert _post({"short_channel": raw}).short_channel == expected

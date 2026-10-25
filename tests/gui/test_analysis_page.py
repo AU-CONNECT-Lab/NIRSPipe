@@ -76,7 +76,8 @@ def test_a_record_the_reader_refuses_is_named(tmp_path):
 
 @pytest.mark.parametrize("form, last", [
     ({}, ["Beer-Lambert Law"]),
-    ({"--mode": "denoise"}, ["Bandpass / Resample"]),
+    ({"--mode": "denoise", "--short-channel": "none"}, ["Bandpass / Resample"]),
+    ({"--mode": "denoise"}, ["Confound Regression"]),
     ({"--mode": "denoise", "--drift-model": "cosine"}, ["Confound Regression"]),
     ({"--mode": "glm"}, ["GLM"]),
     ({"--mode": "glm", "--fc": "on"}, ["Connectivity"]),

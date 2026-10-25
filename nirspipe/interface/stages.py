@@ -16,9 +16,10 @@ def pipeline_stages(form) -> "list[list[str]]":
     mode = form.get("--mode") or None
     if mode is None:
         return levels
-    # denoise regresses only when there is something to regress, as the post stage decides
+    # denoise regresses only when there is something to regress, as the post stage decides;
+    # an empty --short-channel is auto, which regresses on any montage with short channels
     confounds = (form.get("--drift-model") in ("cosine", "polynomial")
-                 or form.get("--short-channel") in ("mean", "pca"))
+                 or form.get("--short-channel") != "none")
     levels.append(["Bandpass / Resample"])
     if mode == "glm":
         levels.append(["GLM"])

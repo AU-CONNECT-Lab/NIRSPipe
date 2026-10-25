@@ -140,7 +140,8 @@ def write_run_record(
 
     [execution] answers "what was run"; [prep]/[post] answer "what was used" and are what
     --config reads back, so the record reruns its run. A post setting the mode would fill
-    is written "none" where it was switched off, or the rerun would get the mode's value.
+    is written "none" where it was switched off, or the rerun would get the mode's value;
+    so is --short-channel, whose default is auto.
 
     # NOTE: a [qc] section with per-subject results (bad channels, SCI
     # distribution, motion summary) will be added here once the QC text
@@ -186,7 +187,8 @@ def write_run_record(
     mode = _unwrap(args.get("mode"))
     if mode is not None and post_config is not None:
         post = _settings(keys["post"], args, post_config)
-        for key in mode_defaults(mode):
+        # short_channel's code default is auto, so a run told none says it too
+        for key in (*mode_defaults(mode), "short_channel"):
             if post.get(key) is None:
                 post[key] = "none"
         sections.append(_section("post", post))

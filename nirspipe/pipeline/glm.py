@@ -498,6 +498,8 @@ def run_glm_pipeline(
     events_path: str | None = None,
     events: pd.DataFrame | None = None,
     short_channel: bool | SCRStrategy | None = None,
+    # the strategy was chosen by --short-channel auto rather than typed
+    short_channel_auto: bool = False,
     aux_path: str | Path | None = None,
     aux_channels: list[str] | None = None,
     # the bandpass applied to `haemo`, not the drift cutoff `high_pass` above. Only the aux
@@ -554,6 +556,7 @@ def run_glm_pipeline(
     # whose short channels were all rejected keeps running, and its text has to say so.
     short_channel_used = short_channel if any(
         c.startswith(SHORT_CH_PREFIX) for c in confound_cols) else None
+    auto_params = {"short_channel_auto": True} if short_channel_used and short_channel_auto else {}
 
     dm = build_design_matrix(
         raw=haemo,
@@ -621,7 +624,7 @@ def run_glm_pipeline(
         noise_params["constant_fitted_as_ols"] = fitted_as_ols
     stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
           noise_model=noise_model, **noise_params, drift_model=drift_model,
-          short_channel=short_channel_used,
+          short_channel=short_channel_used, **auto_params,
           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")),
           conditions=conditions,
           # the HRF only shapes a design that holds conditions
@@ -672,7 +675,7 @@ def run_glm_pipeline(
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, **table_noise, drift_model=drift_model,
                           drift_high_pass=high_pass, drift_order=drift_order,
-                          short_channel=short_channel_used,
+                          short_channel=short_channel_used, **auto_params,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
     return haemo, tables_est, dm, raw_resid

@@ -88,6 +88,7 @@ def analysis(form) -> Hints:
     hints.placeholders["--drift-model"] = default("drift_model", "none")
     hints.placeholders["--hrf-model"] = default("hrf_model", "none")
     hints.placeholders["--noise-model"] = default("noise_model", "auto")
+    hints.placeholders["--short-channel"] = "auto (pca where the montage has short channels)"
 
     method = form.get("--motion-correction") or None
     std, iqr = STD_THRESH_DEFAULTS.get(method), IQR_FACTOR_DEFAULTS.get(method)

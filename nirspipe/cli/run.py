@@ -64,7 +64,7 @@ def _noise_model(value: str) -> str:
         f"{value!r}: expected 'ols', 'auto', 'arN' (e.g. ar1 or ar16), 'ar_irls' or 'worsley'")
 
 
-_SHORT_CHANNEL_CHOICES = ["none", "mean", "pca"]
+_SHORT_CHANNEL_CHOICES = ["auto", "none", "mean", "pca"]
 _IGNORE_CHOICES        = ["events", "bids-validation", "channel-status"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
 # here cannot reach the parser without also declaring what it needs
@@ -169,7 +169,8 @@ def _build_parser() -> argparse.ArgumentParser:
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,
                       help="Postprocessing mode: denoise (bandpass, plus confound regression "
-                           "when --short-channel or --drift-model is given), glm or rest. "
+                           "when short-channel regression runs or --drift-model is given), "
+                           "glm or rest. "
                            "Each mode fills in its own defaults for the post settings, which "
                            "--config and then the command line override. The run record "
                            "names where each setting came from.")
@@ -244,7 +245,9 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--fir-delays",
                      help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
-                     help="Short-channel confound regressor strategy. Honoured by every mode: "
+                     help="Short-channel confound regressor strategy, default auto: pca where "
+                          "the montage has a channel at or under --short-max-dist, none where "
+                          "it has none. Honoured by every mode: "
                           "glm fits it alongside the task, denoise and rest on its own. "
                           "'mean' gives one column per chromophore; 'pca' gives one column "
                           "per short channel, orthogonalised, which fits the same as entering "

@@ -7,7 +7,7 @@ All steps within a mode are still individually controllable via PostConfig field
 
 from __future__ import annotations
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -34,7 +34,7 @@ from nirspipe.pipeline.glm import glm_inputs, run_glm_pipeline, sole_regressor_c
 from nirspipe.exceptions import StageError
 from nirspipe.utils import is_marker
 from nirspipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
-from nirspipe.qc.metrics._helpers import separation_bands
+from nirspipe.qc.metrics._helpers import long_short_channels, separation_bands
 from nirspipe.utils.logging import get_logger
 from nirspipe import __version__
 from nirspipe.io.derivatives import (
@@ -47,6 +47,9 @@ from nirspipe.utils.spans import excluded_spans
 logger = get_logger("post.pipeline")
 
 Mode = Literal["denoise", "glm", "rest"]
+
+# --short-channel's default, decided per run: pca on a montage with short channels, else none
+SHORT_CHANNEL_AUTO = "auto"
 
 
 @dataclass
@@ -85,6 +88,8 @@ class PostConfig:
     drift_order:     int | None            = None
     fir_delays:      tuple[int, ...] | None = None
     short_channel:   bool | str | None     = None
+    # set where short_channel was decided from "auto", so the sidecars can say so
+    short_channel_auto: bool               = False
     aux:             bool                  = False
     aux_channels:    list[str] | None      = None
     events_path:     str | None            = None
@@ -116,6 +121,20 @@ class PostConfig:
                 "--drift-model cosine needs --drift-high-pass: the cosine drift basis is "
                 "defined by its cutoff frequency, and there is no sensible default"
             )
+
+
+def resolve_short_channel(config: PostConfig, raw: mne.io.Raw) -> PostConfig:
+    """``config`` with ``short_channel = "auto"`` decided on ``raw``'s montage; any other value as it is.
+
+    e.g. a montage with an 8 mm channel gets ``"pca"``, one with only 30 mm channels None.
+    """
+    if config.short_channel != SHORT_CHANNEL_AUTO:
+        return config
+    n_short = len(long_short_channels(raw, separation_bands(config))[1])
+    logger.info("sub-%s | --short-channel auto: %s", config.subject,
+                f"pca, {n_short} short channel(s)" if n_short
+                else "none, the montage has no short channel")
+    return replace(config, short_channel="pca" if n_short else None, short_channel_auto=True)
 
 
 def _warn_fc_without_bandpass(config: PostConfig) -> None:
@@ -299,6 +318,7 @@ def run_post(
     the last two empty without --roi-mapping.
     """
 
+    config = resolve_short_channel(config, raw_haemo)
     rec = Recorder()
     if source_path is not None:
         rec.register_input(source_path, raw_haemo)
@@ -383,6 +403,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=config.fir_delays,
             short_channel=config.short_channel,
+            short_channel_auto=config.short_channel_auto,
             sep_bands=separation_bands(config),
             **aux_kwargs,
             events_path=config.events_path,
@@ -421,6 +442,7 @@ def run_post(
             drift_order=config.drift_order,
             fir_delays=None,
             short_channel=config.short_channel,
+            short_channel_auto=config.short_channel_auto,
             sep_bands=separation_bands(config),
             **aux_kwargs,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
@@ -502,6 +524,7 @@ def run_post(
                 drift_order=config.drift_order,
                 fir_delays=None,
                 short_channel=config.short_channel,
+                short_channel_auto=config.short_channel_auto,
                 sep_bands=separation_bands(config),
                 **aux_kwargs,
                 events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),

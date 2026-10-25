@@ -274,8 +274,11 @@ def _regressor_phrase(params: dict[str, Any]) -> str:
         parts.append("the mean of the retained short channels for each chromophore")
     # not "principal components": every component is kept, so the basis is no reduction
     elif sc == "pca":
+        # --short-channel auto only ever chooses pca
+        why = ("; used by default, since the montage has short channels"
+               if params.get("short_channel_auto") else "")
         parts.append("an orthogonal basis spanning the retained short channels "
-                     "(HbO and HbR decomposed together)")
+                     f"(HbO and HbR decomposed together{why})")
     aux = [str(name).removeprefix("aux_") for name in params.get("aux_regressors") or []]
     if aux:
         parts.append(f"the auxiliary signals {_series(aux)}")

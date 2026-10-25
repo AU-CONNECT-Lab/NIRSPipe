@@ -35,6 +35,7 @@ def post_calls(monkeypatch):
         return (None,) * 7
 
     monkeypatch.setattr(post_pipeline, "run_post", _fake_run_post)
+    monkeypatch.setattr(post_pipeline, "resolve_short_channel", lambda config, raw: config)
     monkeypatch.setattr(workflows, "get_layout", lambda *a, **k: _FakeLayout())
     monkeypatch.setattr(workflows, "read_snirf", lambda path, **k: path)
     monkeypatch.setattr(workflows, "_build_post_config", lambda *a, **k: object())

@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: the dyad raw page reads each member's raw QC record (lines, cardiac band, DPF, verdict, motion correction) instead of screening again; it takes no screening flags
 - Raw QC writes a run record, `sub-<label>/logs/*_desc-raw.toml`, that `nirspipe-qc --config` reruns
 - **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
+- **Breaking**: `--short-channel` defaults to `auto`, pca where the montage has short channels and none otherwise; it used to default to none
 
 ## [0.76.0] - 2026-10-25
 

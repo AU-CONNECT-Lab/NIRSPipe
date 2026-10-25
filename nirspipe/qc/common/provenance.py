@@ -159,7 +159,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
             bits.append(f"{drift} drift")
         # the confounds regressed out, which in denoise mode are the whole of the step
         if (short := pick("short_channel")) not in (None, "none"):
-            bits.append(f"short {short}")
+            bits.append(f"short {short}" + (" (auto)" if pick("short_channel_auto") else ""))
         if aux := pick("aux_regressors"):
             bits.append(f"{len(aux)} aux")
         return " / ".join(str(b) for b in bits if b)

@@ -47,7 +47,7 @@ def _roi_map_name(args: dict[str, Any]) -> str:
 
 
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
-    from nirspipe.pipeline.post_pipeline import PostConfig
+    from nirspipe.pipeline.post_pipeline import SHORT_CHANNEL_AUTO, PostConfig
 
     # CLI takes priority over TOML; Typer Enum values are unwrapped to plain strings.
     def pick(cli_key: str, toml_key: str | None = None, default: Any = None) -> Any:
@@ -60,7 +60,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         return default
 
     ep = pick("events_path")
-    sc = pick("short_channel")
+    sc = pick("short_channel", default=SHORT_CHANNEL_AUTO)
     raw_fir = pick("fir_delays")  # CLI passes a comma-separated string, e.g. "0,1,2"
 
     # contrast_def can live in a separate TOML file referenced by --contrast-file or config key.
@@ -110,7 +110,8 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
 
 # ---- post settings: command line over --config over the mode's defaults ----
 
-_NOT_SETTINGS = {"subject", "session", "roi_map", "roi_map_name", "contrast_def"}
+_NOT_SETTINGS = {"subject", "session", "roi_map", "roi_map_name", "contrast_def",
+                 "short_channel_auto"}
 _ARG_OF_FIELD = {"aux": "aux_regressors"}
 
 
@@ -822,7 +823,7 @@ def _run_post_for_subject(
     One entry per run, keyed the same way as the prep results, so the report loop can pair
     them up. A run whose post failed simply has no entry.
     """
-    from nirspipe.pipeline.post_pipeline import run_post, write_combined_runs
+    from nirspipe.pipeline.post_pipeline import resolve_short_channel, run_post, write_combined_runs
 
     mode = _v(args["mode"])
     task_label = args.get("task_label")
@@ -857,6 +858,8 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
+                    # decided here as well as in run_post, so --combine-runs reads the same stage
+                    post_config = resolve_short_channel(post_config, raw_haemo)
                     denoised, glm_est, dm, alff_df, fc, fc_seed, fc_roi = run_post(
                         raw_haemo, post_config, output_dir=output_dir, mode=mode,
                         source_entities=src_entities, source_path=snirf_path,
