@@ -78,7 +78,7 @@ Before anything expensive starts, every dyad prints its channel budget:
 
 ## Wavelet transform coherence
 
-Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/8`) over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number tables carry is the **band mean**, the coherence averaged over `--wtc-band-fmin` to `--wtc-band-fmax` (by default `--band-fmin` to `--band-fmax`, else the whole axis) and over time, with its Fisher z.
+Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/12`) over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number tables carry is the **band mean**, the coherence averaged over `--wtc-band-fmin` to `--wtc-band-fmax` (by default `--band-fmin` to `--band-fmax`, else the whole axis) and over time, with its Fisher z.
 
 - **Cone of influence.** By default the band mean averages only the cells outside the cone of influence, the cells the edges of the record reach. `--no-wtc-mask-coi` averages the whole band. The share of band cells that held a value is written as `n_valid_frac` either way.
 - **Chromophores.** Each chromophore is a separate pass, a member's HbO paired only with the other's HbO, never mixed or averaged, and each costs a full run. `--wtc-chroma` takes one or more of `hbo`, `hbr` and `hbt` (default `hbo hbr`), for the coherence and the correlation alike; every band-mean table has a `chromophore` column. `hbt`, total haemoglobin, is HbO plus HbR of each channel, summed as each member's recording is loaded: after the rejections, so a pair rejected in either half is rejected in HbT, and before `--normalize` and `--wtc-whiten`, which then treat it as one more channel.
