@@ -149,8 +149,8 @@ def test_the_glm_tables_blank_a_channel_fitted_against_itself(tmp_path):
     t in the billions. Its rows stay, so every subject's table has the same shape, with
     every statistic n/a."""
     fit, con = _glm_tables(tmp_path, "mean", ["S2_D2 hbo", "S2_D2 hbr"])
-    stats_fit = ["df", "mse", "p_value", "se", "t", "theta", "Significant"]
-    stats_con = ["effect", "p_value", "stat", "z_score", "Significant"]
+    stats_fit = ["df", "mse", "p_value", "se", "t", "theta"]
+    stats_con = ["effect", "p_value", "stat", "z_score"]
     for table, stats in ((fit, stats_fit), (con, stats_con)):
         lone = table[table["ch_name"].isin(["S1_D1 hbo", "S1_D1 hbr"])]
         assert len(lone) and lone[stats].isna().all().all()

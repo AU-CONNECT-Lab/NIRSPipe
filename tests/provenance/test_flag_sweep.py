@@ -113,6 +113,7 @@ CASES = {
     "events_path": Case("glm", {"--stim-dur": None, "--events-path": ["{events}"]},
                         ("errts", "design")),
     "contrast_file": Case("glm", {"--contrast-file": ["{contrast}"]}, ("contrast",)),
+    "p_correction": Case("glm", {"--p-correction": ["fdr_bh"]}, ("glm",)),
     "roi_mapping": Case("rest", {"--roi-mapping": ["{roi}"]}, ("pearson",)),
     "ignore": Case("denoise", {"--ignore": ["channel-status"]}, ("sci",)),
     "allow_cropped_input": Case("denoise", {"--allow-cropped-input": []}, ()),

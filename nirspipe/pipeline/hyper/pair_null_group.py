@@ -31,7 +31,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
+from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, correct_p
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.derivatives import occasion_label
 from nirspipe.io.naming import derivative_path, parse_path
@@ -512,40 +512,6 @@ def _paired_row(cond, observed: pd.Series, pools: "dict[str, np.ndarray]",
     return row
 
 
-# the multipletests method names; none leaves the raw p as the only one written
-P_CORRECTIONS = ("none", "fdr_bh", "fdr_by", "holm", "bonferroni")
-
-
-def _correct(frame: pd.DataFrame, keys: list[str], method: str) -> pd.DataFrame:
-    """Add ``family`` and, unless ``method`` is none, a ``p_<method>`` column beside ``p``.
-
-    ::
-
-      4 channels in one condition, holm  ->  family 4, p kept, p_holm added
-
-    Rows whose ``p`` is absent take no part in any family and keep a blank corrected p.
-    """
-    from statsmodels.stats.multitest import multipletests
-
-    if method not in P_CORRECTIONS:
-        raise ValueError(f"unknown p correction {method!r}; one of {P_CORRECTIONS}")
-    frame = frame.copy()
-    col = f"p_{method}"
-    if method != "none":
-        frame[col] = np.nan
-    frame["family"] = 0
-    if "p" not in frame.columns or not keys:
-        return frame
-    for _, part in frame.groupby(keys, dropna=False):
-        usable = part[part["p"].notna()]
-        if usable.empty:
-            continue
-        if method != "none":
-            frame.loc[usable.index, col] = multipletests(usable["p"], method=method)[1]
-        frame.loc[part.index, "family"] = len(usable)
-    return frame
-
-
 def correct_cohort(frame: pd.DataFrame, method: str = "none") -> pd.DataFrame:
     """Correct the cohort p within one condition at one level, when a method is asked for.
 
@@ -560,7 +526,7 @@ def correct_cohort(frame: pd.DataFrame, method: str = "none") -> pd.DataFrame:
     leaves, take no part in any family.
     """
     keys = [k for k in ("granularity", "pairings", "test", "condition") if k in frame.columns]
-    return _correct(frame, keys, method)
+    return correct_p(frame, keys, method)
 
 
 def by_cell(output_dir: Path, task: str, chroma: str, null: str,
@@ -588,7 +554,7 @@ def by_cell(output_dir: Path, task: str, chroma: str, null: str,
         # percentile is a count over n_iter written as a share
         beaten = (frame["percentile"] / 100 * frame["n_iter"]).round()
         frame["p"] = _exact_p(beaten, frame["n_iter"])
-        parts.append(_correct(frame, ["condition"], method).assign(level=level))
+        parts.append(correct_p(frame, ["condition"], method).assign(level=level))
     if not parts:
         return None
     return _cell_table(pd.concat(parts, ignore_index=True), method)
@@ -627,7 +593,7 @@ def by_cell_from_draws(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool 
                      "n_iter": int(pool.size), "p": _tailed_p(value, pool, two_sided)})
     parts = []
     if rows:
-        parts.append(_correct(pd.DataFrame(rows), ["condition"], method).assign(level="channel"))
+        parts.append(correct_p(pd.DataFrame(rows), ["condition"], method).assign(level="channel"))
     parts += _roi_cells(draws, real, two_sided, method, roi_map, min_channels)
     if not parts:
         return None
@@ -658,7 +624,7 @@ def _roi_cells(draws: pd.DataFrame, real: pd.DataFrame, two_sided: bool, method:
             by_level["roi_crossed"].append(occ.assign(label=a, label2=b))
         else:
             by_level["roi"].append(occ.assign(label=name))
-    return [_correct(pd.concat(parts, ignore_index=True), ["condition"], method)
+    return [correct_p(pd.concat(parts, ignore_index=True), ["condition"], method)
             .assign(level=level)
             for level, parts in by_level.items() if parts]
 

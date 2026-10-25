@@ -1,9 +1,12 @@
 """Shared utilities."""
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 _R_CLIP = 0.999999
 
@@ -61,6 +64,43 @@ def zscore_rows(x: np.ndarray) -> np.ndarray:
     mu  = x.mean(axis=1, keepdims=True)
     std = x.std(axis=1, keepdims=True)
     return (x - mu) / np.where(std < 1e-12, 1.0, std)
+
+
+# the multipletests method names; none leaves the raw p as the only one written
+P_CORRECTIONS = ("none", "fdr_bh", "fdr_by", "holm", "bonferroni")
+
+
+def correct_p(frame: "pd.DataFrame", keys: "list[str]", method: str, p: str = "p",
+              eligible: "pd.Series | None" = None) -> "pd.DataFrame":
+    """Add ``family`` and, unless ``method`` is none, a ``p_<method>`` column beside ``p``.
+
+    ::
+
+      4 channels in one condition, holm  ->  family 4, p kept, p_holm added
+
+    Rows whose ``p`` is absent, or that ``eligible`` leaves out, take no part in any family
+    and keep a blank corrected p.
+    """
+    from statsmodels.stats.multitest import multipletests
+
+    if method not in P_CORRECTIONS:
+        raise ValueError(f"unknown p correction {method!r}; one of {P_CORRECTIONS}")
+    frame = frame.copy()
+    col = f"p_{method}"
+    if method != "none":
+        frame[col] = np.nan
+    frame["family"] = 0
+    if p not in frame.columns or not keys:
+        return frame
+    tested = frame[p].notna() if eligible is None else frame[p].notna() & eligible
+    for _, part in frame.groupby(keys, dropna=False):
+        usable = part[tested[part.index]]
+        if usable.empty:
+            continue
+        if method != "none":
+            frame.loc[usable.index, col] = multipletests(usable[p], method=method)[1]
+        frame.loc[part.index, "family"] = len(usable)
+    return frame
 
 
 def cone_margin_s(band_fmin: float, factor: float = 2.0) -> float:

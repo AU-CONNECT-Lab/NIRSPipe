@@ -165,14 +165,13 @@ def _groupnull_measure(params: dict[str, Any]) -> dict[str, str]:
             "tail": "two-tailed",
             "two_sided": ", its p doubling the smaller of the two tails"}
 
-def _correction_phrase(value: Any) -> str:
+def _correction_phrase(value: Any, within: str) -> str:
     # a sidecar from before the setting was recorded gets no sentence rather than a guessed one
     if value is None:
         return ""
     if value == "none":
         return " P values were not corrected for multiple comparisons."
-    return (f" P values were corrected by {_P_CORRECTION_NAMES[value]} within each "
-            "condition, level and test.")
+    return f" P values were corrected by {_P_CORRECTION_NAMES[value]} within {within}."
 
 def _noise_phrase(value: Any, fitted_as_auto: "list | None" = None,
                   fitted_as_ols: "list | None" = None) -> str:
@@ -627,7 +626,11 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                                              params.get("constant_fitted_as_ols")),
                 "censoring": _censoring_phrase(params),
                 "hbt": (" HbT was fitted as a series of its own, with the same design and noise "
-                        "model." if "hbt" in (params.get("chromophores") or ()) else "")}
+                        "model." if "hbt" in (params.get("chromophores") or ()) else ""),
+                "correction": _correction_phrase(
+                    params.get("p_correction"),
+                    "each regressor or contrast and each chromophore, over the long channels "
+                    "not marked as bad")}
     if key == "gvtd_censoring":
         return {"channel_set": str(params.get("gvtd_censor_channel_set")
                                    or params.get("gvtd_censor") or "long"),
@@ -654,7 +657,8 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
                 else "phase-randomised",
                 **_groupnull_measure(params),
                 "n_resample": str(int(params.get("n_resample") or 0)),
-                "correction": _correction_phrase(params.get("p_correction"))}
+                "correction": _correction_phrase(params.get("p_correction"),
+                                                 "each condition, level and test")}
     if key == "hyper_pairnull":
         return _pairnull_slots(params)
     if key == "alff":

@@ -19,8 +19,9 @@ from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_ORDER,
     FILTER_METHODS,
 )
+from nirspipe.utils import P_CORRECTIONS
 
-_MOTION_CHOICES        = ["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
+_MOTION_CHOICES       = ["tddr", "wavelet", "tpca", "spline", "spline_sg", "wavelet_tddr",
                           "spline_wavelet", "none"]
 _MODE_CHOICES          = ["denoise", "glm", "rest"]
 _PRESETS_DIR           = Path(__file__).resolve().parent.parent / "data" / "presets"
@@ -287,6 +288,12 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
     glm.add_argument("--contrast-file", type=Path, help="TOML file defining GLM contrasts.")
+    glm.add_argument("--p-correction", choices=P_CORRECTIONS,
+                     help="Multiple-comparison correction of the GLM and contrast p values "
+                          "(default none), within one regressor or contrast and one "
+                          "chromophore, over the long channels not marked bad. p_value is "
+                          "always written; a method adds a p_<method> column beside it, and "
+                          "the family column says how many tests it ran over.")
 
     out = p.add_argument_group("output")
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")

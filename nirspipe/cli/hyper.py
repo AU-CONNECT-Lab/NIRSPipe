@@ -23,11 +23,11 @@ from types import SimpleNamespace
 
 from threadpoolctl import threadpool_limits
 
-from nirspipe.utils import ROI_MIN_CHANNELS, pair_of
+from nirspipe.utils import P_CORRECTIONS, ROI_MIN_CHANNELS, pair_of
 from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
 from nirspipe.io.naming import roi_map_name
-from nirspipe.pipeline.hyper.pair_null_group import ISC_TESTS, P_CORRECTIONS
+from nirspipe.pipeline.hyper.pair_null_group import ISC_TESTS
 from nirspipe.qc.metrics import SCI_WINDOW_S
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe import __version__

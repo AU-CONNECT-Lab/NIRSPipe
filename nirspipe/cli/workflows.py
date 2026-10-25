@@ -100,6 +100,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         export_mean_filled=bool(pick("export_mean_filled", default=False)),
         combine_runs=pick("combine_runs"),
         chromophores=tuple(pick("chromophores", default=DEFAULT_CHROMOPHORES)),
+        p_correction=pick("p_correction", default="none"),
         roi_map=roi_map,
         roi_map_name=_roi_map_name(args),
         # the same bands prep split with, so the regression and the reports agree

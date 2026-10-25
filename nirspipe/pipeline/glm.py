@@ -15,7 +15,7 @@ from nirspipe.pipeline.denoise import (
     filter_array,
 )
 from nirspipe.exceptions import StageError
-from nirspipe.utils import is_marker
+from nirspipe.utils import correct_p, is_marker
 from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, chroma_of, hbt_names, hbt_of
 from nirspipe.pipeline.glm_censored import (censor_summary, condition_columns, events_left,
                                            fit_censored, kept_frames, refuse_too_few_frames,
@@ -511,6 +511,7 @@ def run_glm_pipeline(
     source_path: str | None = None,
     sep_bands=None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
+    p_correction: str = "none",
 ) -> tuple:
     if output_dir and not source_path:
         raise ValueError(
@@ -646,8 +647,14 @@ def run_glm_pipeline(
             table_noise["constant_fitted_as_ols"] = fitted_as_ols + hbt_ols
     contrasts = compute_contrasts(tables_est, contrast_def, dm) if contrast_def else None
 
+    long_channels: list[str] = []
+    if output_dir:
+        from nirspipe.qc.metrics._helpers import long_short_channels
+
+        long_channels = long_short_channels(tables_raw, sep_bands)[0]
     # only a task GLM's t values lean on the whitening being complete
-    whitening = (_whitening_of(tables_est, tables_raw, tables_resid, keep, sep_bands, self_fitted)
+    whitening = (_whitening_of(tables_est, tables_raw, tables_resid, keep, long_channels,
+                               self_fitted)
                  if output_dir and conditions else None)
 
     if output_dir:
@@ -656,6 +663,7 @@ def run_glm_pipeline(
                           inputs=glm_inputs(events_path if not from_annotations else None, aux_path),
                           bads=list(tables_raw.info["bads"]),
                           self_fitted=self_fitted, chromophores=chromophores,
+                          long_channels=long_channels, p_correction=p_correction,
                           censored=~keep, whitening=whitening, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, **table_noise, drift_model=drift_model,
@@ -682,13 +690,12 @@ def _data_residual(glm_est: Any, haemo: mne.io.Raw, design_matrix: pd.DataFrame,
 
 
 def _whitening_of(glm_est: Any, haemo: mne.io.Raw, residual: np.ndarray, keep: np.ndarray,
-                  sep_bands, self_fitted: "list[str]") -> tuple[pd.DataFrame, pd.DataFrame]:
-    from nirspipe.qc.metrics._helpers import long_short_channels
-
+                  long_channels: "list[str]",
+                  self_fitted: "list[str]") -> tuple[pd.DataFrame, pd.DataFrame]:
     return whitening_tables(
         glm_est, residual, keep, float(haemo.info["sfreq"]),
         [chroma_of(ch) for ch in haemo.ch_names],
-        long_channels=set(long_short_channels(haemo, sep_bands)[0]),
+        long_channels=set(long_channels),
         bads=set(haemo.info["bads"]), self_fitted=set(self_fitted))
 
 
@@ -703,7 +710,7 @@ def blank_self_fitted(df: pd.DataFrame, channels: "list[str]") -> pd.DataFrame:
         return df
     stats = [c for c in df.columns if c not in _GLM_ID_COLUMNS]
     for col in stats:
-        # floats take n/a as they are; `Significant` is bool and needs room for it
+        # floats take n/a as they are; any other dtype needs room for it
         if not pd.api.types.is_float_dtype(df[col]):
             df[col] = df[col].astype(object)
         df.loc[rows, col] = np.nan
@@ -745,20 +752,38 @@ def _save_glm_outputs(
     censored: "np.ndarray | None" = None,
     whitening: "tuple[pd.DataFrame, pd.DataFrame] | None" = None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
+    long_channels: "list[str]" = (),
+    p_correction: str = "none",
     **params: Any,
 ) -> None:
     bads = bads or []
     table_params = {**params, "chromophores": list(chromophores)}
+    p_params = {**table_params, "p_correction": p_correction}
+    if p_correction != "none" and not long_channels:
+        logger.warning("--p-correction %s: no channel was told long, so no GLM p value was "
+                       "corrected", p_correction)
 
     def _mark_bads(df: pd.DataFrame) -> pd.DataFrame:
         # the fit runs on every channel; the tables carry the chromophores asked for
         if "Chroma" in df.columns:
             df = df[df["Chroma"].isin(chromophores)].reset_index(drop=True)
+        # mne-nirs' flag is p < 0.05 uncorrected; a corrected p comes from --p-correction
+        df = df.drop(columns="Significant", errors="ignore")
         # the rejected ones are kept and flagged rather than dropped: removing rows would
         # change the shape group analysis expects
         if "ch_name" in df.columns:
             df["bad"] = df["ch_name"].isin(bads)
         return blank_self_fitted(df, self_fitted)
+
+    def _corrected(df: pd.DataFrame, test: str) -> pd.DataFrame:
+        """``family`` and the corrected p beside ``p_value``, one family per test and chromophore."""
+        if "p_value" not in df.columns:
+            return df
+        tested = df["ch_name"].isin(long_channels) & ~df["bad"]
+        out = correct_p(df, [test, "Chroma"], p_correction, p="p_value", eligible=tested)
+        cols = list(df.columns)
+        at = cols.index("p_value") + 1
+        return out[cols[:at] + [c for c in out.columns if c not in cols] + cols[at:]]
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -777,8 +802,8 @@ def _save_glm_outputs(
     write_step_sidecar(dm_path, "design_matrix", source_path, bads, inputs=inputs, **params)
 
     res_path = _named("nirsmap", desc="glm")
-    write_tsv(_mark_bads(glm_est.to_dataframe()), res_path)
-    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **table_params)
+    write_tsv(_corrected(_mark_bads(glm_est.to_dataframe()), "Condition"), res_path)
+    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **p_params)
 
     if contrasts:
         frames = []
@@ -787,10 +812,10 @@ def _save_glm_outputs(
             df.insert(0, "contrast", name)
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")
-        write_tsv(pd.concat(frames, ignore_index=True), con_path)
+        write_tsv(_corrected(pd.concat(frames, ignore_index=True), "contrast"), con_path)
         # the weights as the file gave them: the TSV names each contrast, nothing else does
         write_step_sidecar(con_path, "contrasts", source_path, bads, inputs=inputs,
-                           contrast_weights=contrast_def, **table_params)
+                           contrast_weights=contrast_def, **p_params)
 
     if whitening is not None:
         channels, spectrum = whitening

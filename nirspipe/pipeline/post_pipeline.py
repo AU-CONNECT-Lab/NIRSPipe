@@ -104,6 +104,8 @@ class PostConfig:
 
     # what the GLM tables, block average, FC and ALFF carry; the stage files keep HbO and HbR
     chromophores: tuple[str, ...] = DEFAULT_CHROMOPHORES
+    # a P_CORRECTIONS method for the GLM and contrast tables' p values
+    p_correction: str = "none"
 
     def __post_init__(self) -> None:
         self.chromophores = in_order(self.chromophores)
@@ -388,6 +390,7 @@ def run_post(
             output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
             chromophores=config.chromophores,
+            p_correction=config.p_correction,
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                           inputs=glm_inputs(config.events_path, aux_path))
@@ -422,6 +425,7 @@ def run_post(
             **aux_kwargs,
             events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
             chromophores=config.chromophores,
+            p_correction=config.p_correction,
         )
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
@@ -504,6 +508,7 @@ def run_post(
                 output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
                 chromophores=config.chromophores,
+                p_correction=config.p_correction,
             )
             _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                               inputs=glm_inputs(None, aux_path))

@@ -112,7 +112,7 @@ plain = "Total haemoglobin (HbT) was the sum of HbO and HbR of each channel, for
 citations = []
 
 [glm]
-plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}.{censoring} Channels marked as bad were fitted as well and flagged in the results.{hbt}"
+plain = "A first-level general linear model (GLM) was fitted to each channel {citations}. Conditions were modelled {conditions}, the design also held {regressors}, and the model was fitted with {noise_model}.{censoring} Channels marked as bad were fitted as well and flagged in the results.{hbt}{correction}"
 citations = ["Santosa2018"]
 
 [alff]
