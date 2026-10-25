@@ -39,7 +39,9 @@ from nirspipe.qc.common.report_shell import (
     render,
 )
 from nirspipe.exceptions import StageError
+from nirspipe.io.derivatives import entity_of
 from nirspipe.io.naming import derivative_path
+from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIXES, pair_status
 from nirspipe.qc.subject.record_io import channel_columns, channel_frame, read_record
 from nirspipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
@@ -324,6 +326,42 @@ def unfinished_subjects(output_dir: Path) -> list[dict]:
     return rows
 
 
+def channels_kept(output_dir: Path) -> dict:
+    """How many subjects kept each source-detector pair, per task: ``{"tasks", "rows"}``, empty without a channel table.
+
+    ::
+
+      sub-01 keeps S1_D1 in run 1 only, sub-02 rejects it  ->  S1_D1  task-rest  1 of 2
+
+    A subject keeps a pair when any of its runs of the task did, sessions included; the
+    count is over the subjects whose runs of the task list the pair.
+    """
+    tables: dict[str, Path] = {}
+    for suffix in CHANNEL_METRICS_SUFFIXES:
+        for path in sorted(output_dir.glob(f"sub-*/**/nirs/*{suffix}")):
+            tables.setdefault(path.name[:-len(suffix)], path)
+    listed: dict[str, dict[str, set]] = {}
+    kept: dict[str, dict[str, set]] = {}
+    separation: dict[str, str] = {}
+    for label, path in sorted(tables.items()):
+        acq = entity_of(label, "acq")
+        task = f"task-{entity_of(label, 'task')}" + (f"_acq-{acq}" if acq else "")
+        subject = entity_of(label, "sub")
+        for pair, status in pair_status(path).items():
+            separation.setdefault(pair, status["separation"])
+            listed.setdefault(task, {}).setdefault(pair, set()).add(subject)
+            if not status["is_bad"]:
+                kept.setdefault(task, {}).setdefault(pair, set()).add(subject)
+    if not listed:
+        return {}
+    tasks = sorted(listed)
+    rows = [{"pair": pair, "separation": sep,
+             "cells": [f"{len(kept.get(task, {}).get(pair, ()))} of {len(listed[task][pair])}"
+                       if pair in listed[task] else None for task in tasks]}
+            for pair, sep in separation.items()]
+    return {"tasks": tasks, "rows": rows}
+
+
 def _render_group(
     output_dir: Path,
     out_desc: str,
@@ -437,6 +475,10 @@ def _render_group(
             "caveat.window_mismatch", pinned=SCI_WINDOW_S,
             windows=", ".join(f"{w:g}" for w in sorted(windows))))
 
+    kept: dict = {}
+    with guard("Channels kept", errors, out_desc):
+        kept = channels_kept(output_dir)
+
     conditions = condition_names(full_rows)
     if not conditions:
         note(notes, out_desc,
@@ -474,6 +516,7 @@ def _render_group(
         table_columns=shown_cols,
         table_rows=df[shown_cols].values.tolist(),
         outliers=outliers,
+        kept=kept,
     )
     html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name
     html_path.write_text(html, encoding="utf-8")

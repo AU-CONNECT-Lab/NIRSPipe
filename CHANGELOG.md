@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - `--chromophores` chooses what the GLM tables, block average, FC and ALFF carry; `hbt`, HbO plus HbR, is off by default
+- The cohort page counts, per task, how many subjects kept each source-detector pair
 
 ### Changed
 - The run report's GLM activation and ALFF brains draw every chromophore of the run, HbR included, and its connectivity figures follow `--chromophores`

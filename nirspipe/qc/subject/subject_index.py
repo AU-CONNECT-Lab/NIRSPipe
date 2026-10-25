@@ -18,7 +18,6 @@ comparable with a view's, so the two must not share a table. See
 
 from __future__ import annotations
 
-import csv
 import json
 import statistics
 from functools import partial
@@ -35,7 +34,7 @@ from nirspipe.qc.common.figure_io import figure_namer, _save_figure_html
 from nirspipe.io.derivatives import entity_of, joined_runs
 from nirspipe.io.naming import report_name
 from nirspipe.qc.common.channel_table import (
-    CHANNEL_METRICS_SUFFIX, CHANNEL_METRICS_SUFFIXES, RAW_CHANNEL_METRICS_SUFFIX,
+    CHANNEL_METRICS_SUFFIX, CHANNEL_METRICS_SUFFIXES, RAW_CHANNEL_METRICS_SUFFIX, pair_status,
 )
 from nirspipe.qc.subject.record_io import read_record
 from nirspipe.qc.subject.sqm_record import (
@@ -254,17 +253,9 @@ def collect_bad_channels(sub_dir: Path, labels: list[str]) -> dict:
                                  for suffix in CHANNEL_METRICS_SUFFIXES) if p.exists()), None)
         if path is None:
             continue
-        bad: set[str] = set()
-        with path.open(encoding="utf-8", newline="") as fh:
-            for entry in csv.DictReader(fh, delimiter="	"):
-                pair = pair_of(entry.get("name") or "")
-                if not pair:
-                    continue
-                if pair not in order:
-                    order.append(pair)
-                if (entry.get("is_bad") or "").strip().lower() == "true":
-                    bad.add(pair)
-        bad_by_label[label] = bad
+        status = pair_status(path)
+        order += [pair for pair in status if pair not in order]
+        bad_by_label[label] = {pair for pair, entry in status.items() if entry["is_bad"]}
 
     if not bad_by_label:
         return {}

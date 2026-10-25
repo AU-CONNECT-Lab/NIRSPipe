@@ -365,6 +365,12 @@ NOTES = {
     "group.outlier_rule":
         "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
         "metric.",
+    "group.channels_kept":
+        "How many subjects kept each source-detector pair, out of those whose runs of the task "
+        "list it. A subject keeps a pair when any of its runs of the task did, sessions "
+        "included; a pair is rejected if either wavelength is. Read from each run&rsquo;s "
+        "<code>_desc-channel_qc.tsv</code>, or <code>_desc-rawchannel_qc.tsv</code> for a run "
+        "only prep-raw saw.",
     "group.table":
         "Every scalar the records carry, the check-only ones aside. Click a column header to "
         "sort; the first column stays in view.",

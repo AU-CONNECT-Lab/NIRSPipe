@@ -11,6 +11,7 @@ does not carry is asking for a metric that was never stored.
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -733,6 +734,20 @@ CHANNEL_METRICS_SUFFIX = "_desc-channel_qc.tsv"
 RAW_CHANNEL_METRICS_SUFFIX = "_desc-rawchannel_qc.tsv"
 # best first, the order a reader wanting one verdict per run takes them in
 CHANNEL_METRICS_SUFFIXES = (CHANNEL_METRICS_SUFFIX, RAW_CHANNEL_METRICS_SUFFIX)
+
+
+def pair_status(path: Path) -> "dict[str, dict[str, Any]]":
+    """Each source-detector pair a run's channel table lists, in its order, with its separation and whether either wavelength was rejected."""
+    out: dict[str, dict[str, Any]] = {}
+    with Path(path).open(encoding="utf-8", newline="") as fh:
+        for entry in csv.DictReader(fh, delimiter="\t"):
+            pair = pair_of(entry.get("name") or "")
+            if not pair:
+                continue
+            row = out.setdefault(pair, {"separation": entry.get("separation") or "n/a",
+                                        "is_bad": False})
+            row["is_bad"] |= (entry.get("is_bad") or "").strip().lower() == "true"
+    return out
 
 
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
