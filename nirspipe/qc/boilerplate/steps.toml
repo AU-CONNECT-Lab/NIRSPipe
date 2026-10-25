@@ -35,6 +35,10 @@ citations = []
 plain = "Stretches the analyst marked as corrupted were listed in a table and marked BAD_manual: they were left out of channel screening and, like every corrupted span, of every estimate."
 citations = []
 
+[excluded_edge]
+plain = "Frames at the start or end of a recording in which most channels measured no light (an intensity missing or not above zero) took the values of the nearest frame that did, before conversion to optical density, and were marked BAD_edge: left out of channel screening and, like every corrupted span, of every estimate."
+citations = []
+
 [gvtd_censoring]
 plain = "Head motion was flagged with the global variance of temporal derivatives (GVTD) {citations}, computed on the {channel_set} channels the screening kept and band-passed to {band}: frames above the mode of its histogram plus {n_std} times its spread below the mode were marked BAD_gvtd, as was every stretch left between them shorter than {min_epoch_s} s."
 citations = ["Sherafati2020"]

@@ -44,10 +44,42 @@ from nirspipe.qc.metrics import (require_screened, resolve_cutoffs, screen_chann
                                  screening_scores)
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
-from nirspipe.utils.spans import (add_bad_spans, bad_spans, excluded_spans, excluded_time,
-                                  mark_manual, mark_unselected, measured_from)
+from nirspipe.utils.spans import (EDGE, add_bad_spans, bad_spans, excluded_spans,
+                                  excluded_time, mark_manual, mark_unselected, measured_from)
+from nirspipe.pipeline.censor_fill import fill_values
 
 logger = get_logger("pipeline.prep")
+
+# Before step 1: frames at either end that measured no light
+def dark_edge_frames(raw: mne.io.Raw) -> tuple[int, int]:
+    """How many frames at the start and at the end measured no light in most channels."""
+    x = raw.get_data(picks="fnirs")
+    measured = np.isfinite(x) if is_optical_density(raw) else np.isfinite(x) & (x > 0)
+    # a channel dark for most of the record would darken every frame, so it has no vote
+    voters = measured.mean(axis=1) > 0.5
+    if not voters.any():
+        return 0, 0
+    # more than half of every voter's frames are lit, so at least one frame is too
+    lit = measured[voters].mean(axis=0) >= 0.5
+    return int(np.argmax(lit)), int(np.argmax(lit[::-1]))
+
+
+def repair_dark_edges(raw: mne.io.Raw) -> tuple[mne.io.Raw, tuple[int, int]]:
+    """``raw`` with its dark edge frames held at the nearest lit frame and marked ``BAD_edge``."""
+    lead, trail = dark_edge_frames(raw)
+    if not (lead or trail):
+        return raw, (0, 0)
+    raw = raw.copy().load_data()
+    sfreq, n = float(raw.info["sfreq"]), raw.n_times
+    gap = np.zeros(n, bool)
+    gap[:lead] = True
+    gap[n - trail:] = True
+    picks = mne.pick_types(raw.info, fnirs=True, exclude=[])
+    raw._data[picks] = fill_values(raw._data[picks], gap, "linear", sfreq)
+    add_bad_spans(raw, [(start / sfreq, count / sfreq)
+                        for start, count in ((0, lead), (n - trail, trail)) if count], EDGE)
+    return raw, (lead, trail)
+
 
 # Step 1: OD conversion
 def intensity_to_od(raw: mne.io.Raw) -> mne.io.Raw:
@@ -283,6 +315,12 @@ def run_prep(
         raw = mark_unselected(raw.copy(), config.keep_spans)
     if config.bad_spans:
         raw = mark_manual(raw.copy(), config.bad_spans)
+    # before OD conversion, where one non-finite sample would take its whole channel
+    raw, (lead, trail) = repair_dark_edges(raw)
+    if lead or trail:
+        logger.warning("sub-%s | %d frame(s) at the start and %d at the end measured no light "
+                       "in most channels; held at the nearest lit frame and marked %s",
+                       config.subject, lead, trail, EDGE)
 
     rec = Recorder()
     if source_path is not None:
@@ -333,7 +371,10 @@ def run_prep(
     if non_finite:
         logger.warning("sub-%s | non-finite samples zeroed and their channels marked bad: %s",
                        config.subject, non_finite)
-    _save(raw_od, "od", extra_provenance={"non_finite_samples": non_finite} if non_finite else None)
+    _save(raw_od, "od", extra_provenance={
+        **({"non_finite_samples": non_finite} if non_finite else {}),
+        **({"dark_edge_frames": {"start": lead, "end": trail}} if lead or trail else {}),
+    } or None)
 
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))

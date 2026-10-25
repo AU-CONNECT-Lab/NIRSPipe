@@ -17,9 +17,11 @@ logger = get_logger("utils.spans")
 
 UNSELECTED = "BAD_unselected"
 MANUAL = "BAD_manual"
+EDGE = "BAD_edge"
 INPUT_SOURCE = "input file"
 # the flag behind each span the run itself adds; a span already on the input is the input's
-_ADDED_BY = {UNSELECTED: "--keep-spans", MANUAL: "--bad-spans", "BAD_gvtd": "--gvtd-censor"}
+_ADDED_BY = {UNSELECTED: "--keep-spans", MANUAL: "--bad-spans", "BAD_gvtd": "--gvtd-censor",
+             EDGE: "prep (no light)"}
 
 
 def is_bad_span(description: Any) -> bool:

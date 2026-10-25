@@ -16,8 +16,8 @@ NOTES = {
     "excluded.summary":
         "{kept} s of the {total} s recording lie outside every BAD_ span: {unselected} is "
         "BAD_unselected (outside --keep-spans) and {corrupted} lies under corrupted spans "
-        "(BAD_gvtd, BAD_manual or the input&rsquo;s own). {n} span(s) in all; each analysis "
-        "section says how it leaves them out.",
+        "(BAD_gvtd, BAD_manual, BAD_edge or the input&rsquo;s own). {n} span(s) in all; each "
+        "analysis section says how it leaves them out.",
     "excluded.conditions":
         "Per condition: its window, its seconds outside every BAD_ span, the screening "
         "windows its passing share counted, and for a task GLM the trials whose interval "
