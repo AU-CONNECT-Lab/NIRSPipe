@@ -247,6 +247,13 @@ def test_either_duration_source_lets_a_glm_through(given):
     _refuse_glm_without_durations(args)
 
 
+@pytest.mark.parametrize("stim_dur", [0.0, -1.0])
+def test_a_zero_stim_dur_stops_before_any_subject_runs(stim_dur):
+    args, _, _ = _resolved({"mode": "glm", **_BANDS, "stim_dur": stim_dur})
+    with pytest.raises(SystemExit, match="--stim-dur .*scales with the sampling rate"):
+        _refuse_glm_without_durations(args)
+
+
 def test_a_config_file_stim_dur_counts():
     args, _, _ = _resolved({"mode": "glm", **_BANDS}, {"stim_dur": 10.0})
     _refuse_glm_without_durations(args)

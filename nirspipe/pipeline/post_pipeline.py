@@ -364,10 +364,6 @@ def run_post(
                 f"confounds only. Use --mode denoise for confound regression without a task model."
             )
         _warn_drift_absorbs_task(config, result, design_events)
-        # on the series the model is fitted to, over the trial window the report's epoch figures use
-        write_block_average(result, nirs_dir, rec.path_of(result), epoch_tmin, epoch_tmax,
-                            epoch_chunk_duration, events=design_events,
-                            inputs=glm_inputs(config.events_path, None))
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,
@@ -387,6 +383,10 @@ def run_post(
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                           inputs=glm_inputs(config.events_path, aux_path))
+        # on the series the model was fitted to, over the trial window the report's epoch figures use
+        write_block_average(result, nirs_dir, rec.path_of(result), epoch_tmin, epoch_tmax,
+                            epoch_chunk_duration, events=design_events,
+                            inputs=glm_inputs(config.events_path, None))
 
         # FC on the task residual: the task is in the design matrix, so what correlates here
         # is what the model did not explain.

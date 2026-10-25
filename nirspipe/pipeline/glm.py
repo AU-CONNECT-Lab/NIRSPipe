@@ -290,6 +290,20 @@ def _aux_regressors(
     return out
 
 
+IMPULSE_REASON = ("a zero-duration event is modelled as a single sample, so its beta scales with "
+                  "the sampling rate and is not in concentration units. Give each event its real "
+                  "duration (a button press can take 0.1 s).")
+
+
+def refuse_impulse_events(events: pd.DataFrame) -> None:
+    """Stop on any task event lasting 0 s or less, naming its conditions."""
+    zero = events[events["duration"] <= 0]
+    if zero.empty:
+        return
+    names = ", ".join(sorted({str(t) for t in zero["trial_type"]}))
+    raise ValueError(f"{len(zero)} event(s) of {names} last 0 s: {IMPULSE_REASON}")
+
+
 def _annotation_events(raw: mne.io.Raw, stim_dur: float | None) -> pd.DataFrame:
     """The recording's own annotations as design events, each lasting ``stim_dur`` seconds."""
     if stim_dur is None:
@@ -510,6 +524,7 @@ def run_glm_pipeline(
         events = events[events["trial_type"].map(is_marker)]
     if events is None:
         events = _annotation_events(haemo, stim_dur)
+    refuse_impulse_events(events)
     # recorded so a reader of the residual can tell a task GLM from a confound regression
     conditions = sorted({str(t) for t in events["trial_type"]})
     # and, where there is a task model, what shaped its regressors

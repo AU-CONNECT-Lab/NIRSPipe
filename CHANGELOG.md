@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given
 - Reports, tables and the channel TSV's reason call the screened windows "passing windows" in place of "coupled windows"
 - `--phase-null-shared` rotates the second member's channels together in the WTC phase null as well as the ISC one, replacing `--isc-phase-null-shared`
+- glm mode refuses a zero-duration event, from `--stim-dur 0` or an events table, since its beta would scale with the sampling rate
 
 ### Fixed
 - Channel screening that could not be measured (a cardiac band near Nyquist, a recording under two windows) kept every channel; preprocessing now stops, raw QC reports say why

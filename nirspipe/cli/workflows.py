@@ -172,7 +172,13 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
 
 def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     """Stop before any subject runs when a GLM has no way to set its event durations."""
-    if _v(args.get("mode")) != "glm" or args.get("stim_dur") is not None or args.get("events_path"):
+    if _v(args.get("mode")) != "glm":
+        return
+    stim_dur = args.get("stim_dur")
+    if stim_dur is not None and stim_dur <= 0:
+        from nirspipe.pipeline.glm import IMPULSE_REASON
+        raise SystemExit(f"[error] --stim-dur {stim_dur:g}: {IMPULSE_REASON}")
+    if stim_dur is not None or args.get("events_path"):
         return
     raise SystemExit(
         "[error] --mode glm needs --stim-dur (one duration for every annotation) or "
