@@ -111,3 +111,29 @@ def test_no_trial_fitting_the_window_writes_nothing(tmp_path):
     out = tmp_path / "sub-01" / "nirs"
     assert write_block_average(_raw(), out, str(tmp_path / SOURCE), -5.0, 125.0) is None
     assert not out.exists()
+
+
+def _annotated(raw, onsets, names):
+    raw = raw.copy()
+    raw.set_annotations(mne.Annotations(onsets, [10.0] * len(onsets), names))
+    return raw
+
+
+def test_an_annotation_written_twice_is_one_trial():
+    """The same condition, onset and duration twice: counted once, as the GLM design counts it."""
+    once = block_average_table(_raw(), -5.0, 15.0)
+    twice = block_average_table(_annotated(_raw(), [*ONSETS, *ONSETS], ["tap"] * 6), -5.0, 15.0)
+    pd.testing.assert_frame_equal(twice, once)
+    assert set(twice["n_trials"]) == {3}
+
+
+def test_two_conditions_on_one_sample_each_keep_the_trial():
+    """Trial 2 opens both conditions; neither refuses the other."""
+    raw = _annotated(_raw(), [20.0, 60.0, 100.0, 60.0], ["tap", "tap", "tap", "listen"])
+    table = block_average_table(raw, -5.0, 15.0)
+    assert table.groupby("condition")["n_trials"].first().to_dict() == {"tap": 3, "listen": 1}
+    # the one listen trial is trial 2, level 2 over its baseline
+    listen = table[(table.condition == "listen") & (table.chroma == "hbo")
+                   & np.isclose(table.time, 5.0)]
+    assert listen["mean"].item() == pytest.approx(2.0 * KEPT)
+    assert set(_condition_evokeds(raw, -5.0, 15.0)) == {"tap", "listen"}

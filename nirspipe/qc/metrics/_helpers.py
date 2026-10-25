@@ -415,6 +415,12 @@ def epochable_events(raw, tmin: float, tmax: float):
     if len(events) == 0 or not event_id:
         return empty
     events = events[np.isin(events[:, 2], list(event_id.values()))]
+    # an annotation repeated at one onset is one trial, as the GLM design counts it
+    _, once = np.unique(events[:, [0, 2]], axis=0, return_index=True)
+    if len(once) < len(events):
+        logger.info("%d repeated event(s) of one condition at one onset counted once",
+                    len(events) - len(once))
+        events = events[np.sort(once)]
     # first appearance, as the event timeline lists them; mne sorts names as strings
     first = {k: events[events[:, 2] == v, 0].min() for k, v in event_id.items()
              if (events[:, 2] == v).any()}
@@ -448,18 +454,16 @@ def condition_epochs(raw: mne.io.Raw, tmin: float, tmax: float) -> "dict[str, mn
     """Condition -> its trials over ``[tmin, tmax]``, each less the mean of its pre-onset part.
 
     Trials whose window leaves the recording or touches a ``BAD_`` span are not epoched, so a
-    condition can come back with fewer trials than it has markers, or not at all.
+    condition can come back with fewer trials than it has markers, or not at all. Each
+    condition is epoched on its own, so two conditions starting on one sample both keep it.
     """
     events, event_id = epochable_events(raw, tmin, tmax)
-    if len(events) == 0:
-        return {}
-    epochs = mne.Epochs(raw, events, event_id, tmin=tmin, tmax=tmax,
-                        baseline=(tmin, 0) if tmin < 0 else None, preload=True, verbose=False)
     out = {}
-    for cond in event_id:
-        try:
-            out[str(cond)] = epochs[cond]
-        except KeyError:
-            # every trial of it dropped by MNE after the check above
-            continue
+    for cond, code in event_id.items():
+        epochs = mne.Epochs(raw, events[events[:, 2] == code], {cond: code}, tmin=tmin,
+                            tmax=tmax, baseline=(tmin, 0) if tmin < 0 else None, preload=True,
+                            verbose=False)
+        # every trial of it dropped by MNE after the check above
+        if len(epochs):
+            out[str(cond)] = epochs
     return out
