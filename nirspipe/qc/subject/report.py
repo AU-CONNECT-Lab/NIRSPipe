@@ -2082,6 +2082,7 @@ def build_subject_report(
     roi_map_name: str | None = None,
     filled_settings: list[tuple[str, Any, str]] | None = None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
+    short_channel_requested: bool = False,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
@@ -2312,7 +2313,7 @@ def build_subject_report(
     if overlap:
         _note(notes, subject, overlap)
     _note_separation(notes, subject, sqm_vars["sqm"], sqm_vars["channel_rows"],
-                     short_channel_requested=bool(getattr(config, "short_channel", None)),
+                     short_channel_requested=short_channel_requested,
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),
                      sep_bands=sep_bands)
     _note_dpf_range(notes, subject, config, raw_intensity)

@@ -434,6 +434,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
                         roi_map_name=_roi_map_name(args),
                         filled_settings=filled_settings,
+                        short_channel=post.get("short_channel"),
                     ) or []])
 
                 if not args.get("no_report") and prep_runs:
@@ -773,7 +774,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None):
     from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -823,6 +824,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         roi_map_name=roi_map_name,
         filled_settings=filled_settings,
         chromophores=in_order(args.get("chromophores") or DEFAULT_CHROMOPHORES),
+        short_channel_requested=bool(short_channel),
     )
 
 
@@ -888,10 +890,11 @@ def _run_post_for_subject(
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
-                post_runs[bids_label(subject, src_entities)] = dict(zip(
-                    _POST_FIELDS,
-                    (glm_est, dm, alff_df, fc, denoised, fc_seed, fc_roi),
-                ))
+                post_runs[bids_label(subject, src_entities)] = {
+                    **dict(zip(_POST_FIELDS, (glm_est, dm, alff_df, fc, denoised, fc_seed, fc_roi))),
+                    # the run's own, auto decided on its montage, for the report's notes
+                    "short_channel": post_config.short_channel,
+                }
                 if src_entities.get("run") is not None:
                     # every entity but the run: files told apart by acq are not runs of one series
                     key = tuple(sorted((k, str(v)) for k, v in src_entities.items() if k != "run"))

@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
 - **Breaking**: `--short-channel` defaults to `auto`, pca where the montage has short channels and none otherwise; it used to default to none
 
+### Fixed
+- A run whose short channels were all rejected listed them as outside every separation range and never noted that short-channel regression did not run
+
 ## [0.76.0] - 2026-10-25
 
 ### Added

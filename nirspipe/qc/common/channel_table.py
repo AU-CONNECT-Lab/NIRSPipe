@@ -23,6 +23,7 @@ from nirspipe.io.optode_space import placement_of
 from nirspipe.io.tables import write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
+from nirspipe.qc.metrics._helpers import bands_from_record
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.utils import pair_of, roi_overlaps
@@ -93,6 +94,13 @@ def channel_rows(
         return {ch for key in _PER_CHANNEL_KEYS for ch in (pc.get(key) or {})}
 
     short_names, long_names = _named(short_pc), _named(long_pc)
+    measured_short = set(short_names)
+    if not short_names:
+        # a short set rejected whole has no section of its own; its separations still say
+        # which channels it held
+        short_max = bands_from_record(record.get("raw") or {})[0]
+        dist = whole_pc.get("ch_dist_per_channel") or {}
+        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max}
 
     def separation_of(ch: str) -> str:
         """Which block a channel belongs to, or "" when the record was never split.
@@ -107,16 +115,17 @@ def channel_rows(
             return "short"
         return "long" if ch in long_names else "unclassified"
 
-    def section_for(sep: str) -> dict:
+    def section_for(sep: str, ch: str) -> dict:
         if sep == "short":
-            return short_pc
+            # the whole-montage section measured a short channel its own section left out
+            return short_pc if ch in measured_short else whole_pc
         # an unclassified channel is in neither split but the whole-montage section
         # measured it, and without those scores its rejection prints no reason
         return whole_pc if sep == "unclassified" else merged_pc
 
     def row_of(ch: str) -> dict[str, Any]:
         sep = separation_of(ch)
-        pc = section_for(sep)
+        pc = section_for(sep, ch)
 
         def value_of(key: str):
             return (pc.get(key) or {}).get(ch)

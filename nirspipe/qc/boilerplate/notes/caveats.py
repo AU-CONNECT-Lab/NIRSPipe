@@ -26,8 +26,8 @@ NOTES = {
         "--long-min-dist {long_min} long, depending on how deep this montage's short end "
         "reaches.",
     "caveat.short_regression_all_bad":
-        "Short-channel regression was requested but all {n} short channels were rejected, so "
-        "it did not run. Their scores are in the per-channel table.",
+        "Short-channel regression did not run: all {n} short channels were rejected. Their "
+        "scores are in the per-channel table.",
 
     # ---- Channel screening ----
     "caveat.unscreened":
