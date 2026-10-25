@@ -56,6 +56,11 @@ SHORT = {"--short-channel": ["mean"]}
 
 CASES = {
     "dpf": Case("denoise", {"--dpf": ["6.0", "7.0"]}, ("preproc",)),
+    # the base types every value the population fills, so the case drops them
+    "population": Case("denoise", {"--population": ["child"], "--dpf": None,
+                                   "--cardiac-l-freq": None, "--cardiac-h-freq": None,
+                                   "--resp-l-freq": None, "--resp-h-freq": None},
+                       ("sci", "preproc")),
     "sci_threshold": Case("denoise", {"--sci-threshold": ["0.9"]}, ("sci",)),
     "motion_correction": Case("denoise", WAVELET, ("motcorrected",)),
     "motion_std_thresh": Case("denoise", {"--motion-std-thresh": ["10"]}, ("motcorrected",), SPLINE),
