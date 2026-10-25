@@ -192,7 +192,7 @@ The run summary of one run. A cell with an arrow holds the value before and afte
 
 No other metric is coloured: uncoloured means no cutoff was applied, not that the metric passed. None of the averages rejects anything; rejection is per channel, by the screening.
 
-**Per-channel table.** One row per source-detector pair: status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR μ/σ (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel passing in too few windows and `BAD (manual)` for one rejected by hand.
+**Per-channel table.** One row per source-detector pair: its region, the Desikan-Killiany region of the template cortex nearest the pair as the run's channel table names it (the run report only; raw QC writes no channel table), status, `SCI (10 s)`, `SCI (whole run)`, `PSP (10 s)`, `SNR μ/σ (10 s)`, `CV (10 s)`, spike share, saturated share and HbO–HbR correlation, grouped long, short, and neither. Wavelength-specific columns print both wavelengths in one cell. Status is `BAD` for a channel passing in too few windows and `BAD (manual)` for one rejected by hand.
 
 ### Quality Figures
 
