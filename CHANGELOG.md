@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - pairnull draws groups of three or more: each draw takes one stand-in per later member from one other group, shared across its pairings, which `--wtc-pair-max` caps together
 - groupnull reads a group of three or more as the mean over its pairings, and each role pair on its own where the pairs table has roles
 - `--template` places and draws each participant on fsaverage or an MNE infant template; under `--dpf age` the template nearest their age is the default
+- glm mode writes `desc-blockavg_timeseries.tsv`: each condition's trials averaged per channel over the epoch window, with standard error and trial count
 
 ### Changed
 - Channel screening counts a window on SCI alone; PSP is shown without a line and screens only when `--psp-threshold` is given

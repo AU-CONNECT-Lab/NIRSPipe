@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 
 from nirspipe.io.head_template import head_sphere
 from nirspipe.io.optode_space import placement_of
-from nirspipe.qc.metrics._helpers import epochable_events
+from nirspipe.qc.metrics._helpers import condition_epochs
 from nirspipe.utils import is_marker
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common._brain_utils import to_head
@@ -50,20 +50,9 @@ def _condition_evokeds(
     """Condition -> evoked, epoched on the (non-BAD) annotations. Empty dict if there are none."""
     if not any(is_marker(a["description"]) for a in raw_haemo.annotations):
         return {}
-    events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
-    if len(events) == 0:
-        return {}
-    epochs = mne.Epochs(
-        raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
-        baseline=(epoch_tmin, 0), preload=True, verbose=False,
-    )
-    out = {}
-    for cond in event_id:
-        try:
-            out[str(cond)] = epochs[cond].average()
-        except Exception:
-            continue
-    return out
+    # the same trials the block average table is written from
+    return {cond: epochs.average()
+            for cond, epochs in condition_epochs(raw_haemo, epoch_tmin, epoch_tmax).items()}
 
 
 def _placed_info(raw: mne.io.Raw) -> mne.Info:

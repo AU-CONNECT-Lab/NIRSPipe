@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.io.auxiliary import find_aux_table
+from nirspipe.pipeline.block_average import write_block_average
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL, fill_corrupted
 from nirspipe.pipeline.glm_censored import kept_frames
 from nirspipe.io.tables import read_table, write_tsv
@@ -276,6 +277,9 @@ def run_post(
     mode: Mode = "denoise",
     source_entities: dict[str, str] | None = None,
     source_path: Path | None = None,
+    epoch_tmin: float | None = None,
+    epoch_tmax: float | None = None,
+    epoch_chunk_duration: float | None = None,
 ) -> tuple:
     """Run post-processing pipeline.
 
@@ -360,6 +364,10 @@ def run_post(
                 f"confounds only. Use --mode denoise for confound regression without a task model."
             )
         _warn_drift_absorbs_task(config, result, design_events)
+        # on the series the model is fitted to, over the trial window the report's epoch figures use
+        write_block_average(result, nirs_dir, rec.path_of(result), epoch_tmin, epoch_tmax,
+                            epoch_chunk_duration, events=design_events,
+                            inputs=glm_inputs(config.events_path, None))
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             stim_dur=config.stim_dur,

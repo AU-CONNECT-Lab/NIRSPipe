@@ -155,9 +155,9 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
     prep_opt.add_argument("--epoch-tmin", type=float, default=None,
                           help="Trial window start relative to event onset in s, for the epoch "
-                               "figures and per-trial scoring; negative pulls in a baseline. "
-                               "Omitted, the figures use -5 to 25 s and each trial is scored "
-                               "over its own duration.")
+                               "figures, the glm block average and per-trial scoring; negative "
+                               "pulls in a baseline. Omitted, the figures and the block average "
+                               "use -5 to 25 s and each trial is scored over its own duration.")
     prep_opt.add_argument("--epoch-tmax", type=float, default=None,
                           help="Trial window end relative to event onset in s. Given together "
                                "with --epoch-tmin, or neither.")

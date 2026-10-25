@@ -96,7 +96,7 @@ from nirspipe.qc.metrics import (
     separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
-from nirspipe.qc.metrics._helpers import bands_from_record
+from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, bands_from_record
 from nirspipe.qc.figures.common._utils import chunk_annotations
 from nirspipe.qc.figures import (
     build_trigger_timeline_single,
@@ -200,7 +200,6 @@ def _single_trial_conditions(
     return [name for name, code in event_id.items() if int((events[:, 2] == code).sum()) == 1]
 
 
-_EPOCH_TMIN, _EPOCH_TMAX = -5.0, 25.0
 
 
 def _epoch_window_mismatch(raw_haemo: mne.io.Raw, epoch_tmax: float) -> "float | None":

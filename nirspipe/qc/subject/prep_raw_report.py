@@ -42,7 +42,7 @@ from nirspipe.qc.metrics import (
     haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
     screen_channels, screening_gap, screening_scores,
 )
-from nirspipe.qc.metrics._helpers import separation_orphans
+from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, separation_orphans
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers
 from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
@@ -65,8 +65,6 @@ from nirspipe.qc.subject.sqm_record import (
 logger = get_logger("qc.prep_raw_report")
 
 _MAX_TS_PTS   = 4000
-_EPOCH_TMIN   = -5.0
-_EPOCH_TMAX   = 25.0
 # the scalars the viewer's metrics panel lists, in order. Names, formats, thresholds and
 # tooltips all come from the metric registry, so this is only the choice of which ones and
 # in what order: the same ones the subject report prints, minus what a raw recording has no

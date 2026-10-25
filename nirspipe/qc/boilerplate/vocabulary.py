@@ -674,6 +674,7 @@ STEP_SUMMARY = {
     "contrasts": "Contrast estimates derived from the fitted model.",
     "glm_residuals": "What the model left behind, once the fitted signal was removed.",
     "glm_whitening": "How white the fit's residual is after its noise model: spectrum and lag-1 autocorrelation.",
+    "block_average": "Each condition's trials averaged per channel over the trial window, on the series the model was fitted to.",
     "export_mean_filled": "The final residual with every BAD_ frame set to its channel's kept mean, for tools that ignore annotations; not for ALFF or a GLM.",
     "glm_residuals_broadband": "The same confound regression on data that skipped the bandpass, so fALFF keeps a full spectrum.",
     "alff": "Amplitude of low-frequency fluctuation, per channel.",

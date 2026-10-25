@@ -850,7 +850,11 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi = run_post(raw_haemo, post_config, output_dir=output_dir, mode=mode, source_entities=src_entities, source_path=snirf_path)
+                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi = run_post(
+                        raw_haemo, post_config, output_dir=output_dir, mode=mode,
+                        source_entities=src_entities, source_path=snirf_path,
+                        epoch_tmin=args.get("epoch_tmin"), epoch_tmax=args.get("epoch_tmax"),
+                        epoch_chunk_duration=args.get("epoch_chunk_duration"))
                 except Exception:
                     logger.exception("post failed for %s", snirf_path)
                     raise
