@@ -69,6 +69,23 @@ def test_the_limited_scales_lie_on_pycwt_own_grid(duration, sfreq, fmin, fmax):
     assert steps >= -1e-9, "s0 below pycwt's smallest default scale"
 
 
+@pytest.mark.parametrize("sfreq", (4.0, 5.0, 7.8125, 10.1725))
+@pytest.mark.parametrize("limited_grid", (False, True))
+def test_a_band_edge_on_a_grid_frequency_is_kept_either_way(sfreq, limited_grid):
+    """The band is closed, so an edge placed on a grid frequency keeps that row, whichever
+    grid's own rounding the edge was read from."""
+    x, y = _pair(300.0, sfreq)
+    dt, step = 1 / sfreq, int(round(sfreq))
+    grid = _pairwise_wtc(x, y, dt, step, 0.01, 0.2, cache=False, limit_scales=limited_grid)[1]
+    fmin, fmax = grid[np.argmin(abs(grid - 0.02))], grid[np.argmin(abs(grid - 0.1))]
+
+    full = _pairwise_wtc(x, y, dt, step, fmin, fmax, cache=False, limit_scales=False)[1]
+    limited = _pairwise_wtc(x, y, dt, step, fmin, fmax, cache=False, limit_scales=True)[1]
+    for freqs in (full, limited):
+        np.testing.assert_allclose(freqs[[0, -1]], [fmin, fmax], rtol=1e-12)
+    assert full.shape == limited.shape
+
+
 def test_limiting_actually_drops_scales():
     """A guard on the point of the exercise: it has to be cheaper than not doing it."""
     sfreq, duration = 10.1725, 900.0

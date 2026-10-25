@@ -79,6 +79,9 @@ _SCALE_MARGIN = 12
 # the coherence there is undefined and set to NaN, which a long filled span produces.
 _POWER_FLOOR = 1e-10
 
+# relative to a band edge: far under one grid step (2 ** dj), far over round-off
+_FREQ_RTOL = 1e-9
+
 
 def _scale_window(dj: float) -> np.ndarray:
     """The scale-direction boxcar, ``_SCALE_SMOOTH_DJ0 / dj`` grid steps wide, summing to 1.
@@ -325,6 +328,11 @@ def _pair_from_prepared(p1: _ChannelWavelet, p2: _ChannelWavelet, dt: float,
     return WCT, phase
 
 
+def _in_band(freqs: np.ndarray, fmin: float, fmax: float) -> np.ndarray:
+    """``[fmin, fmax]`` closed: an edge on a grid frequency keeps it, however the grid rounds."""
+    return (freqs >= fmin * (1 - _FREQ_RTOL)) & (freqs <= fmax * (1 + _FREQ_RTOL))
+
+
 def _trim_pair(
     WCT: np.ndarray,
     aWCT: np.ndarray,
@@ -348,7 +356,7 @@ def _trim_pair(
     order      = np.argsort(freqs)
     freqs_s    = freqs[order]
     WCT_s      = WCT[order]
-    band       = (freqs_s >= fmin) & (freqs_s <= fmax)
+    band       = _in_band(freqs_s, fmin, fmax)
     WCT_band   = WCT_s[band][:, ::step].astype(np.float32)
     phase_band = aWCT[order][band][:, ::step].astype(np.float32)
     freqs_band = freqs_s[band]
@@ -873,7 +881,7 @@ def wtc_band_mean(
     its channels were rejected.
     """
     freqs = np.asarray(result.freqs, dtype=float)
-    band  = (freqs >= fmin) & (freqs <= fmax)
+    band  = _in_band(freqs, fmin, fmax)
     computed = any(data is not None for labels in result.pairs.values() for data in labels.values())
     # a result with no map has no frequency axis either, and only blank rows to give
     if not band.any() and computed:
@@ -967,7 +975,7 @@ def wtc_phase_by_scale(
     no rows rather than a NaN one: there is no frequency axis to hang them on.
     """
     freqs = np.asarray(result.freqs, dtype=float)
-    band = (freqs >= fmin) & (freqs <= fmax)
+    band = _in_band(freqs, fmin, fmax)
     if not band.any():
         span = f"{freqs.min():.4f}-{freqs.max():.4f} Hz" if freqs.size else "empty"
         raise ValueError(

@@ -198,7 +198,7 @@ class CudaDevice:
         cp = self.cp
         order = np.argsort(freqs)
         freqs_s = freqs[order]
-        band = (freqs_s >= fmin) & (freqs_s <= fmax)
+        band = _wtc._in_band(freqs_s, fmin, fmax)
         rows = cp.asarray(order[band])
         WCT_band = cp.asnumpy(WCT[:, :n_sig][rows][:, ::step].astype(cp.float32))
         phase_band = cp.asnumpy(aWCT[:, :n_sig][rows][:, ::step].astype(cp.float32))
