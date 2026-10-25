@@ -19,8 +19,8 @@ from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
-_ALFF_DF, _FC_DF, _FC_SEED, _FC_ROI = 3, 4, 6, 7
+# run_post: (result, glm_est, dm, alff_df, fc, fc_seed, fc_roi)
+_ALFF_DF, _FC, _FC_SEED, _FC_ROI = 3, 4, 5, 6
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +86,7 @@ def test_an_explicit_none_drift_model_is_not_a_reason_to_regress(haemo, tmp_path
 def test_without_the_flag_nothing_connectivity_is_written(haemo, tmp_path):
     out = _denoise(haemo, tmp_path, short_channel="mean")
     assert _names(tmp_path, "*_relmat.tsv") == []
-    assert out[_FC_DF] is None and out[_FC_ROI] == {} and out[_FC_SEED] == {}
+    assert out[_FC] == {} and out[_FC_ROI] == {} and out[_FC_SEED] == {}
 
 
 def test_the_flag_writes_the_same_family_rest_writes(haemo, tmp_path, roi_map):
@@ -101,7 +101,7 @@ def test_the_flag_writes_the_same_family_rest_writes(haemo, tmp_path, roi_map):
             expected = derivative_path(tmp_path, "relmat", ".tsv", subject="01",
                                        task="rest", chromophore=chromo, **entities)
             assert expected.name in written, expected.name
-    assert out[_FC_DF] is not None
+    assert "hbo" in out[_FC]
     assert sorted(out[_FC_ROI]) == ["hbo", "hbr"]
     assert sorted(out[_FC_SEED]) == ["hbo", "hbr"]
 
@@ -110,7 +110,7 @@ def test_the_roi_products_need_a_roi_map(haemo, tmp_path):
     out = _denoise(haemo, tmp_path, short_channel="mean", fc=True)
     assert _names(tmp_path, "*fcroi*.tsv") == []
     assert _names(tmp_path, "*fcseed*.tsv") == []
-    assert out[_FC_DF] is not None
+    assert "hbo" in out[_FC]
 
 
 # ---- which signal the correlation was taken on ----
@@ -118,14 +118,14 @@ def test_the_roi_products_need_a_roi_map(haemo, tmp_path):
 def test_fc_without_any_regression_runs_on_the_bandpassed_data(haemo, tmp_path):
     """This is the route rest mode cannot express: no drift model, no GLM, no ALFF."""
     out = _denoise(haemo, tmp_path, fc=True)
-    assert out[_FC_DF] is not None
+    assert "hbo" in out[_FC]
     assert _names(tmp_path, "*desc-errts*.snirf") == []
     assert _fc_source(tmp_path).endswith("_desc-filtered_nirs.snirf")
 
 
 def test_fc_after_a_regression_runs_on_the_residual(haemo, tmp_path):
     out = _denoise(haemo, tmp_path, short_channel="mean", fc=True)
-    assert out[_FC_DF] is not None
+    assert "hbo" in out[_FC]
     assert _fc_source(tmp_path).endswith("_desc-errts_nirs.snirf")
 
 
@@ -135,9 +135,9 @@ def test_the_regression_actually_changes_the_correlations(haemo, tmp_path):
     Without this, both tests would pass on a branch that always read the bandpassed data
     and merely labelled the sidecar differently.
     """
-    plain = _denoise(haemo, tmp_path / "plain", fc=True)[_FC_DF]
+    plain = _denoise(haemo, tmp_path / "plain", fc=True)[_FC]["hbo"]
     regressed = _denoise(haemo, tmp_path / "regressed",
-                         short_channel="mean", fc=True)[_FC_DF]
+                         short_channel="mean", fc=True)[_FC]["hbo"]
     assert list(plain.columns) == list(regressed.columns)
     assert not plain.equals(regressed)
 

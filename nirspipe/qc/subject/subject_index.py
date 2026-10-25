@@ -24,6 +24,7 @@ import statistics
 from functools import partial
 from pathlib import Path
 
+from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.utils import pair_of
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.vocabulary import format_metric, with_unit
@@ -506,7 +507,7 @@ def collect_combined(sub_dir: Path) -> list[dict]:
 
             def _tables(pattern: str) -> dict:
                 found = {c: next(iter(sorted(nirs_dir.glob(pattern.format(c=c)))), None)
-                         for c in ("hbo", "hbr")}
+                         for c in CHROMOPHORES}
                 return {c: p for c, p in found.items() if p is not None}
 
             out.append({"label": label, "series": path,
@@ -566,7 +567,7 @@ def write_combined_figures(sub_dir: Path, item: dict) -> dict:
     if carpet is not None:
         mark_joined_runs(carpet, [(row["run"], row["onset_s"]) for row in rows], bad_spans(raw))
     channel = {c: _matrix(p) for c, p in item["channel"].items()}
-    panel = rest_channel_panel(channel.get("hbo"), channel.get("hbr"), None,
+    panel = rest_channel_panel(channel, None,
                                raw=raw,
                                sep_bands=bands_from_record(params.get("parameters") or {}),
                                title="Functional connectivity over the joined runs")

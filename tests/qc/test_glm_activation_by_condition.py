@@ -79,12 +79,39 @@ class info_holder:
         self.info = info
 
 
+def test_an_hbt_row_leaves_the_scale_where_either_half_is_bad():
+    import mne
+    info = mne.create_info(["S1_D1 hbo", "S1_D1 hbr", "S1_D2 hbo", "S1_D2 hbr"], 1.0, "misc")
+    info["bads"] = ["S1_D2 hbr"]
+    df = pd.DataFrame({"ch_name": ["S1_D1 hbt", "S1_D2 hbt", "S1_D2 hbo"],
+                       "Coef.": [1.0, 90.0, 50.0]})
+    assert _shared_clim({"a": df}, info_holder(info), "hbt")["pos_lims"][-1] == pytest.approx(1.0)
+
+
+def test_each_chromophore_is_a_row_on_its_own_scale(monkeypatch):
+    seen = []
+
+    def fake(raw_haemo, results_df, clim, view, size, title, chroma):
+        seen.append((title, clim["pos_lims"][-1]))
+        return _tiny_png(12, 8)
+
+    monkeypatch.setattr(glm_figures, "_save_glm_brain", fake)
+    df = pd.DataFrame({"ch_name": ["S1_D1 hbo", "S1_D1 hbr", "S1_D1 hbt"],
+                       "Coef.": [1.0, -0.2, 0.8]})
+    out = activation_condition_figures(None, {"tap": df})
+    assert [title for title, _ in seen] == ["tap - HbO", "tap - HbR", "tap - HbT"]
+    # HbR is scaled by its own betas, not by HbO's larger ones
+    assert [limit for _, limit in seen] == pytest.approx([1.0, 0.2, 0.8], rel=0.05)
+    # one picture per condition, its rows stacked
+    assert [label for label, _ in out] == ["tap"] and _png_height(out[0][1]) == 3 * 8
+
+
 # ---- one figure per condition ----
 
 def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
     seen = []
 
-    def fake(raw_haemo, results_df, clim, view, size, title):
+    def fake(raw_haemo, results_df, clim, view, size, title, chroma):
         seen.append((title, clim["pos_lims"][-1]))
         return _tiny_png()
 
@@ -93,14 +120,15 @@ def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
 
     assert [label for label, _ in out] == ["weak", "strong"]
     # both conditions, and both against the strong one's limit rather than their own
-    assert [title for title, _ in seen] == ["weak", "strong"]
+    assert [title for title, _ in seen] == ["weak - HbO", "strong - HbO"]
     assert [limit for _, limit in seen] == pytest.approx([4.0, 4.0], rel=0.05)
 
 
 def _fails_for(*labels):
     def render(*a, **k):
-        if a[5] in labels:
-            raise RuntimeError(f"no surface for {a[5]}")
+        cond = a[5].split(" - ")[0]
+        if cond in labels:
+            raise RuntimeError(f"no surface for {cond}")
         return _tiny_png()
     return render
 

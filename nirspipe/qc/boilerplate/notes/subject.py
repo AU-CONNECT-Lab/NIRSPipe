@@ -175,11 +175,11 @@ NOTES = {
         "from the denoised residual. The map shows where the amplitude is; the connectivity "
         "panel below gives each channel&rsquo;s value beside its correlations.",
     "rest.alff_brain":
-        "mALFF of HbO: each kept long channel&rsquo;s amplitude over its chromophore&rsquo;s "
-        "mean, so 1 is an average channel, spread over the cortex within 3 cm. Yellow is "
-        "stronger, purple weaker, grey unmeasured. Low is not a poor channel.",
+        "mALFF, a block per chromophore: each kept long channel&rsquo;s amplitude over its "
+        "chromophore&rsquo;s mean, so 1 is an average channel, spread over the cortex within "
+        "3 cm. Yellow is stronger, purple weaker, grey unmeasured. Low is not a poor channel.",
     "fc.channel_matrix":
-        "Channel-by-channel Pearson r, HbO left and HbR right on one scale, on the residual "
+        "Channel-by-channel Pearson r, a matrix per chromophore on one scale, on the residual "
         "the mode analyses. In rest mode each channel&rsquo;s ALFF and fALFF sit below in "
         "the same order. Rejected channels are left off.",
     "fc.roi_matrix":
@@ -193,9 +193,10 @@ NOTES = {
         "inside the seed (undefined, not zero); faded grey ones were rejected. Short "
         "channels are not drawn.",
     "glm.activation":
-        "HbO betas on the surface, three views per condition, on one colour scale shared by "
-        "every condition so a weak condition reads as weak. One model over the whole "
-        "recording, so every condition rests on the same channels. Select a condition.",
+        "Betas on the surface, a row of three views per chromophore, each chromophore on one "
+        "colour scale shared by every condition so a weak condition reads as weak. One model "
+        "over the whole recording, so every condition rests on the same channels. Select a "
+        "condition.",
     "glm.whitening":
         "The t values assume the whitened residual is white: a flat line at 1 and dots inside "
         "the band. Power above 1 near the dashed design frequencies makes t too large.",

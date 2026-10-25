@@ -20,8 +20,8 @@ from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-# run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
-_ALFF_DF, _FC_DF, _FC_SEED, _FC_ROI = 3, 4, 6, 7
+# run_post: (result, glm_est, dm, alff_df, fc, fc_seed, fc_roi)
+_ALFF_DF, _FC, _FC_SEED, _FC_ROI = 3, 4, 5, 6
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +85,7 @@ def fc_no_roi(haemo, tmp_path_factory):
 def test_without_the_flag_nothing_connectivity_is_written(plain):
     out, out_dir = plain
     assert _names(out_dir, "*_relmat.tsv") == []
-    assert out[_FC_DF] is None and out[_FC_ROI] == {} and out[_FC_SEED] == {}
+    assert out[_FC] == {} and out[_FC_ROI] == {} and out[_FC_SEED] == {}
 
 
 def test_the_flag_writes_the_same_family_rest_writes(fc_with_roi):
@@ -100,7 +100,7 @@ def test_the_flag_writes_the_same_family_rest_writes(fc_with_roi):
             expected = derivative_path(out_dir, "relmat", ".tsv", subject="01",
                                        task="tapping", chromophore=chromo, **entities)
             assert expected.name in written, expected.name
-    assert out[_FC_DF] is not None
+    assert "hbo" in out[_FC]
     assert sorted(out[_FC_ROI]) == ["hbo", "hbr"]
     assert sorted(out[_FC_SEED]) == ["hbo", "hbr"]
 
@@ -115,7 +115,7 @@ def test_the_roi_products_need_a_roi_map(fc_no_roi):
     out, out_dir = fc_no_roi
     assert _names(out_dir, "*fcroi*.tsv") == []
     assert _names(out_dir, "*fcseed*.tsv") == []
-    assert out[_FC_DF] is not None                      # the channel matrices still come
+    assert "hbo" in out[_FC]                      # the channel matrices still come
 
 
 # ---- what the mode cannot produce ----

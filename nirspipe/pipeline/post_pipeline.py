@@ -289,12 +289,12 @@ def run_post(
 ) -> tuple:
     """Run post-processing pipeline.
 
-    Returns (result, glm_est, design_matrix, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi).
+    Returns (result, glm_est, design_matrix, alff_df, fc, fc_seed, fc_roi).
     glm_est / design_matrix are None only when no regression ran; denoise and rest return
     them too, fitted on empty events, so the design holds confound columns and no condition.
     alff_df is None outside rest mode. The FC products are written by rest mode, and by glm
-    and denoise mode under ``config.fc``; fc_df holds the HbO matrix.
-    fc_seed and fc_roi are {chromophore: frame}, both empty without --roi-mapping.
+    and denoise mode under ``config.fc``. fc, fc_seed and fc_roi are {chromophore: frame},
+    the last two empty without --roi-mapping.
     """
 
     rec = Recorder()
@@ -345,7 +345,8 @@ def run_post(
     # SQM is not computed here either; the record is assembled from disk after this
     # pipeline returns, which is what lets one writer own the whole file.
 
-    glm_est = dm = alff_df = fc_df = fc_hbr_df = None
+    glm_est = dm = alff_df = None
+    fc: dict = {}
     fc_seed: dict = {}
     fc_roi: dict = {}
     raw_resid = None  # set by the glm/rest/denoise branches
@@ -400,7 +401,7 @@ def run_post(
         # is what the model did not explain.
         if config.fc:
             _warn_fc_without_bandpass(config)
-            fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+            fc, fc_roi, fc_seed = _write_fc_derivatives(
                 raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
     elif mode == "rest":
@@ -474,7 +475,7 @@ def run_post(
                                   rec=rec, source_entities=source_entities, known_spans=known_spans,
                                   inputs=glm_inputs(None, aux_path))
 
-        alff_df, fc_df, fc_hbr_df, fc_roi, fc_seed = _write_rest_derivatives(
+        alff_df, fc, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
     elif mode == "denoise":
@@ -511,7 +512,7 @@ def run_post(
         # the full spectrum, so the number would be ~1 by construction.
         if config.fc:
             _warn_fc_without_bandpass(config)
-            fc_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+            fc, fc_roi, fc_seed = _write_fc_derivatives(
                 raw_resid if raw_resid is not None else result,
                 config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
 
@@ -523,7 +524,7 @@ def run_post(
     # GCOR around the confound regression is not measured here. Both of its stages are
     # written to disk and the SQM record measures each one per channel set, so the report
     # reads `filtered` -> `errts`.
-    return result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi
+    return result, glm_est, dm, alff_df, fc, fc_seed, fc_roi
 
 
 def final_stage(config: PostConfig, mode: Mode) -> "str | None":
@@ -660,8 +661,8 @@ def _write_fc_derivatives(
 ) -> tuple:
     """Write the FC, ROI FC and seed-map TSVs for one residual.
 
-    Returns (fc_hbo_df, fc_hbr_df, fc_roi, fc_seed). The last two are
-    {chromophore: frame} and stay empty without a roi_map. ``joined_rois`` is
+    Returns (fc, fc_roi, fc_seed), each {chromophore: frame}; the last two stay empty
+    without a roi_map. ``joined_rois`` is
     {chromophore: (ROI signals, members per run)} from
     :func:`~nirspipe.pipeline.combine_runs.join_roi_signals`, for a joined series, and
     ``joined_hbt`` that series' HbT, joined from each run's own.
@@ -700,13 +701,13 @@ def _write_fc_derivatives(
     def _roi(extra: dict) -> dict:
         return {**extra, "segmentation": config.roi_map_name}
 
-    fc_hbo_df = fc_hbr_df = None
+    fc: dict[str, pd.DataFrame] = {}
     fc_roi: dict[str, pd.DataFrame] = {}
     fc_seed: dict[str, pd.DataFrame] = {}
 
     kept = _kept_time(raw_resid, config, "FC", rec)
     if kept is None:
-        return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
+        return fc, fc_roi, fc_seed
 
     def _sidecar(path: Path, step: str, **params) -> None:
         write_step_sidecar(path, step, src_bp, bads,
@@ -782,12 +783,9 @@ def _write_fc_derivatives(
 
                 fc_seed[chromo] = fc_seed_df
 
-        if chromo == "hbo":
-            fc_hbo_df = fc_df
-        elif chromo == "hbr":
-            fc_hbr_df = fc_df
+        fc[chromo] = fc_df
 
-    return fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
+    return fc, fc_roi, fc_seed
 
 
 def _write_rest_derivatives(
@@ -801,7 +799,7 @@ def _write_rest_derivatives(
 ) -> tuple:
     """Write ALFF/fALFF and everything :func:`_write_fc_derivatives` writes.
 
-    Returns (alff_df | None, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed).
+    Returns (alff_df | None, fc, fc_roi, fc_seed).
     ALFF/fALFF use the broadband residual (raw_resid_bb); every FC product uses the
     bandpassed one.
     """
@@ -854,9 +852,9 @@ def _write_rest_derivatives(
     elif raw_resid_bb is None:
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
-    fc_hbo_df, fc_hbr_df, fc_roi, fc_seed = _write_fc_derivatives(
+    fc, fc_roi, fc_seed = _write_fc_derivatives(
         raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
-    return alff_df, fc_hbo_df, fc_hbr_df, fc_roi, fc_seed
+    return alff_df, fc, fc_roi, fc_seed
 
 
 # the parameters that make two runs off one recording two different analyses rather than

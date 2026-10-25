@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `--chromophores` chooses what the GLM tables, block average, FC and ALFF carry; `hbt`, HbO plus HbR, is off by default
 
+### Changed
+- The run report's GLM activation and ALFF brains draw every chromophore of the run, HbR included, and its connectivity figures follow `--chromophores`
+
 ## [0.75.0] - 2026-10-25
 
 ### Added

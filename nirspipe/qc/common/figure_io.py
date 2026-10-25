@@ -19,6 +19,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import mne
+import numpy as np
 from plotly.offline import get_plotlyjs, get_plotlyjs_version
 
 from nirspipe.utils import is_marker, pair_of
@@ -356,6 +357,21 @@ def fig_png_b64(fig, dpi: int = 300, **savefig_kw) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight", **savefig_kw)
     plt.close(fig)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def stack_png_b64(b64s: "list[str]") -> str:
+    """Base64 PNGs one above the other as one, the narrower ones padded white on the right."""
+    from PIL import Image
+
+    if len(b64s) == 1:
+        return b64s[0]
+    rows = [np.array(Image.open(io.BytesIO(base64.b64decode(b))).convert("RGB")) for b in b64s]
+    width = max(r.shape[1] for r in rows)
+    rows = [np.pad(r, ((0, 0), (0, width - r.shape[1]), (0, 0)), constant_values=255)
+            for r in rows]
+    buf = io.BytesIO()
+    Image.fromarray(np.vstack(rows)).save(buf, format="PNG", optimize=True)
     return base64.b64encode(buf.getvalue()).decode()
 
 

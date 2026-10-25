@@ -18,8 +18,11 @@ def _hex_to_rgba(hex_color: str, alpha: float) -> str:
 
 HBO_COLOR      = "#e74c3c"
 HBR_COLOR      = "#3498db"
+HBT_COLOR      = "#27ae60"
 HBO_MEAN_COLOR = "#c0392b"   # darker HbO for bold mean line
 HBR_MEAN_COLOR = "#11629e"   # darker HbR for bold mean line
+# each chromophore's printed name and colour, in the order every figure lists them
+CHROMA_STYLE = {"hbo": ("HbO", HBO_COLOR), "hbr": ("HbR", HBR_COLOR), "hbt": ("HbT", HBT_COLOR)}
 
 # By source-detector separation, the split every raw-level view uses.
 LONG_COLOR  = "#f37d7d"

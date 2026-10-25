@@ -48,6 +48,13 @@ def hbt_of(raw: mne.io.BaseRaw) -> mne.io.BaseRaw:
     return out
 
 
+def chroma_channels(raw: mne.io.BaseRaw, chroma: str) -> mne.io.BaseRaw:
+    """A copy of ``raw`` holding one chromophore's channels, HbT made from the pair."""
+    if chroma == "hbt":
+        return hbt_of(raw)
+    return raw.copy().pick([ch for ch in raw.ch_names if chroma_of(ch) == chroma])
+
+
 def with_hbt(raw: mne.io.BaseRaw, chromophores: "Iterable[str]") -> mne.io.BaseRaw:
     """A copy of ``raw`` with :func:`hbt_of` added when ``chromophores`` holds hbt, else ``raw`` itself; never written to a file."""
     if "hbt" not in chromophores:

@@ -22,7 +22,7 @@ from nirspipe.qc.figures.subject.rest_figures import _head_for, fc_seed_topo_fig
 from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
-_FC_SEED = 6  # run_post: (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
+_FC_SEED = 5  # run_post: (result, glm_est, dm, alff_df, fc, fc_seed, fc_roi)
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +77,7 @@ def test_run_post_returns_no_seed_frame_without_a_roi_map(haemo, tmp_path):
 # ---- the figure ----
 
 def test_figure_is_a_plotly_figure(haemo, seed_frames):
-    fig = fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"])
+    fig = fc_seed_topo_figure(haemo, seed_frames)
     assert isinstance(fig, go.Figure) and len(fig.data)
 
 
@@ -85,19 +85,19 @@ def test_figure_grows_a_column_per_seed(haemo):
     hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
     one = compute_fc_seed(haemo, {"left": hbo[:2]}, "hbo")
     two = compute_fc_seed(haemo, {"left": hbo[:2], "right": hbo[2:4]}, "hbo")
-    assert _panel_titles(fc_seed_topo_figure(haemo, one)) == ["left - HbO"]
-    assert _panel_titles(fc_seed_topo_figure(haemo, two)) == ["left - HbO", "right - HbO"]
-    assert (fc_seed_topo_figure(haemo, two).layout.height
-            == fc_seed_topo_figure(haemo, one).layout.height)
+    assert _panel_titles(fc_seed_topo_figure(haemo, {"hbo": one})) == ["left - HbO"]
+    assert _panel_titles(fc_seed_topo_figure(haemo, {"hbo": two})) == ["left - HbO", "right - HbO"]
+    assert (fc_seed_topo_figure(haemo, {"hbo": two}).layout.height
+            == fc_seed_topo_figure(haemo, {"hbo": one}).layout.height)
 
 
 def test_seeds_past_four_wrap_into_another_row(haemo):
     hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
     four = compute_fc_seed(haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcd")}, "hbo")
     five = compute_fc_seed(haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcde")}, "hbo")
-    assert _panel_titles(fc_seed_topo_figure(haemo, five)) == [f"{k} - HbO" for k in "abcde"]
-    assert (fc_seed_topo_figure(haemo, five).layout.height
-            > fc_seed_topo_figure(haemo, four).layout.height)
+    assert _panel_titles(fc_seed_topo_figure(haemo, {"hbo": five})) == [f"{k} - HbO" for k in "abcde"]
+    assert (fc_seed_topo_figure(haemo, {"hbo": five}).layout.height
+            > fc_seed_topo_figure(haemo, {"hbo": four}).layout.height)
 
 
 def _row_px(fig) -> float:
@@ -108,24 +108,32 @@ def _row_px(fig) -> float:
 
 def test_a_head_keeps_its_size_however_many_seeds(haemo):
     hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
-    one = fc_seed_topo_figure(haemo, compute_fc_seed(haemo, {"a": hbo[:2]}, "hbo"))
-    four = fc_seed_topo_figure(haemo, compute_fc_seed(
-        haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcd")}, "hbo"))
+    one = fc_seed_topo_figure(haemo, {"hbo": compute_fc_seed(haemo, {"a": hbo[:2]}, "hbo")})
+    four = fc_seed_topo_figure(haemo, {"hbo": compute_fc_seed(
+        haemo, {k: hbo[i:i + 1] for i, k in enumerate("abcd")}, "hbo")})
     assert _row_px(four) == pytest.approx(_row_px(one), abs=1)
 
 
 def test_figure_grows_a_row_for_the_second_chromophore(haemo, seed_frames):
-    hbo_only = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"]))
-    both = _panel_titles(fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]))
+    hbo_only = _panel_titles(fc_seed_topo_figure(haemo, {"hbo": seed_frames["hbo"]}))
+    both = _panel_titles(fc_seed_topo_figure(haemo, seed_frames))
     assert all(t.endswith("HbO") for t in hbo_only)
     # the HbO row, then the HbR row under it, the seeds in the same order
     assert both == hbo_only + [t.replace("HbO", "HbR") for t in hbo_only]
-    assert fc_seed_topo_figure(haemo, seed_frames["hbo"]).layout.height <            fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"]).layout.height
+    assert fc_seed_topo_figure(haemo, {"hbo": seed_frames["hbo"]}).layout.height <            fc_seed_topo_figure(haemo, seed_frames).layout.height
+
+
+def test_hbt_is_a_row_of_its_own_under_the_others(haemo, roi_map, seed_frames):
+    from nirspipe.pipeline.chromophores import hbt_of
+
+    hbt = compute_fc_seed(hbt_of(haemo), roi_map, "hbt")
+    titles = _panel_titles(fc_seed_topo_figure(haemo, {**seed_frames, "hbt": hbt}))
+    assert titles == [f"{roi} - {label}" for label in ("HbO", "HbR", "HbT") for roi in roi_map]
 
 
 def test_one_colour_bar_for_the_whole_grid(haemo, seed_frames):
     """Every panel is on the fixed +-1 scale, so a bar per panel would be the same bar."""
-    fig = fc_seed_topo_figure(haemo, seed_frames["hbo"], seed_frames["hbr"])
+    fig = fc_seed_topo_figure(haemo, seed_frames)
     assert sum(1 for t in fig.data if getattr(t.marker, "showscale", False)) == 1
 
 
@@ -134,7 +142,7 @@ def test_a_seed_s_own_channels_are_drawn_without_a_colour(haemo, roi_map, seed_f
     that none is being made, where a blue channel would claim no connection."""
     from nirspipe.qc.figures.common.head_map import BLANK_COLOR
 
-    fig = fc_seed_topo_figure(haemo, seed_frames["hbo"])
+    fig = fc_seed_topo_figure(haemo, {"hbo": seed_frames["hbo"]})
     assert any(t.marker.color == BLANK_COLOR for t in fig.data)
 
 
@@ -143,11 +151,11 @@ def test_figure_is_none_without_optode_positions(haemo, seed_frames):
     flat = haemo.copy()
     for ch in flat.info["chs"]:
         ch["loc"] = np.zeros(12)
-    assert fc_seed_topo_figure(flat, seed_frames["hbo"]) is None
+    assert fc_seed_topo_figure(flat, {"hbo": seed_frames["hbo"]}) is None
 
 
 def test_figure_is_none_with_no_frames(haemo):
-    assert fc_seed_topo_figure(haemo, None, None) is None
+    assert fc_seed_topo_figure(haemo, {}) is None
 
 
 def test_the_head_drops_a_pair_with_no_location(haemo):

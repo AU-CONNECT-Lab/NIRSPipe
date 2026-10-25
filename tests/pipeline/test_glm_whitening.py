@@ -153,6 +153,17 @@ def test_the_design_peak_is_the_block_rate(written):
     assert peaks["tapping"] == pytest.approx(1 / 40, abs=0.002)
 
 
+def test_the_figure_draws_the_chromophores_the_tables_hold():
+    spectrum = pd.DataFrame({"freq": np.linspace(0.01, 1.0, 20),
+                             **{f"{c}_{kind}": np.ones(20) for c in ("hbo", "hbt")
+                                for kind in ("whitened", "residual")}})
+    channels = pd.DataFrame({"ch_name": ["S1_D1 hbo", "S1_D1 hbt"], "Chroma": ["hbo", "hbt"],
+                             "long": True, "bad": False, "n_samples": 100,
+                             "acf1_whitened": [0.1, 0.2]})
+    names = {t.name for t in whitening_figure(spectrum, channels, {}, (0.01, 0.1)).data}
+    assert {"HbO whitened", "HbT whitened"} <= names and "HbR whitened" not in names
+
+
 def test_the_figure_draws_both_panels(written):
     nirs_dir, dm = written["auto"]
     fig = whitening_figure(

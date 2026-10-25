@@ -42,6 +42,11 @@ def test_the_roi_matrix_draws_both_chromophores():
     assert _panels(fc_roi_matrix_figure({"hbo": frame, "hbr": frame})) ==            ["ROI FC - HbO", "ROI FC - HbR"]
 
 
+def test_the_roi_matrix_draws_hbt_after_the_others():
+    frame = _roi_frame(["PFC", "TPJ"])
+    assert _panels(fc_roi_matrix_figure({"hbt": frame, "hbo": frame})) ==            ["ROI FC - HbO", "ROI FC - HbT"]
+
+
 def test_the_roi_matrix_prints_every_cell():
     """A handful of ROIs means the numbers fit, and a matrix whose values all sit near one
     another renders as a flat square without them."""
@@ -77,7 +82,7 @@ def test_a_matrix_is_drawn_as_a_triangle():
     """It is symmetric, so the upper half is the same values read the other way round;
     drawing both doubles the ink for no second reading."""
     pairs = ["S1_D1", "S1_D2", "S2_D1"]
-    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, None)
+    fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")})
     z = np.asarray(next(t for t in fig.data if t.type == "heatmap").z, dtype=float)
     assert np.isnan(z[np.triu_indices(len(pairs))]).all()      # upper half and diagonal
     assert np.isfinite(z[np.tril_indices(len(pairs), -1)]).all()   # lower half kept
@@ -86,11 +91,29 @@ def test_a_matrix_is_drawn_as_a_triangle():
 def test_the_panel_splits_the_matrices_by_chromophore():
     pairs = ["S1_D1", "S1_D2", "S2_D1"]
     hbo, hbr = _fc_frame(pairs, "hbo"), _fc_frame(pairs, "hbr")
-    assert _panels(rest_channel_panel(hbo, hbr))[:2] == ["HbO", "HbR"]
-    heat = [t for t in rest_channel_panel(hbo, hbr).data if t.type == "heatmap"]
+    assert _panels(rest_channel_panel({"hbo": hbo, "hbr": hbr}))[:2] == ["HbO", "HbR"]
+    heat = [t for t in rest_channel_panel({"hbo": hbo, "hbr": hbr}).data if t.type == "heatmap"]
     assert len(heat) == 2
     # the matrices are labelled by pair, the chromophore being the panel's own title
     assert list(heat[0].x) == pairs
+
+
+def test_the_panel_draws_a_matrix_and_a_marker_per_chromophore():
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    chromas = ("hbo", "hbr", "hbt")
+    alff = pd.DataFrame({"channel": [f"{p} {c}" for p in pairs for c in chromas],
+                         "alff": np.arange(9.0), "falff": np.arange(9.0) / 10})
+    fig = rest_channel_panel({c: _fc_frame(pairs, c) for c in chromas}, alff)
+    assert _panels(fig)[:3] == ["HbO", "HbR", "HbT"]
+    assert [t.type for t in fig.data].count("heatmap") == 3
+    markers = {t.name for t in fig.data if getattr(t, "mode", None) == "markers"}
+    assert {"HbO", "HbR", "HbT"} <= markers
+
+
+def test_an_hbr_only_run_puts_its_matrix_first():
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    fig = rest_channel_panel({"hbr": _fc_frame(pairs, "hbr")})
+    assert _panels(fig) == ["HbR"]
 
 
 def test_the_panel_rows_share_one_channel_order():
@@ -99,7 +122,7 @@ def test_the_panel_rows_share_one_channel_order():
     pairs = ["S2_D1", "S1_D1", "S1_D2"]
     alff = pd.DataFrame({"channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
                          "alff": np.arange(6.0), "falff": np.arange(6.0) / 10})
-    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, alff)
+    fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")}, alff)
     heat = next(t for t in fig.data if t.type == "heatmap")
     strip = next(ax for name, ax in fig.layout.to_plotly_json().items()
                  if name.startswith("xaxis") and ax.get("ticktext"))
@@ -113,26 +136,26 @@ def test_a_rejected_channel_sits_below_the_measured_range_not_on_zero():
     alff = pd.DataFrame({
         "channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
         "alff": [1.0, 1.2, np.nan, np.nan], "falff": [0.2, 0.2, np.nan, np.nan]})
-    fig = rest_channel_panel(_fc_frame(pairs, "hbo"), None, alff)
+    fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")}, alff)
     ring = next(t for t in fig.data if getattr(t, "name", None) == "no value")
     assert all(y < 1.0 for y in ring.y)
 
 
 def test_the_panel_is_the_matrices_alone_without_amplitudes():
-    fig = rest_channel_panel(_fc_frame(["S1_D1", "S1_D2"], "hbo"), None, None)
+    fig = rest_channel_panel({"hbo": _fc_frame(["S1_D1", "S1_D2"], "hbo")})
     assert [t.type for t in fig.data].count("heatmap") == 1
     assert not any(getattr(t, "name", None) in ("HbO", "HbR") for t in fig.data)
 
 
 def test_the_panel_declines_rather_than_raises():
-    assert rest_channel_panel(None, None, None) is None
-    assert rest_channel_panel(pd.DataFrame(), None, None) is None
+    assert rest_channel_panel({}) is None
+    assert rest_channel_panel({"hbo": pd.DataFrame()}) is None
 
 
 def test_both_matrices_use_the_report_s_one_correlation_scale():
     """A copy of the scale per figure would let a red cell mean +1 in one panel and -1 in
     the next."""
-    for fig in (rest_channel_panel(_fc_frame(["S1_D1", "S1_D2"], "hbo"), None, None),
+    for fig in (rest_channel_panel({"hbo": _fc_frame(["S1_D1", "S1_D2"], "hbo")}),
                 fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
         heat = next(t for t in fig.data if t.type == "heatmap")
         assert [c for _, c in heat.colorscale] ==                [c for _, c in pc.get_colorscale(CORRELATION_SCALE)]
@@ -160,7 +183,7 @@ def test_a_channel_with_no_correlation_leaves_every_row_of_the_panel():
     pairs = ["S1_D1", "S1_D2", "S2_D1"]
     alff = pd.DataFrame({"channel": [f"{p} {c}" for p in pairs for c in ("hbo", "hbr")],
                          "alff": np.arange(6.0), "falff": np.arange(6.0) / 10})
-    fig = rest_channel_panel(_without(_fc_frame(pairs, "hbo"), "S1_D2 hbo"), None, alff)
+    fig = rest_channel_panel({"hbo": _without(_fc_frame(pairs, "hbo"), "S1_D2 hbo")}, alff)
     heat = next(t for t in fig.data if t.type == "heatmap")
     strip = next(ax for name, ax in fig.layout.to_plotly_json().items()
                  if name.startswith("xaxis") and ax.get("ticktext"))
@@ -201,11 +224,15 @@ def projected(monkeypatch):
     seen = {}
 
     def project(raw, columns):
-        seen["names"], seen["columns"] = list(raw.ch_names), np.asarray(columns)
+        seen.setdefault("blocks", []).append(list(raw.ch_names))
+        # the first block, HbO, is the one the tests below read
+        seen.setdefault("names", list(raw.ch_names))
+        seen.setdefault("columns", np.asarray(columns))
         return None, None
 
     def render(stc, colour, subjects_dir, size, views):
-        seen["colour"], seen["views"] = colour, views
+        seen.setdefault("colour", colour)
+        seen["views"] = views
         return [np.full((48, 56, 3), 255, np.uint8)] * len(views)
 
     monkeypatch.setattr(rest_figures, "project_to_cortex", project)
@@ -231,6 +258,24 @@ def test_only_the_kept_long_hbo_channels_are_projected(haemo, alff_df, projected
     np.testing.assert_array_equal(projected["columns"][:, 0], malff[names].to_numpy())
     # the second column is the coverage every vertex is divided by
     np.testing.assert_array_equal(projected["columns"][:, 1], 1.0)
+
+
+def test_each_chromophore_of_the_table_is_a_block_of_its_own(haemo, alff_df, projected):
+    from nirspipe.pipeline.chromophores import hbt_of
+
+    hbt = hbt_of(haemo)
+    table = pd.concat([alff_df, pd.DataFrame({"channel": hbt.ch_names, "alff": 1.0,
+                                              "malff": 1.0, "falff": 0.5})])
+    half = _long_hbo(haemo)[0].replace(" hbo", " hbr")
+    marked = haemo.copy()
+    marked.info["bads"] = [half]
+    alff_brain_figure(marked, table)
+    hbo, hbr, total = projected["blocks"]
+    assert [{n.rsplit(" ", 1)[1] for n in names} for names in (hbo, hbr, total)] == [
+        {"hbo"}, {"hbr"}, {"hbt"}]
+    # one bad half takes its HbT out, not its other half
+    pair = half.rsplit(" ", 1)[0]
+    assert f"{pair} hbo" in hbo and f"{pair} hbt" not in total
 
 
 def test_a_rejected_channel_does_not_set_the_colour_scale(haemo, alff_df, projected):
@@ -283,6 +328,7 @@ def test_a_low_and_a_high_channel_land_on_their_own_sides(tmp_path):
         pytest.skip("fsaverage is not on this machine")
 
     names = [f"S{s}_D{d} {c}" for s, d in ((1, 1), (2, 2)) for c in ("hbo", "hbr")]
+    hbo = [n for n in names if n.endswith(" hbo")]
     raw = mne.io.RawArray(np.zeros((4, 100)),
                           mne.create_info(names, 10.0, ["hbo", "hbr", "hbo", "hbr"]),
                           verbose=False)
@@ -292,7 +338,8 @@ def test_a_low_and_a_high_channel_land_on_their_own_sides(tmp_path):
                rpa=[0.084, -0.029, -0.041])
     raw.set_montage(mne.channels.make_dig_montage(ch_pos=pos, coord_frame="head", **fid),
                     verbose="error")
-    frame = pd.DataFrame({"channel": names, "malff": [0.5, 0.5, 1.5, 1.5]})
+    # HbO alone, so the picture is the one 2 x 2 block
+    frame = pd.DataFrame({"channel": hbo, "malff": [0.5, 1.5]})
 
     img = np.array(Image.open(io.BytesIO(base64.b64decode(
         alff_brain_figure(raw, frame)))).convert("RGB")).astype(int)

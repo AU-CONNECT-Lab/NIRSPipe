@@ -23,14 +23,15 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from plotly.subplots import make_subplots
 
-from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.pipeline.chromophores import chroma_channels, chroma_of
+from nirspipe.qc.common.figure_io import fig_png_b64, stack_png_b64
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 
 from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
 from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
 from nirspipe.qc.figures.common._surface_overlay import coverage_rgba
-from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import CHROMA_STYLE
 from nirspipe.qc.figures.common.head_map import (
     BLANK_COLOR, head_axes, head_geometry, head_glyph, head_ground,
 )
@@ -40,8 +41,6 @@ from nirspipe.qc.figures.common.matrix_map import (
 
 logger = get_logger("qc.figures.rest")
 
-_HBO_COLOR = HBO_COLOR
-_HBR_COLOR = HBR_COLOR
 _MEAN_LINE_COLOR = "#555555"
 
 
@@ -119,24 +118,26 @@ def _panel_matrix(fig, frame, order, chromo, col, show_bar):
 
 
 def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
-    """One measure's row: a marker per chromophore per pair, the two joined."""
+    """One measure's row: a marker per chromophore per pair, a pair's markers joined."""
     def value(pair, chromo):
         got = values.get(pair, {}).get(chromo)
         return float(got[measure]) if got is not None and measure in got else np.nan
 
+    chromas = [c for c in CHROMA_STYLE if any(c in v for v in values.values())]
     seg_x, seg_y = [], []
     for xi, p in zip(xs, order):
-        a, b = value(p, "hbo"), value(p, "hbr")
-        if np.isfinite(a) and np.isfinite(b):
+        ys = [y for y in (value(p, c) for c in chromas) if np.isfinite(y)]
+        if len(ys) > 1:
             seg_x += [xi, xi, None]
-            seg_y += [a, b, None]
+            seg_y += [min(ys), max(ys), None]
     fig.add_trace(go.Scatter(x=seg_x, y=seg_y, mode="lines", hoverinfo="skip",
                              line=dict(color=_CONNECTOR, width=1.5), showlegend=False),
                   row=row, col=col)
 
     drawn = np.zeros(len(order), dtype=bool)
     seen = []
-    for chromo, colour, name in (("hbo", _HBO_COLOR, "HbO"), ("hbr", _HBR_COLOR, "HbR")):
+    for chromo in chromas:
+        name, colour = CHROMA_STYLE[chromo]
         y = np.array([value(p, chromo) for p in order])
         ok = np.isfinite(y)
         drawn |= ok
@@ -176,8 +177,7 @@ def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
 
 
 def rest_channel_panel(
-    fc_df,
-    fc_hbr_df=None,
+    fc: "dict[str, pd.DataFrame]",
     alff_df=None,
     raw=None,
     sep_bands=None,
@@ -185,22 +185,22 @@ def rest_channel_panel(
 ):
     """The run's channels in one panel: FC on top, ALFF and fALFF below.
 
-    Built in the shape of the HbO-HbR correlation panel: two matrices side by side on one
-    colour scale, and a per-pair strip under them. Here the two matrices are the two
-    chromophores rather than two stages, and the strips carry amplitude rather than a
-    correlation.
+    Built in the shape of the HbO-HbR correlation panel: matrices side by side on one colour
+    scale, and a per-pair strip under them. Here the matrices are the chromophores in ``fc``
+    ({chromophore: channel matrix}) rather than two stages, and the strips carry amplitude
+    rather than a correlation.
 
     **The rows share one channel order and one set of separation blocks**, so a channel is in
     the same relative place in all of them. They do not share an x *scale*: the matrices are
-    half-width and the strips full-width, so a column and a position correspond as labels and
-    as blocks, not pixel for pixel.
+    narrower than the strips, so a column and a position correspond as labels and as blocks,
+    not pixel for pixel.
 
     ``alff_df`` may be None, which is a run that computed no amplitude, and the panel is then
     the matrices alone. None overall when there is no FC to draw. A channel with no
-    correlation in either matrix is left off every row (:func:`kept_axes`).
+    correlation in any matrix is left off every row (:func:`kept_axes`).
     """
-    frames = {c: f for c, f in (("hbo", fc_df), ("hbr", fc_hbr_df))
-              if f is not None and not f.empty}
+    frames = {c: fc[c] for c in CHROMA_STYLE
+              if fc.get(c) is not None and not fc[c].empty}
     if not frames:
         return None
 
@@ -227,21 +227,21 @@ def rest_channel_panel(
 
     measures = [(m, lab) for m, lab in (("alff", "ALFF (M)"), ("falff", "fALFF"))
                 if alff_df is not None and m in alff_df.columns]
-    # the two strips sit side by side under the two matrices, so the panel is one grid and
-    # not a matrix block with a tail
+    # the strips sit side by side under the matrices, so the panel is one grid and not a
+    # matrix block with a tail
     n_rows = 2 if measures else 1
+    n_cols = max(2, len(frames))
     height = _PANEL_MATRIX_PX + (_PANEL_STRIP_PX if measures else 0) + 150
     heights = [_PANEL_MATRIX_PX] + ([_PANEL_STRIP_PX] if measures else [])
     heights = [h / sum(heights) for h in heights]
+    titles = [CHROMA_STYLE[c][0] for c in frames] + [""] * (n_cols - len(frames))
     fig = make_subplots(
-        rows=n_rows, cols=2, row_heights=heights, vertical_spacing=0.10,
+        rows=n_rows, cols=n_cols, row_heights=heights, vertical_spacing=0.10,
         horizontal_spacing=0.09,
-        subplot_titles=["HbO", "HbR"] + [lab for _, lab in measures])
+        subplot_titles=titles + [lab for _, lab in measures])
 
-    for col, chromo in enumerate(("hbo", "hbr"), start=1):
-        frame = frames.get(chromo)
-        if frame is not None:
-            _panel_matrix(fig, frame, order, chromo, col, show_bar=(col == len(frames)))
+    for col, (chromo, frame) in enumerate(frames.items(), start=1):
+        _panel_matrix(fig, frame, order, chromo, col, show_bar=(col == len(frames)))
 
     for col, (measure, label) in enumerate(measures, start=1):
         _panel_strip(fig, values, order, xs, measure, label, 2, col, legend=(col == 1))
@@ -258,8 +258,15 @@ def rest_channel_panel(
                                    text=name, showarrow=False,
                                    font=dict(color="#9aa5af", size=8), row=2, col=col)
 
+    # a cell neither a matrix nor a strip fills is left blank rather than drawn as empty axes
+    for row, filled in ((1, len(frames)), (2, len(measures) if measures else n_cols)):
+        for col in range(filled + 1, n_cols + 1):
+            fig.update_xaxes(visible=False, row=row, col=col)
+            fig.update_yaxes(visible=False, row=row, col=col)
+
+    names = {label for label, _ in CHROMA_STYLE.values()} | {lab for _, lab in measures}
     for note in fig.layout.annotations:
-        if note.text in ("HbO", "HbR") or note.text in {lab for _, lab in measures}:
+        if note.text in names:
             note.font = dict(size=12, color="#34495e")
     fig.update_layout(
         height=height, plot_bgcolor="white", margin=dict(l=76, r=30, t=96, b=104),
@@ -286,7 +293,7 @@ def fc_roi_matrix_figure(
     left off both axes (:func:`kept_axes`).
     """
     panels = []
-    for chromo, label in (("hbo", "HbO"), ("hbr", "HbR")):
+    for chromo, (label, _) in CHROMA_STYLE.items():
         frame = fc_roi.get(chromo)
         if frame is None or frame.empty:
             continue
@@ -400,15 +407,14 @@ _SEED_COLS = 4
 
 def fc_seed_topo_figure(
     raw: mne.io.Raw,
-    seed_df: pd.DataFrame,
-    seed_hbr_df: pd.DataFrame | None = None,
+    seeds: "dict[str, pd.DataFrame]",
     title: str = "Seed-to-whole-brain connectivity (Pearson r)",
     sep_bands=None,
 ) -> "go.Figure | None":
-    """One flat map per seed ROI, or None if the montage has no positions.
+    """One flat map per seed ROI and chromophore, or None if the montage has no positions.
 
-    compute_fc_seed returns an ROI x channel frame per chromophore, so HbO arrives in seed_df
-    and HbR in seed_hbr_df. Each channel is a bar of discs along its source-to-detector path,
+    compute_fc_seed returns an ROI x channel frame per chromophore, and ``seeds`` holds them
+    as {chromophore: frame}. Each channel is a bar of discs along its source-to-detector path,
     coloured by that seed's correlation with it, on the same reversed RdBu / +-1 scale
     fc_matrix_figure uses so the two figures can be read against each other.
 
@@ -421,8 +427,8 @@ def fc_seed_topo_figure(
     - a **rejected** channel, drawn faded. Whether it also has a value depends on the frame;
       either way the fading says the channel was excluded upstream.
     """
-    panels = [(f, lab) for f, lab in ((seed_df, "HbO"), (seed_hbr_df, "HbR"))
-              if f is not None and not f.empty]
+    panels = [(seeds[c], c) for c in CHROMA_STYLE
+              if seeds.get(c) is not None and not seeds[c].empty]
     if not panels:
         return None
     geo = _head_for(raw, sep_bands)
@@ -433,26 +439,27 @@ def fc_seed_topo_figure(
     rois = list(dict.fromkeys([r for frame, _ in panels for r in frame.index]))
     dim = {pair_of(ch) for ch in raw.info["bads"]}
     # a seed per column, a chromophore per row; past _SEED_COLS seeds the next ones wrap
-    # into another HbO row and HbR row, so a seed's two maps always sit one above the other
+    # into another row per chromophore, so a seed's maps always sit one above the other
     n_cols = min(len(rois), _SEED_COLS)
     chunks = [rois[k:k + n_cols] for k in range(0, len(rois), n_cols)]
     cells = {}
     for k, chunk in enumerate(chunks):
-        for p, (frame, label) in enumerate(panels):
+        for p, (frame, chromo) in enumerate(panels):
             for c, roi in enumerate(chunk, start=1):
-                cells[(k * len(panels) + p + 1, c)] = (roi, frame, label)
+                cells[(k * len(panels) + p + 1, c)] = (roi, frame, chromo)
     n_rows = len(chunks) * len(panels)
     grid = [(r, c) for r in range(1, n_rows + 1) for c in range(1, n_cols + 1)]
-    titles = [f"{cells[rc][0]} - {cells[rc][2]}" if rc in cells else "" for rc in grid]
+    titles = [f"{cells[rc][0]} - {CHROMA_STYLE[cells[rc][2]][0]}" if rc in cells else ""
+              for rc in grid]
     fig = _head_grid(n_rows, n_cols, titles, geo, empty={rc for rc in grid if rc not in cells})
 
     first = True
-    for (i, j), (roi, frame, label) in cells.items():
+    for (i, j), (roi, frame, chromo) in cells.items():
         if roi not in frame.index:
             continue
         row = frame.loc[roi]
         values = _values_for(geo, lambda ch, r=row: float(r[ch]) if ch in r.index
-                             else np.nan, label.lower())
+                             else np.nan, chromo)
         # one bar for the whole figure: every panel is on the same fixed +-1 scale, so
         # a bar per row would be the same bar drawn again
         head_glyph(fig, geo, "long", values, i, j, "Pearson r", -1.0, 1.0,
@@ -473,11 +480,11 @@ _BRAIN_VIEW_PX = (560, 480)
 
 
 def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> "str | None":
-    """mALFF of HbO on the template's cortex in four views, as a base64 PNG.
+    """mALFF on the template's cortex in four views, a block per chromophore the table holds, as a base64 PNG.
 
     The long channels that were kept and carry a value are projected as the GLM activation
-    is, and the scale runs from their lowest value to their highest. None when no channel
-    has one.
+    is, and each block's scale runs from its lowest value to its highest. None when no
+    channel has one.
     """
     from nirspipe.qc.metrics import long_short_channels
 
@@ -485,18 +492,23 @@ def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) ->
     values = alff_df.set_index("channel")[measure].astype(float)
     long_names, _ = long_short_channels(raw, sep_bands)
     long_pairs = {pair_of(ch) for ch in (long_names or raw.ch_names)}
-    bads = set(raw.info["bads"])
-    names = [ch for ch, kind in zip(raw.ch_names, raw.get_channel_types())
-             if kind == "hbo" and ch not in bads and pair_of(ch) in long_pairs
-             and np.isfinite(values.get(ch, np.nan))]
-    if not names:
-        return None
-    vals = values.loc[names].to_numpy()
-    vmin, vmax = float(vals.min()), float(vals.max())
+    held = {chroma_of(ch) for ch in values.index}
+    blocks = []
+    for chroma in (c for c in CHROMA_STYLE if c in held):
+        drawn = chroma_channels(raw, chroma)
+        bads = set(drawn.info["bads"])
+        names = [ch for ch in drawn.ch_names if ch not in bads and pair_of(ch) in long_pairs
+                 and np.isfinite(values.get(ch, np.nan))]
+        if names:
+            blocks.append(_alff_brain_block(drawn.pick(names), values.loc[names].to_numpy(),
+                                            measure, CHROMA_STYLE[chroma][0]))
+    return stack_png_b64(blocks) if blocks else None
 
+
+def _alff_brain_block(drawn: mne.io.Raw, vals: np.ndarray, measure: str, label: str) -> str:
+    vmin, vmax = float(vals.min()), float(vals.max())
     # a column of ones alongside, so each vertex knows how much of it the channels cover
-    stc, subjects_dir = project_to_cortex(raw.copy().pick(names),
-                                          np.column_stack([vals, np.ones_like(vals)]))
+    stc, subjects_dir = project_to_cortex(drawn, np.column_stack([vals, np.ones_like(vals)]))
     with RENDER_LOCK:
         images = render_cortex(
             stc, lambda curv, s: coverage_rgba(curv, s[:, 0], s[:, 1], vmin, vmax),
@@ -512,7 +524,7 @@ def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) ->
         ax.axis("off")
     bar = fig.colorbar(ScalarMappable(norm=Normalize(vmin, vmax), cmap="viridis"),
                        cax=fig.add_subplot(grid[:, 2]))
-    bar.set_label("mALFF (1 = mean channel), HbO" if measure == "malff" else "ALFF (M), HbO",
-                  fontsize=11)
+    bar.set_label(f"mALFF (1 = mean channel), {label}" if measure == "malff"
+                  else f"ALFF (M), {label}", fontsize=11)
     bar.outline.set_linewidth(0.5)
     return fig_png_b64(fig, dpi=100, pad_inches=0.1)

@@ -29,7 +29,7 @@ from nirspipe.io.derivatives import (
 from nirspipe.io.snirf import read_raw_snirf, read_snirf
 from nirspipe.pipeline.denoise import DEFAULT_FILTER_METHOD, DEFAULT_FILTER_ORDER
 from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL
-from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES
+from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, in_order
 from nirspipe.pipeline.dpf import dpf_from_age
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -412,9 +412,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     run_notes.extend([(label, n) for n in _emit_subject_report(
                         subject, sub_dir, raw, result, run_prep_config, args,
                         post.get("glm_est"), post.get("design_matrix"),
-                        alff_df=post.get("alff_df"), fc_df=post.get("fc_df"),
-                        fc_hbr_df=post.get("fc_hbr_df"), fc_seed=post.get("fc_seed") or {},
-                        fc_roi=post.get("fc_roi") or {},
+                        alff_df=post.get("alff_df"), fc=post.get("fc") or {},
+                        fc_seed=post.get("fc_seed") or {}, fc_roi=post.get("fc_roi") or {},
                         high_pass=cfg_high_pass, low_pass=cfg_low_pass,
                         after_haemo=post.get("denoised"),
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
@@ -752,7 +751,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc_df=None, fc_hbr_df=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None):
     from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -792,8 +791,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         # splat: this is a report option and PrepConfig has no field for it
         by_condition=bool(args.get("by_condition")),
         alff_df=alff_df,
-        fc_df=fc_df,
-        fc_hbr_df=fc_hbr_df,
+        fc=fc,
         fc_seed=fc_seed,
         fc_roi=fc_roi,
         after_haemo=after_haemo,
@@ -802,12 +800,12 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         sqm_label=sqm_label,
         roi_map_name=roi_map_name,
         filled_settings=filled_settings,
+        chromophores=in_order(args.get("chromophores") or DEFAULT_CHROMOPHORES),
     )
 
 
 # What post leaves behind for one run, in the order the report section builders want it.
-_POST_FIELDS = ("glm_est", "design_matrix", "alff_df", "fc_df", "fc_hbr_df",
-                "denoised", "fc_seed", "fc_roi")
+_POST_FIELDS = ("glm_est", "design_matrix", "alff_df", "fc", "denoised", "fc_seed", "fc_roi")
 
 
 def _run_post_for_subject(
@@ -858,7 +856,7 @@ def _run_post_for_subject(
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
-                    denoised, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi = run_post(
+                    denoised, glm_est, dm, alff_df, fc, fc_seed, fc_roi = run_post(
                         raw_haemo, post_config, output_dir=output_dir, mode=mode,
                         source_entities=src_entities, source_path=snirf_path,
                         epoch_tmin=args.get("epoch_tmin"), epoch_tmax=args.get("epoch_tmax"),
@@ -868,7 +866,7 @@ def _run_post_for_subject(
                     raise
                 post_runs[bids_label(subject, src_entities)] = dict(zip(
                     _POST_FIELDS,
-                    (glm_est, dm, alff_df, fc_df, fc_hbr_df, denoised, fc_seed, fc_roi),
+                    (glm_est, dm, alff_df, fc, denoised, fc_seed, fc_roi),
                 ))
                 if src_entities.get("run") is not None:
                     # every entity but the run: files told apart by acq are not runs of one series

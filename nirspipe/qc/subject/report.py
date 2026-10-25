@@ -75,6 +75,7 @@ import html as _html
 import mne
 import mne.io
 
+from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES
 from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
@@ -1839,6 +1840,7 @@ def _section_glm(
     segments: "dict | None" = None,
     nirs_dir: "Path | None" = None,
     sqm_label: "str | None" = None,
+    chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
 ) -> dict:
     glm_design_path = None
     glm_design_heatmap_path = None
@@ -1868,6 +1870,8 @@ def _section_glm(
         with _guard("GLM activation panel", errors, subject):
             from nirspipe.qc.figures import activation_condition_figures
             df = glm_est.to_dataframe().reset_index()
+            # the fit covers every channel; the report draws the chromophores the tables carry
+            df = df[df["Chroma"].isin(chromophores)]
             if "Contrast" not in df.columns:
                 for alt in ("contrast", "Regressor", "regressor", "condition", "Condition"):
                     if alt in df.columns:
@@ -1924,12 +1928,11 @@ def _section_glm(
 
 def _section_rest(
     alff_df: "Any | None",
-    fc_df: "Any | None",
+    fc: "dict | None",
     subject: str,
     errors: list,
     figures_dir: Path,
     fig_name,
-    fc_hbr_df: "Any | None" = None,
     fc_seed: dict | None = None,
     fc_roi: dict | None = None,
     raw_haemo: "mne.io.Raw | None" = None,
@@ -1939,9 +1942,8 @@ def _section_rest(
     panel_path = alff_brain_path = fc_roi_path = fc_seed_path = None
     fc_seed_h = panel_h = fc_roi_h = 0
     with _guard("Rest channel panel", errors, subject):
-        if fc_df is not None:
-            fig = rest_channel_panel(fc_df, fc_hbr_df, alff_df, raw=raw_haemo,
-                                     sep_bands=sep_bands)
+        if fc:
+            fig = rest_channel_panel(fc, alff_df, raw=raw_haemo, sep_bands=sep_bands)
             if fig is not None:
                 panel_path, panel_h = _save_plotly_html(
                     fig, figures_dir / fig_name("restpanel"))
@@ -1960,8 +1962,7 @@ def _section_rest(
                         aggregation="roi", statistic="pearson"))
     with _guard("FC seed topography", errors, subject):
         if fc_seed and raw_haemo is not None:
-            fig = fc_seed_topo_figure(raw_haemo, fc_seed.get("hbo"), fc_seed.get("hbr"),
-                                      sep_bands=sep_bands)
+            fig = fc_seed_topo_figure(raw_haemo, fc_seed, sep_bands=sep_bands)
             if fig is not None:   # None means the montage carries no optode positions
                 fc_seed_path, fc_seed_h = _save_plotly_html(
                     fig, figures_dir / fig_name(
@@ -2059,8 +2060,7 @@ def build_subject_report(
     mode: str | None = None,
     by_condition: bool = False,
     alff_df: "Any | None" = None,
-    fc_df: "Any | None" = None,
-    fc_hbr_df: "Any | None" = None,
+    fc: dict | None = None,
     fc_seed: dict | None = None,
     fc_roi: dict | None = None,
     after_haemo: mne.io.Raw | None = None,
@@ -2069,6 +2069,7 @@ def build_subject_report(
     sqm_label: str | None = None,
     roi_map_name: str | None = None,
     filled_settings: list[tuple[str, Any, str]] | None = None,
+    chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
@@ -2271,9 +2272,9 @@ def build_subject_report(
                                               figures_dir, fig_name, notes)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
                                      figures_dir, fig_name, segments=segments,
-                                     nirs_dir=nirs_dir, sqm_label=sqm_label)
-    rest_vars         = _section_rest(alff_df, fc_df, subject, errors, figures_dir, fig_name,
-                                      fc_hbr_df=fc_hbr_df,
+                                     nirs_dir=nirs_dir, sqm_label=sqm_label,
+                                     chromophores=chromophores)
+    rest_vars         = _section_rest(alff_df, fc, subject, errors, figures_dir, fig_name,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
     excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)

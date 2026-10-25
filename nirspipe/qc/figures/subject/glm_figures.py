@@ -21,13 +21,15 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 
-from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.pipeline.chromophores import chroma_channels, chroma_of
+from nirspipe.qc.common.figure_io import fig_png_b64, stack_png_b64
+from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 
 from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
 from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
 from nirspipe.qc.figures.common._surface_overlay import activation_rgba
-from nirspipe.qc.figures.common._utils import HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import CHROMA_STYLE, HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL
 from nirspipe.utils.spans import span_kind
 
@@ -163,7 +165,7 @@ def _clim_vmax(clim: dict) -> float:
     return abs(float(lims[-1]))
 
 
-def _add_shared_colorbar(fig, clim: dict) -> None:
+def _add_shared_colorbar(fig, clim: dict, chroma: str = "hbo") -> None:
     """One horizontal scale under the three views, in micromolar.
 
     The renderer draws a colourbar into every view; this draws it once instead, in the unit
@@ -179,7 +181,7 @@ def _add_shared_colorbar(fig, clim: dict) -> None:
     ticks = np.linspace(-vmax, vmax, 5)
     cb.set_ticks(ticks)
     cb.set_ticklabels([f"{t * 1e6:.3g}" for t in ticks])
-    cb.set_label("HbO beta (µM)", fontsize=11)
+    cb.set_label(f"{CHROMA_STYLE[chroma][0]} beta (µM)", fontsize=11)
     cb.ax.tick_params(labelsize=10)
     cb.outline.set_linewidth(0.5)
 
@@ -204,6 +206,7 @@ def _save_glm_brain(
     view: str = "lat",
     size: tuple[int, int] = (800, 700),
     title: str = "",
+    chroma: str = "hbo",
 ) -> str:
     view_configs = [
         {'azimuth': 180, 'elevation': 90},  # Lateral
@@ -211,28 +214,24 @@ def _save_glm_brain(
         {'azimuth': 90,  'elevation': 90},  # Frontal
     ]
 
-    # HbO only; the HbR betas are reported by the beta heatmap and the beta table
-    ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in results_df.columns), None)
-    raw_hbo = raw_haemo.copy().pick("hbo")
+    ch_col = _ch_col(results_df)
+    drawn = chroma_channels(raw_haemo, chroma)
 
     # stc_near_sensors._get_channel_positions skips bad channels but evoked.data
     # includes them, causing a matmul shape mismatch, so drop bads before passing
-    bads_in_hbo = [b for b in raw_hbo.info["bads"] if b in raw_hbo.ch_names]
-    if bads_in_hbo:
-        raw_hbo.drop_channels(bads_in_hbo)
-
-    hbo_ch_names = set(raw_hbo.ch_names)
+    bads = [b for b in drawn.info["bads"] if b in drawn.ch_names]
+    if bads:
+        drawn.drop_channels(bads)
 
     if ch_col is not None:
-        results_df = results_df[results_df[ch_col].str.endswith("hbo")].copy()
-        results_df = results_df[results_df[ch_col].isin(hbo_ch_names)].copy()
+        results_df = results_df[results_df[ch_col].isin(set(drawn.ch_names))].copy()
 
     coef_col = _coef_col(results_df)
 
     # the projection steps of plot_glm_surface_projection; the render is _render_activation
     if ch_col is not None:
-        results_df = results_df.set_index(ch_col).loc[raw_hbo.ch_names].reset_index()
-    stc, subjects_dir = project_to_cortex(raw_hbo, results_df[coef_col].values[:, np.newaxis])
+        results_df = results_df.set_index(ch_col).loc[drawn.ch_names].reset_index()
+    stc, subjects_dir = project_to_cortex(drawn, results_df[coef_col].values[:, np.newaxis])
     with RENDER_LOCK:
         view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
 
@@ -247,7 +246,7 @@ def _save_glm_brain(
     if title:
         ax.set_title(title, fontsize=16, pad=10)
     fig.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
-    _add_shared_colorbar(fig, clim)
+    _add_shared_colorbar(fig, clim, chroma)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
@@ -295,34 +294,40 @@ def _coef_col(df) -> str:
            "theta" if "theta" in df.columns else df.columns[-1])
 
 
-def _plotted_rows(df, raw_haemo: "mne.io.Raw | None"):
-    """The rows :func:`_save_glm_brain` will actually project: HbO, and not a bad channel.
+def _ch_col(df) -> "str | None":
+    return next((c for c in ("ch_name", "Channel", "channel") if c in df.columns), None)
+
+
+def _plotted_rows(df, raw_haemo: "mne.io.Raw | None", chroma: str = "hbo"):
+    """The rows :func:`_save_glm_brain` will actually project: ``chroma``'s, and not a bad channel.
 
     _plotted_rows(df_with_hbo_and_hbr_rows, raw) -> only the good HbO rows
 
     The colour scale has to be measured on the same set that gets drawn, or a bad channel's
     beta sets a limit no drawn channel comes near.
     """
-    ch_col = next((c for c in ("ch_name", "Channel", "channel") if c in df.columns), None)
+    ch_col = _ch_col(df)
     if ch_col is None:
         return df
     names = df[ch_col].astype(str)
-    keep = names.str.endswith("hbo")
+    keep = names.map(chroma_of) == chroma
     bads = set(raw_haemo.info.get("bads") or ()) if raw_haemo is not None else set()
+    # HbT is bad where either half is
+    bads |= {f"{pair_of(b)} hbt" for b in bads}
     if bads:
         keep &= ~names.isin(bads)
     return df[keep]
 
 
 def _shared_clim(results_dict: "dict[str, pd.DataFrame]",
-                 raw_haemo: "mne.io.Raw | None" = None) -> dict:
+                 raw_haemo: "mne.io.Raw | None" = None, chroma: str = "hbo") -> dict:
     """One colour scale over every condition, so two of them can be read against each other.
 
     The limit is a high percentile of the drawn rows rather than their maximum, so one
     surviving outlier channel cannot flatten the rest. There is no absolute floor: at the
     scale of haemoglobin betas a fixed one would grey out every condition.
     """
-    vals = [_plotted_rows(df, raw_haemo)[_coef_col(df)].to_numpy(dtype=float)
+    vals = [_plotted_rows(df, raw_haemo, chroma)[_coef_col(df)].to_numpy(dtype=float)
             for df in results_dict.values()]
     mag = np.abs(np.concatenate(vals)) if vals else np.array([])
     mag = mag[np.isfinite(mag)]
@@ -344,25 +349,30 @@ def activation_condition_figures(
     size: tuple[int, int] = (800, 700),
     failed: "list[tuple[str, str]] | None" = None,
 ) -> "list[tuple[str, str]]":
-    """One brain render per condition, as ``[(label, png_b64), ...]``.
+    """One brain render per condition, a row per chromophore the results hold, as ``[(label, png_b64), ...]``.
 
     activation_condition_figures(haemo, {"rest": df1, "task": df2})
     -> [("rest", "iVBOR..."), ("task", "iVBOR...")]
 
     The report shows these behind one switch rather than stacked, so a condition can be
-    looked at on its own. The colour scale is shared, see :func:`_shared_clim`.
+    looked at on its own. Each chromophore's colour scale is shared by every condition, see
+    :func:`_shared_clim`.
 
     A condition whose render failed is left out rather than kept as a blank panel, so the
     switcher never offers a label with nothing behind it; ``failed`` collects
     ``(label, reason)`` for each one, for the caller to report.
     """
-    if clim is None:
-        clim = _shared_clim(results_dict, raw_haemo)
+    held = {chroma_of(n) for df in results_dict.values() if _ch_col(df) is not None
+            for n in df[_ch_col(df)].astype(str)}
+    chromas = [c for c in CHROMA_STYLE if c in held] or ["hbo"]
+    clims = {c: clim or _shared_clim(results_dict, raw_haemo, c) for c in chromas}
     rendered: list[tuple[str, str]] = []
     for cond, df in results_dict.items():
         try:
-            rendered.append((str(cond), _save_glm_brain(raw_haemo, df, clim, view, size,
-                                                        str(cond))))
+            rows = [_save_glm_brain(raw_haemo, df, clims[c], view, size,
+                                    f"{cond} - {CHROMA_STYLE[c][0]}", chroma=c)
+                    for c in chromas]
+            rendered.append((str(cond), stack_png_b64(rows)))
         except Exception as exc:
             logger.exception("GLM activation render failed for %s", cond)
             if failed is not None:
@@ -740,8 +750,7 @@ def design_peak_frequencies(design_matrix: "pd.DataFrame", conditions: "list[str
 def whitening_figure(spectrum: "pd.DataFrame", channels: "pd.DataFrame",
                      design_freqs: dict, lowband: "tuple[float, float]") -> "go.Figure | None":
     """The whitened residual's spectrum against white, then each channel's lag-1 autocorrelation."""
-    chromas = [(c, label, color) for c, label, color in
-               (("hbo", "HbO", HBO_COLOR), ("hbr", "HbR", HBR_COLOR))
+    chromas = [(c, label, color) for c, (label, color) in CHROMA_STYLE.items()
                if f"{c}_whitened" in spectrum.columns]
     if not chromas or spectrum.empty:
         return None

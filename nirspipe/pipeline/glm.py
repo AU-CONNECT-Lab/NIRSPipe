@@ -623,8 +623,8 @@ def run_glm_pipeline(
             raise StageError(f"contrast {name!r} weights {lost}, dropped from the design "
                              f"because no kept frame carries any of their signal")
 
-    # what the tables report: HbT, when asked for, fitted as a series of its own beside the
-    # pair, whose residual alone is the one returned and written
+    # what the tables and the report show: HbT, when asked for, fitted as a series of its own
+    # beside the pair, whose residual alone is the one returned and written
     tables_est, tables_raw, tables_resid = glm_est, haemo, resid_data
     self_fitted = sole_regressor_channels(haemo, short_channel_used, sep_bands)
     table_noise = dict(noise_params)
@@ -663,7 +663,7 @@ def run_glm_pipeline(
                           short_channel=short_channel_used,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 
-    return haemo, glm_est, dm, raw_resid
+    return haemo, tables_est, dm, raw_resid
 
 
 def _data_residual(glm_est: Any, haemo: mne.io.Raw, design_matrix: pd.DataFrame,

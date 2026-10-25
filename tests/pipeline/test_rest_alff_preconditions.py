@@ -20,7 +20,7 @@ from tests._synth import synth_raw
 
 _BANDS = dict(cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.2, resp_h_freq=0.5)
 
-_ALFF_DF, _FC_DF = 3, 4  # (result, glm_est, dm, alff_df, fc_df, fc_hbr_df, fc_seed, fc_roi)
+_ALFF_DF, _FC = 3, 4  # (result, glm_est, dm, alff_df, fc, fc_seed, fc_roi)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +38,7 @@ def _rest(haemo, tmp_path, **drift):
                         drift_high_pass=0.01, **drift, **_BANDS)
     out = run_post(haemo.copy(), config, output_dir=tmp_path, mode="rest",
                    source_entities={"task": "tapping"})
-    return out[_ALFF_DF], out[_FC_DF], sorted(tmp_path.rglob("*_stat-alff_nirsmap.tsv"))
+    return out[_ALFF_DF], out[_FC].get("hbo"), sorted(tmp_path.rglob("*_stat-alff_nirsmap.tsv"))
 
 
 # ---- drift models that do remove a linear trend ----
