@@ -358,7 +358,8 @@ def test_the_conditions_are_unaffected_by_the_analysis_window(stub_null):
 def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     """The wiring: both functions take the window for the run as well as the ones for the
     conditions."""
-    from nirspipe.pipeline.hyper import wtc_null
+    # imported before the patch, or it would keep the no-op sidecar writer for the session
+    from nirspipe.pipeline.hyper import wtc_null, wtc_store  # noqa: F401
     seen = {}
 
     def _spy(*args, **kwargs):
