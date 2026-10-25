@@ -153,6 +153,14 @@ def test_the_reference_only_supplies_the_ratio_and_draws_nothing():
     assert "SD 0.01×" in fig.layout.annotations[0].text
 
 
+def test_a_stage_drawn_as_its_own_reference_quotes_no_ratio():
+    """A run without postprocessing draws desc-preproc, the reference itself."""
+    preproc = _raw(1e-6)
+    fig = carpet_compare_figure([("desc-preproc", preproc)], ["hbo", "hbr"],
+                                reference=("desc-preproc", preproc))
+    assert fig.layout.annotations[0].text == "desc-preproc"
+
+
 def test_one_gvtd_row_per_channel_set_carrying_both_sides():
     """Long and short measure different depths, so they get a row each, before over after."""
     od = _od()

@@ -116,8 +116,9 @@ def carpet_compare_figure(
             ordered = [names[i] for i in order]
             d = raw.get_data(picks=ordered)
             blocks.append((chromo, ordered, d, groups))
-            # whole-run, so a cut view would quote columns the panel is not drawing
-            if xlim is None and not (reference is None and label == stages[0][0]):
+            # whole-run, so a cut view would quote columns the panel is not drawing; the
+            # reference itself would quote 1.00x of itself
+            if xlim is None and label != ref_label:
                 ref_sd = ref_raw.get_data(picks=ordered).std(axis=1)
                 ref_sd[ref_sd == 0] = 1.0
                 ratios.append((chromo, float(np.median(d.std(axis=1) / ref_sd))))
