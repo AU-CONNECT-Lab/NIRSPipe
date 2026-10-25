@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.76.0] - 2026-10-25
+
 ### Added
 - `--chromophores` chooses what the GLM tables, block average, FC and ALFF carry; `hbt`, HbO plus HbR, is off by default
 - The cohort page counts, per task, how many subjects kept each source-detector pair
