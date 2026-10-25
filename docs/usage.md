@@ -23,7 +23,7 @@ NIRSPipe is a set of command-line entry points. What each step does is described
 
 ## Examples
 
-The cardiac and respiration bands depend on the population and have no default, so every `nirspipe` run names them. The first example spells them out; the rest shorten them to `--cardiac-* --resp-*`.
+The cardiac and respiration bands depend on the population and have no default, so every `nirspipe` run names them; [Channel screening](workflows.md#channel-screening) gives them by age. The first example spells them out; the rest shorten them to `--cardiac-* --resp-*`.
 
 Preprocessing only, with a report per run:
 
@@ -59,12 +59,12 @@ nirspipe /data/bids /data/derivatives participant \
     --mode denoise --short-channel pca --high-pass 0.02 --low-pass 0.2
 ```
 
-Children's faster heart rate needs a higher cardiac band, or good channels are rejected:
+Children's faster heart rate needs a higher cardiac band, or good channels are rejected; for 4 to 8 years old, from the table:
 
 ```bash
 nirspipe /data/bids /data/derivatives participant \
     --dpf 6.0 --sci-threshold 0.8 \
-    --cardiac-l-freq 1.0 --cardiac-h-freq 2.5 --resp-l-freq 0.2 --resp-h-freq 0.8
+    --cardiac-l-freq 0.9 --cardiac-h-freq 2.2 --resp-l-freq 0.2 --resp-h-freq 0.5
 ```
 
 Then the cohort pages, which need no preprocessing flag:

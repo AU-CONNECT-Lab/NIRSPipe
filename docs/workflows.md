@@ -62,7 +62,20 @@ Before the conversion, frames at the start or end of the recording in which most
 
 ### Channel screening
 
-The scalp coupling index (SCI) measures the strength of the cardiac pulsation in the optical density, as a proxy for how well the optode touches the scalp. Peak spectral power (PSP) measures the same pulsation in the frequency domain, computed as QT-NIRS computes it. Both are measured in the cardiac band set by `--cardiac-l-freq` / `--cardiac-h-freq`, which has no default because it depends on the population: choose it around the participants' heart rate, about 1 to 1.7 Hz for adults and 2 to 3 Hz for infants. The band's top edge plus the filter's 0.3 Hz roll-off has to stay below half the sampling rate, and a band that does not is refused with the highest top edge the recording allows.
+The scalp coupling index (SCI) measures the strength of the cardiac pulsation in the optical density, as a proxy for how well the optode touches the scalp. Peak spectral power (PSP) measures the same pulsation in the frequency domain, computed as QT-NIRS computes it. Both are measured in the cardiac band set by `--cardiac-l-freq` / `--cardiac-h-freq`, which has no default because it depends on the population: choose it around the participants' heart rate (the table below). The band's top edge plus the filter's 0.3 Hz roll-off has to stay below half the sampling rate, and a band that does not is refused with the highest top edge the recording allows.
+
+The table gives the resting heart and breathing rates by age and the bands that hold them, rounded outward to 0.1 Hz. Children's rates run from the 1st to the 99th centile of Fleming et al. (2011), a systematic review of 69 studies of awake and sleeping children. Adults' heart rate runs from the 1st to the 99th centile of the US resting pulse in Ostchega et al. (2011), taken seated after four minutes of rest at 20 to 79 years; their breathing rate is the lowest to highest value in Rückert-Eheberg et al. (2025), derived from resting ECG at 39 to 88 years, which publishes no 1st or 99th centile. `--resp-l-freq` / `--resp-h-freq` set the band the respiration power is measured in and the spectra mark. A task that raises the heart rate, such as exercise, needs a higher top edge than the resting range gives.
+
+| Age | Heart rate (beats/min) | Cardiac band (Hz) | Breathing rate (breaths/min) | Respiration band (Hz) |
+|---|---|---|---|---|
+| birth to 3 months | 90 to 181 | 1.5 to 3.1 | 25 to 66 | 0.4 to 1.1 |
+| 3 to 12 months | 93 to 175 | 1.5 to 3.0 | 22 to 64 | 0.3 to 1.1 |
+| 1 to 2 years | 82 to 156 | 1.3 to 2.6 | 19 to 53 | 0.3 to 0.9 |
+| 2 to 4 years | 70 to 142 | 1.1 to 2.4 | 17 to 38 | 0.2 to 0.7 |
+| 4 to 8 years | 59 to 131 | 0.9 to 2.2 | 16 to 29 | 0.2 to 0.5 |
+| 8 to 12 years | 52 to 115 | 0.8 to 2.0 | 14 to 25 | 0.2 to 0.5 |
+| 12 to 18 years | 43 to 108 | 0.7 to 1.8 | 11 to 23 | 0.1 to 0.4 |
+| adults | 47 to 103 | 0.7 to 1.8 | 9 to 28 | 0.1 to 0.5 |
 
 Screening counts 10 s windows; the window is fixed and does not follow `--window-length`. A window *passes* when the channel's SCI clears `--sci-threshold` in it, and a channel is marked bad when it passes in fewer than `--min-good-frac` (0.75 by default) of the windows that count. PSP is computed in the same windows and drawn in every report without a line. `--psp-threshold` has no default; given, a window has to clear it as well as the SCI line, inside the same window, as QT-NIRS does. Its 0.1 comes from PHOEBE, a tool for fitting the headgear before recording, and its authors have used 0.075 on recorded data; on expert-rated recordings either line rejected far more channels than the raters did. `--screen-scope` says which windows count: `run`, the whole recording, or `task`, only the annotated blocks, so the lead-in and the gaps between blocks are not held against a channel. `task` falls back to `run` when no annotation is long enough to hold two windows. A channel passing for only part of a recording can therefore be rejected even when its whole-run SCI passes. The same criteria are used by every path that screens: the pipeline, the raw QC report, the per-trial scoring and the dyad commands.
 
