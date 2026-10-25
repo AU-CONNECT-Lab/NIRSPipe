@@ -56,7 +56,9 @@ Before any data is read, the input is checked with bids-validator when one is in
 
 ### Optical density
 
-Raw intensity is converted to optical density, $\Delta OD_\lambda = -\log(I / I_0)$, with MNE-Python. Writes `desc-od`.
+Raw intensity is converted to optical density, $\Delta OD_\lambda = -\log(I / I_0)$, with MNE-Python, where $I_0$ is the channel's mean. Writes `desc-od`.
+
+Before the conversion, frames at the start or end of the recording in which most channels measured no light (an intensity missing or not above zero) take the values of the nearest frame that did, and are marked `BAD_edge` ([Excluded time](#excluded-time)). Some devices write such a frame when they start or stop. Left in, one missing sample makes the channel's mean, and so its whole optical density, undefined; and the bandpass pads each end by mirroring the signal about its first and last frames, so a dark frame there becomes a step that spreads across the run. The sidecar of `desc-od` records how many frames were held at each end.
 
 ### Channel screening
 
@@ -195,7 +197,7 @@ A design matrix as the report draws it: the condition regressors, the short-chan
 
 **Noise model.** `--noise-model` sets the residual autocorrelation model: `ols`, `arN` for an AR model of order N, `auto` (the default) for an AR order of four times the sampling rate, `ar_irls`, or `worsley`. `ar_irls` alternates the AR whitening with a robust refit that down-weights outlying samples such as residual motion, until the betas stop moving; the order is chosen per channel by BIC, capped at the same bound `auto` uses or at N with `ar_irlsN`. `worsley` keeps `auto`'s order (N with `worsleyN`) and takes the coefficients from the residual's autocovariances after correcting the bias the fit leaves in them (Worsley et al., 2002); a channel whose corrected autocovariances do not admit that order is fitted as `auto`, and the sidecars list it as `worsley_fitted_as_auto`. Every channel keeps its own AR coefficients. Every mode fits the noise model, `denoise` and `rest` on their confound regression.
 
-**Short-channel regression.** Short channels (at or under `--short-max-dist`) see the scalp only. `--short-channel mean` adds the mean of the good short channels as one regressor per chromophore; `pca` adds one orthogonalised column per good short channel, HbO and HbR decomposed together, which fits the same as entering every short channel. `pca` is the recommended choice. A short channel the regressors span is fitted against itself, so its residual is zero and its GLM statistics, connectivity and amplitude values are left blank. A montage with no short channel stops the run; a subject whose short channels were all rejected runs without the regressor, and its record and Methods text say so.
+**Short-channel regression.** Short channels (at or under `--short-max-dist`) see the scalp only. `--short-channel mean` adds the mean of the good short channels as one regressor per chromophore; `pca` adds one orthogonalised column per good short channel, HbO and HbR decomposed together, which fits the same as entering every short channel. A short channel the regressors span is fitted against itself, so its residual is zero and its GLM statistics, connectivity and amplitude values are left blank. A montage with no short channel stops the run; a subject whose short channels were all rejected runs without the regressor, and its record and Methods text say so.
 
 **Auxiliary regressors (experimental).** `--aux-regressors` adds the recording's aux channels to the confound regression, each resampled onto the data's time axis with an anti-alias filter, band-limited to `--high-pass` / `--low-pass` and z-scored. `--aux-channels` picks them by name. Both are withheld from `--help` while they are evaluated.
 
@@ -279,7 +281,7 @@ A run is always processed whole. Time that should not count is marked with an an
 | Kind | Annotation | Comes from | The data there |
 |------|------------|------------|----------------|
 | unselected | `BAD_unselected` | `--keep-spans`: everything outside the stretches its table lists | Intact measurements you chose not to count |
-| corrupted | every other `BAD_` description | `BAD_manual` from `--bad-spans`, `BAD_gvtd` from `--gvtd-censor`, or any `BAD_` span the input file carries | Damaged by motion or another artifact |
+| corrupted | every other `BAD_` description | `BAD_manual` from `--bad-spans`, `BAD_gvtd` from `--gvtd-censor`, `BAD_edge` where most channels measured no light at the recording's start or end ([Optical density](#optical-density)), or any `BAD_` span the input file carries | Damaged by motion or another artifact, or not measured |
 
 The two kinds part ways only before the filters: corrupted time is filled first ([Filling corrupted spans](#filling-corrupted-spans)), intact time is not. From the first estimate on, both are left out alike. An unknown `BAD_` description counts as corrupted.
 
