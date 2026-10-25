@@ -24,7 +24,8 @@ from nirspipe.io.derivatives import entity_of, read_json, write_sidecar_json
 from nirspipe.io.head_template import (FSAVERAGE, describe, from_fsaverage, head_to_mri,
                                        nearest_cortex_regions, reference_points, scalp)
 from nirspipe.io.naming import derivative_path
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import read_tsv_or_none, write_tsv
+from nirspipe.utils import pair_of
 from nirspipe.utils.lineage import path_from
 from nirspipe.utils.logging import get_logger
 
@@ -270,6 +271,26 @@ def recorded_coords_path(run_file) -> Path:
                          f"this derivative tree predates optode placement, rerun nirspipe")
     raise StageError(f"{name} has a channel table in more than one space "
                      f"({', '.join(p.name for p in found)}); rerun nirspipe to keep one")
+
+
+def recorded_regions(run_file, atlas: str = "aparc") -> dict[str, str]:
+    """Each source-detector pair's region in the run's channel table; empty when it has none.
+
+    ``S1_D1 hbo`` and ``S1_D1 hbr`` in ``precentral-lh`` -> ``{"S1_D1": "precentral-lh"}``;
+    an unplaced pair, written ``n/a``, is left out.
+    """
+    try:
+        path = recorded_coords_path(run_file)
+    except StageError:
+        return {}
+    table = read_tsv_or_none(path, "the per-channel table's regions")
+    if table is None or atlas not in table.columns:
+        return {}
+    out: dict[str, str] = {}
+    for name, region in zip(table["name"], table[atlas]):
+        if isinstance(region, str) and region:
+            out.setdefault(pair_of(name), region)
+    return out
 
 
 def _drop_other_spaces(out_path: Path) -> None:

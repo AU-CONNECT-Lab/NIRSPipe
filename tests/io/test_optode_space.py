@@ -22,6 +22,7 @@ from nirspipe.io.optode_space import (
     place_optodes,
     placement_of,
     read_placement,
+    recorded_regions,
     write_channel_coords,
 )
 from nirspipe.io.snirf import read_snirf, write_snirf
@@ -197,6 +198,19 @@ def test_prep_names_each_channels_region_in_both_fsaverage_atlases(prepped):
     assert (table.groupby(pair)[["aparc", "brodmann"]].nunique() == 1).all().all()
     side = json.loads(path.with_suffix(".json").read_text())
     assert {"aparc", "brodmann"} <= set(side)
+
+
+def test_the_report_finds_preps_regions_from_the_run_label(prepped):
+    nirs_dir, _ = prepped
+    table = read_table(nirs_dir / "sub-01_task-rest_space-fsaverage_channels.tsv")
+    expected = dict(zip(table["name"].str.rsplit(" ", n=1).str[0], table["aparc"]))
+    # the four long pairs and the short one
+    assert len(expected) == 5
+    assert recorded_regions(nirs_dir / "sub-01_task-rest_nirs.snirf") == expected
+
+
+def test_a_run_without_a_channel_table_has_no_regions(tmp_path):
+    assert recorded_regions(tmp_path / "sub-01_task-rest_desc-preproc_nirs.snirf") == {}
 
 
 def test_a_derivative_is_placed_by_the_record_not_by_its_own_landmarks(prepped):

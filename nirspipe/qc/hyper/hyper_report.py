@@ -702,7 +702,7 @@ def group_methods(
 # The columns a dyad's channel table prints, dropped rather than listed, so a column added
 # to CHANNEL_COLUMNS reaches this page by default. Same drops the raw viewer makes, plus the
 # whole-run SCI so two members fit side by side: screening reads the windowed one.
-_CH_COLUMNS = channel_columns(("corr", "separation", "sci_whole"))
+_CH_COLUMNS = channel_columns(("corr", "separation", "sci_whole", "region"))
 
 
 def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:

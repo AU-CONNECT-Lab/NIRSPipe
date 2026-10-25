@@ -364,6 +364,8 @@ _COLUMN_METRIC = {
 # the block header already says which side a row is on.
 CHANNEL_COLUMNS = (
     ("name",       "Channel"),
+    # read off the run's channel table, so a view without one drops it
+    ("region",     "Region (aparc)"),
     ("status",     "Status"),
     # the windowed SCI is the one read; the whole-run correlation beside it is context
     ("sci_win",    f"SCI ({SCI_WINDOW_S:g} s)"),
@@ -390,10 +392,10 @@ def channel_columns(drop: "Sequence[str]" = ()) -> list[tuple[str, str]]:
     return [(key, label) for key, label in CHANNEL_COLUMNS if key not in dropped]
 
 
-# Every column a table prints, minus the derived Status, plus the three raw values no table
-# has room for: the passing-window share the verdict rests on, the verdict itself as a flag,
-# and the criterion it failed.
-CSV_FIELDS = (*(key for key, _ in channel_columns(("status",))),
+# Every column a table prints, minus the derived Status and the region the run's channel
+# table already holds, plus the three raw values no table has room for: the passing-window
+# share the verdict rests on, the verdict itself as a flag, and the criterion it failed.
+CSV_FIELDS = (*(key for key, _ in channel_columns(("status", "region"))),
               "good_frac", "is_bad", "reason")
 
 
@@ -653,6 +655,7 @@ def format_rows(
     *,
     name_key: str = "name",
     psp_threshold: float | None = None,
+    regions: "dict[str, str] | None" = None,
 ) -> list[dict[str, Any]]:
     """Rows with the numbers already formatted and the cells already classed.
 
@@ -675,7 +678,8 @@ def format_rows(
     rejected channel is re-derived from its scores, so a run that moved the PSP line has to
     hand that line over or the reason comes out naming the wrong criterion.
     ``sci_threshold`` None means no line was recorded, and the SCI cell stays uncoloured.
-    ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`.
+    ``name_key`` is ``"pair"`` for rows that came through :func:`pair_rows`. ``regions`` is
+    :func:`~nirspipe.io.optode_space.recorded_regions`, pair -> region, for the Region column.
 
     Status is ``BAD`` for a channel rejected on its passing-window share, the reason every
     table's note states once, and ``BAD (manual)`` for one rejected by hand. ``reason`` keeps
@@ -693,6 +697,7 @@ def format_rows(
         shown = [w for w in why if w != passing]
         formatted: dict[str, Any] = {
             "name":       row.get(name_key),
+            "region":     (regions or {}).get(pair_of(row.get(name_key))) or MISSING_VALUE,
             "status":     ("BAD (" + "/".join(shown) + ")" if shown
                            else "BAD" if row["is_bad"] else "OK"),
             "status_cls": "bad" if row["is_bad"] else "good",

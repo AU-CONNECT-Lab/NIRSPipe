@@ -63,6 +63,7 @@ from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.pipeline.motion import overmarked
 from nirspipe.qc.metrics.aggregate import in_analysis_band
 from nirspipe.io.naming import parse_path, report_name
+from nirspipe.io.optode_space import recorded_regions
 from nirspipe.io.tables import read_table
 import matplotlib
 matplotlib.use("Agg")
@@ -1612,12 +1613,15 @@ def _section_sqm(
         }
 
     rows = channel_rows(record_read, sci_scores, bad_channels)
+    # each pair's region as the run's channel table names it; none there, no Region column
+    regions = (recorded_regions(Path(out_dir) / f"{sqm_label}_nirs.snirf")
+               if out_dir is not None and sqm_label else {})
     # the raw rows stay for the quality grid, which wants the numbers; the
     # template gets them formatted, so the per-channel table prints the same widths and the
     # same SCI verdict as the raw viewer and the GUI
     # one row per pair, the wavelength-dependent columns printing both values
     cells = format_rows(pair_rows(rows, by_wavelength=True), sci_threshold,
-                        name_key="pair", psp_threshold=psp_threshold)
+                        name_key="pair", psp_threshold=psp_threshold, regions=regions)
     return {
         "sqm": sqm,
         "channel_rows": rows,
@@ -1627,7 +1631,9 @@ def _section_sqm(
         # the bands are stamped in `raw` only, which `sqm` was not filled from on a split run
         "channel_blocks": separation_blocks(cells, bands_from_record(sqm_all)),
         # the table groups by separation, so the block header says which side a row is on
-        "channel_columns": channel_columns(("separation",)),
+        "channel_columns": channel_columns(("separation",) if regions
+                                           else ("separation", "region")),
+        "channel_regions": regions,
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
         "sqm_short": sqm_short,
@@ -2829,8 +2835,9 @@ def _write_condition_reports(
             cropped = remake_cropped(cond_name, span)
         rows = _condition_channel_rows(record, entry, sci_scores,
                                        set(report_vars.get("bad_channels") or ()))
+        regions = report_vars.get("channel_regions") or {}
         cells = format_rows(pair_rows(rows, by_wavelength=True), cutoffs["sci"],
-                            name_key="pair", psp_threshold=cutoffs["psp"])
+                            name_key="pair", psp_threshold=cutoffs["psp"], regions=regions)
         summary = _section_channel_summary(
             rows, subject, errors, figures_dir, cond_name, cutoffs["sci"],
             psp_thresh=cutoffs["psp"], good_frac_thresh=cutoffs["good_frac"])
@@ -2882,7 +2889,8 @@ def _write_condition_reports(
             "channel_wavelengths": pair_wavelengths(rows),
             "channel_blocks": separation_blocks(cells, separation_bands(config)),
             # a condition has no whole-run SCI: that estimate has no windows to select from
-            "channel_columns": channel_columns(("separation", "sci_whole")),
+            "channel_columns": channel_columns(("separation", "sci_whole") if regions
+                                               else ("separation", "sci_whole", "region")),
             "sqm_all": od_by_set.get("all") or {},
             "sqm_long": od_by_set.get("long") or {},
             "sqm_short": od_by_set.get("short") or {},

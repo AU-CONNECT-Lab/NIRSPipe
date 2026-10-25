@@ -275,6 +275,10 @@ NOTES = {
         "on SCI, and on PSP too when <code>--psp-threshold</code> is given, so a channel can "
         "be BAD with a passing whole-run SCI; BAD (manual) was rejected by hand. A BAD short channel is left out of the "
         "regressors.",
+    "metrics.per_channel_region":
+        "Region is the Desikan-Killiany region of the template cortex nearest the pair's "
+        "midpoint, as the run's channel table names it: where the channel sits, not where "
+        "its light travels.",
     "channel_summary":
         "Green pass, red fail, grey missing, blue-grey measured with no line. Only Status "
         "rejects a channel: too few passing windows (<code>--min-good-frac</code>), a window "

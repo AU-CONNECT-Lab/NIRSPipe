@@ -759,7 +759,8 @@
       one block, which is what a montage of one kind looks like. -#}
   {% set n_blocks = channel_blocks | length %}
   <p class="qm-note">{{ section_note('metrics.per_channel_stage') }}
-    {%- if n_blocks > 1 %} {{ section_note('metrics.per_channel') }}{% endif %}</p>
+    {%- if n_blocks > 1 %} {{ section_note('metrics.per_channel') }}{% endif %}
+    {%- if channel_regions %} {{ section_note('metrics.per_channel_region') }}{% endif %}</p>
   <div style="overflow-x:auto;">
     <table class="qm-table">
       <thead>

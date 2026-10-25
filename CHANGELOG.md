@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
+
 ## [0.76.0] - 2026-10-25
 
 ### Added
