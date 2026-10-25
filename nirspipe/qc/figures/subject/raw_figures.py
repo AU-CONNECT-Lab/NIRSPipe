@@ -36,13 +36,30 @@ EPOCH_MIN_TRIALS = 2
 
 
 
+# how far a pair's longest wavelength is darkened toward black, the shortest kept as is
+_WAVELENGTH_DARKEN = 0.4
+
+
+def _darken(hex_color: str, share: float) -> str:
+    h = hex_color.lstrip("#")
+    return "#" + "".join(f"{round(int(h[i:i + 2], 16) * (1 - share)):02x}" for i in (0, 2, 4))
+
+
 def _ch_colors(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[str]:
-    """Long, short or unclassified per channel, by the split every report uses."""
+    """Long, short or unclassified per channel, by the split every report uses; within a pair, longer wavelengths darker."""
     long_names, short_names = map(set, long_short_channels(raw, sep_bands))
-    return [_hex_to_rgba(LONG_COLOR if ch in long_names
-                         else SHORT_COLOR if ch in short_names
-                         else UNCLASSIFIED_COLOR, 0.78)
-            for ch in raw.ch_names]
+    by_pair: dict[str, set[float]] = {}
+    for ch in raw.info["chs"]:
+        by_pair.setdefault(pair_of(ch["ch_name"]), set()).add(float(ch["loc"][9]))
+    colors = []
+    for ch in raw.info["chs"]:
+        name = ch["ch_name"]
+        base = (LONG_COLOR if name in long_names
+                else SHORT_COLOR if name in short_names else UNCLASSIFIED_COLOR)
+        waves = sorted(by_pair[pair_of(name)])
+        share = _WAVELENGTH_DARKEN * waves.index(float(ch["loc"][9])) / max(len(waves) - 1, 1)
+        colors.append(_hex_to_rgba(_darken(base, share), 0.78))
+    return colors
 
 
 def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:

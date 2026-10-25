@@ -35,6 +35,15 @@ def test_channel_colours_follow_the_long_short_split(raw):
     assert colours[short] == _hex_to_rgba(SHORT_COLOR, 0.78)
 
 
+def test_a_pairs_two_wavelengths_take_two_shades_of_its_colour(raw):
+    pair = raw.ch_names[2].rsplit(" ", 1)[0]
+    first, second = (colours for name, colours in zip(raw.ch_names, _ch_colors(raw))
+                     if name.startswith(pair + " "))
+    # #f37d7d darkened by 0.4 is (146, 75, 75)
+    assert first == _hex_to_rgba(LONG_COLOR, 0.78)
+    assert second == "rgba(146,75,75,0.78)"
+
+
 def test_an_sci_of_zero_is_kept_rather_than_passed_over():
     assert _lookup_sci({"S1_D1 hbo": 0.0, "S1_D1 hbr": 0.9}, "S1_D1 760") == 0.0
 
