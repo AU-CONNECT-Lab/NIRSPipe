@@ -367,14 +367,58 @@ def fit_glm(
     haemo: mne.io.Raw,
     design_matrix: pd.DataFrame,
     noise_model: NoiseModel = "ar1",
+    bins: int | None = None,
 ) -> Any:
     from mne_nirs.statistics import run_glm
     if noise_model.startswith(WORSLEY_PREFIX):
         return fit_worsley(haemo, design_matrix, noise_model)[0]
     if not noise_model.startswith("ar_irls"):
-        bins = max(len(haemo.ch_names), AR_BINS_MIN)
+        bins = bins or max(len(haemo.ch_names), AR_BINS_MIN)
         return run_glm(haemo, design_matrix, noise_model=noise_model, bins=bins)
     return _fit_glm_ar_irls(haemo, design_matrix, noise_model)
+
+
+def constant_channels(haemo: mne.io.Raw, keep: np.ndarray) -> list[str]:
+    """Channels holding one value on every kept frame, e.g. a wholly non-finite one prep zeroed."""
+    return [ch for ch, x in zip(haemo.ch_names, haemo.get_data()) if np.ptp(x[keep]) == 0]
+
+
+def _fit_one_model(haemo: mne.io.Raw, design_matrix: pd.DataFrame, noise_model: str,
+                   keep: np.ndarray, bins: int) -> tuple[Any, list[str]]:
+    """The fit ``noise_model`` names, censored where ``keep`` drops frames, and Worsley's fallbacks."""
+    if noise_model.startswith(WORSLEY_PREFIX):
+        return fit_worsley(haemo, design_matrix, noise_model,
+                           keep=None if keep.all() else keep)
+    if keep.all():
+        return fit_glm(haemo, design_matrix, noise_model=noise_model, bins=bins), []
+    return fit_censored(haemo, design_matrix, keep, noise_model), []
+
+
+def fit_noise_model(haemo: mne.io.Raw, design_matrix: pd.DataFrame, noise_model: str,
+                    keep: np.ndarray) -> tuple[Any, list[str], list[str]]:
+    """(results, Worsley's channels fitted as auto, constant channels fitted by OLS)."""
+    from mne_nirs.statistics._glm_level_first import RegressionResults
+
+    # from the whole run, so the other channels' AR(1) grid is the one they had with it
+    bins = max(len(haemo.ch_names), AR_BINS_MIN)
+    # a constant channel's residual is all zeros, from which no AR model can be estimated
+    constant = constant_channels(haemo, keep) if noise_model != "ols" else []
+    if not constant:
+        return *_fit_one_model(haemo, design_matrix, noise_model, keep, bins), []
+    logger.info("%d constant channel(s) fitted by OLS, no AR model being estimable from "
+                "them: %s", len(constant), constant)
+    varying = [ch for ch in haemo.ch_names if ch not in set(constant)]
+    fits, fitted_as_auto = {}, []
+    if varying:
+        est, fitted_as_auto = _fit_one_model(haemo.copy().pick(varying), design_matrix,
+                                             noise_model, keep, bins)
+        fits.update(est.data)
+    fits.update(_fit_one_model(haemo.copy().pick(constant), design_matrix, "ols", keep,
+                               bins)[0].data)
+    # keyed by the info's own name objects: the container checks identity, not equality
+    return (RegressionResults(haemo.info, {ch: fits[ch] for ch in haemo.ch_names},
+                              design_matrix),
+            fitted_as_auto, constant)
 
 
 def _fit_glm_ar_irls(haemo: mne.io.Raw, design_matrix: pd.DataFrame, spec: str) -> Any:
@@ -511,12 +555,8 @@ def run_glm_pipeline(
     if conditions:
         censor_params["events_left"] = events_left(events, bad_spans(haemo))
     worsley = noise_model.startswith(WORSLEY_PREFIX)
-    fitted_as_auto: list[str] = []
     if keep.all():
-        if worsley:
-            glm_est, fitted_as_auto = fit_worsley(haemo, dm, noise_model)
-        else:
-            glm_est = fit_glm(haemo, dm, noise_model=noise_model)
+        glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
         # the residual in the data's own units. nilearn's `.residuals` subtracts the whitened
         # design's fit instead, which differs from this under any AR noise model
         # nilearn stores per-channel arrays as (n_times, 1); squeeze removes the trailing dim
@@ -542,10 +582,7 @@ def run_glm_pipeline(
                     censor_params["censored_n_spans"],
                     "; events left " + ", ".join(f"{c} {n['left']}/{n['total']}"
                                                  for c, n in left.items()) if left else "")
-        if worsley:
-            glm_est, fitted_as_auto = fit_worsley(haemo, dm, noise_model, keep=keep)
-        else:
-            glm_est = fit_censored(haemo, dm, keep, noise_model)
+        glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
         theta = np.column_stack([np.asarray(glm_est.data[ch].theta).ravel()
                                  for ch in haemo.ch_names])
         # estimated on the kept rows, applied to the whole run, so the residual is full length
@@ -564,6 +601,8 @@ def run_glm_pipeline(
     # off this file whether the systemic component was regressed out
     # the channels whose bias-corrected AR could not be had at the order, fitted as auto
     noise_params = {"worsley_fitted_as_auto": fitted_as_auto} if worsley else {}
+    if fitted_as_ols:
+        noise_params["constant_fitted_as_ols"] = fitted_as_ols
     stamp(raw_resid, stage="errts", step="glm_residuals", source=haemo,
           noise_model=noise_model, **noise_params, drift_model=drift_model,
           short_channel=short_channel_used,

@@ -163,12 +163,22 @@ def _correction_phrase(value: Any) -> str:
     return (f" P values were corrected by {_P_CORRECTION_NAMES[value]} within each "
             "condition, level and test.")
 
-def _noise_phrase(value: Any, fitted_as_auto: "list | None" = None) -> str:
+def _noise_phrase(value: Any, fitted_as_auto: "list | None" = None,
+                  fitted_as_ols: "list | None" = None) -> str:
     """The noise model as prose, expanding the one spelling that names no order.
 
     ``auto`` is mne-nirs' own rule and reaches the sidecar unexpanded, so the sentence has
     to say what it stands for.
     """
+    phrase = _model_phrase(value, fitted_as_auto)
+    if fitted_as_ols:
+        phrase += (f"; {len(fitted_as_ols)} channel(s) holding one value throughout, from "
+                   "which no autoregressive model can be estimated, were fitted by ordinary "
+                   "least squares")
+    return phrase
+
+
+def _model_phrase(value: Any, fitted_as_auto: "list | None") -> str:
     value = str(value or "").strip().lower()
     if value.startswith("worsley"):
         order = value[len("worsley"):]
@@ -563,13 +573,15 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     if key == "confound_regression":
         return {"regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"),
-                                             params.get("worsley_fitted_as_auto")),
+                                             params.get("worsley_fitted_as_auto"),
+                                             params.get("constant_fitted_as_ols")),
                 "censoring": _censoring_phrase(params)}
     if key == "glm":
         return {"conditions": _conditions_phrase(params),
                 "regressors": _regressor_phrase(params),
                 "noise_model": _noise_phrase(params.get("noise_model"),
-                                             params.get("worsley_fitted_as_auto")),
+                                             params.get("worsley_fitted_as_auto"),
+                                             params.get("constant_fitted_as_ols")),
                 "censoring": _censoring_phrase(params)}
     if key == "gvtd_censoring":
         return {"channel_set": str(params.get("gvtd_censor_channel_set")

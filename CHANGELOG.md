@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - pairnull drew a group of three or more for its first two members only, leaving the other pairings without a null
 - groupnull's occasion and cohort levels ranked a group of three or more's mean over every pairing against one pairing's draws
 - In a group of three or more, `--isc-phase-null` gave different members identical phase draws when seeded, and one member different surrogates across its pairings when not
+- Every AR `--noise-model` failed on a recording with a constant channel; such channels are now fitted by OLS and named in the record
 
 ## [0.74.0] - 2026-10-23
 
