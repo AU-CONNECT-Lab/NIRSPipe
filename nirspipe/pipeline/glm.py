@@ -591,6 +591,16 @@ def run_glm_pipeline(
                     censor_params["censored_n_spans"],
                     "; events left " + ", ".join(f"{c} {n['left']}/{n['total']}"
                                                  for c, n in left.items()) if left else "")
+    # a contrast on a dropped condition has nothing to estimate; the rest of the fit stands
+    dropped = set(censor_params.get("dropped_conditions") or [])
+    skipped = {name: sorted(set(weights) & dropped)
+               for name, weights in (contrast_def or {}).items() if set(weights) & dropped}
+    if skipped:
+        for name, lost in skipped.items():
+            logger.warning("contrast %r not computed: no kept frame carries %s", name,
+                           ", ".join(lost))
+        contrast_def = {k: v for k, v in contrast_def.items() if k not in skipped} or None
+        censor_params["skipped_contrasts"] = skipped
     glm_est, fitted_as_auto, fitted_as_ols = fit_noise_model(haemo, dm, noise_model, keep)
     resid_data = _data_residual(glm_est, haemo, dm, keep)
     raw_resid = haemo.copy()
@@ -617,12 +627,6 @@ def run_glm_pipeline(
           # the HRF only shapes a design that holds conditions
           **({"hrf_model": hrf_model} if conditions else {}),
           **design_params, **drift_params, **censor_params)
-
-    dropped = censor_params.get("dropped_conditions") or []
-    for name, weights in (contrast_def or {}).items():
-        if lost := sorted(set(weights) & set(dropped)):
-            raise StageError(f"contrast {name!r} weights {lost}, dropped from the design "
-                             f"because no kept frame carries any of their signal")
 
     # what the tables and the report show: HbT, when asked for, fitted as a series of its own
     # beside the pair, whose residual alone is the one returned and written

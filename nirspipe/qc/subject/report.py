@@ -1389,7 +1389,8 @@ def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
     Empty for a run without ``BAD_`` spans, so its report is the one it always was. The spans
     are desc-sci's, which every later stage carries unchanged; trials left per condition
     come from a task GLM's fit sidecar. ``excluded_skipped`` is every output ``--min-time``
-    skipped, with its recorded reason, spans or none, for the run's notes.
+    skipped and every contrast whose condition no kept frame carries, with its reason, spans
+    or none, for the run's notes.
     """
     skipped = [section_note("excluded.skipped", output=item.get("output"),
                             reason=item.get("reason"))
@@ -1397,12 +1398,15 @@ def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
                               "desc-resampled_nirs")
                for item in _sidecar_of(nirs_dir, sqm_label, subject, suffix).get(
                    "skipped_outputs") or []]
+    glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
+    skipped += [section_note("excluded.skipped", output=f"Contrast {name}",
+                             reason=f"no kept frame carries {', '.join(lost)}")
+                for name, lost in (glm.get("skipped_contrasts") or {}).items()]
     excluded = record.get("excluded") or {}
     if not excluded.get("n_spans"):
         return {"excluded": {}, "excluded_spans": [], "excluded_conditions": [],
                 "excluded_skipped": skipped}
     spans = _sidecar_of(nirs_dir, sqm_label, subject, "desc-sci_nirs").get("excluded_spans") or []
-    glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
     events_left = glm.get("events_left") or {}
     conditions = []
     for label, entry in (record.get("by_condition") or {}).items():

@@ -133,8 +133,50 @@ def test_a_condition_with_no_signal_in_kept_time_is_dropped_and_named():
     params = lineage_of(resid).params
     assert params["dropped_conditions"] == ["rest"]
     assert params["conditions"] == ["tap"]
-    with pytest.raises(StageError, match=r"weights \['rest'\], dropped from the design"):
-        _glm(raw, contrast_def={"rest_minus_tap": {"rest": 1, "tap": -1}})
+
+
+def test_a_contrast_on_a_dropped_condition_is_skipped_and_named_and_the_rest_computed(tmp_path):
+    raw = _haemo(onsets=[20.0, 120.0, 200.0, 180.0], durations=[0.0, 0.0, 0.0, 120.0],
+                 descs=["tap", "tap", "rest", UNSELECTED])
+    nirs = tmp_path / "sub-01" / "nirs"
+    source = nirs / "sub-01_task-tapping_desc-preproc_nirs.snirf"
+    _, _, _, resid = _glm(raw, output_dir=str(nirs), source_path=str(source),
+                          contrast_def={"rest_minus_tap": {"rest": 1, "tap": -1},
+                                        "tap_alone": {"tap": 1}})
+    skipped = {"rest_minus_tap": ["rest"]}
+    assert lineage_of(resid).params["skipped_contrasts"] == skipped
+    glm_side = json.loads((nirs / "sub-01_task-tapping_desc-glm_nirsmap.json").read_text("utf-8"))
+    assert glm_side["parameters"]["skipped_contrasts"] == skipped
+    table = pd.read_csv(nirs / "sub-01_task-tapping_desc-contrast_nirsmap.tsv", sep="\t")
+    assert set(table["contrast"]) == {"tap_alone"}
+    con_side = json.loads((nirs / "sub-01_task-tapping_desc-contrast_nirsmap.json").read_text("utf-8"))
+    assert con_side["parameters"]["contrast_weights"] == {"tap_alone": {"tap": 1}}
+
+
+def test_a_run_whose_every_contrast_is_skipped_writes_the_glm_and_no_contrast_table(tmp_path):
+    raw = _haemo(onsets=[20.0, 120.0, 200.0, 180.0], durations=[0.0, 0.0, 0.0, 120.0],
+                 descs=["tap", "tap", "rest", UNSELECTED])
+    nirs = tmp_path / "sub-01" / "nirs"
+    _glm(raw, output_dir=str(nirs), source_path=str(nirs / "sub-01_task-tapping_desc-preproc_nirs.snirf"),
+         contrast_def={"rest_minus_tap": {"rest": 1, "tap": -1}})
+    assert (nirs / "sub-01_task-tapping_desc-glm_nirsmap.tsv").exists()
+    assert not (nirs / "sub-01_task-tapping_desc-contrast_nirsmap.tsv").exists()
+
+
+def test_methods_and_the_report_notes_name_a_skipped_contrast(tmp_path):
+    from nirspipe.qc.boilerplate.vocabulary import _censoring_phrase
+    from nirspipe.qc.subject.report import _section_excluded
+
+    params = {"censored_frac": 0.4, "noise_model": "ols", "dropped_conditions": ["rest"],
+              "skipped_contrasts": {"rest_minus_tap": ["rest"]}}
+    assert ("Contrast rest_minus_tap, which weights rest, was therefore not computed."
+            in _censoring_phrase(params))
+    nirs = tmp_path / "nirs"
+    nirs.mkdir()
+    (nirs / "sub-01_task-tapping_desc-glm_nirsmap.json").write_text(
+        json.dumps({"parameters": params}), encoding="utf-8")
+    notes = _section_excluded({}, nirs, "sub-01_task-tapping", "01")["excluded_skipped"]
+    assert notes == ["Contrast rest_minus_tap was not computed: no kept frame carries rest."]
 
 
 def test_too_few_kept_frames_are_refused():

@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 - The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
 
+### Changed
+- A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject
+
 ## [0.76.0] - 2026-10-25
 
 ### Added

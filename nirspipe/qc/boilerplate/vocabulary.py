@@ -489,6 +489,7 @@ def _censoring_phrase(params: dict[str, Any]) -> str:
     if not frac:
         return ""
     dropped = params.get("dropped_conditions") or []
+    skipped = params.get("skipped_contrasts") or {}
     # ordinary least squares estimates no noise model, so it has no lags to keep in kept time
     noise = ("" if params.get("noise_model") == "ols" else
              " the noise model was estimated only from stretches whose lags all lay in kept "
@@ -498,7 +499,9 @@ def _censoring_phrase(params: dict[str, Any]) -> str:
             "residual kept its full length."
             + (f" {'Conditions' if len(dropped) > 1 else 'Condition'} {_series(dropped)} "
                f"{'were' if len(dropped) > 1 else 'was'} dropped from the model, having no "
-               "signal in the kept frames." if dropped else ""))
+               "signal in the kept frames." if dropped else "")
+            + "".join(f" Contrast {name}, which weights {_series(lost)}, was therefore not "
+                      "computed." for name, lost in skipped.items()))
 
 
 def _min_time_phrase(params: dict[str, Any], what: str) -> str:
