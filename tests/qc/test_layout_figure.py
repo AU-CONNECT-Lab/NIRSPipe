@@ -36,8 +36,8 @@ def test_channel_dashes_follow_the_long_short_split(raw):
 
 def test_a_pairs_shorter_wavelength_is_orange_and_its_longer_blue(raw):
     colours = {name: colour for name, (colour, _) in zip(raw.ch_names, _ch_styles(raw))}
-    assert colours["S1_D1 760"] == "#e66101"
-    assert colours["S1_D1 850"] == "#2166ac"
+    assert colours["S1_D1 760"] == "#f28e2b"
+    assert colours["S1_D1 850"] == "#4e79a7"
 
 
 def test_an_sci_of_zero_is_kept_rather_than_passed_over():

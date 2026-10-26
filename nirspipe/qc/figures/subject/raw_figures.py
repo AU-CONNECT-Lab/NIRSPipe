@@ -37,7 +37,7 @@ EPOCH_MIN_TRIALS = 2
 
 
 # a pair's wavelengths, shortest first; the separation is carried by the dash instead
-WAVELENGTH_COLORS = ("#e66101", "#2166ac", "#4d9221")
+WAVELENGTH_COLORS = ("#f28e2b", "#4e79a7", "#4d9221")
 _SEPARATION_DASH = {"long": "solid", "short": "dash", "unclassified": "dot"}
 
 
