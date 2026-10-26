@@ -61,8 +61,6 @@ def binary_heatmap_figure(
 
 
 _MISSING_COLOR = "#D3D3D3"
-# a value measured against no line: shown, neither passing nor failing
-_UNJUDGED_COLOR = "#D9E6F2"
 
 
 def _scale_dots(values, lo, hi) -> list[str]:
@@ -92,9 +90,11 @@ def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_fra
     ]
 
 
-def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD")) -> tuple[str, str]:
+def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD"),
+                  scale=(None, None)) -> tuple[str, str]:
     """Colour and hover for one cell; ``value`` is the bad flag on a row with no ``fmt``,
-    the Status row's kind. ``words`` name its two states."""
+    the Status row's kind. ``words`` name its two states, ``scale`` the range a row with no
+    line is coloured over."""
     if fmt is None:
         if value is None:
             return _MISSING_COLOR, f"{ch} · {metric}: —"
@@ -102,7 +102,7 @@ def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD")) -> tuple[s
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return _MISSING_COLOR, f"{ch} · {metric}: —"
     if check is None:
-        return _UNJUDGED_COLOR, f"{ch} · {metric}: {value:{fmt}} (no line)"
+        return _scale_dots([value], *scale)[0], f"{ch} · {metric}: {value:{fmt}} (no line)"
     return (_GOOD_COLOR if check(value) else _BAD_COLOR), f"{ch} · {metric}: {value:{fmt}}"
 
 
@@ -159,7 +159,7 @@ def channel_quality_heatmap(
     sits directly under: a channel can fail on its passing-window share with every average
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
-    them prunes; PSP with ``psp_thresh`` None is drawn neutral, its value in the hover.
+    them prunes; PSP with ``psp_thresh`` None is drawn on Viridis over its row, higher better.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
                "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
@@ -170,9 +170,11 @@ def channel_quality_heatmap(
 
     xs, ys, colors, hover = [], [], [], []
     for m_idx, (metric, key, fmt, chk) in enumerate(specs):
+        scale = (_data_range([lookups[key].get(ch, np.nan) for ch in ch_names])
+                 if key is not None and chk is None else (None, None))
         for i, ch in enumerate(ch_names):
             value = is_bad[i] if key is None else lookups[key].get(ch)
-            color, text = _channel_cell(metric, value, fmt, chk, ch)
+            color, text = _channel_cell(metric, value, fmt, chk, ch, scale=scale)
             xs.append(i * _SPACING)
             ys.append(m_idx * _SPACING)
             colors.append(color)
@@ -249,6 +251,10 @@ def condition_quality_heatmap(
     xs, ys, colors, hover, tickvals, ticktext = [], [], [], [], [], []
     for m_idx, (metric, key, fmt, chk) in enumerate(specs):
         top = m_idx * depth + 1
+        # one range over every condition, so a condition's colour compares with the others'
+        scale = (_data_range([v for _, args in conditions
+                              for v in (args.get(key) or {}).values() if v is not None])
+                 if key is not None and chk is None else (None, None))
         for c_idx, (label, args) in enumerate(conditions):
             y = (top + c_idx) * _SPACING
             tickvals.append(y)
@@ -257,7 +263,7 @@ def condition_quality_heatmap(
                       else args.get(key) or {})
             for i, ch in enumerate(ch_names):
                 color, text = _channel_cell(metric, lookup.get(ch), fmt, chk, ch,
-                                            words=status_words)
+                                            words=status_words, scale=scale)
                 xs.append(i * _SPACING)
                 ys.append(y)
                 colors.append(color)
