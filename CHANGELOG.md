@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - The raw QC cohort page listed every subject as unfinished, since raw QC run records never got an outcome; they now do
 - A cohort of a few runs drew an empty condition matrix: the chart was too short for its colour bar
 - Trials shorter than one 10 s screening window logged a windowed-SCI warning each
+- A montage without short channels showed Separation n/a for every channel; channels in the long range now read long
 
 ## [0.76.0] - 2026-10-25
 

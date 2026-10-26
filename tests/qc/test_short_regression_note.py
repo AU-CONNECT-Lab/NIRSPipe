@@ -53,3 +53,26 @@ def test_a_rejected_short_set_keeps_its_rows_short_with_the_whole_montage_scores
                                                [short_ch])}
     assert (rows[short_ch]["separation"], rows[short_ch]["sci_whole"]) == ("short", 0.4)
     assert rows[short_ch]["is_bad"] and rows[long_ch]["separation"] == "long"
+
+
+def _unsplit_record(dist: dict) -> dict:
+    return {
+        "raw": {"n_long_channels": len(dist), "n_short_channels": 0, "sep_short_max_mm": 10.0,
+                "sep_long_min_mm": 15.0, "sep_long_max_mm": 45.0},
+        "per_channel": {"raw": {"ch_dist_per_channel": dist,
+                                "sci_per_channel": {ch: 0.9 for ch in dist}}},
+    }
+
+
+def test_a_montage_without_short_channels_calls_its_channels_long_by_their_separation():
+    # no raw_long or raw_short: every channel is long, so the record was never split
+    dist = {"S1_D1 760": 30.0, "S2_D2 760": 40.0}
+    rows = channel_rows(_unsplit_record(dist), {ch: 0.9 for ch in dist}, [])
+    assert [r["separation"] for r in rows] == ["long", "long"]
+    assert rows[0]["sci_whole"] == 0.9
+
+
+def test_a_montage_without_positions_has_no_separation():
+    dist = {"S1_D1 760": 0.0, "S2_D2 760": 0.0}
+    rows = channel_rows(_unsplit_record(dist), {ch: 0.9 for ch in dist}, [])
+    assert {r["separation"] for r in rows} == {""}

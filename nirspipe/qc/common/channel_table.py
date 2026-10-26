@@ -95,21 +95,25 @@ def channel_rows(
 
     short_names, long_names = _named(short_pc), _named(long_pc)
     measured_short = set(short_names)
+    dist = whole_pc.get("ch_dist_per_channel") or {}
+    short_max, long_min, long_max = bands_from_record(record.get("raw") or {})
     if not short_names:
         # a short set rejected whole has no section of its own; its separations still say
         # which channels it held
-        short_max_mm = bands_from_record(record.get("raw") or {})[0] * 1e3
-        dist = whole_pc.get("ch_dist_per_channel") or {}
-        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max_mm}
+        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max * 1e3}
+    if not long_names:
+        # an all-long montage writes no long section, nor does a long set rejected whole
+        long_names = {ch for ch, d in dist.items() if d is not None and long_min * 1e3 <= d
+                      and (long_max is None or d <= long_max * 1e3)}
 
     def separation_of(ch: str) -> str:
-        """Which block a channel belongs to, or "" when the record was never split.
+        """Which block a channel belongs to, or "" when no channel has a separation in either range.
 
         The two separation ranges do not meet, so a channel at 12 mm is in neither list.
         Those get their own name rather than falling into the long block, where a row of
         dashes would read as a long channel whose metrics failed.
         """
-        if not long_names:
+        if not long_names and not short_names:
             return ""
         if ch in short_names:
             return "short"
