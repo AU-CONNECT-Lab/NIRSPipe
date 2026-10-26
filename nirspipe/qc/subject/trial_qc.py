@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, _window_samples
+from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.trial_qc")
@@ -121,8 +122,12 @@ def trial_sqm(raw, t0: float, t1: float,
     sci_scores, seg_od = compute_sci_scores(seg, cardiac_l_freq, cardiac_h_freq)
     cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
                               good_frac=min_good_frac)
+    have = {"sci": sci_scores}
+    # a crop without one whole screening window has no share to count, and asking warns per trial
+    if not trial_fits(sfreq, t0, t1, SCREEN_WINDOW_S):
+        have["good_frac"] = {}
     scores = screening_scores(seg_od, cardiac_l_freq, cardiac_h_freq,
-                              have={"sci": sci_scores}, cutoffs=cutoffs)
+                              have=have, cutoffs=cutoffs)
     bad, _ = screen_channels(scores, cutoffs)
     try:
         sqm = compute_raw_sqm(seg, sci_scores, bad, cardiac_l_freq, cardiac_h_freq,

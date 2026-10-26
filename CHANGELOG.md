@@ -33,6 +33,8 @@ All notable changes to this project will be documented in this file.
 - The GUI's Edit events drift hint failed when the only repeated condition was a doubled marker
 - A joined `--combine-runs` series without a regression did not record its separation bands, so the subject index split its FC by the defaults
 - The raw QC cohort page listed every subject as unfinished, since raw QC run records never got an outcome; they now do
+- A cohort of a few runs drew an empty condition matrix: the chart was too short for its colour bar
+- Trials shorter than one 10 s screening window logged a windowed-SCI warning each
 
 ## [0.76.0] - 2026-10-25
 

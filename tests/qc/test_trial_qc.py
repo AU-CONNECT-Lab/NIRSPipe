@@ -25,6 +25,16 @@ def test_a_trial_between_the_two_lines_is_scored_on_its_window_free_rows_only():
     assert 0.0 < sqm["sci_mean"] <= 1.0
 
 
+def test_a_trial_without_a_screening_window_does_not_warn_per_trial(caplog):
+    raw = synth_raw("01", "tapping", duration=120.0, motion_onset=None)
+    markers = [{"onset": 10.0 * i, "duration": MIN_SCI_TRIAL_S + 1.0, "description": "tap"}
+               for i in range(1, 6)]
+    with caplog.at_level("WARNING"):
+        _, sqms = score_trials(raw, markers, 0.8, 0.7, 2.0)
+    assert all("sci_mean" in sqm for sqm in sqms)
+    assert "not a channel x window grid" not in caplog.text
+
+
 def test_the_counts_split_the_partly_scored_from_the_unscored():
     markers = [{"onset": 10.0 * i, "duration": d, "description": "tap"}
                for i, d in enumerate((1.0, MIN_SCI_TRIAL_S, 8.0, MIN_TRIAL_S), start=1)]
