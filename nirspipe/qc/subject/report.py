@@ -130,6 +130,7 @@ from nirspipe.qc.figures import (
     channel_quality_heatmap,
     condition_quality_heatmap,
     alff_brain_figure,
+    alff_flat_figure,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
     rest_channel_panel,
@@ -1868,11 +1869,13 @@ def _section_glm(
     nirs_dir: "Path | None" = None,
     sqm_label: "str | None" = None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
+    sep_bands=None,
 ) -> dict:
     glm_design_path = None
     glm_design_heatmap_path = None
     glm_activation_path = None
     glm_activation_conditions: list[dict] = []
+    glm_activation_flat_path, glm_activation_flat_h = None, 0
     glm_whitening_path = None
     glm_whitening_h = 0
 
@@ -1894,10 +1897,9 @@ def _section_glm(
 
     glm_activation_unplaced = (glm_est is not None and raw_haemo is not None
                                and not placement_of(raw_haemo).placed)
-    # one file per condition, all shown, against one colour scale so they compare
-    if glm_est is not None and conditions and raw_haemo is not None and not glm_activation_unplaced:
+    results_dict: dict = {}
+    if glm_est is not None and conditions and raw_haemo is not None:
         with _guard("GLM activation panel", errors, subject):
-            from nirspipe.qc.figures import activation_condition_figures
             df = glm_est.to_dataframe().reset_index()
             # the fit covers every channel; the report draws the chromophores the tables carry
             df = df[df["Chroma"].isin(chromophores)]
@@ -1909,25 +1911,36 @@ def _section_glm(
             if "Contrast" in df.columns:
                 df["Contrast"] = df["Contrast"].astype(str)
                 results_dict = {c: df[df["Contrast"] == c] for c in conditions}
-                # _pair_fname strips everything but alphanumerics, so "game-1" and
-                # "game 1" would land on one file and two labels would show the same picture
-                used: set[str] = set()
-                failed: list[tuple[str, str]] = []
-                rendered = activation_condition_figures(raw_haemo, results_dict, failed=failed)
-                errors.extend(f"GLM activation panel ({cond}): {reason}"
-                              for cond, reason in failed)
-                for label, b64 in rendered:
-                    slug = _pair_fname(label) or "cond"
-                    if slug in used:
-                        slug = f"{slug}{len(used) + 1}"
-                    used.add(slug)
-                    path = save_png(b64, figures_dir, fig_name("glmactivation", suffix="nirsmap",
-                                                                extension=".png", condition=slug))
-                    if path:
-                        glm_activation_conditions.append({"label": label, "path": path})
-                # still what gates the GLM section being shown
-                if glm_activation_conditions:
-                    glm_activation_path = glm_activation_conditions[0]["path"]
+    if results_dict and glm_activation_unplaced:
+        with _guard("GLM activation flat map", errors, subject):
+            from nirspipe.qc.figures import activation_flat_figure
+            fig = activation_flat_figure(raw_haemo, results_dict, sep_bands=sep_bands)
+            if fig is not None:
+                glm_activation_flat_path, glm_activation_flat_h = _save_plotly_html(
+                    fig, figures_dir / fig_name("flat", suffix="nirsmap", statistic="beta"))
+    # one file per condition, all shown, against one colour scale so they compare
+    if results_dict and not glm_activation_unplaced:
+        with _guard("GLM activation panel", errors, subject):
+            from nirspipe.qc.figures import activation_condition_figures
+            # _pair_fname strips everything but alphanumerics, so "game-1" and
+            # "game 1" would land on one file and two labels would show the same picture
+            used: set[str] = set()
+            failed: list[tuple[str, str]] = []
+            rendered = activation_condition_figures(raw_haemo, results_dict, failed=failed)
+            errors.extend(f"GLM activation panel ({cond}): {reason}"
+                          for cond, reason in failed)
+            for label, b64 in rendered:
+                slug = _pair_fname(label) or "cond"
+                if slug in used:
+                    slug = f"{slug}{len(used) + 1}"
+                used.add(slug)
+                path = save_png(b64, figures_dir, fig_name("glmactivation", suffix="nirsmap",
+                                                            extension=".png", condition=slug))
+                if path:
+                    glm_activation_conditions.append({"label": label, "path": path})
+            # still what gates the GLM section being shown
+            if glm_activation_conditions:
+                glm_activation_path = glm_activation_conditions[0]["path"]
 
     # read back from the GLM step's tables: the whitened residual itself is never written
     label = sqm_label or f"sub-{subject}"
@@ -1951,6 +1964,8 @@ def _section_glm(
         "glm_activation_path": glm_activation_path,
         "glm_activation_conditions": glm_activation_conditions,
         "glm_activation_unplaced": glm_activation_unplaced,
+        "glm_activation_flat_path": glm_activation_flat_path,
+        "glm_activation_flat_h": glm_activation_flat_h,
         "glm_whitening_path": glm_whitening_path,
         "glm_whitening_h": glm_whitening_h,
     }
@@ -1969,8 +1984,8 @@ def _section_rest(
     roi_map_name: "str | None" = None,
     sep_bands=None,
 ) -> dict:
-    panel_path = alff_brain_path = fc_roi_path = fc_seed_path = None
-    fc_seed_h = panel_h = fc_roi_h = 0
+    panel_path = alff_brain_path = alff_flat_path = fc_roi_path = fc_seed_path = None
+    fc_seed_h = panel_h = fc_roi_h = alff_flat_h = 0
     unplaced = raw_haemo is not None and not placement_of(raw_haemo).placed
     with _guard("Rest channel panel", errors, subject):
         if fc:
@@ -1983,6 +1998,12 @@ def _section_rest(
             alff_brain_path = save_png(
                 alff_brain_figure(raw_haemo, alff_df, sep_bands=sep_bands), figures_dir,
                 fig_name("brain", suffix="nirsmap", statistic="alff", extension=".png"))
+    with _guard("ALFF flat map", errors, subject):
+        if alff_df is not None and unplaced:
+            fig = alff_flat_figure(raw_haemo, alff_df, sep_bands=sep_bands)
+            if fig is not None:
+                alff_flat_path, alff_flat_h = _save_plotly_html(
+                    fig, figures_dir / fig_name("flat", suffix="nirsmap", statistic="alff"))
     with _guard("ROI FC matrix", errors, subject):
         if fc_roi:
             fig = fc_roi_matrix_figure(fc_roi)
@@ -2002,6 +2023,7 @@ def _section_rest(
     return {"rest_panel_path": panel_path, "rest_panel_h": panel_h,
             "rest_alff_brain_path": alff_brain_path,
             "rest_alff_unplaced": unplaced and alff_df is not None,
+            "rest_alff_flat_path": alff_flat_path, "rest_alff_flat_h": alff_flat_h,
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
             "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
@@ -2308,7 +2330,7 @@ def build_subject_report(
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
                                      figures_dir, fig_name, segments=segments,
                                      nirs_dir=nirs_dir, sqm_label=sqm_label,
-                                     chromophores=chromophores)
+                                     chromophores=chromophores, sep_bands=sep_bands)
     rest_vars         = _section_rest(alff_df, fc, subject, errors, figures_dir, fig_name,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
@@ -2726,6 +2748,8 @@ def _condition_glm(report_vars: dict, label: str) -> dict:
         "glm_activation_conditions": conditions,
         "glm_activation_path": conditions[0]["path"] if conditions else None,
         "glm_activation_unplaced": report_vars.get("glm_activation_unplaced"),
+        "glm_activation_flat_path": report_vars.get("glm_activation_flat_path"),
+        "glm_activation_flat_h": report_vars.get("glm_activation_flat_h"),
     }
 
 

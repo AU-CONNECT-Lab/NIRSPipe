@@ -178,8 +178,12 @@ NOTES = {
         "from the denoised residual. The map shows where the amplitude is; the connectivity "
         "panel below gives each channel&rsquo;s value beside its correlations.",
     "rest.alff_unplaced":
-        "Not drawn on the cortex: the optodes could not be placed on the template head (see "
-        "the notes). Each channel&rsquo;s ALFF and fALFF are in the connectivity panel below.",
+        "mALFF on the optode flat map, a head per chromophore on its own range: the optodes "
+        "could not be placed on the template head (see the notes), so nothing is drawn on the "
+        "cortex. 1 is an average channel; grey has no value, faded was rejected.",
+    "rest.alff_no_map":
+        "No map: the montage carries no optode positions to draw on. Each channel&rsquo;s "
+        "ALFF and fALFF are in the connectivity panel below.",
     "rest.alff_brain":
         "mALFF, a block per chromophore: each kept long channel&rsquo;s amplitude over its "
         "chromophore&rsquo;s mean, so 1 is an average channel, spread over the cortex within "
@@ -199,8 +203,9 @@ NOTES = {
         "inside the seed (undefined, not zero); faded grey ones were rejected. Short "
         "channels are not drawn.",
     "glm.activation_unplaced":
-        "Betas are not drawn on the cortex: the optodes could not be placed on the template "
-        "head (see the notes). Each channel&rsquo;s betas are in <code>desc-glm_nirsmap.tsv</code>.",
+        "Betas on the optode flat map, a head per condition and a row per chromophore, each "
+        "chromophore on one scale shared by every condition: the optodes could not be placed "
+        "on the template head (see the notes), so nothing is drawn on the cortex.",
     "glm.activation":
         "Betas on the surface, a row of three views per chromophore, each chromophore on one "
         "colour scale shared by every condition so a weak condition reads as weak. One model "

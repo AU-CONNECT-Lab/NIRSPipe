@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- A run whose optodes could not be placed shows its mALFF and GLM betas on the optode flat map in place of the cortex
 - The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
 - Raw QC takes `--bad-channels`, `--keep-spans`, `--keep-spans-from`, `--bad-spans` and `--bids-filter-file` as the pipeline does, and its verdict is the pipeline's for them
 - The raw QC record carries the settings it screened with: lines, cardiac band, DPF, template, motion correction and the final bad channels

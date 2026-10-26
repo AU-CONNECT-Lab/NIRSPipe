@@ -83,11 +83,16 @@ def test_an_unplaced_run_projects_nothing_onto_the_cortex(tmp_path, monkeypatch)
         raise AssertionError("ALFF projected onto the cortex for optodes no reading placed")
 
     monkeypatch.setattr(report, "alff_brain_figure", no_cortex)
+    od = mne.preprocessing.nirs.optical_density(raw)
+    haemo = _unplaced(mne.preprocessing.nirs.beer_lambert_law(od, ppf=6.0))
+    alff = pd.DataFrame({"channel": haemo.ch_names, "malff": np.linspace(0.5, 1.5, len(haemo.ch_names))})
     errors = []
-    out = report._section_rest(pd.DataFrame({"alff": [1.0]}), None, "01", errors, tmp_path,
-                               figure_namer("sub-01_task-rest"), raw_haemo=raw)
+    out = report._section_rest(alff, None, "01", errors, tmp_path,
+                               figure_namer("sub-01_task-rest"), raw_haemo=haemo)
     assert errors == []
     assert out["rest_alff_brain_path"] is None and out["rest_alff_unplaced"]
+    # the flat map stands in for the cortex
+    assert (tmp_path / out["rest_alff_flat_path"].rsplit("/", 1)[-1]).exists()
 
 def _drawn_lines(raw, sci, rejected, monkeypatch) -> dict:
     """Each source-detector line of the drawn map, by the labels at its two ends: its colour."""

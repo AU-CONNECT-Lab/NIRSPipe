@@ -32,7 +32,8 @@ from nirspipe.qc.figures.subject.denoise_compare import (
 )
 from nirspipe.qc.figures.subject.glm_figures import (
     design_matrix_figure, design_matrix_static_figure,
-    activation_brain_figure, activation_condition_figures, activation_panel,
+    activation_brain_figure, activation_condition_figures, activation_flat_figure,
+    activation_panel,
     per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
     design_peak_frequencies, whitening_figure,
 )
@@ -42,6 +43,7 @@ from nirspipe.qc.figures.subject.optode_layout import optode_layout_static
 from nirspipe.qc.figures.common.topomap import evoked_channel_map_figure
 from nirspipe.qc.figures.subject.rest_figures import (
     alff_brain_figure,
+    alff_flat_figure,
     rest_channel_panel,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
@@ -80,6 +82,7 @@ __all__ = [
     "design_matrix_static_figure",
     "activation_brain_figure",
     "activation_condition_figures",
+    "activation_flat_figure",
     "activation_panel",
     "per_channel_hrf_figure",
     "design_matrix_heatmap",
@@ -91,6 +94,7 @@ __all__ = [
     "optode_layout_static",
     "evoked_channel_map_figure",
     "alff_brain_figure",
+    "alff_flat_figure",
     "rest_channel_panel",
     "fc_roi_matrix_figure",
     "fc_seed_topo_figure",

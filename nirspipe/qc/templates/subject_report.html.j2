@@ -430,8 +430,13 @@
       <p class="step-desc">{{ section_note('rest.alff_brain') }}</p>
       <img class="responsive" src="{{ rest_alff_brain_path }}" alt="mALFF of HbO on the cortex" />
       <p class="fig-path">{{ rest_alff_brain_path }}</p>
+    {% elif rest_alff_flat_path %}
+      <p class="step-desc">{{ section_note('rest.alff_unplaced') }}</p>
+      <iframe class="plotly-frame" src="{{ rest_alff_flat_path }}" title="mALFF on the optode flat map"
+              style="height:{{ rest_alff_flat_h }}px"></iframe>
+      <p class="fig-path">{{ rest_alff_flat_path }}</p>
     {% elif rest_alff_unplaced %}
-      <div class="placeholder">{{ section_note('rest.alff_unplaced') }}</div>
+      <div class="placeholder">{{ section_note('rest.alff_no_map') }}</div>
     {% else %}
       <div class="placeholder">ALFF not computed: --high-pass and --low-pass are required.</div>
     {% endif %}
@@ -503,9 +508,12 @@
       <h3>Activation by condition</h3>
       <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
       <p class="fig-path">{{ glm_activation_path }}</p>
-    {% elif glm_activation_unplaced %}
+    {% elif glm_activation_flat_path %}
       <h3>Activation by condition</h3>
-      <div class="placeholder">{{ section_note('glm.activation_unplaced') }}</div>
+      <p class="panel-note">{{ section_note('glm.activation_unplaced') }}</p>
+      <iframe class="plotly-frame" src="{{ glm_activation_flat_path }}" title="Betas on the optode flat map"
+              style="height:{{ glm_activation_flat_h }}px"></iframe>
+      <p class="fig-path">{{ glm_activation_flat_path }}</p>
     {% endif %}
 
     {% if glm_whitening_path %}

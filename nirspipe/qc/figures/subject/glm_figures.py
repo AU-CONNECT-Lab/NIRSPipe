@@ -3,6 +3,7 @@
 design_matrix_figure():   regressor time series + censoring + BC/AC bars.
 activation_brain_figure(): brain surface projection, rendered off-screen.
 activation_panel():        per-condition rows of brain projections.
+activation_flat_figure():  the betas on the optode flat map, for optodes no reading placed.
 """
 
 import base64
@@ -31,6 +32,8 @@ from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
 from nirspipe.qc.figures.common._surface_overlay import activation_rgba
 from nirspipe.qc.figures.common._utils import CHROMA_STYLE, HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL
+from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
+from nirspipe.qc.figures.subject.rest_figures import flat_value_maps
 from nirspipe.utils.spans import span_kind
 
 if TYPE_CHECKING:
@@ -378,6 +381,29 @@ def activation_condition_figures(
             if failed is not None:
                 failed.append((str(cond), str(exc)))
     return rendered
+
+
+def activation_flat_figure(
+    raw_haemo: mne.io.Raw,
+    results_dict: "dict[str, pd.DataFrame]",
+    sep_bands=None,
+) -> "go.Figure | None":
+    """Betas on the optode flat map, a head per condition and a row per chromophore on the scale :func:`activation_condition_figures` shares: its stand-in when the optodes could not be placed."""
+    held = {chroma_of(n) for df in results_dict.values() if _ch_col(df) is not None
+            for n in df[_ch_col(df)].astype(str)}
+    rows = []
+    for chroma in (c for c in CHROMA_STYLE if c in held):
+        v = _shared_clim(results_dict, raw_haemo, chroma)["pos_lims"][2] * 1e6
+        panels = []
+        for cond, df in results_dict.items():
+            drawn = _plotted_rows(df, raw_haemo, chroma)
+            panels.append((str(cond), chroma,
+                           dict(zip(drawn[_ch_col(df)].astype(str),
+                                    drawn[_coef_col(df)].astype(float) * 1e6))))
+        rows.append({"panels": panels, "scale": (-v, v),
+                     "bar": f"{CHROMA_STYLE[chroma][0]} beta (µM)"})
+    return flat_value_maps(raw_haemo, rows, "Betas on the optode flat map", CORRELATION_SCALE,
+                           sep_bands)
 
 
 def activation_panel(

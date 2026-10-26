@@ -2,6 +2,7 @@
 
 rest_channel_panel():   the run's channels in one panel, FC matrices over ALFF and fALFF.
 alff_brain_figure():    mALFF projected onto the cortex, as the GLM activation is.
+alff_flat_figure():     mALFF on the optode flat map, for optodes no reading placed.
 fc_roi_matrix_figure(): connectivity ROI by ROI instead of channel by channel.
 fc_seed_topo_figure():  seed-to-whole-brain correlations drawn on the optode flat map.
 
@@ -399,6 +400,67 @@ def _finish_head_grid(fig, geo, n_rows, n_cols, title):
                       showlegend=False, margin=dict(l=40, r=40, t=_MARGIN_T, b=_MARGIN_B),
                       title=dict(text=title, x=0.01, font=dict(size=13)))
     return fig
+
+
+def _column_centre(c: int, n_cols: int) -> float:
+    width = (1 - (n_cols - 1) * _COL_GAP) / n_cols
+    return (c - 1) * (width + _COL_GAP) + width / 2
+
+
+def flat_value_maps(raw: mne.io.Raw, rows: "list[dict]", title: str, colorscale,
+                    sep_bands=None) -> "go.Figure | None":
+    """Channel values on the optode flat map, a row of heads per entry, or None without positions.
+
+    Each row is ``{"panels": [(title, chromophore, {channel: value}), ...], "scale": (vmin,
+    vmax) or None, "bar": label}``: a scale is shared by the row under one bar, None gives
+    every head its own range and bar. A channel with no value is grey, a rejected one faded.
+    """
+    geo = _head_for(raw, sep_bands)
+    if geo is None or not rows:
+        return None
+    n_rows, n_cols = len(rows), max(len(row["panels"]) for row in rows)
+    titles = [row["panels"][c][0] if c < len(row["panels"]) else ""
+              for row in rows for c in range(n_cols)]
+    empty = {(r, c) for r, row in enumerate(rows, start=1)
+             for c in range(len(row["panels"]) + 1, n_cols + 1)}
+    fig = _head_grid(n_rows, n_cols, titles, geo, empty=empty)
+    dim = {pair_of(ch) for ch in raw.info["bads"]}
+    total = _grid_px(n_rows)
+    for r, row in enumerate(rows, start=1):
+        # in the gap under its row, which is sized for a horizontal bar
+        bar_y = 1 - (r * _HEAD_PX + (r - 1) * _ROW_GAP_PX + 10) / total
+        for c, (_, chromo, by_channel) in enumerate(row["panels"], start=1):
+            values = _values_for(geo, lambda ch, d=by_channel: d.get(ch, np.nan), chromo)
+            shown = values[np.isfinite(values)]
+            vmin, vmax = row["scale"] or ((float(shown.min()), float(shown.max()))
+                                          if shown.size else (0.0, 1.0))
+            own_bar = row["scale"] is None
+            bar = ({"orientation": "h", "len": 0.8 / n_cols if own_bar else 0.28,
+                    "thickness": 9, "x": _column_centre(c, n_cols) if own_bar else 0.46,
+                    "xanchor": "center", "y": bar_y, "yanchor": "top",
+                    "tickfont": {"size": 9}, "title": {"side": "right"}}
+                   if own_bar or c == 1 else False)
+            head_glyph(fig, geo, "long", values, r, c, row["bar"], vmin, vmax, bar=bar,
+                       colorscale=colorscale, dim=dim, blank_color=BLANK_COLOR)
+    return _finish_head_grid(fig, geo, n_rows, n_cols, title)
+
+
+def alff_flat_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> "go.Figure | None":
+    """mALFF on the optode flat map, a head per chromophore on its own range: the stand-in for :func:`alff_brain_figure` when the optodes could not be placed."""
+    measure = "malff" if "malff" in alff_df.columns else "alff"
+    values = alff_df.set_index("channel")[measure].astype(float)
+    bads = set(raw.info["bads"])
+    panels = []
+    for chroma in (c for c in CHROMA_STYLE if c in {chroma_of(ch) for ch in values.index}):
+        kept = {ch: float(v) for ch, v in values.items()
+                if chroma_of(ch) == chroma and ch not in bads and np.isfinite(v)}
+        if kept:
+            panels.append((CHROMA_STYLE[chroma][0], chroma, kept))
+    if not panels:
+        return None
+    label = "mALFF (1 = mean channel)" if measure == "malff" else "ALFF (M)"
+    return flat_value_maps(raw, [{"panels": panels, "scale": None, "bar": label}],
+                           f"{label} on the optode flat map", "Viridis", sep_bands)
 
 
 # seeds per row before the grid wraps: four heads still fit the report's width at full size
