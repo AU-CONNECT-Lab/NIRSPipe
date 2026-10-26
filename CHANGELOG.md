@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - A cohort of a few runs drew an empty condition matrix: the chart was too short for its colour bar
 - Trials shorter than one 10 s screening window logged a windowed-SCI warning each
 - A montage without short channels showed Separation n/a for every channel; channels in the long range now read long
+- The raw signal overview left rows of blank space above and below a tall montage; its y range now fits the traces
 
 ## [0.76.0] - 2026-10-25
 

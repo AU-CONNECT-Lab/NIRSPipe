@@ -143,6 +143,7 @@ def build_ts_figure(
 
     traces = []
     band_shapes = []
+    y_lo, y_hi = -1.5, (len(picks) - 1) * 3 + 1.5
     for i, pick in enumerate(picks):
         ch = raw.ch_names[pick]
         row = data[i]
@@ -150,6 +151,9 @@ def build_ts_figure(
         std = float(np.std(row))
         normed = ((arr - row.mean()) / std).tolist() if std > 0 else (arr - row.mean()).tolist()
         shifted = [v + i * 3 for v in normed]
+        finite = [v for v in shifted if np.isfinite(v)]
+        if finite:
+            y_lo, y_hi = min(y_lo, min(finite)), max(y_hi, max(finite))
         color, dash = all_styles[pick] if pick < len(all_styles) else ("#aaa", "solid")
         color = "#b2bec3" if ch in bad_channels else _hex_to_rgba(color, 0.85)
         traces.append(go.Scatter(
@@ -188,6 +192,8 @@ def build_ts_figure(
                 ticktext=[raw.ch_names[p] for p in picks],
                 tickfont=dict(size=8),
                 showgrid=False, zeroline=False,
+                # autorange pads by a share of the whole stack, rows of blank space on a tall montage
+                range=[y_lo, y_hi], autorange=False,
             ),
             plot_bgcolor="white", paper_bgcolor="white",
             shapes=band_shapes + mk_shapes,
