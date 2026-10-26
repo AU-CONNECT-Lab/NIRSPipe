@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
 - **Breaking**: `--short-channel` defaults to `auto`, pca where the montage has short channels and none otherwise; it used to default to none
 - **Breaking**: the quality record's `ch_dist_*` separations are in mm, as the flags and band stamps are; rerun QC for older records
+- **Breaking**: raw QC writes one report per recording, named like its run report, so the subject index and cohort page link it; `nirspipe-rate raw` opens every matching one, `--run-label` added
 
 ### Removed
 - **Breaking**: fallbacks for trees older versions wrote: flat QC records, sidecars without the filter or GLM conditions, dyad tables without member columns, the old rate report path

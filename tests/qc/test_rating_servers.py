@@ -72,3 +72,41 @@ def test_hyper_decisions_live_under_their_own_key_beside_the_runs(tmp_path):
     assert r.get_json() == {"status": "success"}
     assert json.loads(path.read_text(encoding="utf-8")) == {
         run_key: {"S1_D1 hbo": "good"}, "_hyper": {"S2_D2 hbo": "bad"}}
+
+
+def _raw_page(tmp_path, label):
+    html = tmp_path / "sub-01" / report_name(label, desc="raw")
+    html.parent.mkdir(parents=True, exist_ok=True)
+    html.write_text("<html><head></head></html>", encoding="utf-8")
+    return html
+
+
+def test_two_runs_of_a_task_keep_each_other_s_decisions_and_the_dyad_s(tmp_path):
+    # each page sends everything it loaded; the other page's later save must not undo this one's
+    run1, run2 = "sub-01_task-rest_run-01", "sub-01_task-rest_run-02"
+    page1 = RawRatingApp(_raw_page(tmp_path, run1), tmp_path).app.test_client()
+    page2 = RawRatingApp(_raw_page(tmp_path, run2), tmp_path).app.test_client()
+    path = channel_decisions_path(tmp_path, "01", task="rest")
+    path.write_text(json.dumps({"_hyper": {"S3_D3 hbo": "bad"}}), encoding="utf-8")
+
+    stale = page2.get("/load_channel_decisions").get_json()
+    page1.post("/save_channel_decisions", json={run1: {"S1_D1 hbo": "bad"}, "_hyper": {}})
+    page2.post("/save_channel_decisions", json={**stale, run2: {"S2_D2 hbo": "good"}})
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "_hyper": {"S3_D3 hbo": "bad"}, run1: {"S1_D1 hbo": "bad"}, run2: {"S2_D2 hbo": "good"}}
+
+
+def test_rate_raw_opens_every_report_the_selection_matches(tmp_path):
+    from nirspipe.cli.rate import open_raw
+
+    for label in ("sub-01_task-rest_run-01", "sub-01_task-rest_run-02", "sub-01_task-tap"):
+        _raw_page(tmp_path, label)
+    _raw_page(tmp_path, "sub-01_task-rest_run-01_cond-a")
+
+    stems = lambda opened: sorted(label for _viewer, label, _entries in opened)
+    assert stems(open_raw(tmp_path, "01", None, "rest", None)) == [
+        "sub-01_task-rest_run-01_desc-raw_report", "sub-01_task-rest_run-02_desc-raw_report"]
+    assert stems(open_raw(tmp_path, "01", None, "rest", None, run_label="02")) == [
+        "sub-01_task-rest_run-02_desc-raw_report"]
+    assert len(open_raw(tmp_path, "01", None, None, None)) == 3

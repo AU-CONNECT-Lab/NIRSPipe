@@ -215,8 +215,16 @@ class _ReportViewer:
         raise NotImplementedError
 
 
+def _merge_into(path: Path, key: str, data: dict) -> None:
+    """Write one page's entry into a file the task's other pages and its dyad page share."""
+    existing = _read_json(path)
+    if key in data:
+        existing[key] = data[key]
+    _write_json(path, existing)
+
+
 class RawRatingApp(_ReportViewer):
-    """Rate a single raw QC report and annotate its channel decisions."""
+    """Rate one recording's raw QC report and annotate its channel decisions."""
 
     route_tag = "raw"
     default_port = RAW_PORT
@@ -224,6 +232,8 @@ class RawRatingApp(_ReportViewer):
 
     def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
         run = {k: entity_of(html_path.stem, k) for k in ("sub", "task", "ses")}
+        # the page's own key in the files below, which hold every run of its task
+        self.run_label = html_path.stem.removesuffix("_desc-raw_report")
         self.decisions_path = channel_decisions_path(
             output_dir, run["sub"], run["task"], run["ses"])
         self.spans_path = bad_spans_path(output_dir, run["sub"], run["task"], run["ses"])
@@ -243,7 +253,7 @@ class RawRatingApp(_ReportViewer):
             data = request.json
             if data is None:
                 return _empty_body()
-            return _respond(lambda: _write_json(self.decisions_path, data),
+            return _respond(lambda: _merge_into(self.decisions_path, self.run_label, data),
                             "save_channel_decisions")
 
         @app.route("/load_bad_spans", methods=["GET"])
@@ -261,7 +271,8 @@ class RawRatingApp(_ReportViewer):
             # millisecond seconds, in time order, so the file reads like the table it becomes
             data = {key: sorted([round(a, 3), round(b, 3)] for a, b in spans)
                     for key, spans in data.items()}
-            return _respond(lambda: _write_json(self.spans_path, data), "save_bad_spans")
+            return _respond(lambda: _merge_into(self.spans_path, self.run_label, data),
+                            "save_bad_spans")
 
 
 class HyperRatingApp(_ReportViewer):

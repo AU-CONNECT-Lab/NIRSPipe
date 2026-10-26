@@ -15,7 +15,7 @@ RUN = "sub-01_ses-02_task-rest_run-01"
 
 
 def _viewer(tmp_path):
-    html = tmp_path / "sub-01" / report_name("sub-01_ses-02_task-rest", desc="raw")
+    html = tmp_path / "sub-01" / report_name(RUN, desc="raw")
     html.parent.mkdir(parents=True, exist_ok=True)
     html.write_text("<html><head></head></html>", encoding="utf-8")
     return RawRatingApp(html, tmp_path).app.test_client()

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from collections import defaultdict
 from dataclasses import replace
 from functools import partial
 from types import SimpleNamespace
@@ -121,7 +120,6 @@ def cmd_participant(
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
         all_runs: list[dict] = []
-        groups: dict[tuple, list[dict]] = defaultdict(list)
         if record_settings is not None:
             write_raw_qc_record(record_settings["args"], record_settings["keys"], subject,
                                 output_dir)
@@ -164,23 +162,18 @@ def cmd_participant(
                         "from_population": list(from_population or []),
                     }
                     all_runs.append(run_dict)
-                    # a chosen run gets a page of its own rather than replacing its task's page
-                    groups[(actual_ses, actual_task, run if run_label else None)].append(run_dict)
 
         if not all_runs:
             print(f"Error: no SNIRF files found for sub-{subject}.", file=sys.stderr)
             return 0
 
-        for (ses, task, run), group_runs in groups.items():
-            name_parts = [f"sub-{subject}"]
-            if ses:  name_parts.append(f"ses-{ses}")
-            if task: name_parts.append(f"task-{task}")
-            if run:  name_parts.append(f"run-{run}")
+        # one page per recording, named as its run report and condition pages are
+        for run_dict in all_runs:
             html_path = (subject_report_dir(output_dir, subject)
-                         / report_name("_".join(name_parts), desc="raw"))
+                         / report_name(run_dict["label"], desc="raw"))
             print(f"Generating raw QC report: {html_path.name} ...")
             try:
-                build_prep_raw_report(group_runs, html_path, dpf=dpf,
+                build_prep_raw_report([run_dict], html_path, dpf=dpf,
                                       sci_threshold=sci_threshold,
                                       psp_threshold=psp_threshold,
                                       min_good_frac=min_good_frac,
@@ -504,9 +497,7 @@ def _build_parser() -> argparse.ArgumentParser:
     part = p.add_argument_group(_LEVEL_GROUPS["participant"])
     part.add_argument("--run-label", "--run_label", nargs="+", action="extend",
                       type=_shared.BidsLabel,
-                      help="Run label(s) to include. Each chosen run gets a report of its own, "
-                           "named with its run, so the report holding all of a task's runs is "
-                           "kept.")
+                      help="Run label(s) to include. Every recording gets a report of its own.")
     _app_options.add_bids_filter_file(part)
     part.add_argument("--config", type=Path,
                       help="A raw QC run record (sub-<label>/logs/*_desc-raw.toml) or a TOML of "

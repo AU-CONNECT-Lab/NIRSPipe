@@ -1,4 +1,4 @@
-"""Raw QC --run-label: a chosen run gets a report of its own, and the task's report is kept."""
+"""Raw QC writes one report per recording, which the subject index and the cohort page link."""
 
 import json
 import re
@@ -31,18 +31,41 @@ def _run_labels(html):
     return json.loads(re.search(r"var _RUN_LABELS\s*=\s*(\[.*?\]);", html.read_text(encoding="utf-8")).group(1))
 
 
-def test_a_chosen_run_gets_its_own_report_and_the_tasks_report_is_kept(two_runs, tmp_path):
+RUNS = ("sub-01_task-tapping_run-1", "sub-01_task-tapping_run-2")
+
+
+def test_every_recording_gets_a_report_of_its_own(two_runs, tmp_path):
     out = tmp_path / "qc"
     qc.main([str(two_runs), str(out), "participant", "--participant-label", "01", *PHYS])
-    task_page = out / "sub-01" / report_name("sub-01_task-tapping", desc="raw")
-    assert _run_labels(task_page) == ["sub-01_task-tapping_run-1", "sub-01_task-tapping_run-2"]
-    before = task_page.read_text(encoding="utf-8")
+    for label in RUNS:
+        assert _run_labels(out / "sub-01" / report_name(label, desc="raw")) == [label]
+    assert not (out / "sub-01" / report_name("sub-01_task-tapping", desc="raw")).exists()
+
+
+def test_the_subject_index_and_the_cohort_link_every_raw_report(two_runs, tmp_path):
+    out = tmp_path / "qc"
+    qc.main([str(two_runs), str(out), "participant", "--participant-label", "01", *PHYS])
+    qc.main([str(two_runs), str(out), "group", "--skip-bids-validation"])
+    index = (out / "sub-01" / "sub-01_desc-index_report.html").read_text(encoding="utf-8")
+    for label in RUNS:
+        assert f'href="{report_name(label, desc="raw")}' in index
+    # the cohort page opens a run's raw report by the row's bids_name
+    rows = (out / "desc-subjects_qc.tsv").read_text(encoding="utf-8").splitlines()[1:]
+    names = sorted(row.split("\t")[0] for row in rows)
+    assert names == list(RUNS)
+    assert all((out / "sub-01" / report_name(name, desc="raw")).exists() for name in names)
+
+
+def test_a_chosen_run_rewrites_its_own_report_only(two_runs, tmp_path):
+    out = tmp_path / "qc"
+    qc.main([str(two_runs), str(out), "participant", "--participant-label", "01", *PHYS])
+    other = out / "sub-01" / report_name(RUNS[0], desc="raw")
+    before = other.read_text(encoding="utf-8")
 
     qc.main([str(two_runs), str(out), "participant", "--participant-label", "01", "--run-label", "2", *PHYS])
 
-    run_page = out / "sub-01" / report_name("sub-01_task-tapping_run-2", desc="raw")
-    assert _run_labels(run_page) == ["sub-01_task-tapping_run-2"]
-    assert task_page.read_text(encoding="utf-8") == before
+    assert other.read_text(encoding="utf-8") == before
+    assert _run_labels(out / "sub-01" / report_name(RUNS[1], desc="raw")) == [RUNS[1]]
 
 
 def test_a_run_label_no_recording_has_writes_no_report(two_runs, tmp_path, capsys):

@@ -9,29 +9,31 @@ from pathlib import Path
 from nirspipe import __version__
 from nirspipe.exceptions import StageError
 
-from nirspipe.io.derivatives import group_label, subject_labels
+from nirspipe.io.derivatives import entity_of, group_label, subject_labels
 from nirspipe.io.naming import report_name
 from nirspipe.cli import _shared
 
 
-def _serve(opened: tuple, port: int | None, default_port: int, log_name: str) -> None:
+def _serve(opened: list, port: int | None, default_port: int, log_name: str) -> None:
     from nirspipe.interface.server import WebApp
 
-    viewer, label, entries = opened
     web = WebApp()
-    web.serve(port, default_port, log_name, web.mount(viewer.app, label, entries))
+    paths = [path for viewer, label, entries in opened
+             for path in web.mount(viewer.app, label, entries)]
+    # several pages open on the home page that lists them, not a browser tab each
+    web.serve(port, default_port, log_name, paths if len(opened) == 1 else [""])
 
 
-def open_rate(output_dir: Path, participant_label: list[str] | None) -> tuple:
-    """(viewer, label, entry pages) for the run reports; exits when there is nothing to rate."""
+def open_rate(output_dir: Path, participant_label: list[str] | None) -> list:
+    """[(viewer, label, entry pages)] for the run reports; exits when there is nothing to rate."""
     from nirspipe.qc.rating.app import FNIRSRatingApp
 
     subjects = participant_label or subject_labels(output_dir)
     if not subjects:
         print("No subjects found in output directory.", file=sys.stderr)
         raise SystemExit(1)
-    return (FNIRSRatingApp(output_dir, subjects), "Run reports",
-            tuple(f"sub-{subject}/" for subject in subjects))
+    return [(FNIRSRatingApp(output_dir, subjects), "Run reports",
+             tuple(f"sub-{subject}/" for subject in subjects))]
 
 
 def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
@@ -44,36 +46,35 @@ def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | 
 def open_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float,
-) -> tuple:
-    """(viewer, label, entry pages) for one raw report; exits when the report is missing."""
+    sci_threshold: float, run_label: str | None = None,
+) -> list:
+    """[(viewer, label, entry pages)], one per raw report the selection matches; exits on none."""
     from nirspipe.qc.rating.app import RawRatingApp
 
-    name_parts = [f"sub-{participant_label}"]
-    if session_label:
-        name_parts.append(f"ses-{session_label}")
-    if task_label:
-        name_parts.append(f"task-{task_label}")
-    html_path = (output_dir / f"sub-{participant_label}"
-                 / report_name("_".join(name_parts), desc="raw"))
-
-    if not html_path.exists():
-        print(f"Error: raw report not found: {html_path}", file=sys.stderr)
+    wanted = {"ses": session_label, "task": task_label, "run": run_label}
+    sub_dir = output_dir / f"sub-{participant_label}"
+    pages = [page for page in sorted(sub_dir.glob(f"sub-{participant_label}_*_desc-raw_report.html"))
+             if "_cond-" not in page.name
+             and all(value is None or entity_of(page.stem, key) == value
+                     for key, value in wanted.items())]
+    if not pages:
+        print(f"Error: no raw report in {sub_dir} matches the selection", file=sys.stderr)
         raise SystemExit(1)
-    return (RawRatingApp(html_path, output_dir, sci_threshold),
-            html_path.stem, ("",))
+    return [(RawRatingApp(page, output_dir, sci_threshold), page.stem, ("",)) for page in pages]
 
 
 def cmd_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, port: int | None,
+    sci_threshold: float, port: int | None, run_label: str | None = None,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import RAW_PORT
 
-    opened = open_raw(output_dir, participant_label, session_label, task_label, sci_threshold)
-    print(f"Launching raw viewer: {opened[0].html_path.name} ...")
+    opened = open_raw(output_dir, participant_label, session_label, task_label, sci_threshold,
+                      run_label)
+    for viewer, _label, _entries in opened:
+        print(f"Launching raw viewer: {viewer.html_path.name} ...")
     _serve(opened, port, RAW_PORT, "nirspipe-rate raw")
 
 
@@ -100,8 +101,8 @@ def open_hyper(
         print(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", file=sys.stderr)
         raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
-    return (HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
-                           decisions_dir=derivatives_dir), html_path.stem, ("",))
+    return [(HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
+                            decisions_dir=derivatives_dir), html_path.stem, ("",))]
 
 
 def cmd_hyper(
@@ -117,7 +118,7 @@ def cmd_hyper(
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
               "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
-    print(f"Launching hyper viewer: {opened[0].html_path.name} ...")
+    print(f"Launching hyper viewer: {opened[0][0].html_path.name} ...")
     _serve(opened, port, HYPER_PORT, "nirspipe-rate hyper")
 
 
@@ -163,13 +164,16 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer: rate sections, decide channels, mark bad stretches.")
     pw.add_argument("output_dir", type=Path, help="nirspipe output directory.")
-    # one subject, not a list: the viewer opens one recording at a time
+    # one subject, not a list: the viewer serves that subject's raw reports
     pw.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
-                    help="Subject ID to open, e.g. '01'.")
+                    help="Subject ID to open, e.g. '01'. Every raw report of the subject the "
+                         "other labels match opens, each recording on its own page.")
     pw.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
     pw.add_argument("--task-label", "--task_label", default=None, type=_shared.BidsLabel,
                     help="Task label.")
+    pw.add_argument("--run-label", "--run_label", default=None, type=_shared.BidsLabel,
+                    help="Run label.")
     pw.add_argument("--sci-threshold", type=float, default=None,
                     help="A second SCI line: outline each SCI (10 s) cell below it. The red "
                          "cells stay the run's own line. Off when not given.")

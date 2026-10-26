@@ -203,7 +203,7 @@ A condition page is a view of the run, not a separate analysis: every rejection 
 
 ## Raw report
 
-`nirspipe-qc bids_dir output_dir participant` reports on raw recordings without running the pipeline: it screens the channels with the same rules and draws each recording, one page per session and task. Each subject runs on its own, so one failure does not stop the rest. It takes the same screening, separation, `--population`, `--bad-channels`, `--keep-spans`, `--bad-spans` and `--bids-filter-file` flags as `nirspipe`.
+`nirspipe-qc bids_dir output_dir participant` reports on raw recordings without running the pipeline: it screens the channels with the same rules and draws each recording on a page of its own, named like its run report. Each subject runs on its own, so one failure does not stop the rest. It takes the same screening, separation, `--population`, `--bad-channels`, `--keep-spans`, `--bad-spans` and `--bids-filter-file` flags as `nirspipe`.
 
 :::{note}
 Give `nirspipe-qc` the same screening settings you give `nirspipe`, or the raw report and the run report will describe different channel sets.
@@ -300,7 +300,7 @@ The dyad index, `group-<id>_desc-index_report.html`, lists every analysed window
 | Command | Serves | Default port |
 |---------|--------|--------------|
 | `nirspipe-rate rate OUTPUT_DIR` | Every subject's index and the run reports it links | 8765 |
-| `nirspipe-rate raw OUTPUT_DIR --participant-label <id>` | One subject's raw report and its condition pages | 5052 |
+| `nirspipe-rate raw OUTPUT_DIR --participant-label <id>` | One subject's raw reports and their condition pages; `--session-label`, `--task-label` and `--run-label` narrow it to some recordings | 5052 |
 | `nirspipe-rate hyper OUTPUT_DIR --group-id <id> --task-label <t> --pairs-csv <file>` | One dyad's raw report, in the raw QC tree | 5053 |
 
 If the default port is busy, the next free one is used. Click a section's cell to cycle unrated, good, bad and other; ctrl-click adds a comment. Click a channel chip to cycle undecided, good and bad; a red tint marks a pair the screening rejected but does not decide for you. Channel decisions apply to the whole run, so condition pages take none.

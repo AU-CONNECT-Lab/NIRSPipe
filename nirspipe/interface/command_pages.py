@@ -131,7 +131,7 @@ def _report_key(prog: str, sub: "str | None", args) -> "str | None":
 
 
 def _open_viewer(web, top, argv: list[str]):
-    """Mount the rating viewer an ``nirspipe-rate`` subcommand would serve, and link its pages."""
+    """Mount the rating viewers an ``nirspipe-rate`` subcommand would serve, and link their pages."""
     from nirspipe.cli import rate
 
     args = vars(top.parse_args(argv[1:]))
@@ -141,12 +141,12 @@ def _open_viewer(web, top, argv: list[str]):
     err = io.StringIO()
     try:
         with contextlib.redirect_stderr(err):
-            viewer, label, entries = opener(**args)
+            opened = opener(**args)
     except SystemExit:
         return jsonify(error=err.getvalue().strip() or "the viewer could not be opened"), 400
-    paths = web.mount(viewer.app, label, entries)
     return jsonify(opened=[{"label": f"{label} {entry}".strip(), "href": "/" + path}
-                           for entry, path in zip(entries, paths)])
+                           for viewer, label, entries in opened
+                           for entry, path in zip(entries, web.mount(viewer.app, label, entries))])
 
 
 def blueprint(web) -> Blueprint:
