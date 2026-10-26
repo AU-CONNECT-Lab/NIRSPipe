@@ -63,7 +63,7 @@ from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.pipeline.motion import overmarked
 from nirspipe.qc.metrics.aggregate import in_analysis_band
 from nirspipe.io.naming import parse_path, report_name
-from nirspipe.io.optode_space import recorded_regions
+from nirspipe.io.optode_space import placement_of, recorded_regions
 from nirspipe.io.tables import read_table
 import matplotlib
 matplotlib.use("Agg")
@@ -1813,6 +1813,8 @@ def _section_brain(
     view: nothing in it is a time series.
     """
     brain_views_path = None
+    # coordinates no reading placed would float beside the brain, so only the flat map is drawn
+    flat_only = not placement_of(raw_intensity).placed
     if coords_head is not None and good_mask is not None and sci_scores:
         with _guard("Brain views", errors, subject):
             import io as _io
@@ -1820,9 +1822,9 @@ def _section_brain(
 
             views_name = fig_name("brainviews", extension=".png")
             ch_names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
-            brain_b64 = quality_brain_views(ch_names, coords_head, good_mask,
-                                            raw=raw_intensity, sci_scores=sci_scores,
-                                            sci_threshold=sci_threshold)
+            brain_b64 = None if flat_only else quality_brain_views(
+                ch_names, coords_head, good_mask, raw=raw_intensity, sci_scores=sci_scores,
+                sci_threshold=sci_threshold)
 
             optode_b64 = None
             with _guard("Optode flat map", errors, subject):
@@ -1846,11 +1848,11 @@ def _section_brain(
                 buf.seek(0)
                 combined_b64 = base64.b64encode(buf.read()).decode()
                 brain_views_path = save_png(combined_b64, figures_dir, views_name)
-            elif brain_b64:
-                brain_views_path = save_png(brain_b64, figures_dir, views_name)
+            elif brain_b64 or optode_b64:
+                brain_views_path = save_png(brain_b64 or optode_b64, figures_dir, views_name)
             else:
-                raise RuntimeError("brain_b64 is None")
-    return {"brain_views_path": brain_views_path}
+                raise RuntimeError("neither the brain views nor the flat map rendered")
+    return {"brain_views_path": brain_views_path, "brain_views_flat": flat_only}
 
 
 
@@ -1890,8 +1892,10 @@ def _section_glm(
             glm_design_heatmap_path = save_png(b64, figures_dir,
                                                fig_name("heatmap", suffix="design", extension=".png"))
 
+    glm_activation_unplaced = (glm_est is not None and raw_haemo is not None
+                               and not placement_of(raw_haemo).placed)
     # one file per condition, all shown, against one colour scale so they compare
-    if glm_est is not None and conditions and raw_haemo is not None:
+    if glm_est is not None and conditions and raw_haemo is not None and not glm_activation_unplaced:
         with _guard("GLM activation panel", errors, subject):
             from nirspipe.qc.figures import activation_condition_figures
             df = glm_est.to_dataframe().reset_index()
@@ -1946,6 +1950,7 @@ def _section_glm(
         "glm_design_heatmap_path": glm_design_heatmap_path,
         "glm_activation_path": glm_activation_path,
         "glm_activation_conditions": glm_activation_conditions,
+        "glm_activation_unplaced": glm_activation_unplaced,
         "glm_whitening_path": glm_whitening_path,
         "glm_whitening_h": glm_whitening_h,
     }
@@ -1966,6 +1971,7 @@ def _section_rest(
 ) -> dict:
     panel_path = alff_brain_path = fc_roi_path = fc_seed_path = None
     fc_seed_h = panel_h = fc_roi_h = 0
+    unplaced = raw_haemo is not None and not placement_of(raw_haemo).placed
     with _guard("Rest channel panel", errors, subject):
         if fc:
             fig = rest_channel_panel(fc, alff_df, raw=raw_haemo, sep_bands=sep_bands)
@@ -1973,7 +1979,7 @@ def _section_rest(
                 panel_path, panel_h = _save_plotly_html(
                     fig, figures_dir / fig_name("restpanel"))
     with _guard("ALFF brain", errors, subject):
-        if alff_df is not None and raw_haemo is not None:
+        if alff_df is not None and raw_haemo is not None and not unplaced:
             alff_brain_path = save_png(
                 alff_brain_figure(raw_haemo, alff_df, sep_bands=sep_bands), figures_dir,
                 fig_name("brain", suffix="nirsmap", statistic="alff", extension=".png"))
@@ -1995,6 +2001,7 @@ def _section_rest(
                         aggregation="seed", statistic="pearson"))
     return {"rest_panel_path": panel_path, "rest_panel_h": panel_h,
             "rest_alff_brain_path": alff_brain_path,
+            "rest_alff_unplaced": unplaced and alff_df is not None,
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
             "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
@@ -2718,6 +2725,7 @@ def _condition_glm(report_vars: dict, label: str) -> dict:
         "glm_design_heatmap_path": report_vars.get("glm_design_heatmap_path"),
         "glm_activation_conditions": conditions,
         "glm_activation_path": conditions[0]["path"] if conditions else None,
+        "glm_activation_unplaced": report_vars.get("glm_activation_unplaced"),
     }
 
 

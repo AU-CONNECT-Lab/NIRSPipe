@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from tests._fingerprint import CLI_ARGS, EVENT_DURATION, make_fingerprint_dataset
@@ -31,8 +32,19 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
             return original(*a, **kw)
         return wrapper
 
+    # the fingerprint montage is not on the fsaverage scalp, and these tests check what a placed
+    # run hands its brain builders, which an unplaced one skips
+    from nirspipe.io.optode_space import Placement
+    from nirspipe.qc.subject import prep_raw_report
+    patched += [(module, "placement_of", module.placement_of)
+                for module in (report, prep_raw_report)]
+    placed = Placement("head", np.eye(4))
+
     bids, truth = make_fingerprint_dataset(root, task=task, rest=rest, blocks=blocks, aux=aux)
     for module, name, original in patched:
+        if name == "placement_of":
+            setattr(module, name, lambda raw: placed)
+            continue
         setattr(module, name, spy(name, original))
     try:
         if raw_viewer:

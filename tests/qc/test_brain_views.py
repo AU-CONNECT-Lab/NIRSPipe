@@ -111,6 +111,9 @@ def test_a_rejected_channel_reaches_the_figure_flagged_as_rejected(mini_bids, tm
         return None
 
     monkeypatch.setattr(report, "quality_brain_views", capture)
+    # the synthetic montage is not on the fsaverage scalp, and an unplaced run draws no 3-D views
+    from nirspipe.io.optode_space import Placement
+    monkeypatch.setattr(report, "placement_of", lambda raw: Placement("head", np.eye(4)))
     main([str(mini_bids), str(tmp_path / "out"), "participant", "--participant-label", "01",
           "--task-label", "tapping", "--bad-channels", "S1_D1", "--dpf", "6",
           "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",

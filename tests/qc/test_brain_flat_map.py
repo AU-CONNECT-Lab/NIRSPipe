@@ -48,6 +48,47 @@ def test_the_flat_map_sits_beside_the_views_at_four_fifths_of_their_height(tmp_p
     assert (dark.min(axis=0).tolist(), dark.max(axis=0).tolist()) == ([4, 120], [35, 151])
 
 
+
+def _unplaced(raw):
+    from nirspipe.io.optode_space import Placement, hold_placement
+    return hold_placement(raw, Placement("none", note="the file has no 3-D optode positions"))
+
+
+def test_an_unplaced_run_draws_the_flat_map_alone(tmp_path, monkeypatch):
+    raw = _unplaced(synth_raw("01", "tapping"))
+
+    def no_views(*a, **k):
+        raise AssertionError("3-D views drawn for optodes no reading placed")
+
+    monkeypatch.setattr(report, "quality_brain_views", no_views)
+    monkeypatch.setattr(report, "optode_layout_static", lambda *a, **k: _png_b64(40, "black"))
+    names = [n for n in raw.ch_names if n.endswith("760")]
+    coords = np.array([raw.info["chs"][raw.ch_names.index(n)]["loc"][:3] for n in names])
+    errors = []
+    out = report._section_brain({n: 0.9 for n in raw.ch_names}, [], coords,
+                                np.ones(len(names), bool), raw, "01", errors, tmp_path,
+                                figure_namer("sub-01_task-tapping"), ch_names_brain=names,
+                                sci_threshold=0.8)
+    assert errors == [] and out["brain_views_flat"]
+    png = Image.open(tmp_path / out["brain_views_path"].rsplit("/", 1)[-1])
+    assert png.size == (40, 40)
+
+
+def test_an_unplaced_run_projects_nothing_onto_the_cortex(tmp_path, monkeypatch):
+    import pandas as pd
+
+    raw = _unplaced(synth_raw("01", "rest"))
+
+    def no_cortex(*a, **k):
+        raise AssertionError("ALFF projected onto the cortex for optodes no reading placed")
+
+    monkeypatch.setattr(report, "alff_brain_figure", no_cortex)
+    errors = []
+    out = report._section_rest(pd.DataFrame({"alff": [1.0]}), None, "01", errors, tmp_path,
+                               figure_namer("sub-01_task-rest"), raw_haemo=raw)
+    assert errors == []
+    assert out["rest_alff_brain_path"] is None and out["rest_alff_unplaced"]
+
 def _drawn_lines(raw, sci, rejected, monkeypatch) -> dict:
     """Each source-detector line of the drawn map, by the labels at its two ends: its colour."""
     figures = []

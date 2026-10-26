@@ -5,10 +5,10 @@ from __future__ import annotations
 NOTES = {
     # ---- Montage ----
     "caveat.unplaced":
-        "The optodes could not be placed on the template head ({reason}). The 3-D views, "
-        "flat maps and topographies draw the coordinates as they stand and are not "
-        "anatomical; separations, screening and metrics are unaffected. Landmarks in the "
-        "file or a standard montage would fix it.",
+        "The optodes could not be placed on the template head ({reason}). Nothing is drawn "
+        "on the brain; the flat maps and topographies draw the coordinates as they stand and "
+        "are not anatomical. Separations, screening and metrics are unaffected. Landmarks in "
+        "the file or a standard montage would fix it.",
     "caveat.child_template":
         "--population child places the optodes on fsaverage, an adult head: MNE ships no "
         "template for 2 to 18 years. Pass --template to put the youngest on an infant one.",

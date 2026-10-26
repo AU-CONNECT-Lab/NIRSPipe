@@ -29,8 +29,8 @@ def test_a_placed_run_gets_no_note(raw):
 def test_an_unplaced_run_says_why_and_that_the_metrics_survive(raw):
     note = placement_note(hold_placement(raw, Placement("none", note=_REASON)))
     assert _REASON in note
-    assert "not anatomical" in note
-    assert "separations, screening and metrics are unaffected" in note
+    assert "not anatomical" in note and "Nothing is drawn on the brain" in note
+    assert "Separations, screening and metrics are unaffected" in note
 
 
 def test_a_run_with_no_positions_is_left_to_the_separation_note(raw):

@@ -16,7 +16,7 @@
 {% if mode != 'rest' %}{% set _ = _sections.append(("Epoch", "Epoch Preview")) %}{% endif %}
 {# three independent conditions, matching the body: glm --fc and denoise --fc draw the
    FC panel too #}
-{% if rest_alff_brain_path %}{% set _ = _sections.append(("RestALFF", "ALFF / fALFF")) %}{% endif %}
+{% if rest_alff_brain_path or rest_alff_unplaced %}{% set _ = _sections.append(("RestALFF", "ALFF / fALFF")) %}{% endif %}
 {% if rest_panel_path %}{% set _ = _sections.append(("RestFC", "Functional Connectivity")) %}{% endif %}
 {% if glm_design_path or glm_activation_path %}
   {% set _ = _sections.append(("GLM", "GLM")) %}
@@ -208,8 +208,9 @@
     {% endif %}
 
     {% if brain_views_path %}
-      <h3>Channel quality on the brain</h3>
+      <h3>Channel quality on the {{ 'optode map' if brain_views_flat else 'brain' }}</h3>
       <p class="panel-note">{{ section_note('quality.brain_views') }}
+        {%- if brain_views_flat %} {{ section_note('quality.brain_views_unplaced') }}{% endif %}
         {%- if condition_label %} {{ section_note('quality.brain_views_condition') }}{% endif %}</p>
       <img class="responsive" src="{{ brain_views_path }}" alt="Brain views" />
       <p class="fig-path">{{ brain_views_path }}</p>
@@ -429,6 +430,8 @@
       <p class="step-desc">{{ section_note('rest.alff_brain') }}</p>
       <img class="responsive" src="{{ rest_alff_brain_path }}" alt="mALFF of HbO on the cortex" />
       <p class="fig-path">{{ rest_alff_brain_path }}</p>
+    {% elif rest_alff_unplaced %}
+      <div class="placeholder">{{ section_note('rest.alff_unplaced') }}</div>
     {% else %}
       <div class="placeholder">ALFF not computed: --high-pass and --low-pass are required.</div>
     {% endif %}
@@ -500,6 +503,9 @@
       <h3>Activation by condition</h3>
       <img src="{{ glm_activation_path }}" alt="Activation by condition" style="max-width:100%;" />
       <p class="fig-path">{{ glm_activation_path }}</p>
+    {% elif glm_activation_unplaced %}
+      <h3>Activation by condition</h3>
+      <div class="placeholder">{{ section_note('glm.activation_unplaced') }}</div>
     {% endif %}
 
     {% if glm_whitening_path %}

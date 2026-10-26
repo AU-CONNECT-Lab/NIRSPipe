@@ -220,7 +220,7 @@ select#run-select {
     {#- the subject report's brain views and flat map, so a run reads the same before the
         pipeline and after -#}
     <div id="Layout">
-      <h3>Channel quality on the brain</h3>
+      <h3 id="brain-views-title">Channel quality on the brain</h3>
       <img id="brain-views-img" class="responsive" alt="Brain views" />
       <p class="qm-note" id="brain-views-note"></p>
       <p class="fig-path" id="brain-views-path"></p>
@@ -697,7 +697,10 @@ function loadBrainViews() {
   if (!(p && p.src)) return;
   document.getElementById("brain-views-img").src = p.src;
   document.getElementById("brain-views-path").textContent = p.src;
+  document.getElementById("brain-views-title").textContent =
+    "Channel quality on the " + (p.flat ? "optode map" : "brain");
   document.getElementById("brain-views-note").innerHTML = {{ section_note('quality.brain_views') | tojson }}
+    + (p.flat ? " " + {{ section_note('quality.brain_views_unplaced') | tojson }} : "")
     + (d.condition_label ? " " + {{ section_note('quality.brain_views_condition') | tojson }} : "");
 }
 

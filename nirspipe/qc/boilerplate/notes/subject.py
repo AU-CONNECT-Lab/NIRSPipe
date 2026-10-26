@@ -60,6 +60,9 @@ NOTES = {
         "Red is rejected by screening, whatever its SCI; the rest are graded green to red by "
         "SCI against the run&rsquo;s line. Screening counts passing windows, so a channel "
         "can be dropped at a high SCI.",
+    "quality.brain_views_unplaced":
+        "The optodes could not be placed on the template head, so the flat map is drawn "
+        "without the 3-D views.",
     "quality.head_slider":
         "The panel above on the head, moved through the recording by the slider: left to right, "
         "whether each window passed, then its SCI and PSP, each centred on its line where it "
@@ -174,6 +177,9 @@ NOTES = {
         "Amplitude of low-frequency fluctuations (ALFF) and its fractional form (fALFF), "
         "from the denoised residual. The map shows where the amplitude is; the connectivity "
         "panel below gives each channel&rsquo;s value beside its correlations.",
+    "rest.alff_unplaced":
+        "Not drawn on the cortex: the optodes could not be placed on the template head (see "
+        "the notes). Each channel&rsquo;s ALFF and fALFF are in the connectivity panel below.",
     "rest.alff_brain":
         "mALFF, a block per chromophore: each kept long channel&rsquo;s amplitude over its "
         "chromophore&rsquo;s mean, so 1 is an average channel, spread over the cortex within "
@@ -192,6 +198,9 @@ NOTES = {
         "the seed, blue against it. Solid grey channels are "
         "inside the seed (undefined, not zero); faded grey ones were rejected. Short "
         "channels are not drawn.",
+    "glm.activation_unplaced":
+        "Betas are not drawn on the cortex: the optodes could not be placed on the template "
+        "head (see the notes). Each channel&rsquo;s betas are in <code>desc-glm_nirsmap.tsv</code>.",
     "glm.activation":
         "Betas on the surface, a row of three views per chromophore, each chromophore on one "
         "colour scale shared by every condition so a weak condition reads as weak. One model "

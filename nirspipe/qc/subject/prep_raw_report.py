@@ -14,7 +14,7 @@ from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
 from nirspipe.io.derivatives import bids_uris
 from nirspipe.io.head_template import FSAVERAGE, space_of
 from nirspipe.io.naming import report_name
-from nirspipe.io.optode_space import hold_placement, place_optodes
+from nirspipe.io.optode_space import hold_placement, place_optodes, placement_of
 from nirspipe.io.snirf import read_raw_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_caveat, dpf_from_age, resolve_dpf, wavelengths
 from nirspipe.pipeline.motion import motion_settings
@@ -885,6 +885,7 @@ def _process_run(
         # drawn by the page writer, not here: the GUI shares this function and shows no copy
         "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
                                       sci_threshold=cutoffs["sci"]),
+        "brain_flat":    not placement_of(raw).placed,
         "remake_head_slider": remake_head_slider,
         "sci_win_scores": (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
         "trial_images_by_condition": trial_img_by_cond,
@@ -1137,7 +1138,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
         """One condition's brain figure, graded by its own SCI over the run's rejections."""
         href = remake_brain(figure_namer(run_label, slug, prefix="raw"), sci,
                             panel_errors.setdefault(slug, []))
-        return {"src": href} if href else None
+        return {"src": href, "flat": ctx.get("brain_flat", False)} if href else None
 
     def save_head_slider(slug: str, window) -> "dict | None":
         """One condition's head slider, on the run's matrices cut to its windows."""
@@ -1291,7 +1292,7 @@ def build_prep_raw_report(
             href = ctx["remake_brain"](figure_namer(label, prefix="raw"),
                                        ctx["sci_win_scores"], brain_errors)
             if href:
-                d["figure_paths"]["brain_views"] = {"src": href}
+                d["figure_paths"]["brain_views"] = {"src": href, "flat": ctx.get("brain_flat", False)}
             d["errors"] = list(d.get("errors") or []) + collapse_messages(brain_errors)
         static_data.append(d)
         if by_condition and ctx:
