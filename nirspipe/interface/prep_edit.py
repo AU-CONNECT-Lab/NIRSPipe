@@ -124,6 +124,8 @@ def drift_hint(rows: list[list]) -> "dict | None":
         if is_marker(name):
             onsets.setdefault(name, []).append(onset)
     gaps = {name: float(np.max(np.diff(sorted(on)))) for name, on in onsets.items() if len(on) >= 2}
+    # a doubled annotation repeats nothing, as --drift-high-pass auto reads it
+    gaps = {name: gap for name, gap in gaps.items() if gap > 0}
     if not gaps:
         return None
     slowest = max(gaps, key=gaps.get)

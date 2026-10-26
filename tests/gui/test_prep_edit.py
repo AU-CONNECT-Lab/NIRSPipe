@@ -101,6 +101,11 @@ def test_the_drift_hint_follows_the_slowest_repeat_and_skips_bad_spans():
     assert drift_hint([[1, 1, "a"]]) is None
 
 
+def test_a_doubled_marker_is_no_repeat_for_the_drift_hint():
+    assert drift_hint([[5, 1, "a"], [5, 1, "a"], [20, 1, "b"]]) is None
+    assert drift_hint([[5, 1, "a"], [5, 1, "a"], [0, 1, "b"], [50, 1, "b"]])["by"] == "b"
+
+
 def test_the_save_command_is_the_form_plus_the_run_and_the_table(tmp_path):
     from werkzeug.datastructures import MultiDict
 
