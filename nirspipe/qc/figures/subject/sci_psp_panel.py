@@ -1,5 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
+from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 
 from nirspipe.qc.figures.common.motion_panel import _px_rows
@@ -62,7 +63,16 @@ def binary_heatmap_figure(
 _MISSING_COLOR = "#D3D3D3"
 # a value measured against no line: shown, neither passing nor failing
 _UNJUDGED_COLOR = "#D9E6F2"
-_UNJUDGED_DOT = "#95a5a6"
+
+
+def _scale_dots(values, lo, hi) -> list[str]:
+    """Each value's colour on the strip's Viridis scale, for a metric with no line; grey where it has none."""
+    span = (hi - lo) if lo is not None and hi is not None else 0.0
+    return [_MISSING_COLOR if not np.isfinite(v)
+            # a row of one value has no range to place it on
+            else sample_colorscale("Viridis", [min(max((v - lo) / span, 0.0), 1.0) if span > 0
+                                               else 0.5])[0]
+            for v in values]
 
 
 def _channel_metric_rows(sci_thresh, cv_thresh, snr_thresh, psp_thresh, good_frac_thresh):
@@ -580,7 +590,8 @@ def build_sci_psp_figure(
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
     the whole-run correlation and not the windowed one the strip draws.
 
-    ``psp_threshold`` None draws PSP with no line: one hue over its own range, grey dots.
+    ``psp_threshold`` None draws PSP with no line: Viridis over its own range, higher better,
+    and each dot in its value's colour on that scale.
 
     Without the windowed matrices this falls back to the lollipop-only pair.
     """
@@ -624,8 +635,8 @@ def build_sci_psp_figure(
         if not has_psp:
             return lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         psp_vals = psp_col[:, 0]
-        psp_colors = [_UNJUDGED_DOT if psp_threshold is None
-                      else "#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals]
+        psp_colors = (_scale_dots(psp_vals, *_data_range(psp_vals)) if psp_threshold is None
+                      else ["#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals])
         fig_sci = lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         fig_psp = lollipop_scores_figure(labels, psp_vals, psp_colors, psp_threshold, "PSP")
         n_ch = len(labels)
@@ -719,14 +730,12 @@ def build_sci_psp_figure(
 
         # the screening verdict only colours the row it is read off; the others colour
         # against their own cutoff, so a channel rejected on SCI is not painted red in CV
-        colors = []
-        for label, v in zip(labels, means):
+        colors = _scale_dots(means, *zrange) if threshold is None else []
+        for label, v in zip(labels, means if threshold is not None else []):
             if name == "SCI" and pair_of(label) in bad_pairs:
                 colors.append("#e74c3c")
             elif not np.isfinite(v):
                 colors.append("#D3D3D3")
-            elif threshold is None:
-                colors.append(_UNJUDGED_DOT)
             elif (v >= threshold) if higher_better else (v <= threshold):
                 colors.append("#27ae60")
             else:

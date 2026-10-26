@@ -75,7 +75,11 @@ def test_without_a_psp_line_psp_spans_its_own_values_and_draws_no_rule():
     assert (heat.zmin, heat.zmax) == (0.01, 0.60)
     assert heat.colorscale[0][1] == "#440154"           # viridis, not the pass/fail ramp
     _, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"][:2]
-    assert set(psp_dots.marker.color) == {"#95a5a6"}
+    # each dot in its value's colour on the strip's scale, the ends of Viridis at the extremes
+    colours = dict(zip(psp_dots.y, psp_dots.marker.color))
+    means = dict(zip(psp_dots.y, psp_dots.x))
+    assert "#95a5a6" not in colours.values()
+    assert colours[max(means, key=means.get)] != colours[min(means, key=means.get)]
     # the SCI and CV rules remain, and nothing is drawn at a PSP line
     assert sorted(s.x0 for s in fig.layout.shapes) == [0.05, 0.8]
 
@@ -85,4 +89,5 @@ def test_without_a_psp_line_the_lollipop_pair_judges_no_psp_dot():
                                sci_threshold=0.8, psp_threshold=None)
     sci_dots, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"]
     assert set(sci_dots.marker.color) == {"#27ae60"}
-    assert set(psp_dots.marker.color) == {"#95a5a6"}
+    # one PSP value everywhere: one colour from the scale, not the grey of a missing value
+    assert len(set(psp_dots.marker.color)) == 1 and psp_dots.marker.color[0] != "#D3D3D3"
