@@ -156,7 +156,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
         # an HRF with no conditions to convolve is a config default, not a setting the step used
         bits = [None if params.get("conditions") == [] else pick("hrf_model"), pick("noise_model")]
         if (drift := pick("drift_model")) is not None:
-            bits.append(f"{drift} drift")
+            bits.append(f"{drift} drift" + (" (auto)" if pick("drift_high_pass_auto") else ""))
         # the confounds regressed out, which in denoise mode are the whole of the step
         if (short := pick("short_channel")) not in (None, "none"):
             bits.append(f"short {short}" + (" (auto)" if pick("short_channel_auto") else ""))

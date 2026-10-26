@@ -54,6 +54,16 @@ def _cutoff(value: str) -> "float | str":
     return "none" if value.lower() == "none" else float(value)
 
 
+def _drift_cutoff(value: str) -> "float | str":
+    """A cosine drift cutoff in Hz, or ``auto`` to set it per run from the run's events."""
+    if value.strip().lower() == "auto":
+        return "auto"
+    try:
+        return float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r}: expected a cutoff in Hz or 'auto'") from None
+
+
 def _noise_model(value: str) -> str:
     """``ols``, ``auto``, ``arN`` for any order the library will take, ``ar_irls`` or ``worsley``.
 
@@ -238,10 +248,11 @@ def _build_parser() -> argparse.ArgumentParser:
     glm.add_argument("--drift-model", choices=_DRIFT_CHOICES,
                      help="Low-frequency drift regressors in design matrix. glm and rest "
                           "default to cosine; optional in denoise, where the bandpass detrends.")
-    glm.add_argument("--drift-high-pass", type=float,
+    glm.add_argument("--drift-high-pass", type=_drift_cutoff, metavar="HZ|auto",
                      help="High-pass cutoff for cosine drift in Hz. Required by --mode glm, "
                           "since it depends on the design: at most 1/(2 x the slowest "
-                          "condition repeat).")
+                          "condition repeat). 'auto' (glm only) computes that per run from its "
+                          "events, capped at 0.01 Hz and never below --high-pass.")
     glm.add_argument("--drift-order", type=int,
                      help="Polynomial drift order (polynomial drift model only), default 1.")
     glm.add_argument("--fir-delays",

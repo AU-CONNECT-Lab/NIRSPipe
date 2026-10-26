@@ -111,7 +111,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
 # ---- post settings: command line over --config over the mode's defaults ----
 
 _NOT_SETTINGS = {"subject", "session", "roi_map", "roi_map_name", "contrast_def",
-                 "short_channel_auto"}
+                 "short_channel_auto", "drift_high_pass_auto"}
 _ARG_OF_FIELD = {"aux": "aux_regressors"}
 
 
@@ -171,7 +171,16 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
     raise SystemExit(
         f"[error] {chosen_by} a cosine drift model, which needs --drift-high-pass. The "
         "cutoff depends on the design: use 1/(2 x the slowest repeat of any condition), "
-        "or pick another --drift-model.")
+        "auto to have each run's events set it, or pick another --drift-model.")
+
+
+def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
+    """Stop before any subject runs: only a task GLM has events for auto to read."""
+    mode = _v(args.get("mode"))
+    if args.get("drift_high_pass") != "auto" or mode == "glm":
+        return
+    raise SystemExit(f"[error] --drift-high-pass auto reads the task's events, which only "
+                     f"--mode glm models; --mode {mode} needs a cutoff in Hz.")
 
 
 def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
@@ -291,6 +300,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     filled_settings: list[tuple[str, Any, str]] = []
     if args.get("mode"):
         _refuse_cosine_without_cutoff(args, post_sources)
+        _refuse_drift_auto_outside_glm(args)
         _refuse_glm_without_durations(args)
         _refuse_bad_contrast_file(args)
         # a cutoff a file switched off was popped from the layers, so it is absent there

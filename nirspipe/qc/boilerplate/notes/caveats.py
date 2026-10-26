@@ -85,6 +85,12 @@ NOTES = {
         "The first and last {edge_s:g} s of the filtered recording, one period of the "
         "{l_freq:g} Hz high-pass, are partly filter settling. A GLM run avoids this with "
         "--drift-model cosine and --drift-high-pass in place of --high-pass.",
+    "caveat.drift_auto_twice":
+        "--drift-high-pass auto set the cutoff to {cutoff} Hz from {condition}, which occurs "
+        "only twice, {gap} s apart. If it marks something other than a condition, leave it "
+        "out with --events-path or nirspipe-prep edit-markers, or type a cutoff.",
+    "caveat.drift_auto_once":
+        "Seen once, so no interval for --drift-high-pass auto to read: {conditions}.",
 
     # ---- Dyads ----
     "caveat.never_aligned":

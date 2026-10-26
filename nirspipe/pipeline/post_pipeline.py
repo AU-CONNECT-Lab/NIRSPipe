@@ -50,6 +50,10 @@ Mode = Literal["denoise", "glm", "rest"]
 
 # --short-channel's default, decided per run: pca on a montage with short channels, else none
 SHORT_CHANNEL_AUTO = "auto"
+# --drift-high-pass auto, decided per run from its events; glm mode only
+DRIFT_HIGH_PASS_AUTO = "auto"
+# the highest cutoff auto chooses, however fast the design repeats: nilearn's default
+DRIFT_AUTO_CAP = 0.01
 
 
 @dataclass
@@ -84,7 +88,10 @@ class PostConfig:
     # direct caller to pass None into nilearn. "auto" is an AR order of 4x the sampling rate
     noise_model:     str                   = "auto"
     drift_model:     str | None            = None
-    drift_high_pass: float | None          = None
+    # Hz, or DRIFT_HIGH_PASS_AUTO until resolve_drift_high_pass reads the run's events
+    drift_high_pass: float | str | None    = None
+    # set where drift_high_pass was decided from "auto": what decided it, for the sidecars
+    drift_high_pass_auto: dict | None      = None
     drift_order:     int | None            = None
     fir_delays:      tuple[int, ...] | None = None
     short_channel:   bool | str | None     = None
@@ -121,6 +128,9 @@ class PostConfig:
                 "--drift-model cosine needs --drift-high-pass: the cosine drift basis is "
                 "defined by its cutoff frequency, and there is no sensible default"
             )
+        if isinstance(self.drift_high_pass, str) and self.drift_high_pass != DRIFT_HIGH_PASS_AUTO:
+            raise ValueError(f"--drift-high-pass {self.drift_high_pass!r}: expected a cutoff "
+                             f"in Hz or {DRIFT_HIGH_PASS_AUTO!r}")
 
 
 def resolve_short_channel(config: PostConfig, raw: mne.io.Raw) -> PostConfig:
@@ -297,6 +307,50 @@ def _warn_drift_absorbs_task(
     )
 
 
+def resolve_drift_high_pass(
+    config: PostConfig, raw: mne.io.Raw, events: "pd.DataFrame | None" = None,
+) -> PostConfig:
+    """``config`` with ``drift_high_pass = "auto"`` set from the run's events; any other value as it is.
+
+    1/(2 x the longest gap between two trials of one condition), the slowest condition
+    deciding, capped at DRIFT_AUTO_CAP and raised to the data's own high-pass, which the
+    basis has to cover. e.g. trials of ``a`` at most 100 s apart give 0.005 Hz.
+    """
+    if config.drift_high_pass != DRIFT_HIGH_PASS_AUTO:
+        return config
+    onsets = {name: set(times) for name, times in _design_onsets(raw, events).items()}
+    # a doubled annotation repeats nothing, so a gap of zero is no interval
+    intervals = {name: gap for name, gap in _repeat_intervals(raw, events).items() if gap > 0}
+    if not intervals:
+        raise ValueError("--drift-high-pass auto: no condition occurs twice in this run, so "
+                         "there is no interval to set the cutoff from. Type a cutoff in Hz.")
+    condition = max(intervals, key=intervals.get)
+    gap = intervals[condition]
+    cutoff, bound = 1.0 / (2.0 * gap), None
+    if cutoff > DRIFT_AUTO_CAP:
+        cutoff, bound = DRIFT_AUTO_CAP, "cap"
+    if config.high_pass is not None and cutoff < config.high_pass:
+        cutoff, bound = config.high_pass, "high_pass"
+    once = sorted(name for name in onsets if name not in intervals)
+    auto = {"condition": condition, "interval_s": gap, "trials": len(onsets[condition]),
+            "bound": bound, "seen_once": once}
+
+    logger.info("sub-%s | --drift-high-pass auto: %g Hz, 1/(2 x %.1f s), the longest gap "
+                "between two trials of %s%s", config.subject, cutoff, gap, condition,
+                {"cap": f", capped at {DRIFT_AUTO_CAP:g} Hz",
+                 "high_pass": f", raised to the data's {cutoff:g} Hz high-pass"}.get(bound, ""))
+    if auto["trials"] == 2:
+        logger.warning(
+            "sub-%s | --drift-high-pass auto took its cutoff from %s, which occurs only twice, "
+            "%.0f s apart. If it marks something other than a condition, leave it out with "
+            "--events-path or nirspipe-prep edit-markers, or type a cutoff.",
+            config.subject, condition, gap)
+    if once:
+        logger.warning("sub-%s | --drift-high-pass auto: %s occur(s) once, so set no interval",
+                       config.subject, ", ".join(once))
+    return replace(config, drift_high_pass=cutoff, drift_high_pass_auto=auto)
+
+
 def run_post(
     raw_haemo: mne.io.Raw,
     config: PostConfig,
@@ -319,6 +373,9 @@ def run_post(
     """
 
     config = resolve_short_channel(config, raw_haemo)
+    if config.drift_high_pass == DRIFT_HIGH_PASS_AUTO and mode != "glm":
+        raise ValueError(f"--drift-high-pass auto reads the task's events, which only glm mode "
+                         f"models; {mode} needs a cutoff in Hz")
     rec = Recorder()
     if source_path is not None:
         rec.register_input(source_path, raw_haemo)
@@ -381,8 +438,6 @@ def run_post(
         if config.events_path is not None and config.stim_dur is not None:
             raise ValueError("--events-path and --stim-dur are mutually exclusive")
         logger.info("sub-%s | GLM (%s / %s)", config.subject, config.hrf_model, config.noise_model)
-        _warn_unmatched_design_band(config)
-        _warn_lowpass_breaks_whitening(config, mode)
         # the same table the design will be built from, so the warning cannot name a
         # condition the model does not carry
         design_events = read_table(config.events_path) if config.events_path else None
@@ -392,6 +447,9 @@ def run_post(
                 f"GLM mode found no events in {where}, so the model would hold drift and "
                 f"confounds only. Use --mode denoise for confound regression without a task model."
             )
+        config = resolve_drift_high_pass(config, result, design_events)
+        _warn_unmatched_design_band(config)
+        _warn_lowpass_breaks_whitening(config, mode)
         _warn_drift_absorbs_task(config, result, design_events)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
@@ -400,6 +458,7 @@ def run_post(
             noise_model=config.noise_model,
             drift_model=config.drift_model,
             high_pass=config.drift_high_pass,
+            drift_high_pass_auto=config.drift_high_pass_auto,
             drift_order=config.drift_order,
             fir_delays=config.fir_delays,
             short_channel=config.short_channel,

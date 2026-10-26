@@ -1382,6 +1382,21 @@ def _sidecar_of(nirs_dir: Path, sqm_label: "str | None", subject: str, suffix: s
         return {}
 
 
+def _drift_auto_notes(nirs_dir: Path, sqm_label: "str | None", subject: str) -> list[str]:
+    """What the log warned about a --drift-high-pass auto cutoff: a deciding condition seen twice, any seen once."""
+    glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
+    auto = glm.get("drift_high_pass_auto") or {}
+    notes = []
+    if auto.get("trials") == 2:
+        notes.append(section_note("caveat.drift_auto_twice", condition=auto["condition"],
+                                  cutoff=f"{glm['drift_high_pass']:g}",
+                                  gap=f"{auto['interval_s']:.0f}"))
+    if auto.get("seen_once"):
+        notes.append(section_note("caveat.drift_auto_once",
+                                  conditions=", ".join(auto["seen_once"])))
+    return notes
+
+
 def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
                       subject: str) -> dict:
     """The run's excluded time: kept seconds, share per kind, the spans, and each condition's part.
@@ -2292,6 +2307,8 @@ def build_subject_report(
                                       roi_map_name=roi_map_name, sep_bands=sep_bands)
     excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)
     for line in excluded_vars["excluded_skipped"]:
+        _note(notes, subject, line)
+    for line in _drift_auto_notes(nirs_dir, sqm_label, subject):
         _note(notes, subject, line)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=nirs_dir,

@@ -50,6 +50,11 @@ def band_note(mode: "str | None", high_pass: "str | None", drift_model: "str | N
     else:
         cutoff = defaults.get("high_pass")
     drift = drift_model or defaults.get("drift_model")
+    if drift == "cosine" and (drift_high_pass or "").strip().lower() == "auto":
+        # auto never sits below the high-pass, so only the mode can be wrong
+        return (None if mode == "glm" else
+                "Drift high-pass auto reads the task's events, so it needs the glm mode. "
+                "Type a cutoff in Hz here.")
     drift_cutoff = _float(drift_high_pass)
     if drift_cutoff is None:
         drift_cutoff = defaults.get("drift_high_pass")
@@ -57,7 +62,8 @@ def band_note(mode: "str | None", high_pass: "str | None", drift_model: "str | N
     # cosine without a cutoff stops the run, so say it while the form is filled
     if drift == "cosine" and drift_cutoff is None:
         return ("A cosine drift model needs a cutoff. Open the run's raw report in Data Preparation: "
-                "its events section gives the slowest repeat of each condition and the number to put here.")
+                "its events section gives the slowest repeat of each condition and the number to put here. "
+                "Or type auto to have each run's events set it.")
     if mode != "glm" or cutoff is None:
         return None
     if drift != "cosine":
@@ -84,7 +90,7 @@ def analysis(form) -> Hints:
     for flag, dest in (("--high-pass", "high_pass"), ("--low-pass", "low_pass")):
         hints.placeholders[flag] = (f"{defaults[dest]} ({mode} default; none switches it off)"
                                     if dest in defaults else "off")
-    hints.placeholders["--drift-high-pass"] = default("drift_high_pass", "from your design")
+    hints.placeholders["--drift-high-pass"] = default("drift_high_pass", "from your design, or auto")
     hints.placeholders["--drift-model"] = default("drift_model", "none")
     hints.placeholders["--hrf-model"] = default("hrf_model", "none")
     hints.placeholders["--noise-model"] = default("noise_model", "auto")

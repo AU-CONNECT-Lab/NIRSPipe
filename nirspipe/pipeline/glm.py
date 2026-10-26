@@ -541,6 +541,8 @@ def run_glm_pipeline(
     drift_order: int | None,
     fir_delays: tuple[int, ...] | None,
     events_path: str | None = None,
+    # what set `high_pass` under --drift-high-pass auto; see post_pipeline.resolve_drift_high_pass
+    drift_high_pass_auto: dict | None = None,
     events: pd.DataFrame | None = None,
     short_channel: bool | SCRStrategy | None = None,
     # the strategy was chosen by --short-channel auto rather than typed
@@ -661,6 +663,8 @@ def run_glm_pipeline(
         drift_params = {"drift_order": drift_order}
     else:
         drift_params = {}
+    drift_auto = ({"drift_high_pass_auto": drift_high_pass_auto}
+                  if drift_model == "cosine" and drift_high_pass_auto else {})
     # measured confounds stamped alongside the frequency ones, so a downstream step can read
     # off this file whether the systemic component was regressed out
     # the channels whose bias-corrected AR could not be had at the order, fitted as auto
@@ -674,7 +678,7 @@ def run_glm_pipeline(
           conditions=conditions,
           # the HRF only shapes a design that holds conditions
           **({"hrf_model": hrf_model} if conditions else {}),
-          **design_params, **drift_params, **censor_params)
+          **design_params, **drift_params, **drift_auto, **censor_params)
 
     # what the tables and the report show: HbT, when asked for, fitted as a series of its own
     # beside the pair, whose residual alone is the one returned and written
@@ -719,7 +723,7 @@ def run_glm_pipeline(
                           censored=~keep, whitening=whitening, **censor_params,
                           hrf_model=hrf_model, conditions=conditions, **design_params,
                           noise_model=noise_model, **table_noise, drift_model=drift_model,
-                          drift_high_pass=high_pass, drift_order=drift_order,
+                          drift_high_pass=high_pass, drift_order=drift_order, **drift_auto,
                           short_channel=short_channel_used, **auto_params,
                           aux_regressors=sorted(k for k in confound_cols if k.startswith("aux_")))
 

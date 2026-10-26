@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - The raw QC record carries the settings it screened with: lines, cardiac band, DPF, template, motion correction and the final bad channels
 - `--population infant|child|adult|older` on `nirspipe` and `nirspipe-qc` participant fills the cardiac and respiration bands, one DPF for the batch and the head template; typed flags override it
 - `--contrast-file` also reads a TSV or CSV table, one row per contrast and a weight column per condition; TOML still works
+- `--drift-high-pass auto` in glm mode sets each run's cosine cutoff to 1/(2 x its slowest condition repeat), capped at 0.01 Hz, never below `--high-pass`
 
 ### Changed
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject

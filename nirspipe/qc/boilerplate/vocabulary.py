@@ -129,8 +129,17 @@ def _drift_phrase(params: dict[str, Any]) -> str | None:
     """
     drift = params.get("drift_model")
     if drift == "cosine":
-        return ("a discrete cosine drift basis "
-                f"(high-pass cutoff: {params.get('drift_high_pass')} Hz)")
+        cutoff = _num(params.get("drift_high_pass"))
+        auto = params.get("drift_high_pass_auto")
+        how = ""
+        if auto:
+            how = (", set from the run's events to 1/(2T), T being the longest interval "
+                   f"between two trials of one condition ({auto['condition']}, "
+                   f"{_num(auto['interval_s'])} s)")
+            how += {"cap": f", and capped at {cutoff} Hz",
+                    "high_pass": ", and raised to the data's high-pass cutoff, which the "
+                                 "basis has to cover"}.get(auto.get("bound"), "")
+        return f"a discrete cosine drift basis (high-pass cutoff: {cutoff} Hz{how})"
     if drift == "polynomial":
         return f"an order-{params.get('drift_order')} polynomial drift basis"
     return None
