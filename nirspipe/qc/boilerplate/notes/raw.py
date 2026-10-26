@@ -24,9 +24,9 @@ NOTES = {
 
     # ---- Panels ----
     "raw.signal":
-        "Each pair's shorter wavelength in orange, its longer in blue; short channels dashed, "
-        "unclassified ones dotted, rejected ones grey. Click a trace to select its channel and "
-        "double-click to reset the view.",
+        "Each pair's shorter wavelength in orange, its longer in blue; short channels in their "
+        "own block below, in lighter shades; rejected ones grey. Click a trace to select its "
+        "channel and double-click to reset the view.",
     "raw.channel_detail":
         "Pick a channel by its trace above or in the list to see its concentration after "
         "Beer-Lambert and its spectrum.",

@@ -36,13 +36,16 @@ EPOCH_MIN_TRIALS = 2
 
 
 
-# a pair's wavelengths, shortest first; the separation is carried by the dash instead
+# a pair's wavelengths, shortest first; a short channel keeps its wavelength's hue, lighter
 WAVELENGTH_COLORS = ("#f28e2b", "#4e79a7", "#4d9221")
-_SEPARATION_DASH = {"long": "solid", "short": "dash", "unclassified": "dot"}
+_SHORT_COLORS = ("#f6a763", "#7fa2c9", "#8fbf73")
+# the overview's blocks, top to bottom, and the label above each but the first
+_SEPARATION_BLOCKS = (("long", ""), ("short", "Short channels"),
+                      ("unclassified", "In neither separation range"))
 
 
 def _ch_styles(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[tuple[str, str]]:
-    """``(colour, dash)`` per channel: colour by its rank among its pair's wavelengths, dash by long, short or unclassified."""
+    """``(colour, separation)`` per channel: hue by its rank among its pair's wavelengths, lighter when short."""
     long_names, short_names = map(set, long_short_channels(raw, sep_bands))
     by_pair: dict[str, set[float]] = {}
     for ch in raw.info["chs"]:
@@ -52,7 +55,8 @@ def _ch_styles(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[tuple[
         name = ch["ch_name"]
         rank = sorted(by_pair[pair_of(name)]).index(float(ch["loc"][9]))
         sep = "long" if name in long_names else "short" if name in short_names else "unclassified"
-        styles.append((WAVELENGTH_COLORS[rank % len(WAVELENGTH_COLORS)], _SEPARATION_DASH[sep]))
+        palette = _SHORT_COLORS if sep == "short" else WAVELENGTH_COLORS
+        styles.append((palette[rank % len(palette)], sep))
     return styles
 
 
@@ -144,41 +148,63 @@ def build_ts_figure(
     first_seen: dict[str, int] = {}
     for p in picks:
         first_seen.setdefault(pair_of(raw.ch_names[p]), len(first_seen))
-    picks = sorted(picks, key=lambda p: (first_seen[pair_of(raw.ch_names[p])],
-                                         float(raw.info["chs"][p]["loc"][9]), raw.ch_names[p]))
+    all_styles = _ch_styles(raw, sep_bands)
+    block_of = {name: k for k, (name, _) in enumerate(_SEPARATION_BLOCKS)}
+    # long channels, then short, then any in neither range; a stable sort keeps the pairs' order
+    picks = sorted(sorted(picks, key=lambda p: (first_seen[pair_of(raw.ch_names[p])],
+                                                float(raw.info["chs"][p]["loc"][9]),
+                                                raw.ch_names[p])),
+                   key=lambda p: block_of[all_styles[p][1]])
+
+    # one slot per row, and a blank one between blocks for the block's label
+    slots, labels_at, slot = [], [], 0
+    for k, pick in enumerate(picks):
+        sep = all_styles[pick][1]
+        if k and sep != all_styles[picks[k - 1]][1]:
+            labels_at.append((slot, dict(_SEPARATION_BLOCKS)[sep]))
+            slot += 1
+        slots.append(slot)
+        slot += 1
+    # the first channel on top, read downwards
+    ys = [(slot - 1 - s) * _ROW_STEP for s in slots]
 
     data, times = raw.get_data(picks=picks, return_times=True)
-
-    all_styles = _ch_styles(raw, sep_bands)
     cond_colors_ = condition_colors(markers)
 
     traces = []
     band_shapes = []
-    y_lo, y_hi = -_ROW_STEP / 2, (len(picks) - 1) * _ROW_STEP + _ROW_STEP / 2
-    for i, pick in enumerate(picks):
+    y_lo, y_hi = -_ROW_STEP / 2, (slot - 1) * _ROW_STEP + _ROW_STEP / 2
+    for i, (pick, y0) in enumerate(zip(picks, ys)):
         ch = raw.ch_names[pick]
         row = data[i]
         t_row, arr = minmax_xy(times, row, max_ts_pts)
         std = float(np.std(row))
         normed = ((arr - row.mean()) / std).tolist() if std > 0 else (arr - row.mean()).tolist()
-        shifted = [v + i * _ROW_STEP for v in normed]
+        shifted = [v + y0 for v in normed]
         finite = [v for v in shifted if np.isfinite(v)]
         if finite:
             y_lo, y_hi = min(y_lo, min(finite)), max(y_hi, max(finite))
-        color, dash = all_styles[pick] if pick < len(all_styles) else ("#aaa", "solid")
-        color = "#b2bec3" if ch in bad_channels else _hex_to_rgba(color, 0.85)
+        color = "#b2bec3" if ch in bad_channels else _hex_to_rgba(all_styles[pick][0], 0.85)
         traces.append(go.Scatter(
             x=t_row.tolist(), y=shifted, name=ch, mode="lines",
-            line=dict(width=0.9, color=color, dash=dash),
+            line=dict(width=0.9, color=color),
             customdata=[ch] * len(t_row),
             hovertemplate="<b>%{customdata}</b><extra></extra>",
         ))
         band_shapes.append(dict(
             type="rect", xref="paper", yref="y", layer="below",
-            x0=0, x1=1, y0=(i - 0.5) * _ROW_STEP, y1=(i + 0.5) * _ROW_STEP,
+            x0=0, x1=1, y0=y0 - _ROW_STEP / 2, y1=y0 + _ROW_STEP / 2,
             fillcolor="rgba(0,0,0,0.025)" if i % 2 == 0 else "rgba(0,0,0,0)",
             line=dict(width=0),
         ))
+    block_labels = []
+    for s, text in labels_at:
+        y_gap = (slot - 1 - s) * _ROW_STEP
+        band_shapes.append(dict(type="line", xref="paper", yref="y", layer="below", x0=0, x1=1,
+                                y0=y_gap, y1=y_gap, line=dict(color="#c9d2da", width=1)))
+        block_labels.append(dict(text=text, xref="paper", yref="y", x=0.005, y=y_gap,
+                                 xanchor="left", yanchor="bottom", showarrow=False,
+                                 font=dict(size=10, color="#6c757d"), bgcolor="white"))
 
     mk_shapes = []
     for m in markers:
@@ -191,7 +217,6 @@ def build_ts_figure(
                 line=dict(width=0), layer="below",
             ))
 
-    n = len(picks)
     fig = go.Figure(
         data=traces,
         layout=go.Layout(
@@ -199,7 +224,7 @@ def build_ts_figure(
             # one tick per trace, so the name sits on the trace instead of in a legend
             yaxis=dict(
                 tickmode="array",
-                tickvals=[i * _ROW_STEP for i in range(n)],
+                tickvals=ys,
                 ticktext=[raw.ch_names[p] for p in picks],
                 tickfont=dict(size=8),
                 showgrid=False, zeroline=False,
@@ -208,7 +233,8 @@ def build_ts_figure(
             ),
             plot_bgcolor="white", paper_bgcolor="white",
             shapes=band_shapes + mk_shapes,
-            height=max(380, n * _ROW_PX + 80),
+            annotations=block_labels,
+            height=max(380, slot * _ROW_PX + 80),
             margin=dict(l=110, r=15, t=12, b=40),
             showlegend=False,
             hovermode="closest",

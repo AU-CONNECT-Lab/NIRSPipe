@@ -3,7 +3,9 @@
 import numpy as np
 
 from nirspipe.qc.figures import build_ts_figure
-from tests._synth import synth_raw
+from tests._synth import N_LONG_PAIRS, synth_raw
+
+_LONG = {f"S{k}_D{k}" for k in range(1, N_LONG_PAIRS + 1)}
 
 
 def test_the_range_is_the_traces_extent():
@@ -13,15 +15,16 @@ def test_the_range_is_the_traces_extent():
     lo, hi = fig.layout.yaxis.range
     assert fig.layout.yaxis.autorange is False
     ticks = fig.layout.yaxis.tickvals
-    half = (ticks[1] - ticks[0]) / 2
-    assert lo == min(ticks[0] - half, ys.min()) and hi == max(ticks[-1] + half, ys.max())
+    half = 2.0
+    assert lo == min(min(ticks) - half, ys.min()) and hi == max(max(ticks) + half, ys.max())
 
 
 def test_rows_sit_four_sds_apart_each_trace_centred_on_its_tick():
-    raw = synth_raw("01", "rest", seed=0)
+    raw = synth_raw("01", "rest", seed=0, short_channels=False)
     fig = build_ts_figure(raw, [], set(), 2000)[0]
     ticks = np.asarray(fig.layout.yaxis.tickvals, float)
-    assert np.allclose(np.diff(ticks), 4.0)
+    # read top-down: the first channel highest
+    assert np.allclose(np.diff(ticks), -4.0)
     for trace, tick in zip(fig.data, ticks):
         y = np.asarray(trace.y, float)
         # z-scored, so a trace's mean is its row and its spread one unit
@@ -38,3 +41,18 @@ def test_a_pairs_wavelengths_sit_on_adjacent_rows_whatever_the_file_order():
     assert all(pairs[k] == pairs[k + 1] for k in range(0, len(pairs), 2))
     # pairs keep the order the file first lists them in
     assert list(dict.fromkeys(pairs)) == list(dict.fromkeys(ch.split()[0] for ch in by_wavelength))
+
+
+def test_short_channels_sit_in_their_own_labelled_block_below_the_long_ones():
+    raw = synth_raw("01", "rest", seed=0)
+    fig = build_ts_figure(raw, [], set(), 2000)[0]
+    y_of = dict(zip((t.name for t in fig.data), fig.layout.yaxis.tickvals))
+    long_y = [y for name, y in y_of.items() if name.split()[0] in _LONG]
+    short_y = [y for name, y in y_of.items() if name.split()[0] not in _LONG]
+    assert short_y and max(short_y) < min(long_y)
+    # one blank row between the blocks, holding the label
+    assert min(long_y) - max(short_y) == 8.0
+    label = [a for a in fig.layout.annotations if a.text == "Short channels"]
+    assert len(label) == 1 and max(short_y) < label[0].y < min(long_y)
+    # no dashes left: the block says short, the colour stays the wavelength
+    assert all(t.line.dash in (None, "solid") for t in fig.data)

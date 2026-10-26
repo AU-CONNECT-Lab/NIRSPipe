@@ -1,7 +1,7 @@
 """The montage figures: what each channel is drawn as.
 
-The dashes follow the one long/short split the reports use, so a channel in the gap between
-the two ranges is neither; the colours follow the wavelength.
+The separation follows the one long/short split the reports use, so a channel in the gap
+between the two ranges is neither; the hue follows the wavelength, lighter for a short channel.
 """
 
 from __future__ import annotations
@@ -21,17 +21,19 @@ def raw():
     return synth_raw("01", "hold", duration=20.0, motion_onset=None)
 
 
-def test_channel_dashes_follow_the_long_short_split(raw):
+def test_channel_separation_follows_the_long_short_split(raw):
     # move the first pair's detector into the gap the two ranges leave between them
     for ch in raw.info["chs"][:2]:
         ch["loc"][6:9] = ch["loc"][3:6] + np.array([0.012, 0.0, 0.0])
-    dashes = {name: dash for name, (_, dash) in zip(raw.ch_names, _ch_styles(raw))}
+    styles = dict(zip(raw.ch_names, _ch_styles(raw)))
 
-    assert dashes[raw.ch_names[0]] == "dot"
-    assert dashes[raw.ch_names[2]] == "solid"
+    assert styles[raw.ch_names[0]][1] == "unclassified"
+    assert styles[raw.ch_names[2]][1] == "long"
     short = next(n for n, ch in zip(raw.ch_names, raw.info["chs"])
                  if np.linalg.norm(ch["loc"][6:9] - ch["loc"][3:6]) < 0.01)
-    assert dashes[short] == "dash"
+    assert styles[short][1] == "short"
+    # a short channel is drawn lighter than either long colour
+    assert styles[short][0] not in {"#f28e2b", "#4e79a7"}
 
 
 def test_a_pairs_shorter_wavelength_is_orange_and_its_longer_blue(raw):
