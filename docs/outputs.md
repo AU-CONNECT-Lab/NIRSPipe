@@ -4,7 +4,7 @@ title: Outputs
 
 # Outputs
 
-`nirspipe` writes a BIDS derivatives tree, and the dyad commands write a second tree of their own beside it. This page lists what each holds, how the files are named, what their sidecars record, and the logs and run records every run leaves.
+`nirspipe` writes a BIDS derivatives tree, and the dyad commands write a second tree of their own beside it. This page lists what each tree holds, how the files are named, and the logs and run records every run leaves.
 
 ## Naming
 
@@ -22,7 +22,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 | `band-` | A re-averaged band from `nirspipe-hyper-band` |
 | `chan-`, `label-` | A channel or a region, in figure names |
 
-The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. A run's outputs carry its input's `ses`, `task`, `acq` and `run`, so two recordings told apart by any of them keep apart; any other entity appears only where it tells two otherwise identical files apart. `group-`, `pair-`, `chromo-`, `chan-`, `agg-`, `band-`, `cond-`, `null-` and `stat-`, and the `relmat` and `nirsmap` suffixes, are this package's extensions to BIDS, declared in its own naming configuration. Each tree's `.bidsignore` exempts the reports, `logs/`, `figures/`, the Plotly.js copy and the JSON-only records, so every table stays visible to a validator.
+The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. A run's outputs keep its input's `ses`, `task`, `acq` and `run`. Some of these entities and suffixes (`group-`, `chromo-`, `relmat`, `nirsmap` and others) are not yet part of BIDS, so a BIDS validator may flag them.
 
 ## The `nirspipe` tree
 
@@ -82,11 +82,11 @@ derivatives/nirspipe/
 
 A step that did not run writes nothing: `desc-motcorrected` is absent under `--motion-correction none`, `desc-filtered` when both cutoffs are off, and the quality record has no section for a stage that does not exist.
 
-**Tables.** Every table is tab-separated and writes a missing or non-applicable value as `n/a`, as BIDS requires. pandas reads that as missing by default; R's `read.delim` and `readr::read_tsv` only when told (`na = c("", "NA", "n/a")`). pandas needs `float_precision="round_trip"` to read values back bit for bit. A connectivity matrix keeps every channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have one shape. The quality record's layout is in [QC](qc.md#the-quality-record).
+**Tables.** Every table is tab-separated and writes a missing value as `n/a`, as BIDS requires. pandas reads `n/a` as missing by default; in R, pass `na = c("", "NA", "n/a")` to `read.delim` or `readr::read_tsv`, or the column is read as text. A connectivity matrix keeps every channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have the same shape. The quality record is described in [QC](qc.md#the-quality-record).
 
 ## The raw QC tree
 
-`nirspipe-qc` writes one tree at both levels, as a BIDS App's group level writes into its participant level's output: each subject under `sub-<label>/`, each dyad under `group-<id>/`, and the cohort pages at the root. Its `dataset_description.json` links the raw dataset as `raw`. It can be the `nirspipe` tree itself, so the raw and run reports of a subject sit side by side and the cohort page reads the pipeline's record where a run has both. `group-<id>/` is not a BIDS entity, and a validator flags the folder.
+`nirspipe-qc` writes one tree for both levels: each subject under `sub-<label>/`, each dyad under `group-<id>/`, and the cohort pages at the root. It can be the `nirspipe` tree itself, so a subject's raw report and run report sit side by side.
 
 ```
 derivatives/nirspipe-qc/
@@ -121,7 +121,7 @@ Per group and task the group level writes:
 
 ## The `nirspipe-hyper` tree
 
-The dyad commands write a tree apart from the one `nirspipe` wrote. Its `dataset_description.json` links that tree as `preprocessed`, so the dyad tables name their member files as `bids:preprocessed:...`. A group the pairs file records per session puts `ses-<s>` after `group-<id>` in every name and its tables in `group-<id>/ses-<s>/nirs/`.
+The dyad commands write a tree separate from the one `nirspipe` wrote. A group the pairs file records per session puts `ses-<s>` after `group-<id>` in every name and its tables in `group-<id>/ses-<s>/nirs/`.
 
 ```
 derivatives/nirspipe-hyper/
@@ -147,58 +147,32 @@ derivatives/nirspipe-hyper/
 
 | File | Holds |
 |------|-------|
-| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing and chromophore, the whole recording's rows first and then each condition window's: `chromophore`, `condition` (`n/a` on the whole recording's rows; absent when no window was read), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `phase_sd`, `phase_n`, `kept_s` |
+| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing, chromophore and window: `chromophore`, `condition` (`n/a` for the whole recording), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `kept_s` |
 | `seg-<map>_agg-roi_stat-wtc_relmat.tsv`, `seg-<map>_agg-homologous_stat-wtc_relmat.tsv` | The region tables, laid out the same way |
 | `stat-wtcphase_relmat.tsv` | Relative phase per frequency, with `lag_s`, laid out the same way |
 | `null-phase_stat-wtc_relmat.tsv` and its region twins | The phase-scrambled null, laid out the same way: the same columns plus `null_sd`, `null_p95`, `n_iter`, `percentile` (with `--wtc-phase-null`) |
 | `cond-all_null-phase_stat-wtc_desc-draws_relmat.tsv` | Every iteration of that null |
-| `chromo-<c>_null-phase_stat-wtc_desc-level_relmat.npz` | The null's level per frequency, which the phase arrows are drawn against, with a JSON sidecar |
 | `chromo-<c>_stat-wtc_relmat.npz` | The full time-frequency maps (with `--wtc-save-maps`) |
 | `stat-isc_relmat.tsv` | The correlations, one row per pairing and window: `chromophore`, `sub1`, `sub2`, `label`, `label2`, `condition`, `r`, `r_z`, and `lag_s` and the null columns where asked for |
-| `seg-<map>_agg-roi_stat-isc_relmat.tsv` | The region correlations as a long table, laid out as `stat-isc_relmat.tsv`: one row per region pairing (the same region in both members unless crossed), chromophore and window, with `r` and `r_z` |
-| `chromo-<c>[_cond-<c>]_stat-isc_relmat.tsv`, `..._seg-<map>_agg-roi_...` | The correlation matrices, per chromophore and window; they stay in the dyad's folder, `nirspipe-hyper-merge` merging the long tables only |
+| `seg-<map>_agg-roi_stat-isc_relmat.tsv` | The region correlations, laid out as `stat-isc_relmat.tsv` |
+| `chromo-<c>[_cond-<c>]_stat-isc_relmat.tsv`, `..._seg-<map>_agg-roi_...` | The correlation matrices, per chromophore and window |
 | `cond-all_null-phase_stat-isc_desc-draws_relmat.tsv` | Every surrogate of the correlation (with `--isc-phase-null`) |
 | `desc-bad_qc.tsv` | Each member's excluded channels and the runs that rejected them |
-| `space-<template>_channels.tsv` | Each member's channel positions and cortical regions on their own template, their own tables stacked with `subject_id` and `space` columns; the name drops `space-` when the members sit on different templates |
+| `space-<template>_channels.tsv` | Each member's channel positions and cortical regions |
 
-`nirspipe-hyper-pairnull` writes beside them, all per condition window: `cond-all_null-pair_stat-wtc_relmat.tsv` and its region twins, `cond-all_null-pair_stat-wtc_desc-draws_relmat.tsv`, the correlation's `cond-all_null-pair_stat-isc_relmat.tsv` and its draws, and the level `chromo-<c>_cond-all_null-pair_stat-wtc_desc-level_relmat.npz`. `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map.
-
-Every band-mean table's sidecar records the settings a later command reads back rather than takes again: the band, `mask_coi`, `channel_cross`, `roi_min_channels`, `desc`, `bads_scope`, the whitening, the conditions and each window's span (`conditions`, `condition_windows_s`), and the level the phase was gated by (`phase_level_source` for the whole recording, `phase_level_source_by_condition` per window). The correlation's sidecars record `isc_band_hz`, its whitening and `isc_max_lag_s`, and the same `desc`, `bads_scope` and analysis window (`analysis_window_s`, from `--tstart`/`--tend`). Both record the separation bands the long channels were chosen by (`sep_short_max_mm`, `sep_long_min_mm`, `sep_long_max_mm`).
+`nirspipe-hyper-pairnull` writes its tables beside them, named with `null-pair` (`cond-all_null-pair_stat-wtc_relmat.tsv`, `cond-all_null-pair_stat-isc_relmat.tsv` and their draws). `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map. Each table's sidecar records the settings it was computed with.
 
 ## Sidecars and provenance
 
-Every file has a JSON sidecar naming the step that produced it and the files it was produced from, so the lineage of every derivative can be recovered from the tree alone.
+Every file has a JSON sidecar beside it, recording the step that made it, the settings it used, the files it was made from, its bad channels and its excluded time. You rarely need to read one: the report's provenance graph and Methods paragraph are built from them.
 
-| Field | Meaning |
-|-------|---------|
-| `TaskName`, `SamplingFrequency`, `NIRSChannelCount`, `NIRSSourceOptodeCount`, `NIRSDetectorOptodeCount` | On every derivative `_nirs.json`: the required fields of the raw sidecar. The rate and channel count describe the file itself |
-| `pipeline_version` | The package version that wrote the file |
-| `step` | The step that produced the file |
-| `Sources` | The files it was derived from, as BIDS URIs. A GLM output or residual also lists the events table (`--events-path`) and the aux table it read |
-| `external_sources` | An input table that sits in no linked dataset, by absolute path, since it has no BIDS URI |
-| `parameters` | The settings that step used, as resolved; a regressor that was asked for but could not be built is absent |
-| `data` | What the step left: `n_channels`, `n_bad`, `sfreq`, `duration_s` |
-| `bad_channels` | The channels marked bad in this file; SNIRF has no field for them |
-| `excluded_spans` | Every `BAD_` span the file carries, with its kind and source |
+:::{note}
+The processing stage is part of the file name (`desc-`). Do not rename files by hand: the sidecars of later files point at the original names, and the reports and dyad commands will not find them.
+:::
 
-Each stage records its own step's settings. The postprocessed stages also carry the filter state of their file (`high_pass`, `low_pass`, `filter_method`, `filter_order`, `censor_fill`, `resample_sfreq`) and the drift settings, so a later analysis can tell what band a residual still holds. The contrast table's sidecar carries the weights it was computed from (`contrast_weights`). The whole configuration is in the run record.
+The sidecars find their sources through relative links to the raw dataset and, for a dyad tree, to the `nirspipe` tree. When you move or share the trees, keep them in the same places relative to each other.
 
-| Stage (`desc-`) | Step |
-|-----------------|------|
-| `od` | `od_conversion`, or `od_passthrough` when the input is already optical density |
-| `sci` | `sci_pruning` |
-| `motcorrected` | `motion_correction` |
-| `preproc` | `beer_lambert` |
-| `filtered` | `bandpass` |
-| `resampled` | `resample` |
-| `errts` | `glm_residuals` |
-| `errtsbroad` | `glm_residuals_broadband` |
-
-The stage is carried by the file name, so renaming a `desc-` entity by hand breaks the lineage of everything downstream of that file.
-
-**BIDS URIs.** Each `Sources` entry is a BIDS URI, never a local path, so a tree can be moved or shared without its lineage breaking: `bids::sub-01/nirs/...` names a file in the same tree, `bids:raw:...` one in the raw dataset, `bids:preprocessed:...` one in the subject-level tree a dyad tree was computed from. The names resolve through `DatasetLinks` in the tree's `dataset_description.json`, written with a relative path where both trees sit on one drive. A tree whose `Sources` are not BIDS URIs is refused where they are read.
-
-**The provenance graph.** At the end of each subject, `nirspipe` draws one graph per run from the sidecars, `figures/<run>_desc-provenance_nirs.png` with its Mermaid source `.mmd`, and the run report embeds it. Nodes are files, labelled by their entities; edges are labelled with the step; three or more outputs one step made from the same inputs are drawn as one box. A node whose file is missing keeps its place with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs from the sidecars on disk, for subjects, dyads and the tree root alike, so it works on any past run and refreshes the image a written report points at.
+**The provenance graph.** Each run gets a graph of how its files were made, `figures/<run>_desc-provenance_nirs.png`, which the run report shows. A file that has gone missing is drawn with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs for any past run.
 
 ```{figure} figures/provenance.png
 :alt: A provenance graph of one run, one box per file
@@ -216,13 +190,11 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 | Run record | TOML | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].toml` | What a subject was run with, and rerunning it |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
 
-The live log and the run record are named by the run's selection: `ses-` holds the labels `--session-label` gave and `task-` those `--task-label` gave, several joined by `+` (`sub-01_ses-1+2`), and a run given neither is `sub-<label>`. Runs of one subject on different sessions or tasks, in parallel or not, each keep their own pair; rerunning the same selection replaces it.
+The log and the run record are named after what the run selected, for example `sub-01_ses-1+2` for `--session-label 1 2`. Rerunning the same selection replaces them.
 
 ### Run record
 
-Each subject's run record is written at the start of its run, with four sections: `[environment]` (package, Python and dependency versions, platform), `[execution]` (the verbatim command, paths, labels and switches), `[prep]` and `[post]` (every setting as resolved, keyed by flag name in the flag's units), and `[post_sources]`, naming for every post setting the layer it came from: `cli`, `config`, `mode` or `default`. Tables are written as typed, with absolute paths, so a record reads from anywhere. A post setting the run switched off is written `"none"`.
-
-When the subject ends, an `[outcome]` section is appended: `status` (`success` or `failed`), `finished`, `duration_s` and, for a failure, the first line of the `error`; the full traceback is in the live log. A record without `[outcome]` belongs to a run that was stopped before it ended. The cohort page lists every run record whose last run did not succeed.
+Each subject's run record holds the software versions, the exact command, every setting the run used, and, for each postprocessing setting, where it came from: the command line (`cli`), `--config`, the `mode` or the `default`. When the run ends, an `[outcome]` section says whether it succeeded and, if not, the first line of the error; the full error is in the log. A record without `[outcome]` belongs to a run that was stopped. The cohort page lists every subject whose last run did not succeed.
 
 ```toml
 [execution]

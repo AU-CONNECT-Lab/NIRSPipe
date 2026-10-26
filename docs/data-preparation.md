@@ -24,7 +24,7 @@ The `_nirs.json` sidecar needs at least `SamplingFrequency`, `NIRSChannelCount`,
 | Optional file | Used for |
 |------|---------|
 | `participants.tsv` | Subject metadata; an `age` column is shown in the QC report. |
-| `*_events.tsv` | Not read: events come from the stim groups inside the SNIRF, placed on the data's time axis even when the file's clock does not start at 0. `edit-markers` writes its edits into the SNIRF and this table both, and `--events-path` gives the GLM a design table of its own. |
+| `*_events.tsv` | Not read: events come from the markers inside the SNIRF. `edit-markers` updates both, and `--events-path` gives the GLM a design table of its own. |
 | `*_channels.tsv` | A channel whose `status` is `bad` is marked bad in preprocessing ([Channel screening](workflows.md#channel-screening)). |
 | `*_optodes.tsv`, `*_coordsystem.json` | Optode positions, needed for the topographic maps and the 3D brain figures. |
 
@@ -46,11 +46,11 @@ for f in raw/*.snirf; do
 done
 ```
 
-Channel types and optode positions are read from the SNIRF by MNE-BIDS. SNIRF does not record which space its optode coordinates were measured in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised against the nasion and preauricular points, and `mri` for positions already on a template brain (MNI or fsaverage), as many acquisition programs export them. The frame labels the BIDS files only: `nirspipe` places the optodes from the SNIRF itself ([Optode placement](workflows.md#optode-placement)). BIDS has no group folders, so encode patient and control in the subject label if their IDs overlap. `nirspipe-snirf2bids` does not validate what it writes; `nirspipe` does at the start of a run. The GUI's SNIRF to BIDS page converts a whole folder from one table ([GUI](gui.md)).
+SNIRF does not record which space its optode coordinates are in, so pass `--optode-frame`: without it no `_optodes.tsv` or `_coordsystem.json` is written, and BIDS requires both. Use `head` for positions digitised on the participant (nasion and ears), and `mri` for positions already on a template brain (MNI or fsaverage), as many acquisition programs export them. This only labels the BIDS files; `nirspipe` places the optodes itself ([Optode placement](workflows.md#optode-placement)). BIDS has no group folders, so if patient and control IDs overlap, put the group in the subject label. `nirspipe-snirf2bids` does not check what it writes; `nirspipe` does at the start of a run. The GUI's SNIRF to BIDS page converts a whole folder from one table ([GUI](gui.md)).
 
 ## Trees written by `nirspipe-prep`
 
-`nirspipe-prep crop`, `align` and `edit-markers apply` each write a new tree under `OUTPUT_DIR` (`cropped/`, `aligned/`, `marker_edited/`) with its own `dataset_description.json`, which links the input dataset under `DatasetLinks` and `SourceDatasets`. Point `OUTPUT_DIR` at a derivatives root rather than at a dataset; the command refuses an output directory that is its input. Each tree reads as a BIDS dataset of its own and can be the input of the next command.
+`nirspipe-prep crop`, `align` and `edit-markers apply` each write a new BIDS dataset under `OUTPUT_DIR` (`cropped/`, `aligned/`, `marker_edited/`), which can be the input of the next command. Point `OUTPUT_DIR` at a derivatives folder, not at your dataset; the command refuses to write into its own input.
 
 ## Editing markers
 
@@ -77,7 +77,7 @@ nirspipe-prep align /data/bids /data/out/marker_edited --group-csv pairs.csv
 
 **Cut a processed stage rather than the raw recording.** With `--input-desc` (`preproc`, `errts`, `filtered`, ...) `crop` reads a derivatives tree and cuts that stage, keeping its `desc-` entity. This is the order to prefer: preprocess the whole recording, then cut the result, so motion correction and the bandpass see the whole recording rather than one segment. `nirspipe` refuses a cropped tree as input unless `--allow-cropped-input` is given.
 
-**Keep a margin for analyses that convolve.** A segment cut to its own boundaries cannot be analysed at those boundaries by a wavelet transform or a filter. `--margin SEC` keeps that many extra seconds either side of every segment and records the span that was asked for in the sidecar; `--margin auto` takes the width from `--band-fmin`, the lowest frequency the later analysis will average over, as `2*sqrt(2)/f` (47 s at 0.06 Hz, 141 s at 0.02 Hz).
+**Keep a margin for filters and wavelets.** Filters and wavelet coherence are unreliable near the edges of a segment. `--margin SEC` keeps that many extra seconds on either side of every segment; `--margin auto` picks the width from `--band-fmin`, the lowest frequency you will analyse (47 s at 0.06 Hz, 141 s at 0.02 Hz).
 
 A cohort QC report over one window of time is a crop followed by the usual QC commands:
 
@@ -91,7 +91,7 @@ nirspipe-qc /data/deriv/cropped /data/out group
 
 ## Aligning dyads
 
-`nirspipe-prep align` puts every member of each `(group_id, task)` in a group file on one clock: each member is cut at its first occurrence of a trigger all members carry, and all are trimmed to the shortest. It writes one aligned SNIRF per member, with its events and sidecars, to `aligned/`, and records the member's offset in its own `_nirs.json` (`align_group`, `align_step`, `align_trigger`, `align_offset_s`, `aligned_duration_s`). The group file has the format of the [pairs file](#pairs-file).
+`nirspipe-prep align` puts every member of each `(group_id, task)` in a group file on one clock: each member is cut at its first occurrence of a trigger all members carry, and all are trimmed to the shortest. It writes one aligned SNIRF per member to `aligned/`, recording in its sidecar how far the member was shifted. The group file has the format of the [pairs file](#pairs-file).
 
 The tree holds one copy per recording, so a member two groups share for the same task is refused for the second group: align such groups into separate trees. A group with no shared trigger is skipped with a warning, the others continue, and the command exits non-zero when any group failed. Alignment is optional for the dyad commands, which align on the shared trigger themselves ([Hyperscanning](hyperscanning.md#alignment)).
 
@@ -104,7 +104,7 @@ Several flags take a table whose rows may apply to some recordings only: `--bad-
 - A recording gets the union of every row it matches.
 - A row that matches no recording, or a column the table does not define, stops the run before any subject starts, naming the line.
 
-For `--bad-channels`, the other column is `bad_channels`, holding source-detector labels such as `S1_D1,S2_D3`; naming either wavelength of a pair marks both. An optional `keep_channels` column names pairs to keep although screening rejected them; `nirspipe-rate export` writes it from the pairs a reviewer rated good ([Rating](qc.md#rating)). A keep overrules screening only: `channels.tsv` and non-finite samples still mark the pair bad, with a warning, and a pair both marked bad and kept for one recording stops the run.
+For `--bad-channels`, the other column is `bad_channels`, holding source-detector labels such as `S1_D1,S2_D3`; naming either wavelength of a pair marks both. An optional `keep_channels` column names pairs to keep although screening rejected them; `nirspipe-rate export` writes it from the pairs a reviewer rated good ([Rating](qc.md#rating)). A keep overrules screening only: a pair `channels.tsv` marks bad, or one with missing samples, stays bad, with a warning. A pair both marked bad and kept for one recording stops the run.
 
 ## Choosing stretches of a recording
 
@@ -161,7 +161,7 @@ G01,sub-02,rest
 | `occasion` | Optional. The sitting, where the members of one group carry different session labels for it. Keys the group in place of `session` and names its outputs `ses-<occasion>`, while each member's `session` still picks that member's file. Letters and digits only; a blank cell falls back to the row's `session`. |
 | `role` | Optional. The part a member plays, e.g. `teacher` or `student`. On every row or on none; letters and digits only. The re-paired null then matches stand-ins by role rather than by row, and `nirspipe-hyper-groupnull` reads each pair of roles on its own ([Groups of three or more](hyperscanning.md#groups-of-three-or-more)). |
 
-- Each group needs at least two members; a group of one raises `GroupCSVError`. A group of three or more is analysed one member pairing at a time.
+- Each group needs at least two members. A group of three or more is analysed one pairing of members at a time.
 - **Row order within a group matters.** The member listed first is `sub1` of its pairings: the one each pairing holds while a null replaces the other, the one a positive `phase_angle` says leads, and the reference of the alignment. Reorder the rows to change it.
 - **Enter a group once, with all its members.** A group split into rows of two is analysed as separate dyads, and its members can then stand in for each other in the re-paired null.
 - A row with an empty `group_id`, `subject_id` or `task` is dropped.

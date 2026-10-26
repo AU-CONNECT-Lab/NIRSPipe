@@ -4,7 +4,7 @@ title: Hyperscanning
 
 # Hyperscanning
 
-Dyad analysis reads the tree `nirspipe` wrote and writes a tree of its own: wavelet transform coherence (WTC) and inter-subject correlation (ISC) for every member pairing in the [pairs file](data-preparation.md#pairs-file), and two nulls to read them against. It is six commands, each its own entry point. Their flags are in [Usage](usage.md#nirspipe-hyper), their files in [Outputs](outputs.md#the-nirspipe-hyper-tree), and the raw dyad QC and the dyad reports in [QC](qc.md#dyad-reports).
+Dyad analysis reads the tree `nirspipe` wrote and writes a tree of its own. For every pairing of members in the [pairs file](data-preparation.md#pairs-file) it computes wavelet transform coherence (WTC) and inter-subject correlation (ISC), and two nulls to compare them with. It is six commands. Their flags are in [Usage](usage.md#nirspipe-hyper), their files in [Outputs](outputs.md#the-nirspipe-hyper-tree), and the dyad reports in [QC](qc.md#dyad-reports).
 
 ```mermaid
 flowchart TD
@@ -47,25 +47,29 @@ nirspipe-hyper-groupnull /data/derivatives/nirspipe-hyper group --task-label tap
 nirspipe-hyper-merge /data/derivatives/nirspipe-hyper group
 ```
 
-`nirspipe-hyper` and `nirspipe-hyper-pairnull` read each member's recording, so they take the `nirspipe` tree and the dyad tree, which must differ: each carries its own `dataset_description.json`, and the dyad tree's links the source as `preprocessed`. The other four only re-read the dyad tree. `group` is the only analysis level, since every metric needs both members. A group of three or more members is analysed one member pairing at a time, the transform still running once over the whole group, and its nulls follow ([Groups of three or more](#groups-of-three-or-more)).
+`nirspipe-hyper` and `nirspipe-hyper-pairnull` take two trees, the `nirspipe` tree and the dyad tree, which must be different folders. The other commands only read the dyad tree. `group` is the only analysis level. A group of three or more members is analysed one pairing of members at a time ([Groups of three or more](#groups-of-three-or-more)).
 
 ## Loading the members
 
-`nirspipe-hyper` reads each member's haemoglobin stage from the `nirspipe` tree: `desc-preproc` by default, or the stage `--desc` names. `--desc errts` reads the confound-regression residual, so short-channel regression can come before the coherence; an optical-density stage is refused. A member without the stage stops that group with `MissingDerivativesError`, and the run goes on to the next group.
+`nirspipe-hyper` reads each member's haemoglobin data from the `nirspipe` tree: `desc-preproc` by default, or the stage `--desc` names. `--desc errts` reads the data after confound regression, so short-channel regression is applied before the coherence. A member without that stage stops its group, and the run goes on to the next group.
 
 ## Alignment
 
-The members are put on one clock by a shared trigger: the annotation descriptions every member carries (`BAD_` ones excluded) are intersected, each member is cut at the first occurrence of a shared description, and all are trimmed to the shortest. No shared description stops that group with `AlignmentError`; rename the markers into one scheme first ([Editing markers](data-preparation.md#editing-markers)). For recordings with no shared trigger, such as resting state, `--no-align` trims every member to the shortest recording instead, which assumes the members started recording at the same moment; it is never applied on its own when alignment fails. Members recorded at different sampling rates are refused.
+The members are put on one clock by a shared event marker: each member is cut at the first marker they all carry, and all are trimmed to the shortest. If the members share no marker, the group stops; rename the markers into one scheme first ([Editing markers](data-preparation.md#editing-markers)). Members recorded at different sampling rates are refused.
 
-`--tstart` / `--tend` analyse one window of the aligned clock, where 0 is the shared trigger. The window is read out of the transform of the whole recording rather than cut from it. `--normalize` z-scores each channel per member for the traces the report draws; coherence and correlation are scale-invariant, so no number changes.
+For recordings with no shared marker, such as resting state, `--no-align` trims every member to the shortest recording instead.
+
+:::{warning}
+`--no-align` assumes the members started recording at the same moment. If they did not, every pairing is compared at the wrong time. It is never used on its own when alignment fails.
+:::
+
+`--tstart` / `--tend` analyse one window of the aligned recording, where 0 is the shared marker. `--normalize` z-scores each channel for the traces the report draws; it changes no number.
 
 ## Channel set
 
-Each member's rejected channels are read from the record its `nirspipe` run wrote, not screened again. `--bads-scope run` (the default) applies each task's own rejections; `subject` unions them over every run of the subject the pairs file names, so every condition rests on one channel set. The two differ only where conditions were cropped into separate tasks before preprocessing.
+Each member's rejected channels are taken from their `nirspipe` run, not screened again. With `--bads-scope subject` (default `run`), a channel rejected in any of a subject's runs is rejected in all of them, so every condition uses one channel set; this only matters when conditions were cropped into separate tasks before preprocessing. Members preprocessed with different short/long separation ranges are refused; the separation flags force one set.
 
-The short and long separation bands are read from the same records. Members preprocessed with different bands are refused, naming each member's bands; the separation flags force one set.
-
-Before anything expensive starts, every dyad prints its channel budget:
+Before the slow part starts, every dyad prints how many channels it keeps:
 
 ```
   -> G01/tapping (2 subjects)
@@ -74,20 +78,19 @@ Before anything expensive starts, every dyad prints its channel budget:
      [warn] sub-02 loses 9 of 20 channel pairs
 ```
 
-`long` is the channel count the metrics use, after the rejections; `from` names the runs the rejections came from. `--check-only` loads, aligns, prints this and stops, which is how to look over a cohort before a long run.
+`--check-only` prints this and stops, which is a quick way to look over a cohort before a long run.
 
 ## Wavelet transform coherence
 
-Coherence is computed for each channel pairing with a Morlet wavelet (`dj = 1/12`) over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number tables carry is the **band mean**, the coherence averaged over `--wtc-band-fmin` to `--wtc-band-fmax` (by default `--band-fmin` to `--band-fmax`, else the whole axis) and over time, with its Fisher z.
+Coherence is computed for each channel pairing over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number in the tables is the **band mean**: the coherence averaged over the band you choose (`--band-fmin` / `--band-fmax`) and over time, with its Fisher z.
 
-- **Cone of influence.** By default the band mean averages only the cells outside the cone of influence, the cells the edges of the record reach. `--no-wtc-mask-coi` averages the whole band. The share of band cells that held a value is written as `n_valid_frac` either way.
-- **Chromophores.** Each chromophore is a separate pass, a member's HbO paired only with the other's HbO, never mixed or averaged, and each costs a full run. `--wtc-chroma` takes one or more of `hbo`, `hbr` and `hbt` (default `hbo hbr`), for the coherence and the correlation alike; every band-mean table has a `chromophore` column. `hbt`, total haemoglobin, is HbO plus HbR of each channel, summed as each member's recording is loaded: after the rejections, so a pair rejected in either half is rejected in HbT, and before `--normalize` and `--wtc-whiten`, which then treat it as one more channel.
-- **Crossing.** By default every long channel of one member is paired with every long channel of the other, n² pairings instead of n, and the report adds the channel-by-channel matrix of band means. `--no-channel-cross` keeps the same-channel pairings only. The correlation follows the same switch.
-- **Prewhitening.** `--wtc-whiten SECONDS` replaces every long channel with the residual of an autoregressive model of that many seconds of order, one order for every channel of both members, fitted on the whole aligned record. The first `order` samples are zeroed. A record shorter than four times the order is refused. Off by default; both nulls follow it.
-- **Scales.** By default only the scales inside the frequency range plus a margin are computed, which gives the same coherences to the bit; `--no-wtc-limit-scales` computes them all.
-- **Significance contour.** `--wtc-significance` overlays a Monte Carlo significance contour against red noise on the maps, from `--wtc-mc-count` surrogates (300) per pairing. This is a different question from the nulls below, and the runtime scales with the count.
+- **Cone of influence.** By default the band mean leaves out the cone of influence, the cells near the start and end of the recording that the edges distort. `--no-wtc-mask-coi` keeps them.
+- **Chromophores.** `--wtc-chroma` picks `hbo`, `hbr` and/or `hbt` (default `hbo hbr`). HbO is only ever paired with HbO, and so on. Each chromophore costs a full run.
+- **Crossing.** By default every channel of one member is paired with every channel of the other, not only the same channel, and the report adds a channel-by-channel matrix. `--no-channel-cross` keeps the same-channel pairings only, and is much faster.
+- **Prewhitening.** `--wtc-whiten SECONDS` removes each channel's own slow autocorrelation before the coherence. Off by default; both nulls follow it.
+- **Significance contour.** `--wtc-significance` draws a significance contour against red noise on the maps. This answers a different question from the nulls below, and it is slow.
 
-**Phase.** The band-mean table also carries the relative phase: `phase_angle`, its circular mean in degrees, positive where the first member leads, `phase_sd` and `phase_n`. A band mean collapses scales whose phase differs, so its angle cannot be divided by a frequency to give a delay; `stat-wtcphase_relmat.tsv` resolves the phase one row per frequency, with `lag_s`. A delay is known only modulo one period, so only a `lag_s` that agrees across neighbouring scales is a delay. The maps draw phase as arrows where the coherence clears a per-frequency level ([Arrow levels](#arrow-levels)).
+**Phase.** The tables also give the relative phase (`phase_angle`, positive where the first member leads). Do not convert a band-mean phase into a time delay: the band mixes frequencies whose phases differ. `stat-wtcphase_relmat.tsv` gives the phase per frequency with `lag_s`, and even then a delay is only trustworthy where it agrees across neighbouring frequencies. The maps draw phase arrows where the coherence is high enough ([Arrow levels](#arrow-levels)).
 
 ```{figure} figures/wtc_map.png
 :alt: A wavelet coherence map of one channel pairing, time by frequency
@@ -105,32 +108,31 @@ The channel-by-channel matrix of band means a crossed run adds to the report, on
 
 ## Conditions and windows
 
-By default the coherence is read out of each task annotation's window as well as over the whole recording. A trigger with a duration uses it; one without runs to the next trigger, and the last to the end of the recording. Each window is read out of the transform of the whole recording rather than transformed on its own, so it costs no second transform and is not inflated by edges of its own. A window shorter than one cycle of `--wtc-fmin` is skipped. The windows land in the same tables as the whole recording, after its rows, told apart by a `condition` column that is `n/a` on the whole recording's rows, as the correlation's table does; each window gets a report page. `--no-by-condition` turns this off.
+By default the coherence is reported for each task condition as well as for the whole recording, and each condition gets its own report page. A marker with a duration uses it; one without runs to the next marker. A condition shorter than one cycle of `--wtc-fmin` is skipped. `--no-by-condition` turns this off.
 
-- `--wtc-window-s SECONDS` cuts every condition into non-overlapping windows of that length and makes the window the unit; the remainder past the last whole window is dropped.
-- `--wtc-cond-transform` transforms each condition on its own instead, keeping `--wtc-cond-pad-s` seconds either side and windowing them back off. With the default `auto` margin, `2*sqrt(2)/--wtc-band-fmin`, the numbers match the default route. It is refused with `--wtc-phase-null`.
+- `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window.
+- `--wtc-cond-transform` analyses each condition separately instead of reading it out of the whole recording. It cannot be combined with `--wtc-phase-null`.
 
-A file name keeps only a condition's letters and digits, so two conditions that would share one name, or a condition named `all`, are refused.
+File names keep only the letters and digits of a condition's name, so two conditions that would get the same name, or a condition named `all`, are refused.
 
 ## Regions
 
-With `--roi-mapping` ([ROI mapping file](data-preparation.md#roi-mapping-file)), region results are averaged out of the channel results rather than transformed again: the maps of a region's channel pairings are averaged into a region map, and the band means into a region mean. The two orders give the same number. Phase is averaged as a direction, the pairings summed as unit vectors. A region cell where either member contributes fewer than `--wtc-roi-min-channels` channels (1 by default) is left blank and keeps its row, its `n_ch` column saying how many pairings the value rests on.
+With `--roi-mapping` ([ROI mapping file](data-preparation.md#roi-mapping-file)), region results are averages of the channel results. A region where either member keeps fewer than `--wtc-roi-min-channels` good channels (1 by default) is left blank, and `n_ch` says how many pairings each value rests on.
 
-Two region tables are written: `agg-homologous`, each region's same-channel pairings averaged, and `agg-roi`, the region-by-region matrix, which under crossing holds every ordered pair of regions.
+Two region tables are written: `agg-homologous`, each region paired with the same region, and `agg-roi`, every pair of regions.
 
 ## Inter-subject correlation
 
-ISC is the Pearson correlation between the long channels of the two members, written as a matrix per chromophore and window (sub1's channels as rows, sub2's as columns, the montage's channels throughout, a rejected one blank) and as one long table, `stat-isc_relmat.tsv`, one row per pairing with `r` and its Fisher z `r_z`. For a condition window the correlation is computed on that window alone. With `--roi-mapping`, region cells average the channel correlations in Fisher z, written as a matrix per chromophore and window and as one long table, `seg-<map>_agg-roi_stat-isc_relmat.tsv`.
+ISC is the Pearson correlation between the two members' channels, per chromophore and condition, written as a matrix and as a long table, `stat-isc_relmat.tsv`, with `r` and its Fisher z. With `--roi-mapping`, region values are written too.
 
-All of its options are off by default, so a run naming none reports the zero-lag correlation of the signals themselves.
+With no option given, ISC is the plain correlation of the signals at zero lag. The options:
 
-- `--isc-fmin` / `--isc-fmax` band-limit each member before the correlation, and before a window is cut. Without them, or `--band-fmin` / `--band-fmax`, which set the coherence band and this one together, the correlation reads whatever band preprocessing left. The run warns when the two bands differ.
-- `--isc-whiten-s SECONDS` correlates the residuals of an autoregressive model, by the coherence's rule with an order of its own. Whitening shrinks r, so a whitened matrix does not compare with an unwhitened one.
-- `--isc-max-lag SECONDS` keeps the strongest correlation over every shift within that many seconds either way, sign kept, and writes the shift as `lag_s`, positive where the second member follows. The maximum over many shifts is larger than any single one under no coupling, so pair it with `--isc-phase-null`.
-- `--isc-phase-null N` ranks each correlation against N phase-scrambled surrogates of the second member, searched the same way, adding `null_abs_mean`, `null_abs_sd`, `null_abs_p95` and `percentile` and keeping every draw.
-- `--phase-null-shared` shifts all of the second member's channels in each of those draws by one shared set of random phases, so the channels stay as correlated with each other as recorded. It applies to `--wtc-phase-null` as well. Off by default: each channel is scrambled on its own.
+- `--isc-fmin` / `--isc-fmax` filter each member to a band first; `--band-fmin` / `--band-fmax` set this band and the coherence band together. Without them, ISC reads whatever band preprocessing left, and the run warns when it differs from the coherence band.
+- `--isc-whiten-s SECONDS` removes each channel's slow autocorrelation first. Whitening makes r smaller, so do not compare whitened and unwhitened values.
+- `--isc-max-lag SECONDS` keeps the strongest correlation over all shifts within that many seconds, and writes the shift as `lag_s`. The best of many shifts is larger than one shift even with no real coupling, so always pair it with `--isc-phase-null`.
+- `--isc-phase-null N` compares each correlation with N phase-scrambled surrogates and adds its `percentile`.
 
-The report's connectivity circle draws a chord where a pairing beats the 95th percentile of its own surrogates, or, without a null, for the strongest tenth of pairings, labelled as a display cut. `--isc-threshold` forces an absolute cut instead.
+The report's connectivity circle draws a chord where a pairing beats the 95th percentile of its surrogates or, without a null, for the strongest tenth of pairings, which is only a display cut. `--isc-threshold` sets a fixed cut instead.
 
 ```{figure} figures/isc_panel.png
 :alt: An ISC matrix beside a connectivity circle of the pairings above their null
@@ -141,78 +143,81 @@ The ISC matrix of one dyad beside the connectivity circle, whose chords are the 
 
 ## Nulls
 
-Coherence between two unrelated recordings is not zero, so a value is read against a null. Two are available, and they control for different things: the phase-scrambled partner keeps each member's spectrum but destroys every temporal relation, including the response both members share because they did the same task; the re-paired partner keeps that task-locked structure, so a value has to exceed the coupling the shared task alone produces.
+Coherence between two unrelated recordings is not zero, so a value only means something compared with a null. There are two, and they answer different questions:
+
+- the **phase-scrambled** null keeps each member's spectrum but destroys all timing, including the response both members share just because they did the same task;
+- the **re-paired** null pairs a member with someone from another group who did the same task, so the shared task response is kept. A value has to beat what the task alone produces.
 
 ### Phase-scrambled null
 
-`--wtc-phase-null N` recomputes the band means against N phase-randomised surrogates of each pairing's second member and writes their mean in `null-phase_stat-wtc_relmat.tsv`, with `null_sd`, `null_p95`, `n_iter` and the `percentile` each real value sits at among the draws. It shares the run's stage, band, mask, whitening, channel set and windows; with conditions on, it follows the same windows at no extra transform and keeps every iteration in a `desc-draws` table. Crossing it squares the cost of every iteration, so it follows `--channel-cross` unless `--wtc-phase-null-cross` / `--no-wtc-phase-null-cross` says otherwise. `--phase-null-shared` rotates all of the scrambled member's channels by one set of random phases per iteration, keeping their correlations with each other (Prichard and Theiler, 1994); off, each channel is scrambled on its own, as the fNIRS hyperscanning literature does. Every table records which, and `nirspipe-hyper-groupnull` refuses a tree drawn both ways. Each iteration is a full coherence run, which makes this the expensive half of a dyad analysis.
+`--wtc-phase-null N` compares each pairing with N phase-scrambled versions of its second member and writes the null mean, its spread and the `percentile` of each real value, in `null-phase_stat-wtc_relmat.tsv`. It uses the same settings as the real analysis. It is the slow part of a dyad analysis, and with crossing every iteration is much slower. `--phase-null-shared` scrambles all of a member's channels together, keeping how they correlate with each other; off by default.
 
 ### Re-paired null
 
-`nirspipe-hyper-pairnull` replaces each pairing's second member with a member of another group who did the same task, and recomputes. It reads the real tables first, so it runs after `nirspipe-hyper`, and only per condition window: each condition is cut from each side's own marker for it, so every draw is as long as the condition it stands in for. There is no whole-run re-paired null.
+`nirspipe-hyper-pairnull` replaces each pairing's second member with a member of another group who did the same task, and recomputes. It runs after `nirspipe-hyper`, reads its settings from the real tables (a different value given on the command line is refused), and works per condition only. When it finishes, it redraws those dyads' pages so their condition pages show the re-paired null; `--no-report` leaves them as they were.
 
-- **Settings come from the real tables.** The band, mask, frequency range, windows, whitening and alignment are read off the real tables' sidecars, and so are `--desc`, `--bads-scope` and `--wtc-roi-min-channels`; a value given that differs is refused. The crossing follows the real table unless `--wtc-pair-cross` / `--no-wtc-pair-cross` is given.
-- **The pool.** `--wtc-pair-pool position` (the default) replaces a member only with another group's member at the same position in the pairs file, or in the same role where the file has a `role` column, the only safe pool when one person appears in several groups. `any` draws from every other group's members and is refused when anybody is repeated. With `position` there is one candidate per other group, so G groups give G - 1 draws, and a `percentile` resolves to about 100/G points. `--wtc-pair-max` stops after N draws; in a group of three or more every pairing gets the same N, a draw counting only when all its stand-ins can be used.
-- **Skipped candidates.** A candidate whose recording cannot be read, was recorded at another rate, has no quality record, lacks a condition's marker, has a shorter block of that condition, or is too short to whiten, is skipped, and the refusals are counted by reason (`pair_refused`).
-- **The correlation too.** The same draws give the correlation's re-paired null, whose `percentile` ranks \|r\| among the \|draws\|.
-- **Chromophores.** `--chroma` takes one or more of `hbo`, `hbr` and `hbt` (default `hbo hbr`), as `--wtc-chroma` does; a stand-in's HbT is summed after its own rejections, as the real members' is.
-- **Regions on the real pairing's channels.** A stand-in may keep other channels than the real partner. A region's draw is compared with the real value over the channel pairs both kept, and that difference is taken off the real region value, so the region's null stands on the real pairing's channels, as in `nirspipe-hyper-groupnull` below.
-- **The pages.** Once its draws are written it draws those dyads' pages again from each dyad's run record, reading the phase-scrambled null from disk instead of drawing it again, so their condition pages read the re-paired null. The record is kept, the redraw logs to `<group>_redraw.log`, and `--no-report` leaves the pages as they were.
+- **The pool.** By default (`--wtc-pair-pool position`) a member is only replaced by someone at the same position in another group, or in the same role when the pairs file has a `role` column. Use this when one person appears in several groups. `any` draws from everyone and is refused when anyone is repeated.
+- **Number of draws.** With `position`, G groups give only G - 1 draws, so a percentile can only move in steps of about 100/G. With few groups, the per-channel percentile is coarse; `nirspipe-hyper-groupnull` below is the better test.
+- **Skipped candidates.** A candidate that cannot be used (unreadable, a different sampling rate, missing the condition, or a shorter block of it) is skipped, and the skips are counted by reason.
+- **The correlation too.** The same draws give the ISC its re-paired null.
 
-The two nulls are written to separate files, and `nirspipe-hyper-merge` refuses to combine them.
+The two nulls are kept in separate files.
 
 ### Groups of three or more
 
-Each pairing holds its first-listed member and replaces the other, so in a group of three the first member is never replaced and the third is replaced in both of its pairings. Within one draw a member is replaced once, and that replacement serves every pairing it is in: each pairing's null is a dyad's, and a mean over the group's pairings keeps the covariance of pairings that share a member.
+Each pairing keeps its first-listed member and replaces the other. Within one draw, each replaced member is replaced once, by the same stand-in in every pairing they are in.
 
-- **Phase-scrambled.** Each iteration scrambles every member after the first once. The correlation's null draws each member from a random stream of its own, the same in every pairing, seeded or not.
-- **Re-paired.** Each draw takes one stand-in for every member after the first, all from one other group, matched by position or by role; the draw's id joins the stand-ins' ids with `+`, and every pairing it serves carries that id. Where a donor has several members of one role, they rotate over the target's members of that role, so a group of a teacher and two students gives a target of the same shape two draws and no stand-in fills one member twice. A group with a pairing no other group can fill, as a triad among dyads matched by position, is refused before anything is drawn: give the pairs file a `role` column, or use `--wtc-pair-pool any`. The sidecar's `n_iter` counts draws.
+For the re-paired null, all stand-ins of one draw come from one other group, matched by position or by role. A group that no other group can fill (for example a triad among dyads matched by position) is refused before anything runs: give the pairs file a `role` column, or use `--wtc-pair-pool any`.
 
 ### Arrow levels
 
-A phase arrow is drawn only where the coherence clears a per-frequency level. The whole-run page uses the phase-scrambled level, else the Monte Carlo one, else the flat `--wtc-arrow-min` (0.5). A condition page uses the re-paired level `nirspipe-hyper-pairnull` wrote, else what the whole-run page used; its ISC chords likewise use the re-paired correlation null. The re-paired level reaches the pages when `nirspipe-hyper-pairnull` redraws them; a dyad it could not redraw, one without a run record or drawn with `--no-report`, keeps its level until `nirspipe-hyper` runs again. A level is used only when its sidecar matches the run (frequency range, mask, whitening, wavelet grid, alignment, sources, and each condition's span); otherwise the page says which file it did not use and why. The page's Arrow threshold row names the level used, and every band-mean table records it as `phase_level_source`, with `phase_level_files` naming each level file used and the version and time of the run that drew it. The phase columns of a table therefore depend on the level on disk when `nirspipe-hyper` ran: rerunning a null and then `nirspipe-hyper` can change them for unchanged recordings.
+A phase arrow is drawn only where the coherence is above a level. The whole-run page uses the phase-scrambled null's level when there is one, else the significance contour's, else `--wtc-arrow-min` (0.5). A condition page uses the re-paired null's level when it has been computed. The page's Arrow threshold row says which level was used, and a level computed with other settings is not used (the page says why).
+
+:::{note}
+The phase columns depend on the null that was on disk when `nirspipe-hyper` ran. Rerunning a null and then `nirspipe-hyper` can change them even when the recordings did not change.
+:::
 
 ## Above the channel: `nirspipe-hyper-groupnull`
 
-Ranking each channel inside its own draws spends the pool's resolution on every cell: against k stand-ins no cell can reach a *p* under 1/(k+1). `nirspipe-hyper-groupnull` averages the channels first and ranks that. It cannot say which channel, but it can say whether the pairing beats its null at all. It reads the draws already written, for the coherence and the correlation alike, and runs no transform.
+With few stand-ins, no single channel can reach a small p value. `nirspipe-hyper-groupnull` averages the channels first and tests that: it cannot say which channel, but it can say whether a pairing beats its null at all. It reads the draws already written and runs no new transform.
 
 | Level | Unit |
 |-------|------|
 | by cell | one channel pairing, or one region, in one condition of one occasion |
-| by occasion | the channels averaged, ranked in that occasion's own draws |
+| by occasion | the channels averaged, compared with that occasion's own draws |
 | cohort | the channels averaged, then the occasions averaged |
 
-A stand-in may keep other channels than the real partner, so each draw is compared with the real value over the channel pairs both kept, and that difference is taken off the real mean over the real pairing's own channels. The occasion's draws then stand on the real pairing's channels: `null_mean`, `percentile`, `p` and `lift` read them, and so do both cohort tests. With no channel rejected this is the draws' plain mean. A draw sharing no channel pair with the real one is left out of `n_iter`.
+The cohort level is tested two ways, named in the `test` column: `resample` (`--n-resample`, 20000 by default) and `paired`, which tests the real values against each occasion's average null, paired over occasions. With the phase-scrambled null, read `paired` only. `--null` picks which null (`repaired`, `phase` or both), and `--chroma` which chromophores.
 
-The cohort level is written two ways, a `test` column naming each. `resample` redraws one stand-in per occasion (`--n-resample`, 20000) and ranks the real statistic inside that; `paired` averages each occasion's draws into one baseline and tests the real values against it, paired over occasions. On the phase-scrambled null `paired` is the only valid read. `--null` names which draws are read (`repaired`, `phase` or both; by default every null whose draws are on disk), `--chroma` which chromophores (by default every one the draws hold; one they do not hold is refused); each combination writes its own tables.
+With `--roi-mapping`, each region is tested beside the whole-brain mean. A group of three or more counts as one occasion. When the pairs file has a `role` column, each pair of roles (`student-teacher`, `student-student`) is also tested on its own.
 
-With `--roi-mapping` each region is a level beside the whole-brain mean, its homologous pairings averaged, and when the null was drawn crossed every ordered region pair is a level too. A region is ranked for an occasion only where that dyad's own table kept it.
+The coherence is tested for being above its null. For ISC, `--isc-test signed` (the default) tests in both directions; `magnitude` tests the size of the correlation regardless of sign.
 
-A group of three or more is one occasion with one value, the mean over its member pairings of each pairing's channel mean, each pairing matched on its own channels as above; each draw is the same mean over the draws of one id, and a draw missing a pairing is left out. Where the pairs file has a `role` column and the cohort holds more than one pair of roles, each unordered pair of roles (`student-teacher`, `student-student`) is a level of its own over the whole brain, granularity `rolepair`, its occasions' values the mean over their pairings of those roles; the page lists them under the whole-brain table. A region also needs its channels in every pairing of the group.
+:::{warning}
+With `magnitude` against the phase-scrambled null and without whitening, the correlation tends to sit above the null even with no coupling. The run warns and the page says so; whiten with `--isc-whiten-s`, or keep `signed`.
+:::
 
-The coherence is always tested above its null. The correlation is averaged in Fisher z and `--isc-test` sets the read: `signed` (the default) averages z and tests two-sided, `magnitude` averages \|z\| and tests above the null. Against the phase-scrambled null on correlations that were not whitened, \|z\| tends to sit above the null, so the run warns and the page says so; whiten with `--isc-whiten-s` or keep `signed`.
-
-No multiple-comparison correction runs unless `--p-correction` names one (`fdr_bh`, `fdr_by`, `holm`, `bonferroni`); the uncorrected `p` is always written, and a method adds a `p_<method>` column. Every table writes `family`, the number of tests a correction runs over. Each run also writes a Methods paragraph for the test, `logs/<cohort table>_methods.md`, and rewrites the task's page, `task-<task>_desc-groupnull_report.html`, from every cohort table on disk.
+No correction for multiple comparisons is applied unless `--p-correction` names one (`fdr_bh`, `fdr_by`, `holm`, `bonferroni`); the uncorrected `p` is always written. Each run writes a Methods paragraph, `logs/<cohort table>_methods.md`, and the task's page, `task-<task>_desc-groupnull_report.html`.
 
 ## Excluded time
 
-The transform and the prewhitening run on each member's whole record. A pairing then leaves out the union of the two members' `BAD_` spans ([Excluded time](workflows.md#excluded-time)): the excluded columns leave the band means, the phase averages and `n_valid_frac`, and the correlation reads only the samples both members kept. Prewhitening fits each member's coefficients on that member's own kept time. A coherence cell where either member has no power left, as deep inside a long filled span, is NaN. Both nulls leave out the real pairing's excluded time; the re-paired null also leaves out each stand-in's own corrupted spans. Every dyad table records each pairing's `kept_s`.
+Each pairing leaves out the excluded time of both members ([Excluded time](workflows.md#excluded-time)), and both nulls do the same. Every dyad table records each pairing's kept seconds as `kept_s`.
 
 ## Running on a GPU
 
-`--device cuda` runs the wavelet transforms of `nirspipe-hyper` and `nirspipe-hyper-pairnull` on an NVIDIA card in double precision, once the optional extra is installed ([GPU](installation.md#gpu)). The command stops before any group is loaded when cupy is missing, no card is visible, or the card cannot hold the groups `--nprocs` runs at once, about 4.5 GiB each. Each group's first pairing is also computed on the CPU; unless the two agree to one float32 unit in the last place (cells near the power floor aside), that group stops with nothing written from the card and the run goes on to the next. The sidecars name the card; the check's cell counts go to the run record, and for the re-paired null to its sidecars.
+`--device cuda` runs `nirspipe-hyper` and `nirspipe-hyper-pairnull` on an NVIDIA card, once the optional extra is installed ([GPU](installation.md#gpu)). Each group needs about 4.5 GiB of card memory, times `--nprocs`. The command stops before starting if cupy is missing, no card is found or the memory is too small. As a check, each group's first pairing is also computed on the CPU, and a group whose two results disagree stops with nothing written.
 
 ## Other commands
 
-**`nirspipe-hyper-band`** re-averages the maps `nirspipe-hyper --wtc-save-maps` saved over another band, with no second transform, and writes tables only, named with a `band-` entity beside the originals. The band must lie inside the frequency axis the maps were computed on.
+**`nirspipe-hyper-band`** recomputes the band means over another band from the maps `nirspipe-hyper --wtc-save-maps` saved, without recomputing the coherence. The new band must lie inside the original frequency range.
 
-**`nirspipe-hyper-index`** rebuilds each dyad's landing page, `group-<id>_desc-index_report.html`, from the tables alone. `nirspipe-hyper` writes it as its last step; this is for a tree produced earlier.
+**`nirspipe-hyper-index`** rebuilds each dyad's landing page, `group-<id>_desc-index_report.html`, from the tables. `nirspipe-hyper` already writes it; use this for a tree written earlier.
 
-**`nirspipe-hyper-merge`** concatenates every per-dyad long table into one table per kind at the root of the tree, adding `group_id` and `task` (and `session` where any input has one), so a cohort analysis reads one file. The correlation matrices stay in each dyad's folder: the long tables carry the same values one row per pairing, which is the shape that stacks across dyads. It refuses tables that disagree on the band, the mask, the whitening, the stage, the rejection scope, the region minimum or which null they are, and crossed tables beside homologous ones. A differing number of null iterations only warns, since `n_iter` is kept per row. `nirspipe-hyper` prints the merge command when the merged tables are missing or older than the per-dyad ones.
+**`nirspipe-hyper-merge`** stacks every dyad's tables into one table per kind at the root of the tree, adding `group_id`, `task` and `session`, so a cohort analysis reads one file. It refuses tables computed with different settings (band, mask, whitening, stage, crossing, null), since they cannot be compared. `nirspipe-hyper` prints the merge command when the merged tables are missing or out of date.
 
 ## Resting-state dyads
 
-Without a shared trigger, pass `--no-align` to both the raw dyad QC and the analysis, so every member is trimmed to the shortest recording:
+Without a shared marker, pass `--no-align` to both the raw dyad QC and the analysis, so every member is trimmed to the shortest recording (see the warning under [Alignment](#alignment)):
 
 ```bash
 nirspipe-qc /data/bids /data/qc participant --population adult --sci-threshold 0.8
