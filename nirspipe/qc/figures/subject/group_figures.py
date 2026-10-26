@@ -712,7 +712,8 @@ def _condition_heatmap(panels: "list[tuple[str, np.ndarray]]", conditions: list[
     fig.update_yaxes(showticklabels=True, tickfont=dict(size=9), row=1, col=1)
     fig.update_xaxes(tickangle=-45, tickfont=dict(size=9))
     fig.update_annotations(font=dict(size=11, color="#6c757d"))
-    fig.update_layout(height=150 + 14 * len(labels), width=180 * len(panels) + 130,
+    # the floor keeps a few rows from leaving the colour bar no length, which Plotly throws on
+    fig.update_layout(height=160 + max(14 * len(labels), 120), width=180 * len(panels) + 130,
                       plot_bgcolor="white", margin=dict(l=110, r=20, t=70, b=90),
                       coloraxis=dict(colorscale="RdBu", cmid=0, cmin=-3, cmax=3,
                                      colorbar=dict(title="z", thickness=12, len=0.8)))
