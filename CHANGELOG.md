@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - A run whose short channels were all rejected listed them as outside every separation range and never noted that short-channel regression did not run
 - The GUI's Edit events drift hint failed when the only repeated condition was a doubled marker
+- A joined `--combine-runs` series without a regression did not record its separation bands, so the subject index split its FC by the defaults
 
 ## [0.76.0] - 2026-10-25
 

@@ -34,7 +34,7 @@ from nirspipe.pipeline.glm import glm_inputs, run_glm_pipeline, sole_regressor_c
 from nirspipe.exceptions import StageError
 from nirspipe.utils import is_marker
 from nirspipe.utils.lineage import Recorder, carried_params, lineage_of, stage_of, stamp
-from nirspipe.qc.metrics._helpers import long_short_channels, separation_bands
+from nirspipe.qc.metrics._helpers import bands_to_record, long_short_channels, separation_bands
 from nirspipe.utils.logging import get_logger
 from nirspipe import __version__
 from nirspipe.io.derivatives import (
@@ -676,7 +676,9 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
     rec = Recorder()
     # the first run under a stage of its own, since the joined series takes that run's stage
     rec.register_input(paths[0], stamp(raws[0], stage="combine_input", step="load"))
+    # the bands chose which channels joined above, and the index splits the joined FC by them
     stamp(joined, stage=stage, step="combine_runs", source=raws[0],
+          **bands_to_record(separation_bands(config)),
           combined_runs=[{"run": p.name, "onset_s": round(o, 6)} for p, o in zip(paths, onsets)],
           channel_runs={ch: [label for label, gone in zip(labels, absent) if ch not in gone]
                         for ch in joined.ch_names},
@@ -1037,8 +1039,6 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     )
     # on every stage, not just desc-filtered: a later stage is what downstream tools read,
     # and it is the one that has to name its own passband
-    from nirspipe.qc.metrics._helpers import bands_to_record
-
     parameters = {
         "high_pass": config.high_pass,
         "low_pass": config.low_pass,

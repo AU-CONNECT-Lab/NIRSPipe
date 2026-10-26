@@ -216,6 +216,17 @@ def test_the_index_draws_the_run_table_and_carpet_in_every_mode(tmp_path, mode, 
     assert (nirs.parent / "figures" / "sub-01_task-tapping_desc-joinedcarpet_nirs.html").exists()
 
 
+def test_a_joined_series_without_a_regression_records_the_bands_it_was_split_by(tmp_path):
+    # denoise with nothing to regress ends on desc-filtered, whose per-run sidecar keeps no bands
+    nirs = _tree(tmp_path, (("01", 1), ("02", 2)), mode="denoise",
+                 extra=("--fc", "--high-pass", "0.01", "--low-pass", "0.1",
+                        "--short-max-dist", "12"))
+    joined = nirs / "sub-01_task-tapping_desc-filtered_nirs.snirf"
+    params = _side(joined)["parameters"]
+    assert {k: params[k] for k in ("sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm")} == {
+        "sep_short_max_mm": 12.0, "sep_long_min_mm": 15.0, "sep_long_max_mm": None}
+
+
 def test_one_run_is_not_joined(tmp_path):
     nirs = _tree(tmp_path, (("01", 1),))
     assert not [p for p in nirs.iterdir() if "_run-" not in p.name
