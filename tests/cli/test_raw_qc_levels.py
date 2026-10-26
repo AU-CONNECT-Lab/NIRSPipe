@@ -28,6 +28,16 @@ def test_the_dyad_pages_sit_beside_the_subjects_in_one_tree(tree):
     assert [e["Name"] for e in desc["GeneratedBy"]] == ["nirspipe"]
 
 
+def test_a_finished_raw_qc_run_is_not_listed_as_unfinished(tree):
+    from nirspipe.qc.subject.group_writer import unfinished_subjects
+    from nirspipe.utils import load_toml
+
+    records = sorted(tree.glob("sub-*/logs/*_desc-raw.toml"))
+    assert [load_toml(r)["outcome"]["status"] for r in records] == ["success", "success"]
+    assert unfinished_subjects(tree) == []
+    assert 'id="Unfinished"' not in (tree / "desc-subjects_report.html").read_text(encoding="utf-8")
+
+
 def test_each_member_is_read_from_its_own_record(tree):
     from nirspipe.qc.metrics import GOOD_FRAC_PASS
 

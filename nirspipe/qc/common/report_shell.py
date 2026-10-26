@@ -199,6 +199,7 @@ NAV_SHORT = {
     "Per-channel table": "Channel table",
     "Wavelet Transform Coherence": "WTC",
     "Inter-brain Synchrony": "ISC",
+    "Subjects that did not finish": "Not finished",
 }
 
 

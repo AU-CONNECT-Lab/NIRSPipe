@@ -280,7 +280,7 @@ def _summary_meta(df: pd.DataFrame, metric_cols: list[str], descs: list[str]) ->
 
 
 def unfinished_subjects(output_dir: Path) -> list[dict]:
-    """Runs whose last `nirspipe` invocation failed or never wrote its outcome, one per run record.
+    """Runs whose last invocation failed or never wrote its outcome, one per run record, raw QC's too.
 
     ::
 

@@ -57,7 +57,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
    belongs on the run it is about. The sections follow the body, so a cohort with no
    conditions is not offered an entry for them. #}
 {% set _sections = [("Overview", "Overview"), ("Distributions", "Distributions")] %}
-{% if unfinished %}{% set _sections = [("Unfinished", "Not finished")] + _sections %}{% endif %}
+{% if unfinished %}{% set _sections = [("Unfinished", "Subjects that did not finish")] + _sections %}{% endif %}
 {% if conditions %}
   {% set _ = _sections.append(("Conditions", "By condition")) %}
   {% set _ = _sections.append(("ConditionMatrix", "Run × condition")) %}

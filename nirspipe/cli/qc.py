@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from dataclasses import replace
 from functools import partial
@@ -82,7 +83,7 @@ def cmd_participant(
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
         raise SystemExit(1)
 
-    from nirspipe.cli.run_record import write_raw_qc_record
+    from nirspipe.cli.run_record import error_line, write_raw_qc_record, write_run_outcome
     from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
     from nirspipe.io.derivatives import (
         LINK_RAW, entity_of, subject_report_dir, write_bidsignore, write_dataset_description,
@@ -120,9 +121,6 @@ def cmd_participant(
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
         all_runs: list[dict] = []
-        if record_settings is not None:
-            write_raw_qc_record(record_settings["args"], record_settings["keys"], subject,
-                                output_dir)
 
         for session in sessions:
             for task in tasks:
@@ -206,12 +204,23 @@ def cmd_participant(
 
     # one subject's failure must not take the rest of the batch with it
     def isolated(subject: str) -> int:
+        record = (write_raw_qc_record(record_settings["args"], record_settings["keys"], subject,
+                                      output_dir) if record_settings is not None else None)
+        t0, n, error = time.monotonic(), 0, None
         try:
-            return one_subject(subject)
+            n = one_subject(subject)
+            if not n:
+                error = "no recording found"
         except Exception as exc:
+            error = error_line(exc)
             logger.exception("sub-%s | raw QC failed", subject)
             print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
-            return 0
+        finally:
+            # the cohort page lists a subject whose record carries no success
+            if record is not None:
+                write_run_outcome(record, "failed" if error else "success",
+                                  time.monotonic() - t0, error)
+        return n
 
     found = _shared.map_subjects(isolated, participant_label, nprocs)
     n_runs = sum(found)
@@ -594,7 +603,7 @@ def read_config(path: Path) -> dict:
         print(f"Error: {path}: {stray[0]} sits outside any section; --config takes a [qc] "
               "section keyed by flag name, as a raw QC run record does.", file=sys.stderr)
         raise SystemExit(1)
-    unknown = sorted(set(raw) - {"qc", "qc_sources", "execution", "environment"})
+    unknown = sorted(set(raw) - {"qc", "qc_sources", "execution", "environment", "outcome"})
     if unknown:
         print(f"Error: {path}: no section [{unknown[0]}]; expected [qc] or [execution].",
               file=sys.stderr)

@@ -337,7 +337,7 @@ NOTES = {
 
     # ---- Cohort report ----
     "group.unfinished":
-        "The last <code>nirspipe</code> run of these subjects failed, or was stopped before it "
+        "The last run of these subjects failed, or was stopped before it "
         "ended. Any rows of theirs below may come from an earlier run. Details are in "
         "<code>sub-&lt;label&gt;/logs/</code>.",
     "group.small_cohort":
