@@ -31,14 +31,19 @@ See [Installation](https://au-connect-lab.github.io/NIRSPipe/installation.html) 
 
 ## Quick start
 
+Raw QC before analysis, a report per recording, then the cohort page:
+
+```bash
+nirspipe-qc /data/bids /data/qc participant --population adult --sci-threshold 0.8
+nirspipe-qc /data/bids /data/qc group
+```
+
 Preprocessing only:
 
 ```bash
 nirspipe /data/bids /data/derivatives participant \
   --participant-label 01 02 \
-  --dpf 6.0 --sci-threshold 0.8 \
-  --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
-  --resp-l-freq 0.1 --resp-h-freq 0.5
+  --population adult --sci-threshold 0.8
 ```
 
 Preprocessing and a first-level GLM, with the events taken from the SNIRF annotations:
@@ -46,14 +51,11 @@ Preprocessing and a first-level GLM, with the events taken from the SNIRF annota
 ```bash
 nirspipe /data/bids /data/derivatives participant \
   --participant-label 01 \
-  --dpf 6.0 --sci-threshold 0.8 \
-  --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 \
-  --resp-l-freq 0.1 --resp-h-freq 0.5 \
-  --mode glm --stim-dur 15 --drift-high-pass 0.01 \
-  --short-channel pca
+  --population adult --sci-threshold 0.8 \
+  --mode glm --stim-dur 15 --drift-high-pass 0.01
 ```
 
-The cardiac and respiration bands depend on the population and have no default. More examples are in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html#examples).
+`--population` (`infant`, `child`, `adult` or `older`) fills the cardiac and respiration bands, the DPF and the head template for the age group; a flag typed for one of them overrides it, and `--sci-threshold` is always typed. Short-channel regression runs by default on a montage with short channels. The drift cutoff depends on the design: `--drift-high-pass auto` sets it per run from its events. More examples are in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html#examples).
 
 ### Hyperscanning
 
@@ -84,7 +86,8 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
 | `nirspipe` | Preprocessing and postprocessing (`participant`), cohort QC pages (`group`) |
 | `nirspipe-snirf2bids` | Convert a raw SNIRF file into BIDS |
 | `nirspipe-prep` | Crop, align dyads, edit markers, write span tables |
-| `nirspipe-qc` | Raw, dyad and cohort QC reports, provenance graphs |
+| `nirspipe-qc` | Raw QC: each recording's report (`participant`), then the cohort and dyad pages (`group`) |
+| `nirspipe-provenance` | Redraw the provenance graphs of a tree from its sidecars |
 | `nirspipe-hyper` | Dyad wavelet coherence and inter-subject correlation, with a phase-scrambled null |
 | `nirspipe-hyper-pairnull`, `-groupnull`, `-band`, `-index`, `-merge` | The re-paired null, cohort tests, re-banding, the dyad index, merged tables |
 | `nirspipe-rate` | Rating viewers for the QC reports |

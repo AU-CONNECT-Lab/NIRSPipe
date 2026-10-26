@@ -39,6 +39,8 @@ nirspipe /data/bids /data/derivatives participant --population adult --sci-thres
     --mode glm --stim-dur 15 --drift-high-pass 0.01 --contrast-file contrasts.tsv
 ```
 
+`--drift-high-pass auto` sets the cutoff for each run from its own events instead ([Choosing the drift cutoff](workflows.md#choosing-the-drift-cutoff)).
+
 Resting state, ALFF and connectivity, with regions:
 
 ```bash
@@ -145,11 +147,11 @@ Each post setting is taken from the first layer that has it: the command line, t
 | `high_pass` | 0.01 | none | 0.01 |
 | `low_pass` | 0.5 | none | 0.08 |
 | `drift_model` | none | `cosine` | `cosine` |
-| `drift_high_pass` | none | **required** | 0.01 |
+| `drift_high_pass` | none | **required**: Hz or `auto` | 0.01 |
 | `noise_model` | `ols` | `auto` | `ols` |
 | `hrf_model` | | `spm` | |
 
-No mode fills a value that depends on the design, the montage or the population: the cosine cutoff of a task design; short-channel regression, which defaults to `auto` in every mode (pca where the run's montage has a channel at or under `--short-max-dist`, none where it has none); and the cardiac and respiration bands, which `--population` fills. To switch a mode's value off, say so: `--high-pass none`, `--drift-model none`, `--short-channel none`, or `high_pass = "none"` in the file. The run record's `[post_sources]` names the layer each value came from, and the run report lists every setting nobody typed.
+No mode fills a value that depends on the design, the montage or the population: the cosine cutoff of a task design, which you type or ask for as `auto`; short-channel regression, which defaults to `auto` in every mode (pca where the run's montage has a channel at or under `--short-max-dist`, none where it has none); and the cardiac and respiration bands, which `--population` fills. To switch a mode's value off, say so: `--high-pass none`, `--drift-model none`, `--short-channel none`, or `high_pass = "none"` in the file. The run record's `[post_sources]` names the layer each value came from, and the run report lists every setting nobody typed.
 
 ### Population
 

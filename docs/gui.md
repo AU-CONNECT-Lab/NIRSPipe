@@ -174,7 +174,7 @@ The form follows the choices that change what other flags mean:
 
 - With a mode chosen, the filter, drift, HRF and noise-model fields show that mode's defaults in grey ([Mode defaults](usage.md#mode-defaults)). Type `none` into a cutoff field to switch off a cutoff the mode would fill in.
 - A flag the current choices do not read is hidden and left out of the command: the GLM flags without `--mode glm`, `--fir-delays` without `--hrf-model fir`, the drift settings of the other drift model, the motion settings of the other methods, the GVTD settings without censoring.
-- Notes under the form warn when a cosine drift model has no cutoff, and when the drift cutoff is below the high-pass, where the basis misses part of what the filter removed.
+- Notes under the form warn when a cosine drift model has no cutoff, when the drift cutoff is below the high-pass, where the basis misses part of what the filter removed, and when `auto` is typed outside glm mode.
 
 ### Choosing the drift cutoff
 
@@ -184,7 +184,7 @@ The cosine drift basis spans every frequency below its cutoff, which puts the cu
 data high-pass   <=   drift cutoff   <   1 / longest repeat interval
 ```
 
-Below the high-pass, the basis does not cover what the filter removed and the betas come out too small. At or above `1/T`, for a condition repeating every `T` seconds, the basis fits the condition away as drift; the usual choice is `1 / (2T)`. The run checks both bounds and names each condition the basis would absorb ([Choosing the cosine drift cutoff](workflows.md#mode-glm)). The Edit events section of [Data Preparation](#edit-events) reads the number off a run's events.
+Below the high-pass, the basis does not cover what the filter removed and the betas come out too small. At or above `1/T`, for a condition repeating every `T` seconds, the basis fits the condition away as drift; the usual choice is `1 / (2T)`. The run checks both bounds and names each condition the basis would absorb. The Edit events section of [Data Preparation](#edit-events) reads the number off a run's events, and `auto` in the field has each run's events set it, in glm mode only ([Choosing the drift cutoff](workflows.md#choosing-the-drift-cutoff)).
 
 ## Hyper Analysis
 

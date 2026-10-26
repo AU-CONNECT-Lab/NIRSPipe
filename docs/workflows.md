@@ -226,7 +226,7 @@ A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual a
 A design matrix as the report draws it: the condition regressors, the short-channel regressors, the cosine drift basis and the constant, one row per sample.
 ```
 
-**Cosine drift cutoff.** `--drift-high-pass` has no default in this mode, because it is bounded by the design. The cosine basis spans every frequency below its cutoff, so the cutoff has to sit at or above the data's `--high-pass`, so the task regressors are detrended the way the data was, and below the rate at which a condition repeats, or the basis fits that condition away as drift. A condition whose trials are at most `T` seconds apart repeats at `1/T` Hz, and `1/(2T)` is a cutoff that clears it. The run warns when either bound is crossed, naming each condition the basis would absorb, and suggests a cutoff that clears the slowest.
+**Cosine drift cutoff.** Required in this mode, since it depends on the design: see [Choosing the drift cutoff](#choosing-the-drift-cutoff).
 
 **Noise model.** `--noise-model` sets the residual autocorrelation model: `ols`, `arN` for an AR model of order N, `auto` (the default) for an AR order of four times the sampling rate, `ar_irls`, or `worsley`. `ar_irls` alternates the AR whitening with a robust refit that down-weights outlying samples such as residual motion, until the betas stop moving; the order is chosen per channel by BIC, capped at the same bound `auto` uses or at N with `ar_irlsN`. `worsley` keeps `auto`'s order (N with `worsleyN`) and takes the coefficients from the residual's autocovariances after correcting the bias the fit leaves in them (Worsley et al., 2002); a channel whose corrected autocovariances do not admit that order is fitted as `auto`, and the sidecars list it as `worsley_fitted_as_auto`. Every channel keeps its own AR coefficients. Every mode fits the noise model, `denoise` and `rest` on their confound regression.
 
@@ -239,6 +239,12 @@ A design matrix as the report draws it: the condition regressors, the short-chan
 **P values.** Both tables give each test's uncorrected `p_value`. `--p-correction` (`fdr_bh`, `fdr_by`, `holm` or `bonferroni`; none by default) adds `p_<method>` beside it, corrected within one regressor or contrast and one chromophore over the long channels not marked bad; short and rejected channels keep their `p_value` and get no corrected one. `family` gives the number of tests a correction runs over, and is written whether or not one ran. The Methods paragraph says whether p was corrected, and how. MNE-NIRS's own `Significant` column, p below 0.05 uncorrected, is not written.
 
 Every channel is fitted, rejected ones included; their rows carry `bad = True` rather than being dropped, so the table shape stays the same across subjects.
+
+#### Choosing the drift cutoff
+
+The cosine drift model removes slow changes below `--drift-high-pass`. Set the cutoff too high and it removes part of your task too, because a condition that repeats every `T` seconds is itself a slow rhythm at `1/T` Hz. A common choice, the one nilearn and MNE-NIRS suggest, is `1/(2T)`, with `T` the longest gap between two trials of the same condition: blocks every 60 s give 1/120, about 0.008 Hz. If you also use `--high-pass`, do not set the cutoff below it. The run warns you when the value is outside these limits.
+
+`--drift-high-pass auto` applies this rule to each run from its own events, never above 0.01 Hz (nilearn's default), and the report says which condition set the value. It works with `--mode glm` only. Type a number instead when every run should use the same value, or when the recording has markers that are not conditions, such as a start and an end marker; `nirspipe-prep edit-markers` can also remove them.
 
 ### Mode: rest
 
