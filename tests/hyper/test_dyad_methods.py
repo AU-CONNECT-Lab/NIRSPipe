@@ -25,7 +25,8 @@ def _member(nirs, sid):
     _sidecar(nirs, f"sub-{sid}_task-hold_desc-preproc_nirs", "beer_lambert",
              sources=[path("od")], dpf=[6.0])
     _sidecar(nirs, f"sub-{sid}_task-hold_desc-filtered_nirs", "bandpass",
-             sources=[path("preproc")], high_pass=0.01, low_pass=0.2)
+             sources=[path("preproc")], high_pass=0.01, low_pass=0.2,
+             filter_method="iir", filter_order=4)
     _sidecar(nirs, f"sub-{sid}_task-hold_desc-errts_nirs", "glm_residuals",
              sources=[path("filtered")], conditions=[], noise_model="ols", drift_model="cosine",
              drift_high_pass=0.01)

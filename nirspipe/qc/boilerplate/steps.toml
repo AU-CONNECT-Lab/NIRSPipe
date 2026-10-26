@@ -123,11 +123,6 @@ citations = []
 plain = "Functional connectivity was computed as the Pearson correlation r between channels{kept}, separately for {chroma}, and reported both as r and as its Fisher z transform, z = arctanh(r).{min_time}"
 citations = []
 
-# A tree written before the regression recorded its conditions; it cannot say which model ran.
-[regression_unrecorded]
-plain = "A regression was applied whose design this derivatives tree does not record; re-run nirspipe to describe it here."
-citations = []
-
 # ---- Hyperscanning ----
 #
 # These describe a dyad rather than a subject, and they follow the steps behind the member

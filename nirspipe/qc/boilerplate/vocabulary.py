@@ -86,12 +86,8 @@ def boilerplate_key(step: str | None, params: dict[str, Any]) -> str | None:
             return "highpass"
         return "lowpass" if high_edge else None
     if step in ("glm_fit", "glm_residuals"):
-        # every mode runs this regression; the conditions it modelled are what make it a task
-        # GLM, and a tree that never recorded them cannot say which it was
-        conditions = params.get("conditions")
-        if conditions is None:
-            return "regression_unrecorded"
-        return "glm" if conditions else "confound_regression"
+        # every mode runs this regression; the conditions it modelled are what make it a task GLM
+        return "glm" if params["conditions"] else "confound_regression"
     if step in _WTC_STEPS:
         return "hyper_wtc_crossed" if params.get("channel_cross") else "hyper_wtc"
     if step in _ROI_STEPS:
@@ -146,16 +142,9 @@ def _drift_phrase(params: dict[str, Any]) -> str | None:
 
 def _filter_phrase(params: dict[str, Any]) -> str:
     """Name the filter that ran, from the recorded method rather than a fixed family."""
-    method, order = params.get("filter_method"), params.get("filter_order")
-    if method == "iir":
-        return ("a zero-phase Butterworth filter "
-                + (f"(order {order}, applied forward and backward)" if order is not None
-                   else "applied forward and backward"))
-    if method == "fir":
+    if params["filter_method"] == "fir":
         return "a zero-phase Hamming-windowed FIR filter"
-    # a stage written before the method was recorded. Both branches are zero-phase, so this
-    # stays true without naming a family the run may not have used
-    return "a zero-phase filter"
+    return f"a zero-phase Butterworth filter (order {params['filter_order']}, applied forward and backward)"
 
 _P_CORRECTION_NAMES = {
     "fdr_bh": "the Benjamini–Hochberg false discovery rate",
@@ -176,7 +165,7 @@ def _groupnull_measure(params: dict[str, Any]) -> dict[str, str]:
             "two_sided": ", its p doubling the smaller of the two tails"}
 
 def _correction_phrase(value: Any, within: str) -> str:
-    # a sidecar from before the setting was recorded gets no sentence rather than a guessed one
+    # a lineage that reaches the residual but not the fit table has no setting to report
     if value is None:
         return ""
     if value == "none":

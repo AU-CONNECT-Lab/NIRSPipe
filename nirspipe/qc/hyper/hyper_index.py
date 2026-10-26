@@ -91,12 +91,10 @@ def _pairings(*frames) -> list:
     """The member pairings a group's tables carry, in the order they were written.
 
     Read off the tables rather than off a member list: the index is rebuilt for trees it did
-    not produce, and a pairing that failed has no rows and belongs on no row of the page. A
-    table from before the columns existed reports one unnamed pairing, which is what a dyad
-    always was.
+    not produce, and a pairing that failed has no rows and belongs on no row of the page.
     """
     for df in frames:
-        if df is None or not {"sub1", "sub2"}.issubset(getattr(df, "columns", [])):
+        if df is None:
             continue
         seen = dict.fromkeys(zip(df["sub1"].astype(str), df["sub2"].astype(str)))
         if seen:

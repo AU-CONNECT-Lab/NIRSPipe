@@ -23,6 +23,9 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
 - **Breaking**: `--short-channel` defaults to `auto`, pca where the montage has short channels and none otherwise; it used to default to none
 
+### Removed
+- **Breaking**: fallbacks for trees older versions wrote: flat QC records, sidecars without the filter or GLM conditions, dyad tables without member columns, the old rate report path
+
 ### Fixed
 - A run whose short channels were all rejected listed them as outside every separation range and never noted that short-channel regression did not run
 - The GUI's Edit events drift hint failed when the only repeated condition was a doubled marker

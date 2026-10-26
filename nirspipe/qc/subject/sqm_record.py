@@ -389,8 +389,7 @@ def raw_verdict_view(record: dict) -> dict:
     numbers (montage counts, duration) live underneath.
 
     One function because three readers need the same answer: the subject report, the dyad
-    raw report and the dyad analysis. A flat legacy record has no sections and comes back
-    unchanged.
+    raw report and the dyad analysis.
     """
     view = {**(record.get("raw") or {})}
     view.update(record.get("raw_long") or {})
@@ -1206,7 +1205,7 @@ def compute_run_sections(
             # one list per channel set, because the test is ">= 10% of *these* channels
             # spiking" and the panel draws each set its own row: a span found on the short
             # channels is not a claim about the long ones. The long list keeps the plain key,
-            # being the one the verdict, the detail figure and every older record read.
+            # being the one the verdict and the detail figure read.
             for key, names in (("spike_spans_s", spike_long),
                                ("spike_spans_short_s", spike_short),
                                ("spike_spans_all_s", list(spike_source.ch_names))):

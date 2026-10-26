@@ -88,8 +88,6 @@ def open_hyper(
 
     fname = report_name(group_label(group_id, task_label, session_label), desc="raw")
     html_path = output_dir / f"group-{group_id}" / fname
-    if not html_path.exists() and (output_dir / fname).exists():
-        html_path = output_dir / fname      # a tree written before the group folder existed
     if not html_path.exists():
         print(f"Error: hyper report not found: {html_path}", file=sys.stderr)
         raise SystemExit(1)

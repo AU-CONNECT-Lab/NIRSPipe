@@ -109,8 +109,7 @@ def bands_to_record(sep_bands: Bands) -> dict:
         (0.01, 0.015, None) -> {"sep_short_max_mm": 10.0, "sep_long_min_mm": 15.0,
                                 "sep_long_max_mm": None}
 
-    Stamped so a reader of an old record can tell which bands produced its split, which is
-    otherwise unrecoverable once the defaults move.
+    Stamped so a reader can tell which bands produced the split, whatever the defaults are.
     """
     return {k: (None if v is None else round(v * 1e3, 1))
             for k, v in zip(BANDS_RECORD_KEYS, sep_bands)}
@@ -119,9 +118,9 @@ def bands_to_record(sep_bands: Bands) -> dict:
 def bands_from_record(scalars: dict) -> Bands:
     """The bands a stored record was split with, read back from its ``raw`` section.
 
-    A key the record does not carry falls back to today's default, which is every record
-    written before the bands were stamped. A key present and null is not missing: it is an
-    upper bound deliberately switched off, so the two cases are told apart by presence.
+    A key the record does not carry, as on a stage that does not stamp them, falls back to
+    the default. A key present and null is not missing: it is an upper bound deliberately
+    switched off, so the two cases are told apart by presence.
     """
     defaults = separation_bands()
     out = []
@@ -135,15 +134,13 @@ def bands_from_record(scalars: dict) -> Bands:
 
 
 def record_has_bands(scalars: dict) -> bool:
-    """Whether a record stamps its own bands, rather than predating the stamp.
+    """Whether a record stamps its own bands, which a record whose raw section failed does not.
 
     {"sep_short_max_mm": 10.0, "sep_long_min_mm": 15.0, "sep_long_max_mm": None} -> True
 
-    :func:`bands_from_record` falls back to today's defaults for a missing key, so a record
-    written before the stamp existed reads back as whatever the defaults happen to be now.
-    A caller comparing two records has to be able to tell that apart from two records that
-    genuinely agree. All three keys or none: the writer always writes the three together,
-    so a partial set is not a stamp.
+    :func:`bands_from_record` falls back to the defaults for a missing key, so a caller
+    comparing two records has to be able to tell that apart from two records that genuinely
+    agree. All three keys or none: the writer always writes the three together.
     """
     return all(key in scalars for key in BANDS_RECORD_KEYS)
 

@@ -168,7 +168,7 @@ def _step_detail(step: str | None, params: dict[str, Any]) -> str:
 
 
 def _state_line(data: dict[str, Any]) -> str:
-    """Shape of the data at this node: "40/56 ch · 2 Hz · 595 s". Empty for older sidecars."""
+    """Shape of the data at this node: "40/56 ch · 2 Hz · 595 s"; empty when the node records none."""
     if not data:
         return ""
     if (n_metrics := data.get("n_metrics")) is not None:

@@ -599,7 +599,7 @@ def resolve_group_bands(
     records carry therefore cannot be switched off from the command line, which needs a
     re-run of prep.
 
-    A member whose record predates the stamp reads back as today's defaults. That is a guess
+    A member whose record carries no stamp reads back as the defaults. That is a guess
     rather than a fact, so it is warned about and does not count towards agreement.
     """
     from nirspipe.qc.metrics._helpers import (
@@ -639,8 +639,8 @@ def resolve_group_bands(
 
     if unstamped:
         logger.warning(
-            "no separation bands stamped for %s, so %s is assumed for %s: the record "
-            "predates the stamp and what it was prepped with is not recoverable from it. "
+            "no separation bands stamped for %s, so %s is assumed for %s: the record has "
+            "no raw section to read them from. "
             "Re-run nirspipe on it, or pass --short-max-dist / --long-min-dist / "
             "--long-max-dist to say what it was.",
             ", ".join(unstamped), bands_phrase(from_records),

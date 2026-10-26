@@ -75,8 +75,6 @@ def test_only_a_design_with_conditions_claims_a_first_level_glm(step):
     params = {"hrf_model": "spm", "noise_model": "ar1"}
     assert boilerplate_key(step, {**params, "conditions": ["tap"]}) == "glm"
     assert boilerplate_key(step, {**params, "conditions": []}) == "confound_regression"
-    # a tree written before the conditions were recorded says so instead of guessing
-    assert boilerplate_key(step, params) == "regression_unrecorded"
 
 
 def test_every_step_the_pipeline_writes_can_be_described():
@@ -94,7 +92,8 @@ def test_every_step_the_pipeline_writes_can_be_described():
 def test_the_lower_edge_of_the_band_is_called_two_things():
     # a sidecar's high_pass is the lower edge; the filter templates call it l_freq, and
     # crossing the two silently prints the band backwards
-    slots = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5})
+    slots = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5,
+                                        "filter_method": "iir", "filter_order": 4})
     assert slots["l_freq"] == "0.01"
     assert slots["h_freq"] == "0.5"
 
@@ -109,9 +108,6 @@ def test_the_filter_sentence_names_the_filter_that_ran():
     fir = template_slots("bandpass", {"high_pass": 0.01, "low_pass": 0.5,
                                       "filter_method": "fir", "filter_order": None})
     assert "FIR" in fir["filter"] and "Butterworth" not in fir["filter"]
-
-    # a sidecar that records no method names no family at all
-    assert template_slots("highpass", {"high_pass": 0.01})["filter"] == "a zero-phase filter"
 
 
 def test_the_noise_model_is_spelled_out_rather_than_pasted():
@@ -506,7 +502,8 @@ def _member_chain(directory):
     _sidecar(directory, "sub-11_task-hold_desc-preproc_nirs", "beer_lambert",
              sources=[path("motcorrected")], dpf=[6.0])
     _sidecar(directory, "sub-11_task-hold_desc-filtered_nirs", "bandpass",
-             sources=[path("preproc")], high_pass=0.01, low_pass=0.2)
+             sources=[path("preproc")], high_pass=0.01, low_pass=0.2,
+             filter_method="iir", filter_order=4)
     _sidecar(directory, "sub-11_task-hold_desc-errts_nirs", "glm_residuals",
              sources=[path("filtered")], conditions=[], noise_model="ols",
              short_channel="mean")
@@ -689,8 +686,8 @@ def test_a_rest_run_reads_regression_then_alff_then_connectivity(tmp_path):
     _sidecar(tmp_path, "sub-01_task-rest_desc-preproc_nirs", "beer_lambert", dpf=[6.0])
     pre = str(tmp_path / "sub-01_task-rest_desc-preproc_nirs.snirf")
     _sidecar(tmp_path, "sub-01_task-rest_desc-filtered_nirs", "bandpass", sources=[pre],
-             high_pass=0.01, low_pass=0.08)
-    filt = str(tmp_path / "sub-01_task-rest_desc-filtered_nirs.snirf")
+             high_pass=0.01, low_pass=0.08, filter_method="iir", filter_order=4)
+    filt =str(tmp_path / "sub-01_task-rest_desc-filtered_nirs.snirf")
     _sidecar(tmp_path, "sub-01_task-rest_desc-errts_nirs", "glm_residuals", sources=[filt],
              conditions=[], drift_model="cosine", drift_high_pass=0.01, noise_model="ols")
     _sidecar(tmp_path, "sub-01_task-rest_desc-errtsbroad_nirs", "glm_residuals_broadband",

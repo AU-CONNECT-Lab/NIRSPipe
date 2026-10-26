@@ -92,7 +92,8 @@ def test_only_the_artefacts_on_disk_are_linked(tmp_path):
 
 def _whole_run_only(tmp_path):
     (tmp_path / "nirs").mkdir()
-    pd.DataFrame({"chromophore": ["hbo"], "label": ["S1_D1"], "label2": ["S1_D1"],
+    pd.DataFrame({"sub1": ["a"], "sub2": ["b"],
+                  "chromophore": ["hbo"], "label": ["S1_D1"], "label2": ["S1_D1"],
                   "coherence": [0.4]}).to_csv(
         tmp_path / "nirs" / name("G01", "main"), sep="\t", index=False)
 
@@ -121,7 +122,7 @@ def test_each_condition_row_of_the_table_is_a_window(tmp_path):
     """Numeric labels, which beside the whole run's n/a would read as 1.0 and 2.0."""
     (tmp_path / "nirs").mkdir()
     table = tmp_path / "nirs" / name("G01", "main")
-    pd.DataFrame({"chromophore": "hbo", "condition": [None, "1", "2"],
+    pd.DataFrame({"sub1": "a", "sub2": "b", "chromophore": "hbo", "condition": [None, "1", "2"],
                   "label": "S1_D1", "coherence": [0.4, 0.6, 0.2]}).to_csv(
         table, sep="\t", index=False, na_rep="n/a")
     table.with_suffix(".json").write_text(json.dumps({"parameters": {

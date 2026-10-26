@@ -281,16 +281,6 @@ def test_tables_carrying_different_chromophores_merge_with_a_warning(tmp_path, c
     assert "same chromophores" in caplog.text
 
 
-def test_a_table_predating_the_column_merges_with_a_warning(tmp_path, caplog):
-    import logging
-
-    _table(tmp_path, "01", "rest", chroma=("hbo", "hbr"))
-    _table(tmp_path, "02", "rest")
-    with caplog.at_level(logging.WARNING):
-        _merge(tmp_path)
-    assert "no chromophore column" in caplog.text
-
-
 def test_uniform_chromophores_warn_about_nothing(tmp_path, caplog):
     import logging
 

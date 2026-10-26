@@ -875,11 +875,9 @@ def _slice_pair(df, pair: "tuple[str, str] | None"):
     The frames are long over every pairing in the group. Everything downstream keys on
     the site pair alone, so handing it the whole frame lets a group of three overwrite
     one pairing's cell with another's; slicing here means no consumer has to know the
-    column exists. A frame without the columns is from a tree written before they were
-    added and is passed through.
+    column exists.
     """
-    if df is None or pair is None or not {"sub1", "sub2"}.issubset(
-            getattr(df, "columns", [])):
+    if df is None or pair is None:
         return df
     return df[(df["sub1"] == pair[0]) & (df["sub2"] == pair[1])]
 

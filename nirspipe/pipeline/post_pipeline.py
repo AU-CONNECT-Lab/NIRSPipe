@@ -231,8 +231,7 @@ def _warn_lowpass_breaks_whitening(config: PostConfig, mode: Mode) -> None:
             if mode == "glm" else
             "so the confound coefficients are fitted under the wrong covariance and "
             "desc-errts is not the residual an ordinary least-squares fit would leave. Use "
-            "--noise-model ols to reproduce a tree written before every mode honoured this "
-            "flag")
+            "--noise-model ols for that residual")
     logger.warning(
         "sub-%s | --noise-model %s is fitted to data the run has low-passed (%s). The AR "
         "model will fit the filter rather than the noise, %s.",

@@ -188,16 +188,14 @@ def _warn_mixed_chromophores(frames: dict[str, pd.DataFrame]) -> None:
     """
     seen = {name: tuple(sorted(df["chromophore"].dropna().unique()))
             for name, df in frames.items() if "chromophore" in df.columns}
-    missing = sorted(set(frames) - set(seen))
-    if len(set(seen.values())) > 1 or (seen and missing):
+    if len(set(seen.values())) > 1:
         spread = ", ".join(f"{name}={'+'.join(chroma) or 'none'}"
                            for name, chroma in sorted(seen.items()))
         logger.warning(
             "the tables do not all carry the same chromophores, so the merged table has a "
-            "different number of dyads per chromophore: %s%s. Nothing is corrupted, since "
+            "different number of dyads per chromophore: %s. Nothing is corrupted, since "
             "the chromophore is a row label, but a group model will not notice.",
-            spread,
-            f"; no chromophore column in {', '.join(missing)}" if missing else "")
+            spread)
 
 
 def aggregate_wtc(output_dir: Path, sources: "list[Path]") -> pd.DataFrame:

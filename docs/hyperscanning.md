@@ -63,7 +63,7 @@ The members are put on one clock by a shared trigger: the annotation description
 
 Each member's rejected channels are read from the record its `nirspipe` run wrote, not screened again. `--bads-scope run` (the default) applies each task's own rejections; `subject` unions them over every run of the subject the pairs file names, so every condition rests on one channel set. The two differ only where conditions were cropped into separate tasks before preprocessing.
 
-The short and long separation bands are read from the same records. Members preprocessed with different bands are refused, naming each member's bands; the separation flags force one set for a tree written before the bands were recorded.
+The short and long separation bands are read from the same records. Members preprocessed with different bands are refused, naming each member's bands; the separation flags force one set.
 
 Before anything expensive starts, every dyad prints its channel budget:
 

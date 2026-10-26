@@ -88,13 +88,8 @@ _DESC_LABELS = {"sqm": "pipeline", "sqmraw": "raw QC"}
 
 
 def _warn_on_mixed_windows(rows: list) -> None:
-    """A time x subject heatmap only reads straight if every subject was binned the same way.
-
-    raw QC rows carry the scalar under a ``raw_`` prefix and pipeline rows do not, so both
-    names are checked. Silence means either one window length across the cohort or records
-    written before the length was stored.
-    """
-    lengths = {r.get("qc_window_s", r.get("raw_qc_window_s")) for r in rows}
+    """A time x subject heatmap only reads straight if every subject was binned the same way."""
+    lengths = {r.get("qc_window_s") for r in rows}
     lengths.discard(None)
     if len(lengths) > 1:
         logger.warning(
@@ -166,26 +161,17 @@ def _bids_name_from_sqm_path(path: Path) -> str:
 def _sqm_row(bids_name: str, sqm: dict) -> dict:
     """One group-table row, in the sectioned record's column vocabulary.
 
-    A legacy record is flat: every scalar sits at the top level and describes every
-    channel. That is exactly the sectioned record's ``raw`` view, so it takes the same
-    ``raw_`` prefix and a cohort holding both shapes compares in one set of columns.
-
     The ``_long`` sections an all-long montage skipped are filled in first, or a cohort
     compared on a ``_long`` column would drop those runs without saying so.
     """
-    if any(isinstance(sqm.get(section), dict) for section in SECTIONS):
-        row = {"bids_name": bids_name, **fill_skipped_long_sections(sqm)}
-        # the record keeps the series in a `windowed` section and the heatmaps below look
-        # them up by their bare names. Lifting here means one shape reaches the panels;
-        # the section stays as written on disk
-        windowed = row.pop("windowed", None)
-        if isinstance(windowed, dict):
-            row.update(windowed)
-        return row
-    return {
-        "bids_name": bids_name,
-        **{(f"raw_{k}" if isinstance(v, (int, float)) else k): v for k, v in sqm.items()},
-    }
+    row = {"bids_name": bids_name, **fill_skipped_long_sections(sqm)}
+    # the record keeps the series in a `windowed` section and the heatmaps below look
+    # them up by their bare names. Lifting here means one shape reaches the panels;
+    # the section stays as written on disk
+    windowed = row.pop("windowed", None)
+    if isinstance(windowed, dict):
+        row.update(windowed)
+    return row
 
 
 def _collect_sqm(
