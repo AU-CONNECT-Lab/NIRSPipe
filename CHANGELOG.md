@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Raw QC writes a run record, `sub-<label>/logs/*_desc-raw.toml`, that `nirspipe-qc --config` reruns
 - **Breaking**: `nirspipe-provenance OUTPUT_DIR` replaces `nirspipe-qc provenance`
 - **Breaking**: `--short-channel` defaults to `auto`, pca where the montage has short channels and none otherwise; it used to default to none
+- **Breaking**: the quality record's `ch_dist_*` separations are in mm, as the flags and band stamps are; rerun QC for older records
 
 ### Removed
 - **Breaking**: fallbacks for trees older versions wrote: flat QC records, sidecars without the filter or GLM conditions, dyad tables without member columns, the old rate report path

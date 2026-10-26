@@ -98,9 +98,9 @@ def channel_rows(
     if not short_names:
         # a short set rejected whole has no section of its own; its separations still say
         # which channels it held
-        short_max = bands_from_record(record.get("raw") or {})[0]
+        short_max_mm = bands_from_record(record.get("raw") or {})[0] * 1e3
         dist = whole_pc.get("ch_dist_per_channel") or {}
-        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max}
+        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max_mm}
 
     def separation_of(ch: str) -> str:
         """Which block a channel belongs to, or "" when the record was never split.

@@ -794,9 +794,9 @@ METRIC_SUMMARY = {
     "n_saturated_channels": "Channels held at the detector's ceiling for two samples or more. Zero is best.",
     "saturated_pct": "Share of samples held at the detector's ceiling. Zero is best.",
     # geometry
-    "ch_dist_mean": "Average source-detector separation, in metres. Descriptive.",
-    "ch_dist_min": "Shortest source-detector separation, in metres. Descriptive.",
-    "ch_dist_max": "Longest source-detector separation, in metres. Descriptive.",
+    "ch_dist_mean": "Average source-detector separation, in mm. Descriptive.",
+    "ch_dist_min": "Shortest source-detector separation, in mm. Descriptive.",
+    "ch_dist_max": "Longest source-detector separation, in mm. Descriptive.",
 
     # haemoglobin
     "hbo_hbr_corr_mean": "Correlation of HbO and HbR: cortical signal pushes it negative, systemic or motion signal positive. Lower is better, with no fixed cutoff.",
@@ -966,7 +966,7 @@ RECORD_CHANNEL_METRICS = {
     "sci_per_channel": "Scalp coupling index over the whole run: the correlation of the two wavelengths in the cardiac band.",
     "sci_win_per_channel": f"The same correlation inside {SCI_WINDOW_S:g} s windows, averaged over the windows.",
     "good_frac_per_channel": f"Share of {SCREEN_WINDOW_S:g} s windows passing on SCI, and on PSP when it has a line; a channel is rejected on this.",
-    "ch_dist_per_channel": "Source-detector separation in metres.",
+    "ch_dist_per_channel": "Source-detector separation in mm.",
     "psp_per_channel": f"Strength of the cardiac peak the two wavelengths share, averaged over {PSP_WINDOW_S:g} s windows.",
     "cp_per_channel": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental.",
     "cv_per_channel": f"Standard deviation over mean of the raw intensity inside {CV_WINDOW_S:g} s windows, averaged over the windows.",
@@ -1098,9 +1098,9 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "saturated_pct":           ("Saturated share", "pct", None, _LOWER),
 
     # geometry
-    "ch_dist_mean":            ("Mean separation (m)", ".3f", None, None),
-    "ch_dist_min":             ("Min separation (m)", ".3f", None, None),
-    "ch_dist_max":             ("Max separation (m)", ".3f", None, None),
+    "ch_dist_mean":            ("Mean separation (mm)", ".1f", None, None),
+    "ch_dist_min":             ("Min separation (mm)", ".1f", None, None),
+    "ch_dist_max":             ("Max separation (mm)", ".1f", None, None),
     # haemoglobin
     "hbo_hbr_corr_mean":       ("HbO-HbR corr", ".3f", None, _LOWER),
     "cnr_hbo_mean":            ("CNR HbO", ".3f", None, _HIGHER),

@@ -43,7 +43,7 @@ def test_a_rejected_short_set_keeps_its_rows_short_with_the_whole_montage_scores
         "raw": {"n_long_channels": 1, "n_short_channels": 1, "sep_short_max_mm": 10.0,
                 "sep_long_min_mm": 15.0, "sep_long_max_mm": None},
         "per_channel": {
-            "raw": {"ch_dist_per_channel": {long_ch: 0.03, short_ch: 0.008},
+            "raw": {"ch_dist_per_channel": {long_ch: 30.0, short_ch: 8.0},
                     "sci_per_channel": {long_ch: 0.9, short_ch: 0.4}},
             # no raw_short: every short channel was rejected
             "raw_long": {"sci_per_channel": {long_ch: 0.9}},

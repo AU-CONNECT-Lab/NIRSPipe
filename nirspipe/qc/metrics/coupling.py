@@ -342,8 +342,8 @@ def _saturation_metrics(raw_intensity: mne.io.Raw,
     "ch_dist_mean", "ch_dist_min", "ch_dist_max", "ch_dist_per_channel",
 ))
 def _channel_distance_metrics(raw_intensity: mne.io.Raw) -> dict[str, Any]:
-    """Source-detector separation per channel, with mean/min/max (metres)."""
-    dists = mne.preprocessing.nirs.source_detector_distances(raw_intensity.info)
+    """Source-detector separation per channel, with mean/min/max, in mm as the flags take it."""
+    dists = mne.preprocessing.nirs.source_detector_distances(raw_intensity.info) * 1e3
     dist_per_ch = {
         ch: float(dists[i])
         for i, ch in enumerate(raw_intensity.ch_names)

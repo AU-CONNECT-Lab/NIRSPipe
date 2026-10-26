@@ -54,7 +54,7 @@ _METRIC_GROUPS: list[tuple[str, list[str]]] = [
     ("Channel & epoch counts",
      ["n_channels", "n_long_channels", "n_short_channels", "n_bad",
       "n_flat_channels", "cnr_n_epochs", "gvtd_censor_n_epochs"]),
-    ("Channel distance (m)", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
+    ("Channel distance (mm)", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
     ("Separation (mm)", ["sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm"]),
 ]
 
