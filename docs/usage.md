@@ -97,7 +97,7 @@ nirspipe /data/bids /data/derivatives group
 - **Tables** you supply are read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed ([Table files](data-preparation.md#table-files)).
 - **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep` and `nirspipe-qc` at both levels) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
 - **Output directories.** A command that writes a tree stops when its output directory is its input directory; `nirspipe-prep crop --input-desc` is the exception.
-- **Parallelism.** `--nprocs` (also `--n_cpus`) is the number of cores a command may use in all. Subjects run on threads, as many at once as there are cores or subjects, and the cores left over are shared out as BLAS threads. Without it, subjects run one at a time and BLAS uses every core. `nirspipe ... participant`, `nirspipe-qc ... participant` and the `nirspipe-prep` subcommands `crop`, `edit-markers` and `keep-spans` take it. The dyad commands `nirspipe-hyper`, `nirspipe-hyper-pairnull` and `nirspipe-qc ... group` take it too and run each group in a process of its own, so memory grows with the number of groups at once.
+- **Parallelism.** `--nprocs N` (also `--n_cpus`) lets a command use N cores; without it, subjects run one at a time. `nirspipe ... participant`, `nirspipe-qc ... participant` and the `nirspipe-prep` subcommands `crop`, `edit-markers` and `keep-spans` take it. The dyad commands `nirspipe-hyper`, `nirspipe-hyper-pairnull` and `nirspipe-qc ... group` take it too and run N groups at once, so memory use grows with N.
 
 ## Configuration file
 
@@ -131,7 +131,7 @@ nirspipe /data/bids /data/out2 participant --config /data/out/sub-01/logs/sub-01
 
 Keys are flag names without the leading `--` and with hyphens turned into underscores, in the flag's own units. `[prep]` holds the preprocessing flags, the cardiac, respiration and separation bands among them; `[post]` holds `mode`, the postprocessing flags and `roi_mapping`; `[execution]` holds the selection (`participant_label`, `session_label`, `task_label`, `bids_filter_file`, `ignore`, `allow_cropped_input`). A key outside a section, an unknown section or key, or a value the flag would refuse stops the run before anything is read, naming the key. The input and output directories and the analysis level always come from the command line.
 
-`nirspipe-hyper --config` reads a dyad's run record, `group-<id>/logs/group-<id>_task-<task>.toml`, the same way: its `[hyper]` section, keyed by flag name, fills every setting the command line leaves out, and the directories and `--pairs-csv` come from the command line. A band or crossing the run took from `--band-fmin`/`--band-fmax` or `--channel-cross` follows them when one of those is typed over the record.
+`nirspipe-hyper --config` reads a dyad's run record, `group-<id>/logs/group-<id>_task-<task>.toml`, the same way: its `[hyper]` section, keyed by flag name, fills every setting the command line leaves out, and the directories and `--pairs-csv` come from the command line.
 
 ```bash
 nirspipe-hyper /data/out /data/hyper2 group --pairs-csv pairs.csv \
@@ -151,11 +151,11 @@ Each post setting is taken from the first layer that has it: the command line, t
 | `noise_model` | `ols` | `auto` | `ols` |
 | `hrf_model` | | `spm` | |
 
-No mode fills a value that depends on the design, the montage or the population: the cosine cutoff of a task design, which you type or ask for as `auto`; short-channel regression, which defaults to `auto` in every mode (pca where the run's montage has a channel at or under `--short-max-dist`, none where it has none); and the cardiac and respiration bands, which `--population` fills. To switch a mode's value off, say so: `--high-pass none`, `--drift-model none`, `--short-channel none`, or `high_pass = "none"` in the file. The run record's `[post_sources]` names the layer each value came from, and the run report lists every setting nobody typed.
+No mode fills a value that depends on the design, the montage or the population: the cosine cutoff of a task design, which you type or ask for as `auto`; short-channel regression, which defaults to `auto` in every mode (pca where the run's montage has a channel at or under `--short-max-dist`, none where it has none); and the cardiac and respiration bands, which `--population` fills. To switch a mode's value off, say so: `--high-pass none`, `--drift-model none`, `--short-channel none`, or `high_pass = "none"` in the file. The run report lists every setting you did not type, and where it came from.
 
 ### Population
 
-`--population` fills the values that follow the participants' age, where nothing else set them: the command line wins, then `--config`, then the population. It is ours, after QSIPrep's `--infant`; no BIDS App has adult, child and older groups.
+`--population` fills the values that depend on the participants' age, unless the command line or `--config` sets them.
 
 | `--population` | Ages | Cardiac band (Hz) | Respiration band (Hz) | DPF | Head template |
 |---|---|---|---|---|---|
@@ -164,7 +164,7 @@ No mode fills a value that depends on the design, the montage or the population:
 | `adult` | 12 to 65 years | 0.7 to 1.8 | 0.1 to 0.5 | at 30 years | fsaverage |
 | `older` | 65 years and over | 0.7 to 1.8 | 0.1 to 0.5 | at 70 years | fsaverage |
 
-Each band is the union of the rows of the [Channel screening](workflows.md#channel-screening) table the ages span. The DPF is the age equation of the [Beer-Lambert law](workflows.md#beer-lambert-law) at one age, one value per wavelength for the whole batch; `--dpf age` takes each participant's own age instead, for a cohort wider than one group. `older` differs from `adult` in its DPF only: resting heart and breathing rates are flat across adult ages, while the DPF at 850 nm is 5.23 at 30 years and 6.30 at 70, so an older cohort run as adult reads amplitudes about 20% high. Under `infant`, a participant without an age in `participants.tsv` stops the run before its first subject: add the age, or pass `--template`. `nirspipe-qc ... participant` takes it the same way for its cardiac band, DPF and template. The run record lists what the population filled under `[prep_sources]` and leaves its DPF out of `[prep]`, so a rerun's `--population` sets it again; the run report lists those values with the other settings nobody typed, and the Methods say which values were the population's.
+The bands cover the ages of the group, from the [Channel screening](workflows.md#channel-screening) table. The DPF is computed at one age for the whole batch ([Beer-Lambert law](workflows.md#beer-lambert-law)); for a cohort that spans more than one group, use `--dpf age`, which takes each participant's own age. `older` differs from `adult` only in its DPF: an older cohort run as `adult` reads response amplitudes about 20% too high. Under `infant`, every participant needs an age in `participants.tsv`, or pass `--template`. `nirspipe-qc ... participant` takes `--population` the same way. The run report and the Methods say which values the population filled.
 
 ### Contrast file
 
