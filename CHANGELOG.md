@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - A montage without short channels showed Separation n/a for every channel; channels in the long range now read long
 - The raw signal overview left rows of blank space above and below a tall montage; its y range now fits the traces
 - The raw signal overview draws its two wavelengths in a brighter orange and blue
+- The raw signal overview spaces its rows wider and puts both wavelengths of a pair on adjacent rows, whatever order the file lists them in
 - Optodes that could not be placed on the template head were still drawn beside a 3-D brain and projected onto the cortex (mALFF, GLM betas); such runs now show the flat optode map only
 - The flat views (optode map, topographies, head slider, seed and flat value maps) of a montage no reading placed pushed optodes past a head outline; they now draw it as laid out, with no head
 

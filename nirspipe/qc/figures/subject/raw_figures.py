@@ -125,6 +125,10 @@ def condition_colors(markers: list[dict]) -> dict[str, str]:
     return {d: CONDITION_PALETTE[i % len(CONDITION_PALETTE)] for i, d in enumerate(descs)}
 
 
+# each trace is in units of its own SD; rows this far apart, at this height, overlap little
+_ROW_STEP, _ROW_PX = 4, 26
+
+
 def build_ts_figure(
     raw: mne.io.Raw,
     markers: list[dict],
@@ -135,6 +139,13 @@ def build_ts_figure(
     picks = mne.pick_types(raw.info, meg=False, fnirs=True)
     if len(picks) == 0:
         picks = list(range(len(raw.ch_names)))
+    # a pair's wavelengths on adjacent rows, pairs in acquisition order: a file may list
+    # every channel of one wavelength before the other
+    first_seen: dict[str, int] = {}
+    for p in picks:
+        first_seen.setdefault(pair_of(raw.ch_names[p]), len(first_seen))
+    picks = sorted(picks, key=lambda p: (first_seen[pair_of(raw.ch_names[p])],
+                                         float(raw.info["chs"][p]["loc"][9]), raw.ch_names[p]))
 
     data, times = raw.get_data(picks=picks, return_times=True)
 
@@ -143,14 +154,14 @@ def build_ts_figure(
 
     traces = []
     band_shapes = []
-    y_lo, y_hi = -1.5, (len(picks) - 1) * 3 + 1.5
+    y_lo, y_hi = -_ROW_STEP / 2, (len(picks) - 1) * _ROW_STEP + _ROW_STEP / 2
     for i, pick in enumerate(picks):
         ch = raw.ch_names[pick]
         row = data[i]
         t_row, arr = minmax_xy(times, row, max_ts_pts)
         std = float(np.std(row))
         normed = ((arr - row.mean()) / std).tolist() if std > 0 else (arr - row.mean()).tolist()
-        shifted = [v + i * 3 for v in normed]
+        shifted = [v + i * _ROW_STEP for v in normed]
         finite = [v for v in shifted if np.isfinite(v)]
         if finite:
             y_lo, y_hi = min(y_lo, min(finite)), max(y_hi, max(finite))
@@ -164,7 +175,7 @@ def build_ts_figure(
         ))
         band_shapes.append(dict(
             type="rect", xref="paper", yref="y", layer="below",
-            x0=0, x1=1, y0=i * 3 - 1.5, y1=i * 3 + 1.5,
+            x0=0, x1=1, y0=(i - 0.5) * _ROW_STEP, y1=(i + 0.5) * _ROW_STEP,
             fillcolor="rgba(0,0,0,0.025)" if i % 2 == 0 else "rgba(0,0,0,0)",
             line=dict(width=0),
         ))
@@ -188,7 +199,7 @@ def build_ts_figure(
             # one tick per trace, so the name sits on the trace instead of in a legend
             yaxis=dict(
                 tickmode="array",
-                tickvals=[i * 3 for i in range(n)],
+                tickvals=[i * _ROW_STEP for i in range(n)],
                 ticktext=[raw.ch_names[p] for p in picks],
                 tickfont=dict(size=8),
                 showgrid=False, zeroline=False,
@@ -197,7 +208,7 @@ def build_ts_figure(
             ),
             plot_bgcolor="white", paper_bgcolor="white",
             shapes=band_shapes + mk_shapes,
-            height=max(380, n * 22 + 80),
+            height=max(380, n * _ROW_PX + 80),
             margin=dict(l=110, r=15, t=12, b=40),
             showlegend=False,
             hovermode="closest",
