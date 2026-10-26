@@ -94,17 +94,20 @@ def _projected_optodes(raw: mne.io.Raw) -> "tuple[dict, list, dict] | None":
     names = [info["ch_names"][i] for i in picks]
 
     outlines = {}
-    project = None
-    try:
-        from mne.utils import _check_sphere
-        from mne.viz.topomap import _get_pos_outlines
-        own = head_sphere(placement_of(raw).space)
-        sphere = _check_sphere(None, info) if own is None else own
-        _, outlines = _get_pos_outlines(info, picks, sphere)
-        project = lambda xyz: _topomap_project(xyz, sphere)  # noqa: E731
-    except Exception as exc:
-        logger.warning("head projection unavailable, plotting flat x/y: %s", exc)
-        project = lambda xyz: np.asarray(xyz, dtype=float)[:, :2]  # noqa: E731
+    project = lambda xyz: np.asarray(xyz, dtype=float)[:, :2]  # noqa: E731
+    placement = placement_of(raw)
+    # coordinates on no head stay as laid out: MNE's projection would push them past an
+    # outline that claims anatomy
+    if placement.placed:
+        try:
+            from mne.utils import _check_sphere
+            from mne.viz.topomap import _get_pos_outlines
+            own = head_sphere(placement.space)
+            sphere = _check_sphere(None, info) if own is None else own
+            _, outlines = _get_pos_outlines(info, picks, sphere)
+            project = lambda xyz: _topomap_project(xyz, sphere)  # noqa: E731
+        except Exception as exc:
+            logger.warning("head projection unavailable, plotting flat x/y: %s", exc)
 
     src, det, pairs = _optode_positions(chs, names)
     opt_xy: dict = {}

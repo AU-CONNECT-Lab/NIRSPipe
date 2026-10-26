@@ -210,7 +210,10 @@ def head_axes(fig, geo_by_sub: dict, n_rows: int, n_cols: int,
     """One square, unlabelled panel per head, all sharing the widest outline's bounds."""
     xs, ys = [], []
     for geo in geo_by_sub.values():
-        for xy in geo["outlines"].values():
+        # a montage drawn without a head is bounded by its own optodes
+        drawn = list(geo["outlines"].values()) or [
+            (geo[s]["gx"], geo[s]["gy"]) for s in ("long", "short") if s in geo]
+        for xy in drawn:
             xs += list(np.asarray(xy[0]))
             ys += list(np.asarray(xy[1]))
     pad = 0.04 * ((max(xs) - min(xs)) or 1.0)

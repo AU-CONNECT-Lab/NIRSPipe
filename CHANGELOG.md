@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 - The raw signal overview left rows of blank space above and below a tall montage; its y range now fits the traces
 - The raw signal overview draws its two wavelengths in a brighter orange and blue
 - Optodes that could not be placed on the template head were still drawn beside a 3-D brain and projected onto the cortex (mALFF, GLM betas); such runs now show the flat optode map only
+- The flat views (optode map, topographies, head slider, seed and flat value maps) of a montage no reading placed pushed optodes past a head outline; they now draw it as laid out, with no head
 
 ## [0.76.0] - 2026-10-25
 

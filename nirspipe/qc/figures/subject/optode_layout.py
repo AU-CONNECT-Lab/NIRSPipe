@@ -5,6 +5,7 @@ import re
 import mne
 import numpy as np
 
+from nirspipe.io.optode_space import placement_of
 from nirspipe.qc.common.figure_io import fig_png_b64
 
 from nirspipe.qc.figures.common._utils import head_outline
@@ -43,7 +44,8 @@ def optode_layout_static(
 
     Optodes sit where MNE's topomap projection puts them, inside MNE's head outline, so this
     map and the report's head maps describe the same head. A montage with no fitted sphere
-    falls back to plain x/y inside a circle fitted to the optodes.
+    falls back to plain x/y inside a circle fitted to the optodes; one no reading placed is
+    drawn as laid out, with no head.
     """
     import matplotlib.pyplot as plt
 
@@ -92,7 +94,7 @@ def optode_layout_static(
     ys = [float(xy[1]) for xy in opt_xy.values()]
     if outlines:
         _mne_head(ax, outlines, xs, ys)
-    else:
+    elif placement_of(raw).placed:
         head_outline(ax, xs, ys)
 
     if sources:

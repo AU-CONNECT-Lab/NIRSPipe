@@ -192,6 +192,10 @@ def test_optode_layout_puts_each_optode_where_the_head_maps_do(haemo, monkeypatc
     from nirspipe.qc.figures.common.topomap import _projected_optodes
     from nirspipe.qc.figures.subject import optode_layout
 
+    from nirspipe.io.optode_space import Placement, hold_placement
+
+    # the synthetic montage is on no head; read in the head frame, as a placed run is drawn
+    haemo = hold_placement(haemo.copy(), Placement("head", np.eye(4)))
     drawn = {}
     monkeypatch.setattr(optode_layout, "fig_png_b64", lambda fig: drawn.setdefault("fig", fig))
     optode_layout.optode_layout_static(haemo, {c: 0.9 for c in haemo.ch_names}, [], 0.8)

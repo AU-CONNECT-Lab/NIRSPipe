@@ -50,3 +50,20 @@ def test_betas_share_one_symmetric_scale_per_chromophore(haemo):
         v = np.percentile(np.abs(betas), 99.5) * 1e6
         expected.add((round(-v, 9), round(v, 9)))
     assert {(round(cmin, 9), round(cmax, 9)) for cmin, cmax, _ in _scales(fig)} == expected
+
+
+def test_an_unplaced_montage_is_drawn_as_laid_out_with_no_head(haemo):
+    from nirspipe.io.optode_space import Placement, hold_placement
+    from nirspipe.qc.figures.common.topomap import _projected_optodes
+
+    raw = hold_placement(haemo.copy(), Placement("none", note="the file has no 3-D optode positions"))
+    opt_xy, _, outlines = _projected_optodes(raw)
+    assert outlines == {}
+    # each optode at its own recorded x and y, untouched by any head projection
+    for ch in raw.info["chs"]:
+        s = ch["ch_name"].split("_")[0]
+        np.testing.assert_allclose(opt_xy[s], ch["loc"][3:5], atol=1e-12)
+    fig = alff_flat_figure(raw, pd.DataFrame({"channel": raw.ch_names,
+                                              "malff": np.linspace(0.5, 1.5, len(raw.ch_names))}))
+    # no outline trace: only the skeleton and the glyphs
+    assert all(t.mode != "lines" or t.line.color != "#c9d2da" for t in fig.data)
