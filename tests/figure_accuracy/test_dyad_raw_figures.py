@@ -338,9 +338,15 @@ def test_a_pair_a_member_rejected_is_greyed_and_counted_lost(groups, group):
     labels = list(heat["y"])
     rejected = {m.rejected for m in groups.truth.group(group)}
     assert {lab.split()[0] for lab in labels if lab.endswith("rejected")} == rejected
-    washed = sorted(round((sh["y0"] + sh["y1"]) / 2) for sh in fig["layout"]["shapes"]
-                    if sh.get("type") == "rect" and str(sh.get("xref", "")).endswith("domain"))
+    washes = [sh for sh in fig["layout"]["shapes"]
+              if sh.get("type") == "rect" and sh.get("yref") == heat.get("yaxis", "y")]
+    washed = sorted(round((sh["y0"] + sh["y1"]) / 2) for sh in washes)
     assert washed == sorted(i for i, lab in enumerate(labels) if lab.split()[0] in rejected)
+    # the wash covers the cells and no more
+    x = np.asarray(heat["x"], float)
+    half = np.diff(x)[0] / 2
+    assert all(sh["x0"] == pytest.approx(x[0] - half) and sh["x1"] == pytest.approx(x[-1] + half)
+               for sh in washes)
     z = np.asarray(heat["z"], float)
     kept = [i for i, lab in enumerate(labels) if lab.split()[0] not in rejected]
     both = (z[kept] == 2).sum(axis=0).mean()

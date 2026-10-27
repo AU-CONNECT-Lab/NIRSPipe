@@ -306,11 +306,14 @@ def build_usable_time(
         zmin=0, zmax=2, showscale=False, ygap=2,
         hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>%{z:.0f} member(s) passing<extra></extra>",
     ), row=n_rows, col=1)
-    # a category axis puts row k at k, so the wash covers k - 0.5 to k + 0.5
+    # a category axis puts row k at k, so the wash covers k - 0.5 to k + 0.5, and the cells
+    # span half a window either side of the first and last centre
+    half = float(np.median(np.diff(t))) / 2 if t.size > 1 else 0.5
+    axis = n_rows if n_rows > 1 else ""
     for k, i in enumerate(order):
         if is_gone[i]:
-            fig.add_shape(type="rect", xref=f"x{n_rows if n_rows > 1 else ''} domain",
-                          yref=f"y{n_rows if n_rows > 1 else ''}", x0=0, x1=1,
+            fig.add_shape(type="rect", xref=f"x{axis}", yref=f"y{axis}",
+                          x0=float(t[0]) - half, x1=float(t[-1]) + half,
                           y0=k - 0.5, y1=k + 0.5, fillcolor=_REJECTED_WASH,
                           line=dict(width=0), layer="above")
     # the key a discrete heatmap cannot carry itself
