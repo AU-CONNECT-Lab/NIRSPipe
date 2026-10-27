@@ -207,8 +207,8 @@
 <p class="step-desc">
   {% if condition_label %}{{ section_note('hyper_post.isc_window', arc_rule=isc_arc_rule) }}
   {%- else %}{{ section_note('hyper_post.isc_run', arc_rule=isc_arc_rule) }}{% endif %}
-  <span style="color:#8e44ad">&#9632;</span> {{ subject_ids[0] }}
-  <span style="color:#27ae60">&#9632;</span> {{ subject_ids[1] }}
+  <span style="color:{{ member_colors[0] }}">&#9632;</span> {{ subject_ids[0] }}
+  <span style="color:{{ member_colors[1] }}">&#9632;</span> {{ subject_ids[1] }}
 </p>
 {% if isc_unfiltered_note %}<p class="qm-note">{{ isc_unfiltered_note }}</p>{% endif %}
 

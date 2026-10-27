@@ -47,6 +47,10 @@ CONDITION_PALETTE = [
     "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
 ]
 
+# A group's members in pairing order, on every dyad page; never a red and blue pair, which
+# these reports read as HbO and HbR.
+MEMBER_COLORS = ("#8e44ad", "#e67e22", "#16a085", "#2c3e50", "#1abc9c", "#34495e")
+
 
 # A marker with no duration is an instant, and the bar drawn for it would be invisible;
 # below this many seconds a block is drawn as a tick too, or it renders as a smear the

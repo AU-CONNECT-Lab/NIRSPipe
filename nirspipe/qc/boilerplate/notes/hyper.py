@@ -48,7 +48,8 @@ NOTES = {
         "named in the legend.",
     "hyper_raw.motion_after":
         "The GVTD rows and carpets after motion correction, scaled by the <em>uncorrected</em> "
-        "median, mean and SD, so a drop is movement removed.",
+        "median, mean and SD, so a drop is movement removed. Each GVTD row has its own y "
+        "range, so compare the tick values with the figure above, not the heights.",
     "hyper_raw.head":
         "The same screening on the montage, member by member: first each block&rsquo;s share "
         "of passing windows, then window by window. Bars are long channels, ringed discs "

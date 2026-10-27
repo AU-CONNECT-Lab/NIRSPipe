@@ -15,7 +15,7 @@ from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
     _ch_kept_by_member, dyad_status, sci_of,
 )
-from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE,
+from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, MEMBER_COLORS,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
                                           minmax_xy, physio_bands, timeline_axes,
@@ -41,8 +41,6 @@ logger = get_logger("qc.figures.hyper")
 
 _MAX_TS_PTS = 4000
 
-_SUB_COLORS   = ["#8e44ad", "#e67e22", "#16a085", "#f39c12",
-                  "#2c3e50", "#1abc9c", "#c0392b", "#34495e"]
 _COND_PALETTE = CONDITION_PALETTE
 _COND_DASHES  = ["solid", "dash", "dot", "dashdot", "longdash"]
 
@@ -190,7 +188,6 @@ def _blocks(raw: "mne.io.Raw | None") -> list[dict]:
 _SERIES_ROWS = (("sci", f"SCI ({SCREEN_WINDOW_S:g} s)", False),
                 ("psp", f"PSP ({SCREEN_WINDOW_S:g} s)", False),
                 ("cv", f"CV ({SCREEN_WINDOW_S:g} s)", False))
-_LEAD_COLOURS = ("#3498db", "#e67e22", "#16a085", "#8e44ad")
 
 
 def _row_title(fig, row: int, text: str, x: float = -0.055) -> None:
@@ -263,7 +260,7 @@ def build_usable_time(
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[-0.5, 0.5],
                          row=1, col=1)
 
-    lines = dict(zip(subject_ids, _LEAD_COLOURS))
+    lines = dict(zip(subject_ids, MEMBER_COLORS))
     for r, (key, label, scaled) in enumerate(have, start=bar_rows + 1):
         for sid in subject_ids:
             s = series.get(sid) or {}
@@ -320,11 +317,10 @@ def build_usable_time(
 # Figure: motion, and whether the two moved together
 # ---------------------------------------------------------------------------
 
-# The motion panel is two figures, before and after correction, on the same rows and axes.
+# The motion panel is two figures, before and after correction, on the same rows.
 
 # Colour is the member, and nothing else: the channel set is the row, before/after the figure.
-# The members' colours are the usable-time panel's (_LEAD_COLOURS), never a red and blue pair,
-# which this report reads as HbO and HbR.
+# The members' colours are MEMBER_COLORS, as on every dyad page.
 # The shared floor under both traces; grey, since it belongs to the pair and not to either.
 _TOGETHER_FILL = "rgba(120,120,130,0.30)"
 _SPIKE_BOTH = "rgba(245,158,11,0.9)"
@@ -390,7 +386,7 @@ def motion_series(
           "series": {"before": {"long": [("sub-01", (39610,)), ...]}, ...},
           "spikes_both": {"before": [(412.0, 3.1), ...]},
           "carpets": {"before": [("sub-01", z, t, labels, spans)]},
-          "y_tops": {"long": 11.4}, "divisors": {("sub-01", "long"): 4.1e-04},
+          "y_tops": {("before", "long"): 11.4}, "divisors": {("sub-01", "long"): 4.1e-04},
           "imu": {"gyro": {...}},
           "roi": {"sub-01": [("PFC", 0, 11), ...]}, "roi_colours": {"PFC": "#8da3c0", ...}}
 
@@ -406,10 +402,11 @@ def motion_series(
     member's usual level for both of them. Dividing the corrected trace by its *own* median
     would divide out the shrinkage the second figure shows.
 
-    One y range per channel set, shared by that set's before and after rows, which is what
-    makes the correction readable as a drop. Long and short do not share one: each pair of
-    (member, set) is divided by its own median, so a "x median" on the long channels is not
-    the same quantity as one on the short.
+    One y range per channel set and stage, so the corrected peaks are not flattened under the
+    uncorrected ones; the drop is read off the tick values, since both stages are divided by
+    the same median. Long and short do not share one: each pair of (member, set) is divided
+    by its own median, so a "x median" on the long channels is not the same quantity as one
+    on the short.
 
     Spikes are kept only where **every** member was spiking at once; a member spiking alone
     shows on the usable-time carpet.
@@ -551,13 +548,15 @@ def motion_series(
         series[stage] = {name: [(sid, y[:n]) for sid, y in v]
                          for name, v in series[stage].items()}
 
-    # one range a set, over both stages, so the after figure's rows are not rescaled to
-    # their own smaller numbers and the drop disappears
+    # each stage on its own range, so the corrected peaks stay readable; the drop is read off
+    # the tick values, both stages being divided by the uncorrected median
     y_tops = {}
-    for name in sets:
-        flat = [y for stage in stages for _, y in series[stage].get(name, [])]
-        y_tops[name] = (float(np.nanpercentile(np.concatenate(flat), _MOTION_CAP_PCTL))
-                        * _MOTION_HEADROOM) if flat else 1.0
+    for stage in stages:
+        for name in sets:
+            flat = [y for _, y in series[stage].get(name, [])]
+            y_tops[(stage, name)] = (float(np.nanpercentile(np.concatenate(flat),
+                                                            _MOTION_CAP_PCTL))
+                                     * _MOTION_HEADROOM) if flat else 1.0
 
     spikes_both = {}
     for stage in stages:
@@ -728,7 +727,7 @@ def build_motion_panel(
 
     for name in sets:
         entries = motion["series"][stage][name]
-        y_top = motion["y_tops"][name]
+        y_top = motion["y_tops"][(stage, name)]
 
         if len(entries) > 1:
             mins = np.minimum.reduce([y for _, y in entries])
@@ -746,7 +745,7 @@ def build_motion_panel(
             fig.add_trace(go.Scatter(
                 x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
                 showlegend=sid not in shown, opacity=0.9,
-                line=dict(color=_LEAD_COLOURS[sids.index(sid) % len(_LEAD_COLOURS)],
+                line=dict(color=MEMBER_COLORS[sids.index(sid) % len(MEMBER_COLORS)],
                           width=1.5),
                 hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
                               "%{y:.2f}x its own median<extra></extra>",
@@ -806,7 +805,7 @@ def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list
         fig.add_trace(go.Scatter(
             x=t_ds, y=y_ds, mode="lines", name=sid, legendgroup=sid,
             showlegend=sid not in shown, opacity=0.9,
-            line=dict(color=_LEAD_COLOURS[sids.index(sid) % len(_LEAD_COLOURS)],
+            line=dict(color=MEMBER_COLORS[sids.index(sid) % len(MEMBER_COLORS)],
                       width=1.5),
             hovertemplate=f"<b>{sid}</b><br>t=%{{x:.0f}}s<br>"
                           "%{y:.2f}x its own median<extra></extra>",
@@ -1003,7 +1002,7 @@ def build_signal_overlay(
                 fig.add_trace(go.Scatter(
                     x=t_vals, y=y_vals,
                     name=sid, mode="lines",
-                    line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.3),
+                    line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.3),
                     visible=(ch_idx == 0),
                     showlegend=False,
                     legendgroup=sid,
@@ -1014,7 +1013,7 @@ def build_signal_overlay(
         fig.add_trace(go.Scatter(
             x=[None], y=[None], mode="lines",
             name=sid,
-            line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.5),
+            line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.5),
             showlegend=True, visible=True,
             legendgroup=sid,
         ), row=1, col=1)
@@ -1073,7 +1072,7 @@ def build_signal_overlay_pair(
             fig.add_trace(go.Scatter(
                 x=times.tolist(), y=arr.tolist(),
                 name=sid, mode="lines",
-                line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.3),
+                line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.3),
                 showlegend=(row_idx == 1),
                 legendgroup=sid,
             ), row=row_idx, col=1)
@@ -1131,7 +1130,7 @@ def build_psd(
         traces.append(go.Scatter(
             x=freqs[mask].tolist(), y=psd[mask].tolist(),
             name=sid, mode="lines",
-            line=dict(color=_SUB_COLORS[sub_idx % len(_SUB_COLORS)], width=1.8),
+            line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.8),
         ))
 
     if not traces:

@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 from nirspipe.qc.common.figure_io import fig_png_b64
+from nirspipe.qc.figures.common._utils import MEMBER_COLORS
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.utils.logging import get_logger
 
@@ -548,9 +549,8 @@ def flat_colorbar(fig, mappable, ax, label: str, **kwargs):
     return bar
 
 
-# Node colours for the two members, on every circle this report draws: purple and green
-# rather than a red and a blue, which on these pages mean HbO and HbR.
-NODE_COLORS = ("#8e44ad", "#27ae60")
+# Node colours for the two members, on every circle this report draws
+NODE_COLORS = MEMBER_COLORS[:2]
 
 # The scales, the kept axes and the printed cell value are the report's, not this figure's;
 # see figures.common.matrix_map for which quantity takes which and why

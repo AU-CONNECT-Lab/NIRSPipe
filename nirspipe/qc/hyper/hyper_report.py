@@ -45,6 +45,7 @@ from nirspipe.qc.common.figure_io import (
     _save_figure_html,
     save_png,
 )
+from nirspipe.qc.figures.common._utils import MEMBER_COLORS
 from nirspipe.qc.figures.common.provenance_figure import write_provenance
 from nirspipe.qc.figures.subject.sci_psp_panel import member_condition_heatmap
 from nirspipe.qc.figures.hyper.hyper_figures import _cond_colors
@@ -1832,6 +1833,7 @@ def build_hyper_post_report(
             group_id=group_id,
             task=task,
             subject_ids=pair_ids,
+            member_colors=MEMBER_COLORS,
             index_href=report_name(f"group-{group_id}", desc="index"),
             wtc_fmin=wtc_fmin,
             wtc_fmax=wtc_fmax,
