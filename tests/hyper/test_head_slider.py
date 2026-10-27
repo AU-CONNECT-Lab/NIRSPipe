@@ -92,11 +92,11 @@ def test_sci_and_psp_are_scaled_with_the_run_s_lines_mid_way(slider):
     assert (psp.cmin, psp.cmax) == pytest.approx((0.0, 0.3))
 
 
-def test_psp_with_no_line_spans_its_own_values_on_the_heads_scale():
+def test_psp_with_no_line_runs_from_zero_to_the_cap_on_the_heads_scale():
     fig, _, _ = _slider({"sci": 0.7})
     assert _titles(fig)[0] == ["Passing", "SCI", "PSP"]
     psp = fig.data[_coloured(fig, 1, 3)].marker
-    assert (psp.cmin, psp.cmax) == pytest.approx((0.02, 0.5))
+    assert (psp.cmin, psp.cmax) == pytest.approx((0.0, 0.15))
     # the Passing and SCI heads' scale, low red to high green
     assert psp.colorscale[0][1] == "#F8786E" and psp.colorscale[-1][1] == "#C5E0B3"
 

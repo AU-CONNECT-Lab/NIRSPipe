@@ -69,10 +69,10 @@ def test_a_pair_whose_wavelengths_disagree_is_drawn_twice_and_said_so():
     assert list(_heat(fig, "PSP").y) == PAIRS
 
 
-def test_without_a_psp_line_psp_spans_its_own_values_and_draws_no_rule():
+def test_without_a_psp_line_psp_runs_from_zero_to_its_cap_and_draws_no_rule():
     fig = _strip(psp_threshold=None)
     heat = _heat(fig, "PSP")
-    assert (heat.zmin, heat.zmax) == (0.01, 0.60)
+    assert (heat.zmin, heat.zmax) == (0.0, 0.15)
     # the SCI row's own scale, so every row reads one way: red low, green high
     assert heat.colorscale == _heat(fig, "SCI").colorscale
     _, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"][:2]

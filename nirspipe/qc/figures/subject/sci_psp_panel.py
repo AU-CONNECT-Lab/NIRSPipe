@@ -5,7 +5,7 @@ from plotly.subplots import make_subplots
 
 from nirspipe.qc.figures.common.motion_panel import _px_rows
 from nirspipe.qc.metrics import CV_PASS, SNR_PASS
-from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
+from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_SCALE_MAX, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS
 from nirspipe.qc.metrics.windowed import window_centers
 from nirspipe.utils.logging import get_logger
@@ -162,7 +162,8 @@ def channel_quality_heatmap(
     sits directly under: a channel can fail on its passing-window share with every average
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
-    them prunes; PSP with ``psp_thresh`` None runs the same ramp over its row, higher better.
+    them prunes; PSP with ``psp_thresh`` None runs the same ramp from 0 to ``PSP_SCALE_MAX``,
+    higher better.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
                "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
@@ -173,8 +174,7 @@ def channel_quality_heatmap(
 
     xs, ys, colors, hover = [], [], [], []
     for m_idx, (metric, key, fmt, chk) in enumerate(specs):
-        scale = (_data_range([lookups[key].get(ch, np.nan) for ch in ch_names])
-                 if key is not None and chk is None else (None, None))
+        scale = (0.0, PSP_SCALE_MAX) if key is not None and chk is None else (None, None)
         for i, ch in enumerate(ch_names):
             value = is_bad[i] if key is None else lookups[key].get(ch)
             color, text = _channel_cell(metric, value, fmt, chk, ch, scale=scale)
@@ -254,10 +254,7 @@ def condition_quality_heatmap(
     xs, ys, colors, hover, tickvals, ticktext = [], [], [], [], [], []
     for m_idx, (metric, key, fmt, chk) in enumerate(specs):
         top = m_idx * depth + 1
-        # one range over every condition, so a condition's colour compares with the others'
-        scale = (_data_range([v for _, args in conditions
-                              for v in (args.get(key) or {}).values() if v is not None])
-                 if key is not None and chk is None else (None, None))
+        scale = (0.0, PSP_SCALE_MAX) if key is not None and chk is None else (None, None)
         for c_idx, (label, args) in enumerate(conditions):
             y = (top + c_idx) * _SPACING
             tickvals.append(y)
@@ -559,12 +556,6 @@ def _per_pair(names: list[str], matrix) -> "tuple[list[str], np.ndarray, list[st
     return labels, np.array(kept), differ
 
 
-def _data_range(matrix) -> "tuple[float | None, float | None]":
-    values = np.asarray(matrix, dtype=float)
-    values = values[np.isfinite(values)]
-    return (float(values.min()), float(values.max())) if values.size else (None, None)
-
-
 def build_sci_psp_figure(
     sci_scores: dict[str, float],
     psp_per_channel: dict[str, float],
@@ -599,8 +590,8 @@ def build_sci_psp_figure(
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
     the whole-run correlation and not the windowed one the strip draws.
 
-    ``psp_threshold`` None draws PSP with no line: the rows' red-to-green scale over its own
-    range, higher better, and each dot in its value's colour on that scale.
+    ``psp_threshold`` None draws PSP with no line: the rows' red-to-green scale from 0 to
+    ``PSP_SCALE_MAX``, higher better, and each dot in its value's colour on that scale.
 
     Without the windowed matrices this falls back to the lollipop-only pair.
     """
@@ -644,7 +635,7 @@ def build_sci_psp_figure(
         if not has_psp:
             return lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         psp_vals = psp_col[:, 0]
-        psp_colors = (_scale_dots(psp_vals, *_data_range(psp_vals), "RdYlGn") if psp_threshold is None
+        psp_colors = (_scale_dots(psp_vals, 0.0, PSP_SCALE_MAX, "RdYlGn") if psp_threshold is None
                       else ["#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals])
         fig_sci = lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         fig_psp = lollipop_scores_figure(labels, psp_vals, psp_colors, psp_threshold, "PSP")
@@ -669,8 +660,8 @@ def build_sci_psp_figure(
     # Every row pins its range with the threshold at mid-scale, so the line is the same
     # colour on every recording and anything far past it saturates. An open `zmid` scale
     # widens symmetrically to the farthest window, which ran PSP's bar below zero and SCI's
-    # above one. SCI tops out at 1, so its range ends there; PSP and CV start at 0. A row
-    # with no line has no mid-scale and spans its own values on one hue.
+    # above one. SCI tops out at 1, so its range ends there; PSP and CV start at 0. PSP with
+    # no line has no mid-scale and runs from 0 to PSP_SCALE_MAX.
     # the mean beside a row is that row's own mean, not the scalar of the same name: the
     # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
     # to 10 s. Here the dot is the row, averaged along time.
@@ -688,7 +679,7 @@ def build_sci_psp_figure(
          (2 * sci_threshold - 1.0, 1.0)),
         ("PSP", f"PSP ({windows})", "Row mean", psp_names, psp_rows, psp_win_times,
          _row_mean(psp_rows), psp_threshold, True, "PSP=%{z:.3f}",
-         _data_range(psp_rows) if psp_threshold is None else (0.0, 2 * psp_threshold)),
+         (0.0, PSP_SCALE_MAX if psp_threshold is None else 2 * psp_threshold)),
     ]
     if cv_matrix is not None and cv_win_times is not None:
         rows.append(("CV", f"CV ({windows})", "Row mean", ch_names, cv_matrix, cv_win_times,

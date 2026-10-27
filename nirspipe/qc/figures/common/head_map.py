@@ -29,6 +29,7 @@ from nirspipe.qc.figures.common.topomap import (
 
 # one disc per channel, drawn larger than the discs a bar is strung from
 _DISC_SIZE = 15
+from nirspipe.qc.metrics.coupling import PSP_SCALE_MAX
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.utils.logging import get_logger
 
@@ -278,8 +279,9 @@ def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
     cmin, cmax, colour scale).
 
     Passing is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
-    the subject report's SCI/PSP strip follows. PSP with no line spans its own values on the
-    same scale, as that strip draws it; SCI with no line, or a number with no data, is left out.
+    the subject report's SCI/PSP strip follows. PSP with no line runs from 0 to
+    ``PSP_SCALE_MAX``, as that strip draws it; SCI with no line, or a number with no data, is
+    left out.
     """
     rows = []
     ok = grid.get("ok") or {}
@@ -295,21 +297,12 @@ def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
         if not values or (line is None and label == "SCI"):
             continue
         if line is None:
-            cmin, cmax = _series_range(values)
-            rows.append((label, label + window, values, cmin, cmax, HEAD_SCALE))
+            rows.append((label, label + window, values, 0.0, PSP_SCALE_MAX, HEAD_SCALE))
             continue
         line = float(line)
         cmin, cmax = (2 * line - 1.0, 1.0) if label == "SCI" else (0.0, 2 * line)
         rows.append((label, label + window, values, cmin, cmax, HEAD_SCALE))
     return rows
-
-
-def _series_range(values: dict) -> "tuple[float | None, float | None]":
-    """Smallest and largest finite value over ``{sid: {pair: series}}``."""
-    found = [np.asarray(s, dtype=float) for by_pair in values.values()
-             for s in by_pair.values()]
-    finite = np.concatenate([a[np.isfinite(a)] for a in found]) if found else np.array([])
-    return (float(finite.min()), float(finite.max())) if finite.size else (None, None)
 
 
 def build_head_slider(

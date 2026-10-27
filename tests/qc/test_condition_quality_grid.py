@@ -52,33 +52,31 @@ def test_every_judged_cell_matches_the_condition_pages_own_grid():
     regrouped = _cells(condition_quality_heatmap(conditions, sci_thresh=0.8))
     for label, args in conditions:
         own = _cells(channel_quality_heatmap(sci_thresh=0.8, **args))
-        # a row with no line is coloured over every condition here, over one page there
-        judged = {k: v for k, v in own.items() if "(no line)" not in k}
-        assert {f"{label} · {k}": v for k, v in judged.items()} == {
-            k: v for k, v in regrouped.items()
-            if k.startswith(f"{label} · ") and "(no line)" not in k}
+        assert {f"{label} · {k}": v for k, v in own.items()} == {
+            k: v for k, v in regrouped.items() if k.startswith(f"{label} · ")}
 
 
-def test_a_row_with_no_line_shares_one_range_across_conditions():
+def test_a_row_with_no_line_runs_from_zero_to_the_cap_in_every_condition():
     a, b = _args(0.95, False), _args(0.95, False)
-    a["psp_per_ch"], b["psp_per_ch"] = {"A": 0.30, "B": 0.20}, {"A": 0.10, "B": 0.01}
+    a["psp_per_ch"], b["psp_per_ch"] = {"A": 0.30, "B": 0.15}, {"A": 0.075, "B": 0.0}
     trace = condition_quality_heatmap([("rest", a), ("task", b)], sci_thresh=0.8).data[0]
     psp = f"PSP ({PSP_WINDOW_S:g} s)"
     cells = {t.split(":")[0]: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
-    # the highest value of either condition at the grid's pass green, the lowest at its red
-    assert cells[f"rest · A · {psp}"] == "rgb(197, 224, 179)"
+    # 0.15 and above at the grid's pass green, 0 at its red, half of 0.15 at the yellow
+    assert cells[f"rest · A · {psp}"] == cells[f"rest · B · {psp}"] == "rgb(197, 224, 179)"
+    assert cells[f"task · A · {psp}"] == "rgb(255, 217, 102)"
     assert cells[f"task · B · {psp}"] == "rgb(248, 120, 110)"
 
 
 def test_without_a_psp_line_the_psp_row_runs_the_grids_ramp_and_keeps_its_value():
     args = _args(0.95, False)
-    args["psp_per_ch"] = {"A": 0.3, "B": 0.01}
+    args["psp_per_ch"] = {"A": 0.3, "B": 0.0}
     trace = channel_quality_heatmap(sci_thresh=0.8, psp_thresh=None, **args).data[0]
     psp = f"PSP ({PSP_WINDOW_S:g} s)"
     cells = {t: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
-    # higher better: the row's highest value at the pass green (#C5E0B3), its lowest at the red
+    # higher better: past the cap at the pass green (#C5E0B3), 0 at the red (#F8786E)
     assert cells == {f"A · {psp}: 0.300 (no line)": "rgb(197, 224, 179)",
-                     f"B · {psp}: 0.010 (no line)": "rgb(248, 120, 110)"}
+                     f"B · {psp}: 0.000 (no line)": "rgb(248, 120, 110)"}
 
 
 def test_a_single_condition_draws_nothing():
