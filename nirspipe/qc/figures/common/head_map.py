@@ -278,8 +278,8 @@ def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
     cmin, cmax, colour scale).
 
     Passing is the mask itself; SCI and PSP are scaled with their line at mid-scale, the rule
-    the subject report's SCI/PSP strip follows. PSP with no line spans its own values on one
-    hue, as that strip draws it; SCI with no line, or a number with no data, is left out.
+    the subject report's SCI/PSP strip follows. PSP with no line spans its own values on the
+    same scale, as that strip draws it; SCI with no line, or a number with no data, is left out.
     """
     rows = []
     ok = grid.get("ok") or {}
@@ -296,7 +296,7 @@ def _slider_rows(grid: dict, series_by_sub: dict, subject_ids: list[str],
             continue
         if line is None:
             cmin, cmax = _series_range(values)
-            rows.append((label, label + window, values, cmin, cmax, "Viridis"))
+            rows.append((label, label + window, values, cmin, cmax, HEAD_SCALE))
             continue
         line = float(line)
         cmin, cmax = (2 * line - 1.0, 1.0) if label == "SCI" else (0.0, 2 * line)

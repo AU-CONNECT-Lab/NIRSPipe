@@ -18,6 +18,8 @@ logger = get_logger("qc.figures.sci_psp")
 
 _GOOD_COLOR = "#C5E0B3"
 _BAD_COLOR  = "#F8786E"
+# the grids' fail-to-pass ramp, for a value read against its row rather than a line
+_GRID_SCALE = [[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]]
 _MAX_TS_PTS = 3000
 _SPACING    = 3
 
@@ -63,12 +65,12 @@ def binary_heatmap_figure(
 _MISSING_COLOR = "#D3D3D3"
 
 
-def _scale_dots(values, lo, hi) -> list[str]:
-    """Each value's colour on the strip's Viridis scale, for a metric with no line; grey where it has none."""
+def _scale_dots(values, lo, hi, colorscale) -> list[str]:
+    """Each value's colour on ``colorscale`` over ``lo`` to ``hi``, for a metric with no line; grey where it has none."""
     span = (hi - lo) if lo is not None and hi is not None else 0.0
     return [_MISSING_COLOR if not np.isfinite(v)
             # a row of one value has no range to place it on
-            else sample_colorscale("Viridis", [min(max((v - lo) / span, 0.0), 1.0) if span > 0
+            else sample_colorscale(colorscale, [min(max((v - lo) / span, 0.0), 1.0) if span > 0
                                                else 0.5])[0]
             for v in values]
 
@@ -102,7 +104,8 @@ def _channel_cell(metric, value, fmt, check, ch, words=("OK", "BAD"),
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return _MISSING_COLOR, f"{ch} · {metric}: —"
     if check is None:
-        return _scale_dots([value], *scale)[0], f"{ch} · {metric}: {value:{fmt}} (no line)"
+        return (_scale_dots([value], *scale, _GRID_SCALE)[0],
+                f"{ch} · {metric}: {value:{fmt}} (no line)")
     return (_GOOD_COLOR if check(value) else _BAD_COLOR), f"{ch} · {metric}: {value:{fmt}}"
 
 
@@ -159,7 +162,7 @@ def channel_quality_heatmap(
     sits directly under: a channel can fail on its passing-window share with every average
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
-    them prunes; PSP with ``psp_thresh`` None is drawn on Viridis over its row, higher better.
+    them prunes; PSP with ``psp_thresh`` None runs the same ramp over its row, higher better.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
                "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
@@ -456,7 +459,7 @@ def trial_quality_heatmap(
         mode="markers",
         marker=dict(symbol="square", size=12,
                     color=[v if v is not None else np.nan for row in z for v in row],
-                    colorscale=[[0.0, _BAD_COLOR], [0.5, "#FFD966"], [1.0, _GOOD_COLOR]],
+                    colorscale=_GRID_SCALE,
                     cmin=0.0, cmax=1.0, showscale=False, line=dict(width=0)),
         text=[t for row in text for t in row],
         hovertemplate="%{text}<extra></extra>",
@@ -596,8 +599,8 @@ def build_sci_psp_figure(
     are one measurement, rather than the record's scalar of the same name -- which for SCI is
     the whole-run correlation and not the windowed one the strip draws.
 
-    ``psp_threshold`` None draws PSP with no line: Viridis over its own range, higher better,
-    and each dot in its value's colour on that scale.
+    ``psp_threshold`` None draws PSP with no line: the rows' red-to-green scale over its own
+    range, higher better, and each dot in its value's colour on that scale.
 
     Without the windowed matrices this falls back to the lollipop-only pair.
     """
@@ -641,7 +644,7 @@ def build_sci_psp_figure(
         if not has_psp:
             return lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         psp_vals = psp_col[:, 0]
-        psp_colors = (_scale_dots(psp_vals, *_data_range(psp_vals)) if psp_threshold is None
+        psp_colors = (_scale_dots(psp_vals, *_data_range(psp_vals), "RdYlGn") if psp_threshold is None
                       else ["#27ae60" if v >= psp_threshold else "#e74c3c" for v in psp_vals])
         fig_sci = lollipop_scores_figure(labels, sci_vals, sci_colors, sci_threshold, "SCI")
         fig_psp = lollipop_scores_figure(labels, psp_vals, psp_colors, psp_threshold, "PSP")
@@ -725,8 +728,7 @@ def build_sci_psp_figure(
         fig.add_trace(go.Heatmap(
             z=z, x=centers.tolist(), y=labels,
             customdata=customdata,
-            colorscale=("Viridis" if threshold is None
-                        else "RdYlGn" if higher_better else "RdYlGn_r"),
+            colorscale="RdYlGn" if higher_better else "RdYlGn_r",
             zmin=zrange[0], zmax=zrange[1],
             colorbar=dict(title=name, thickness=10, x=1.01, yanchor="middle",
                           y=(domain[0] + domain[1]) / 2, len=0.95 * (domain[1] - domain[0])),
@@ -736,7 +738,7 @@ def build_sci_psp_figure(
 
         # the screening verdict only colours the row it is read off; the others colour
         # against their own cutoff, so a channel rejected on SCI is not painted red in CV
-        colors = _scale_dots(means, *zrange) if threshold is None else []
+        colors = _scale_dots(means, *zrange, "RdYlGn") if threshold is None else []
         for label, v in zip(labels, means if threshold is not None else []):
             if name == "SCI" and pair_of(label) in bad_pairs:
                 colors.append("#e74c3c")

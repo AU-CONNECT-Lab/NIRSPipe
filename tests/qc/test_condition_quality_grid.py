@@ -65,20 +65,20 @@ def test_a_row_with_no_line_shares_one_range_across_conditions():
     trace = condition_quality_heatmap([("rest", a), ("task", b)], sci_thresh=0.8).data[0]
     psp = f"PSP ({PSP_WINDOW_S:g} s)"
     cells = {t.split(":")[0]: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
-    # the highest value of either condition at Viridis' top, the lowest at its bottom
-    assert cells[f"rest · A · {psp}"] == "rgb(253, 231, 37)"
-    assert cells[f"task · B · {psp}"] == "rgb(68, 1, 84)"
+    # the highest value of either condition at the grid's pass green, the lowest at its red
+    assert cells[f"rest · A · {psp}"] == "rgb(197, 224, 179)"
+    assert cells[f"task · B · {psp}"] == "rgb(248, 120, 110)"
 
 
-def test_without_a_psp_line_the_psp_row_runs_over_viridis_and_keeps_its_value():
+def test_without_a_psp_line_the_psp_row_runs_the_grids_ramp_and_keeps_its_value():
     args = _args(0.95, False)
     args["psp_per_ch"] = {"A": 0.3, "B": 0.01}
     trace = channel_quality_heatmap(sci_thresh=0.8, psp_thresh=None, **args).data[0]
     psp = f"PSP ({PSP_WINDOW_S:g} s)"
     cells = {t: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
-    # higher better: the row's highest value at Viridis' yellow end, its lowest at the purple
-    assert cells == {f"A · {psp}: 0.300 (no line)": "rgb(253, 231, 37)",
-                     f"B · {psp}: 0.010 (no line)": "rgb(68, 1, 84)"}
+    # higher better: the row's highest value at the pass green (#C5E0B3), its lowest at the red
+    assert cells == {f"A · {psp}: 0.300 (no line)": "rgb(197, 224, 179)",
+                     f"B · {psp}: 0.010 (no line)": "rgb(248, 120, 110)"}
 
 
 def test_a_single_condition_draws_nothing():

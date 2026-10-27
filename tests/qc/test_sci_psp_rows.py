@@ -73,9 +73,10 @@ def test_without_a_psp_line_psp_spans_its_own_values_and_draws_no_rule():
     fig = _strip(psp_threshold=None)
     heat = _heat(fig, "PSP")
     assert (heat.zmin, heat.zmax) == (0.01, 0.60)
-    assert heat.colorscale[0][1] == "#440154"           # viridis, not the pass/fail ramp
+    # the SCI row's own scale, so every row reads one way: red low, green high
+    assert heat.colorscale == _heat(fig, "SCI").colorscale
     _, psp_dots = [t for t in fig.data if t.type == "scatter" and t.mode == "markers"][:2]
-    # each dot in its value's colour on the strip's scale, the ends of Viridis at the extremes
+    # each dot in its value's colour on the strip's scale
     colours = dict(zip(psp_dots.y, psp_dots.marker.color))
     means = dict(zip(psp_dots.y, psp_dots.x))
     assert "#95a5a6" not in colours.values()
