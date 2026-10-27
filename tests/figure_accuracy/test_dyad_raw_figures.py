@@ -120,7 +120,8 @@ def test_each_carpet_is_titled_with_the_member_whose_movement_it_shows(groups):
     carpets = [t for t in fig["data"] if t["type"] == "heatmap"]
     assert len(titles) == len(carpets) == 2
     for title, carpet in zip(titles, carpets):
-        member = groups.truth.member(title.split()[0])
+        # the margin name is "<b>sub-01</b><br>carpet (before)"
+        member = groups.truth.member(re.sub(r"<[^>]+>", " ", title).split()[0])
         other = next(o for o in groups.truth.group("G01") if o is not member)
         x = np.asarray(carpet["x"], float)
         # the planted movement is on every channel, so the median row shows it and noise does not
