@@ -10,6 +10,7 @@ real layout would make the nested tree hard to construct while proving nothing e
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -38,7 +39,7 @@ def post_calls(monkeypatch):
     monkeypatch.setattr(post_pipeline, "resolve_short_channel", lambda config, raw: config)
     monkeypatch.setattr(workflows, "get_layout", lambda *a, **k: _FakeLayout())
     monkeypatch.setattr(workflows, "read_snirf", lambda path, **k: path)
-    monkeypatch.setattr(workflows, "_build_post_config", lambda *a, **k: object())
+    monkeypatch.setattr(workflows, "_build_post_config", lambda *a, **k: SimpleNamespace(short_channel=None))
     return seen
 
 

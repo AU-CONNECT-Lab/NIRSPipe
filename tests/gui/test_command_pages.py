@@ -68,9 +68,9 @@ def test_a_rating_subcommand_opens_its_viewer_in_this_app(tmp_path):
     form = {"output_dir": str(tmp_path), "--participant-label": "01"}
 
     missing = client.post("/run/nirspipe-rate/raw/", data=form)
-    assert missing.status_code == 400 and "raw report not found" in missing.get_json()["error"]
+    assert missing.status_code == 400 and "no raw report in" in missing.get_json()["error"]
 
-    html = tmp_path / "sub-01" / report_name("sub-01", desc="raw")
+    html = tmp_path / "sub-01" / report_name("sub-01_task-rest", desc="raw")
     html.parent.mkdir(parents=True)
     html.write_text("<html></html>", encoding="utf-8")
     [opened] = client.post("/run/nirspipe-rate/raw/", data=form).get_json()["opened"]
