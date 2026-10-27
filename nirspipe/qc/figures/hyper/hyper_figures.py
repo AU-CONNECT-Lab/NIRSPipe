@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import mne
 import numpy as np
 import plotly.graph_objects as go
@@ -48,6 +50,10 @@ _GOOD_COLOR = "#C5E0B3"
 _MIX_COLOR  = "#FFD966"
 _NA_COLOR   = "#D3D3D3"
 _BAD_COLOR  = "#F8786E"
+
+# an upper bound on a 10 px Open Sans character, bold or not, for sizing the left margin
+_LABEL_CHAR_PX = 6.5
+_MIN_LEFT_MARGIN = 112
 
 
 # ---------------------------------------------------------------------------
@@ -706,6 +712,7 @@ def build_motion_panel(
                          row=1, col=1)
         ri = 2
 
+    label_px = [_MIN_LEFT_MARGIN]
     if has_spikes:
         xs, ys = _span_polygons(spans_both, 0.15, 0.85)
         fig.add_trace(go.Scatter(
@@ -714,12 +721,12 @@ def build_motion_panel(
             legendgroup="spikes", showlegend=True), row=ri, col=1)
         fig.update_yaxes(range=[0, 1], showticklabels=False, showgrid=False,
                          zeroline=False, row=ri, col=1)
-        _margin_label(fig, ri, "<b>both spiking</b>")
+        label_px.append(_margin_label(fig, ri, "<b>both spiking</b>"))
         ri += 1
 
     shown: set[str] = set()
     for sensor, row in imu_rows.items():
-        _add_imu_row(fig, ri, sensor, row, t, sids, shown)
+        label_px.append(_add_imu_row(fig, ri, sensor, row, t, sids, shown))
         ri += 1
 
     for name in sets:
@@ -755,7 +762,7 @@ def build_motion_panel(
                       line=dict(color="#c8cfd6", width=1, dash="dot"))
         fig.update_yaxes(range=[0, y_top], tickfont=dict(size=8), gridcolor="#eef1f4",
                          zeroline=False, row=ri, col=1)
-        _margin_label(fig, ri, f"<b>GVTD {name}</b>")
+        label_px.append(_margin_label(fig, ri, f"<b>GVTD {name}</b>"))
         ri += 1
 
     drawn_rois: set = set()
@@ -763,7 +770,7 @@ def build_motion_panel(
         add_carpet(fig, ri, z, t_carpet, labels, spans)
         # in the margin like every other row's name, the gaps being too thin for a title;
         # further out, past the carpet's own set and ROI strips
-        _margin_label(fig, ri, f"<b>{sid}</b><br>carpet ({stage})", xshift=-58)
+        label_px.append(_margin_label(fig, ri, f"<b>{sid}</b><br>carpet ({stage})", xshift=-58))
         groups = motion["roi"].get(sid) or []
         if len(groups) > 1:
             add_roi_strip(fig, ri, groups, len(labels), motion["roi_colours"])
@@ -781,15 +788,15 @@ def build_motion_panel(
                      row=n_rows, col=1)
     fig.update_layout(height=total_px, plot_bgcolor="white", barmode="overlay",
                       coloraxis=carpet_coloraxis(y=0.2),
-                      margin=dict(l=112, r=24, t=56, b=48),
+                      margin=dict(l=round(max(label_px)), r=24, t=56, b=48),
                       legend=dict(orientation="h", yanchor="bottom", y=1.012,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig
 
 
 def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list[str],
-                 shown: set) -> None:
-    """One IMU sensor's row, drawn as the GVTD rows are: the pair's floor, then each member."""
+                 shown: set) -> float:
+    """One IMU sensor's row, drawn as the GVTD rows are; returns the margin its name needs."""
     name, _label, symbol, _colour = _IMU_ROWS[sensor]
     if row["both"] is not None:
         t_ds, m_ds = _maxpool_xy(t, row["both"])
@@ -814,17 +821,18 @@ def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list
     fig.add_hline(y=1.0, row=ri, col=1, line=dict(color="#c8cfd6", width=1, dash="dot"))
     fig.update_yaxes(range=[0, row["y_top"]], tickfont=dict(size=8), gridcolor="#eef1f4",
                      zeroline=False, row=ri, col=1)
-    _margin_label(fig, ri, f"<b>{name}</b><br>x own median")
+    label_px = _margin_label(fig, ri, f"<b>{name}</b><br>x own median")
     # the divisors themselves, so who moved more is stated even though the row cannot show it
     unit = f" {row['unit']}" if row.get("unit") else ""
     medians = " · ".join(f"{sid} {m:.3g}{unit}" for sid, m in row["medians"].items())
     fig.add_annotation(x=1, xref="paper", y=1.0, yref=f"y{ri if ri > 1 else ''} domain",
                        text=f"median {symbol}: {medians}", showarrow=False,
                        xanchor="right", yanchor="top", font=dict(size=9, color="#8b95a1"))
+    return label_px
 
 
-def _margin_label(fig, row: int, text: str, xshift: int = -36) -> None:
-    """A row's name, parked in the left margin clear of the data.
+def _margin_label(fig, row: int, text: str, xshift: int = -36) -> float:
+    """A row's name, parked in the left margin clear of the data; returns the margin it needs.
 
     The row is named through ``yref`` rather than through ``row=``: passing the latter makes
     plotly rewrite ``xref`` to that subplot's x axis, and an axis-referenced annotation
@@ -835,6 +843,8 @@ def _margin_label(fig, row: int, text: str, xshift: int = -36) -> None:
                        y=0.5, yref=f"y{row if row > 1 else ''} domain",
                        text=text, showarrow=False, xanchor="right",
                        yanchor="middle", align="right", font=dict(size=10))
+    widest = max(len(re.sub(r"<[^>]+>", "", line)) for line in text.split("<br>"))
+    return widest * _LABEL_CHAR_PX + abs(xshift) + 6
 
 
 # ---------------------------------------------------------------------------
