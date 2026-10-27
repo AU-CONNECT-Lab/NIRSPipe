@@ -793,7 +793,7 @@ def whitening_figure(spectrum: "pd.DataFrame", channels: "pd.DataFrame",
     values = values[np.isfinite(values) & (values > 0)]
     lo, hi = float(values.min()), float(values.max())
     fig.add_trace(go.Scatter(x=[lowband[0], lowband[1], lowband[1], lowband[0]],
-                             y=[lo, lo, hi, hi], fill="toself", fillcolor=_BAND_FILL,
+                             y=[lo, lo, hi, hi], mode="lines", fill="toself", fillcolor=_BAND_FILL,
                              line=dict(width=0), hoverinfo="skip", showlegend=False),
                   row=1, col=1)
     fig.add_trace(go.Scatter(x=[freqs[0], freqs[-1]], y=[1.0, 1.0], mode="lines",
@@ -824,7 +824,7 @@ def whitening_figure(spectrum: "pd.DataFrame", channels: "pd.DataFrame",
         n = int(good["n_samples"].median())
         bound = 1.96 / np.sqrt(n)
         fig.add_trace(go.Scatter(x=[pairs[0], pairs[-1], pairs[-1], pairs[0]],
-                                 y=[-bound, -bound, bound, bound], fill="toself",
+                                 y=[-bound, -bound, bound, bound], mode="lines", fill="toself",
                                  fillcolor=_BAND_FILL, line=dict(width=0), hoverinfo="skip",
                                  showlegend=False), row=2, col=1)
         for c, label, color in chromas:

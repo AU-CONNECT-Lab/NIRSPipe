@@ -164,6 +164,18 @@ def test_the_figure_draws_the_chromophores_the_tables_hold():
     assert {"HbO whitened", "HbT whitened"} <= names and "HbR whitened" not in names
 
 
+def test_the_shaded_bands_draw_no_corner_dots():
+    # a scatter of under 20 points gets markers by default, which read as data
+    spectrum = pd.DataFrame({"freq": np.linspace(0.01, 1.0, 20),
+                             **{f"hbo_{kind}": np.ones(20) for kind in ("whitened", "residual")}})
+    channels = pd.DataFrame({"ch_name": ["S1_D1 hbo", "S2_D1 hbo"], "Chroma": "hbo",
+                             "long": True, "bad": False, "n_samples": 100,
+                             "acf1_whitened": [0.1, 0.2]})
+    bands = [t for t in whitening_figure(spectrum, channels, {}, (0.01, 0.1)).data
+             if t.fill == "toself"]
+    assert len(bands) == 2 and all(t.mode == "lines" for t in bands)
+
+
 def test_the_figure_draws_both_panels(written):
     nirs_dir, dm = written["auto"]
     fig = whitening_figure(
