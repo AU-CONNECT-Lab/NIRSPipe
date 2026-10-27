@@ -34,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: fallbacks for trees older versions wrote: flat QC records, sidecars without the filter or GLM conditions, dyad tables without member columns, the old rate report path
 
 ### Fixed
+- The dyad motion panel's carpet titles covered the GVTD row above; each carpet is now named in the left margin
 - A run whose short channels were all rejected listed them as outside every separation range and never noted that short-channel regression did not run
 - The GUI's Edit events drift hint failed when the only repeated condition was a doubled marker
 - A joined `--combine-runs` series without a regression did not record its separation bands, so the subject index split its FC by the defaults

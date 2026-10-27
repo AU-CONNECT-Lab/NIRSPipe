@@ -689,12 +689,8 @@ def build_motion_panel(
                + [_MOTION_CARPET_PX] * len(carpets))
     vspace = 0.022
     row_heights, total_px = _px_rows(heights, vspace, chrome_px=150)
-    titles = ([""] * (n_rows - len(carpets))
-              + [f"{sid} carpet ({stage})" for sid, *_ in carpets])
     fig = make_subplots(rows=n_rows, cols=1, shared_xaxes=True, row_heights=row_heights,
-                        vertical_spacing=vspace, subplot_titles=titles)
-    for ann in fig.layout.annotations:
-        ann.yshift = 3
+                        vertical_spacing=vspace)
 
     ri = 1
     if has_cond:
@@ -765,6 +761,9 @@ def build_motion_panel(
     drawn_rois: set = set()
     for sid, z, t_carpet, labels, spans in carpets:
         add_carpet(fig, ri, z, t_carpet, labels, spans)
+        # in the margin like every other row's name, the gaps being too thin for a title;
+        # further out, past the carpet's own set and ROI strips
+        _margin_label(fig, ri, f"<b>{sid}</b><br>carpet ({stage})", xshift=-58)
         groups = motion["roi"].get(sid) or []
         if len(groups) > 1:
             add_roi_strip(fig, ri, groups, len(labels), motion["roi_colours"])
@@ -824,7 +823,7 @@ def _add_imu_row(fig, ri: int, sensor: str, row: dict, t: np.ndarray, sids: list
                        xanchor="right", yanchor="top", font=dict(size=9, color="#8b95a1"))
 
 
-def _margin_label(fig, row: int, text: str) -> None:
+def _margin_label(fig, row: int, text: str, xshift: int = -36) -> None:
     """A row's name, parked in the left margin clear of the data.
 
     The row is named through ``yref`` rather than through ``row=``: passing the latter makes
@@ -832,7 +831,7 @@ def _margin_label(fig, row: int, text: str) -> None:
     sitting at x=0 on an axis that starts at 0.1 s is clipped away silently.
     """
     # xshift clears the tick labels, which sit between the axis and the margin
-    fig.add_annotation(x=0, xref="paper", xshift=-36,
+    fig.add_annotation(x=0, xref="paper", xshift=xshift,
                        y=0.5, yref=f"y{row if row > 1 else ''} domain",
                        text=text, showarrow=False, xanchor="right",
                        yanchor="middle", align="right", font=dict(size=10))
