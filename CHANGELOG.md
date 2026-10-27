@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
+
 ## [0.77.0] - 2026-10-26
 
 ### Added

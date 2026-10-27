@@ -797,6 +797,11 @@
         {% for row in channel_cells %}{{ ch_row(row) }}{% endfor %}
       </tbody>
       {% endif %}
+    </table>
+  </div>
+</div>
+</section>
+{% endif %}
 
 {% if excluded %}
 <!-- ======================================================== excluded time -->
@@ -877,12 +882,6 @@
           style="border:none;min-width:500px;display:block;"></iframe>
 </div>
 <p class="fig-path">{{ condition_summary_path }}</p>
-</div>
-</section>
-{% endif %}
-
-    </table>
-  </div>
 </div>
 </section>
 {% endif %}
