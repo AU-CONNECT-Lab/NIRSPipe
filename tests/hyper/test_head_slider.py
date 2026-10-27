@@ -1,4 +1,4 @@
-"""The dyad's head slider: the coupling verdict, then the SCI and PSP behind it, on the run's lines."""
+"""The dyad's head slider: the window verdict, then the SCI and PSP behind it, on the run's lines."""
 
 import numpy as np
 import pytest
@@ -17,7 +17,7 @@ MOVED = 1
 
 
 def _screened(order, moved):
-    """Screening windows with every pair coupled except ``moved`` in window MOVED."""
+    """Screening windows with every pair passing except ``moved`` in window MOVED."""
     n_ch, n_win = len(order), len(CENTERS)
     sci, psp = np.full((n_ch, n_win), 0.9), np.full((n_ch, n_win), 0.5)
     mask = np.ones((n_ch, n_win), dtype=bool)
@@ -62,12 +62,12 @@ def _coloured(fig, row: int, col: int) -> int:
                 if tr.xaxis == axis and tr.marker.colorscale is not None)
 
 
-def test_each_member_is_a_row_reading_coupled_then_sci_then_psp(slider):
+def test_each_member_is_a_row_reading_passing_then_sci_then_psp(slider):
     fig, _, _ = slider
     assert _titles(fig) == (["Passing", "SCI", "PSP"], SIDS)
 
 
-def test_a_moved_window_is_not_coupled_while_its_sci_stays_over_the_line(slider):
+def test_a_moved_window_is_not_passing_while_its_sci_stays_over_the_line(slider):
     fig, geo, moved = slider
     per_pair = geo["long"]["per_pair"]
     first = geo["long"]["names"].index(moved)
