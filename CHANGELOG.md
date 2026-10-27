@@ -41,6 +41,7 @@ All notable changes to this project will be documented in this file.
 - The raw signal overview draws its two wavelengths in a brighter orange and blue
 - The raw signal overview spaces its rows wider and puts both wavelengths of a pair on adjacent rows, whatever order the file lists them in
 - The raw signal overview reads top-down and puts short channels in their own labelled block below the long ones, in lighter shades, instead of dashed lines
+- The mALFF and GLM cortex figures were saved at 100 dpi and the provenance graph at 220; all three are now 300 dpi, rendered to match
 - With no PSP line, PSP takes the same red-to-green scales as SCI and CV (strip, row means, channel and condition grids, head slider), from 0 to 0.1, higher greener
 - Optodes that could not be placed on the template head were still drawn beside a 3-D brain and projected onto the cortex (mALFF, GLM betas); such runs now show the flat optode map only
 - The flat views (optode map, topographies, head slider, seed and flat value maps) of a montage no reading placed pushed optodes past a head outline; they now draw it as laid out, with no head

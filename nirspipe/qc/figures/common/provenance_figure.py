@@ -36,8 +36,8 @@ _SCALE = 0.52          # inches per data unit
 # A graph taller than it is wide wraps each long column into a grid of this many rows
 _MAX_ROWS = 5
 _SUB_GAP = 3.4         # between the sub-columns of a wrapped column
-# drawn at this resolution and shown at half of it (srcset 2x in _footer.html.j2)
-_DPI = 220
+# drawn at this resolution and shown at 110 px per inch (srcset 2.727x in _footer.html.j2)
+_DPI = 300
 
 
 def _fit(text: str, base: float, max_chars: int) -> float:

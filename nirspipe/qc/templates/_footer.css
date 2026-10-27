@@ -18,7 +18,7 @@
 .error-list li { color: var(--bad); font-size: 0.85rem; margin-bottom: 0.2rem; }
 .no-errors { color: var(--ok); font-weight: 500; }
 
-/* Shown at its own size (srcset 2x, a fixed text size), narrowed only to fit the column;
+/* Shown at its own size (srcset 2.727x, a fixed text size), narrowed only to fit the column;
    a tall graph is wrapped into a grid when drawn, so no height cap squeezes it. */
 img.prov-graph { width: auto; max-width: 100%; margin: 0 auto; display: block; border: none; }
 

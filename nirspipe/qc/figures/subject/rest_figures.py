@@ -538,7 +538,8 @@ def fc_seed_topo_figure(
 # (title, azimuth, elevation): both sides, the top and the front. An fMRI surface plot's
 # medial views are left out, since no optode reaches the medial cortex.
 _BRAIN_VIEWS = (("Left", 180, 90), ("Right", 0, 90), ("Superior", 0, 0), ("Frontal", 90, 90))
-_BRAIN_VIEW_PX = (560, 480)
+# about a view's panel width at 300 dpi, so the render is not upsampled
+_BRAIN_VIEW_PX = (1400, 1200)
 
 
 def alff_brain_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> "str | None":
@@ -589,4 +590,4 @@ def _alff_brain_block(drawn: mne.io.Raw, vals: np.ndarray, measure: str, label: 
     bar.set_label(f"mALFF (1 = mean channel), {label}" if measure == "malff"
                   else f"ALFF (M), {label}", fontsize=11)
     bar.outline.set_linewidth(0.5)
-    return fig_png_b64(fig, dpi=100, pad_inches=0.1)
+    return fig_png_b64(fig, pad_inches=0.1)

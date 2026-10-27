@@ -41,6 +41,8 @@ if TYPE_CHECKING:
 
 logger = get_logger("qc.figures.glm")
 
+_DPI = 300
+
 _COND_COLORS = [
     "#2980b9", "#c0392b", "#27ae60", "#8e44ad",
     "#d35400", "#16a085", "#2c3e50", "#f39c12",
@@ -235,15 +237,17 @@ def _save_glm_brain(
     if ch_col is not None:
         results_df = results_df.set_index(ch_col).loc[drawn.ch_names].reset_index()
     stc, subjects_dir = project_to_cortex(drawn, results_df[coef_col].values[:, np.newaxis])
+    # ``size`` is the layout at 100 px per inch; the views are rendered at the saved density
+    render_px = (size[0] * _DPI // 100, size[1] * _DPI // 100)
     with RENDER_LOCK:
-        view_images = _render_activation(stc, clim, subjects_dir, size, view_configs)
+        view_images = _render_activation(stc, clim, subjects_dir, render_px, view_configs)
 
     combined_img = np.hstack(view_images)
 
     import matplotlib.pyplot as plt
     fig_width = (size[0] * len(view_configs)) / 100
     fig_height = size[1] / 100
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=100)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=_DPI)
     ax.imshow(combined_img)
     ax.axis('off')
     if title:
@@ -252,7 +256,7 @@ def _save_glm_brain(
     _add_shared_colorbar(fig, clim, chroma)
 
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", bbox_inches='tight', pad_inches=0.1)
+    fig.savefig(buf, format="png", dpi=_DPI, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
@@ -427,10 +431,10 @@ def activation_panel(
     row_imgs = [np.array(_PILImage.open(io.BytesIO(base64.b64decode(b64))))
                 for _, b64 in rendered]
 
-    label_px = 30
+    dpi = _DPI
+    label_px = 30 * dpi // 100
     row_h = row_imgs[0].shape[0] + label_px
     combined_w = row_imgs[0].shape[1]
-    dpi = 100
 
     fig_mpl, axes = plt.subplots(
         len(row_imgs), 1,
