@@ -54,6 +54,8 @@ _BAD_COLOR  = "#F8786E"
 # an upper bound on a 10 px Open Sans character, bold or not, for sizing the left margin
 _LABEL_CHAR_PX = 6.5
 _MIN_LEFT_MARGIN = 112
+# over a pair a member rejected; light enough that the screening's colours still read
+_REJECTED_WASH = "rgba(110, 110, 110, 0.45)"
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +218,7 @@ def build_usable_time(
     series: dict[str, dict],
     conditions: "dict[str, tuple[float, float]] | None" = None,
     cutoffs: "dict[str, float] | None" = None,
+    rejected: "dict[str, set[str]] | None" = None,
 ) -> "go.Figure | None":
     """Which pairs the dyad could use, when, and what went wrong where it could not.
 
@@ -223,6 +226,11 @@ def build_usable_time(
     moment, so the dyad's usable time is the intersection of the two and not the smaller of
     them: two members can each keep 13 of 14 pairs and share only 12, if the pair they each
     lose is a different one. That intersection is the carpet at the bottom.
+
+    The carpet's colours are the screening's, window by window. A pair a member rejected
+    (``rejected``, by screening, by hand or in channels.tsv) keeps them under a grey wash,
+    is named as rejected and counts as lost in the share beside its name, as it does in
+    the dyad's usable numbers.
 
     Over it, each member's long-channel means for the metrics the mask is made of, so the
     panel says why a pair went and not only that it did. A condition bar names the blocks
@@ -237,9 +245,12 @@ def build_usable_time(
     # long channels only, the set every dyad measure runs on
     keep = [i for i, name in enumerate(grid["pairs"]) if name in set(pairs)]
     status = dyad_status(grid, subject_ids)[keep]
-    lost = (status != 2).mean(axis=1)
-    order = np.argsort(lost)[::-1]
-    labels = [f"{pairs[i]}   {lost[i] * 100:.0f}%" if lost[i] else pairs[i] for i in order]
+    gone = {pair for pairs_out in (rejected or {}).values() for pair in pairs_out}
+    is_gone = np.array([pair in gone for pair in pairs])
+    lost = np.where(is_gone, 1.0, (status != 2).mean(axis=1))
+    order = np.lexsort((is_gone, lost))[::-1]
+    labels = [f"{pairs[i]}   rejected" if is_gone[i]
+              else f"{pairs[i]}   {lost[i] * 100:.0f}%" if lost[i] else pairs[i] for i in order]
 
     have = [(key, label, scaled) for key, label, scaled in _SERIES_ROWS
             if any(key in (series.get(sid) or {}) for sid in subject_ids)]
@@ -295,6 +306,13 @@ def build_usable_time(
         zmin=0, zmax=2, showscale=False, ygap=2,
         hovertemplate="<b>%{y}</b><br>t=%{x:.0f}s<br>%{z:.0f} member(s) passing<extra></extra>",
     ), row=n_rows, col=1)
+    # a category axis puts row k at k, so the wash covers k - 0.5 to k + 0.5
+    for k, i in enumerate(order):
+        if is_gone[i]:
+            fig.add_shape(type="rect", xref=f"x{n_rows if n_rows > 1 else ''} domain",
+                          yref=f"y{n_rows if n_rows > 1 else ''}", x0=0, x1=1,
+                          y0=k - 0.5, y1=k + 0.5, fillcolor=_REJECTED_WASH,
+                          line=dict(width=0), layer="above")
     # the key a discrete heatmap cannot carry itself
     for colour, lab in ((_GOOD_COLOR, "passing in both"), (_MIX_COLOR, "one member only"),
                         (_BAD_COLOR, "neither")):
@@ -312,8 +330,10 @@ def build_usable_time(
                      row=n_rows, col=1)
     fig.update_xaxes(title_text="Time on the shared clock (s)", title_font=dict(size=10),
                      row=n_rows, col=1)
+    widest = max(len(label) for label in labels)
     fig.update_layout(height=96 + total, plot_bgcolor="white", barmode="overlay",
-                      margin=dict(l=112, r=24, t=48, b=48),
+                      margin=dict(l=max(_MIN_LEFT_MARGIN, round(widest * _LABEL_CHAR_PX) + 12),
+                                  r=24, t=48, b=48),
                       legend=dict(orientation="h", yanchor="bottom", y=1.02,
                                   xanchor="right", x=1, font=dict(size=10)))
     return fig

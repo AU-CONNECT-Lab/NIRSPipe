@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
 - The dyad motion panel's left margin is sized to its longest row name, which a fixed margin cut off
 
+### Changed
+- Shared usable time greys a pair a member rejected and counts it as lost; the dyad's usable numbers and table no longer count rejected channels
+
 ## [0.77.0] - 2026-10-26
 
 ### Added

@@ -30,7 +30,8 @@ from nirspipe.qc.figures.hyper.hyper_figures import (
 )
 from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
 from nirspipe.qc.metrics.hyper import (
-    compute_hyper_sqm, passing_grid, member_series, motion_summary, shared_screen_windows,
+    compute_hyper_sqm, passing_grid, member_rejections, member_series, motion_summary,
+    shared_screen_windows, without_rejected,
 )
 from nirspipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from nirspipe.qc.boilerplate.notes import section_note
@@ -223,6 +224,7 @@ def _process_hyper_raw_group(
 
     duration_s = first_raw.times[-1] if first_raw is not None else None
     grid, series, geo = None, {}, {}
+    rejected = member_rejections(sqm_data, subject_ids)
     # the panels below are screened again on the aligned recordings, whose windows are matched
     # by time on the shared clock; each member's verdict stays its own screening's
     shared = {}
@@ -243,7 +245,7 @@ def _process_hyper_raw_group(
             note(notes, label, "no optode positions on either member: the head panels "
                                "are empty")
         _safe_save("usable_time", "usable", build_usable_time,
-                   grid, subject_ids, series, conditions, cutoffs)
+                   grid, subject_ids, series, conditions, cutoffs, rejected)
         if geo:
             _safe_save("head_by_condition", "headcond", build_head_by_condition,
                        geo, subject_ids, grid, conditions)
@@ -280,11 +282,13 @@ def _process_hyper_raw_group(
                                        for name in ("long", "short")} if pair_sets else None)
     sqm["motion"] = motion_scalars
     if grid is not None:
-        sqm.update(usable_scalars(grid, subject_ids))
+        # what the analysis can use: a rejected pair is lost whatever its windows did
+        kept = without_rejected(grid, rejected)
+        sqm.update(usable_scalars(kept, subject_ids))
         with guard("Usable-time table", errors, label):
             write_usable_table(
                 _table(sqm_dir, {"desc": "usable"}, suffix="qc"),
-                grid, subject_ids, conditions,
+                kept, subject_ids, conditions,
                 sources=paths_from(aligned_raws.values()),
                 screen_lines=lines, screen_bands=bands)
     sqm_path = record_path(sqm_dir, label)

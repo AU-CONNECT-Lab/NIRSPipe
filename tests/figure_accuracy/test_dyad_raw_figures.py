@@ -319,13 +319,32 @@ def test_the_usable_table_is_the_carpet_cut_by_condition(groups, group):
     table = groups.table(group, "desc-usable_qc.tsv")
     carpet = _carpet(groups, group)
     blocks = js_var(_page(groups, group), "_BLOCKS")
+    rejected = {m.rejected for m in groups.truth.group(group)}
     for r in table.itertuples():
         x, status = carpet[r.pair]
         t0, t1 = blocks[r.condition]
         inside = status[(x >= t0) & (x <= t1)]
         assert len(inside) == r.n_windows, (r.pair, r.condition)
+        # a pair a member rejected leaves the analysis whatever its windows did
+        usable = 0.0 if r.pair in rejected else np.mean(inside == 2)
         # the table keeps four decimals
-        assert np.mean(inside == 2) == pytest.approx(r.usable_frac, abs=5e-5), (r.pair, r.condition)
+        assert usable == pytest.approx(r.usable_frac, abs=5e-5), (r.pair, r.condition)
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_a_pair_a_member_rejected_is_greyed_and_counted_lost(groups, group):
+    fig = one_figure(groups.figure(group, "desc-rawusable_nirs.html"))
+    heat = next(t for t in fig["data"] if t["type"] == "heatmap")
+    labels = list(heat["y"])
+    rejected = {m.rejected for m in groups.truth.group(group)}
+    assert {lab.split()[0] for lab in labels if lab.endswith("rejected")} == rejected
+    washed = sorted(round((sh["y0"] + sh["y1"]) / 2) for sh in fig["layout"]["shapes"]
+                    if sh.get("type") == "rect" and str(sh.get("xref", "")).endswith("domain"))
+    assert washed == sorted(i for i, lab in enumerate(labels) if lab.split()[0] in rejected)
+    z = np.asarray(heat["z"], float)
+    kept = [i for i, lab in enumerate(labels) if lab.split()[0] not in rejected]
+    both = (z[kept] == 2).sum(axis=0).mean()
+    assert groups.record(group)["usable_pairs_mean"] == pytest.approx(both, abs=0.005)
 
 
 @pytest.mark.parametrize("group", GROUPS)

@@ -30,7 +30,8 @@ NOTES = {
         "{tol}&nbsp;s ({n} samples) means a late trigger or drifting clocks.",
     "hyper_raw.usable":
         "A channel is usable by the dyad only while it is passing in <em>both</em> members "
-        "at once, so the dyad can keep less time than either member.",
+        "at once, so the dyad can keep less time than either member. A pair a member "
+        "rejected is greyed and counted as lost, whatever its windows show.",
     "hyper_raw.usable_panel":
         "Above the carpet: each member&rsquo;s long-channel mean SCI and PSP, which build the "
         "mask (PSP only with <code>--psp-threshold</code>), so a dip explains the hole "

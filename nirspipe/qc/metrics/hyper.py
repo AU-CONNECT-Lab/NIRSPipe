@@ -264,6 +264,25 @@ def dyad_status(grid: dict, subject_ids: list[str]) -> "np.ndarray":
     return np.where(stack.all(axis=0), 2, np.where(stack.any(axis=0), 1, 0))
 
 
+def member_rejections(sqm_data: dict[str, dict], subject_ids: list[str]) -> dict[str, set[str]]:
+    """Each member's rejected S-D pairs: screening, by hand and the recording's channels.tsv."""
+    return {sid: _rejected_pairs(sqm_data, sid) or set() for sid in subject_ids}
+
+
+def without_rejected(grid: dict, rejected: dict[str, set[str]]) -> dict:
+    """``grid`` with every window of a pair a member rejected counted as not passing there.
+
+    A rejected channel leaves the analysis whatever its windows did, so the dyad's usable
+    counts read this grid, while the carpet keeps drawing the screening it came from.
+    """
+    ok = {}
+    for sid, mask in grid["ok"].items():
+        mask = np.array(mask, copy=True)
+        mask[[i for i, pair in enumerate(grid["pairs"]) if pair in rejected.get(sid, ())]] = False
+        ok[sid] = mask
+    return {**grid, "ok": ok}
+
+
 def _channel_mean(m: np.ndarray) -> np.ndarray:
     """The mean over the channels with a value in each window, NaN only where none has one."""
     with warnings.catch_warnings():
