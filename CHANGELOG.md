@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - `--drift-high-pass auto` in glm mode sets each run's cosine cutoff to 1/(2 x its slowest condition repeat), capped at 0.01 Hz, never below `--high-pass`
 
 ### Changed
+- Every dyad page draws the members in one palette, purple then orange; the motion panel and the circle plots used blue and orange, and purple and green
+- The dyad raw page's after-correction GVTD rows take their own y range, so corrected peaks stay readable; values still use the uncorrected median
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject
 - Raw QC's `--motion-correction` defaults to `tddr`, as the pipeline's, so its before and after panels show by default
 - **Breaking**: `nirspipe-qc bids_dir output_dir participant|group` replaces `prep-raw`, `hyper-raw`, `cohort` and `cohort-hyper`; dyad pages sit beside the subjects in one tree
