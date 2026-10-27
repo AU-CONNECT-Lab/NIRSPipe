@@ -78,14 +78,37 @@ def _fc_frame(pairs, chromo):
     return _roi_frame(labels)
 
 
-def test_a_matrix_is_drawn_as_a_triangle():
-    """It is symmetric, so the upper half is the same values read the other way round;
-    drawing both doubles the ink for no second reading."""
+def test_a_matrix_is_drawn_whole_with_a_blank_diagonal():
+    """Whole, so an ROI's block reads as a square; the diagonal is 1 by construction."""
     pairs = ["S1_D1", "S1_D2", "S2_D1"]
     fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")})
     z = np.asarray(next(t for t in fig.data if t.type == "heatmap").z, dtype=float)
-    assert np.isnan(z[np.triu_indices(len(pairs))]).all()      # upper half and diagonal
-    assert np.isfinite(z[np.tril_indices(len(pairs), -1)]).all()   # lower half kept
+    assert np.isnan(np.diag(z)).all()
+    off = ~np.eye(len(pairs), dtype=bool)
+    assert np.isfinite(z[off]).all()
+    np.testing.assert_allclose(z, z.T, equal_nan=True)
+
+
+def test_an_roi_map_orders_the_panel_and_marks_each_roi():
+    pairs = ["S1_D1", "S1_D2", "S2_D1", "S3_D3"]
+    roi_map = {"right": ["S2_D1", "S1_D2"], "left": ["S1_D1"]}
+    alff = pd.DataFrame({"channel": [f"{p} hbo" for p in pairs],
+                         "alff": np.arange(4.0), "falff": np.arange(4.0) / 10})
+    fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")}, alff, roi_map=roi_map)
+    heat = next(t for t in fig.data if t.type == "heatmap")
+    # ROIs in name order, members by name inside, a pair no ROI claims last
+    assert list(heat.x) == list(heat.y) == ["S1_D1", "S1_D2", "S2_D1", "S3_D3"]
+    strip = next(ax for name, ax in fig.layout.to_plotly_json().items()
+                 if name.startswith("xaxis") and ax.get("ticktext"))
+    assert list(strip["ticktext"]) == list(heat.x)
+    filled = [s for s in fig.layout.shapes if s.fillcolor and s.xref == "x"]
+    # a strip along the top and one down the side for each of left, right and unassigned
+    assert len(filled) == 6
+    rules = [s for s in fig.layout.shapes if s.type == "line" and s.xref == "x"]
+    # one vertical and one horizontal rule between each two neighbouring ROIs
+    assert sorted({s.x0 for s in rules if s.x0 == s.x1}) == [0.5, 2.5]
+    legend = {t.name for t in fig.data if getattr(t, "showlegend", None) is not False}
+    assert {"left", "right", "unassigned"} <= legend
 
 
 def test_the_panel_splits_the_matrices_by_chromophore():
@@ -159,7 +182,20 @@ def test_both_matrices_use_the_report_s_one_correlation_scale():
                 fc_roi_matrix_figure({"hbo": _roi_frame(["A", "B"])})):
         heat = next(t for t in fig.data if t.type == "heatmap")
         assert [c for _, c in heat.colorscale] ==                [c for _, c in pc.get_colorscale(CORRELATION_SCALE)]
-        assert (heat.zmin, heat.zmax) == (-1.0, 1.0)
+
+
+def test_the_range_is_symmetric_and_reaches_the_largest_correlation_of_either_panel():
+    """All-positive correlations still span the red half, and 0 stays white."""
+    pairs = ["S1_D1", "S1_D2", "S2_D1"]
+    hbo, hbr = _fc_frame(pairs, "hbo"), _fc_frame(pairs, "hbr") * 0.5
+    off = ~np.eye(3, dtype=bool)
+    largest = max(np.abs(hbo.to_numpy()[off]).max(), np.abs(hbr.to_numpy()[off]).max())
+    heats = [t for t in rest_channel_panel({"hbo": hbo, "hbr": hbr}).data if t.type == "heatmap"]
+    assert [(h.zmin, h.zmax) for h in heats] == [(-largest, largest)] * 2
+    roi = _roi_frame(["A", "B", "C"])
+    heat = next(t for t in fc_roi_matrix_figure({"hbo": roi}).data if t.type == "heatmap")
+    top = np.abs(roi.to_numpy()[off]).max()
+    assert (heat.zmin, heat.zmax) == pytest.approx((-top, top))
 
 
 # ---- only the measured part is drawn ----

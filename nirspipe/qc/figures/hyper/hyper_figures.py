@@ -323,7 +323,8 @@ def build_usable_time(
 # The members' colours are MEMBER_COLORS, as on every dyad page.
 # The shared floor under both traces; grey, since it belongs to the pair and not to either.
 _TOGETHER_FILL = "rgba(120,120,130,0.30)"
-_SPIKE_BOTH = "rgba(245,158,11,0.9)"
+# green, as amber would read as the second member's orange
+_SPIKE_BOTH = "#55a868"
 
 _MOTION_ROW_PX = 84
 _MOTION_CARPET_PX = 240

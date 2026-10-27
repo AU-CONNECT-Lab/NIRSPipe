@@ -87,10 +87,15 @@ def test_conditions_render_from_parallel_threads(subjects_dir):
 
 def test_a_failed_condition_render_is_listed_on_the_run_page(mini_bids, tmp_path, monkeypatch):
     from nirspipe.cli.run import main
+    from nirspipe.io.optode_space import Placement
+    from nirspipe.qc.subject import report
 
     def broken(*a, **k):
         raise RuntimeError("renderer unavailable")
 
+    # the synthetic cap reaches no scalp, and an unplaced run skips the brain altogether
+    monkeypatch.setattr(report, "placement_of", lambda raw: Placement("head", np.eye(4)))
+    monkeypatch.setattr(glm_figures, "project_to_cortex", lambda raw, values: (None, None))
     monkeypatch.setattr(glm_figures, "_render_activation", broken)
     out = tmp_path / "out"
     main([str(mini_bids), str(out), "participant", "--participant-label", "01",

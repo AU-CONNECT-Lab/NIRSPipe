@@ -437,8 +437,8 @@ def _carpet_band_marks(fig, row: int, spans: list, n_rows: int) -> None:
 
 
 # ---- ROI strip ----
-# muted, close in lightness, none of them the HbO red or HbR blue beside the strip
-_ROI_COLOURS = ("#8da3c0", "#c4a27c", "#93b38c", "#b393ab", "#c2b67e", "#86b3b0", "#a9a9a9")
+# close in lightness and saturated enough to tell apart at strip width
+_ROI_COLOURS = ("#4684d5", "#eb8e25", "#65bd52", "#b75ea1", "#e6c52a", "#48c2ba", "#909090")
 _ROI_UNASSIGNED = "#e3e6e9"
 _ROI_STRIP_X = (-0.026, -0.016)
 _ROI_GAP = 0.002

@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - `--drift-high-pass auto` in glm mode sets each run's cosine cutoff to 1/(2 x its slowest condition repeat), capped at 0.01 Hz, never below `--high-pass`
 
 ### Changed
+- The channel FC matrices are drawn whole, ordered by ROI with rules and colour strips, on a range symmetric at the largest |r|; ALFF strips follow the order
+- ROI colour strips are more saturated; the dyad page's "both spiking" strip is green, not the second member's amber
 - Every dyad page draws the members in one palette, purple then orange; the motion panel and the circle plots used blue and orange, and purple and green
 - The dyad raw page's after-correction GVTD rows take their own y range, so corrected peaks stay readable; values still use the uncorrected median
 - A contrast weighting a condition that censoring dropped is skipped and named in the report notes and Methods, instead of failing the subject

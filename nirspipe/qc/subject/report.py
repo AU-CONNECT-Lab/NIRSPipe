@@ -1983,13 +1983,15 @@ def _section_rest(
     raw_haemo: "mne.io.Raw | None" = None,
     roi_map_name: "str | None" = None,
     sep_bands=None,
+    roi_map: "dict | None" = None,
 ) -> dict:
     panel_path = alff_brain_path = alff_flat_path = fc_roi_path = fc_seed_path = None
     fc_seed_h = panel_h = fc_roi_h = alff_flat_h = 0
     unplaced = raw_haemo is not None and not placement_of(raw_haemo).placed
     with _guard("Rest channel panel", errors, subject):
         if fc:
-            fig = rest_channel_panel(fc, alff_df, raw=raw_haemo, sep_bands=sep_bands)
+            fig = rest_channel_panel(fc, alff_df, raw=raw_haemo, sep_bands=sep_bands,
+                                     roi_map=roi_map)
             if fig is not None:
                 panel_path, panel_h = _save_plotly_html(
                     fig, figures_dir / fig_name("restpanel"))
@@ -2333,7 +2335,8 @@ def build_subject_report(
                                      chromophores=chromophores, sep_bands=sep_bands)
     rest_vars         = _section_rest(alff_df, fc, subject, errors, figures_dir, fig_name,
                                       fc_seed=fc_seed, fc_roi=fc_roi, raw_haemo=raw_haemo,
-                                      roi_map_name=roi_map_name, sep_bands=sep_bands)
+                                      roi_map_name=roi_map_name, sep_bands=sep_bands,
+                                      roi_map=roi_map)
     excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)
     for line in excluded_vars["excluded_skipped"]:
         _note(notes, subject, line)

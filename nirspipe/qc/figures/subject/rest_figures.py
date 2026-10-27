@@ -39,6 +39,7 @@ from nirspipe.qc.figures.common.head_map import (
 from nirspipe.qc.figures.common.matrix_map import (
     CORRELATION_SCALE, cell_values, kept_axes,
 )
+from nirspipe.qc.figures.common.motion_panel import _roi_order, roi_colours
 
 logger = get_logger("qc.figures.rest")
 
@@ -54,6 +55,8 @@ _STRIP_MARK, _CONNECTOR, _REJECTED_INK = 8, "#c3cad1", "#b9c2cb"
 # The panel's two bands, in pixels: the matrices are square and need the room, a strip does
 # not, and a strip added later must not shrink the matrices.
 _PANEL_MATRIX_PX, _PANEL_STRIP_PX = 560, 230
+# the ROI colour strip beside a matrix, in cells left of (and above) its first row
+_ROI_STRIP = (-1.35, -0.8)
 
 
 def _pair_blocks(pairs, raw, sep_bands):
@@ -92,30 +95,66 @@ def _pair_blocks(pairs, raw, sep_bands):
     return order, np.asarray(xs, dtype=float), spans
 
 
-def _panel_matrix(fig, frame, order, chromo, col, show_bar):
-    """One chromophore's channel matrix into the panel's top row, on the panel's order."""
+def _roi_blocks(pairs, roi_map):
+    """The panel's channel order by ROI: ``(pairs, x positions, block spans, groups)``.
+
+    ``groups`` is :func:`_roi_order`'s ``[(ROI, first row, last row), ...]``; a pair no ROI
+    claims, a short channel among them, goes last under "unassigned".
+    """
+    idx, groups = _roi_order(pairs, roi_map)
+    order = [pairs[i] for i in idx]
+    xs, spans, x = [], [], 0.0
+    for label, i0, i1 in groups:
+        start = x
+        for _ in range(i0, i1 + 1):
+            xs.append(x)
+            x += 1.0
+        spans.append((start, x - 1.0, label))
+        x += _BLOCK_GAP
+    return order, np.asarray(xs, dtype=float), spans, groups
+
+
+def _panel_matrix(fig, frame, order, chromo, col, show_bar, lim, groups, colours):
+    """One chromophore's full channel matrix into the panel's top row, on the panel's order.
+
+    The axes are categorical, which places category i at i, so the ROI rules and strips are
+    drawn in cell units.
+    """
     names = [f"{p} {chromo}" for p in order]
     # to_numpy can hand back a read-only view, and the matrix is blanked in place
     mat = np.array(frame.reindex(index=names, columns=names).to_numpy(dtype=float), copy=True)
     np.fill_diagonal(mat, np.nan)
-    # Lower triangle only, as the HbO-HbR correlation panel draws it: the matrix is symmetric
-    mat[np.triu_indices(len(order), k=1)] = np.nan
+    n = len(order)
     fig.add_trace(go.Heatmap(
-        z=mat.astype(np.float32), x=order, y=order, zmin=-1.0, zmax=1.0,
+        z=mat.astype(np.float32), x=order, y=order, zmin=-lim, zmax=lim,
         colorscale=CORRELATION_SCALE, showscale=show_bar,
         colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
-                      thickness=12, len=0.46, y=1.0, yanchor="top",
-                      tickfont=dict(size=9), tickvals=[-1, -0.5, 0, 0.5, 1]),
+                      thickness=12, len=0.46, y=1.0, yanchor="top", tickfont=dict(size=9)),
         hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
     ), row=1, col=col)
+    xref, yref = ("x", "y") if col == 1 else (f"x{col}", f"y{col}")
+    rule = dict(color="#555", width=0.8)
+    for _label, i0, _i1 in groups[1:]:
+        fig.add_shape(type="line", x0=i0 - 0.5, x1=i0 - 0.5, y0=-0.5, y1=n - 0.5,
+                      xref=xref, yref=yref, line=rule)
+        fig.add_shape(type="line", y0=i0 - 0.5, y1=i0 - 0.5, x0=-0.5, x1=n - 0.5,
+                      xref=xref, yref=yref, line=rule)
+    for label, i0, i1 in groups:
+        for x0, x1, y0, y1 in ((*_ROI_STRIP, i0 - 0.5, i1 + 0.5), (i0 - 0.5, i1 + 0.5, *_ROI_STRIP)):
+            fig.add_shape(type="rect", x0=x0, x1=x1, y0=y0, y1=y1, xref=xref, yref=yref,
+                          fillcolor=colours[label], line=dict(width=0))
+    fig.add_shape(type="rect", x0=-0.5, x1=n - 0.5, y0=-0.5, y1=n - 0.5,
+                  xref=xref, yref=yref, line=rule)
+    edge = (_ROI_STRIP[0] if groups else -0.5) - 0.1
+    ticks = dict(type="category", tickfont=dict(size=7), showgrid=False, zeroline=False,
+                 ticks="")
     # `constrain="domain"` on **both** axes, or the one without it pads its range instead of
     # shrinking, the square ends up centred in a wider cell, and that axis's tick labels stay
     # out at the cell's edge with a gap between them and the matrix
-    fig.update_xaxes(tickangle=-90, tickfont=dict(size=7), showgrid=False, ticks="",
-                     constrain="domain", row=1, col=col)
-    fig.update_yaxes(autorange="reversed", scaleanchor=f"x{col if col > 1 else ''}",
-                     scaleratio=1, constrain="domain", tickfont=dict(size=7),
-                     showgrid=False, ticks="", row=1, col=col)
+    fig.update_xaxes(range=[edge, n - 0.5], tickangle=-90, constrain="domain",
+                     **ticks, row=1, col=col)
+    fig.update_yaxes(range=[n - 0.5, edge], scaleanchor=xref, scaleratio=1,
+                     constrain="domain", **ticks, row=1, col=col)
 
 
 def _panel_strip(fig, values, order, xs, measure, label, row, col, legend):
@@ -183,6 +222,7 @@ def rest_channel_panel(
     raw=None,
     sep_bands=None,
     title: str = "Resting state per channel: connectivity, amplitude, spectral share",
+    roi_map: "dict | None" = None,
 ):
     """The run's channels in one panel: FC on top, ALFF and fALFF below.
 
@@ -191,10 +231,15 @@ def rest_channel_panel(
     ({chromophore: channel matrix}) rather than two stages, and the strips carry amplitude
     rather than a correlation.
 
-    **The rows share one channel order and one set of separation blocks**, so a channel is in
-    the same relative place in all of them. They do not share an x *scale*: the matrices are
-    narrower than the strips, so a column and a position correspond as labels and as blocks,
-    not pixel for pixel.
+    The matrices are drawn whole, diagonal blank, on a scale symmetric about 0 that reaches
+    the largest |r| any of them holds, so a run whose correlations are all positive still
+    spans the red half.
+
+    **The rows share one channel order and one set of blocks**, so a channel is in the same
+    relative place in all of them: by ROI when ``roi_map`` ({ROI: [channels]}) is given, with
+    a rule between ROIs and a colour strip beside each matrix, and by separation otherwise.
+    They do not share an x *scale*: the matrices are narrower than the strips, so a column
+    and a position correspond as labels and as blocks, not pixel for pixel.
 
     ``alff_df`` may be None, which is a run that computed no amplitude, and the panel is then
     the matrices alone. None overall when there is no FC to draw. A channel with no
@@ -214,9 +259,21 @@ def rest_channel_panel(
         np.fill_diagonal(mat, np.nan)
         measured.append(kept_axes([mat])[0])
     pairs = [p for p, kept in zip(pairs, np.any(measured, axis=0)) if kept]
-    order, xs, spans = _pair_blocks(pairs, raw, sep_bands)
+    if roi_map:
+        order, xs, spans, groups = _roi_blocks(pairs, roi_map)
+        colours = roi_colours(roi_map)
+    else:
+        (order, xs, spans), groups, colours = _pair_blocks(pairs, raw, sep_bands), [], {}
     if not order:
         return None
+    lim = 0.0
+    for chromo, frame in frames.items():
+        names = [f"{p} {chromo}" for p in order]
+        mat = frame.reindex(index=names, columns=names).to_numpy(dtype=float)
+        off = mat[~np.eye(len(names), dtype=bool)]
+        if np.isfinite(off).any():
+            lim = max(lim, float(np.nanmax(np.abs(off))))
+    lim = lim or 1.0
 
     values = {}
     if alff_df is not None:
@@ -242,7 +299,12 @@ def rest_channel_panel(
         subplot_titles=titles + [lab for _, lab in measures])
 
     for col, (chromo, frame) in enumerate(frames.items(), start=1):
-        _panel_matrix(fig, frame, order, chromo, col, show_bar=(col == len(frames)))
+        _panel_matrix(fig, frame, order, chromo, col, (col == len(frames)), lim, groups,
+                      colours)
+    for label, _i0, _i1 in groups:
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=label,
+                                 marker=dict(symbol="square", size=11, color=colours[label]),
+                                 hoverinfo="skip"))
 
     for col, (measure, label) in enumerate(measures, start=1):
         _panel_strip(fig, values, order, xs, measure, label, 2, col, legend=(col == 1))
@@ -270,8 +332,9 @@ def rest_channel_panel(
         if note.text in names:
             note.font = dict(size=12, color="#34495e")
     fig.update_layout(
-        height=height, plot_bgcolor="white", margin=dict(l=76, r=30, t=96, b=104),
-        legend=dict(orientation="h", yanchor="bottom", y=1.015, x=0.0, font=dict(size=10)),
+        height=height, plot_bgcolor="white", margin=dict(l=76, r=30, t=118, b=104),
+        # clear of the matrix titles under it
+        legend=dict(orientation="h", yanchor="bottom", y=1.045, x=0.0, font=dict(size=10)),
         title=dict(text=title, x=0.01, y=0.985, font=dict(size=13)))
     return fig
 
@@ -286,9 +349,9 @@ def fc_roi_matrix_figure(
 ) -> "go.Figure | None":
     """The ROI x ROI FC heatmaps, or None if there is nothing to draw.
 
-    ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. Same
-    scale as the channel matrices in :func:`rest_channel_panel`, so the ROI view and the
-    channel view can be read against each other. A handful of ROIs means every label fits, so
+    ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. The
+    channel matrices' rule in :func:`rest_channel_panel`: symmetric about 0, out to the
+    largest |r| either panel holds. A handful of ROIs means every label fits, so
     unlike those this one labels and prints every cell. The diagonal is blanked: an ROI's
     correlation with itself is 1 by construction and says nothing. An ROI with no value is
     left off both axes (:func:`kept_axes`).
@@ -310,6 +373,8 @@ def fc_roi_matrix_figure(
                        f"ROI FC - {label}"))
     if not panels:
         return None
+    lim = max((float(np.nanmax(np.abs(m))) for _, m, _ in panels if np.isfinite(m).any()),
+              default=0.0) or 1.0
 
     side = float(np.clip(max(len(n) for n, _, _ in panels) * _ROI_CELL_PX,
                          _ROI_MIN_PX, _ROI_MAX_PX))
@@ -317,14 +382,13 @@ def fc_roi_matrix_figure(
                         subplot_titles=[lab for _, _, lab in panels])
     for col, (names, mat, _label) in enumerate(panels, start=1):
         fig.add_trace(go.Heatmap(
-            z=mat.astype(np.float32), x=names, y=names, zmin=-1.0, zmax=1.0,
+            z=mat.astype(np.float32), x=names, y=names, zmin=-lim, zmax=lim,
             colorscale=CORRELATION_SCALE, showscale=(col == len(panels)),
             colorbar=dict(title=dict(text="Pearson r", side="right", font=dict(size=10)),
-                          thickness=12, len=0.8, tickfont=dict(size=9),
-                          tickvals=[-1, -0.5, 0, 0.5, 1]),
+                          thickness=12, len=0.8, tickfont=dict(size=9)),
             hovertemplate="%{y}<br>%{x}<br>r = %{z:.3f}<extra></extra>",
         ), row=1, col=col)
-        cell_values(fig, mat, names, names, cmap=CORRELATION_SCALE, vmin=-1.0, vmax=1.0,
+        cell_values(fig, mat, names, names, cmap=CORRELATION_SCALE, vmin=-lim, vmax=lim,
                     row=1, col=col)
         axes = dict(tickfont=dict(size=9), showgrid=False, zeroline=False, ticks="",
                     showline=False, constrain="domain")
