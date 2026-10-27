@@ -23,9 +23,22 @@ logger = get_logger("qc.metrics.helpers")
 SHORT_MAX_DIST = 0.01   # m, <= this is a short channel
 LONG_MIN_DIST  = 0.015  # m, >= this is a long channel
 LONG_MAX_DIST  = None   # m, or None for no upper bound
+# m: digitised positions put a 10 mm channel at 10.000025 mm; no montage is designed this finely
+SEP_TOLERANCE  = 1e-5
 
 
 Bands = "tuple[float, float, float | None]"
+
+
+def in_short_band(d: float, sep_bands: Bands) -> bool:
+    """``d`` (m) is a short separation, within :data:`SEP_TOLERANCE` of the edge."""
+    return 0 < d <= sep_bands[0] + SEP_TOLERANCE
+
+
+def in_long_band(d: float, sep_bands: Bands) -> bool:
+    """``d`` (m) is a long separation, within :data:`SEP_TOLERANCE` of either edge."""
+    long_min, long_max = sep_bands[1], sep_bands[2]
+    return long_min - SEP_TOLERANCE <= d and (long_max is None or d <= long_max + SEP_TOLERANCE)
 
 # Montage + bands pairs already named in the orphan warning below. `long_short_channels` is a
 # pure function of both and is called once per figure, so a dyad run would otherwise print
@@ -187,13 +200,13 @@ def long_short_channels(
     pick_types drops bads by default, which would leave every metric computed from these
     lists averaging over channels that were selected for being good.
     """
-    short_max, long_min, long_max = sep_bands if sep_bands is not None else separation_bands()
+    bands = sep_bands if sep_bands is not None else separation_bands()
+    short_max, long_min, long_max = bands
     picks = mne.pick_types(raw.info, meg=False, fnirs=True, exclude=[])
     dists = mne.preprocessing.nirs.source_detector_distances(raw.info, picks=picks)
     names = [raw.ch_names[i] for i in picks]
-    long_names  = [ch for ch, d in zip(names, dists)
-                   if long_min <= d and (long_max is None or d <= long_max)]
-    short_names = [ch for ch, d in zip(names, dists) if 0 < d <= short_max]
+    long_names  = [ch for ch, d in zip(names, dists) if in_long_band(d, bands)]
+    short_names = [ch for ch, d in zip(names, dists) if in_short_band(d, bands)]
     if not long_names and not short_names:
         logger.warning("no channel falls in either separation range; optode positions "
                        "are probably missing")

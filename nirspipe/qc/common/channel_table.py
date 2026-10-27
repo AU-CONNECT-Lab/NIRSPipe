@@ -23,7 +23,7 @@ from nirspipe.io.optode_space import placement_of
 from nirspipe.io.tables import write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
-from nirspipe.qc.metrics._helpers import bands_from_record
+from nirspipe.qc.metrics._helpers import bands_from_record, in_long_band, in_short_band
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.utils import pair_of, roi_overlaps
@@ -96,15 +96,14 @@ def channel_rows(
     short_names, long_names = _named(short_pc), _named(long_pc)
     measured_short = set(short_names)
     dist = whole_pc.get("ch_dist_per_channel") or {}
-    short_max, long_min, long_max = bands_from_record(record.get("raw") or {})
+    bands = bands_from_record(record.get("raw") or {})
     if not short_names:
         # a short set rejected whole has no section of its own; its separations still say
         # which channels it held
-        short_names = {ch for ch, d in dist.items() if d is not None and 0 < d <= short_max * 1e3}
+        short_names = {ch for ch, d in dist.items() if d is not None and in_short_band(d / 1e3, bands)}
     if not long_names:
         # an all-long montage writes no long section, nor does a long set rejected whole
-        long_names = {ch for ch, d in dist.items() if d is not None and long_min * 1e3 <= d
-                      and (long_max is None or d <= long_max * 1e3)}
+        long_names = {ch for ch, d in dist.items() if d is not None and in_long_band(d / 1e3, bands)}
 
     def separation_of(ch: str) -> str:
         """Which block a channel belongs to, or "" when no channel has a separation in either range.

@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
 - The dyad motion panel's left margin is sized to its longest row name, which a fixed margin cut off
+- A channel digitised a hair past a separation band's edge (a 10 mm short channel at 10.000025 mm) is classed in that band, within 0.01 mm, instead of in neither
 
 ### Changed
 - Shared usable time greys a pair a member rejected and counts it as lost; the dyad's usable numbers and table no longer count rejected channels

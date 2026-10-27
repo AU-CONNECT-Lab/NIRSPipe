@@ -293,6 +293,27 @@ def test_a_normal_montage_picks_the_long_channels_and_keeps_the_label():
     assert not set(short_names) & set(gvtd_channel_picks(normal)[0])
 
 
+def _at_separation(raw, ch: str, mm: float) -> None:
+    loc = raw.info["chs"][raw.ch_names.index(ch)]["loc"]
+    loc[6:9] = loc[3:6] + np.array([mm / 1e3, 0.0, 0.0])
+
+
+def test_a_separation_digitised_a_hair_past_a_band_edge_stays_in_the_band():
+    raw = synth_raw("01", "rest", duration=60.0, bad_pair=None, motion_onset=None)
+    long_names, short_names = long_short_channels(raw)
+    short_ch, long_ch = short_names[0], long_names[0]
+    _at_separation(raw, short_ch, 10.000025)   # Moffat's S13_D2, digitised
+    _at_separation(raw, long_ch, 14.999975)
+    long_after, short_after = long_short_channels(raw)
+    assert short_ch in short_after and long_ch in long_after
+    # past the tolerance the gap between the bands still holds
+    _at_separation(raw, short_ch, 10.05)
+    _at_separation(raw, long_ch, 14.95)
+    long_after, short_after = long_short_channels(raw)
+    assert short_ch not in short_after + long_after
+    assert long_ch not in short_after + long_after
+
+
 def test_the_channel_set_can_be_overridden_and_the_label_follows():
     """`--gvtd-censor SET` is the only caller that asks for a set, and the label it gets back
     is what the record stores, so an override that kept saying "long" would make two runs
