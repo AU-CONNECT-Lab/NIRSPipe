@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.77.0] - 2026-10-26
+
 ### Added
 - A run whose optodes could not be placed shows its mALFF and GLM betas on the optode flat map in place of the cortex
 - The run report's per-channel table names each pair's nearest cortical region (`aparc`), read from the run's channel table
