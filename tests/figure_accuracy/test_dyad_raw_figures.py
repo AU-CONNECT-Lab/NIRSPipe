@@ -332,22 +332,19 @@ def test_the_usable_table_is_the_carpet_cut_by_condition(groups, group):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_a_pair_a_member_rejected_is_greyed_and_counted_lost(groups, group):
+def test_a_pair_a_member_rejected_is_named_and_counted_lost(groups, group):
     fig = one_figure(groups.figure(group, "desc-rawusable_nirs.html"))
     heat = next(t for t in fig["data"] if t["type"] == "heatmap")
     labels = list(heat["y"])
     rejected = {m.rejected for m in groups.truth.group(group)}
     assert {lab.split()[0] for lab in labels if lab.endswith("rejected")} == rejected
-    washes = [sh for sh in fig["layout"]["shapes"]
-              if sh.get("type") == "rect" and sh.get("yref") == heat.get("yaxis", "y")]
-    washed = sorted(round((sh["y0"] + sh["y1"]) / 2) for sh in washes)
-    assert washed == sorted(i for i, lab in enumerate(labels) if lab.split()[0] in rejected)
-    # the wash covers the cells and no more
-    x = np.asarray(heat["x"], float)
-    half = np.diff(x)[0] / 2
-    assert all(sh["x0"] == pytest.approx(x[0] - half) and sh["x1"] == pytest.approx(x[-1] + half)
-               for sh in washes)
+    assert not [sh for sh in fig["layout"]["shapes"]
+                if sh.get("type") == "rect" and sh.get("yref") == heat.get("yaxis", "y")]
     z = np.asarray(heat["z"], float)
+    # worst first: rejected, then windows lost, then windows neither member passed
+    rank = [(lab.split()[0] not in rejected, -np.mean(row != 2), -np.mean(row == 0))
+            for lab, row in zip(labels, z)]
+    assert rank == sorted(rank)
     kept = [i for i, lab in enumerate(labels) if lab.split()[0] not in rejected]
     both = (z[kept] == 2).sum(axis=0).mean()
     assert groups.record(group)["usable_pairs_mean"] == pytest.approx(both, abs=0.005)

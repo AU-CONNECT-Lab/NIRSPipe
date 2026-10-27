@@ -31,7 +31,8 @@ NOTES = {
     "hyper_raw.usable":
         "A channel is usable by the dyad only while it is passing in <em>both</em> members "
         "at once, so the dyad can keep less time than either member. A pair a member "
-        "rejected is greyed and counted as lost, whatever its windows show.",
+        "rejected is named so and counted as lost, whatever its windows show. Rows run from "
+        "worst to best.",
     "hyper_raw.usable_panel":
         "Above the carpet: each member&rsquo;s long-channel mean SCI and PSP, which build the "
         "mask (PSP only with <code>--psp-threshold</code>), so a dip explains the hole "

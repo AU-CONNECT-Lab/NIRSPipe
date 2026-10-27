@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 - The GLM whitening figure's shaded bands drew a dot at each corner, which read as data points
 
 ### Changed
-- Shared usable time greys a pair a member rejected and counts it as lost; the dyad's usable numbers and table no longer count rejected channels
+- Shared usable time names a pair a member rejected and counts it as lost, rows running worst to best; the dyad's usable numbers and table no longer count rejected channels
 
 ## [0.77.0] - 2026-10-26
 
