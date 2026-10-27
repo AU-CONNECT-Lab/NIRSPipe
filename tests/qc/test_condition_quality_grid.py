@@ -58,11 +58,11 @@ def test_every_judged_cell_matches_the_condition_pages_own_grid():
 
 def test_a_row_with_no_line_runs_from_zero_to_the_cap_in_every_condition():
     a, b = _args(0.95, False), _args(0.95, False)
-    a["psp_per_ch"], b["psp_per_ch"] = {"A": 0.30, "B": 0.15}, {"A": 0.075, "B": 0.0}
+    a["psp_per_ch"], b["psp_per_ch"] = {"A": 0.30, "B": 0.10}, {"A": 0.05, "B": 0.0}
     trace = condition_quality_heatmap([("rest", a), ("task", b)], sci_thresh=0.8).data[0]
     psp = f"PSP ({PSP_WINDOW_S:g} s)"
     cells = {t.split(":")[0]: c for t, c in zip(trace.text, trace.marker.color) if psp in t}
-    # 0.15 and above at the grid's pass green, 0 at its red, half of 0.15 at the yellow
+    # 0.1 and above at the grid's pass green, 0 at its red, half of 0.1 at the yellow
     assert cells[f"rest · A · {psp}"] == cells[f"rest · B · {psp}"] == "rgb(197, 224, 179)"
     assert cells[f"task · A · {psp}"] == "rgb(255, 217, 102)"
     assert cells[f"task · B · {psp}"] == "rgb(248, 120, 110)"

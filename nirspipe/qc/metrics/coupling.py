@@ -28,7 +28,7 @@ logger = get_logger("qc.metrics.coupling")
 PSP_WINDOW_S = 10.0
 # a PSP with no line is coloured from 0 to here and saturates above, so a few loud windows
 # do not push the rest of the run into the red
-PSP_SCALE_MAX = 0.15
+PSP_SCALE_MAX = 0.1
 # CV is sigma/mu, so a longer window admits slower variation into sigma and the number grows
 # with the recording. Pinned like PSP, and to the same length so the two scalars describe
 # the same stretch of recording.
