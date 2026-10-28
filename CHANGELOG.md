@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The quality record carries the heart rate of the kept channels, and the log warns when it lies outside the cardiac band
+
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
 - The dyad motion panel's left margin is sized to its longest row name, which a fixed margin cut off

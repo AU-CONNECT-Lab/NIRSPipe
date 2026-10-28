@@ -32,7 +32,7 @@ SLICEABLE = ("sci_win_per_channel", "psp_per_channel",
 # later shows a gap instead of a whole-run number under a condition's heading.
 # `hbo_hbr_corr_per_channel` is dropped but recoverable: `with_condition_corr` puts back a
 # value measured on the cut, and a failed recompute leaves dashes rather than the run's.
-UNSLICEABLE = ("cp_per_channel", "temporal_derivative_variance",
+UNSLICEABLE = ("cp_per_channel", "heart_rate_per_channel", "temporal_derivative_variance",
                # the whole-run SCI is one correlation over the recording, with no windows
                "sci_per_channel",
                "hbo_hbr_corr_per_channel", "cnr_per_channel",

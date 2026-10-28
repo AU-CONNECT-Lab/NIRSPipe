@@ -311,7 +311,7 @@ def _process_run(
     # uses, and the panels read it too, so short channels stay out of the long verdict.
     raw_secs, raw_pc = raw_sections(
         raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
-        screen_scores.get("good_frac"))
+        screen_scores.get("good_frac"), resp_h_freq=resp_h_freq)
     # HbO-HbR correlation on both conversions above, split by separation as the pipeline's
     # haemoglobin stages are
     for name, haemo in (("rawhaemo", raw_haemo), ("rawhaemo_post", raw_haemo_post)):

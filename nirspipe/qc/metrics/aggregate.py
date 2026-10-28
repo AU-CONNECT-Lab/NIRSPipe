@@ -12,7 +12,7 @@ import mne
 import numpy as np
 
 from nirspipe.qc.metrics.coupling import (
-    _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics,
+    _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics, _heart_rate_metrics,
     _intensity_metrics, _psp_metrics, _saturation_metrics, _sci_metrics, _sci_win_metrics,
 )
 from nirspipe.qc.metrics.gvtd import _motion_metrics
@@ -37,6 +37,7 @@ def compute_raw_sqm(
     cardiac_h_freq: float,
     good_frac_scores: dict[str, float] | None = None,
     ceiling: float | None = None,
+    resp_h_freq: float | None = None,
 ) -> dict[str, Any]:
     """Metrics computable from raw intensity data (no haemo required).
 
@@ -57,12 +58,16 @@ def compute_raw_sqm(
         The whole recording's highest intensity, which the saturated share is counted
         against. Pass it when ``raw_intensity`` is one channel set or one stretch of the
         recording; None takes the maximum of ``raw_intensity`` itself.
+    resp_h_freq : float or None, optional
+        Top of the respiration band, where the heart rate is looked for from, over the
+        channels not in ``bad_channels``. None stores no heart rate, as for a trial's crop,
+        too short for its spectrum.
 
     Returns
     -------
     dict
-        Flat dict of SCI (whole-run and windowed), channel distance, PSP, CP, the
-        passing-window share, and
+        Flat dict of SCI (whole-run and windowed), channel distance, PSP, CP, the heart
+        rate, the passing-window share, and
         (intensity input only) CV/SNR/amplitude plus motion metrics.
 
     Notes
@@ -78,6 +83,9 @@ def compute_raw_sqm(
     record.update(_psp_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     # CP works in the OD domain, so it runs for both intensity and already-OD input
     record.update(_cardiac_power_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
+    if resp_h_freq is not None:
+        record.update(_heart_rate_metrics(
+            raw_intensity, resp_h_freq, set(bad_channels) | set(raw_intensity.info["bads"])))
     if is_optical_density(raw_intensity):
         # intensity-value metrics are meaningless on already-OD data
         logger.warning("input is already optical density; skipping intensity/motion SQM")

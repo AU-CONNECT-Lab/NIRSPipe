@@ -1,7 +1,8 @@
 """How well the optodes are coupled to the scalp, and how strong the signal is.
 
-SCI and PSP read the cardiac oscillation the two wavelengths of a pair should share; CV,
-SNR and mean amplitude read the intensity itself; CP is experimental. Every one of these is
+SCI and PSP read the cardiac oscillation the two wavelengths of a pair should share, and the
+heart rate where it peaks; CV, SNR and mean amplitude read the intensity itself; CP is
+experimental. Every one of these is
 a property of the recording as acquired, so they run before any rejection and their
 aggregates include the channels that rejection will remove.
 """
@@ -546,4 +547,68 @@ def _cardiac_power_metrics(
     return {
         "cp_mean": _mean_or_none(valid),
         "cp_per_channel": cp_per_ch,
+    }
+
+
+def heart_rate_band(sfreq: float, resp_h_freq: float) -> "tuple[float, float]":
+    """Where a heart rate is looked for: from the respiration band's top to where a cardiac band may end.
+
+    ::
+
+        heart_rate_band(10.0, 0.5) -> (0.5, 4.7)
+    """
+    return resp_h_freq, sfreq / 2 - CARDIAC_TRANSITION_HZ
+
+
+@_safe_metrics("Heart rate", ("heart_rate", "heart_rate_per_channel"))
+def _heart_rate_metrics(
+    raw: mne.io.Raw,
+    resp_h_freq: float,
+    rejected: "set[str]",
+) -> dict[str, Any]:
+    r"""Heart rate: the median over kept channels of each channel's cardiac frequency, in Hz.
+
+    .. math::
+
+        f_\mathrm{HR} = \operatorname*{median}_{c \notin \mathrm{rejected}} \;
+            \operatorname*{arg\,max}_{f_\mathrm{resp} \le f \le f_N - 0.3\,\mathrm{Hz}} P_c(f),
+
+    where :math:`P_c` is channel :math:`c`'s Welch spectrum of optical density over the run,
+    frames in ``BAD_`` spans left out, :math:`f_\mathrm{resp}` the top of the respiration band
+    and :math:`f_N` the Nyquist frequency. The peak is CP's cardiac frequency
+    :footcite:`Bizzego2022`, searched past the cardiac band rather than inside it, so a band
+    that misses the pulse shows; the top is where a cardiac band may end at this sampling
+    rate. Descriptive: nothing is rejected on it.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        Raw intensity or optical-density recording.
+    resp_h_freq : float
+        Top of the respiration band in Hz, the search's floor.
+    rejected : set of str
+        Channels that do not vote; they keep their own peak in the per-channel dict.
+
+    Returns
+    -------
+    dict
+        heart_rate and heart_rate_per_channel, a flat channel having no peak to report.
+
+    References
+    ----------
+    .. footbibliography::
+    """
+    raw_od = as_optical_density(raw)
+    fmin, fmax = heart_rate_band(raw_od.info["sfreq"], resp_h_freq)
+    psd = raw_od.compute_psd(fmin=fmin, fmax=fmax, verbose=False)
+    # exclude=() keeps get_data() aligned with ch_names, as in CP above
+    power = psd.get_data(exclude=())
+    if psd.freqs.size == 0:
+        raise ValueError(f"no frequencies between {fmin:g} and {fmax:g} Hz")
+    per_ch = {ch: float(psd.freqs[np.argmax(row)]) for ch, row in zip(psd.ch_names, power)
+              if np.isfinite(row).all() and row.max() > 0}
+    kept = [f for ch, f in per_ch.items() if ch not in rejected]
+    return {
+        "heart_rate": float(np.median(kept)) if kept else None,
+        "heart_rate_per_channel": per_ch,
     }

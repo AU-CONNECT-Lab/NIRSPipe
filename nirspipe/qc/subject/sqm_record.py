@@ -68,7 +68,7 @@ from nirspipe.utils import is_optical_density
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, is_bad_span
 from nirspipe import __version__
-from nirspipe.qc.common.channel_table import channel_rows, save_channel_csv
+from nirspipe.qc.common.channel_table import channel_rows, heart_rate_note, save_channel_csv
 from nirspipe.qc.subject.record_io import write_record
 from nirspipe.qc.subject.condition_views import (
     PSD_NFFT_CAP, condition_haemo_scalars, condition_scalars, condition_set_scalars,
@@ -304,10 +304,12 @@ def _short_section(
     cardiac_h_freq: float,
     good_frac_scores: "dict[str, float] | None" = None,
     ceiling: "float | None" = None,
+    resp_h_freq: "float | None" = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Only the metrics that answer "are the short-channel regressors trustworthy".
 
-    Coupling (SCI, PSP, the passing-window share), amplitude (SNR, CV) and saturation,
+    Coupling (SCI, PSP, the passing-window share, the heart rate), amplitude (SNR, CV) and
+    saturation,
     against the whole recording's ``ceiling``, transfer to short
     channels, and so does the whole spike family: the mask is a per-channel MAD test, and the
     frame counts over it ask how many of *these* channels spiked at once, which the windowed
@@ -330,7 +332,7 @@ def _short_section(
         _intensity_metrics, _motion_metrics, _psp_metrics, _saturation_metrics, _sci_metrics,
         _sci_win_metrics, _spike_metrics,
     )
-    from nirspipe.qc.metrics.coupling import _good_frac_metrics
+    from nirspipe.qc.metrics.coupling import _good_frac_metrics, _heart_rate_metrics
 
     raw_short = raw_intensity.copy().pick(short_names)
     short_set = set(short_names)
@@ -343,6 +345,9 @@ def _short_section(
     record.update(_sci_win_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
     record.update(_psp_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
     record.update(_good_frac_metrics(short_frac))
+    if resp_h_freq is not None:
+        record.update(_heart_rate_metrics(raw_short, resp_h_freq,
+                                          set(short_bad) | set(raw_short.info["bads"])))
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
@@ -439,6 +444,7 @@ def raw_sections(
     cardiac_h_freq: float,
     sep_bands=None,
     good_frac_scores: dict[str, float] | None = None,
+    resp_h_freq: float | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The three views of the original recording, as ``(sections, per_channel)``.
 
@@ -458,6 +464,9 @@ def raw_sections(
     ``good_frac_scores`` is the passing-window share the screening already counted, passed
     in rather than recounted: it is two windowed passes over the recording, and a caller
     that screened has it. None leaves the entry empty rather than paying for it again.
+
+    ``resp_h_freq`` is where each set's heart rate is looked for from; a heart rate outside
+    the cardiac band is warned about in the log. None measures no heart rate.
     """
     from nirspipe.qc.metrics import compute_raw_sqm, long_short_channels
     from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
@@ -471,7 +480,7 @@ def raw_sections(
 
     section("raw", lambda: compute_raw_sqm(
         raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
-        good_frac_scores, ceiling=ceiling))
+        good_frac_scores, ceiling=ceiling, resp_h_freq=resp_h_freq))
 
     sep_bands = sep_bands if sep_bands is not None else separation_bands()
     long_names, short_names = long_short_channels(raw_intensity, sep_bands)
@@ -492,16 +501,21 @@ def raw_sections(
                          if k in set(long_names)}
             return compute_raw_sqm(
                 raw_long, long_sci, long_bad, cardiac_l_freq, cardiac_h_freq, long_frac,
-                ceiling=ceiling)
+                ceiling=ceiling, resp_h_freq=resp_h_freq)
         section("raw_long", long_section)
     if short_names and not set(short_names) <= rejected:
         # already returns the (scalars, nested) split, so it bypasses `section`
         try:
             sections["raw_short"], per_channel["raw_short"] = _short_section(
                 raw_intensity, short_names, sci_scores, bad_channels,
-                cardiac_l_freq, cardiac_h_freq, good_frac_scores, ceiling)
+                cardiac_l_freq, cardiac_h_freq, good_frac_scores, ceiling, resp_h_freq)
         except Exception:
             logger.warning("raw_short: section failed", exc_info=True)
+    # read off the long set where there is one, as the reports read it
+    note = heart_rate_note(raw_verdict_view(sections).get("heart_rate"),
+                           (cardiac_l_freq, cardiac_h_freq))
+    if note:
+        logger.warning(note)
     return sections, per_channel
 
 
@@ -1162,7 +1176,7 @@ def compute_run_sections(
 
         raw_secs, raw_pc = raw_sections(
             raw_intensity, sci_scores, bad_channels, cardiac_l_freq, cardiac_h_freq,
-            sep_bands, _good_frac_scores(stages))
+            sep_bands, _good_frac_scores(stages), resp_h_freq=resp_h_freq)
         sections.update(raw_secs)
         per_channel.update(raw_pc)
 

@@ -277,6 +277,14 @@ def template_note(population: "str | None", template: "str | None") -> "str | No
     return None
 
 
+def heart_rate_note(heart_rate: "float | None", cardiac: "tuple[float, float]") -> "str | None":
+    """What to say when the heart rate lies outside the cardiac band, or None."""
+    if heart_rate is None or cardiac[0] <= heart_rate <= cardiac[1]:
+        return None
+    return section_note("caveat.heart_rate_outside_band", hz=heart_rate, bpm=60 * heart_rate,
+                        lo=cardiac[0], hi=cardiac[1])
+
+
 def placement_note(raw) -> "str | None":
     """What to say when no reading placed the optodes on their template, read as the brain views read it.
 
