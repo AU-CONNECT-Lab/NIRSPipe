@@ -31,6 +31,14 @@ def test_each_set_sits_over_its_members_columns():
     assert cells == ["50.0%", "60.0%", "70.0%", "80.0%", "90.0%", "100.0%"]
 
 
+def test_the_heart_rate_is_an_optical_density_row_with_each_member_s_value():
+    by_set = {"all": {"A": {"heart_rate": 1.3777}, "B": {"heart_rate": 1.0861}}}
+    table = member_metric_table(subject_metric_tables(by_set, ["A", "B"], {}))
+    row = _row(table, "heart_rate")
+    assert [c["text"] for c in row["cells"]] == ["1.38", "1.09"]
+    assert next(g["title"] for g in table["groups"] if row in g["rows"]) == "Optical density"
+
+
 def test_a_metric_one_set_lacks_prints_a_dash_in_that_set_only():
     table = member_metric_table(subject_metric_tables(_by_set(), ["A", "B"], {}))
     cells = [c["text"] for c in _row(table, "hbo_hbr_corr_mean")["cells"]]

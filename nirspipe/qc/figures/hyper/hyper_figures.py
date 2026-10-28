@@ -20,7 +20,7 @@ from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the pane
 from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, MEMBER_COLORS,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
-                                          minmax_xy, physio_bands, timeline_axes,
+                                          minmax_xy, physio_bands, spectrum_fmax, timeline_axes,
                                           timeline_row_bands, timeline_row_traces)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from nirspipe.qc.figures.common.head_map import (
@@ -1137,6 +1137,7 @@ def build_psd(
 ) -> go.Figure | None:
     hbo_name = f"{ch_pair} hbo"
     traces: list[go.BaseTraceType] = []
+    xmax = 0.0
 
     for sub_idx, sid in enumerate(subject_ids):
         raw = aligned_raws.get(sid)
@@ -1149,7 +1150,8 @@ def build_psd(
         psds, freqs = spectrum
         sfreq = raw.info["sfreq"]
         psd = psds[0]
-        fmax = min(2.0, float(sfreq / 2))
+        fmax = spectrum_fmax(float(sfreq), cardiac[1] if cardiac else None)
+        xmax = max(xmax, fmax)
         mask = freqs <= fmax
         traces.append(go.Scatter(
             x=freqs[mask].tolist(), y=psd[mask].tolist(),
@@ -1164,7 +1166,7 @@ def build_psd(
     return go.Figure(
         data=traces,
         layout=go.Layout(
-            xaxis=dict(title="Frequency (Hz)", range=[0, 2], gridcolor="#eeeeee"),
+            xaxis=dict(title="Frequency (Hz)", range=[0, xmax], gridcolor="#eeeeee"),
             yaxis=dict(title="Power (HbO)", type="log", gridcolor="#eeeeee"),
             plot_bgcolor="white", paper_bgcolor="white",
             height=200, margin=dict(l=60, r=15, t=22, b=38),

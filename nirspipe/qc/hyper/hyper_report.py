@@ -88,6 +88,7 @@ _SUBJECT_METRIC_GROUPS = (
         # the only one of these that screens; the rest are measured and reported
         "good_frac_mean",
         "psp_mean",
+        "heart_rate",
         "snr_mean",
         "cv_mean",
         "n_saturated_channels",

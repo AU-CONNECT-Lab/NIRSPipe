@@ -35,6 +35,7 @@ from nirspipe.qc.metrics.hyper import (
 )
 from nirspipe.qc.hyper.hyper_usable import usable_scalars, write_usable_table
 from nirspipe.qc.boilerplate.notes import section_note
+from nirspipe.qc.common.channel_table import heart_rate_note
 from nirspipe.qc.common.report_shell import guard, note
 from nirspipe.qc.common.windows import condition_windows, markers_on_data_axis
 from nirspipe.qc.metrics._helpers import long_short_channels
@@ -143,6 +144,10 @@ def _process_hyper_raw_group(
             note(notes, label, f"{sid}: " + section_note("caveat.unscreened", reason=gap))
         if caveat := (sqm_data.get(sid) or {}).get("dpf_caveat"):
             note(notes, label, f"{sid}: {caveat}")
+        member = sqm_data.get(sid) or {}
+        if member.get("screen_band") and (hr_note := heart_rate_note(
+                member.get("heart_rate"), member["screen_band"])):
+            note(notes, label, f"{sid}: {hr_note}")
 
     # each member screened by its own lines and on its own cardiac band; a figure drawn for
     # the dyad as one carries a rule or a shaded band only where every member shares it

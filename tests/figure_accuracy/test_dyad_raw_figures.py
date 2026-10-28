@@ -7,8 +7,8 @@ import pytest
 from mne.preprocessing.nirs import beer_lambert_law
 
 from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, own_freq
-from tests._fingerprint import CLI_ARGS
-from tests.figure_accuracy._dyad import js_var
+from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS
+from tests.figure_accuracy._dyad import html_tables, js_var
 from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
 from tests.figure_accuracy._read import share_at, slider_layout, traces, xy
 
@@ -173,6 +173,24 @@ def test_each_spectrum_shades_the_bands_the_members_were_given(groups, group):
         spans = {(s["x0"], s["x1"]) for s in psd["layout"]["shapes"] if s["type"] == "rect"}
         assert spans >= {band("--resp-l-freq", "--resp-h-freq"),
                          band("--cardiac-l-freq", "--cardiac-h-freq")}, pair
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_each_spectrum_ends_at_2_hz_under_a_band_that_does(groups, group):
+    pair = groups.truth.long_pairs[0]
+    psd = plotly_figures(groups.figure(
+        group, f"chan-{pair.replace('_', '')}_desc-rawdetail_nirs.html"))[1]
+    assert psd["layout"]["xaxis"]["range"] == [0, 2.0]
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_the_quality_table_gives_each_member_the_planted_heart_rate(groups, group):
+    rows = [row for _, rows in html_tables(groups.page(group, raw=True)) for row in rows
+            if row and row[0].strip().startswith("Heart rate")]
+    values = [float(cell) for cell in rows[0][1:] if re.fullmatch(r"[0-9.]+", cell.strip())]
+    assert len(values) >= 2
+    assert all(v == pytest.approx(CARDIAC_FREQ, abs=0.05) for v in values)
+    assert "outside the cardiac band" not in _page(groups, group)
 
 
 # ---- channels ----
