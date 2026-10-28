@@ -15,7 +15,7 @@ from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import (
     COHORT_ID_COLUMN, COHORT_SECTIONS, format_metric, metric_label, record_key_summary,
 )
-from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
+from nirspipe.qc.metrics.coupling import SCI_WINDOW_S, labels_look_swapped
 from nirspipe.qc.common.figure_io import _save_figure_html
 from nirspipe.qc.figures.subject.group_figures import (
     SCORE_THRESHOLD,
@@ -361,6 +361,30 @@ def channels_kept(output_dir: Path) -> dict:
     return {"tasks": tasks, "rows": rows}
 
 
+def swapped_label_tasks(full_rows: list[dict]) -> list[dict]:
+    """Each task whose runs mostly read as if the two wavelength labels were swapped.
+
+    ``[{"task": "task-rest", "runs": [names], "n": runs with a verdict}]``, a task listed when
+    more than half of its runs with a verdict read swapped (:func:`labels_look_swapped`). A
+    label error belongs to a device or a converter, so it shows in most runs; one run alone
+    can read swapped by chance.
+    """
+    by_task: dict[str, dict] = {}
+    for row in full_rows:
+        long_set = row.get("raw_long") or {}
+        swapped = labels_look_swapped(long_set.get("cardiac_ratio"),
+                                      long_set.get("cardiac_ratio_swapped"))
+        if swapped is None:
+            continue
+        task = by_task.setdefault(f"task-{entity_of(row['bids_name'], 'task')}",
+                                  {"runs": [], "n": 0})
+        task["n"] += 1
+        if swapped:
+            task["runs"].append(row["bids_name"])
+    return [{"task": name, "runs": t["runs"], "n": t["n"]} for name, t in sorted(by_task.items())
+            if len(t["runs"]) > t["n"] / 2]
+
+
 def _optode_order(name: str) -> tuple:
     """Sources before detectors, then by number: S2 before S10."""
     digits = name[1:]
@@ -555,6 +579,12 @@ def _render_group(
     regions: dict = {}
     with guard("Regions", errors, out_desc):
         regions = region_losses(output_dir, roi_map)
+
+    for task in swapped_label_tasks(full_rows):
+        msg = section_note("caveat.labels_swapped", task=task["task"], k=len(task["runs"]),
+                           n=task["n"], runs=", ".join(task["runs"]))
+        notes.append(msg)
+        logger.warning(msg)
 
     conditions = condition_names(full_rows)
     if not conditions:

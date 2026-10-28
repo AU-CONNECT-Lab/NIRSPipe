@@ -615,3 +615,120 @@ def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
         "heart_rate": float(np.median(list(per_ch.values()))) if per_ch else None,
         "heart_rate_per_channel": per_ch,
     }
+
+
+# ours: a pulse whose peak stands this far over the band's median, and a swapped reading this
+# many times the labelled one
+CARDIAC_PEAK_MIN = 10.0
+SWAP_FACTOR = 2.0
+
+
+def labels_look_swapped(ratio: "float | None", ratio_swapped: "float | None") -> "bool | None":
+    """Whether swapping the two wavelengths puts the pulse in HbO by :data:`SWAP_FACTOR` more; None without both."""
+    if ratio is None or ratio_swapped is None:
+        return None
+    return ratio_swapped > SWAP_FACTOR * ratio
+
+
+@_safe_metrics("Wavelength check", ("cardiac_ratio", "cardiac_ratio_swapped", "cardiac_ratio_n",
+                                    "cardiac_ratio_per_channel",
+                                    "cardiac_ratio_swapped_per_channel"))
+def _cardiac_ratio_metrics(raw: mne.io.Raw, bad_channels: "list[str]", cardiac_l_freq: float,
+                           cardiac_h_freq: float) -> dict[str, Any]:
+    r"""HbO over HbR power of the pulse, with the two wavelength labels as given and swapped.
+
+    For each kept pair whose pulse is clear, from the band means over the cardiac band of the
+    Welch auto-spectra :math:`S_{11}, S_{22}` and the real cross-spectrum :math:`S_{12}` of
+    its two optical densities,
+
+    .. math::
+
+        R = \frac{\mathbf{m}_{O} S \mathbf{m}_{O}^\top}{\mathbf{m}_{R} S \mathbf{m}_{R}^\top},
+        \qquad S = \begin{pmatrix} S_{11} & S_{12} \\ S_{12} & S_{22} \end{pmatrix},
+
+    where :math:`\mathbf{m}_{O}` and :math:`\mathbf{m}_{R}` are the rows of the pseudo-inverse
+    of the 2 × 2 extinction matrix the conversion uses; :math:`R_\mathrm{swapped}` takes the
+    matrix with its rows swapped. The record keeps the median of each over the pairs. The
+    pulse is arterial and arterial blood is nearly all oxygenated, so labels as given read
+    far above 1 and swapped ones below; :func:`labels_look_swapped` compares the two.
+
+    A pair counts when neither wavelength was rejected and the peak of its longer
+    wavelength's spectrum in the band stands :data:`CARDIAC_PEAK_MIN` times over the band's
+    median: a change common to both wavelengths (movement, a loose optode) carries the
+    band otherwise, reads near 1 either way, and SCI cannot tell it from a pulse.
+
+    Ours. A single recording can read swapped by chance, so the cohort page, not the run,
+    says so, per task. Descriptive: nothing is rejected on it.
+
+    Parameters
+    ----------
+    raw : mne.io.Raw
+        Raw intensity or optical-density recording.
+    bad_channels : list of str
+        Channels rejected, by screening or by hand.
+    cardiac_l_freq, cardiac_h_freq : float
+        The cardiac band in Hz; its top is capped below Nyquist as the heart rate's search is.
+
+    Returns
+    -------
+    dict
+        The two medians, the number of pairs they are taken over, and each pair's two ratios.
+    """
+    from mne.preprocessing.nirs._beer_lambert_law import _load_absorption
+
+    raw_od = as_optical_density(raw)
+    sfreq = raw_od.info["sfreq"]
+    band = (cardiac_l_freq, min(cardiac_h_freq, sfreq / 2 - CARDIAC_TRANSITION_HZ))
+    wavelength = {ch["ch_name"]: float(ch["loc"][9]) for ch in raw_od.info["chs"]}
+    wavelengths = sorted(set(wavelength.values()))
+    if len(wavelengths) != 2 or band[1] <= band[0]:
+        raise ValueError(f"needs two wavelengths and a cardiac band below Nyquist, "
+                         f"has {wavelengths} and {band}")
+    rejected = set(bad_channels) | set(raw_od.info["bads"])
+    pairs: dict[str, dict[float, str]] = {}
+    for ch in raw_od.ch_names:
+        pairs.setdefault(ch.rsplit(" ", 1)[0], {})[wavelength[ch]] = ch
+    kept = {p: (by[wavelengths[0]], by[wavelengths[1]]) for p, by in pairs.items()
+            if len(by) == 2 and not set(by.values()) & rejected}
+    if not kept:
+        raise ValueError("no kept pair")
+    # BAD_ spans out, as the heart rate's spectrum leaves them
+    order = [raw_od.ch_names.index(c) for both in kept.values() for c in both]
+    data = raw_od.get_data(picks=order, reject_by_annotation="omit")
+    short_wl, long_wl = data[0::2], data[1::2]
+    kw = dict(fs=sfreq, nperseg=int(min(data.shape[1], round(sfreq * 20))),
+              detrend="linear", axis=-1)
+    freqs, s11 = signal.welch(short_wl, **kw)
+    _, s22 = signal.welch(long_wl, **kw)
+    _, s12 = signal.csd(short_wl, long_wl, **kw)
+    inband = (freqs >= band[0]) & (freqs <= band[1])
+    if inband.sum() < 3:
+        raise ValueError(f"fewer than three frequencies in {band}")
+    s11, s22, s12 = s11[:, inband], s22[:, inband], s12.real[:, inband]
+    floor = np.median(s22, axis=1)
+    # the peak of both wavelengths' spectra, each on its own floor, one bin either side
+    profile = s11 / np.median(s11, axis=1, keepdims=True) + s22 / floor[:, None]
+    k = np.clip(profile.argmax(axis=1), 1, inband.sum() - 2)
+    peak = np.take_along_axis(s22, np.c_[k - 1, k, k + 1], axis=1).mean(axis=1)
+    # a flat channel has no floor to stand over
+    clear = (floor > 0) & (peak >= CARDIAC_PEAK_MIN * floor)
+
+    def ratios(extinction):
+        m = np.linalg.pinv(extinction)
+        a, b, c = s11.mean(1), s22.mean(1), s12.mean(1)
+        hbo = m[0, 0] ** 2 * a + m[0, 1] ** 2 * b + 2 * m[0, 0] * m[0, 1] * c
+        hbr = m[1, 0] ** 2 * a + m[1, 1] ** 2 * b + 2 * m[1, 0] * m[1, 1] * c
+        return hbo / hbr
+
+    extinction = _load_absorption(wavelengths)
+    given, swapped = ratios(extinction), ratios(extinction[::-1])
+    clear &= np.isfinite(given) & np.isfinite(swapped)
+    names = [p for p, ok in zip(kept, clear) if ok]
+    given, swapped = given[clear], swapped[clear]
+    return {
+        "cardiac_ratio": float(np.median(given)) if names else None,
+        "cardiac_ratio_swapped": float(np.median(swapped)) if names else None,
+        "cardiac_ratio_n": len(names),
+        "cardiac_ratio_per_channel": dict(zip(names, map(float, given))),
+        "cardiac_ratio_swapped_per_channel": dict(zip(names, map(float, swapped))),
+    }

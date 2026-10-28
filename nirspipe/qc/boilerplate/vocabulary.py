@@ -785,6 +785,9 @@ METRIC_SUMMARY = {
     "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows passing on SCI, and on PSP when it has a line; channels are rejected on this. Higher is better.",
     "cp_mean": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental, with no better end; read SCI and PSP for coupling.",
     "heart_rate": "Heart rate in Hz, the median of the channels' spectral peaks above the respiration band. Descriptive; it should lie inside the cardiac band.",
+    "cardiac_ratio": "HbO over HbR power of the pulse, the median over kept long channels whose pulse is clear. Descriptive; far above 1, as the pulse is arterial.",
+    "cardiac_ratio_swapped": "The same with the two wavelength labels swapped. Far above the labelled value in most runs of a task means the labels may be swapped.",
+    "cardiac_ratio_n": "Kept long channels whose pulse is clear enough for the cardiac HbO/HbR ratio. Descriptive.",
 
     # raw intensity
     "cv_mean": f"Noise relative to brightness (SD / mean) of the raw intensity, in {CV_WINDOW_S:g} s windows. Lower is better.",
@@ -977,6 +980,8 @@ RECORD_CHANNEL_METRICS = {
     "psp_per_channel": f"Strength of the cardiac peak the two wavelengths share, averaged over {PSP_WINDOW_S:g} s windows.",
     "cp_per_channel": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental.",
     "heart_rate_per_channel": "Frequency in Hz where the channel's spectrum peaks above the respiration band; their median over the set is the heart rate.",
+    "cardiac_ratio_per_channel": "HbO over HbR power of the pulse, wavelength labels as given.",
+    "cardiac_ratio_swapped_per_channel": "HbO over HbR power of the pulse, the two wavelength labels swapped.",
     "cv_per_channel": f"Standard deviation over mean of the raw intensity inside {CV_WINDOW_S:g} s windows, averaged over the windows.",
     "snr_per_channel": "Mean over standard deviation, the reciprocal of the channel's CV.",
     "mean_amp_per_channel": "Mean raw intensity reaching the detector.",
@@ -1098,6 +1103,9 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     "good_frac_mean":          ("Passing windows", "pct", (0.75, 0.5), _HIGHER),
     "cp_mean":                 ("Mean CP (exp.)", ".3f", None, None),
     "heart_rate":              ("Heart rate (Hz)", ".2f", None, None),
+    "cardiac_ratio":           ("Cardiac HbO/HbR ratio", ".1f", None, None),
+    "cardiac_ratio_swapped":   ("Cardiac HbO/HbR ratio, labels swapped", ".1f", None, None),
+    "cardiac_ratio_n":         ("Channels with a clear pulse", "d", None, None),
     # raw intensity
     "cv_mean":                 (f"Mean CV ({CV_WINDOW_S:g} s)", ".3f", None, _LOWER),
     "snr_mean":                (f"Mean SNR μ/σ ({CV_WINDOW_S:g} s)", ".1f", None, _HIGHER),

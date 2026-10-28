@@ -33,6 +33,11 @@ NOTES = {
     "caveat.unscreened":
         "Channel screening could not judge this recording: {reason}. No channel was rejected "
         "by it, so OK here means unscreened; preprocessing refuses the recording.",
+    "caveat.labels_swapped":
+        "{k} of the {n} runs of {task} with a clear pulse read as if their two wavelength "
+        "labels were swapped: the pulse, which is arterial and so mostly HbO, comes out "
+        "mostly in HbR as labelled and in HbO with the labels swapped. Check the "
+        "wavelengths in the files and their converter. Runs: {runs}.",
     "caveat.heart_rate_outside_band":
         "The heart rate, {hz:.2f} Hz ({bpm:.0f} beats per minute), lies outside the cardiac "
         "band ({lo:g} to {hi:g} Hz) that SCI and PSP look for the pulse in. Check "

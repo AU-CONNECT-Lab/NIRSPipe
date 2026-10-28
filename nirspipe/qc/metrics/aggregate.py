@@ -12,8 +12,9 @@ import mne
 import numpy as np
 
 from nirspipe.qc.metrics.coupling import (
-    _cardiac_power_metrics, _channel_distance_metrics, _good_frac_metrics, _heart_rate_metrics,
-    _intensity_metrics, _psp_metrics, _saturation_metrics, _sci_metrics, _sci_win_metrics,
+    _cardiac_power_metrics, _cardiac_ratio_metrics, _channel_distance_metrics, _good_frac_metrics,
+    _heart_rate_metrics, _intensity_metrics, _psp_metrics, _saturation_metrics, _sci_metrics,
+    _sci_win_metrics,
 )
 from nirspipe.qc.metrics.gvtd import _motion_metrics
 from nirspipe.qc.metrics.haemo import (
@@ -60,13 +61,14 @@ def compute_raw_sqm(
         recording; None takes the maximum of ``raw_intensity`` itself.
     resp_h_freq : float or None, optional
         Top of the respiration band, where the heart rate is looked for from. None stores
-        no heart rate, as for a trial's crop, too short for its spectrum.
+        no heart rate and no wavelength check, as for a trial's crop, too short for their
+        spectra.
 
     Returns
     -------
     dict
         Flat dict of SCI (whole-run and windowed), channel distance, PSP, CP, the heart
-        rate, the passing-window share, and
+        rate, the cardiac HbO/HbR ratio as labelled and swapped, the passing-window share, and
         (intensity input only) CV/SNR/amplitude plus motion metrics.
 
     Notes
@@ -84,6 +86,8 @@ def compute_raw_sqm(
     record.update(_cardiac_power_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     if resp_h_freq is not None:
         record.update(_heart_rate_metrics(raw_intensity, resp_h_freq))
+        record.update(_cardiac_ratio_metrics(raw_intensity, bad_channels, cardiac_l_freq,
+                                             cardiac_h_freq))
     if is_optical_density(raw_intensity):
         # intensity-value metrics are meaningless on already-OD data
         logger.warning("input is already optical density; skipping intensity/motion SQM")
