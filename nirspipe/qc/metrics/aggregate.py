@@ -59,9 +59,8 @@ def compute_raw_sqm(
         against. Pass it when ``raw_intensity`` is one channel set or one stretch of the
         recording; None takes the maximum of ``raw_intensity`` itself.
     resp_h_freq : float or None, optional
-        Top of the respiration band, where the heart rate is looked for from, over the
-        channels not in ``bad_channels``. None stores no heart rate, as for a trial's crop,
-        too short for its spectrum.
+        Top of the respiration band, where the heart rate is looked for from. None stores
+        no heart rate, as for a trial's crop, too short for its spectrum.
 
     Returns
     -------
@@ -84,8 +83,7 @@ def compute_raw_sqm(
     # CP works in the OD domain, so it runs for both intensity and already-OD input
     record.update(_cardiac_power_metrics(raw_intensity, cardiac_l_freq, cardiac_h_freq))
     if resp_h_freq is not None:
-        record.update(_heart_rate_metrics(
-            raw_intensity, resp_h_freq, set(bad_channels) | set(raw_intensity.info["bads"])))
+        record.update(_heart_rate_metrics(raw_intensity, resp_h_freq))
     if is_optical_density(raw_intensity):
         # intensity-value metrics are meaningless on already-OD data
         logger.warning("input is already optical density; skipping intensity/motion SQM")

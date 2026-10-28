@@ -346,8 +346,7 @@ def _short_section(
     record.update(_psp_metrics(raw_short, cardiac_l_freq, cardiac_h_freq))
     record.update(_good_frac_metrics(short_frac))
     if resp_h_freq is not None:
-        record.update(_heart_rate_metrics(raw_short, resp_h_freq,
-                                          set(short_bad) | set(raw_short.info["bads"])))
+        record.update(_heart_rate_metrics(raw_short, resp_h_freq))
     intensity = _intensity_metrics(raw_short)
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})

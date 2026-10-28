@@ -561,16 +561,12 @@ def heart_rate_band(sfreq: float, resp_h_freq: float) -> "tuple[float, float]":
 
 
 @_safe_metrics("Heart rate", ("heart_rate", "heart_rate_per_channel"))
-def _heart_rate_metrics(
-    raw: mne.io.Raw,
-    resp_h_freq: float,
-    rejected: "set[str]",
-) -> dict[str, Any]:
-    r"""Heart rate: the median over kept channels of each channel's cardiac frequency, in Hz.
+def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
+    r"""Heart rate: the median over channels of each channel's cardiac frequency, in Hz.
 
     .. math::
 
-        f_\mathrm{HR} = \operatorname*{median}_{c \notin \mathrm{rejected}} \;
+        f_\mathrm{HR} = \operatorname*{median}_{c} \;
             \operatorname*{arg\,max}_{f_\mathrm{resp} \le f \le f_N - 0.3\,\mathrm{Hz}} P_c(f),
 
     where :math:`P_c` is channel :math:`c`'s Welch spectrum of optical density over the run,
@@ -578,7 +574,8 @@ def _heart_rate_metrics(
     and :math:`f_N` the Nyquist frequency. The peak is CP's cardiac frequency
     :footcite:`Bizzego2022`, searched past the cardiac band rather than inside it, so a band
     that misses the pulse shows; the top is where a cardiac band may end at this sampling
-    rate. Descriptive: nothing is rejected on it.
+    rate. Rejected channels vote too: screening reads SCI in that same band, so a band that
+    misses the pulse rejects every channel. Descriptive: nothing is rejected on it.
 
     Parameters
     ----------
@@ -586,8 +583,6 @@ def _heart_rate_metrics(
         Raw intensity or optical-density recording.
     resp_h_freq : float
         Top of the respiration band in Hz, the search's floor.
-    rejected : set of str
-        Channels that do not vote; they keep their own peak in the per-channel dict.
 
     Returns
     -------
@@ -607,8 +602,7 @@ def _heart_rate_metrics(
         raise ValueError(f"no frequencies between {fmin:g} and {fmax:g} Hz")
     per_ch = {ch: float(psd.freqs[np.argmax(row)]) for ch, row in zip(psd.ch_names, power)
               if np.isfinite(row).all() and row.max() > 0}
-    kept = [f for ch, f in per_ch.items() if ch not in rejected]
     return {
-        "heart_rate": float(np.median(kept)) if kept else None,
+        "heart_rate": float(np.median(list(per_ch.values()))) if per_ch else None,
         "heart_rate_per_channel": per_ch,
     }

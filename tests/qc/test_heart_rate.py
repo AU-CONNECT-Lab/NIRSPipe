@@ -37,20 +37,20 @@ def _recording(pulse_hz, sfreq=10.0, duration=120.0, breath_hz=0.25, breath_amp=
 
 
 def test_the_heart_rate_is_the_shared_pulse():
-    out = _heart_rate_metrics(_recording([1.2] * 4), 0.5, set())
+    out = _heart_rate_metrics(_recording([1.2] * 4), 0.5)
     assert out["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
     assert len(out["heart_rate_per_channel"]) == 8
 
 
 def test_breathing_stronger_than_the_pulse_is_left_below_the_search():
     raw = _recording([1.2] * 4, breath_hz=0.4, breath_amp=0.05)
-    assert _heart_rate_metrics(raw, 0.5, set())["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
+    assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
     # a respiration band that ends below the breathing lets it win, so the band is what keeps it out
-    assert _heart_rate_metrics(raw, 0.3, set())["heart_rate"] == pytest.approx(0.4, abs=TOLERANCE_HZ)
+    assert _heart_rate_metrics(raw, 0.3)["heart_rate"] == pytest.approx(0.4, abs=TOLERANCE_HZ)
 
 
 def test_a_pulse_above_the_cardiac_band_is_found_and_named():
-    hr = _heart_rate_metrics(_recording([2.3] * 4), 0.5, set())["heart_rate"]
+    hr = _heart_rate_metrics(_recording([2.3] * 4), 0.5)["heart_rate"]
     assert hr == pytest.approx(2.3, abs=TOLERANCE_HZ)
     assert "outside the cardiac band" in heart_rate_note(hr, (0.7, 1.8))
     assert heart_rate_note(hr, (1.5, 3.1)) is None
@@ -59,23 +59,27 @@ def test_a_pulse_above_the_cardiac_band_is_found_and_named():
 
 def test_nothing_above_where_a_cardiac_band_could_reach_is_reported():
     # at 5 Hz no cardiac band may end above 2.2 Hz, so a 2.4 Hz pulse is out of reach
-    hr = _heart_rate_metrics(_recording([2.4] * 4, sfreq=5.0), 0.5, set())["heart_rate"]
+    hr = _heart_rate_metrics(_recording([2.4] * 4, sfreq=5.0), 0.5)["heart_rate"]
     assert hr <= 2.2
 
 
-def test_rejected_channels_do_not_vote():
+def test_the_heart_rate_is_the_median_channel():
     raw = _recording([1.2, 1.2, 2.0, 2.0, 2.0])
-    names = raw.ch_names
-    rejected = {n for n in names if n.split()[0] in ("S3_D3", "S4_D4", "S5_D5")}
-    assert _heart_rate_metrics(raw, 0.5, rejected)["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
-    assert _heart_rate_metrics(raw, 0.5, set())["heart_rate"] == pytest.approx(2.0, abs=TOLERANCE_HZ)
-    # every channel keeps its own peak, rejected or not
-    per_channel = _heart_rate_metrics(raw, 0.5, rejected)["heart_rate_per_channel"]
-    assert set(per_channel) == set(names)
+    out = _heart_rate_metrics(raw, 0.5)
+    assert out["heart_rate"] == pytest.approx(2.0, abs=TOLERANCE_HZ)
+    assert set(out["heart_rate_per_channel"]) == set(raw.ch_names)
+
+
+def test_a_recording_screening_rejected_whole_still_has_a_heart_rate():
+    # a band that misses the pulse rejects every channel, and the heart rate is what says so
+    raw = synth_raw("01", "rest", duration=120.0, motion_onset=None)
+    sci = {ch: 0.1 for ch in raw.ch_names}
+    sections, _ = raw_sections(raw, sci, list(raw.ch_names), 1.5, 2.4, resp_h_freq=0.5)
+    assert sections["raw"]["heart_rate"] == pytest.approx(CARDIAC_FREQ, abs=TOLERANCE_HZ)
 
 
 def test_a_flat_channel_has_no_peak():
-    out = _heart_rate_metrics(_recording([1.2] * 4, flat=(1,)), 0.5, set())
+    out = _heart_rate_metrics(_recording([1.2] * 4, flat=(1,)), 0.5)
     assert not {"S2_D2 760", "S2_D2 850"} & set(out["heart_rate_per_channel"])
     assert out["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
 

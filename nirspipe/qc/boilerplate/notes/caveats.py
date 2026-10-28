@@ -34,9 +34,9 @@ NOTES = {
         "Channel screening could not judge this recording: {reason}. No channel was rejected "
         "by it, so OK here means unscreened; preprocessing refuses the recording.",
     "caveat.heart_rate_outside_band":
-        "The heart rate read from the kept channels, {hz:.2f} Hz ({bpm:.0f} beats per minute), "
-        "lies outside the cardiac band ({lo:g} to {hi:g} Hz) that SCI and PSP look for the "
-        "pulse in. Check --cardiac-l-freq and --cardiac-h-freq, or --population.",
+        "The heart rate, {hz:.2f} Hz ({bpm:.0f} beats per minute), lies outside the cardiac "
+        "band ({lo:g} to {hi:g} Hz) that SCI and PSP look for the pulse in. Check "
+        "--cardiac-l-freq and --cardiac-h-freq, or --population.",
 
     # ---- Optics ----
     "caveat.dpf_age_range":

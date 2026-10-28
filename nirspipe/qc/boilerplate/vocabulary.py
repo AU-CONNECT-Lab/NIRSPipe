@@ -784,7 +784,7 @@ METRIC_SUMMARY = {
     "psp_mean": f"Strength of the heartbeat peak the two wavelengths share, in {PSP_WINDOW_S:g} s windows. Higher is better.",
     "good_frac_mean": f"Share of {SCREEN_WINDOW_S:g} s windows passing on SCI, and on PSP when it has a line; channels are rejected on this. Higher is better.",
     "cp_mean": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental, with no better end; read SCI and PSP for coupling.",
-    "heart_rate": "Heart rate in Hz, where the kept channels' spectra peak above the respiration band. Descriptive; it should lie inside the cardiac band.",
+    "heart_rate": "Heart rate in Hz, the median of the channels' spectral peaks above the respiration band. Descriptive; it should lie inside the cardiac band.",
 
     # raw intensity
     "cv_mean": f"Noise relative to brightness (SD / mean) of the raw intensity, in {CV_WINDOW_S:g} s windows. Lower is better.",
@@ -970,7 +970,7 @@ RECORD_CHANNEL_METRICS = {
     "ch_dist_per_channel": "Source-detector separation in mm.",
     "psp_per_channel": f"Strength of the cardiac peak the two wavelengths share, averaged over {PSP_WINDOW_S:g} s windows.",
     "cp_per_channel": "How peaked the spectrum is inside the cardiac band, 0 to 1. Experimental.",
-    "heart_rate_per_channel": "Frequency in Hz where the channel's spectrum peaks above the respiration band; the median over kept channels is the heart rate.",
+    "heart_rate_per_channel": "Frequency in Hz where the channel's spectrum peaks above the respiration band; their median over the set is the heart rate.",
     "cv_per_channel": f"Standard deviation over mean of the raw intensity inside {CV_WINDOW_S:g} s windows, averaged over the windows.",
     "snr_per_channel": "Mean over standard deviation, the reciprocal of the channel's CV.",
     "mean_amp_per_channel": "Mean raw intensity reaching the detector.",
