@@ -459,17 +459,17 @@ def _psd_groups(
     except Exception:
         long_names, short_names = [], []
     if not long_names and not short_names:
-        return [("Mean (OD)", np.arange(len(ch_names)), dict(color="#2980b9", width=2.5))]
+        return [("Mean (OD)", np.arange(len(ch_names)), dict(color="#2980b9", width=1.5))]
 
     long_set, short_set = set(long_names), set(short_names)
     groups = [
         ("Long channels",  np.array([c in long_set for c in ch_names]),
-         dict(color=LONG_COLOR, width=2.5)),
+         dict(color=LONG_COLOR, width=1.5)),
         ("Short channels", np.array([c in short_set for c in ch_names]),
-         dict(color=SHORT_COLOR, width=2.5)),
+         dict(color=SHORT_COLOR, width=1.5)),
         (_neither_range_title(sep_bands),
          np.array([c not in long_set and c not in short_set for c in ch_names]),
-         dict(color=UNCLASSIFIED_COLOR, width=2, dash="dash")),
+         dict(color=UNCLASSIFIED_COLOR, width=1.5, dash="dash")),
     ]
     return [(name, np.flatnonzero(sel), line) for name, sel, line in groups if sel.any()]
 
@@ -499,11 +499,11 @@ def build_psd_mean_figure(
         band = psds[:, mask]
         groups = _psd_groups(raw_od, [raw_od.ch_names[i] for i in picks], sep_bands)
 
-        # ---- Individual channels behind, one bold mean per group ----
+        # ---- Individual channels behind, one mean per group ----
         # neutral grey, so a group's own colour is what stands out against it
         traces = [
             go.Scatter(**line_xy(freqs_masked, ch_psd), mode="lines",
-                       line=dict(width=0.6, color="rgba(140,140,140,0.15)"),
+                       line=dict(width=0.5, color="rgba(140,140,140,0.15)"),
                        showlegend=False, hoverinfo="skip")
             for ch_psd in band
         ]

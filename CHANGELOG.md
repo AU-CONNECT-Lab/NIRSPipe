@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-qc` participant requires the respiration band (`--resp-l-freq`, `--resp-h-freq`) as `nirspipe` does, unless `--population` fills it, and records it
 - The raw report names the respiration band in its summary and shades it on its spectra, as the run report does
 - The dyad raw page shades the respiration band its members share; a member record without one is refused, naming the rerun
+- The raw report's mean OD spectrum draws thinner lines: 1.5 px group means over 0.5 px channels
 
 ## [0.77.0] - 2026-10-26
 
