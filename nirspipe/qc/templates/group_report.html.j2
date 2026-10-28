@@ -66,6 +66,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% set _ = _sections.append(("Outliers", "Outliers")) %}
 {% set _ = _sections.append(("Metrics", "Quality Metrics")) %}
 {% if kept %}{% set _ = _sections.append(("ChannelsKept", "Channels kept")) %}{% endif %}
+{% if optodes %}{% set _ = _sections.append(("Optodes", "Optodes")) %}{% endif %}
 {% set nav_modules = [nav_bar(_sections, rated=false, summary="#Summary",
                               closing=[("Errors", "Errors & Warnings"), ("Versions", "Software Versions")])] %}
 {% set nav_chip = title %}
@@ -214,7 +215,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 </section>
 {% endif %}
 
-{% if headline_rows or table_rows or kept %}
+{% if headline_rows or table_rows or kept or optodes %}
 <h2 id="Metrics">Quality Metrics</h2>
 {% endif %}
 
@@ -242,6 +243,23 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
         {%- for task in kept.tasks %}<th>{{ task }}</th>{% endfor %}</tr>
       {%- for row in kept.rows %}
       <tr><td><code>{{ row.pair }}</code></td><td>{{ row.separation }}</td>
+        {%- for cell in row.cells %}<td>{{ cell or "&mdash;" }}</td>{% endfor %}</tr>
+      {%- endfor %}
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if optodes %}
+<section id="Optodes" class="step">
+  <h3 class="step-title">Optodes</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('group.optodes') }}</p>
+    <table class="qm-table qm-flat">
+      <tr><th>Optode</th>
+        {%- for task in optodes.tasks %}<th>{{ task }}</th>{% endfor %}</tr>
+      {%- for row in optodes.rows %}
+      <tr><td><code>{{ row.optode }}</code></td>
         {%- for cell in row.cells %}<td>{{ cell or "&mdash;" }}</td>{% endfor %}</tr>
       {%- endfor %}
     </table>

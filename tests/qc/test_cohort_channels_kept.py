@@ -7,7 +7,7 @@ of the task did, and a subject whose montage lacks the pair is not counted for i
 
 from __future__ import annotations
 
-from nirspipe.qc.subject.group_writer import build_group_raw_report, channels_kept
+from nirspipe.qc.subject.group_writer import build_group_raw_report, channels_kept, optode_losses
 from nirspipe.qc.subject.record_io import write_record
 from tests.figure_accuracy._dyad import table_under
 
@@ -76,3 +76,55 @@ def test_the_page_prints_the_counts_under_quality_metrics(tmp_path):
         ["S2_D2", "long", "0 of 1", "3 of 3"],
         ["S3_D3", "short", "1 of 1", "2 of 2"],
     ]
+
+
+# ---- each optode's long channels rejected, pooled over the task's runs ----
+
+SHARED = ("S1_D1", "S1_D2", "S2_D2", "S3_D3")
+
+
+def _shared_tree(out):
+    """S1 reaches D1 and D2, S2 reaches D2, S3_D3 is short."""
+    s1, s2 = (out / f"sub-0{i}" / "nirs" for i in (1, 2))
+    # sub-01 loses both of S1's channels, one wavelength each
+    _channel_table(s1, "sub-01_task-rest", {"S1_D1 760", "S1_D2 850", "S3_D3 760"}, pairs=SHARED)
+    _channel_table(s2, "sub-02_task-rest", set(), pairs=SHARED)
+    _channel_table(s2, "sub-02_task-nback", {"S2_D2 760"}, pairs=SHARED)
+    for nirs, label in ((s1, "sub-01_task-rest"), (s2, "sub-02_task-rest")):
+        write_record(nirs / f"{label}_desc-sqm_qc.json",
+                     {"step": "sqm", "raw": {"psp_mean": 0.3, "gvtd_p95": 1e-3}})
+
+
+def test_each_optode_pools_its_long_channels_over_the_runs_of_a_task(tmp_path):
+    _shared_tree(tmp_path)
+    got = optode_losses(tmp_path)
+    assert got["tasks"] == ["task-nback", "task-rest"]
+    # rest: S1 2 of 2 then 0 of 2; D1 1 of 1 then 0 of 1; D2 1 of 2 then 0 of 2; S2 0 of 1
+    # twice. nback: S2_D2 alone rejected. S3 and D3 have only the short pair
+    assert got["rows"] == [
+        {"optode": "S1", "cells": ["0% (0 of 2)", "50% (2 of 4)"]},
+        {"optode": "S2", "cells": ["100% (1 of 1)", "0% (0 of 2)"]},
+        {"optode": "D1", "cells": ["0% (0 of 1)", "50% (1 of 2)"]},
+        {"optode": "D2", "cells": ["50% (1 of 2)", "25% (1 of 4)"]},
+    ]
+
+
+def test_the_page_prints_the_optodes_after_the_channels(tmp_path):
+    _shared_tree(tmp_path)
+    page = build_group_raw_report(tmp_path)
+    html = page.read_text(encoding="utf-8")
+    assert (html.index('<section id="ChannelsKept"') < html.index('<section id="Optodes"')
+            < html.index('<section id="Table"'))
+    assert 'href="#Optodes"' in html
+    assert table_under(page, "Optodes")[0] == ["Optode", "task-nback", "task-rest"]
+    assert table_under(page, "Optodes")[1] == ["S1", "0% (0 of 2)", "50% (2 of 4)"]
+
+
+def test_no_channel_table_leaves_the_optodes_out(tmp_path):
+    nirs = tmp_path / "sub-01" / "nirs"
+    nirs.mkdir(parents=True)
+    write_record(nirs / "sub-01_task-rest_desc-sqm_qc.json",
+                 {"step": "sqm", "raw": {"psp_mean": 0.3, "gvtd_p95": 1e-3}})
+    assert optode_losses(tmp_path) == {}
+    html = build_group_raw_report(tmp_path).read_text(encoding="utf-8")
+    assert 'id="Optodes"' not in html and 'href="#Optodes"' not in html

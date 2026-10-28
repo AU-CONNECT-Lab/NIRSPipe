@@ -392,6 +392,11 @@ NOTES = {
         "included; a pair is rejected if either wavelength is. Read from each run&rsquo;s "
         "<code>_desc-channel_qc.tsv</code>, or <code>_desc-rawchannel_qc.tsv</code> for a run "
         "only raw QC saw.",
+    "group.optodes":
+        "The share of each source&rsquo;s and detector&rsquo;s long channels rejected, pooled "
+        "over the runs of the task, from the same channel tables. An optode that loses most of "
+        "its channels across runs points at that optode rather than at the recordings. Short "
+        "channels are left out, as on each run&rsquo;s optode map.",
     "group.table":
         "Every scalar the records carry, the check-only ones aside. Click a column header to "
         "sort; the first column stays in view.",

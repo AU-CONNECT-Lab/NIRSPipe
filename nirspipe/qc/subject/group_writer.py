@@ -41,7 +41,9 @@ from nirspipe.qc.common.report_shell import (
 from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of
 from nirspipe.io.naming import derivative_path
-from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIXES, pair_status
+from nirspipe.qc.common.channel_table import (
+    CHANNEL_METRICS_SUFFIXES, optode_rejections, pair_status,
+)
 from nirspipe.qc.subject.record_io import channel_columns, channel_frame, read_record
 from nirspipe.qc.subject.sqm_record import (
     OPTIONAL_SECTIONS,
@@ -312,6 +314,21 @@ def unfinished_subjects(output_dir: Path) -> list[dict]:
     return rows
 
 
+def _channel_tables(output_dir: Path) -> "dict[str, Path]":
+    """Each run's channel table by run label, the pipeline's where raw QC wrote one too."""
+    tables: dict[str, Path] = {}
+    for suffix in CHANNEL_METRICS_SUFFIXES:
+        for path in sorted(output_dir.glob(f"sub-*/**/nirs/*{suffix}")):
+            tables.setdefault(path.name[:-len(suffix)], path)
+    return tables
+
+
+def _task_of(label: str) -> str:
+    """The cohort column a run falls in: its task, with its acquisition where it has one."""
+    acq = entity_of(label, "acq")
+    return f"task-{entity_of(label, 'task')}" + (f"_acq-{acq}" if acq else "")
+
+
 def channels_kept(output_dir: Path) -> dict:
     """How many subjects kept each source-detector pair, per task: ``{"tasks", "rows"}``, empty without a channel table.
 
@@ -322,16 +339,11 @@ def channels_kept(output_dir: Path) -> dict:
     A subject keeps a pair when any of its runs of the task did, sessions included; the
     count is over the subjects whose runs of the task list the pair.
     """
-    tables: dict[str, Path] = {}
-    for suffix in CHANNEL_METRICS_SUFFIXES:
-        for path in sorted(output_dir.glob(f"sub-*/**/nirs/*{suffix}")):
-            tables.setdefault(path.name[:-len(suffix)], path)
     listed: dict[str, dict[str, set]] = {}
     kept: dict[str, dict[str, set]] = {}
     separation: dict[str, str] = {}
-    for label, path in sorted(tables.items()):
-        acq = entity_of(label, "acq")
-        task = f"task-{entity_of(label, 'task')}" + (f"_acq-{acq}" if acq else "")
+    for label, path in sorted(_channel_tables(output_dir).items()):
+        task = _task_of(label)
         subject = entity_of(label, "sub")
         for pair, status in pair_status(path).items():
             separation.setdefault(pair, status["separation"])
@@ -346,6 +358,42 @@ def channels_kept(output_dir: Path) -> dict:
                        if pair in listed[task] else None for task in tasks]}
             for pair, sep in separation.items()]
     return {"tasks": tasks, "rows": rows}
+
+
+def _optode_order(name: str) -> tuple:
+    """Sources before detectors, then by number: S2 before S10."""
+    digits = name[1:]
+    return (name[:1].upper() != "S", int(digits) if digits.isdigit() else 0, name)
+
+
+def optode_losses(output_dir: Path) -> dict:
+    """Each optode's long channels rejected over the runs of each task, pooled: ``{"tasks", "rows"}``, empty without a channel table.
+
+    ::
+
+      run 1 rejects S1_D1 and S1_D2, run 2 rejects neither  ->  S1  task-rest  50% (2 of 4)
+
+    Short channels are left out, as on each run's optode map.
+    """
+    counts: dict[str, dict[str, list[int]]] = {}
+    for label, path in sorted(_channel_tables(output_dir).items()):
+        for optode, (bad, listed) in optode_rejections(pair_status(path)).items():
+            total = counts.setdefault(_task_of(label), {}).setdefault(optode, [0, 0])
+            total[0] += bad
+            total[1] += listed
+    if not counts:
+        return {}
+    tasks = sorted(counts)
+    optodes = sorted({o for by_optode in counts.values() for o in by_optode}, key=_optode_order)
+
+    def cell(task: str, optode: str) -> "str | None":
+        if optode not in counts[task]:
+            return None
+        bad, listed = counts[task][optode]
+        return f"{bad / listed:.0%} ({bad} of {listed})"
+
+    return {"tasks": tasks,
+            "rows": [{"optode": o, "cells": [cell(t, o) for t in tasks]} for o in optodes]}
 
 
 def _render_group(
@@ -464,6 +512,9 @@ def _render_group(
     kept: dict = {}
     with guard("Channels kept", errors, out_desc):
         kept = channels_kept(output_dir)
+    optodes: dict = {}
+    with guard("Optodes", errors, out_desc):
+        optodes = optode_losses(output_dir)
 
     conditions = condition_names(full_rows)
     if not conditions:
@@ -503,6 +554,7 @@ def _render_group(
         table_rows=df[shown_cols].values.tolist(),
         outliers=outliers,
         kept=kept,
+        optodes=optodes,
     )
     html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name
     html_path.write_text(html, encoding="utf-8")

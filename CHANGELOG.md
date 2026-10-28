@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - The run report's summary names the cardiac and respiration bands and the heart rate, its spectra by stage mark the heart rate, and its notes say when it lies outside the band
 - The dyad pages list each member's heart rate, and the dyad raw page notes a member whose heart rate lies outside its cardiac band
 - The optode map and the 3-D brain views fill each source and detector by the share of its long channels rejected, so an optode that lost every channel stands out
+- The cohort page lists each optode's share of its long channels rejected, pooled over each task's runs
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
