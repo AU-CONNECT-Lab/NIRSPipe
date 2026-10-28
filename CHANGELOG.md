@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The channel quality grids carry a PSP colour bar when PSP has no line
+
 ### Changed
 - The channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
 

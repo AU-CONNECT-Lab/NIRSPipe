@@ -120,6 +120,24 @@ def _channel_xaxis(ch_names: list[str]) -> dict:
     )
 
 
+# room on the right for the PSP colour bar
+_BAR_MARGIN = 80
+
+
+def _psp_colorbar(fig: go.Figure) -> None:
+    """The PSP row's ramp as a colour bar, for a run that gave PSP no line; the grid's other rows are pass or fail."""
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode="markers", showlegend=False, hoverinfo="skip",
+        marker=dict(colorscale=_GRID_SCALE, cmin=0.0, cmax=PSP_SCALE_MAX, color=[0.0],
+                    showscale=True,
+                    colorbar=dict(title=dict(text="PSP", side="top", font=dict(size=10)),
+                                  thickness=10, len=1.0, outlinewidth=0,
+                                  tickvals=[0.0, PSP_SCALE_MAX / 2, PSP_SCALE_MAX],
+                                  ticktext=["0", f"{PSP_SCALE_MAX / 2:g}", f"≥{PSP_SCALE_MAX:g}"],
+                                  tickfont=dict(size=9, color=AXIS_TEXT_COLOR))),
+    ))
+
+
 def _long_short_divider(fig: go.Figure, split_at: "int | None", n_ch: int) -> bool:
     """Draw the long/short divider and name both sides; False when there is no split."""
     if split_at is None or not 0 < split_at < n_ch:
@@ -163,7 +181,7 @@ def channel_quality_heatmap(
     below it comfortable. The rows under
     it are drawn against the cutoffs in :mod:`nirspipe.qc.metrics._helpers` and none of
     them prunes; PSP with ``psp_thresh`` None runs the same ramp from 0 to ``PSP_SCALE_MAX``,
-    higher better.
+    higher better, with a colour bar.
     """
     lookups = {"good_frac_per_ch": good_frac_per_ch or {}, "sci_per_ch": sci_per_ch,
                "cv_per_ch": cv_per_ch, "snr_per_ch": snr_per_ch, "psp_per_ch": psp_per_ch}
@@ -192,6 +210,10 @@ def channel_quality_heatmap(
         hovertemplate="%{text}<extra></extra>",
         showlegend=False,
     ))
+    right = 20
+    if psp_thresh is None:
+        _psp_colorbar(fig)
+        right = _BAR_MARGIN
     fig.update_layout(
         xaxis=_channel_xaxis(ch_names),
         yaxis=dict(
@@ -203,12 +225,12 @@ def channel_quality_heatmap(
         ),
         plot_bgcolor="white", paper_bgcolor="white",
         # wide enough for the longest row name, SNR μ/σ's
-        margin=dict(l=92, r=20, t=20, b=100),
+        margin=dict(l=92, r=right, t=20, b=100),
         height=260,
     )
     if _long_short_divider(fig, split_at, n_ch):
         # the extra top margin is what the raised labels sit in
-        fig.update_layout(margin=dict(l=92, r=20, t=52, b=100))
+        fig.update_layout(margin=dict(l=92, r=right, t=52, b=100))
     return fig
 
 
@@ -283,6 +305,10 @@ def condition_quality_heatmap(
     n_rows = len(specs) * depth
     left = max(92, 7 * max(len(label) for label, _ in conditions) + 20)
     top_px = 52 if _long_short_divider(fig, first.get("split_at"), n_ch) else 20
+    right = 20
+    if psp_thresh is None:
+        _psp_colorbar(fig)
+        right = _BAR_MARGIN
     fig.update_layout(
         xaxis=_channel_xaxis(ch_names),
         yaxis=dict(tickvals=tickvals, ticktext=ticktext,
@@ -290,7 +316,7 @@ def condition_quality_heatmap(
                    showgrid=False, zeroline=False,
                    range=[(n_rows - 0.5) * _SPACING, -0.5 * _SPACING]),
         plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=left, r=20, t=top_px, b=100),
+        margin=dict(l=left, r=right, t=top_px, b=100),
         height=top_px + 100 + n_rows * _CONDITION_ROW_PX,
     )
     return fig
