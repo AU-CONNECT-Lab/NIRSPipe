@@ -729,8 +729,8 @@ def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:
     for sid in subject_ids:
         member = sqm_data.get(sid) or {}
         record = {"per_channel": member.get("per_channel") or {}}
-        # acquisition order, per wavelength: it is what sets the row order, and the pairing
-        # below folds the two wavelengths of a pair into the one row a decision applies to
+        # per wavelength: the pairing below folds the two wavelengths of a pair into the one
+        # row a decision applies to
         sci_scores = (member.get("per_channel_all") or {}).get("sci_per_channel") or {}
         try:
             rows = pair_rows(channel_rows(record, sci_scores,

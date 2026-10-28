@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
+
 ## [0.78.0] - 2026-10-28
 
 ### Added

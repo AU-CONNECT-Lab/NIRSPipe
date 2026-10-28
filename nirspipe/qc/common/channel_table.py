@@ -26,7 +26,7 @@ from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
 from nirspipe.qc.metrics._helpers import bands_from_record, in_long_band, in_short_band
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from nirspipe.utils import bare_roi_map, pair_of, roi_overlaps
+from nirspipe.utils import bare_roi_map, pair_of, pair_order, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
@@ -64,9 +64,9 @@ def channel_rows(
 ) -> list[dict[str, Any]]:
     """One row per channel: its scores, its verdict, and which separation block it is in.
 
-    Rows follow the order of ``sci_scores``, which is acquisition order, and every value is
-    read from the record rather than recomputed, so a table and the stored numbers cannot
-    disagree.
+    Rows go by source then detector number, a pair's wavelengths side by side
+    (:func:`channel_order`), and every value is read from the record rather than recomputed,
+    so a table and the stored numbers cannot disagree.
 
     A short channel's scores come from ``raw_short`` and a long channel's from the long
     sections, because the two are measured separately: averaging a short channel's coupling
@@ -152,7 +152,16 @@ def channel_rows(
             "separation": sep,
         }
 
-    return [row_of(ch) for ch in sci_scores]
+    return sorted((row_of(ch) for ch in sci_scores), key=lambda r: channel_order(r["name"]))
+
+
+def channel_order(ch: str) -> tuple:
+    """A sort key: source, then detector number, then wavelength.
+
+    ["S2_D1 850", "S10_D1 760", "S2_D1 760"] -> ["S2_D1 760", "S2_D1 850", "S10_D1 760"]
+    """
+    wavelength = str(ch).rsplit(" ", 1)[1] if " " in str(ch) else ""
+    return pair_order(ch), len(wavelength), wavelength
 
 
 # The per-channel columns measured on each wavelength on its own; the rest are a pair's
@@ -179,9 +188,9 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
 
         rows for "S1_D1 760" and "S1_D1 850"  ->  one row, pair "S1_D1"
 
-    ``pairs`` fixes the order and the membership when the caller already has a pair list
-    from the haemoglobin file; without it the pairs come out in the order they appear.
-    A pair with no row is still returned, empty, so the caller's list stays intact.
+    ``pairs`` fixes the membership when the caller already has a pair list from the
+    haemoglobin file; either way the pairs come out by source then detector number. A pair
+    with no row is still returned, empty, so the caller's list stays intact.
 
     ``by_wavelength`` keeps both values of each :data:`WAVELENGTH_COLUMNS` column as a
     tuple in :func:`pair_wavelengths` order, ``snr: (23.7, 13.7)``, instead of the first.
@@ -200,7 +209,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
                 return row[key]
         return None
 
-    order = pairs if pairs is not None else list(by_pair)
+    order = sorted(pairs if pairs is not None else by_pair, key=pair_order)
     out = []
     for pair in order:
         group = by_pair.get(pair, [])
@@ -248,7 +257,7 @@ def heatmap_args(rows: list[dict]) -> dict[str, Any]:
     """Arguments for :func:`channel_quality_heatmap`, ordered the way a table reads.
 
     Long block first so the grid and the table above it list channels in the same order,
-    with a stable sort so acquisition order survives inside each block. ``split_at`` is the
+    with a stable sort so :func:`channel_rows`' order survives inside each block. ``split_at`` is the
     divider between long and short, and it names its two sides, so it is only set when there
     are exactly two: a montage with channels in neither range has three blocks, and the
     table is where those get named.
