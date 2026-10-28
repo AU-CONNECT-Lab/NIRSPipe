@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Runs that compute FC after a regression also write the channel matrix of the series before it (`stat-pearson_desc-filtered_relmat.tsv`)
 - The cohort page draws, per task, every run's connectivity values before and after the regression
 - The cohort page draws each connection's r between head movement and FC across a task's runs, beside the spread with no relation and against distance, and writes them to `desc-fcmovement_qc.tsv`
+- The run report's summary gives the recording's duration and the passing-window share screening requires, as the raw report does; condition pages give their window
 
 ### Changed
 - The cohort page's per-task tables pool every acquisition of a task into one column

@@ -65,6 +65,7 @@
       {% if condition_label %}
       <tr><th>Scope</th><td>condition &ldquo;{{ condition_label }}&rdquo;</td></tr>
       {% endif %}
+      {% if duration_s is not none %}<tr><th>Duration</th><td>{{ '%.0f'|format(duration_s) }} s</td></tr>{% endif %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
@@ -78,6 +79,7 @@
       </tr>
       {% if condition_kept %}<tr><th>Kept</th><td>{{ condition_kept }}</td></tr>{% endif %}
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
+      {% if good_frac_thresh is not none %}<tr><th>Passing windows</th><td>{{ '%.0f'|format(good_frac_thresh * 100) }}% of windows</td></tr>{% endif %}
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
       <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
       <tr><th>Cardiac band</th><td>{{ '%g'|format(config.cardiac_l_freq) }}&ndash;{{ '%g'|format(config.cardiac_h_freq) }} Hz</td></tr>

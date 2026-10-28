@@ -2545,6 +2545,9 @@ def build_subject_report(
         bad_channels=bad_channels,
         sci_scores=sci_scores,
         config=config,
+        # measured as the raw viewer measures it, the recording's span on its own clock
+        duration_s=float(raw_intensity.times[-1] - raw_intensity.times[0]),
+        good_frac_thresh=run_cutoffs["good_frac"],
         heart_rate=heart_rate,
         heart_rate_outside=hr_note is not None,
 
@@ -3101,6 +3104,9 @@ def _write_condition_reports(
             "page_heading": f"{report_vars['page_heading']}  \u00b7  {label}",
             "page_title": f"{report_vars['page_title']}  \u00b7  {label}",
             "condition_label": label,
+            # the condition's window, not the recording the run page measures
+            "duration_s": (entry["window_s"][1] - entry["window_s"][0]
+                           if entry.get("window_s") else None),
             "condition_unassessed": entry.get("counted_windows") == 0,
             # only on a run with spans, whose kept time differs from the window
             "condition_kept": (
