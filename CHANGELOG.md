@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - The quality record carries the heart rate, the median of the channels' spectral peaks, and the log warns when it lies outside the cardiac band
 - The raw report shows the heart rate in its summary, metric table and spectrum, and notes when it lies outside the cardiac band
+- The run report's summary names the cardiac and respiration bands and the heart rate, its spectra by stage mark the heart rate, and its notes say when it lies outside the band
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed

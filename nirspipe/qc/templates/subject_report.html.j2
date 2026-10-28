@@ -80,6 +80,9 @@
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
       <tr><th>DPF</th><td>{{ config.dpf | join(', ') }}</td></tr>
+      <tr><th>Cardiac band</th><td>{{ '%g'|format(config.cardiac_l_freq) }}&ndash;{{ '%g'|format(config.cardiac_h_freq) }} Hz</td></tr>
+      <tr><th>Heart rate</th><td>{% if heart_rate is not none %}{{ '%.2f'|format(heart_rate) }} Hz ({{ (heart_rate * 60)|round|int }} bpm){% if heart_rate_outside %}, <span class="qm-bad">outside the cardiac band</span>{% endif %}{% else %}&mdash;{% endif %}</td></tr>
+      <tr><th>Respiration band</th><td>{{ '%g'|format(config.resp_l_freq) }}&ndash;{{ '%g'|format(config.resp_h_freq) }} Hz</td></tr>
     </table>
   </div>
   {% if bad_channels %}

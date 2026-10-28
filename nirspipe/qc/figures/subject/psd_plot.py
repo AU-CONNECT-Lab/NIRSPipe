@@ -22,6 +22,7 @@ from nirspipe.qc.figures.common._utils import HBO_COLOR as _HBO_COLOR, HBR_COLOR
 from nirspipe.qc.figures.common._utils import line_xy
 from nirspipe.qc.figures.common._utils import HBO_MEAN_COLOR as _HBO_MEAN_COLOR, HBR_MEAN_COLOR as _HBR_MEAN_COLOR
 from nirspipe.qc.figures.common._utils import add_band_shading as _add_band_shading
+from nirspipe.qc.figures.common._utils import add_heart_rate_line
 from nirspipe.qc.figures.common._utils import physio_bands as _physio_bands
 
 # Stage is the row and chromophore is the colour, so HbO and HbR keep the identity they have
@@ -113,6 +114,7 @@ def psd_figure(
     stages: "list[tuple[str, mne.io.Raw]] | None" = None,
     first_label: str = _FIRST_LABEL,
     overlay: bool = False,
+    heart_rate: "float | None" = None,
 ) -> go.Figure:
     """Each stage's spectrum in its own row, HbO and HbR together, with the filter drawn on it.
 
@@ -142,6 +144,7 @@ def psd_figure(
         overlay:            HbO and HbR side by side with one line per stage instead of a
                             row per stage, for a single channel whose rows would be compared
                             across a gap. No faint lines and no response curve.
+        heart_rate:         The run's heart rate, marked on every row; None draws no line.
     """
     nyquist = raw_haemo.info["sfreq"] / 2
     if fmax > nyquist:
@@ -223,6 +226,7 @@ def psd_figure(
         ), row=filter_row, col=1)
 
     _add_band_shading(fig, fmax=fmax, bands=_physio_bands(cardiac, resp), rows=n_rows)
+    add_heart_rate_line(fig, heart_rate, fmax, rows=n_rows)
 
     for cutoff in (l_freq, h_freq):
         if cutoff is not None and cutoff <= fmax:

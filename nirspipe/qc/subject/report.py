@@ -85,7 +85,8 @@ from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
-    placement_note, roi_overlap_note, separation_blocks, separation_notes, template_note,
+    heart_rate_note, placement_note, roi_overlap_note, separation_blocks, separation_notes,
+    template_note,
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
@@ -99,7 +100,7 @@ from nirspipe.qc.metrics import (
     resolve_cutoffs,
 )
 from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, bands_from_record
-from nirspipe.qc.figures.common._utils import chunk_annotations
+from nirspipe.qc.figures.common._utils import chunk_annotations, spectrum_fmax
 from nirspipe.qc.figures import (
     build_trigger_timeline_single,
     condition_colors,
@@ -139,7 +140,9 @@ from nirspipe.qc.common.report_shell import (
     footer_vars, guard, note, page_vars, render,
 )
 from nirspipe.qc.subject.record_io import read_record
-from nirspipe.qc.subject.sqm_record import record_path as _sqm_record_path, entities_of
+from nirspipe.qc.subject.sqm_record import (
+    record_path as _sqm_record_path, entities_of, raw_verdict_view,
+)
 from nirspipe.qc.subject.trial_qc import (
     MIN_SCI_TRIAL_S, MIN_TRIAL_S, score_trials, short_trial_counts, trial_windows,
 )
@@ -704,7 +707,9 @@ def _section_psd_detail(
                     # a short channel is a regressor, and a retained one leaves a zero residual
                     and not (pair in short_pairs and label == "desc-errts")
                 ][-1:]
-            fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+            fig = psd_figure(raw_sub, l_freq=l_freq, h_freq=h_freq,
+                             fmax=spectrum_fmax(raw_sub.info["sfreq"],
+                                                cardiac[1] if cardiac else None),
                              title=f"PSD: {pair}", cardiac=cardiac, resp=resp,
                              stages=stages_sub, overlay=True)
             fname = fig_name("psddetail", channel=_pair_fname(pair))
@@ -991,10 +996,13 @@ def _section_haemo(
     if psd:
         with _guard("PSD figure", errors, subject):
             # the first stage and the last, which is what the analysis reads
+            heart_rate = raw_verdict_view(record or {}).get("heart_rate")
             fig_psd_custom = psd_figure(
-                _long_only(raw_haemo_cut), l_freq=l_freq, h_freq=h_freq, fmax=2.0,
+                _long_only(raw_haemo_cut), l_freq=l_freq, h_freq=h_freq,
+                fmax=spectrum_fmax(raw_haemo_cut.info["sfreq"], config.cardiac_h_freq,
+                                   heart_rate),
                 cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
-                resp=(config.resp_l_freq, config.resp_h_freq),
+                resp=(config.resp_l_freq, config.resp_h_freq), heart_rate=heart_rate,
                 stages=([(label, _long_only(raw)) for label, raw in psd_stages_cut[-1:]]
                         if psd_stages_cut else None))
             psd_panel_path, psd_panel_h = _save_plotly_html(
@@ -2366,6 +2374,10 @@ def build_subject_report(
                      orphan_mm=separation_orphans(raw_intensity, sep_bands),
                      sep_bands=sep_bands)
     _note_dpf_range(notes, subject, config, raw_intensity)
+    heart_rate = raw_verdict_view(record).get("heart_rate")
+    hr_note = heart_rate_note(heart_rate, (config.cardiac_l_freq, config.cardiac_h_freq))
+    if hr_note:
+        _note(notes, subject, hr_note)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors,
                                                   figures_dir, fig_name)
     run_cutoffs       = resolve_cutoffs(config)
@@ -2430,6 +2442,8 @@ def build_subject_report(
         bad_channels=bad_channels,
         sci_scores=sci_scores,
         config=config,
+        heart_rate=heart_rate,
+        heart_rate_outside=hr_note is not None,
 
         **sci_vars,
         **motion_vars,

@@ -1,9 +1,12 @@
 """The PSD figures draw the first stage and the last on their own rows, long channels only."""
 
+import re
+
 import numpy as np
 import pytest
 
-from tests._fingerprint import CLI_ARGS, SYSTEMIC_FREQ
+from nirspipe.qc.figures.common._utils import HEART_RATE_COLOR
+from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, SYSTEMIC_FREQ
 from tests.figure_accuracy._payload import one_figure
 from tests.figure_accuracy._read import traces, xy
 
@@ -60,6 +63,22 @@ def test_the_systemic_peak_is_on_the_rows_before_regression_and_not_after(psd):
     before = _db_at(traces(psd, "HbO", "x")[0], SYSTEMIC_FREQ)
     after = _db_at(traces(psd, "HbO", "x2")[0], SYSTEMIC_FREQ)
     assert before - after > 15
+
+
+def test_every_row_marks_the_planted_heart_rate(psd):
+    lines = [s for s in psd["layout"]["shapes"]
+             if s["type"] == "line" and s["line"]["color"] == HEART_RATE_COLOR]
+    # one per stage row, each at the pulse the recording was built with
+    assert len(lines) == 2
+    assert all(s["x0"] == pytest.approx(CARDIAC_FREQ, abs=0.05) for s in lines)
+
+
+def test_the_summary_names_the_planted_heart_rate(denoise_run):
+    html = denoise_run.report.read_text(encoding="utf-8")
+    hz, bpm = re.search(r"<th>Heart rate</th><td>([0-9.]+) Hz \((\d+) bpm\)</td>", html).groups()
+    assert float(hz) == pytest.approx(CARDIAC_FREQ, abs=0.05)
+    assert int(bpm) == pytest.approx(CARDIAC_FREQ * 60, abs=3)
+    assert "outside the cardiac band" not in html
 
 
 def test_the_bands_are_the_ones_the_run_was_given(psd):
