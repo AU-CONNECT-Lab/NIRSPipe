@@ -85,8 +85,8 @@ from nirspipe.qc.metrics.motion import SPIKE_CH_FRAC
 from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
-    heart_rate_note, placement_note, roi_overlap_note, separation_blocks, separation_notes,
-    template_note,
+    heart_rate_note, placement_note, region_coverage, roi_overlap_note, separation_blocks,
+    separation_notes, template_note,
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
@@ -1676,6 +1676,16 @@ def _section_sqm(
     }
 
 
+def _section_regions(rows: list[dict], roi_map: "dict | None") -> dict:
+    """Each ``--roi-mapping`` region's long channels kept, from the rows the channel table prints."""
+    if not roi_map:
+        return {"region_coverage": [], "region_not_counted": ""}
+    coverage = region_coverage({r["pair"]: r for r in pair_rows(rows)}, roi_map)
+    skipped = {pair: why for row in coverage for pair, why in row["not_counted"].items()}
+    return {"region_coverage": coverage,
+            "region_not_counted": ", ".join(f"{pair} ({why})" for pair, why in skipped.items())}
+
+
 def _note_separation(
     notes: list,
     subject: str,
@@ -2358,6 +2368,7 @@ def build_subject_report(
                                      sqm_label=sqm_label,
                                      sci_threshold=config.sci_threshold,
                                      psp_threshold=getattr(config, "psp_threshold", None))
+    region_vars       = _section_regions(sqm_vars["channel_rows"], roi_map)
     # a property of the high-pass, so stated on every run it filtered rather than measured
     if l_freq and any(lab == "desc-filtered" for lab, _ in (psd_stages or [])):
         _note(notes, subject, section_note("caveat.filter_edge", edge_s=round(1.0 / l_freq),
@@ -2458,6 +2469,7 @@ def build_subject_report(
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
+        **region_vars,
         **excluded_vars,
         **brain_vars,
 

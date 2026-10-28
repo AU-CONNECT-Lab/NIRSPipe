@@ -296,6 +296,12 @@ NOTES = {
         "Region is the Desikan-Killiany region of the template cortex nearest the pair's "
         "midpoint, as the run's channel table names it: where the channel sits, not where "
         "its light travels.",
+    "metrics.regions":
+        "The long channels each region of <code>--roi-mapping</code> lists, and how many "
+        "screening and the hand marks left. A region with none kept is left blank in every "
+        "output built per region.",
+    "metrics.regions_not_counted":
+        "Listed but not counted, not being long channels of this recording: {pairs}.",
     "channel_summary":
         "Green pass, red fail, grey missing, blue-grey measured with no line. Only Status "
         "rejects a channel: too few passing windows (<code>--min-good-frac</code>), a window "

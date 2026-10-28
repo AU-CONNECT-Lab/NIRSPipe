@@ -755,6 +755,27 @@
 </div>
 </section>
 
+{% if region_coverage %}
+<!-- ------------------------------------------ region coverage -->
+<section id="Regions" class="step">
+<h3 class="step-title">Region coverage</h3>
+<div class="details-body">
+  <p class="qm-note">{{ section_note('metrics.regions') }}</p>
+  <table class="qm-table qm-flat">
+    <thead><tr><th>Region</th><th>Long channels kept</th><th>Rejected</th></tr></thead>
+    <tbody>
+      {%- for row in region_coverage %}
+      <tr><td>{{ row.region }}</td><td class="qv{% if not row.kept %} bad{% endif %}">{{ row.kept }} of {{ row.listed }}</td><td>{{ row.rejected | join(', ') }}</td></tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  {%- if region_not_counted %}
+  <p class="qm-note">{{ section_note('metrics.regions_not_counted', pairs=region_not_counted) }}</p>
+  {%- endif %}
+</div>
+</section>
+{% endif %}
+
 {% if channel_rows %}
 <!-- ------------------------------------------ per-channel table -->
 <section id="ChannelTable" class="step">

@@ -26,7 +26,7 @@ from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
 from nirspipe.qc.metrics._helpers import bands_from_record, in_long_band, in_short_band
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from nirspipe.utils import pair_of, roi_overlaps
+from nirspipe.utils import bare_roi_map, pair_of, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.channel_table")
@@ -787,6 +787,49 @@ def pair_status(path: Path) -> "dict[str, dict[str, Any]]":
     return out
 
 
+# the separations a pair counts as long under: a montage that never split writes none, which
+# a channel table prints as n/a and every table blocks with the long channels
+_LONG_SEPARATIONS = ("long", "", "n/a")
+
+
+def region_coverage(pairs: "dict[str, dict[str, Any]]",
+                    roi_map: "dict[str, list[str]]") -> "list[dict[str, Any]]":
+    """Each ``--roi-mapping`` region's long channels in one recording, and which were rejected.
+
+    ::
+
+      region_coverage({"S1_D1": {"separation": "long", "is_bad": False},
+                       "S1_D2": {"separation": "long", "is_bad": True},
+                       "S1_D9": {"separation": "short", "is_bad": False}},
+                      {"L": ["S1_D1", "S1_D2 hbo", "S1_D9", "S7_D7"]})
+      -> [{"region": "L", "listed": 2, "kept": 1, "rejected": ["S1_D2"],
+           "not_counted": {"S1_D9": "short", "S7_D7": "not in the recording"}}]
+
+    ``pairs`` is :func:`pair_status`-shaped. A listed pair that is not a long channel of this
+    recording is named under ``not_counted`` rather than counted, since no region output
+    averages it.
+    """
+    out = []
+    for region, listed_pairs in bare_roi_map(roi_map).items():
+        long_pairs, rejected, not_counted = [], [], {}
+        for pair in listed_pairs:
+            status = pairs.get(pair)
+            separation = (status or {}).get("separation")
+            if status is None:
+                not_counted[pair] = "not in the recording"
+            elif separation not in _LONG_SEPARATIONS:
+                not_counted[pair] = ("between the separation bands" if separation == "unclassified"
+                                     else str(separation))
+            else:
+                long_pairs.append(pair)
+                if status.get("is_bad"):
+                    rejected.append(pair)
+        out.append({"region": str(region), "listed": len(long_pairs),
+                    "kept": len(long_pairs) - len(rejected), "rejected": rejected,
+                    "not_counted": not_counted})
+    return out
+
+
 def optode_rejections(pairs: "dict[str, dict[str, Any]]") -> "dict[str, tuple[int, int]]":
     """Each source's and detector's long pairs as ``(rejected, listed)``, from :func:`pair_status` rows.
 
@@ -803,7 +846,7 @@ def optode_rejections(pairs: "dict[str, dict[str, Any]]") -> "dict[str, tuple[in
     """
     out: dict[str, list[int]] = {}
     for pair, status in pairs.items():
-        if status.get("separation") not in ("long", "", "n/a"):
+        if status.get("separation") not in _LONG_SEPARATIONS:
             continue
         for optode in pair.split("_")[:2]:
             counts = out.setdefault(optode, [0, 0])
