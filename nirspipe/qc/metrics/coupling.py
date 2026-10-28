@@ -562,26 +562,30 @@ def heart_rate_band(sfreq: float, resp_h_freq: float) -> "tuple[float, float]":
 
 @_safe_metrics("Heart rate", ("heart_rate", "heart_rate_per_channel"))
 def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
-    r"""Heart rate: the median over channels of each channel's most prominent spectral peak, in Hz.
+    r"""Heart rate: the median over channels of each one's highest peak above its background, in Hz.
 
     .. math::
 
         f_\mathrm{HR} = \operatorname*{median}_{c} \;
-            \operatorname*{arg\,max}_{p \in \mathcal{P}_c} \operatorname{prom}_c(p),
+            \operatorname*{arg\,max}_{p \in \mathcal{P}_c} r_c(p), \qquad
+        r_c(f) = \log S_c(f) - (a_c + b_c \log f),
 
-    where :math:`\mathcal{P}_c` are the local maxima of channel :math:`c`'s log Welch spectrum
-    of optical density between :math:`f_\mathrm{resp}`, the top of the respiration band, and
-    :math:`f_N - 0.3` Hz, :math:`f_N` the Nyquist frequency, and :math:`\operatorname{prom}`
-    is how far a peak rises above the higher of the lowest points on either side of it before
-    a higher peak. Frames in ``BAD_`` spans are left out. The search runs past the cardiac band
-    rather than inside it, so a band that misses the pulse shows; its top is where a cardiac
-    band may end at this sampling rate. Prominence rather than the highest power, CP's cardiac
-    frequency: the background falls across the range, and near the floor it often outranks
-    the pulse. Rejected channels vote too: screening reads SCI in the cardiac band this
-    checks, so a band that misses the pulse rejects every channel.
+    where :math:`S_c` is channel :math:`c`'s Welch spectrum of optical density between
+    :math:`f_\mathrm{resp}`, the top of the respiration band, and :math:`f_N - 0.3` Hz,
+    :math:`f_N` the Nyquist frequency; :math:`a_c + b_c \log f` is the least-squares line
+    through :math:`\log S_c` against :math:`\log f` over that range, the background's fall with
+    frequency; and :math:`\mathcal{P}_c` are the local maxima of :math:`r_c`. Taking the
+    background out keeps a pulse near the floor, where the background is high, from being
+    outranked by its own harmonic or by the background itself. Two things still mislead a
+    channel: breathing strong enough that its harmonic stands higher than the pulse, and a
+    background falling faster than a line near the floor, as large motion spikes leave it,
+    which puts the reading just above the floor; the median holds while most channels are
+    spared. Frames in ``BAD_`` spans are left out. The search runs past the cardiac band rather than inside it, so a band that
+    misses the pulse shows; its top is where a cardiac band may end at this sampling rate.
+    Rejected channels vote too: screening reads SCI in the cardiac band this checks, so a
+    band that misses the pulse rejects every channel.
 
-    Experimental: an estimator of our own, not checked against a reference heart rate such as
-    an ECG. Descriptive: nothing is rejected on it.
+    Experimental: an estimator of our own. Descriptive: nothing is rejected on it.
 
     Parameters
     ----------
@@ -607,10 +611,12 @@ def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
     for ch, row in zip(psd.ch_names, power):
         if not (np.isfinite(row).all() and (row > 0).all()):
             continue
-        # a falling edge is no local maximum, so the background's slope is never chosen
-        peaks, props = signal.find_peaks(np.log(row), prominence=0)
+        log_f, log_p = np.log(psd.freqs), np.log(row)
+        above = log_p - np.polyval(np.polyfit(log_f, log_p, 1), log_f)
+        # a falling edge is no local maximum, so a range end is never chosen
+        peaks, _ = signal.find_peaks(above)
         if peaks.size:
-            per_ch[ch] = float(psd.freqs[peaks[np.argmax(props["prominences"])]])
+            per_ch[ch] = float(psd.freqs[peaks[np.argmax(above[peaks])]])
     return {
         "heart_rate": float(np.median(list(per_ch.values()))) if per_ch else None,
         "heart_rate_per_channel": per_ch,

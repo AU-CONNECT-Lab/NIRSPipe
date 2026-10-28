@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 from mne.preprocessing.nirs import beer_lambert_law
 
-from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, own_freq
+from nirspipe.qc.subject.record_io import read_record
+from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, TASK, own_freq
 from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS
 from tests.figure_accuracy._dyad import html_tables, js_var
 from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
@@ -184,12 +185,18 @@ def test_each_spectrum_ends_at_2_hz_under_a_band_that_does(groups, group):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_the_quality_table_gives_each_member_the_planted_heart_rate(groups, group):
+def test_the_quality_table_gives_each_member_its_own_heart_rate(groups, group):
     rows = [row for _, rows in html_tables(groups.page(group, raw=True)) for row in rows
             if row and row[0].strip().startswith("Heart rate")]
-    values = [float(cell) for cell in rows[0][1:] if re.fullmatch(r"[0-9.]+", cell.strip())]
-    assert len(values) >= 2
-    assert all(v == pytest.approx(CARDIAC_FREQ, abs=0.05) for v in values)
+    members = [m.sid for m in groups.truth.group(group)]
+    # All, Long, Short, each a column per member
+    cells = dict(zip([(s, sid) for s in ("raw", "raw_long", "raw_short") for sid in members],
+                     rows[0][1:]))
+    for (section, sid), cell in cells.items():
+        record = read_record(groups.qc / sid / "nirs" / f"{sid}_task-{TASK}_desc-sqmraw_qc.json")
+        assert float(cell) == pytest.approx(record[section]["heart_rate"], abs=0.005), (section, sid)
+        if section == "raw":
+            assert float(cell) == pytest.approx(CARDIAC_FREQ, abs=0.05), sid
     assert "outside the cardiac band" not in _page(groups, group)
 
 

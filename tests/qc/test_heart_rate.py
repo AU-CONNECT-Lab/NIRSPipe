@@ -1,4 +1,4 @@
-"""The heart rate: each channel's most prominent spectral peak above the respiration band, their median."""
+"""The heart rate: each channel's highest spectral peak above its background, above the respiration band, their median."""
 
 import json
 import logging
@@ -46,15 +46,42 @@ def test_the_heart_rate_is_the_shared_pulse():
     assert len(out["heart_rate_per_channel"]) == 8
 
 
-def test_breathing_that_outranks_the_pulse_in_power_does_not_outrank_it_in_prominence():
-    # strong breathing just under the floor leaves its tail and a harmonic above it
-    raw = _recording([1.2] * 4, duration=600.0, breath_hz=0.45, breath_amp=0.3)
-    # the case as built: in most channels the highest power is not the pulse
-    od = mne.preprocessing.nirs.optical_density(raw, verbose=False)
-    psd = od.compute_psd(fmin=0.5, fmax=4.7, verbose=False)
-    highest = psd.freqs[np.argmax(psd.get_data(), axis=1)]
-    assert np.median(highest) < 1.0
+def test_breathing_ten_times_the_pulse_just_under_the_floor_leaves_it_alone():
+    # its tail and its harmonic at 0.9 Hz reach into the search
+    raw = _recording([1.2] * 4, duration=600.0, breath_hz=0.45, breath_amp=0.2)
     assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
+
+
+def test_a_breathing_harmonic_louder_than_the_pulse_is_read_as_the_heart_rate():
+    # the limit the docstring states: fifteen times the pulse puts its 0.9 Hz harmonic highest
+    raw = _recording([1.2] * 4, duration=600.0, breath_hz=0.45, breath_amp=0.3)
+    assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(0.9, abs=TOLERANCE_HZ)
+
+
+def _power_law(n, sfreq, rng):
+    """Unit-variance noise whose power falls as 1/f^2."""
+    f = np.fft.rfftfreq(n, 1 / sfreq)
+    amp = np.zeros_like(f)
+    amp[1:] = 1 / f[1:]
+    x = np.fft.irfft(amp * np.exp(2j * np.pi * rng.random(f.size)), n)
+    return x / x.std()
+
+
+def test_a_slow_pulse_high_on_the_background_wins_over_its_harmonic():
+    # 51 bpm with a second harmonic half its size, over a background falling as 1/f^2: the
+    # harmonic stands on a lower background, so it rose further above its neighbours
+    names, locs, _ = _channel_layout(4, short=False)
+    rng = np.random.default_rng(0)
+    sfreq = 10.0
+    t = np.arange(int(sfreq * 600.0)) / sfreq
+    pulse = np.sin(2 * np.pi * 0.85 * t) + 0.5 * np.sin(2 * np.pi * 1.7 * t)
+    data = np.array([0.1 * (1.0 + 0.01 * pulse + 0.01 * _power_law(t.size, sfreq, rng)
+                            + 0.0002 * rng.normal(size=t.size)) for _ in names])
+    info = mne.create_info(names, sfreq, ["fnirs_cw_amplitude"] * len(names))
+    for ch, loc in zip(info["chs"], locs):
+        ch["loc"] = loc
+    raw = mne.io.RawArray(data, info, verbose="error")
+    assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(0.85, abs=TOLERANCE_HZ)
 
 
 def test_breathing_stronger_than_the_pulse_is_left_below_the_search():
