@@ -418,6 +418,14 @@ NOTES = {
     "group.outlier_rule":
         "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
         "metric.",
+    "group.fc_distribution":
+        "Every connection between two kept long channels, one curve per run, its cohort median "
+        "in colour: on the left the series the regression started from, on the right its "
+        "residual, the series the run&rsquo;s connectivity is computed on. A regression that "
+        "removed a shared signal moves the curves toward 0; one that removed little leaves "
+        "them where they were. Read from each run&rsquo;s channel matrices, the one before the "
+        "regression ending in <code>_desc-filtered_relmat.tsv</code>; runs without a "
+        "regression are left out.",
     "group.regions":
         "For each region of the <code>--roi-mapping</code> given at this level, the runs of the "
         "task that kept none of its long channels, out of the runs of the task; hover a count "

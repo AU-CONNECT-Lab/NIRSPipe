@@ -809,6 +809,12 @@ def pair_status(path: Path) -> "dict[str, dict[str, Any]]":
 _LONG_SEPARATIONS = ("long", "", "n/a")
 
 
+def long_kept_pairs(pairs: "dict[str, dict[str, Any]]") -> "set[str]":
+    """The long pairs :func:`pair_status` rows list as kept; a pair with no separation counts as long."""
+    return {pair for pair, row in pairs.items()
+            if row["separation"] in _LONG_SEPARATIONS and not row["is_bad"]}
+
+
 def region_coverage(pairs: "dict[str, dict[str, Any]]",
                     roi_map: "dict[str, list[str]]") -> "list[dict[str, Any]]":
     """Each ``--roi-mapping`` region's long channels in one recording, and which were rejected.

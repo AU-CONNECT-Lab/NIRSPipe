@@ -24,6 +24,7 @@ from nirspipe.qc.figures.subject.group_figures import (
     build_condition_matrix,
     build_condition_panels,
     build_deviation_strip,
+    build_fc_distributions,
     build_grouped_boxes,
     build_window_grid,
     check_only,
@@ -43,7 +44,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of
 from nirspipe.io.naming import derivative_path
 from nirspipe.qc.common.channel_table import (
-    CHANNEL_METRICS_SUFFIXES, optode_rejections, pair_status, region_coverage,
+    CHANNEL_METRICS_SUFFIXES, long_kept_pairs, optode_rejections, pair_status, region_coverage,
 )
 from nirspipe.qc.subject.record_io import channel_columns, channel_frame, read_record
 from nirspipe.qc.subject.sqm_record import (
@@ -55,9 +56,9 @@ from nirspipe.qc.subject.sqm_record import (
     SQM_DESCS,
     fill_skipped_long_sections,
 )
-from nirspipe.utils import load_toml
+from nirspipe.utils import load_toml, pair_of
 from nirspipe.utils.logging import get_logger
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import read_table, write_tsv
 
 # Click a strip point -> open that subject's raw report, which lives in sub-<id>/ next to
 # the rest of that subject's files. The figure is an iframe one dir down from the group HTML,
@@ -455,6 +456,45 @@ def region_losses(output_dir: Path, roi_map: "dict[str, list[str]] | None") -> d
                      for region in regions]}
 
 
+def _relmat(path: Path) -> pd.DataFrame:
+    return read_table(path).set_index("channel")
+
+
+def fc_distributions(output_dir: Path) -> dict:
+    """Each run's channel-pair r over its kept long channels, before and after the regression, per task.
+
+    ``{task: {"runs": [label, ...], "values": {(chromophore, "before"|"after"): [r per run]}}}``,
+    read from the residual's channel matrix and the one written beside it on the series the
+    regression started from (``_desc-<stage>_relmat.tsv``); a run without the second ran no
+    regression and is left out. Long and kept are read off the run's channel table. Runs
+    are pooled by task alone, acquisitions together: each curve is one run's own.
+    """
+    tables = _channel_tables(output_dir)
+    out: dict = {}
+    for after_path in sorted(output_dir.glob("sub-*/**/nirs/*_stat-pearson_relmat.tsv")):
+        name = after_path.name
+        if entity_of(name, "seg") or entity_of(name, "agg"):
+            continue
+        label, chroma = name[:name.index("_chromo-")], entity_of(name, "chromo")
+        before_path = next(iter(sorted(after_path.parent.glob(
+            f"{label}_chromo-{chroma}_stat-pearson_desc-*_relmat.tsv"))), None)
+        if before_path is None or label not in tables:
+            continue
+        kept = long_kept_pairs(pair_status(tables[label]))
+        after, before = _relmat(after_path), _relmat(before_path)
+        names = [c for c in after.index if pair_of(c) in kept and c in before.index]
+        if len(names) < 2:
+            continue
+        upper = np.triu_indices(len(names), 1)
+        task = out.setdefault(f"task-{entity_of(label, 'task')}", {"runs": [], "values": {}})
+        if label not in task["runs"]:
+            task["runs"].append(label)
+        for side, matrix in (("before", before), ("after", after)):
+            r = matrix.loc[names, names].to_numpy(dtype=float)[upper]
+            task["values"].setdefault((chroma, side), []).append(r[np.isfinite(r)])
+    return out
+
+
 def _render_group(
     output_dir: Path,
     out_desc: str,
@@ -579,6 +619,8 @@ def _render_group(
     regions: dict = {}
     with guard("Regions", errors, out_desc):
         regions = region_losses(output_dir, roi_map)
+    with guard("Connectivity distributions", errors, out_desc):
+        _save("fcdistribution", "fcdistribution", build_fc_distributions(fc_distributions(output_dir)))
 
     for task in swapped_label_tasks(full_rows):
         msg = section_note("caveat.labels_swapped", task=task["task"], k=len(task["runs"]),

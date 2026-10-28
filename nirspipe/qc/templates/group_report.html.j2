@@ -63,6 +63,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
   {% set _ = _sections.append(("ConditionMatrix", "Run × condition")) %}
 {% endif %}
 {% set _ = _sections.append(("Windowed", "Over time")) %}
+{% if figure_paths.fcdistribution %}{% set _ = _sections.append(("Connectivity", "Connectivity")) %}{% endif %}
 {% set _ = _sections.append(("Outliers", "Outliers")) %}
 {% set _ = _sections.append(("Metrics", "Quality Metrics")) %}
 {% if regions %}{% set _ = _sections.append(("Regions", "Regions")) %}{% endif %}
@@ -194,6 +195,17 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
     <p class="step-desc">{{ section_note('group.windowed', smooth='%g'|format(smooth_s), sci_window='%g'|format(sci_window_s)) }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.windows.src }}"
             style="height:{{ figure_paths.windows.h }}px"></iframe>
+  </div>
+</section>
+{% endif %}
+
+{% if figure_paths.fcdistribution %}
+<section id="Connectivity" class="step">
+  <h3 class="step-title">Connectivity before and after the regression</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('group.fc_distribution') }}</p>
+    <iframe class="plot-frame" src="{{ figure_paths.fcdistribution.src }}"
+            style="height:{{ figure_paths.fcdistribution.h }}px"></iframe>
   </div>
 </section>
 {% endif %}

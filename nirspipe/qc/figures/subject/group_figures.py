@@ -12,8 +12,8 @@ from plotly.subplots import make_subplots
 from nirspipe.qc.boilerplate.vocabulary import grid_window_label, shared_window
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
-from nirspipe.qc.figures.common._utils import (CONDITION_PALETTE, LONG_COLOR, SHORT_COLOR,
-                                                  _hex_to_rgba)
+from nirspipe.qc.figures.common._utils import (CHROMA_STYLE, CONDITION_PALETTE, LONG_COLOR,
+                                                  SHORT_COLOR, _hex_to_rgba)
 
 
 # Only scale-homogeneous metrics share a chart, so the y-axis stays in real units. Keys are
@@ -937,3 +937,64 @@ def build_grouped_boxes(
         if fig is not None:
             out.append((title, fig))
     return out
+
+
+# ---- Connectivity before and after the regression ----
+
+# each run's r are binned this finely, and smoothed this wide for display
+FC_BIN = 0.02
+FC_SMOOTH = 0.04
+
+
+def fc_density(values: np.ndarray) -> "tuple[np.ndarray, np.ndarray]":
+    """(bin centres, density) of ``values`` over -1 to 1, binned at :data:`FC_BIN` and smoothed by a Gaussian of :data:`FC_SMOOTH`."""
+    edges = np.linspace(-1.0, 1.0, int(round(2 / FC_BIN)) + 1)
+    counts, _ = np.histogram(values, edges)
+    half = int(round(3 * FC_SMOOTH / FC_BIN))
+    kernel = np.exp(-0.5 * (np.arange(-half, half + 1) * FC_BIN / FC_SMOOTH) ** 2)
+    smooth = np.convolve(counts, kernel / kernel.sum(), mode="same")
+    total = smooth.sum() * FC_BIN
+    return (edges[:-1] + edges[1:]) / 2, smooth / total if total else smooth
+
+
+def build_fc_distributions(by_task: dict) -> "go.Figure | None":
+    """Each run's channel-pair r before and after the regression, pale, with the cohort median; a row per task and chromophore.
+
+    ``by_task`` is :func:`~nirspipe.qc.subject.group_writer.fc_distributions`. None when no
+    task has a run with both matrices.
+    """
+    rows = [(task, chroma) for task in sorted(by_task) for chroma in CHROMA_STYLE
+            if by_task[task]["values"].get((chroma, "after"))]
+    if not rows:
+        return None
+    fig = make_subplots(
+        rows=len(rows), cols=2, shared_xaxes=True, shared_yaxes=True,
+        horizontal_spacing=0.04, vertical_spacing=min(0.08, 0.3 / len(rows)),
+        column_titles=["Before the regression", "After the regression"],
+        row_titles=[f"{task} {CHROMA_STYLE[chroma][0]}" for task, chroma in rows])
+    for i, (task, chroma) in enumerate(rows, 1):
+        values = by_task[task]["values"]
+        top = 0.0
+        for j, side in enumerate(("before", "after"), 1):
+            curves = [fc_density(np.asarray(v, float)) for v in values[(chroma, side)]]
+            x = curves[0][0]
+            ys = np.array([y for _, y in curves])
+            top = max(top, float(ys.max()))
+            fig.add_trace(_bundle(x, ys), row=i, col=j)
+            fig.add_trace(go.Scatter(
+                x=x, y=np.median(ys, axis=0), mode="lines", showlegend=False,
+                name="cohort median", line=dict(color=CHROMA_STYLE[chroma][1], width=2),
+                hovertemplate="r %{x:.2f}<br>cohort median density %{y:.2f}<extra></extra>"),
+                row=i, col=j)
+            fig.add_vline(x=0, line=dict(color="#999", width=0.8, dash="dot"), row=i, col=j)
+        # every run whole, the narrowest one's peak included
+        fig.update_yaxes(range=[0, 1.05 * top], row=i)
+    fig.update_xaxes(range=[-1, 1], gridcolor="#f0f0f0", zeroline=False)
+    fig.update_xaxes(title_text="r between two kept long channels", row=len(rows))
+    fig.update_yaxes(gridcolor="#f0f0f0", zeroline=False)
+    fig.update_yaxes(title_text="density", col=1)
+    fig.update_annotations(font_size=11)
+    fig.update_layout(height=70 + 190 * len(rows), plot_bgcolor="white", paper_bgcolor="white",
+                      margin=dict(t=40, l=60, r=40, b=50))
+    return fig
+
