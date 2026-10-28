@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The heart rate no longer reads the pulse's second harmonic, which it often did below about 75 bpm
-- The channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
+- The Raw signal, the channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
 
 ## [0.78.0] - 2026-10-28
 

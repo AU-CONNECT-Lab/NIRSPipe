@@ -33,14 +33,15 @@ def test_rows_sit_four_sds_apart_each_trace_centred_on_its_tick():
 
 def test_a_pairs_wavelengths_sit_on_adjacent_rows_whatever_the_file_order():
     raw = synth_raw("01", "rest", seed=0)
-    # one wavelength block before the other, as some files are written
-    by_wavelength = sorted(raw.ch_names, key=lambda ch: (ch.split()[1], raw.ch_names.index(ch)))
+    # one wavelength block before the other, pairs last to first
+    by_wavelength = sorted(raw.ch_names, key=lambda ch: (ch.split()[1], -raw.ch_names.index(ch)))
     raw = raw.copy().reorder_channels(by_wavelength)
     names = [t.name for t in build_ts_figure(raw, [], set(), 2000)[0].data]
     pairs = [n.split()[0] for n in names]
     assert all(pairs[k] == pairs[k + 1] for k in range(0, len(pairs), 2))
-    # pairs keep the order the file first lists them in
-    assert list(dict.fromkeys(pairs)) == list(dict.fromkeys(ch.split()[0] for ch in by_wavelength))
+    # long pairs by source then detector number, whatever order the file lists them in
+    long_pairs = [p for p in dict.fromkeys(pairs) if p in _LONG]
+    assert long_pairs == [f"S{k}_D{k}" for k in range(1, N_LONG_PAIRS + 1)]
 
 
 def test_short_channels_sit_in_their_own_labelled_block_below_the_long_ones():

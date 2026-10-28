@@ -7,7 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from nirspipe.utils import is_marker, pair_of
+from nirspipe.utils import is_marker, pair_of, pair_order
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans
 
@@ -158,15 +158,11 @@ def build_ts_figure(
     picks = mne.pick_types(raw.info, meg=False, fnirs=True)
     if len(picks) == 0:
         picks = list(range(len(raw.ch_names)))
-    # a pair's wavelengths on adjacent rows, pairs in acquisition order: a file may list
-    # every channel of one wavelength before the other
-    first_seen: dict[str, int] = {}
-    for p in picks:
-        first_seen.setdefault(pair_of(raw.ch_names[p]), len(first_seen))
     all_styles = _ch_styles(raw, sep_bands)
     block_of = {name: k for k, (name, _) in enumerate(_SEPARATION_BLOCKS)}
-    # long channels, then short, then any in neither range; a stable sort keeps the pairs' order
-    picks = sorted(sorted(picks, key=lambda p: (first_seen[pair_of(raw.ch_names[p])],
+    # long channels, then short, then any in neither range; within each, by source then
+    # detector number, a pair's wavelengths on adjacent rows
+    picks = sorted(sorted(picks, key=lambda p: (pair_order(raw.ch_names[p]),
                                                 float(raw.info["chs"][p]["loc"][9]),
                                                 raw.ch_names[p])),
                    key=lambda p: block_of[all_styles[p][1]])
