@@ -532,7 +532,7 @@ def combined_run_rows(series: Path, raw) -> list[dict]:
     return rows
 
 
-def write_combined_figures(sub_dir: Path, item: dict) -> dict:
+def write_combined_figures(sub_dir: Path, item: dict, roi_map: "dict | None" = None) -> dict:
     """The joined series' run table, carpet, channel FC panel and ROI matrix, drawn as a run report draws them."""
     from nirspipe.io.snirf import read_snirf
     from nirspipe.io.tables import read_table
@@ -561,6 +561,7 @@ def write_combined_figures(sub_dir: Path, item: dict) -> dict:
     panel = rest_channel_panel(channel, None,
                                raw=raw,
                                sep_bands=bands_from_record(params.get("parameters") or {}),
+                               roi_map=roi_map,
                                title="Functional connectivity over the joined runs")
     roi = fc_roi_matrix_figure({c: _matrix(p) for c, p in item["roi"].items()},
                                title="ROI-to-ROI functional connectivity over the joined runs")
@@ -573,6 +574,7 @@ def write_subject_index(
     sub_dir: Path,
     run_command: str,
     mode: str | None = None,
+    roi_map: "dict | None" = None,
 ) -> Path | None:
     """Render sub-<subject>_desc-index_report.html as the index over the subject's per-run reports."""
     rows = collect_runs(sub_dir)
@@ -584,7 +586,7 @@ def write_subject_index(
     combined = collect_combined(sub_dir)
     for item in combined:
         with guard(f"Runs combined ({item['label']})", errors, f"sub-{subject}"):
-            item.update(write_combined_figures(sub_dir, item))
+            item.update(write_combined_figures(sub_dir, item, roi_map))
     condition_groups = collect_conditions(sub_dir)
     figures: dict = {"profile": None, "per_run": []}
     if condition_groups:

@@ -176,6 +176,17 @@ def test_the_subject_index_draws_the_joined_fc(two):
     assert (sub / "figures" / "sub-01_task-tapping_desc-joinedroifc_nirs.html").exists()
 
 
+def test_the_joined_fc_panel_takes_the_run_reports_roi_order(two):
+    figures = two.parent / "figures"
+    joined = one_figure(figures / "sub-01_task-tapping_desc-joinedfc_nirs.html")["data"][0]["x"]
+    # run-01 marks S1_D1 bad, so run-02 is the one that holds every pair the join does
+    run = one_figure(figures / "sub-01_task-tapping_run-02_desc-restpanel_nirs.html")["data"][0]["x"]
+    # each ROI's members together, in the map's order, the unclaimed pairs after them
+    claimed = [p for members in ROI.values() for p in members if p in joined]
+    assert list(joined[:len(claimed)]) == claimed
+    assert list(joined) == list(run)
+
+
 def test_the_index_tables_each_runs_length_kept_time_and_rejected_pairs(two):
     html = (two.parent / "sub-01_desc-index_report.html").read_text(encoding="utf-8")
     cells = {row[0]: row[1:] for row in re.findall(

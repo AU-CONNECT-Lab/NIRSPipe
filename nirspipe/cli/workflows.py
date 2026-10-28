@@ -451,7 +451,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     from nirspipe.qc.subject.subject_index import write_subject_index
                     try:
                         write_subject_index(subject, sub_dir, " ".join(sys.argv),
-                                            mode=_v(args["mode"]) if args.get("mode") else None)
+                                            mode=_v(args["mode"]) if args.get("mode") else None,
+                                            roi_map=roi_map)
                     except Exception:
                         logger.warning("sub-%s | run index failed", subject, exc_info=True)
 
