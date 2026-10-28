@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Shared usable time names a pair a member rejected and counts it as lost, rows running worst to best; the dyad's usable numbers and table no longer count rejected channels
+- `nirspipe-qc` participant requires the respiration band (`--resp-l-freq`, `--resp-h-freq`) as `nirspipe` does, unless `--population` fills it, and records it
 
 ## [0.77.0] - 2026-10-26
 

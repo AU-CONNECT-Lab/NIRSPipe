@@ -8,7 +8,8 @@ from nirspipe.cli import qc
 
 from tests._raw_qc import raw_qc
 
-PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8"]
+PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8",
+        "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"]
 
 
 def _generated_by(tree):

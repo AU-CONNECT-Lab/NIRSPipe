@@ -20,6 +20,7 @@ from nirspipe.cli import _app_options
 from nirspipe.cli import _shared
 from nirspipe.utils.logging import get_logger, setup_logging
 from nirspipe.cli._app_options import separation_bands_from_args
+from nirspipe.pipeline.population import BAND_KEYS
 from nirspipe.qc.metrics._helpers import separation_bands
 
 setup_logging()
@@ -28,7 +29,8 @@ logger = get_logger("cli.qc")
 
 # analysis levels and the flags each one cannot run without
 _LEVEL_REQUIRES = {
-    "participant": ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq"),
+    "participant": ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq",
+                    "--resp-l-freq", "--resp-h-freq"),
     "group":       (),
 }
 # a parser group's title names the level its flags belong to; one typed at the other level
@@ -44,6 +46,7 @@ def cmd_participant(
     dpf: list[float], sci_threshold: float, psp_threshold: float | None,
     min_good_frac: float | None, screen_scope: str,
     cardiac_l_freq: float, cardiac_h_freq: float,
+    resp_l_freq: float, resp_h_freq: float,
     window_length: float,
     epoch_qc: bool, epoch_tmin: float | None, epoch_tmax: float | None,
     by_condition: bool,
@@ -178,6 +181,7 @@ def cmd_participant(
                                       screen_scope=screen_scope,
                                       cardiac_l_freq=cardiac_l_freq,
                                       cardiac_h_freq=cardiac_h_freq,
+                                      resp_l_freq=resp_l_freq, resp_h_freq=resp_h_freq,
                                       window_s=window_length, epoch_qc=epoch_qc,
                                       epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
                                       sep_bands=sep_bands, by_condition=by_condition,
@@ -514,7 +518,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            "given here override it.")
     _app_options.add_dpf(part)
     _app_options.add_template(part)
-    _app_options.add_population(part, "the two cardiac band edges")
+    _app_options.add_population(part, "the four cardiac and respiration band edges")
     _app_options.add_sci_threshold(part)
     _app_options.add_psp_threshold(part)
     _app_options.add_min_good_frac(part)
@@ -525,6 +529,12 @@ def _build_parser() -> argparse.ArgumentParser:
     part.add_argument("--cardiac-h-freq", type=float,
                       help="Upper bound of cardiac band in Hz (required at participant level "
                            "unless --population sets it).")
+    part.add_argument("--resp-l-freq", type=float,
+                      help="Lower bound of respiration band in Hz (required at participant "
+                           "level unless --population sets it).")
+    part.add_argument("--resp-h-freq", type=float,
+                      help="Upper bound of respiration band in Hz (required at participant "
+                           "level unless --population sets it).")
     part.add_argument("--window-length", type=float, default=10.0,
                       help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     part.add_argument("--epoch-qc", action="store_true",
@@ -659,11 +669,11 @@ def main(argv: list[str] | None = None) -> None:
     filled = []
     if args.analysis_level == "participant":
         # below the command line and --config, so either overrides any value it fills
-        filled = _app_options.fill_population(args, ("cardiac_l_freq", "cardiac_h_freq"))
+        filled = _app_options.fill_population(args, BAND_KEYS)
     for flag in _LEVEL_REQUIRES[args.analysis_level]:
-        if getattr(args, flag.lstrip("-").replace("-", "_")) is None:
-            hint = ("; --population sets it" if flag in ("--dpf", "--cardiac-l-freq",
-                                                          "--cardiac-h-freq") else "")
+        dest = flag.lstrip("-").replace("-", "_")
+        if getattr(args, dest) is None:
+            hint = "; --population sets it" if dest in (*BAND_KEYS, "dpf") else ""
             print(f"Error: Missing option '{flag}' (required at {args.analysis_level} "
                   f"level{hint}).", file=sys.stderr)
             raise SystemExit(1)

@@ -10,7 +10,7 @@ from nirspipe.io.naming import report_name
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--sci-threshold", "0.8",
-        "--skip-bids-validation"]
+        "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation"]
 
 
 @pytest.fixture(scope="module")

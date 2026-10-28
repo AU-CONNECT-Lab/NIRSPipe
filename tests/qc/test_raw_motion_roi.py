@@ -38,7 +38,8 @@ def _legend_squares(fig) -> list:
 def pages(tmp_path_factory):
     out, run = _run(tmp_path_factory.mktemp("roi"))
     page = out / "sub-01" / "sub-01_task-tap_desc-raw_report.html"
-    build_prep_raw_report([run], page, 0.7, 1.5, [6.0], 0.8, by_condition=True, roi_map=ROI_MAP)
+    build_prep_raw_report([run], page, 0.7, 1.5, 0.1, 0.5, [6.0], 0.8, by_condition=True,
+                          roi_map=ROI_MAP)
     return page, sorted(page.parent.glob("*_cond-*_desc-raw_report.html"))
 
 

@@ -4,10 +4,6 @@ import pytest
 from tests._fingerprint import CLI_ARGS, EVENT_DURATION, make_fingerprint_dataset
 from tests.figure_accuracy._run import Run
 
-# raw QC takes no respiration band
-RAW_VIEWER_ARGS = [a for i, a in enumerate(CLI_ARGS)
-                   if not (a.startswith("--resp-") or (i and CLI_ARGS[i - 1].startswith("--resp-")))]
-
 
 def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: bool = False,
                   blocks: bool = False, raw_viewer: bool = False, aux: bool = False) -> dict:
@@ -48,7 +44,7 @@ def run_capturing(root, args: list, spied: tuple, task: str = "tapping", rest: b
         setattr(module, name, spy(name, original))
     try:
         if raw_viewer:
-            qc_cli.main([str(bids), str(root / "out"), "participant", *RAW_VIEWER_ARGS, *args,
+            qc_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, *args,
                          "--skip-bids-validation"])
         else:
             run_cli.main([str(bids), str(root / "out"), "participant", *CLI_ARGS, *args,
@@ -149,7 +145,8 @@ def _flag(name: str) -> list[str]:
 
 
 # the members' raw QC takes the physiology and the SCI line, and none of the pipeline's other settings
-DYAD_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq")
+DYAD_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq",
+                                "--resp-l-freq", "--resp-h-freq")
                  for a in _flag(flag)]
 DYAD_HYPER_ARGS = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10"]
 

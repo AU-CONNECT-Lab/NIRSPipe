@@ -187,11 +187,12 @@ def test_an_infant_without_an_age_stops_naming_both_fixes(tmp_path, capsys):
 
 # ---- raw QC ----
 
-def test_raw_qc_takes_the_cardiac_band_dpf_and_template(bids, tmp_path):
+def test_raw_qc_takes_the_bands_dpf_and_template(bids, tmp_path):
     qc_cli.main([str(bids), str(tmp_path), "participant", "--population", "adult",
                  "--sci-threshold", "0.8", *SELECT])
     params = json.loads(next(tmp_path.rglob("*_desc-sqmraw_qc.json")).read_text())["parameters"]
     assert (params["cardiac_l_freq"], params["cardiac_h_freq"]) == (0.7, 1.8)
+    assert (params["resp_l_freq"], params["resp_h_freq"]) == (0.1, 0.5)
     assert params["dpf"] == pytest.approx([_scholkmann_wolf(w, 30.0) for w in WAVELENGTHS])
     assert (params["dpf_population"], params["template"]) == ("adult", "fsaverage")
     record = _record(tmp_path, "sub-01_desc-raw.toml")

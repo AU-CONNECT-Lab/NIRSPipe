@@ -3,7 +3,8 @@
 from nirspipe.cli import qc as qc_cli
 
 SCREENING = ("--dpf", "6", "--sci-threshold", "0.8",
-             "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5")
+             "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+             "--resp-l-freq", "0.1", "--resp-h-freq", "0.5")
 
 
 def raw_qc(bids, out, pairs=None, participant=SCREENING, group=(), validate=False):

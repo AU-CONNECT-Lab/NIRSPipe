@@ -278,9 +278,9 @@ def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
     _write_subject(bids, "01", "tap", synth_raw("01", "tap", duration=300.0))
     out = tmp_path / "out"
     shared = ["--participant-label", "01", "--dpf", "6", "--cardiac-l-freq", "0.7",
-              "--cardiac-h-freq", "1.5", "--skip-bids-validation"]
+              "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation"]
     run_cli.main([str(bids), str(out), "participant", *shared, "--sci-threshold", "0.5",
-                  "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--no-report"])
+                  "--no-report"])
     pipeline_table = out / "sub-01" / "nirs" / ("sub-01_task-tap" + CHANNEL_METRICS_SUFFIX)
     before = pipeline_table.read_text(encoding="utf-8")
 

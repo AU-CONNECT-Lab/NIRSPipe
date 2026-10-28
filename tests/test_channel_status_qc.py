@@ -13,7 +13,7 @@ from tests._synth import make_bids_dataset, make_hyper_dataset
 
 LISTED = "S1_D1 760"     # one wavelength of a pair the screening keeps
 RAW_ARGS = ("--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
-            "--cardiac-h-freq", "1.5", "--skip-bids-validation")
+            "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation")
 
 
 def _with_status(bids, subject, task):

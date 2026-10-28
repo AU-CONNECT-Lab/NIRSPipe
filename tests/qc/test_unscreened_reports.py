@@ -12,7 +12,7 @@ from nirspipe.qc.metrics import screening_gap
 from tests._synth import make_bids_dataset, synth_raw
 
 RAW_ARGS = ("--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
-            "--cardiac-h-freq", "1.5", "--skip-bids-validation")
+            "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation")
 NOTE = "Channel screening could not judge this recording"
 
 

@@ -18,7 +18,7 @@ from tests._synth import make_hyper_dataset
 
 SIDS = ["sub-11", "sub-12"]
 RAW_ARGS = ("--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
-            "--cardiac-h-freq", "1.5", "--skip-bids-validation")
+            "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation")
 
 
 def _section(html: str) -> str:

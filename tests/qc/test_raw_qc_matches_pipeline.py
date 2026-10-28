@@ -11,10 +11,11 @@ from nirspipe.utils import pair_of
 from tests._fingerprint import DPF, make_fingerprint_dataset
 from tests._synth import make_bids_dataset
 
-# the fingerprint's screening settings, less the respiration band raw QC has no use for
+# the fingerprint's screening settings
 SCREENING = ("--dpf", *(str(v) for v in DPF), "--sci-threshold", "0.75",
              "--psp-threshold", "0.12", "--min-good-frac", "0.85",
-             "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9")
+             "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
+             "--resp-l-freq", "0.15", "--resp-h-freq", "0.45")
 
 
 def _record(out):
@@ -36,7 +37,7 @@ def both(tmp_path_factory):
     spans.write_text(f"onset\tduration\n{onset - 5:g}\t{span + 10:g}\n", encoding="utf-8")
     flags = ("--bad-channels", str(marks), "--bad-spans", str(spans), "--skip-bids-validation")
     run_cli.main([str(bids), str(tmp / "pipe"), "participant", *SCREENING,
-                  "--resp-l-freq", "0.15", "--resp-h-freq", "0.45", "--no-report", *flags])
+                  "--no-report", *flags])
     qc_cli.main([str(bids), str(tmp / "qc"), "participant", "--participant-label", "01",
                  *SCREENING, *flags])
     (sci,) = (tmp / "pipe").rglob("*_desc-sci_nirs.json")
@@ -62,11 +63,13 @@ def test_the_record_carries_the_settings_it_screened_with(tmp_path):
     bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",))
     qc_cli.main([str(bids), str(tmp_path / "qc"), "participant", "--participant-label", "01",
                  "--dpf", "6", "--sci-threshold", "0.8", "--cardiac-l-freq", "0.7",
-                 "--cardiac-h-freq", "1.5", "--skip-bids-validation"])
+                 "--cardiac-h-freq", "1.5", "--resp-l-freq", "0.2", "--resp-h-freq", "0.6",
+                 "--skip-bids-validation"])
     params = _record(tmp_path / "qc")["parameters"]
     assert params["sci_threshold"] == 0.8
     assert params["psp_threshold"] is None
     assert (params["cardiac_l_freq"], params["cardiac_h_freq"]) == (0.7, 1.5)
+    assert (params["resp_l_freq"], params["resp_h_freq"]) == (0.2, 0.6)
     # as typed: one factor for every wavelength, the form the pipeline's desc-preproc records
     assert params["dpf"] == [6.0]
     assert params["template"] == "fsaverage"

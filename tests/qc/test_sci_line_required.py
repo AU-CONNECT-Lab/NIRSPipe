@@ -10,7 +10,8 @@ from nirspipe.interface.forms import fields, required_first
 from nirspipe.qc.common.channel_table import format_rows
 from nirspipe.qc.rating.app import HyperRatingApp, RawRatingApp
 
-SCREEN = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5"]
+SCREEN = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+          "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"]
 
 
 def test_the_participant_level_refuses_to_run_without_a_line(capsys):

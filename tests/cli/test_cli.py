@@ -368,6 +368,18 @@ def test_cardiac_band_stays_required_at_participant_level(capsys):
     assert "--cardiac-l-freq" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("flag", ["--resp-l-freq", "--resp-h-freq"])
+def test_raw_qc_requires_the_respiration_band_as_the_pipeline_does(flag, capsys):
+    bands = {"--cardiac-l-freq": "0.7", "--cardiac-h-freq": "1.5",
+             "--resp-l-freq": "0.1", "--resp-h-freq": "0.5"}
+    del bands[flag]
+    with pytest.raises(SystemExit):
+        qc_cli.main(["/b", "/o", "participant", "--participant-label", "01", "--dpf", "6.0",
+                     "--sci-threshold", "0.8", *(a for kv in bands.items() for a in kv)])
+    err = capsys.readouterr().err
+    assert f"Missing option '{flag}'" in err and "--population sets it" in err
+
+
 @pytest.mark.parametrize("raw, expected", [("none", "none"), ("None", "none"), ("0.5", 0.5)])
 def test_a_cutoff_takes_a_frequency_or_none(raw, expected):
     assert _parse(_MIN + ["--low-pass", raw]).low_pass == expected

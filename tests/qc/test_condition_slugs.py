@@ -92,6 +92,7 @@ def test_a_subject_report_keeps_the_record_and_draws_no_condition_pages(tmp_path
     out = tmp_path / "out"
     qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01",
                  "--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+                 "--resp-l-freq", "0.1", "--resp-h-freq", "0.5",
                  "--sci-threshold", "0.8", "--by-condition", "--skip-bids-validation"])
 
     records = list(out.rglob("*_desc-sqmraw_qc.json"))

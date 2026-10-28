@@ -15,7 +15,7 @@ OCCASION = "7"
 MEMBER_SESSIONS = {"11": "3", "12": "1", "13": "2", "14": "4"}
 GROUPS = {"G01": ("11", "12"), "G02": ("13", "14")}
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
-        "--sci-threshold", "0.8"]
+        "--sci-threshold", "0.8", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"]
 
 
 def _csv(tmp_path, text):

@@ -4,7 +4,7 @@ import pytest
 
 TASKS = ("hold", "rest")
 PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
-        "--sci-threshold", "0.8"]
+        "--sci-threshold", "0.8", "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"]
 
 
 def _mmd(figures, stem):

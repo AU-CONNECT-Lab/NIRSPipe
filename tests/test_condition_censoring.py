@@ -113,6 +113,7 @@ def test_raw_qc_leaves_out_an_input_span(tmp_path):
         out = tmp_path / name / "out"
         qc_cli.main([str(bids), str(out), "participant", "--dpf", "6",
                      "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
+                     "--resp-l-freq", "0.1", "--resp-h-freq", "0.5",
                      "--sci-threshold", str(SCI_CUTOFF), "--psp-threshold", str(PSP_CUTOFF),
                      "--min-good-frac", "0.85", "--skip-bids-validation"])
         (record,) = out.rglob("*_desc-sqmraw_qc.json")
@@ -137,6 +138,7 @@ def _raw_condition_summaries(tmp_path, spans) -> dict:
     out = tmp_path / "out"
     qc_cli.main([str(bids), str(out), "participant", "--participant-label", "01", "--dpf", "6",
                  "--cardiac-l-freq", "0.8", "--cardiac-h-freq", "1.9",
+                 "--resp-l-freq", "0.1", "--resp-h-freq", "0.5",
                  "--sci-threshold", str(SCI_CUTOFF), "--by-condition", "--skip-bids-validation"])
     summaries = {}
     for page in out.rglob("*_cond-*_desc-raw_report.html"):
