@@ -162,7 +162,7 @@ def member_raw_record(output_dir: Path, entry: GroupEntry, raw: mne.io.Raw) -> "
 
     Matched by the recording its Sources name rather than by label, so a member with several
     runs of a task gets the record of the run the pairs table chose. Refused when there is
-    none, or when it predates records that carry their parameters.
+    none, or when it predates records that carry the respiration band among their parameters.
     """
     from nirspipe.exceptions import StageError
     from nirspipe.qc.subject.record_io import read_record
@@ -173,9 +173,9 @@ def member_raw_record(output_dir: Path, entry: GroupEntry, raw: mne.io.Raw) -> "
                                   f"{entry.subject_id}*{RECORD_SUFFIXES['sqmraw']}"):
         if any(Path(str(uri)).name == source for uri in read_json(path).get("Sources") or []):
             record = read_record(path)
-            if "parameters" not in record:
+            if "resp_l_freq" not in (record.get("parameters") or {}):
                 raise StageError(f"{path.name} was written before raw QC records carried their "
-                                 f"settings; run `nirspipe-qc ... participant` on "
+                                 f"respiration band; run `nirspipe-qc ... participant` on "
                                  f"{entry.subject_id} again")
             return path, record
     raise StageError(f"{entry.subject_id}: no raw QC record for {source} under {output_dir}; "
@@ -239,6 +239,7 @@ def load_group_sqm_raw(
         sqm["screen_windows"]  = _screen_windows(record, cutoffs)
         sqm["screen_cutoffs"]  = cutoffs
         sqm["screen_band"]     = (params["cardiac_l_freq"], params["cardiac_h_freq"])
+        sqm["resp_band"]       = (params["resp_l_freq"], params["resp_h_freq"])
         sqm["screening_gap"]   = record.get("screening_gap")
         sqm["parameters"]      = params
         sqm["per_channel"]     = per_channel
@@ -251,7 +252,8 @@ def load_group_sqm_raw(
         sqm_data[sid] = sqm
         members[sid] = {k: params.get(k) for k in ("sci_threshold", "psp_threshold",
                                                    "min_good_frac", "cardiac_l_freq",
-                                                   "cardiac_h_freq")}
+                                                   "cardiac_h_freq", "resp_l_freq",
+                                                   "resp_h_freq")}
 
         # every scalar the record holds, not a whitelist that would leave SCI alone
         scalar_rows.append({

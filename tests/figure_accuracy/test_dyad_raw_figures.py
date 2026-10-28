@@ -7,6 +7,7 @@ import pytest
 from mne.preprocessing.nirs import beer_lambert_law
 
 from tests._dyad_fingerprint import DPF, OWN_SPIKE, SHARED_SPIKE, SYNC, own_freq
+from tests._fingerprint import CLI_ARGS
 from tests.figure_accuracy._dyad import js_var
 from tests.figure_accuracy._payload import one_figure, plotly_figures, plotly_frames
 from tests.figure_accuracy._read import share_at, slider_layout, traces, xy
@@ -159,6 +160,19 @@ def test_each_member_s_detail_trace_carries_that_member_s_own_frequency(groups, 
             x, y = xy(traces(fig, m.sid, axis="x")[0])
             scores = {o.sid: share_at(x, y, own_freq(o.subject, k)) for o in members}
             assert max(scores, key=scores.get) == m.sid, (pair, m.sid, scores)
+
+
+@pytest.mark.parametrize("group", GROUPS)
+def test_each_spectrum_shades_the_bands_the_members_were_given(groups, group):
+    def band(lo, hi):
+        return tuple(float(CLI_ARGS[CLI_ARGS.index(flag) + 1]) for flag in (lo, hi))
+
+    for pair in groups.truth.long_pairs:
+        psd = plotly_figures(groups.figure(
+            group, f"chan-{pair.replace('_', '')}_desc-rawdetail_nirs.html"))[1]
+        spans = {(s["x0"], s["x1"]) for s in psd["layout"]["shapes"] if s["type"] == "rect"}
+        assert spans >= {band("--resp-l-freq", "--resp-h-freq"),
+                         band("--cardiac-l-freq", "--cardiac-h-freq")}, pair
 
 
 # ---- channels ----

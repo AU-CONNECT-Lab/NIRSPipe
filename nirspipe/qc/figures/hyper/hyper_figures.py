@@ -64,9 +64,8 @@ def _cond_colors(descriptions: list[str]) -> dict[str, str]:
     return {d: _COND_PALETTE[i % len(_COND_PALETTE)] for i, d in enumerate(descriptions)}
 
 
-def _psd_band_shapes(cardiac=None) -> tuple[list[dict], list[dict]]:
-    # resp omitted: the hyper raw pipeline has no respiration band input
-    bands = physio_bands(cardiac=cardiac, resp=None)
+def _psd_band_shapes(cardiac=None, resp=None) -> tuple[list[dict], list[dict]]:
+    bands = physio_bands(cardiac=cardiac, resp=resp)
     shapes = [dict(type="rect", xref="x", yref="paper",
                    x0=x0, x1=x1, y0=0, y1=1,
                    fillcolor=BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
@@ -1134,6 +1133,7 @@ def build_psd(
     ch_pair: str,
     subject_ids: list[str],
     cardiac: "tuple[float, float] | None" = None,
+    resp: "tuple[float, float] | None" = None,
 ) -> go.Figure | None:
     hbo_name = f"{ch_pair} hbo"
     traces: list[go.BaseTraceType] = []
@@ -1160,7 +1160,7 @@ def build_psd(
     if not traces:
         return None
 
-    shapes, annots = _psd_band_shapes(cardiac)
+    shapes, annots = _psd_band_shapes(cardiac, resp)
     return go.Figure(
         data=traces,
         layout=go.Layout(

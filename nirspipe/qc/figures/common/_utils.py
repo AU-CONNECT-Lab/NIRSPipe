@@ -200,8 +200,8 @@ def physio_bands(cardiac=None, resp=None):
 
     Mayer is a fixed visual reference (no metric counterpart). ``cardiac`` / ``resp`` take
     the CLI ``(l_freq, h_freq)`` so the shading matches the bands the metrics integrate over;
-    pass None to omit that band entirely rather than guess a default (e.g. the hyper pipeline
-    has no respiration band).
+    pass None to omit that band entirely rather than guess a default (e.g. a dyad whose
+    members were given different bands).
     """
     bands = [("Mayer", 0.07, 0.13)]
     if resp is not None:

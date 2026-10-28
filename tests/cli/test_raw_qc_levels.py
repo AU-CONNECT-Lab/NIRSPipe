@@ -45,7 +45,8 @@ def test_each_member_is_read_from_its_own_record(tree):
     # the lines each member was screened by, the share at its default as none was typed
     assert sidecar["parameters"]["members"] == {
         sid: {"sci_threshold": 0.8, "psp_threshold": None, "min_good_frac": GOOD_FRAC_PASS,
-              "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5} for sid in ("sub-11", "sub-12")}
+              "cardiac_l_freq": 0.7, "cardiac_h_freq": 1.5, "resp_l_freq": 0.1,
+              "resp_h_freq": 0.5} for sid in ("sub-11", "sub-12")}
     records = {p.name for p in tree.glob("sub-*/nirs/*_task-hold_desc-sqmraw_qc.json")}
     assert {s.rsplit("/", 1)[-1] for s in sidecar["Sources"]} >= records
 
@@ -64,6 +65,23 @@ def test_a_member_without_a_record_fails_its_dyad_and_names_the_fix(mini_hyper_b
     assert "sub-12: no raw QC record" in err and "participant" in err
     # the cohort page is still written for the subjects there are
     assert (out / "desc-subjects_report.html").exists()
+
+
+def test_a_member_record_without_the_respiration_band_fails_its_dyad(mini_hyper_bids, tmp_path,
+                                                                      capsys):
+    bids, pairs = mini_hyper_bids
+    out = tmp_path / "qc"
+    qc.main([str(bids), str(out), "participant", "--task-label", "hold", *SCREENING, *SKIP])
+    (path,) = out.glob("sub-12/**/*_desc-sqmraw_qc.json")
+    record = json.loads(path.read_text(encoding="utf-8"))
+    del record["parameters"]["resp_l_freq"], record["parameters"]["resp_h_freq"]
+    path.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(SystemExit) as exit_:
+        qc.main([str(bids), str(out), "group", "--pairs-csv", str(pairs), "--task-label", "hold",
+                 *SKIP])
+    assert exit_.value.code == 1
+    err = capsys.readouterr().err
+    assert "respiration band" in err and "nirspipe-qc ... participant` on sub-12" in err
 
 
 def test_the_motion_panel_corrects_each_member_as_its_record_says(mini_hyper_bids, tmp_path):

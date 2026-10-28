@@ -149,8 +149,10 @@ def _process_hyper_raw_group(
     lines = {sid: dict((sqm_data.get(sid) or {}).get("screen_cutoffs") or {})
              for sid in subject_ids}
     bands = {sid: (sqm_data.get(sid) or {}).get("screen_band") for sid in subject_ids}
+    resps = {sid: (sqm_data.get(sid) or {}).get("resp_band") for sid in subject_ids}
     cutoffs = next(iter(lines.values()), {}) if len({str(v) for v in lines.values()}) == 1 else {}
     band = next(iter(bands.values()), None) if len({str(v) for v in bands.values()}) == 1 else None
+    resp = next(iter(resps.values()), None) if len({str(v) for v in resps.values()}) == 1 else None
     if lines and not cutoffs:
         note(notes, label, "the members were screened by different lines ("
              + "; ".join(f"{sid} SCI {line.get('sci')}" for sid, line in lines.items())
@@ -158,6 +160,10 @@ def _process_hyper_raw_group(
     if bands and band is None:
         note(notes, label, "the members were screened on different cardiac bands ("
              + "; ".join(f"{sid} {b[0]:g} to {b[1]:g} Hz" for sid, b in bands.items() if b)
+             + "): the spectra shade none")
+    if resps and resp is None:
+        note(notes, label, "the members' respiration bands differ ("
+             + "; ".join(f"{sid} {b[0]:g} to {b[1]:g} Hz" for sid, b in resps.items() if b)
              + "): the spectra shade none")
     # only read where a member's record lists no rejections, which no raw QC record does
     sci_threshold = next((line.get("sci") for line in lines.values() if line.get("sci")), None)
@@ -262,7 +268,8 @@ def _process_hyper_raw_group(
                 aligned_raws, subject_ids, pair, markers_list, cond_colors_,
             )
             psd_fig   = build_psd(aligned_raws, pair, subject_ids,
-                                  cardiac=tuple(band) if band else None)
+                                  cardiac=tuple(band) if band else None,
+                                  resp=tuple(resp) if resp else None)
             fname = fig_name("detail", channel=_pair_fname(pair))
             # No epoch panel: this design gives one block per condition, so a "mean epoch"
             # would average a single trial and draw its first seconds as an evoked response.
