@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.78.0] - 2026-10-28
+
 ### Added
 - The quality record carries the heart rate, the median of the channels' spectral peaks, and the log warns when it lies outside the cardiac band
 - The raw report shows the heart rate in its summary, metric table and spectrum, and notes when it lies outside the cardiac band
