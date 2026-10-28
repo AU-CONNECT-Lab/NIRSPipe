@@ -33,7 +33,7 @@ from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
     channel_rows, format_rows, heart_rate_note, heatmap_args, pair_rows, pair_wavelengths,
-    placement_note, template_note,
+    placement_note, region_table, template_note,
     save_channel_csv,
     separation_blocks,
     separation_notes,
@@ -853,6 +853,8 @@ def _process_run(
             "haemo_split":  haemo_split,
             "channel_set":  "long channels" if sqm_split else "every channel",
         },
+        # each --roi-mapping region's long channels kept, as the subject report lists them
+        "regions": _regions_view(ch_rows, roi_map),
         # One table, at pair granularity: a decision is taken per source-detector pair. The
         # per-wavelength numbers are in the CSV written next to the record.
         "channels": {
@@ -914,6 +916,14 @@ def _process_run(
         "cutoffs":       cutoffs,
         "trial_rows":    trial_rows,
     }
+
+
+def _regions_view(rows: list[dict], roi_map: "dict | None") -> dict:
+    """The region table's rows and its not-counted note, ready to print."""
+    table = region_table(rows, roi_map)
+    return {"rows": table["rows"],
+            "note": (section_note("metrics.regions_not_counted", pairs=table["not_counted"])
+                     if table["not_counted"] else "")}
 
 
 def _marked_copy(raw_od, bad_channels: "set[str]"):

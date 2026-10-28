@@ -323,6 +323,19 @@ select#run-select {
 </div>
 </section>
 
+{#- shown only for a run given --roi-mapping; no rating id, being a count of the table below -#}
+<section id="Regions" class="step" style="display:none">
+<h3 class="step-title">Region coverage</h3>
+<div class="details-body">
+  <p class="qm-note">{{ section_note('metrics.regions') }}</p>
+  <table class="qm-table qm-flat">
+    <thead><tr><th>Region</th><th>Long channels kept</th><th>Rejected</th></tr></thead>
+    <tbody id="regions-tbody"></tbody>
+  </table>
+  <p class="qm-note" id="regions-note"></p>
+</div>
+</section>
+
 <section id="Channels" class="step">
 <h3 class="step-title">Per-channel table</h3>
 <div id="ch-decisions-body" class="details-body">
@@ -479,6 +492,7 @@ window.addEventListener("DOMContentLoaded", function() {
   loadHeadSlider();
   loadBrainViews();
   loadSqm();
+  loadRegions();
   loadChannelSummary();
   loadConditionSummary();
   loadTrialQc();
@@ -692,6 +706,20 @@ function loadHeadSlider() {
 }
 
 // ─── brain views ──────────────────────────────────────────────────────────────
+function loadRegions() {
+  var regions = ((_STATIC_DATA || [])[_run_idx] || {}).regions || {};
+  var rows = regions.rows || [];
+  _showSection("Regions", rows.length > 0);
+  if (!rows.length) return;
+  document.getElementById("regions-tbody").innerHTML = rows.map(function(r) {
+    return "<tr><td>" + _esc(r.region) + "</td><td class='qv" + (r.kept ? "" : " bad") + "'>"
+         + r.kept + " of " + r.listed + "</td><td>" + _esc(r.rejected.join(", ")) + "</td></tr>";
+  }).join("");
+  var note = document.getElementById("regions-note");
+  note.innerHTML = regions.note || "";
+  note.style.display = regions.note ? "" : "none";
+}
+
 function loadBrainViews() {
   var d = _STATIC_DATA[_run_idx] || {};
   var p = (d.figure_paths || {}).brain_views;
@@ -1001,7 +1029,8 @@ function switchRun(idx) {
     document.getElementById("detail-plot").style.display = "none";
     loadSummary(); loadChannelPicker(); loadTimeSeries(); loadPsdMean();
     loadTriggerTimeline(); loadCarpetGvtd(); loadMotionDetail(); loadHbCorr();
-    loadSciPsp(); loadHeadSlider(); loadBrainViews(); loadSqm(); loadChannelSummary();
+    loadSciPsp(); loadHeadSlider(); loadBrainViews(); loadSqm(); loadRegions();
+    loadChannelSummary();
     loadConditionSummary();
     loadTrialQc(); loadEpochMean(); loadTrialImages(); buildChDecisionsTable();
     loadIssues();

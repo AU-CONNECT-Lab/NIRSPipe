@@ -830,6 +830,19 @@ def region_coverage(pairs: "dict[str, dict[str, Any]]",
     return out
 
 
+def region_table(rows: list[dict], roi_map: "dict[str, list[str]] | None") -> dict[str, Any]:
+    """A run's region coverage from its :func:`channel_rows`: ``{"rows", "not_counted"}``, empty without a map.
+
+    ``not_counted`` names every listed pair no region counted, with why, in one line.
+    """
+    if not roi_map:
+        return {"rows": [], "not_counted": ""}
+    coverage = region_coverage({r["pair"]: r for r in pair_rows(rows)}, roi_map)
+    skipped = {pair: why for row in coverage for pair, why in row["not_counted"].items()}
+    return {"rows": coverage,
+            "not_counted": ", ".join(f"{pair} ({why})" for pair, why in skipped.items())}
+
+
 def optode_rejections(pairs: "dict[str, dict[str, Any]]") -> "dict[str, tuple[int, int]]":
     """Each source's and detector's long pairs as ``(rejected, listed)``, from :func:`pair_status` rows.
 

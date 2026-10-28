@@ -68,3 +68,27 @@ def test_without_a_map_the_report_has_no_region_table():
 
     assert _section_regions([{"name": "S1_D1 760", "is_bad": False, "separation": "long"}],
                             None) == {"region_coverage": [], "region_not_counted": ""}
+
+
+def test_the_raw_report_carries_the_same_table(tmp_path):
+    import re
+
+    from nirspipe.cli import qc as qc_cli
+    from tests._synth import make_bids_dataset
+
+    bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("tapping",))
+    roi = tmp_path / "roi.json"
+    roi.write_text(json.dumps({"front": ["S1_D1", "S2_D2"], "back": ["S3_D3", "S4_D4"],
+                               "scalp": ["S5_D5"]}))
+    out = tmp_path / "qc"
+    qc_cli.main([str(bids), str(out), "participant", "--dpf", "6", "--sci-threshold", "0.8",
+                 "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+                 "--resp-l-freq", "0.1", "--resp-h-freq", "0.4", "--bad-channels", "S1_D1",
+                 "--roi-mapping", str(roi), "--skip-bids-validation"])
+    (page,) = out.rglob("*_desc-raw_report.html")
+    html = page.read_text(encoding="utf-8")
+    data = json.loads(re.search(r"var _STATIC_DATA = (\[.*?\]);\n", html, re.S).group(1))[0]
+    assert [(r["region"], r["kept"], r["listed"], r["rejected"]) for r in data["regions"]["rows"]] == [
+        ("front", 1, 2, ["S1_D1"]), ("back", 1, 2, ["S3_D3"]), ("scalp", 0, 0, [])]
+    assert "S5_D5 (short)" in data["regions"]["note"]
+    assert (html.index('<section id="Regions"') < html.index('<section id="Channels"'))

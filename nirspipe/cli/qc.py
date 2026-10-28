@@ -502,7 +502,8 @@ def _build_parser() -> argparse.ArgumentParser:
                      type=_shared.BidsLabel, help="Task label(s) to include.")
     sel.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the "
-                          "motion carpet's rows by ROI. Optional.")
+                          "motion carpet's rows by ROI and lists each region's long channels "
+                          "kept. Optional.")
     _shared.add_skip_bids_validation(sel)
     _shared.add_nprocs(sel, unit="job",
                        note="A job is a subject at participant level, a dyad at group level.")

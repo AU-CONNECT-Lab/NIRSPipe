@@ -296,7 +296,7 @@ def _build_parser() -> argparse.ArgumentParser:
     out = p.add_argument_group("output")
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")
     out.add_argument("--roi-mapping", type=Path, default=None,
-                     help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
+                     help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet and lists each region's long channels kept, and in rest mode adds the ROI correlation matrix and one seed topography per ROI. Optional.")
     _shared.add_nprocs(out)
 
     esc = p.add_argument_group("escape hatches")
