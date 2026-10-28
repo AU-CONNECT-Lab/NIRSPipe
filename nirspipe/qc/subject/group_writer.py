@@ -55,8 +55,9 @@ from nirspipe.qc.subject.sqm_record import (
     RECORD_SUFFIXES,
     SQM_DESCS,
     fill_skipped_long_sections,
+    raw_verdict_view,
 )
-from nirspipe.utils import load_toml, pair_of
+from nirspipe.utils import fisher_r_to_z, load_toml, pair_of, pair_order
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.tables import read_table, write_tsv
 
@@ -495,6 +496,94 @@ def fc_distributions(output_dir: Path) -> dict:
     return out
 
 
+# a correlation across fewer runs than this says nothing of a connection; ours
+FC_MOVEMENT_MIN_RUNS = 5
+
+FC_MOVEMENT_COLUMNS = {
+    "task": "The task whose runs were pooled, acquisitions together.",
+    "chromophore": "The chromophore of the connection.",
+    "channel_a": "One end of the connection, a long source-detector pair.",
+    "channel_b": "The other end.",
+    "n_runs": "Runs of the task that kept both channels, the runs the r is taken over.",
+    "r": "Pearson r across those runs between each run's head movement (band-passed GVTD "
+         "averaged over its long channels, gvtd_filt_mean) and the Fisher z of the "
+         "connection's FC. Descriptive, no test.",
+    "distance_mm": "Distance between the two channels in the runs' template space, the median "
+                   "over the runs; blank when no run placed them.",
+}
+
+
+def _positions(nirs_dir: Path, label: str) -> "dict[str, np.ndarray]":
+    """Each pair's position in the run's template space; empty when the run has none."""
+    path = next(iter(sorted(nirs_dir.glob(f"{label}_space-*_channels.tsv"))), None)
+    if path is None:
+        return {}
+    table = read_table(path)
+    return {pair_of(name): np.array([x, y, z], float)
+            for name, x, y, z in zip(table["name"], table["x"], table["y"], table["z"])}
+
+
+def fc_against_movement(output_dir: Path, full_rows: list[dict]) -> pd.DataFrame:
+    """Each connection's r, across the runs of a task, between a run's head movement and its FC.
+
+    One row per task, chromophore and pair of kept long channels that at least
+    :data:`FC_MOVEMENT_MIN_RUNS` runs share; the columns are :data:`FC_MOVEMENT_COLUMNS`.
+    Movement is each record's ``gvtd_filt_mean`` on its long set, FC the run's channel matrix
+    after the regression. Runs pool by task, connections match by channel name.
+
+    ::
+
+      3 runs keep S1_D1 and S2_D2, movement 1, 2, 3, FC z 0.1, 0.2, 0.3  ->  r 1.0
+    """
+    movement = {row["bids_name"]: value for row in full_rows
+                if (value := raw_verdict_view(row).get("gvtd_filt_mean")) is not None}
+    tables = _channel_tables(output_dir)
+    pooled: dict = {}
+    for path in sorted(output_dir.glob("sub-*/**/nirs/*_stat-pearson_relmat.tsv")):
+        name = path.name
+        if entity_of(name, "seg") or entity_of(name, "agg"):
+            continue
+        label, chroma = name[:name.index("_chromo-")], entity_of(name, "chromo")
+        if label not in movement or label not in tables:
+            continue
+        kept = long_kept_pairs(pair_status(tables[label]))
+        fc = _relmat(path)
+        names = [c for c in fc.index if pair_of(c) in kept]
+        values = fisher_r_to_z(fc.loc[names, names].to_numpy(dtype=float))
+        positions = _positions(path.parent, label)
+        task = f"task-{entity_of(label, 'task')}"
+        for i, j in zip(*np.triu_indices(len(names), 1)):
+            if not np.isfinite(values[i, j]):
+                continue
+            a, b = sorted((pair_of(names[i]), pair_of(names[j])), key=pair_order)
+            distance = (float(np.linalg.norm(positions[a] - positions[b]))
+                        if a in positions and b in positions else np.nan)
+            pooled.setdefault((task, chroma, a, b), []).append(
+                (movement[label], values[i, j], distance))
+    rows = []
+    for (task, chroma, a, b), runs in pooled.items():
+        moved, z, distance = (np.array(v, float) for v in zip(*runs))
+        if len(runs) < FC_MOVEMENT_MIN_RUNS or np.ptp(moved) == 0 or np.ptp(z) == 0:
+            continue
+        rows.append({"task": task, "chromophore": chroma, "channel_a": a, "channel_b": b,
+                     "n_runs": len(runs), "r": float(np.corrcoef(moved, z)[0, 1]),
+                     "distance_mm": (float(np.nanmedian(distance))
+                                     if np.isfinite(distance).any() else np.nan)})
+    return pd.DataFrame(rows, columns=list(FC_MOVEMENT_COLUMNS))
+
+
+def _write_fc_movement(output_dir: Path, table: pd.DataFrame) -> "Path | None":
+    if table.empty:
+        return None
+    path = output_dir / derivative_path("", "qc", ".tsv", desc="fcmovement").name
+    write_tsv(table, path)
+    path.with_suffix(".json").write_text(json.dumps(
+        {c: {"Description": d} for c, d in FC_MOVEMENT_COLUMNS.items()}, indent=2) + "\n",
+        encoding="utf-8")
+    logger.info("FC against movement -> %s (rows=%d)", path, len(table))
+    return path
+
+
 def _render_group(
     output_dir: Path,
     out_desc: str,
@@ -621,6 +710,10 @@ def _render_group(
         regions = region_losses(output_dir, roi_map)
     with guard("Connectivity distributions", errors, out_desc):
         _save("fcdistribution", "fcdistribution", build_fc_distributions(fc_distributions(output_dir)))
+    fc_movement = pd.DataFrame()
+    with guard("Connectivity against movement", errors, out_desc):
+        fc_movement = fc_against_movement(output_dir, full_rows)
+        _write_fc_movement(output_dir, fc_movement)
 
     for task in swapped_label_tasks(full_rows):
         msg = section_note("caveat.labels_swapped", task=task["task"], k=len(task["runs"]),

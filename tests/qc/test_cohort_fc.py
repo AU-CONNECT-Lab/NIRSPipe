@@ -7,6 +7,8 @@ regression is left out, and runs pool by task.
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -102,3 +104,68 @@ def test_the_page_draws_it_and_leaves_it_out_without_a_regression(tmp_path):
          with_before=False)
     html = build_group_raw_report(tmp_path / "b").read_text(encoding="utf-8")
     assert 'id="Connectivity"' not in html
+
+
+# ---- each connection against the runs' movement ----
+
+def _movement_tree(out, movement, fc_of_run, kept_by=None):
+    """Run k moves ``movement[k]`` and carries ``fc_of_run(k)``; S1..S4 sit 10 mm apart on x."""
+    for k, move in enumerate(movement):
+        label = f"sub-{k:02d}_task-rest"
+        nirs = out / f"sub-{k:02d}" / "nirs"
+        nirs.mkdir(parents=True, exist_ok=True)
+        _channel_table(nirs, label, bad=(kept_by or {}).get(k, ()))
+        for chroma in ("hbo", "hbr"):
+            _matrix(nirs, f"{label}_chromo-{chroma}_stat-pearson_relmat.tsv", chroma, fc_of_run(k))
+        rows = ["name\tx\ty\tz"] + [f"{c} {ch}\t{10 * i}\t0\t0"
+                                    for i, c in enumerate(CHANNELS) for ch in ("hbo", "hbr")]
+        (nirs / f"{label}_space-fsaverage_channels.tsv").write_text("\n".join(rows) + "\n",
+                                                                   encoding="utf-8")
+        # the long set's movement is the one read; the whole montage's is a decoy
+        write_record(nirs / f"{label}_desc-sqm_qc.json",
+                     {"step": "sqm", "raw": {"gvtd_filt_mean": 99.0, "n_long_channels": 6},
+                      "raw_long": {"gvtd_filt_mean": move}})
+
+
+def _table(out):
+    from nirspipe.qc.subject.group_writer import _collect_sqm, fc_against_movement
+    return fc_against_movement(out, _collect_sqm(out, "sub-*")[1]).set_index(
+        ["chromophore", "channel_a", "channel_b"])
+
+
+def test_a_connection_that_tracks_movement_reads_one_and_its_opposite_minus_one(tmp_path):
+    z = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+    _movement_tree(tmp_path, [1.0, 2.0, 3.0, 4.0, 5.0], lambda k: {
+        ("S1_D1", "S2_D2"): np.tanh(z[k]), ("S1_D1", "S4_D4"): np.tanh(-z[k]),
+        ("S2_D2", "S4_D4"): 0.3})
+    table = _table(tmp_path)
+    assert table.loc[("hbo", "S1_D1", "S2_D2"), "r"] == pytest.approx(1.0)
+    assert table.loc[("hbo", "S1_D1", "S4_D4"), "r"] == pytest.approx(-1.0)
+    assert table.loc[("hbo", "S1_D1", "S2_D2"), "n_runs"] == 5
+    assert table.loc[("hbo", "S1_D1", "S4_D4"), "distance_mm"] == pytest.approx(30.0)
+    # a connection the same in every run has no r; the short S3_D3 is never an end
+    assert ("hbo", "S2_D2", "S4_D4") not in table.index
+    assert not any("S3_D3" in key for key in table.index)
+
+
+def test_a_connection_fewer_than_five_runs_keep_is_left_out(tmp_path):
+    z = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+    _movement_tree(tmp_path, [1.0, 2.0, 3.0, 4.0, 5.0],
+                   lambda k: {("S1_D1", "S2_D2"): np.tanh(z[k]), ("S1_D1", "S4_D4"): np.tanh(z[k])},
+                   kept_by={0: ("S4_D4",)})
+    table = _table(tmp_path)
+    assert ("hbo", "S1_D1", "S2_D2") in table.index
+    assert ("hbo", "S1_D1", "S4_D4") not in table.index
+
+
+def test_the_page_writes_the_table_with_its_column_descriptions(tmp_path):
+    z = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+    _movement_tree(tmp_path, [1.0, 2.0, 3.0, 4.0, 5.0],
+                   lambda k: {("S1_D1", "S2_D2"): np.tanh(z[k])})
+    build_group_raw_report(tmp_path)
+    table = pd.read_csv(tmp_path / "desc-fcmovement_qc.tsv", sep="\t")
+    assert list(table.columns) == ["task", "chromophore", "channel_a", "channel_b", "n_runs",
+                                   "r", "distance_mm"]
+    assert sorted(table["chromophore"]) == ["hbo", "hbr"]
+    sidecar = json.loads((tmp_path / "desc-fcmovement_qc.json").read_text())
+    assert set(sidecar) == set(table.columns)
