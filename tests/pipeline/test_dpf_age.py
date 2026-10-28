@@ -5,7 +5,7 @@ import argparse
 import pytest
 
 from nirspipe.cli import _app_options
-from nirspipe.pipeline.dpf import age_dpf, dpf_from_age, resolve_dpf, wavelengths
+from nirspipe.pipeline.dpf import age_dpf, dpf_from_age, dpf_text, resolve_dpf, wavelengths
 from nirspipe.pipeline.prep_pipeline import intensity_to_od, od_to_haemo
 from nirspipe.qc.boilerplate.generate import step_sentence
 from nirspipe.utils.lineage import lineage_of
@@ -25,6 +25,20 @@ def test_the_equation_gives_the_published_curve(wavelength, age, expected):
 def test_numbers_pass_through_untouched():
     od = intensity_to_od(synth_raw("01", "rest"))
     assert resolve_dpf([6.0, 5.5], od, None) == [6.0, 5.5]
+
+
+def test_the_reports_print_an_age_dpf_with_the_age_and_each_factor():
+    # the two factors worked by hand above, rounded as the summaries print them
+    assert dpf_text(["age"], [760.0, 850.0], 30.0) == "age 30 (6.30, 5.23)"
+
+
+def test_the_reports_print_numbers_as_given():
+    assert dpf_text([6.0], [760.0, 850.0], None) == "6"
+    assert dpf_text([5.8, 6.4], [760.0, 850.0], 30.0) == "5.8, 6.4"
+
+
+def test_an_age_dpf_without_an_age_prints_the_word_alone():
+    assert dpf_text(["age"], [760.0, 850.0], None) == "age"
 
 
 def test_age_gives_one_factor_per_wavelength_in_ascending_order():

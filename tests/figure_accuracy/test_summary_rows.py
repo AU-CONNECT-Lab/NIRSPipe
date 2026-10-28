@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from tests._fingerprint import BLOCKS, CLI_ARGS, DURATION, SFREQ
+from tests._fingerprint import BLOCKS, CLI_ARGS, DPF, DURATION, SFREQ
 
 
 def _cell(html: str, heading: str) -> str:
@@ -31,6 +31,11 @@ def test_the_run_page_names_the_recording_s_length_and_passing_share(denoise_run
     assert _cell(html, "Duration") == f"{DURATION - 1 / SFREQ:.0f} s"
     share = float(CLI_ARGS[CLI_ARGS.index("--min-good-frac") + 1])
     assert _cell(html, "Passing windows") == f"{share * 100:.0f}% of windows"
+
+
+def test_the_run_page_prints_the_dpf_the_run_was_given(denoise_run):
+    html = denoise_run.report.read_text(encoding="utf-8")
+    assert _cell(html, "DPF") == ", ".join(f"{d:g}" for d in DPF)
 
 
 @pytest.mark.parametrize("name,duration", [(b[0], b[2]) for b in BLOCKS])

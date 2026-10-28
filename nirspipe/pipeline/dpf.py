@@ -61,6 +61,16 @@ def resolve_dpf(dpf: "list", raw: mne.io.Raw, age: "float | None") -> list[float
     return [age_dpf(w, age) for w in wavelengths(raw)]
 
 
+def dpf_text(dpf: "list", wavelengths_nm: "list[float]", age: "float | None") -> str:
+    """The factors as the reports print them: ``age 30 (6.30, 5.23)``, or the numbers given."""
+    if not dpf_from_age(dpf):
+        return ", ".join(f"{float(d):g}" for d in dpf)
+    if age is None or not np.isfinite(age):
+        return AGE
+    factors = ", ".join(f"{age_dpf(w, age):.2f}" for w in wavelengths_nm)
+    return f"{AGE} {age:g} ({factors})"
+
+
 def as_ppf(dpf: "list[float]") -> "float | list[float]":
     """MNE's ``ppf``: one value for every wavelength, or the list."""
     return dpf[0] if len(dpf) == 1 else dpf

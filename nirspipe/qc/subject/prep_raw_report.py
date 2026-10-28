@@ -16,7 +16,9 @@ from nirspipe.io.head_template import FSAVERAGE, space_of
 from nirspipe.io.naming import report_name
 from nirspipe.io.optode_space import hold_placement, place_optodes, placement_of
 from nirspipe.io.snirf import read_raw_snirf
-from nirspipe.pipeline.dpf import as_ppf, dpf_caveat, dpf_from_age, resolve_dpf, wavelengths
+from nirspipe.pipeline.dpf import (
+    as_ppf, dpf_caveat, dpf_from_age, dpf_text, resolve_dpf, wavelengths,
+)
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs, join_marks
 from nirspipe.qc.subject.condition_views import (
@@ -823,8 +825,7 @@ def _process_run(
                             else "badge-yellow" if bad_rate < 30 else "badge-red"),
             "sci_threshold": cutoffs["sci"],
             "good_frac": cutoffs["good_frac"],
-            "dpf": factors,
-            **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
+            "dpf": dpf_text(dpf, wavelengths(raw_od), run.get("age")),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
             "heart_rate": heart_rate,
             "heart_rate_outside": hr_note is not None,

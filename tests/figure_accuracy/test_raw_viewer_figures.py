@@ -12,7 +12,7 @@ from mne.time_frequency import psd_array_welch
 from nirspipe.qc.figures.common._utils import PSD_NFFT
 from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.subject.record_io import read_record
-from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
+from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, DPF, EVENT_DURATION, EVENT_ONSETS, HBR_FREQ
 from tests.figure_accuracy._payload import _decode, fragment_views, one_figure, plotly_figures
 from tests.figure_accuracy._read import (
     brain_inputs, by_pair, pair_sci, share_at, slider_layout, traces, which_pair, xy,
@@ -204,6 +204,10 @@ def test_the_mean_psd_marks_the_planted_heart_rate_and_ends_at_2_hz(raw_viewer_r
     assert lines == [pytest.approx(CARDIAC_FREQ, abs=0.05)]
     # a band ending under 2 Hz keeps the axis every spectrum had
     assert fig["layout"]["xaxis"]["range"] == [0, 2.0]
+
+
+def test_the_summary_prints_the_dpf_the_run_was_given(page):
+    assert page[1]["summary"]["dpf"] == ", ".join(f"{d:g}" for d in DPF)
 
 
 def test_the_summary_names_the_planted_heart_rate_inside_the_band(page):

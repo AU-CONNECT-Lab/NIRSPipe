@@ -77,6 +77,7 @@ import mne
 import mne.io
 
 from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES
+from nirspipe.pipeline.dpf import dpf_text, wavelengths
 from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
@@ -190,7 +191,7 @@ def _note(notes: list, subject: str, message: str) -> None:
 
 def _note_dpf_range(notes: list, subject: str, config: Any, raw_intensity) -> None:
     """An age DPF computed outside its equation's recommended range, said on the page."""
-    from nirspipe.pipeline.dpf import dpf_caveat, dpf_from_age, wavelengths
+    from nirspipe.pipeline.dpf import dpf_caveat, dpf_from_age
 
     age = getattr(config, "age", None)
     if age is not None and dpf_from_age(list(getattr(config, "dpf", []) or [])):
@@ -2548,6 +2549,8 @@ def build_subject_report(
         # measured as the raw viewer measures it, the recording's span on its own clock
         duration_s=float(raw_intensity.times[-1] - raw_intensity.times[0]),
         good_frac_thresh=run_cutoffs["good_frac"],
+        dpf_label=dpf_text(list(getattr(config, "dpf", []) or []), wavelengths(raw_intensity),
+                           getattr(config, "age", None)),
         heart_rate=heart_rate,
         heart_rate_outside=hr_note is not None,
 

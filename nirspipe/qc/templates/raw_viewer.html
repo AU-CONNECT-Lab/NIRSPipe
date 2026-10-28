@@ -859,7 +859,7 @@ function loadSummary() {
   put("sum-sci", d.sci_threshold === undefined ? "&mdash;" : _esc(d.sci_threshold));
   put("sum-frac", d.good_frac === undefined ? "&mdash;"
                   : Math.round(d.good_frac * 100) + "% of windows");
-  put("sum-dpf", _esc((d.dpf || []).join(", ")));
+  put("sum-dpf", _esc(d.dpf || ""));
   put("sum-cardiac", (d.cardiac || []).length
       ? _esc(d.cardiac[0]) + "&ndash;" + _esc(d.cardiac[1]) + " Hz" : "&mdash;");
   put("sum-hr", d.heart_rate == null ? "&mdash;"
