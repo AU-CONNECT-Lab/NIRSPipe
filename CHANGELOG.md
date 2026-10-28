@@ -23,6 +23,9 @@ All notable changes to this project will be documented in this file.
 - Both reports print the DPF as `age 30 (6.30, 5.23)` or the numbers given, where the run report printed `age` and the raw report unrounded factors
 - The provenance graph feeds outputs that share parents through one bar, so no arrow crosses a box; inputs name their dataset, labels repeat no word
 
+### Fixed
+- `--by-condition` runs no longer warn that the short-channel share, the wavelength check and the nuisance figure lack a per-condition form; the pages are unchanged
+
 ## [0.78.0] - 2026-10-28
 
 ### Added

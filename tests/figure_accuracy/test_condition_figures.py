@@ -243,3 +243,11 @@ def test_a_condition_page_names_its_channel_share_for_its_stretch(condition_run,
         encoding="utf-8")
     assert "Passing in condition" in page and "Channel retention" not in page
     assert "Channel retention" in condition_run.report.read_text(encoding="utf-8")
+
+
+def test_the_condition_pages_classify_every_run_value_and_blank_every_run_figure(condition_run):
+    # both guards warn rather than fail, so the subject's log is where a missed one shows
+    log = (condition_run.out / "sub-01" / "logs" / "sub-01.log").read_text(encoding="utf-8")
+    assert "_cond-ca_report.html" in log
+    assert "in none of the three lists" not in log
+    assert "still points at run-wide figures" not in log

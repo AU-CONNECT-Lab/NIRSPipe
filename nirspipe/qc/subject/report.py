@@ -2625,6 +2625,7 @@ def build_subject_report(
                 report_vars,
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
                               topomap_vars, haemo_vars, overview_vars, raw_psd_vars,
+                              short_share_vars, nuisance_vars,
                               channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, carpet_vars, cond_summary_vars,

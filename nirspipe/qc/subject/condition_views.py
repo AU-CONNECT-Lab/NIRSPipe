@@ -41,7 +41,11 @@ UNSLICEABLE = ("cp_per_channel", "heart_rate_per_channel", "temporal_derivative_
                # condition's window
                "spike_pct_per_channel", "saturated_per_channel",
                # both vary over the recording and neither has a windowed series stored
-               "mean_amp_per_channel", "motion_corrected_frac_per_channel")
+               "mean_amp_per_channel", "motion_corrected_frac_per_channel",
+               # the pulse's power ratio is read off the whole run's spectra, as cp is
+               "cardiac_ratio_per_channel", "cardiac_ratio_swapped_per_channel",
+               # one regression over the whole run; the condition table drops its column too
+               "short_share_per_channel")
 
 # Keys that describe the montage rather than the recording, so the run's value is also the
 # condition's. Named rather than left out of both lists above, which is the same silence a
