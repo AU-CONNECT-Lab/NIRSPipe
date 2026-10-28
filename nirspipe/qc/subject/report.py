@@ -132,6 +132,7 @@ from nirspipe.qc.figures import (
     condition_quality_heatmap,
     alff_brain_figure,
     alff_flat_figure,
+    short_share_figure,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
     rest_channel_panel,
@@ -1023,6 +1024,20 @@ def _section_haemo(
     }
 
 
+def _section_short_share(raw_haemo: mne.io.Raw, record: dict, sep_bands, subject: str,
+                         errors: list, figures_dir: Path, fig_name) -> dict:
+    """The record's short-channel share of each long channel on the head, where the run regressed short channels."""
+    shares = (((record.get("per_channel") or {}).get("short_regression") or {})
+              .get("short_share_per_channel") or {})
+    path, h = None, 0
+    if shares:
+        with _guard("Short-channel share map", errors, subject):
+            fig = short_share_figure(raw_haemo, shares, sep_bands=sep_bands)
+            if fig is not None:
+                path, h = _save_plotly_html(fig, figures_dir / fig_name("shortshare"))
+    return {"short_share_path": path, "short_share_h": h}
+
+
 def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> tuple:
     """``([(label, raw)], reference)``: the denoised haemo stage, and desc-preproc.
 
@@ -1583,9 +1598,11 @@ def _section_sqm(
         # `preproc` before `preproc_long`, so the long values win where they exist and the
         # whole-file ones the split does not carry (pct_data_retained) survive underneath
         # `motion_long` the same way: only its frame counts differ from `motion`
-        # `censor`, `imu` and `whitening` last and unsuffixed: their keys (gvtd_censor_*,
-        # gyro_speed_*, accel_jerk_*, whitening_*) collide with nothing
-        for key in (*keys, "motion_long", "preproc_long", "censor", "imu", "whitening"):
+        # `censor`, `imu`, `whitening` and `short_regression` last and unsuffixed: their keys
+        # (gvtd_censor_*, gyro_speed_*, accel_jerk_*, whitening_*, short_share_*) collide with
+        # nothing
+        for key in (*keys, "motion_long", "preproc_long", "censor", "imu", "whitening",
+                    "short_regression"):
             sqm.update(record.get(key) or {})
             sqm.update(per_channel.get(key) or {})
         # The corrected side of the *same* channel set, suffixed rather than merged: it
@@ -1658,9 +1675,12 @@ def _section_sqm(
         "wavelength_columns": WAVELENGTH_COLUMNS,
         # the bands are stamped in `raw` only, which `sqm` was not filled from on a split run
         "channel_blocks": separation_blocks(cells, bands_from_record(sqm_all)),
-        # the table groups by separation, so the block header says which side a row is on
-        "channel_columns": channel_columns(("separation",) if regions
-                                           else ("separation", "region")),
+        # the table groups by separation, so the block header says which side a row is on;
+        # the short-channel share only where the run regressed short channels
+        "channel_columns": channel_columns(
+            ("separation",) + (() if regions else ("region",))
+            + (() if any(r.get("short_share_hbo") is not None for r in rows)
+               else ("short_share",))),
         "channel_regions": regions,
         "sqm_all": sqm_all,
         "sqm_long": sqm_long,
@@ -2247,6 +2267,8 @@ def build_subject_report(
                                        fig_name, l_freq=l_freq, h_freq=h_freq,
                                        raw_errts=raw_errts, psd_stages=psd_stages,
                                        record=record, sep_bands=sep_bands, mode=mode)
+    short_share_vars = _section_short_share(raw_haemo, record, sep_bands, subject, errors,
+                                            figures_dir, fig_name)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
     carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None,
                                          subject, errors, figures_dir, fig_name,
@@ -2477,6 +2499,7 @@ def build_subject_report(
         **ch_summary_vars,
         **cond_summary_vars,
         **carpet_vars,
+        **short_share_vars,
         gvtd_set=gvtd_set,
         # the set GVTD was actually measured on, so the note says so on a per-condition page
         # too
@@ -2976,9 +2999,11 @@ def _write_condition_reports(
             "channel_cells": cells,
             "channel_wavelengths": pair_wavelengths(rows),
             "channel_blocks": separation_blocks(cells, separation_bands(config)),
-            # a condition has no whole-run SCI: that estimate has no windows to select from
-            "channel_columns": channel_columns(("separation", "sci_whole") if regions
-                                               else ("separation", "sci_whole", "region")),
+            # a condition has no whole-run SCI, nor a share of its own: both are the run's
+            "channel_columns": channel_columns(("separation", "sci_whole", "short_share")
+                                               if regions else
+                                               ("separation", "sci_whole", "short_share",
+                                                "region")),
             "sqm_all": od_by_set.get("all") or {},
             "sqm_long": od_by_set.get("long") or {},
             "sqm_short": od_by_set.get("short") or {},

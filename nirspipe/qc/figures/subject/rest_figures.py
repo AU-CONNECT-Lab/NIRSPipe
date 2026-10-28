@@ -527,6 +527,18 @@ def alff_flat_figure(raw: mne.io.Raw, alff_df: pd.DataFrame, sep_bands=None) -> 
                            f"{label} on the optode flat map", "Viridis", sep_bands)
 
 
+def short_share_figure(raw: mne.io.Raw, shares: "dict[str, float]",
+                       sep_bands=None) -> "go.Figure | None":
+    """Each long channel's variance the short-channel regressors carried, a head per chromophore on one 0 to 1 scale."""
+    panels = [(CHROMA_STYLE[c][0], c, {ch: v for ch, v in shares.items() if chroma_of(ch) == c})
+              for c in CHROMA_STYLE if any(chroma_of(ch) == c for ch in shares)]
+    if not panels:
+        return None
+    return flat_value_maps(raw, [{"panels": panels, "scale": (0.0, 1.0), "bar": "Share"}],
+                           "Variance carried by the short-channel regressors", "Viridis",
+                           sep_bands)
+
+
 # seeds per row before the grid wraps: four heads still fit the report's width at full size
 _SEED_COLS = 4
 

@@ -64,7 +64,9 @@ from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
                                      read_aux_table, table_channels)
 from nirspipe.io.derivatives import bids_uris, entity_of, joined_runs, read_json, resolve_bids_uri
 from nirspipe.io.tables import read_table
-from nirspipe.utils import is_optical_density
+from nirspipe.pipeline.chromophores import chroma_of, with_hbt
+from nirspipe.pipeline.glm import SHORT_CH_PREFIX
+from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, is_bad_span
 from nirspipe import __version__
@@ -110,7 +112,7 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 # never the name.
 SQM_DESCS = ("sqm", "sqmraw")
 
-OPTIONAL_SECTIONS = ("censor", "imu", "whitening",
+OPTIONAL_SECTIONS = ("censor", "imu", "whitening", "short_regression",
                      # raw QC only: its in-memory Beer-Lambert, before and after
                      # the correction it may run
                      "rawhaemo", "rawhaemo_long", "rawhaemo_short",
@@ -285,6 +287,71 @@ def _whitening_section(stages: dict[str, Path]) -> dict[str, float]:
         if len(values):
             out[f"whitening_lowband_{chroma}"] = float(values.median())
     return out
+
+
+def short_regression_shares(design: pd.DataFrame, betas: pd.DataFrame,
+                            haemo: mne.io.BaseRaw) -> dict[str, float]:
+    """Each channel's variance carried by its fitted short-channel part, over the frames the fit kept.
+
+    ::
+
+      share = var(X_short @ theta_short) / var(y)
+
+    ``design`` is the GLM step's design table (``censored`` = 1 marks a frame left out),
+    ``betas`` its ``desc-glm_nirsmap`` table, ``haemo`` the series it was fitted on. A
+    channel whose short-channel betas are blank, fitted against itself, has no entry.
+    """
+    columns = [c for c in design.columns if c.startswith(SHORT_CH_PREFIX)]
+    if not columns:
+        return {}
+    keep = design["censored"].to_numpy() == 0 if "censored" in design else np.ones(len(design), bool)
+    short = design[columns].to_numpy(dtype=float)[keep]
+    rows = betas[betas["Condition"].isin(columns)]
+    series = with_hbt(haemo, {chroma_of(ch) for ch in rows["ch_name"]})
+    index = {ch: i for i, ch in enumerate(series.ch_names)}
+    data = series.get_data()
+    out = {}
+    for ch, fit in rows.groupby("ch_name", sort=False):
+        theta = pd.to_numeric(fit.set_index("Condition")["theta"], errors="coerce").reindex(columns)
+        if ch not in index or not np.isfinite(theta).all():
+            continue
+        y = data[index[ch]][keep]
+        if np.var(y) > 0:
+            out[str(ch)] = float(np.var(short @ theta.to_numpy()) / np.var(y))
+    return out
+
+
+def _short_regression_section(stages: dict[str, Path], sep_bands) -> tuple[dict, dict]:
+    """The set means per chromophore over kept long channels, and every long channel's share, or two empty dicts."""
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.qc.metrics import long_short_channels
+
+    any_stage = next(iter(stages.values()), None)
+    if any_stage is None:
+        return {}, {}
+    label = any_stage.name[: any_stage.name.index("_desc-")]
+    design_path = any_stage.parent / f"{label}_design.tsv"
+    betas_path = any_stage.parent / f"{label}_desc-glm_nirsmap.tsv"
+    if not (design_path.exists() and betas_path.exists()):
+        return {}, {}
+    design = read_table(design_path)
+    if not any(c.startswith(SHORT_CH_PREFIX) for c in design.columns):
+        return {}, {}
+    sources = _sidecar(design_path).get("Sources") or []
+    if not sources:
+        return {}, {}
+    haemo = read_snirf(resolve_bids_uri(sources[0], design_path))
+    betas = read_table(betas_path)
+    long_pairs = {pair_of(ch) for ch in long_short_channels(haemo, sep_bands)[0]}
+    shares = {ch: v for ch, v in short_regression_shares(design, betas, haemo).items()
+              if pair_of(ch) in long_pairs}
+    bad = set(betas.loc[betas["bad"].astype(str).str.lower() == "true", "ch_name"])
+    scalars = {}
+    for chroma in dict.fromkeys(chroma_of(ch) for ch in shares):
+        kept = [v for ch, v in shares.items() if chroma_of(ch) == chroma and ch not in bad]
+        if kept:
+            scalars[f"short_share_{chroma}"] = float(np.mean(kept))
+    return scalars, ({"short_share_per_channel": shares} if shares else {})
 
 
 def _split_scalars(record: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1192,6 +1259,15 @@ def compute_run_sections(
     # the GLM step measured this on its whitened residual, which no file on disk holds
     if whitening := _whitening_section(stages):
         sections["whitening"] = whitening
+    try:
+        short_scalars, short_pc = _short_regression_section(stages, sep_bands)
+    except Exception:
+        logger.warning("short-channel regression share failed", exc_info=True)
+        short_scalars, short_pc = {}, {}
+    if short_scalars:
+        sections["short_regression"] = short_scalars
+    if short_pc:
+        per_channel["short_regression"] = short_pc
 
     # written by the prep step rather than measured here: censoring is a decision the run
     # made, and re-deriving it would silently disagree with the marks already on the files

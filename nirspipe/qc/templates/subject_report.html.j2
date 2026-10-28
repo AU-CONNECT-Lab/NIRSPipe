@@ -293,6 +293,15 @@
         <p class="fig-path">{{ panel.path }}</p>
       {% endfor %}
     {% endif %}
+
+    {% if short_share_path %}
+      <h3>Short-channel regression</h3>
+      <p class="panel-note">{{ section_note('haemo.short_share') }}</p>
+      <iframe class="plotly-frame" src="{{ short_share_path }}"
+              title="Variance carried by the short-channel regressors"
+              style="height:{{ short_share_h }}px"></iframe>
+      <p class="fig-path">{{ short_share_path }}</p>
+    {% endif %}
   </div>
 </section>
 
@@ -732,6 +741,15 @@
     {%- else %}{{ span_row(key, metric_label(key), mv(key, sqm.get(key))) }}{% endif %}
     {%- endfor %}
     {%- endif %}
+    {#- ---- what the short-channel regressors took out of the long channels ---- -#}
+    {%- set share_keys = ['short_share_hbo', 'short_share_hbr', 'short_share_hbt'] | select('in', sqm) | list %}
+    {%- if share_keys %}
+    {{ group_row('Short-channel regression', 'variance share') }}
+    {%- for key in share_keys %}
+    {%- if sqm_split %}{{ long_row(key, metric_label(key), mv(key, sqm.get(key))) }}
+    {%- else %}{{ span_row(key, metric_label(key), mv(key, sqm.get(key))) }}{% endif %}
+    {%- endfor %}
+    {%- endif %}
     </tbody>
   </table>
 
@@ -806,7 +824,8 @@
           {#- a column measured per wavelength prints both, named under its header -#}
           {%- for key, label in channel_columns %}<th>{{ label }}
             {%- if key in wavelength_columns and channel_wavelengths %}<span class="wl">{{ channel_wavelengths | join(' / ') }} nm</span>{% endif %}
-            {%- if key == 'corr' and channel_cells | selectattr('corr_denoised') | list %}<span class="wl">before &rarr; after denoising</span>{% endif %}</th>{% endfor %}
+            {%- if key == 'corr' and channel_cells | selectattr('corr_denoised') | list %}<span class="wl">before &rarr; after denoising</span>{% endif %}
+            {%- if key == 'short_share' %}<span class="wl">HbO / HbR</span>{% endif %}</th>{% endfor %}
         </tr>
       </thead>
       {% if n_blocks > 1 %}

@@ -122,10 +122,11 @@ def _column_vars(columns: list) -> dict:
     return {"ch_columns": columns, "ch_column_keys_json": json.dumps([key for key, _ in columns])}
 
 
-# raw QC writes no channel table, so it has no regions to print
-_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "region")))
+# raw QC writes no channel table, so it has no regions to print, and regresses nothing
+_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "region", "short_share")))
 # a condition has no whole-run SCI: that estimate has no windows to select from
-_COND_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "sci_whole", "region")))
+_COND_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "sci_whole", "region",
+                                                     "short_share")))
 
 
 def _store_matrices(windowed: dict, series: dict) -> None:

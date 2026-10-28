@@ -47,6 +47,7 @@ from nirspipe.qc.figures.subject.rest_figures import (
     rest_channel_panel,
     fc_roi_matrix_figure,
     fc_seed_topo_figure,
+    short_share_figure,
 )
 
 __all__ = [
@@ -98,4 +99,5 @@ __all__ = [
     "rest_channel_panel",
     "fc_roi_matrix_figure",
     "fc_seed_topo_figure",
+    "short_share_figure",
 ]

@@ -836,6 +836,9 @@ METRIC_SUMMARY = {
     "gvtd_censor_retained_s": "Seconds left after censoring, the time an analysis can actually use. Higher is better.",
     "whitening_lowband_hbo": "Whitened GLM residual power at 0.01-0.1 Hz over white noise: above 1 inflates t, below 1 deflates it; aim for 1, so no better end.",
     "whitening_lowband_hbr": "The same for HbR.",
+    "short_share_hbo": "Share of each long channel's HbO variance the fitted short-channel regressors carry, averaged over the kept long channels, 0 to 1. Descriptive.",
+    "short_share_hbr": "The same for HbR.",
+    "short_share_hbt": "The same for HbT.",
     "spike_count": "Sudden jumps across all channels, on the motion-band derivative. Lower is better.",
     "spike_pct": "Spike samples as a share of all channel-samples. Experimental; lower is better.",
     "spike_num_frames": f"Frames where at least {100 * SPIKE_CH_FRAC:g}% of channels jumped together. Experimental; lower is better.",
@@ -879,6 +882,7 @@ _STAGE_MOTION = "Measured across motion correction."
 _STAGE_PREPROC = "Measured after Beer-Lambert, before filtering."
 _STAGE_BOTH = "Measured at each haemoglobin stage; the section says which."
 _STAGE_WHITENING = "Median over good long channels of the task GLM."
+_STAGE_SHORT_REGRESSION = "From the confound regression's design and fit, on the series it was fitted to."
 # the one haemoglobin metric the raw viewer also measures, on its own Beer-Lambert
 _STAGE_BOTH_AND_RAW = (
     "Measured at each haemoglobin stage, unfiltered in the raw viewer; the section says which."
@@ -929,6 +933,7 @@ METRIC_STAGE = {
     "hbo_hbr_corr_mean": _STAGE_BOTH_AND_RAW,
     "whitening_lowband_hbo": _STAGE_WHITENING,
     "whitening_lowband_hbr": _STAGE_WHITENING,
+    **{f"short_share_{c}": _STAGE_SHORT_REGRESSION for c in ("hbo", "hbr", "hbt")},
 }
 
 def metric_summary(metric: str, condition: bool = False) -> str:
@@ -960,9 +965,10 @@ _RECORD_STAGES = {
     "errts": "The confound-regression residual, bad channels excluded.",
 }
 _RECORD_SETS = {"": "", "_long": " Long channels only.", "_short": " Short channels only."}
-RECORD_SECTIONS = {f"{stage}{suffix}": text + phrase
-                   for stage, text in _RECORD_STAGES.items()
-                   for suffix, phrase in _RECORD_SETS.items()}
+RECORD_SECTIONS = {**{f"{stage}{suffix}": text + phrase
+                      for stage, text in _RECORD_STAGES.items()
+                      for suffix, phrase in _RECORD_SETS.items()},
+                   "short_regression": "The confound regression's design and fit, long channels only."}
 RECORD_CHANNEL_METRICS = {
     "sci_per_channel": "Scalp coupling index over the whole run: the correlation of the two wavelengths in the cardiac band.",
     "sci_win_per_channel": f"The same correlation inside {SCI_WINDOW_S:g} s windows, averaged over the windows.",
@@ -980,6 +986,7 @@ RECORD_CHANNEL_METRICS = {
     "motion_corrected_frac_per_channel": "Fraction of samples where the correction changed the signal abruptly, its frame-to-frame change exceeding the channel's own noise. Experimental.",
     "hbo_hbr_corr_per_channel": "Correlation between HbO and HbR, one value per source-detector pair.",
     "cnr_per_channel": "How far the evoked response clears its own noise, averaged over the stimulus epochs.",
+    "short_share_per_channel": "Share of the channel's variance its fitted short-channel regressors carry, over the frames the fit kept, 0 to 1.",
 }
 
 RECORD_CHANNEL_COLUMNS = {
@@ -1155,6 +1162,11 @@ METRIC_DISPLAY: dict[str, tuple[str, str, "tuple[float, float] | None", "str | N
     # GLM residual: 1 is the target from both sides, so neither end is the better one here
     "whitening_lowband_hbo":   ("Residual low-band power HbO", ".2f", None, None),
     "whitening_lowband_hbr":   ("Residual low-band power HbR", ".2f", None, None),
+
+    # how much the short-channel regressors took out; a share, with no better end
+    "short_share_hbo":         ("Short-channel share HbO", ".2f", None, None),
+    "short_share_hbr":         ("Short-channel share HbR", ".2f", None, None),
+    "short_share_hbt":         ("Short-channel share HbT", ".2f", None, None),
 
     # time
     "pct_data_retained":       ("% data retained", "pct", (0.8, 0.6), _HIGHER),

@@ -95,6 +95,11 @@ NOTES = {
         "Here the after stage is the GLM residual, with the task model removed along with "
         "the confounds. A weaker anticorrelation there can mean the model explained part of "
         "the response, not that the data got worse, so judge the run on the before stage.",
+    "haemo.short_share":
+        "The share of each long channel's variance its fitted short-channel regressors "
+        "carried, on the series the regression was fitted to and over the frames it kept: a "
+        "high share means much of that channel was scalp or systemic signal. Descriptive. "
+        "Rejected channels are faded; the metrics table gives the mean over kept ones.",
     "carpet.after_named":
         "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR, marked "
         "by the red and blue bar.",

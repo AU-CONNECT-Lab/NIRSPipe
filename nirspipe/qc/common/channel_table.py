@@ -88,6 +88,7 @@ def channel_rows(
     corr_pc = (per_channel.get("preproc") or per_channel.get("rawhaemo")
                or {}).get("hbo_hbr_corr_per_channel") or {}
     corr_post_pc = (per_channel.get("errts") or {}).get("hbo_hbr_corr_per_channel") or {}
+    share_pc = (per_channel.get("short_regression") or {}).get("short_share_per_channel") or {}
     bad = set(bad_channels)
 
     def _named(pc: dict) -> set:
@@ -145,6 +146,8 @@ def channel_rows(
             "saturated":  value_of("saturated_per_channel"),
             "corr":       corr_pc.get(pair_of(ch)),
             "corr_post":  corr_post_pc.get(pair_of(ch)),
+            "short_share_hbo": share_pc.get(f"{pair_of(ch)} hbo"),
+            "short_share_hbr": share_pc.get(f"{pair_of(ch)} hbr"),
             "is_bad":     ch in bad,
             "separation": sep,
         }
@@ -212,6 +215,7 @@ def pair_rows(rows: list[dict], pairs: list[str] | None = None, *,
             "saturated":  _first(group, "saturated"),
             "corr":       _first(group, "corr"),
             "corr_post":  _first(group, "corr_post"),
+            "short_share": (_first(group, "short_share_hbo"), _first(group, "short_share_hbr")),
             # the share a pair is rejected on, so its Status can name the criterion
             "good_frac":  min((row["good_frac"] for row in group
                                if row.get("good_frac") is not None), default=None),
@@ -381,6 +385,7 @@ _COLUMN_METRIC = {
     "spike": "spike_pct",
     "saturated": "saturated_pct",
     "corr":  "hbo_hbr_corr_mean",
+    "short_share": "short_share_hbo",
 }
 
 # ---- Columns ----
@@ -405,6 +410,8 @@ CHANNEL_COLUMNS = (
     ("spike",      "Spike % (exp.)"),
     ("saturated",  "Saturated %"),
     ("corr",       "HbO–HbR corr"),
+    # what the short-channel regressors carried, HbO then HbR; only a run that regressed has it
+    ("short_share", "Short-channel share"),
     ("separation", "Separation"),
 )
 
@@ -422,10 +429,11 @@ def channel_columns(drop: "Sequence[str]" = ()) -> list[tuple[str, str]]:
 
 
 # Every column a table prints, minus the derived Status and the region the run's channel
-# table already holds, plus the three raw values no table has room for: the passing-window
+# table already holds, the short-channel share split by chromophore, plus the three raw
+# values no table has room for: the passing-window
 # share the verdict rests on, the verdict itself as a flag, and the criterion it failed.
-CSV_FIELDS = (*(key for key, _ in channel_columns(("status", "region"))),
-              "good_frac", "is_bad", "reason")
+CSV_FIELDS = (*(key for key, _ in channel_columns(("status", "region", "short_share"))),
+              "short_share_hbo", "short_share_hbr", "good_frac", "is_bad", "reason")
 
 
 # The optical-density metrics the "one file, three channel sets" table prints, in column
