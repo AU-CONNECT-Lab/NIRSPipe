@@ -2,7 +2,8 @@
 
 A channel is the source-detector segment, so quality is drawn on the link, not on
 a sphere at the channel midpoint. Colours follow the 2-D optode flat map so the
-two panels of the combined figure read the same way.
+two panels of the combined figure read the same way, its optodes included: a source is a
+cube and a detector a sphere, each filled by the share of its long channels rejected.
 
 Three camera perspectives (frontal, left lateral, superior) rendered off-screen and
 assembled into a single base64 PNG.
@@ -16,12 +17,14 @@ import mne
 import numpy as np
 from PIL import Image as _PILImage
 
+from nirspipe.qc.common.channel_table import optode_rejections
+from nirspipe.qc.metrics._helpers import long_short_channels
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common._brain_utils import (
     CAMERAS, RENDER_LOCK, VIEW_LABELS, load_brain_meshes, space_of_run, to_template,
 )
-from nirspipe.qc.figures.subject.raw_figures import SCI_WARN_RATIO
+from nirspipe.qc.figures.subject.raw_figures import NO_SHARE_COLOR, SCI_WARN_RATIO, share_color
 
 logger = get_logger("qc.figures.brain_views")
 
@@ -29,13 +32,11 @@ _GOOD_COLOR = "#27ae60"
 _MID_COLOR  = "#f39c12"
 _BAD_COLOR  = "#e74c3c"
 _NA_COLOR   = "#95a5a6"
-# red source / blue detector, matching the 2-D flat map;
-# it re-uses the quality colours, but optodes are dots and channels are lines
-_SRC_COLOR = "#e74c3c"
-_DET_COLOR = "#2980b9"
 # drawn sizes, in mm on the template's surface
 _LINK_RADIUS = 1.0
-_SRC_RADIUS, _DET_RADIUS, _MARKER_RADIUS = 3.0, 2.5, 3.0
+_SRC_EDGE, _DET_RADIUS, _MARKER_RADIUS = 5.4, 2.5, 3.0
+# an optode only short channels use is drawn smaller, as on the flat map
+_SHORT_ONLY_SCALE = 0.6
 _VIEW_SIZE = (1400, 1120)
 
 _CH_RE = re.compile(r"(S\d+)[_\s]+(D\d+)", re.IGNORECASE)
@@ -139,11 +140,24 @@ def _spheres(points: np.ndarray, radius: float):
         geom=pv.Sphere(radius=radius), scale=False, orient=False)
 
 
-def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
-                 sci_threshold: float) -> list[tuple]:
-    """S-D segments as one tube mesh per quality colour, plus optode spheres.
+def _optode_glyph(point: np.ndarray, cube: bool, scale: float = 1.0):
+    """One optode's mark at ``point``: a cube for a source, a sphere for a detector."""
+    import pyvista as pv
 
-    Returns ``(mesh, colour)`` pairs.
+    geom = (pv.Cube(x_length=_SRC_EDGE * scale, y_length=_SRC_EDGE * scale,
+                    z_length=_SRC_EDGE * scale)
+            if cube else pv.Sphere(radius=_DET_RADIUS * scale))
+    return pv.PolyData(np.asarray(point, float)[None, :]).glyph(geom=geom, scale=False,
+                                                                 orient=False)
+
+
+def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
+                 sci_threshold: float, sep_bands=None) -> list[tuple]:
+    """S-D segments as one tube mesh per quality colour, plus the optodes.
+
+    Each optode is filled by the share of its long channels rejected, as the flat map beside
+    these fills it; one only short channels use is a smaller grey mark. ``sep_bands`` is the
+    run's separations. Returns ``(mesh, colour)`` pairs.
     """
     import pyvista as pv
 
@@ -175,10 +189,18 @@ def _link_meshes(raw: mne.io.Raw, sci_scores: dict, good_by_base: dict,
         lines = np.column_stack([np.full(n, 2), np.arange(0, 2 * n, 2), np.arange(1, 2 * n, 2)])
         segments = pv.PolyData(np.vstack(points), lines=lines.ravel())
         meshes.append((segments.tube(radius=_LINK_RADIUS), color))
-    for optodes, color, radius in ((sources, _SRC_COLOR, _SRC_RADIUS),
-                                   (detectors, _DET_COLOR, _DET_RADIUS)):
-        if optodes:
-            meshes.append((_spheres(np.vstack(list(optodes.values())), radius), color))
+
+    long_pairs = {pair_of(n).upper() for n in long_short_channels(raw, sep_bands)[0]}
+    shares = {optode: bad / listed for optode, (bad, listed) in optode_rejections(
+        {pair_id: {"separation": "long" if pair_id in long_pairs else "short",
+                   "is_bad": goods.get(pair_id) is False} for pair_id in pair_ids}).items()}
+    for optodes, cube in ((sources, True), (detectors, False)):
+        for name, point in optodes.items():
+            share = shares.get(name)
+            if share is None:
+                meshes.append((_optode_glyph(point, cube, _SHORT_ONLY_SCALE), NO_SHARE_COLOR))
+            else:
+                meshes.append((_optode_glyph(point, cube), share_color(share)))
     return meshes
 
 
@@ -230,17 +252,19 @@ def quality_brain_views(
     sci_scores: dict[str, float] | None = None,
     *,
     sci_threshold: float,
+    sep_bands=None,
 ) -> str:
     """Render 3-view brain figure and return as base64 PNG string.
 
     A failed render raises, so the report lists it rather than leaving the panel blank.
+    ``sep_bands`` tells the optodes which of their channels are long.
     """
     good_by_base = {pair_of(n): bool(g) for n, g in zip(ch_names, good_mask)}
     data_meshes: list = []
     if raw is not None:
         try:
             data_meshes = _link_meshes(raw, sci_scores or {}, good_by_base,
-                                       sci_threshold)
+                                       sci_threshold, sep_bands)
         except Exception as exc:
             logger.warning("channel links failed: %s", exc)
     if not data_meshes:

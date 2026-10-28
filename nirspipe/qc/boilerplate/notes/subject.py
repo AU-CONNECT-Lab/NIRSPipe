@@ -59,7 +59,10 @@ NOTES = {
     "quality.brain_views":
         "Red is rejected by screening, whatever its SCI; the rest are graded green to red by "
         "SCI against the run&rsquo;s line. Screening counts passing windows, so a channel "
-        "can be dropped at a high SCI.",
+        "can be dropped at a high SCI. Each source (a square, a cube in 3-D) and detector (a "
+        "circle, a sphere) is filled by the share of its long channels rejected, white to red: "
+        "a solid red optode lost every one, which points at the optode rather than at its "
+        "channels. Grey ones carry short channels only.",
     "quality.brain_views_unplaced":
         "The optodes could not be placed on the template head, so the flat map is drawn "
         "without the 3-D views.",

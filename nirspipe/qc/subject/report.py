@@ -1813,13 +1813,15 @@ def _section_brain(
     ch_names_brain: list[str] | None = None,
     *,
     sci_threshold: float,
+    sep_bands=None,
 ) -> dict:
     """The 3D quality views and the optode flat map, side by side in one PNG.
 
     ``fig_name`` names the file, so a per-condition page writes its own. Both figures colour a
     channel by its SCI against the run's line and mark the rejected ones, and a condition has
     both of those of its own, so this is a real per-condition figure rather than a narrowed
-    view: nothing in it is a time series.
+    view: nothing in it is a time series. ``sep_bands`` tells both figures which of an
+    optode's channels are long.
     """
     brain_views_path = None
     # coordinates no reading placed would float beside the brain, so only the flat map is drawn
@@ -1833,12 +1835,13 @@ def _section_brain(
             ch_names = ch_names_brain if ch_names_brain is not None else list(sci_scores.keys())
             brain_b64 = None if flat_only else quality_brain_views(
                 ch_names, coords_head, good_mask, raw=raw_intensity, sci_scores=sci_scores,
-                sci_threshold=sci_threshold)
+                sci_threshold=sci_threshold, sep_bands=sep_bands)
 
             optode_b64 = None
             with _guard("Optode flat map", errors, subject):
                 optode_b64 = optode_layout_static(raw_intensity, sci_scores, bad_channels,
-                                                  sci_threshold=sci_threshold)
+                                                  sci_threshold=sci_threshold,
+                                                  sep_bands=sep_bands)
 
             if brain_b64 and optode_b64:
                 brain_pil = _PILImage.open(_io.BytesIO(base64.b64decode(brain_b64))).convert("RGBA")
@@ -2286,7 +2289,7 @@ def build_subject_report(
                             sci_win_scores, bad_channels, coords_head, good_mask, raw_intensity,
                             subject, errors, figures_dir, fig_name,
                             ch_names_brain=ch_names_brain,
-                            sci_threshold=resolve_cutoffs(config)["sci"])
+                            sci_threshold=resolve_cutoffs(config)["sci"], sep_bands=sep_bands)
     # every figure in the epoch section on the denoised (bandpassed, pre-regression) haemo so
     # drift/noise is gone and the task response is intact; fall back to preproc only if no
     # post-processing ran. The unfiltered preproc would leave cardiac ripple on a curve read
@@ -2513,7 +2516,8 @@ def build_subject_report(
                 remake_brain=lambda cond_name, sci_pc: _section_brain(
                     sci_pc, bad_channels, coords_head, good_mask,
                     raw_intensity, subject, errors, figures_dir, cond_name,
-                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"]),
+                    ch_names_brain=ch_names_brain, sci_threshold=resolve_cutoffs(config)["sci"],
+                    sep_bands=sep_bands),
                 remake_motion_detail=lambda slug: _condition_motion_detail(
                     motion_det_vars.get("motion_detail_pairs") or [], slug),
                 remake_denoise_carpet=lambda cond_name, span: _section_stage_carpets(

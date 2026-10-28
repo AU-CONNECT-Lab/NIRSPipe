@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import mne
 import numpy as np
 import pytest
+import pyvista as pv
 from PIL import Image
 
 from nirspipe.qc.figures.common._brain_utils import VIEW_LABELS, load_brain_meshes
@@ -74,6 +75,45 @@ def _green_pixels(sci_value: float, good: bool) -> int:
 def test_links_are_drawn_in_their_quality_colour():
     assert _green_pixels(0.95, good=True) > 50
     assert _green_pixels(0.10, good=False) == 0
+
+
+def test_share_colour_runs_from_white_to_the_rejected_red():
+    assert bv.share_color(0.0) == "#ffffff"
+    assert bv.share_color(1.0) == "#e74c3c"
+    # halfway, worked by hand: (255 + 231) / 2, (255 + 76) / 2, (255 + 60) / 2
+    mid = bv.share_color(0.5)
+    assert [int(mid[i:i + 2], 16) for i in (1, 3, 5)] == pytest.approx([243, 165.5, 157.5], abs=0.5)
+
+
+def test_each_optode_is_filled_by_the_share_of_its_long_channels_rejected():
+    # S1 reaches D1 (rejected) and D2 at 30 mm, S2 reaches D2 at 30 mm and the short D3
+    # at 8 mm (rejected): S1 1/2, D1 1/1, D2 0/2, S2 0/1, D3 short only
+    names = [f"{p} {wl}" for p in ("S1_D1", "S1_D2", "S2_D2", "S2_D3") for wl in (760, 850)]
+    info = mne.create_info(names, 10.0, ch_types="fnirs_cw_amplitude")
+    for ch, name in zip(info["chs"], names):
+        ch["loc"][9] = float(name.split(" ")[1])
+    raw = mne.io.RawArray(np.zeros((len(names), 100)), info, verbose=False)
+    pos = {"S1": [-0.05, 0.02, 0.10], "D1": [-0.05, 0.05, 0.10], "D2": [-0.02, 0.02, 0.10],
+           "S2": [-0.02, -0.01, 0.10], "D3": [-0.02, -0.018, 0.10]}
+    raw.set_montage(mne.channels.make_dig_montage(ch_pos=pos, coord_frame="head",
+                                                  nasion=NASION, lpa=LPA, rpa=RPA),
+                    verbose="error")
+    good = {"S1_D1": False, "S1_D2": True, "S2_D2": True, "S2_D3": False}
+    meshes = bv._link_meshes(raw, dict.fromkeys(names, 0.95), good, 0.8)
+
+    def extent(mesh) -> float:
+        bounds = np.asarray(mesh.bounds).reshape(3, 2)
+        return float((bounds[:, 1] - bounds[:, 0]).max())
+
+    def kind(mesh):
+        return "source" if mesh.n_points == pv.Cube().n_points else "detector"
+
+    # a tube spans at least its 8 mm separation, an optode's mark a few mm; colour cannot
+    # tell them apart, since a fully rejected optode is the rejected channel's red
+    drawn = sorted((kind(mesh), colour) for mesh, colour in meshes if extent(mesh) < 7)
+    assert drawn == sorted([("source", bv.share_color(0.5)), ("source", bv.share_color(0.0)),
+                            ("detector", bv.share_color(1.0)), ("detector", bv.share_color(0.0)),
+                            ("detector", bv.NO_SHARE_COLOR)])
 
 
 def test_a_failed_render_raises_instead_of_returning_a_blank(monkeypatch):

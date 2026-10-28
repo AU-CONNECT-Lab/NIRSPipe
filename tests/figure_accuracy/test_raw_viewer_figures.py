@@ -51,6 +51,13 @@ def test_the_brain_figure_rejects_the_bad_pair_and_grades_every_other_above_the_
     assert all(pair_sci(sci, p.name) >= _arg("--sci-threshold") for p in truth.pairs if not p.bad)
 
 
+def test_every_brain_figure_counts_an_optode_s_long_channels_by_the_run_s_separations(raw_viewer_run):
+    from nirspipe.qc.metrics import separation_bands
+    # this run kept the default bands
+    assert all(kw["sep_bands"] == separation_bands()
+               for _, kw in raw_viewer_run.captured["_calls"]["_section_brain"])
+
+
 # ---- inline figures ----
 
 def test_each_raw_signal_row_is_the_channel_it_is_labelled(raw_viewer_run, page):

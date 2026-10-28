@@ -787,6 +787,31 @@ def pair_status(path: Path) -> "dict[str, dict[str, Any]]":
     return out
 
 
+def optode_rejections(pairs: "dict[str, dict[str, Any]]") -> "dict[str, tuple[int, int]]":
+    """Each source's and detector's long pairs as ``(rejected, listed)``, from :func:`pair_status` rows.
+
+    ::
+
+      {"S1_D1": {"separation": "long", "is_bad": True},
+       "S1_D2": {"separation": "long", "is_bad": False},
+       "S1_D9": {"separation": "short", "is_bad": True}}
+      -> {"S1": (1, 2), "D1": (1, 1), "D2": (0, 1)}
+
+    Short pairs are left out, so an optode that only short pairs use has no entry. A pair
+    with no separation at all (a montage that never split, ``n/a`` in the channel table)
+    counts as long, as the tables block it.
+    """
+    out: dict[str, list[int]] = {}
+    for pair, status in pairs.items():
+        if status.get("separation") not in ("long", "", "n/a"):
+            continue
+        for optode in pair.split("_")[:2]:
+            counts = out.setdefault(optode, [0, 0])
+            counts[0] += bool(status.get("is_bad"))
+            counts[1] += 1
+    return {optode: (bad, listed) for optode, (bad, listed) in out.items()}
+
+
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
                      sci_threshold: "float | None",
                      psp_threshold: float | None = None,

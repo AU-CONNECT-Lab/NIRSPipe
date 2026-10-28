@@ -898,7 +898,7 @@ def _process_run(
                                               {pair_of(c) for c in bad_channels}),
         # drawn by the page writer, not here: the GUI shares this function and shows no copy
         "remake_brain":  _brain_maker(raw, raw_haemo, bad_channels, label, fig_dir,
-                                      sci_threshold=cutoffs["sci"]),
+                                      sci_threshold=cutoffs["sci"], sep_bands=sep_bands),
         "brain_flat":    not placement_of(raw).placed,
         "remake_head_slider": remake_head_slider,
         "sci_win_scores": (raw_pc.get("raw") or {}).get("sci_win_per_channel") or {},
@@ -951,7 +951,7 @@ def _hbo_hbr_maker(haemo, haemo_post, sep_bands, method, bad_pairs):
 
 
 def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
-                 sci_threshold: float):
+                 sci_threshold: float, sep_bands=None):
     """``(namer, SCI per channel, errors) -> href`` of the subject report's brain views.
 
     The haemoglobin file's HbO channels place the channels, rejected ones included, as the
@@ -972,7 +972,7 @@ def _brain_maker(raw, raw_haemo, bad_channels, label: str, fig_dir: Path, *,
     def remake(namer, sci: dict, errors: list) -> "str | None":
         return _section_brain(sci, sorted(bad_channels), coords, good, raw, label, errors,
                               fig_dir, namer, ch_names_brain=names,
-                              sci_threshold=sci_threshold)["brain_views_path"]
+                              sci_threshold=sci_threshold, sep_bands=sep_bands)["brain_views_path"]
 
     return remake
 

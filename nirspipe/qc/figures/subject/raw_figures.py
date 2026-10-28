@@ -115,6 +115,23 @@ def sci_color(sci: float | None, threshold: float,
     return "#e74c3c"
 
 
+# an optode's share of its long channels rejected, white for none to the rejected red for all;
+# the flat map and the 3-D views beside it fill their optodes from these two stops
+SHARE_RAMP = ("#ffffff", "#e74c3c")
+# an optode only short channels use has no share
+NO_SHARE_COLOR = "#cfd6dc"
+
+
+def share_color(share: float) -> str:
+    """An optode's fill for the share of its long channels rejected, linear in RGB along :data:`SHARE_RAMP`.
+
+    share_color(0.0) -> "#ffffff", share_color(1.0) -> "#e74c3c"
+    """
+    lo, hi = (np.array([int(c[i:i + 2], 16) for i in (1, 3, 5)], float) for c in SHARE_RAMP)
+    rgb = np.rint(lo + float(np.clip(share, 0.0, 1.0)) * (hi - lo)).astype(int)
+    return "#" + "".join(f"{v:02x}" for v in rgb)
+
+
 def sci_legend(threshold: float) -> str:
     """Caption for :func:`sci_color`, from the same two numbers it colours by."""
     warn = SCI_WARN_RATIO * threshold

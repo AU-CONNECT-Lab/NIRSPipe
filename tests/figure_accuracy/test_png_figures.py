@@ -61,6 +61,9 @@ def test_the_flat_map_beside_them_grades_the_same_sci_over_the_run_s_rejections(
     raw = denoise_run.record()["per_channel"]["raw"]
     assert args[1] == pytest.approx(raw["sci_win_per_channel"])
     assert {c.rsplit(" ", 1)[0] for c in args[2]} == {p.name for p in denoise_run.truth.pairs if p.bad}
+    # which of an optode's channels are long is the run's call; this run kept the defaults
+    from nirspipe.qc.metrics import separation_bands
+    assert kwargs["sep_bands"] == separation_bands()
 
 
 def test_the_brain_views_place_each_channel_at_its_own_position_with_its_own_verdict(denoise_run):
