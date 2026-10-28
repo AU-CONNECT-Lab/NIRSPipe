@@ -97,6 +97,9 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
       {%- for label, value in summary_meta or [] %}
       <tr><th>{{ label }}</th><td>{{ value }}</td></tr>
       {%- endfor %}
+      {%- if dyad_page %}
+      <tr><th>Dyads</th><td><a href="{{ dyad_page }}">{{ dyad_page }}</a></td></tr>
+      {%- endif %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       {%- if versions %}
       <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>

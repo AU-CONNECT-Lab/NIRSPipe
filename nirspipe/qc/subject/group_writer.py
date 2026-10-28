@@ -4,6 +4,7 @@ TSV + an HTML viewer with heatmap / boxplots / sortable table / outlier panel.""
 from __future__ import annotations
 
 import json
+from itertools import chain
 from pathlib import Path
 
 import numpy as np
@@ -440,6 +441,7 @@ def _render_group(
     template_name: str = "group_report.html.j2",
     unfinished: list[dict] | None = None,
     roi_map: "dict[str, list[str]] | None" = None,
+    dyad_page: "str | None" = None,
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
 
@@ -594,6 +596,7 @@ def _render_group(
         kept=kept,
         optodes=optodes,
         regions=regions,
+        dyad_page=dyad_page,
     )
     html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name
     html_path.write_text(html, encoding="utf-8")
@@ -609,13 +612,14 @@ def _build_group(
     template_name: str = "group_report.html.j2",
     unfinished: list[dict] | None = None,
     roi_map: "dict[str, list[str]] | None" = None,
+    dyad_page: "str | None" = None,
 ) -> Path | None:
     """Glob SQM JSONs and render group report; None when there are none."""
     df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
     if df.empty:
         return None
     return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name,
-                         unfinished, roi_map)
+                         unfinished, roi_map, dyad_page)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
@@ -627,6 +631,14 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(scalar_rows, columns=cols)
 
 
+def dyad_page(output_dir: Path) -> "str | None":
+    """The dyad cohort page's name when the tree holds dyad records, which build that page next."""
+    suffix = RECORD_SUFFIXES["sqm"]
+    held = next(chain(output_dir.glob(f"group-*/nirs/*{suffix}"),
+                      output_dir.glob(f"group-*/ses-*/nirs/*{suffix}")), None)
+    return derivative_path("", "report", ".html", desc="groups").name if held else None
+
+
 def build_group_raw_report(output_dir: Path,
                            roi_map: "dict[str, list[str]] | None" = None) -> Path | None:
     """Aggregate all sub-XX/nirs/...desc-sqm_qc.json into desc-subjects_{qc.tsv,report.html}."""
@@ -636,5 +648,6 @@ def build_group_raw_report(output_dir: Path,
         title="Cohort QC (individual subjects)",
         unfinished=unfinished_subjects(output_dir),
         roi_map=roi_map,
+        dyad_page=dyad_page(output_dir),
     )
 

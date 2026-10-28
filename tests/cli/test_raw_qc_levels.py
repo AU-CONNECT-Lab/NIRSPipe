@@ -28,6 +28,22 @@ def test_the_dyad_pages_sit_beside_the_subjects_in_one_tree(tree):
     assert [e["Name"] for e in desc["GeneratedBy"]] == ["nirspipe"]
 
 
+def test_the_subject_cohort_page_links_the_dyad_cohort_page(tree):
+    page = (tree / "desc-subjects_report.html").read_text(encoding="utf-8")
+    assert '<a href="desc-groups_report.html">' in page
+    assert (tree / "desc-groups_report.html").exists()
+
+
+def test_a_tree_without_dyads_links_no_dyad_page(tree, tmp_path):
+    from nirspipe.qc.subject.group_writer import build_group_raw_report
+
+    import shutil
+    for sub in ("sub-11", "sub-12"):
+        shutil.copytree(tree / sub, tmp_path / sub)
+    page = build_group_raw_report(tmp_path).read_text(encoding="utf-8")
+    assert "desc-groups_report.html" not in page
+
+
 def test_a_finished_raw_qc_run_is_not_listed_as_unfinished(tree):
     from nirspipe.qc.subject.group_writer import unfinished_subjects
     from nirspipe.utils import load_toml

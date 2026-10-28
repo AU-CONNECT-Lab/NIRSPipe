@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - The quality record, channel table and run report give each long channel's variance share carried by the fitted short-channel regressors, on a head map and as set means
 - The run report draws the correlations among the nuisance series (short-channel, aux, drift, GVTD, head motion) and each one's correlation with the global signals
 - `nirspipe-rate rate|raw|hyper --rater NAME` keeps each rater's ratings, channel decisions and marked stretches in files of their own, and the viewer shows who is rating
+- The subject cohort page links the dyad cohort page when the tree holds dyads
 - `nirspipe-rate export` writes a rater column and takes `--rater NAME` for one rater's files; `--bad-channels` and `--bad-spans` refuse a table holding several raters
 
 ### Fixed
