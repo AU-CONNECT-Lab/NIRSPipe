@@ -191,6 +191,21 @@ def test_the_mean_psd_shades_the_run_s_bands(raw_viewer_run):
                      "Cardiac": (_arg("--cardiac-l-freq"), _arg("--cardiac-h-freq"))}
 
 
+def test_the_mean_psd_marks_the_planted_heart_rate_and_ends_at_2_hz(raw_viewer_run):
+    fig = one_figure(raw_viewer_run.figure("rawpsd"))
+    lines = [s["x0"] for s in fig["layout"]["shapes"] if s["type"] == "line"]
+    assert lines == [pytest.approx(CARDIAC_FREQ, abs=0.05)]
+    # a band ending under 2 Hz keeps the axis every spectrum had
+    assert fig["layout"]["xaxis"]["range"] == [0, 2.0]
+
+
+def test_the_summary_names_the_planted_heart_rate_inside_the_band(page):
+    summary = page[1]["summary"]
+    assert summary["heart_rate"] == pytest.approx(CARDIAC_FREQ, abs=0.05)
+    assert summary["heart_rate_outside"] is False
+    assert not any("heart rate" in n for n in page[1]["notes"])
+
+
 def test_each_channel_spectrum_shades_the_run_s_bands(raw_viewer_run):
     for pair in raw_viewer_run.truth.long_pairs:
         psd = plotly_figures(raw_viewer_run.figure("rawdetail", chan=_fname(pair.name)))[1]

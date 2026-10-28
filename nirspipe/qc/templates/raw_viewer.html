@@ -144,6 +144,7 @@ select#run-select {
       <tr><th>Passing windows</th><td id="sum-frac"></td></tr>
       <tr><th>DPF</th><td id="sum-dpf"></td></tr>
       <tr><th>Cardiac band</th><td id="sum-cardiac"></td></tr>
+      <tr><th>Heart rate</th><td id="sum-hr"></td></tr>
       <tr><th>Respiration band</th><td id="sum-resp"></td></tr>
     </table>
   </div>
@@ -833,6 +834,9 @@ function loadSummary() {
   put("sum-dpf", _esc((d.dpf || []).join(", ")));
   put("sum-cardiac", (d.cardiac || []).length
       ? _esc(d.cardiac[0]) + "&ndash;" + _esc(d.cardiac[1]) + " Hz" : "&mdash;");
+  put("sum-hr", d.heart_rate == null ? "&mdash;"
+      : d.heart_rate.toFixed(2) + " Hz (" + Math.round(d.heart_rate * 60) + " bpm)"
+        + (d.heart_rate_outside ? ", <span class='qm-bad'>outside the cardiac band</span>" : ""));
   put("sum-resp", (d.resp || []).length
       ? _esc(d.resp[0]) + "&ndash;" + _esc(d.resp[1]) + " Hz" : "&mdash;");
   put("sum-scope", _esc(d.scope || ""));

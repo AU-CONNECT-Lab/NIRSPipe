@@ -217,6 +217,48 @@ BAND_COLORS = {
     "Resp":    "rgba(241,196,15,0.10)",
     "Cardiac": "rgba(231,76,60,0.10)",
 }
+# the cardiac band's hue, darker, so the line reads against the band it is checked against
+HEART_RATE_COLOR = "#a93226"
+
+# Hz, where a spectrum's x axis ends unless the cardiac band or the heart rate lies beyond
+PSD_FMAX = 2.0
+
+
+def spectrum_fmax(sfreq: float, *freqs: "float | None") -> float:
+    """Where a spectrum's x axis ends: 2 Hz, or 0.2 Hz past the highest of ``freqs`` beyond it, at most Nyquist.
+
+    ::
+
+        spectrum_fmax(10.0, 1.8, 1.38) -> 2.0
+        spectrum_fmax(10.0, 3.1, 2.4)  -> 3.3
+    """
+    top = max((f for f in freqs if f is not None), default=0.0)
+    return min(sfreq / 2, PSD_FMAX if top <= PSD_FMAX else top + 0.2)
+
+
+def _panels(rows: "int | None", cols: int) -> "list[dict]":
+    """The ``row``/``col`` keyword sets of a subplot grid, or one empty set for a plain figure."""
+    if rows is None:
+        return [{}]
+    return [{"row": row, "col": col} for row in range(1, rows + 1) for col in range(1, cols + 1)]
+
+
+def add_heart_rate_line(fig, heart_rate: "float | None", fmax: float,
+                        rows: "int | None" = None, cols: int = 1) -> None:
+    """A dotted line at the run's heart rate on every panel of a PSD figure, labelled on the first.
+
+    ``rows`` and ``cols`` as in :func:`add_band_shading`. Nothing is drawn without a heart rate
+    or past ``fmax``.
+    """
+    if heart_rate is None or heart_rate > fmax:
+        return
+    for target in _panels(rows, cols):
+        fig.add_vline(x=heart_rate, line=dict(color=HEART_RATE_COLOR, width=1.2, dash="dot"),
+                      **target)
+    fig.add_annotation(x=heart_rate, y=0.0, xref="x", yref="y domain",
+                       text=f"HR {heart_rate:.2f} Hz", showarrow=False,
+                       font=dict(size=9, color=HEART_RATE_COLOR),
+                       xanchor="left", yanchor="bottom")
 
 
 def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None,
@@ -235,9 +277,7 @@ def add_band_shading(fig, fmax: float, bands: list, rows: "int | None" = None,
     right edge would claim the band is in view when it is off the plot. ``cols`` shades a
     grid of that many columns, row by row.
     """
-    targets = [{}] if rows is None else [{"row": row, "col": col}
-                                         for row in range(1, rows + 1)
-                                         for col in range(1, cols + 1)]
+    targets = _panels(rows, cols)
     for name, x0, x1 in bands:
         if x0 > fmax:
             continue

@@ -437,6 +437,7 @@ OD_SPLIT_COLUMNS = (
     ("sci_mean",               "Mean SCI (whole run)"),
     ("good_frac_mean",         "Passing windows"),
     ("psp_mean",               f"Mean PSP ({PSP_WINDOW_S:g} s)"),
+    ("heart_rate",             "Heart rate (Hz)"),
     ("snr_mean",               f"Mean SNR μ/σ ({CV_WINDOW_S:g} s)"),
     ("cv_mean",                f"Mean CV ({CV_WINDOW_S:g} s)"),
     ("mean_amp_mean",          "Mean amplitude"),
@@ -496,6 +497,8 @@ WHOLE_RUN_ONLY_COLUMNS = frozenset({
     # one estimate over the whole recording, with no windowed series to take a condition's
     # columns out of. The 10 s estimate beside it is the one a condition can have
     "sci_mean",
+    # one spectrum over the whole recording
+    "heart_rate",
 })
 
 # what a condition page's set table prints: the run's columns a condition can have, each

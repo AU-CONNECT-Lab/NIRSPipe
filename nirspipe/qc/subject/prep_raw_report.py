@@ -32,8 +32,8 @@ from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_la
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
     WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
-    channel_rows, format_rows, heatmap_args, pair_rows, pair_wavelengths, placement_note,
-    template_note,
+    channel_rows, format_rows, heart_rate_note, heatmap_args, pair_rows, pair_wavelengths,
+    placement_note, template_note,
     save_channel_csv,
     separation_blocks,
     separation_notes,
@@ -88,7 +88,7 @@ _VIEW_MONTAGE_KEYS = tuple(
 )
 _VIEW_SCALAR_KEYS = (
     "channel_retention_rate", "sci_win_mean", "sci_mean", "good_frac_mean", "psp_mean",
-    "snr_mean", "cv_mean",
+    "heart_rate", "snr_mean", "cv_mean",
     "cp_mean", "n_flat_channels", "mean_amp_mean", "n_saturated_channels",
     "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
@@ -344,6 +344,10 @@ def _process_run(
     # the verdict is read off the long channels wherever the montage was split, exactly as
     # the subject report reads it, so two views of one recording cannot disagree
     view_scalars = raw_secs.get("raw_long") or raw_secs.get("raw") or {}
+    heart_rate = view_scalars.get("heart_rate")
+    hr_note = heart_rate_note(heart_rate, (cardiac_l_freq, cardiac_h_freq))
+    if hr_note:
+        note(notes, label, hr_note)
     raw_all = raw_secs.get("raw") or {}
     sqm_split = bool(raw_secs.get("raw_long") and raw_secs.get("raw_short"))
 
@@ -528,7 +532,8 @@ def _process_run(
     psd_inline: dict = {}
     with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq),
-                                    resp=(resp_l_freq, resp_h_freq), sep_bands=sep_bands)
+                                    resp=(resp_l_freq, resp_h_freq), sep_bands=sep_bands,
+                                    heart_rate=heart_rate)
         if fig:
             fname = fig_name("psd")
             h     = _save_figure_html(fig, fig_dir / fname)
@@ -820,6 +825,8 @@ def _process_run(
             "dpf": factors,
             **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
+            "heart_rate": heart_rate,
+            "heart_rate_outside": hr_note is not None,
             "resp": [resp_l_freq, resp_h_freq],
             "motion_correction": motion_correction or "none",
             "scope": (section_note("raw.screened_long") if sqm_split
@@ -883,7 +890,7 @@ def _process_run(
         # record off disk, the way the subject report's do
         "remake_psd":    _psd_maker(raw, (cardiac_l_freq, cardiac_h_freq),
                                     (resp_l_freq, resp_h_freq), sep_bands,
-                                    build_psd_mean_figure),
+                                    build_psd_mean_figure, heart_rate),
         "remake_epoch":  _epoch_maker(epoch_view, fig_tmin, fig_tmax, sep_bands,
                                       build_epoch_preview_figure),
         "remake_hbo_hbr_corr": _hbo_hbr_maker(raw_haemo, raw_haemo_post, sep_bands,
@@ -1033,7 +1040,7 @@ def _epoch_maker(raw_haemo, tmin: float, tmax: float, sep_bands, build):
 
 
 def _psd_maker(raw, cardiac: "tuple[float, float]", resp: "tuple[float, float]", sep_bands,
-               build):
+               build, heart_rate: "float | None" = None):
     """``(t0, t1) -> figure`` for one condition's own spectrum, or None when the cut is short.
 
     Recomputed on a crop rather than sliced, because there is nothing to slice: it is one
@@ -1054,7 +1061,8 @@ def _psd_maker(raw, cardiac: "tuple[float, float]", resp: "tuple[float, float]",
             logger.info("condition %.1f-%.1f s is %d samples, under the %d the transform "
                         "needs; no spectrum", lo, hi, len(cut.times), PSD_NFFT_CAP)
             return None
-        return build(cut, cardiac=cardiac, resp=resp, sep_bands=sep_bands)
+        return build(cut, cardiac=cardiac, resp=resp, sep_bands=sep_bands,
+                     heart_rate=heart_rate)
 
     return remake
 

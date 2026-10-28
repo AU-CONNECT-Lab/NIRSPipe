@@ -1,16 +1,20 @@
 """The heart rate: each channel's most prominent spectral peak above the respiration band, their median."""
 
+import json
 import logging
+import re
 
 import mne
 import numpy as np
 import pytest
 
+from nirspipe.cli import qc as qc_cli
 from nirspipe.qc.common.channel_table import heart_rate_note
+from nirspipe.qc.figures.common._utils import spectrum_fmax
 from nirspipe.qc.metrics.coupling import _heart_rate_metrics
 from nirspipe.qc.subject.sqm_record import raw_sections
 
-from tests._synth import CARDIAC_FREQ, _channel_layout, synth_raw
+from tests._synth import CARDIAC_FREQ, _channel_layout, make_bids_dataset, synth_raw
 
 # 3 beats per minute
 TOLERANCE_HZ = 0.05
@@ -116,3 +120,27 @@ def test_a_heart_rate_outside_the_cardiac_band_is_warned_in_the_log(caplog):
     with caplog.at_level(logging.WARNING):
         raw_sections(raw, sci, [], 0.7, 1.8, resp_h_freq=0.5)
     assert not any("outside the cardiac band" in r.getMessage() for r in caplog.records)
+
+
+def test_the_spectrum_ends_at_2_hz_unless_the_band_or_the_heart_rate_lies_beyond():
+    assert spectrum_fmax(10.0, 1.8, 1.38) == 2.0
+    assert spectrum_fmax(10.0, 3.1, 2.4) == pytest.approx(3.3)
+    assert spectrum_fmax(10.0, 1.8, 2.6) == pytest.approx(2.8)
+    assert spectrum_fmax(5.0, 3.1, None) == 2.5
+
+
+def test_the_raw_report_says_when_the_band_misses_the_pulse(tmp_path):
+    # the synthetic pulse is at 1.2 Hz, under this band
+    bids = make_bids_dataset(tmp_path, subjects=("01",), tasks=("rest",))
+    out = tmp_path / "qc"
+    qc_cli.main([str(bids), str(out), "participant", "--dpf", "6", "--sci-threshold", "0.8",
+                 "--cardiac-l-freq", "1.5", "--cardiac-h-freq", "2.4",
+                 "--resp-l-freq", "0.1", "--resp-h-freq", "0.5", "--skip-bids-validation"])
+    (page,) = out.rglob("*_desc-raw_report.html")
+    html = page.read_text(encoding="utf-8")
+    data = json.loads(re.search(r"var _STATIC_DATA = (\[.*?\]);\n", html, re.S).group(1))[0]
+    assert data["summary"]["heart_rate"] == pytest.approx(CARDIAC_FREQ, abs=TOLERANCE_HZ)
+    assert data["summary"]["heart_rate_outside"] is True
+    assert any("outside the cardiac band (1.5 to 2.4 Hz)" in n for n in data["notes"])
+    # the axis reaches past the band's top, so the band is drawn whole
+    assert data["psd"]["figure"]["layout"]["xaxis"]["range"] == [0, pytest.approx(2.6)]

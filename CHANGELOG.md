@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - The quality record carries the heart rate, the median of the channels' spectral peaks, and the log warns when it lies outside the cardiac band
+- The raw report shows the heart rate in its summary, metric table and spectrum, and notes when it lies outside the cardiac band
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
@@ -20,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-qc` participant requires the respiration band (`--resp-l-freq`, `--resp-h-freq`) as `nirspipe` does, unless `--population` fills it, and records it
 - The raw report names the respiration band in its summary and shades it on its spectra, as the run report does
 - The dyad raw page shades the respiration band its members share; a member record without one is refused, naming the rerun
+- Spectra reach past 2 Hz when the cardiac band or the heart rate does, instead of cutting an infant's band off
 
 ## [0.77.0] - 2026-10-26
 

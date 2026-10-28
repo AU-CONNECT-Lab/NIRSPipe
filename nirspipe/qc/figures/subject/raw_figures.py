@@ -13,9 +13,9 @@ from nirspipe.utils.spans import bad_spans
 
 from nirspipe.qc.figures.common._utils import (
     BAND_COLORS, CONDITION_PALETTE, HBO_COLOR, HBR_COLOR, _hex_to_rgba,
-    LONG_COLOR, PSD_NFFT, SCALE_MIN_TRIALS, SHORT_COLOR, UNCLASSIFIED_COLOR,
-    TIMELINE_ROW_PX, block_duration_labels,
-    line_xy, minmax_xy,
+    LONG_COLOR, PSD_FMAX, PSD_NFFT, SCALE_MIN_TRIALS, SHORT_COLOR, UNCLASSIFIED_COLOR,
+    TIMELINE_ROW_PX, add_heart_rate_line, block_duration_labels,
+    line_xy, minmax_xy, spectrum_fmax,
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
 )
@@ -25,8 +25,6 @@ from nirspipe.qc.common.channel_table import _neither_range_title
 from nirspipe.qc.common.figure_io import extract_markers
 
 logger = get_logger("qc.figures")
-
-_PSD_FMAX = 2.0
 
 # A condition needs this many epochs before its row is drawn as an average. One epoch is
 # that block's own trace, not a mean of anything, and the panel is headed "grand mean".
@@ -60,8 +58,8 @@ def _ch_styles(raw: mne.io.Raw, sep_bands: "Bands | None" = None) -> list[tuple[
     return styles
 
 
-def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
-    """Layout for a single-panel PSD, with the physiological bands shaded.
+def psd_layout(height: int = 220, cardiac=None, resp=None, fmax: float = PSD_FMAX) -> dict:
+    """Layout for a single-panel PSD to ``fmax``, with the physiological bands shaded.
 
     ``cardiac`` and ``resp`` are the run's own ``(l_freq, h_freq)``, not constant edges.
     Passing None omits that band, and the colours and
@@ -69,16 +67,16 @@ def psd_layout(height: int = 220, cardiac=None, resp=None) -> dict:
     """
     bands = physio_bands(cardiac, resp)
     shapes = [dict(type="rect", xref="x", yref="paper",
-                   x0=x0, x1=min(x1, _PSD_FMAX), y0=0, y1=1,
+                   x0=x0, x1=min(x1, fmax), y0=0, y1=1,
                    fillcolor=BAND_COLORS.get(name, "rgba(120,120,120,0.10)"),
                    line=dict(width=0))
-              for name, x0, x1 in bands if x0 <= _PSD_FMAX]
-    annotations = [dict(x=(x0 + min(x1, _PSD_FMAX)) / 2, y=0.97, xref="x", yref="paper",
+              for name, x0, x1 in bands if x0 <= fmax]
+    annotations = [dict(x=(x0 + min(x1, fmax)) / 2, y=0.97, xref="x", yref="paper",
                         text=name, showarrow=False,
                         font=dict(size=8, color="#666"))
-                   for name, x0, x1 in bands if x0 <= _PSD_FMAX]
+                   for name, x0, x1 in bands if x0 <= fmax]
     return dict(
-        xaxis=dict(title="Frequency (Hz)", range=[0, _PSD_FMAX], gridcolor="#eeeeee"),
+        xaxis=dict(title="Frequency (Hz)", range=[0, fmax], gridcolor="#eeeeee"),
         yaxis=dict(title="Power", type="log", gridcolor="#eeeeee"),
         plot_bgcolor="white", paper_bgcolor="white",
         height=height, margin=dict(l=60, r=15, t=22, b=38),
@@ -352,7 +350,7 @@ def build_channel_figure(
         psds, freqs = spectrum
         sfreq = raw_haemo.info["sfreq"]
         psd_hbo, psd_hbr = psds[0], psds[1]
-        fmax = min(2.0, sfreq / 2)
+        fmax = spectrum_fmax(sfreq, cardiac[1] if cardiac else None)
         mask = freqs <= fmax
         psd_fig = go.Figure(
             data=[
@@ -361,7 +359,7 @@ def build_channel_figure(
                 go.Scatter(**line_xy(freqs[mask], psd_hbr[mask]),
                            name="HbR", mode="lines", line=dict(color=HBR_COLOR, width=2)),
             ],
-            layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)),
+            layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp, fmax=fmax)),
         )
     except _NoKeptTime:
         logger.info("channel PSD for %s skipped: every frame lies in a BAD_ span", ch_pair)
@@ -475,12 +473,13 @@ def _psd_groups(
 
 
 def build_psd_mean_figure(
-    raw: mne.io.Raw, cardiac=None, resp=None, sep_bands=None,
+    raw: mne.io.Raw, cardiac=None, resp=None, sep_bands=None, heart_rate=None,
 ) -> go.Figure | None:
     """Channel spectra in optical density, one mean per separation group, channels behind.
 
     Nothing here is a quality verdict: the panel shows what the spectrum looks like, and
-    the screening result is the quality heatmap's and the per-channel table's job.
+    the screening result is the quality heatmap's and the per-channel table's job. The
+    run's ``heart_rate`` is marked, so a pulse outside the shaded cardiac band shows.
     """
     try:
         picks = mne.pick_types(raw.info, meg=False, fnirs=True)
@@ -493,7 +492,7 @@ def build_psd_mean_figure(
             logger.info("OD spectrum skipped: every frame lies in a BAD_ span")
             return None
         psds, freqs = spectrum
-        fmax = min(_PSD_FMAX, sfreq / 2)
+        fmax = spectrum_fmax(sfreq, cardiac[1] if cardiac else None, heart_rate)
         mask = freqs <= fmax
         freqs_masked = freqs[mask]
         band = psds[:, mask]
@@ -513,8 +512,10 @@ def build_psd_mean_figure(
                 name=f"{name} (n={len(rows)})", line=dict(**line),
                 hovertemplate=f"{name}<br>%{{x:.3f}} Hz<br>%{{y:.3g}}<extra></extra>",
             ))
-        return go.Figure(data=traces,
-                         layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp)))
+        fig = go.Figure(data=traces,
+                        layout=go.Layout(**psd_layout(cardiac=cardiac, resp=resp, fmax=fmax)))
+        add_heart_rate_line(fig, heart_rate, fmax)
+        return fig
     except Exception as exc:
         logger.warning("mean PSD failed: %s", exc)
         return None
