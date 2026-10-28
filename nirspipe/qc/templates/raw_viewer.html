@@ -144,6 +144,7 @@ select#run-select {
       <tr><th>Passing windows</th><td id="sum-frac"></td></tr>
       <tr><th>DPF</th><td id="sum-dpf"></td></tr>
       <tr><th>Cardiac band</th><td id="sum-cardiac"></td></tr>
+      <tr><th>Respiration band</th><td id="sum-resp"></td></tr>
     </table>
   </div>
   <p class="qm-note" id="sum-scope"></p>
@@ -832,6 +833,8 @@ function loadSummary() {
   put("sum-dpf", _esc((d.dpf || []).join(", ")));
   put("sum-cardiac", (d.cardiac || []).length
       ? _esc(d.cardiac[0]) + "&ndash;" + _esc(d.cardiac[1]) + " Hz" : "&mdash;");
+  put("sum-resp", (d.resp || []).length
+      ? _esc(d.resp[0]) + "&ndash;" + _esc(d.resp[1]) + " Hz" : "&mdash;");
   put("sum-scope", _esc(d.scope || ""));
 }
 

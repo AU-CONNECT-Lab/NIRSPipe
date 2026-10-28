@@ -182,13 +182,21 @@ def test_the_mean_psd_is_the_welch_mean_of_each_separation_group(raw_viewer_run,
         assert x[above][np.argmax(y[above])] == pytest.approx(CARDIAC_FREQ, abs=od.info["sfreq"] / PSD_NFFT)
 
 
-def test_the_mean_psd_shades_the_run_s_cardiac_band(raw_viewer_run):
+def test_the_mean_psd_shades_the_run_s_bands(raw_viewer_run):
     fig = one_figure(raw_viewer_run.figure("rawpsd"))
     spans = [(s["x0"], s["x1"]) for s in fig["layout"]["shapes"] if s["type"] == "rect"]
     named = dict(zip([a["text"] for a in fig["layout"]["annotations"]], spans))
-    # raw QC takes no respiration band, so it draws none
     assert named == {"Mayer": (0.07, 0.13),
+                     "Resp": (_arg("--resp-l-freq"), _arg("--resp-h-freq")),
                      "Cardiac": (_arg("--cardiac-l-freq"), _arg("--cardiac-h-freq"))}
+
+
+def test_each_channel_spectrum_shades_the_run_s_bands(raw_viewer_run):
+    for pair in raw_viewer_run.truth.long_pairs:
+        psd = plotly_figures(raw_viewer_run.figure("rawdetail", chan=_fname(pair.name)))[1]
+        spans = {(s["x0"], s["x1"]) for s in psd["layout"]["shapes"] if s["type"] == "rect"}
+        assert spans >= {(_arg("--resp-l-freq"), _arg("--resp-h-freq")),
+                         (_arg("--cardiac-l-freq"), _arg("--cardiac-h-freq"))}, pair.name
 
 
 def test_the_carpet_is_the_pipeline_s_carpet(raw_viewer_run, denoise_run):

@@ -528,7 +528,7 @@ def _process_run(
     psd_inline: dict = {}
     with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq),
-                                    sep_bands=sep_bands)
+                                    resp=(resp_l_freq, resp_h_freq), sep_bands=sep_bands)
         if fig:
             fname = fig_name("psd")
             h     = _save_figure_html(fig, fig_dir / fname)
@@ -691,7 +691,8 @@ def _process_run(
                 # average, low-passed, where this stage would draw cardiac ripple
                 detail_fig, psd_fig, _ = build_channel_figure(
                     raw_haemo, detail_markers, pair, _MAX_TS_PTS, fig_tmin, fig_tmax,
-                    cardiac=(cardiac_l_freq, cardiac_h_freq), epoch=False,
+                    cardiac=(cardiac_l_freq, cardiac_h_freq),
+                    resp=(resp_l_freq, resp_h_freq), epoch=False,
                 )
                 fname = fig_name("detail", channel=_pair_fname(pair))
                 _save_multi_fig_html(
@@ -819,6 +820,7 @@ def _process_run(
             "dpf": factors,
             **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
+            "resp": [resp_l_freq, resp_h_freq],
             "motion_correction": motion_correction or "none",
             "scope": (section_note("raw.screened_long") if sqm_split
                       else section_note("raw.screened_every")),
@@ -879,7 +881,8 @@ def _process_run(
     }, {
         # where the per-condition numbers are, rather than the numbers: the pages read the
         # record off disk, the way the subject report's do
-        "remake_psd":    _psd_maker(raw, cardiac_l_freq, cardiac_h_freq, sep_bands,
+        "remake_psd":    _psd_maker(raw, (cardiac_l_freq, cardiac_h_freq),
+                                    (resp_l_freq, resp_h_freq), sep_bands,
                                     build_psd_mean_figure),
         "remake_epoch":  _epoch_maker(epoch_view, fig_tmin, fig_tmax, sep_bands,
                                       build_epoch_preview_figure),
@@ -1029,7 +1032,8 @@ def _epoch_maker(raw_haemo, tmin: float, tmax: float, sep_bands, build):
     return remake
 
 
-def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, sep_bands, build):
+def _psd_maker(raw, cardiac: "tuple[float, float]", resp: "tuple[float, float]", sep_bands,
+               build):
     """``(t0, t1) -> figure`` for one condition's own spectrum, or None when the cut is short.
 
     Recomputed on a crop rather than sliced, because there is nothing to slice: it is one
@@ -1050,7 +1054,7 @@ def _psd_maker(raw, cardiac_l_freq: float, cardiac_h_freq: float, sep_bands, bui
             logger.info("condition %.1f-%.1f s is %d samples, under the %d the transform "
                         "needs; no spectrum", lo, hi, len(cut.times), PSD_NFFT_CAP)
             return None
-        return build(cut, cardiac=(cardiac_l_freq, cardiac_h_freq), sep_bands=sep_bands)
+        return build(cut, cardiac=cardiac, resp=resp, sep_bands=sep_bands)
 
     return remake
 
