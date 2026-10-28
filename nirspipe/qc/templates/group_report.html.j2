@@ -65,6 +65,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% set _ = _sections.append(("Windowed", "Over time")) %}
 {% set _ = _sections.append(("Outliers", "Outliers")) %}
 {% set _ = _sections.append(("Metrics", "Quality Metrics")) %}
+{% if regions %}{% set _ = _sections.append(("Regions", "Regions")) %}{% endif %}
 {% if kept %}{% set _ = _sections.append(("ChannelsKept", "Channels kept")) %}{% endif %}
 {% if optodes %}{% set _ = _sections.append(("Optodes", "Optodes")) %}{% endif %}
 {% set nav_modules = [nav_bar(_sections, rated=false, summary="#Summary",
@@ -215,7 +216,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 </section>
 {% endif %}
 
-{% if headline_rows or table_rows or kept or optodes %}
+{% if headline_rows or table_rows or kept or optodes or regions %}
 <h2 id="Metrics">Quality Metrics</h2>
 {% endif %}
 
@@ -227,6 +228,23 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
       <tr><th>Metric</th><th>Median</th><th>Range</th></tr>
       {%- for row in headline_rows %}
       <tr><td>{{ row.label }}</td><td>{{ row.median }}</td><td>{{ row.range }}</td></tr>
+      {%- endfor %}
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if regions %}
+<section id="Regions" class="step">
+  <h3 class="step-title">Regions</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('group.regions') }}</p>
+    <table class="qm-table qm-flat">
+      <tr><th>Region</th>
+        {%- for task in regions.tasks %}<th>{{ task }}</th>{% endfor %}</tr>
+      {%- for row in regions.rows %}
+      <tr><td>{{ row.region }}</td>
+        {%- for cell in row.cells %}<td{% if cell.runs %} title="{{ cell.runs | join(', ') }}"{% endif %}>{{ cell.text }}</td>{% endfor %}</tr>
       {%- endfor %}
     </table>
   </div>

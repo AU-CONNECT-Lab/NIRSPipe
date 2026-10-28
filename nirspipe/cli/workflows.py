@@ -952,7 +952,8 @@ def run_group_level(args: dict[str, Any]) -> None:
     _warn_on_split_tree(output_dir)
 
     logger.info("nirspipe group: aggregating individual SQMs from %s", output_dir)
-    ind_path = build_group_raw_report(output_dir)
+    ind_path = build_group_raw_report(
+        output_dir, _app_options.load_roi_mapping(args.get("roi_mapping")))
     if ind_path is not None:
         logger.info("  -> %s", ind_path)
 

@@ -7,7 +7,12 @@ of the task did, and a subject whose montage lacks the pair is not counted for i
 
 from __future__ import annotations
 
-from nirspipe.qc.subject.group_writer import build_group_raw_report, channels_kept, optode_losses
+import json
+
+from nirspipe.cli import qc as qc_cli
+from nirspipe.cli.workflows import run_group_level
+from nirspipe.qc.subject.group_writer import (build_group_raw_report, channels_kept,
+                                              optode_losses, region_losses)
 from nirspipe.qc.subject.record_io import write_record
 from tests.figure_accuracy._dyad import table_under
 
@@ -128,3 +133,72 @@ def test_no_channel_table_leaves_the_optodes_out(tmp_path):
     assert optode_losses(tmp_path) == {}
     html = build_group_raw_report(tmp_path).read_text(encoding="utf-8")
     assert 'id="Optodes"' not in html and 'href="#Optodes"' not in html
+
+
+# ---- the runs in which each --roi-mapping region kept no long channel ----
+
+# L is S1's two channels, R adds the short S3_D3 to S2_D2, F lists a pair no montage has
+ROI_MAP = {"L": ["S1_D1", "S1_D2 hbo"], "R": ["S2_D2", "S3_D3"], "F": ["S9_D9"]}
+
+
+def test_each_region_counts_the_runs_of_a_task_that_kept_none_of_it(tmp_path):
+    _shared_tree(tmp_path)
+    got = region_losses(tmp_path, ROI_MAP)
+    assert got["tasks"] == ["task-nback", "task-rest"]
+    # rest: sub-01 loses S1_D1 and S1_D2, sub-02 loses nothing; nback: sub-02 loses S2_D2,
+    # R's only long channel. F has no channel in any run, so every run counts
+    assert got["rows"] == [
+        {"region": "L", "cells": [{"text": "0 of 1", "runs": []},
+                                  {"text": "1 of 2", "runs": ["sub-01_task-rest"]}]},
+        {"region": "R", "cells": [{"text": "1 of 1", "runs": ["sub-02_task-nback"]},
+                                  {"text": "0 of 2", "runs": []}]},
+        {"region": "F", "cells": [{"text": "1 of 1", "runs": ["sub-02_task-nback"]},
+                                  {"text": "2 of 2",
+                                   "runs": ["sub-01_task-rest", "sub-02_task-rest"]}]},
+    ]
+
+
+def test_no_map_leaves_the_regions_out(tmp_path):
+    _shared_tree(tmp_path)
+    assert region_losses(tmp_path, None) == {}
+    html = build_group_raw_report(tmp_path).read_text(encoding="utf-8")
+    assert 'id="Regions"' not in html and 'href="#Regions"' not in html
+
+
+def test_the_page_prints_the_regions_before_the_channels(tmp_path):
+    _shared_tree(tmp_path)
+    page = build_group_raw_report(tmp_path, ROI_MAP)
+    html = page.read_text(encoding="utf-8")
+    assert (html.index('<h2 id="Metrics">') < html.index('<section id="Regions"')
+            < html.index('<section id="ChannelsKept"'))
+    assert 'href="#Regions"' in html
+    assert table_under(page, "Regions") == [
+        ["Region", "task-nback", "task-rest"],
+        ["L", "0 of 1", "1 of 2"],
+        ["R", "1 of 1", "0 of 2"],
+        ["F", "1 of 1", "2 of 2"],
+    ]
+    assert 'title="sub-01_task-rest, sub-02_task-rest"' in html
+
+
+def _map_file(tmp_path):
+    path = tmp_path / "roi.json"
+    path.write_text(json.dumps(ROI_MAP), encoding="utf-8")
+    return path
+
+
+def test_raw_qc_group_level_reads_the_map(tmp_path):
+    out = tmp_path / "qc"
+    _shared_tree(out)
+    qc_cli.main([str(tmp_path / "bids"), str(out), "group", "--roi-mapping",
+                 str(_map_file(tmp_path))])
+    assert table_under(next(out.glob("*desc-subjects_report.html")), "Regions")[1] == [
+        "L", "0 of 1", "1 of 2"]
+
+
+def test_the_pipeline_group_level_reads_the_map(tmp_path):
+    out = tmp_path / "out"
+    _shared_tree(out)
+    run_group_level({"output_dir": str(out), "roi_mapping": str(_map_file(tmp_path))})
+    assert table_under(next(out.glob("*desc-subjects_report.html")), "Regions")[1] == [
+        "L", "0 of 1", "1 of 2"]

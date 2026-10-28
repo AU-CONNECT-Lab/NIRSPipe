@@ -392,6 +392,11 @@ NOTES = {
     "group.outlier_rule":
         "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
         "metric.",
+    "group.regions":
+        "For each region of the <code>--roi-mapping</code> given at this level, the runs of the "
+        "task that kept none of its long channels, out of the runs of the task; hover a count "
+        "for the runs. Such a run has no value for the region in any region output. Read from "
+        "the same channel tables as Channels kept.",
     "group.channels_kept":
         "How many subjects kept each source-detector pair, out of those whose runs of the task "
         "list it. A subject keeps a pair when any of its runs of the task did, sessions "

@@ -355,7 +355,7 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
 def _dyads(bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | None,
            participant_label: list[str] | None, task_label: list[str] | None,
            session_label: list[str] | None, normalize: bool, no_align: bool,
-           tstart: float | None, tend: float | None, roi_mapping: Path | None,
+           tstart: float | None, tend: float | None, roi_map: "dict[str, list[str]] | None",
            nprocs: int | None) -> bool:
     """Every selected dyad's raw page, read from its members' records; False when one failed."""
     from nirspipe.cli.hyper import _run_groups, _select_groups
@@ -372,7 +372,7 @@ def _dyads(bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | No
             raise SystemExit(1)
     settings = SimpleNamespace(
         bids_dir=bids_dir, output_dir=output_dir, no_align=no_align, normalize=normalize,
-        tstart=tstart, tend=tend, roi_map=_app_options.load_roi_mapping(roi_mapping))
+        tstart=tstart, tend=tend, roi_map=roi_map)
     done = _run_groups(groups, partial(_raw_one_group, settings), nprocs,
                        log_file=lambda key: group_report_dir(output_dir, key[0]) / "logs"
                        / f"{group_label(*key)}_desc-raw.log", exit_on_failure=False)
@@ -394,6 +394,7 @@ def cmd_group(
     if group_id is not None and pairs_csv is None:
         print("Error: --group-id selects from --pairs-csv, which was not given.", file=sys.stderr)
         raise SystemExit(1)
+    roi_map = _app_options.load_roi_mapping(roi_mapping)
     dyads_ok = True
     if pairs_csv is not None:
         if not skip_bids_validation:
@@ -404,9 +405,9 @@ def cmd_group(
         write_dataset_description(output_dir, source=bids_dir, link=LINK_RAW)
         dyads_ok = _dyads(bids_dir, output_dir, pairs_csv, group_id, participant_label,
                           task_label, session_label, normalize, no_align, tstart, tend,
-                          roi_mapping, nprocs)
+                          roi_map, nprocs)
 
-    path = build_group_raw_report(output_dir)
+    path = build_group_raw_report(output_dir, roi_map)
     if path is None:
         print(f"Error: no raw QC records under {output_dir}; run the participant level into "
               "it first.", file=sys.stderr)
@@ -503,7 +504,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sel.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the "
                           "motion carpet's rows by ROI and lists each region's long channels "
-                          "kept. Optional.")
+                          "kept; at group level the cohort page also counts the runs per "
+                          "region that kept none. Optional.")
     _shared.add_skip_bids_validation(sel)
     _shared.add_nprocs(sel, unit="job",
                        note="A job is a subject at participant level, a dyad at group level.")

@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - With `--roi-mapping`, the run report lists each region's long channels kept and the rejected ones, naming listed pairs that are not long channels
 - With `--roi-mapping`, the raw report lists each region's long channels kept, as the run report does
 - With `--roi-mapping`, the dyad raw page lists each member's long channels kept per region, side by side
+- With `--roi-mapping` at group level, both commands' cohort page counts per task the runs in which each region kept no long channel
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed

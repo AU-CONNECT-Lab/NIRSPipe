@@ -42,7 +42,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of
 from nirspipe.io.naming import derivative_path
 from nirspipe.qc.common.channel_table import (
-    CHANNEL_METRICS_SUFFIXES, optode_rejections, pair_status,
+    CHANNEL_METRICS_SUFFIXES, optode_rejections, pair_status, region_coverage,
 )
 from nirspipe.qc.subject.record_io import channel_columns, channel_frame, read_record
 from nirspipe.qc.subject.sqm_record import (
@@ -396,6 +396,40 @@ def optode_losses(output_dir: Path) -> dict:
             "rows": [{"optode": o, "cells": [cell(t, o) for t in tasks]} for o in optodes]}
 
 
+def region_losses(output_dir: Path, roi_map: "dict[str, list[str]] | None") -> dict:
+    """The runs of each task in which an ``--roi-mapping`` region kept no long channel: ``{"tasks", "rows"}``, empty without a map or a channel table.
+
+    ::
+
+      run 1 keeps 0 of L's 2 long channels, run 2 keeps 1  ->  L  task-rest  1 of 2
+
+    A run whose recording has none of the region's long channels counts as keeping none,
+    since the region drops out of its region outputs either way. Each cell carries the
+    runs it counts under ``runs``.
+    """
+    if not roi_map:
+        return {}
+    lost: dict[str, dict[str, list[str]]] = {}
+    runs: dict[str, int] = {}
+    for label, path in sorted(_channel_tables(output_dir).items()):
+        task = _task_of(label)
+        runs[task] = runs.get(task, 0) + 1
+        by_region = lost.setdefault(task, {})
+        for row in region_coverage(pair_status(path), roi_map):
+            by_region.setdefault(row["region"], [])
+            if row["kept"] == 0:
+                by_region[row["region"]].append(label)
+    if not runs:
+        return {}
+    tasks = sorted(runs)
+    regions = list(next(iter(lost.values())))
+    return {"tasks": tasks,
+            "rows": [{"region": region,
+                      "cells": [{"text": f"{len(lost[t][region])} of {runs[t]}",
+                                 "runs": lost[t][region]} for t in tasks]}
+                     for region in regions]}
+
+
 def _render_group(
     output_dir: Path,
     out_desc: str,
@@ -405,6 +439,7 @@ def _render_group(
     descs: list[str] | None = None,
     template_name: str = "group_report.html.j2",
     unfinished: list[dict] | None = None,
+    roi_map: "dict[str, list[str]] | None" = None,
 ) -> Path:
     """Render TSV + HTML for an already-collected group of SQM rows.
 
@@ -515,6 +550,9 @@ def _render_group(
     optodes: dict = {}
     with guard("Optodes", errors, out_desc):
         optodes = optode_losses(output_dir)
+    regions: dict = {}
+    with guard("Regions", errors, out_desc):
+        regions = region_losses(output_dir, roi_map)
 
     conditions = condition_names(full_rows)
     if not conditions:
@@ -555,6 +593,7 @@ def _render_group(
         outliers=outliers,
         kept=kept,
         optodes=optodes,
+        regions=regions,
     )
     html_path = output_dir / derivative_path("", "report", ".html", desc=out_desc).name
     html_path.write_text(html, encoding="utf-8")
@@ -569,13 +608,14 @@ def _build_group(
     title: str,
     template_name: str = "group_report.html.j2",
     unfinished: list[dict] | None = None,
+    roi_map: "dict[str, list[str]] | None" = None,
 ) -> Path | None:
     """Glob SQM JSONs and render group report; None when there are none."""
     df, full_rows, descs = _collect_sqm(output_dir, entity_glob)
     if df.empty:
         return None
     return _render_group(output_dir, out_desc, title, df, full_rows, descs, template_name,
-                         unfinished)
+                         unfinished, roi_map)
 
 
 def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
@@ -587,12 +627,14 @@ def rows_to_dataframe(full_rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(scalar_rows, columns=cols)
 
 
-def build_group_raw_report(output_dir: Path) -> Path | None:
+def build_group_raw_report(output_dir: Path,
+                           roi_map: "dict[str, list[str]] | None" = None) -> Path | None:
     """Aggregate all sub-XX/nirs/...desc-sqm_qc.json into desc-subjects_{qc.tsv,report.html}."""
     return _build_group(
         output_dir, entity_glob="sub-*",
         out_desc="subjects",
         title="Cohort QC (individual subjects)",
         unfinished=unfinished_subjects(output_dir),
+        roi_map=roi_map,
     )
 
