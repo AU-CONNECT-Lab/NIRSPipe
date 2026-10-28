@@ -1,4 +1,4 @@
-"""The heart rate: each channel's spectral peak above the respiration band, its median over kept channels."""
+"""The heart rate: each channel's most prominent spectral peak above the respiration band, their median."""
 
 import logging
 
@@ -42,11 +42,23 @@ def test_the_heart_rate_is_the_shared_pulse():
     assert len(out["heart_rate_per_channel"]) == 8
 
 
+def test_breathing_that_outranks_the_pulse_in_power_does_not_outrank_it_in_prominence():
+    # strong breathing just under the floor leaves its tail and a harmonic above it
+    raw = _recording([1.2] * 4, duration=600.0, breath_hz=0.45, breath_amp=0.3)
+    # the case as built: in most channels the highest power is not the pulse
+    od = mne.preprocessing.nirs.optical_density(raw, verbose=False)
+    psd = od.compute_psd(fmin=0.5, fmax=4.7, verbose=False)
+    highest = psd.freqs[np.argmax(psd.get_data(), axis=1)]
+    assert np.median(highest) < 1.0
+    assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
+
+
 def test_breathing_stronger_than_the_pulse_is_left_below_the_search():
     raw = _recording([1.2] * 4, breath_hz=0.4, breath_amp=0.05)
     assert _heart_rate_metrics(raw, 0.5)["heart_rate"] == pytest.approx(1.2, abs=TOLERANCE_HZ)
-    # a respiration band that ends below the breathing lets it win, so the band is what keeps it out
-    assert _heart_rate_metrics(raw, 0.3)["heart_rate"] == pytest.approx(0.4, abs=TOLERANCE_HZ)
+    # a respiration band that ends below the breathing lets it win, at 0.4 Hz or its 0.8 Hz
+    # harmonic, so the band is what keeps it out
+    assert _heart_rate_metrics(raw, 0.3)["heart_rate"] < 1.0
 
 
 def test_a_pulse_above_the_cardiac_band_is_found_and_named():

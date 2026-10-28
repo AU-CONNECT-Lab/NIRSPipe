@@ -562,20 +562,26 @@ def heart_rate_band(sfreq: float, resp_h_freq: float) -> "tuple[float, float]":
 
 @_safe_metrics("Heart rate", ("heart_rate", "heart_rate_per_channel"))
 def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
-    r"""Heart rate: the median over channels of each channel's cardiac frequency, in Hz.
+    r"""Heart rate: the median over channels of each channel's most prominent spectral peak, in Hz.
 
     .. math::
 
         f_\mathrm{HR} = \operatorname*{median}_{c} \;
-            \operatorname*{arg\,max}_{f_\mathrm{resp} \le f \le f_N - 0.3\,\mathrm{Hz}} P_c(f),
+            \operatorname*{arg\,max}_{p \in \mathcal{P}_c} \operatorname{prom}_c(p),
 
-    where :math:`P_c` is channel :math:`c`'s Welch spectrum of optical density over the run,
-    frames in ``BAD_`` spans left out, :math:`f_\mathrm{resp}` the top of the respiration band
-    and :math:`f_N` the Nyquist frequency. The peak is CP's cardiac frequency
-    :footcite:`Bizzego2022`, searched past the cardiac band rather than inside it, so a band
-    that misses the pulse shows; the top is where a cardiac band may end at this sampling
-    rate. Rejected channels vote too: screening reads SCI in that same band, so a band that
-    misses the pulse rejects every channel. Descriptive: nothing is rejected on it.
+    where :math:`\mathcal{P}_c` are the local maxima of channel :math:`c`'s log Welch spectrum
+    of optical density between :math:`f_\mathrm{resp}`, the top of the respiration band, and
+    :math:`f_N - 0.3` Hz, :math:`f_N` the Nyquist frequency, and :math:`\operatorname{prom}`
+    is how far a peak rises above the higher of the lowest points on either side of it before
+    a higher peak. Frames in ``BAD_`` spans are left out. The search runs past the cardiac band
+    rather than inside it, so a band that misses the pulse shows; its top is where a cardiac
+    band may end at this sampling rate. Prominence rather than the highest power, CP's cardiac
+    frequency: the background falls across the range, and near the floor it often outranks
+    the pulse. Rejected channels vote too: screening reads SCI in the cardiac band this
+    checks, so a band that misses the pulse rejects every channel.
+
+    Experimental: an estimator of our own, not checked against a reference heart rate such as
+    an ECG. Descriptive: nothing is rejected on it.
 
     Parameters
     ----------
@@ -587,11 +593,8 @@ def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
     Returns
     -------
     dict
-        heart_rate and heart_rate_per_channel, a flat channel having no peak to report.
-
-    References
-    ----------
-    .. footbibliography::
+        heart_rate and heart_rate_per_channel, a flat channel or one with no peak in the
+        range having none to report.
     """
     raw_od = as_optical_density(raw)
     fmin, fmax = heart_rate_band(raw_od.info["sfreq"], resp_h_freq)
@@ -600,8 +603,14 @@ def _heart_rate_metrics(raw: mne.io.Raw, resp_h_freq: float) -> dict[str, Any]:
     power = psd.get_data(exclude=())
     if psd.freqs.size == 0:
         raise ValueError(f"no frequencies between {fmin:g} and {fmax:g} Hz")
-    per_ch = {ch: float(psd.freqs[np.argmax(row)]) for ch, row in zip(psd.ch_names, power)
-              if np.isfinite(row).all() and row.max() > 0}
+    per_ch = {}
+    for ch, row in zip(psd.ch_names, power):
+        if not (np.isfinite(row).all() and (row > 0).all()):
+            continue
+        # a falling edge is no local maximum, so the background's slope is never chosen
+        peaks, props = signal.find_peaks(np.log(row), prominence=0)
+        if peaks.size:
+            per_ch[ch] = float(psd.freqs[peaks[np.argmax(props["prominences"])]])
     return {
         "heart_rate": float(np.median(list(per_ch.values()))) if per_ch else None,
         "heart_rate_per_channel": per_ch,
