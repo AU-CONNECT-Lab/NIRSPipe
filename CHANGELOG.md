@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The cohort page draws each connection's r between head movement and FC across a task's runs, beside the spread with no relation and against distance, and writes them to `desc-fcmovement_qc.tsv`
 
 ### Changed
+- The cohort page's per-task tables pool every acquisition of a task into one column
 - The heart rate no longer reads the pulse's second harmonic, which it often did below about 75 bpm
 - The Raw signal, the channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
 

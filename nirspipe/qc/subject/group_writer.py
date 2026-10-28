@@ -328,9 +328,8 @@ def _channel_tables(output_dir: Path) -> "dict[str, Path]":
 
 
 def _task_of(label: str) -> str:
-    """The cohort column a run falls in: its task, with its acquisition where it has one."""
-    acq = entity_of(label, "acq")
-    return f"task-{entity_of(label, 'task')}" + (f"_acq-{acq}" if acq else "")
+    """The cohort column a run falls in: its task, every acquisition of it together."""
+    return f"task-{entity_of(label, 'task')}"
 
 
 def channels_kept(output_dir: Path) -> dict:
@@ -379,7 +378,7 @@ def swapped_label_tasks(full_rows: list[dict]) -> list[dict]:
                                       long_set.get("cardiac_ratio_swapped"))
         if swapped is None:
             continue
-        task = by_task.setdefault(f"task-{entity_of(row['bids_name'], 'task')}",
+        task = by_task.setdefault(_task_of(row["bids_name"]),
                                   {"runs": [], "n": 0})
         task["n"] += 1
         if swapped:
@@ -468,8 +467,7 @@ def fc_distributions(output_dir: Path) -> dict:
     ``{task: {"runs": [label, ...], "values": {(chromophore, "before"|"after"): [r per run]}}}``,
     read from the residual's channel matrix and the one written beside it on the series the
     regression started from (``_desc-<stage>_relmat.tsv``); a run without the second ran no
-    regression and is left out. Long and kept are read off the run's channel table. Runs
-    are pooled by task alone, acquisitions together: each curve is one run's own.
+    regression and is left out. Long and kept are read off the run's channel table.
     """
     tables = _channel_tables(output_dir)
     out: dict = {}
@@ -488,7 +486,7 @@ def fc_distributions(output_dir: Path) -> dict:
         if len(names) < 2:
             continue
         upper = np.triu_indices(len(names), 1)
-        task = out.setdefault(f"task-{entity_of(label, 'task')}", {"runs": [], "values": {}})
+        task = out.setdefault(_task_of(label), {"runs": [], "values": {}})
         if label not in task["runs"]:
             task["runs"].append(label)
         for side, matrix in (("before", before), ("after", after)):
@@ -552,7 +550,7 @@ def fc_against_movement(output_dir: Path, full_rows: list[dict]) -> pd.DataFrame
         names = [c for c in fc.index if pair_of(c) in kept]
         values = fisher_r_to_z(fc.loc[names, names].to_numpy(dtype=float))
         positions = _positions(path.parent, label)
-        task = f"task-{entity_of(label, 'task')}"
+        task = _task_of(label)
         for i, j in zip(*np.triu_indices(len(names), 1)):
             if not np.isfinite(values[i, j]):
                 continue

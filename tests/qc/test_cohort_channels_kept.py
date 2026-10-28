@@ -202,3 +202,14 @@ def test_the_pipeline_group_level_reads_the_map(tmp_path):
     run_group_level({"output_dir": str(out), "roi_mapping": str(_map_file(tmp_path))})
     assert table_under(next(out.glob("*desc-subjects_report.html")), "Regions")[1] == [
         "L", "0/1", "1/2"]
+
+
+def test_the_acquisitions_of_a_task_share_its_column(tmp_path):
+    s1, s2 = (tmp_path / f"sub-0{i}" / "nirs" for i in (1, 2))
+    _channel_table(s1, "sub-01_task-rest_acq-a", {"S1_D1 760"})
+    _channel_table(s2, "sub-02_task-rest_acq-b", set())
+    kept = channels_kept(tmp_path)
+    assert kept["tasks"] == ["task-rest"]
+    assert kept["rows"][0] == {"pair": "S1_D1", "separation": "long", "cells": ["1/2"]}
+    # S1 reaches S1_D1 alone: one long channel in each of the two runs, one rejected
+    assert optode_losses(tmp_path)["rows"][0] == {"optode": "S1", "cells": ["50% (1/2)"]}
