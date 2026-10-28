@@ -553,7 +553,21 @@ def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...],
 
 def _bad_channel_rows(path: Path) -> list[dict[str, str]]:
     # keep_channels: the reviewer kept these although screening rejected them
-    return _label_table_rows(path, "--bad-channels", ("bad_channels",), optional=("keep_channels",))
+    rows = _label_table_rows(path, "--bad-channels", ("bad_channels",),
+                             optional=("keep_channels", "rater"))
+    _refuse_several_raters(rows, "--bad-channels", path)
+    return rows
+
+
+def _refuse_several_raters(rows: list[dict], flag: str, path: Path) -> None:
+    """A rated table applies one rater's decisions, or one settled set, never several at once."""
+    found = sorted({row["rater"].strip() for row in rows})
+    if len(found) > 1:
+        named = ", ".join(rater or "rows without a rater" for rater in found)
+        raise ValueError(
+            f"{flag} table {path} holds several raters' decisions ({named}), and nirspipe "
+            "applies one set. Export one rater's with nirspipe-rate export --rater NAME, or "
+            "settle them into one table and blank its rater column.")
 
 
 def _span_rows(path: Path, flag: str = "--keep-spans",
@@ -563,7 +577,8 @@ def _span_rows(path: Path, flag: str = "--keep-spans",
     ``sub-01 | | rest | | 30 | 240`` comes back with ``"onset": 30.0, "duration": 240.0``.
     A ``relative`` onset is measured from a marker and may be negative.
     """
-    rows = _label_table_rows(path, flag, ("onset", "duration"))
+    rows = _label_table_rows(path, flag, ("onset", "duration"), optional=("rater",))
+    _refuse_several_raters(rows, flag, path)
     for row in rows:
         for column in ("onset", "duration"):
             cell = row[column]

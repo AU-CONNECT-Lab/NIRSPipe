@@ -146,18 +146,28 @@ def cmd_hyper(
     _serve(opened, port, HYPER_PORT, "nirspipe-rate hyper")
 
 
-def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
+def cmd_export(trees: list[Path], out_dir: Path | None, rater: str | None = None) -> None:
     """Write the rated channels as a --bad-channels table, and the FINAL verdicts as a list."""
-    from nirspipe.qc.rating.export import export_ratings, export_spans
+    from nirspipe.qc.rating.export import export_ratings, export_spans, raters
 
+    found = raters(trees)
+    if rater is not None and rater not in found:
+        print(f"[warning] no files of rater {rater} under {', '.join(map(str, trees))}; "
+              f"raters found: {', '.join(r or '(none)' for r in found) or 'none'}.",
+              file=sys.stderr)
     try:
-        channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0])
+        channels, verdicts, conflicts = export_ratings(trees, out_dir or trees[0], rater)
     except StageError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
     print(f"Channel decisions: {channels}")
     print(f"  pass it to nirspipe as --bad-channels {channels}")
-    spans = export_spans(trees, out_dir or trees[0])
+    if rater is None and len(found) > 1:
+        named = ", ".join(r or "(saved without --rater)" for r in found)
+        print(f"[info] the tables hold several raters' decisions ({named}). nirspipe applies "
+              "one set: export one rater's with --rater NAME, or settle them into one table "
+              "and blank its rater column.", file=sys.stderr)
+    spans = export_spans(trees, out_dir or trees[0], rater)
     if spans:
         print(f"Marked bad stretches: {spans}")
         print(f"  pass it to nirspipe as --bad-spans {spans}")
@@ -244,6 +254,9 @@ def _build_parser() -> argparse.ArgumentParser:
                          "the tree given to hyper as --derivatives-dir.")
     pe.add_argument("--out-dir", "--out_dir", type=Path, default=None,
                     help="Folder for the two tables. Default: the first tree.")
+    pe.add_argument("--rater", type=rater_name, default=None,
+                    help="Export only this rater's files. Default: every rater's, named in a "
+                         "rater column; nirspipe takes one rater's table.")
     pe.set_defaults(func=cmd_export)
     return p
 

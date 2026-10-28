@@ -299,7 +299,8 @@ def add_reviewer_marks(container, bad_spans_note: str = "") -> None:
                                 "every subject; or a table with a bad_channels column, rows "
                                 "optionally limited by participant_id, session, task, acq and "
                                 "run as in --keep-spans. Either wavelength marks the pair. "
-                                "Marked, not removed, and added to the SCI-detected bad channels.")
+                                "Marked, not removed, and added to the SCI-detected bad channels. "
+                                "A table with a rater column holds one rater's decisions.")
     container.add_argument("--keep-spans", type=Path, metavar="TABLE",
                            help="Table of the stretches to use (onset and duration in s on each "
                                 "recording's own time axis), rows optionally limited by "
@@ -314,7 +315,8 @@ def add_reviewer_marks(container, bad_spans_note: str = "") -> None:
     container.add_argument("--bad-spans", type=Path, metavar="TABLE",
                            help="Table of corrupted stretches (motion, a loose optode) in the "
                                 "--keep-spans format. Each is marked BAD_manual: left out of "
-                                "screening and of every estimate." + bad_spans_note)
+                                "screening and of every estimate. One rater's, as for "
+                                "--bad-channels." + bad_spans_note)
 
 
 def check_keep_spans_from(keep_spans: "Path | None", keep_spans_from: "str | None") -> None:

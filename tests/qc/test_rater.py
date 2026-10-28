@@ -2,9 +2,11 @@
 
 import json
 
+import pandas as pd
 import pytest
 
 from nirspipe.cli import rate
+from nirspipe.cli.workflows import _bad_channels_for, _keep_channels_for
 from nirspipe.io.naming import report_name
 from nirspipe.qc.rating.app import FNIRSRatingApp, HyperRatingApp, RawRatingApp
 
@@ -130,3 +132,97 @@ def test_the_raw_qc_page_offers_an_optional_rater_field_that_reaches_the_viewer(
 
     client.post(f"{opened['href']}save_raw_ratings", json={"ratings": {"Final": "good"}})
     assert (tmp_path / "sub-01" / "nirs" / "sub-01_task-rest_rater-QY_desc-rawrating_qc.json").exists()
+
+
+# ---- the exports and what nirspipe reads ----
+
+def _two_raters(tree):
+    _rate_raw(tree, "QY", "good", "bad", [1.0, 2.0])
+    _rate_raw(tree, "rater2", "bad", "good", [5.0, 6.0])
+
+
+def test_the_export_names_each_row_s_rater(tmp_path):
+    from nirspipe.qc.rating.export import export_ratings, export_spans
+
+    _two_raters(tmp_path)
+    channels, verdicts, conflicts = export_ratings([tmp_path], tmp_path / "out")
+    spans = export_spans([tmp_path], tmp_path / "out")
+    read = lambda path: pd.read_csv(path, sep="\t", dtype=str, keep_default_na=False)
+
+    assert conflicts == []
+    assert read(channels)[["rater", "bad_channels", "keep_channels"]].values.tolist() == [
+        ["QY", "S1_D1", ""], ["rater2", "", "S1_D1"]]
+    assert read(verdicts)[["rater", "verdict"]].values.tolist() == [["QY", "good"],
+                                                                    ["rater2", "bad"]]
+    assert read(spans)[["rater", "onset", "duration"]].values.tolist() == [
+        ["QY", "1.0", "1.0"], ["rater2", "5.0", "1.0"]]
+
+
+def test_export_with_a_rater_keeps_only_that_rater_s_files(tmp_path, capsys):
+    _two_raters(tmp_path)
+    rate.main(["export", str(tmp_path), "--out-dir", str(tmp_path / "out"), "--rater", "rater2"])
+    table = pd.read_csv(tmp_path / "out" / "desc-ratedchannels_qc.tsv", sep="\t", dtype=str,
+                        keep_default_na=False)
+
+    assert table[["rater", "keep_channels"]].values.tolist() == [["rater2", "S1_D1"]]
+    assert _keep_channels_for(str(tmp_path / "out" / "desc-ratedchannels_qc.tsv"), "01",
+                              {"task": "rest"}) == ["S1_D1"]
+    assert "several raters" not in capsys.readouterr().err
+
+
+def test_export_of_every_rater_says_nirspipe_takes_one(tmp_path, capsys):
+    _two_raters(tmp_path)
+    _rate_raw(tmp_path, None, "good", "bad", [8.0, 9.0])
+    rate.main(["export", str(tmp_path), "--out-dir", str(tmp_path / "out")])
+    err = capsys.readouterr().err
+
+    assert "several raters' decisions ((saved without --rater), QY, rater2)" in err
+    assert "--rater NAME" in err
+
+
+def test_export_of_a_rater_with_no_files_warns(tmp_path, capsys):
+    _two_raters(tmp_path)
+    rate.main(["export", str(tmp_path), "--out-dir", str(tmp_path / "out"), "--rater", "XY"])
+    assert "no files of rater XY" in capsys.readouterr().err
+
+
+def _table(tmp_path, text, name="table.tsv"):
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("raters", [("QY", "rater2"), ("QY", "")])
+def test_a_channel_table_holding_several_raters_is_refused(tmp_path, raters):
+    path = _table(tmp_path, "participant_id\trater\tbad_channels\n"
+                            f"sub-01\t{raters[0]}\tS1_D1\nsub-01\t{raters[1]}\tS2_D2\n")
+    with pytest.raises(ValueError, match=r"several raters' decisions .*--rater NAME"):
+        _bad_channels_for(str(path), "01")
+
+
+def test_a_channel_table_of_one_rater_or_settled_reads_as_before(tmp_path):
+    one = _table(tmp_path, "participant_id\trater\tbad_channels\n"
+                           "sub-01\tQY\tS1_D1\nsub-01\tQY\tS2_D2\n", "one.tsv")
+    settled = _table(tmp_path, "participant_id\trater\tbad_channels\n"
+                               "sub-01\t\tS1_D1\nsub-02\t\tS2_D2\n", "settled.tsv")
+    assert _bad_channels_for(str(one), "01") == ["S1_D1", "S2_D2"]
+    assert _bad_channels_for(str(settled), "01") == ["S1_D1"]
+
+
+def test_a_span_table_holding_several_raters_stops_the_run(mini_bids, tmp_path):
+    from nirspipe.cli.workflows import _refuse_bad_span_rows
+    from nirspipe.io.bids import get_layout
+
+    path = _table(tmp_path, "task\trater\tonset\tduration\nrest\tQY\t0\t10\nrest\tAB\t20\t10\n")
+    with pytest.raises(SystemExit, match=r"several raters' decisions \(AB, QY\)"):
+        _refuse_bad_span_rows(str(path), get_layout(mini_bids), flag="--bad-spans")
+
+
+def test_a_channel_table_holding_several_raters_stops_the_run(mini_bids, tmp_path):
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
+
+    path = _table(tmp_path, "participant_id\trater\tbad_channels\n"
+                            "sub-01\tQY\tS1_D1\nsub-01\tAB\tS1_D1\n")
+    with pytest.raises(SystemExit, match="several raters"):
+        _refuse_unmatched_bad_channel_rows(str(path), get_layout(mini_bids))

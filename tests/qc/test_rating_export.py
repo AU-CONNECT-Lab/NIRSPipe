@@ -32,9 +32,9 @@ def test_a_run_s_decisions_become_one_row_and_the_dyad_s_a_row_for_every_run(tmp
     assert conflicts == []
     assert rows == [
         {"participant_id": "sub-01", "session": "02", "task": "rest", "acq": "", "run": "01",
-         "bad_channels": "S1_D1", "keep_channels": "S2_D2"},
+         "rater": "", "bad_channels": "S1_D1", "keep_channels": "S2_D2"},
         {"participant_id": "sub-01", "session": "02", "task": "rest", "acq": "", "run": "",
-         "bad_channels": "S3_D3", "keep_channels": ""},
+         "rater": "", "bad_channels": "S3_D3", "keep_channels": ""},
     ]
 
 
@@ -76,15 +76,17 @@ def test_final_verdicts_are_listed_for_reading(tmp_path):
                                 "notes": {"sub-01_task-rest_Final": "cap slipped"}}),
                     encoding="utf-8")
 
-    assert verdict_rows([tmp_path]) == [{"page": stem, "key": "sub-01_task-rest_Final",
+    assert verdict_rows([tmp_path]) == [{"page": stem, "rater": "", "key": "sub-01_task-rest_Final",
                                          "verdict": "bad", "note": "cap slipped"}]
 
 
 def test_an_empty_tree_still_writes_both_tables_with_their_headers(tmp_path):
     channels, verdicts, _ = export_ratings([tmp_path], tmp_path)
     assert list(pd.read_csv(channels, sep="\t").columns) == [
-        "participant_id", "session", "task", "acq", "run", "bad_channels", "keep_channels"]
-    assert list(pd.read_csv(verdicts, sep="\t").columns) == ["page", "key", "verdict", "note"]
+        "participant_id", "session", "task", "acq", "run", "rater", "bad_channels",
+        "keep_channels"]
+    assert list(pd.read_csv(verdicts, sep="\t").columns) == ["page", "rater", "key", "verdict",
+                                                             "note"]
 
 
 def test_a_kept_pair_comes_out_of_screening_s_rejections():
