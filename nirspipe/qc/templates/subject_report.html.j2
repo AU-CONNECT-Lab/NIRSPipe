@@ -537,6 +537,21 @@
       <p class="fig-path">{{ glm_activation_flat_path }}</p>
     {% endif %}
 
+    {% if glm_contrasts %}
+      <h3>Contrasts</h3>
+      <p class="panel-note">{{ section_note('glm.contrasts') }}</p>
+      {% for c in glm_contrasts %}
+      <img class="responsive" src="{{ c.path }}" alt="Contrast: {{ c.label }}" />
+      <p class="fig-path">{{ c.path }}</p>
+      {% endfor %}
+    {% elif glm_contrast_flat_path %}
+      <h3>Contrasts</h3>
+      <p class="panel-note">{{ section_note('glm.contrasts_unplaced') }}</p>
+      <iframe class="plotly-frame" src="{{ glm_contrast_flat_path }}" title="Contrasts on the optode flat map"
+              style="height:{{ glm_contrast_flat_h }}px"></iframe>
+      <p class="fig-path">{{ glm_contrast_flat_path }}</p>
+    {% endif %}
+
     {% if glm_whitening_path %}
       <h3>Whitening</h3>
       <p class="panel-note">{{ section_note('glm.whitening') }}</p>

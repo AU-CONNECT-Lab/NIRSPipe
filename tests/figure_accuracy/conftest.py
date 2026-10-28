@@ -93,6 +93,19 @@ def glm_run(tmp_path_factory) -> Run:
 
 
 @pytest.fixture(scope="session")
+def glm_contrast_run(tmp_path_factory) -> Run:
+    """The GLM run with two contrasts of its one condition; every activation builder call captured."""
+    root = tmp_path_factory.mktemp("fingerprint_glm_contrast")
+    contrasts = root / "contrasts.tsv"
+    contrasts.write_text("contrast\ttapping\nwhole\t1\nhalf\t0.5\n", encoding="utf-8")
+    done = run_capturing(root, ["--mode", "glm", "--drift-high-pass", "0.008",
+                                "--stim-dur", f"{EVENT_DURATION:g}", "--short-channel", "mean",
+                                "--contrast-file", str(contrasts)],
+                         ("activation_condition_figures",))
+    return Run(root / "out", done["truth"], captured=done["captured"])
+
+
+@pytest.fixture(scope="session")
 def rest_run(tmp_path_factory) -> Run:
     """The resting-state fingerprint through rest mode, with an ROI map."""
     root = tmp_path_factory.mktemp("fingerprint_rest")

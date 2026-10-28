@@ -225,6 +225,16 @@ NOTES = {
         "Betas on the optode flat map, a head per condition and a row per chromophore, each "
         "chromophore on one scale shared by every condition: the optodes could not be placed "
         "on the template head (see the notes), so nothing is drawn on the cortex.",
+    "glm.contrasts":
+        "Each t contrast of <code>--contrast-file</code>, the weighted sum of the betas per "
+        "channel, drawn as the betas are, each chromophore on one scale shared by every "
+        "contrast. Its t, p and z values are in <code>desc-contrast_nirsmap.tsv</code>; F "
+        "contrasts are there only.",
+    "glm.contrasts_unplaced":
+        "Each t contrast of <code>--contrast-file</code> on the optode flat map, a head per "
+        "contrast and a row per chromophore, as the betas are drawn: the optodes could not be "
+        "placed on the template head. Its t, p and z values are in "
+        "<code>desc-contrast_nirsmap.tsv</code>.",
     "glm.activation":
         "Betas on the surface, a row of three views per chromophore, each chromophore on one "
         "colour scale shared by every condition so a weak condition reads as weak. One model "

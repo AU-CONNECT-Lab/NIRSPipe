@@ -170,7 +170,7 @@ def _clim_vmax(clim: dict) -> float:
     return abs(float(lims[-1]))
 
 
-def _add_shared_colorbar(fig, clim: dict, chroma: str = "hbo") -> None:
+def _add_shared_colorbar(fig, clim: dict, chroma: str = "hbo", quantity: str = "beta") -> None:
     """One horizontal scale under the three views, in micromolar.
 
     The renderer draws a colourbar into every view; this draws it once instead, in the unit
@@ -186,7 +186,7 @@ def _add_shared_colorbar(fig, clim: dict, chroma: str = "hbo") -> None:
     ticks = np.linspace(-vmax, vmax, 5)
     cb.set_ticks(ticks)
     cb.set_ticklabels([f"{t * 1e6:.3g}" for t in ticks])
-    cb.set_label(f"{CHROMA_STYLE[chroma][0]} beta (µM)", fontsize=11)
+    cb.set_label(f"{CHROMA_STYLE[chroma][0]} {quantity} (µM)", fontsize=11)
     cb.ax.tick_params(labelsize=10)
     cb.outline.set_linewidth(0.5)
 
@@ -212,6 +212,7 @@ def _save_glm_brain(
     size: tuple[int, int] = (800, 700),
     title: str = "",
     chroma: str = "hbo",
+    quantity: str = "beta",
 ) -> str:
     view_configs = [
         {'azimuth': 180, 'elevation': 90},  # Lateral
@@ -253,7 +254,7 @@ def _save_glm_brain(
     if title:
         ax.set_title(title, fontsize=16, pad=10)
     fig.subplots_adjust(left=0, right=1, top=0.9, bottom=0.10)
-    _add_shared_colorbar(fig, clim, chroma)
+    _add_shared_colorbar(fig, clim, chroma, quantity)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=_DPI, bbox_inches='tight', pad_inches=0.1)
@@ -355,6 +356,7 @@ def activation_condition_figures(
     view: str = "dorsal",
     size: tuple[int, int] = (800, 700),
     failed: "list[tuple[str, str]] | None" = None,
+    quantity: str = "beta",
 ) -> "list[tuple[str, str]]":
     """One brain render per condition, a row per chromophore the results hold, as ``[(label, png_b64), ...]``.
 
@@ -377,7 +379,8 @@ def activation_condition_figures(
     for cond, df in results_dict.items():
         try:
             rows = [_save_glm_brain(raw_haemo, df, clims[c], view, size,
-                                    f"{cond} - {CHROMA_STYLE[c][0]}", chroma=c)
+                                    f"{cond} - {CHROMA_STYLE[c][0]}", chroma=c,
+                                    quantity=quantity)
                     for c in chromas]
             rendered.append((str(cond), stack_png_b64(rows)))
         except Exception as exc:
@@ -391,6 +394,7 @@ def activation_flat_figure(
     raw_haemo: mne.io.Raw,
     results_dict: "dict[str, pd.DataFrame]",
     sep_bands=None,
+    quantity: str = "beta",
 ) -> "go.Figure | None":
     """Betas on the optode flat map, a head per condition and a row per chromophore on the scale :func:`activation_condition_figures` shares: its stand-in when the optodes could not be placed."""
     held = {chroma_of(n) for df in results_dict.values() if _ch_col(df) is not None
@@ -405,9 +409,9 @@ def activation_flat_figure(
                            dict(zip(drawn[_ch_col(df)].astype(str),
                                     drawn[_coef_col(df)].astype(float) * 1e6))))
         rows.append({"panels": panels, "scale": (-v, v),
-                     "bar": f"{CHROMA_STYLE[chroma][0]} beta (µM)"})
-    return flat_value_maps(raw_haemo, rows, "Betas on the optode flat map", CORRELATION_SCALE,
-                           sep_bands)
+                     "bar": f"{CHROMA_STYLE[chroma][0]} {quantity} (µM)"})
+    return flat_value_maps(raw_haemo, rows, f"{quantity.capitalize()}s on the optode flat map",
+                           CORRELATION_SCALE, sep_bands)
 
 
 def activation_panel(

@@ -1917,6 +1917,19 @@ def _section_brain(
 
 
 
+def _contrast_results(nirs_dir: "Path | None", label: str,
+                      chromophores: "tuple[str, ...]") -> "dict[str, pd.DataFrame]":
+    """Each t contrast of ``--contrast-file`` from the GLM step's table, its effect as the value the activation maps draw."""
+    path = nirs_dir / f"{label}_desc-contrast_nirsmap.tsv" if nirs_dir is not None else None
+    if path is None or not path.exists():
+        return {}
+    table = read_table(path)
+    # an F contrast's effect is a vector, which no single map can draw
+    table = table[(table["ContrastType"] == "t") & table["Chroma"].isin(chromophores)]
+    table = table.rename(columns={"effect": "theta"})
+    return {str(name): rows for name, rows in table.groupby("contrast", sort=False)}
+
+
 def _section_glm(
     design_matrix: "Any | None",
     glm_est: "Any | None",
@@ -1938,6 +1951,8 @@ def _section_glm(
     glm_activation_flat_path, glm_activation_flat_h = None, 0
     glm_whitening_path = None
     glm_whitening_h = 0
+    glm_contrasts: list[dict] = []
+    glm_contrast_flat_path, glm_contrast_flat_h = None, 0
 
     conditions: list[str] = []
     if design_matrix is not None:
@@ -2004,6 +2019,32 @@ def _section_glm(
 
     # read back from the GLM step's tables: the whitened residual itself is never written
     label = sqm_label or f"sub-{subject}"
+    contrasts = _contrast_results(nirs_dir, label, chromophores)
+    if contrasts and raw_haemo is not None and glm_activation_unplaced:
+        with _guard("GLM contrast flat map", errors, subject):
+            from nirspipe.qc.figures import activation_flat_figure
+            fig = activation_flat_figure(raw_haemo, contrasts, sep_bands=sep_bands,
+                                         quantity="contrast")
+            if fig is not None:
+                glm_contrast_flat_path, glm_contrast_flat_h = _save_plotly_html(
+                    fig, figures_dir / fig_name("contrastflat", suffix="nirsmap"))
+    elif contrasts and raw_haemo is not None:
+        with _guard("GLM contrast panel", errors, subject):
+            from nirspipe.qc.figures import activation_condition_figures
+            failed = []
+            rendered = activation_condition_figures(raw_haemo, contrasts, failed=failed,
+                                                    quantity="contrast")
+            errors.extend(f"GLM contrast panel ({name}): {reason}" for name, reason in failed)
+            used = set()
+            for name, b64 in rendered:
+                slug = _pair_fname(name) or "contrast"
+                if slug in used:
+                    slug = f"{slug}{len(used) + 1}"
+                used.add(slug)
+                path = save_png(b64, figures_dir, fig_name("glmcontrast", suffix="nirsmap",
+                                                            extension=".png", condition=slug))
+                if path:
+                    glm_contrasts.append({"label": name, "path": path})
     if nirs_dir is not None and (nirs_dir / f"{label}_desc-whitening_nirsmap.tsv").exists():
         with _guard("GLM whitening", errors, subject):
             from nirspipe.qc.figures import design_peak_frequencies, whitening_figure
@@ -2028,6 +2069,9 @@ def _section_glm(
         "glm_activation_flat_h": glm_activation_flat_h,
         "glm_whitening_path": glm_whitening_path,
         "glm_whitening_h": glm_whitening_h,
+        "glm_contrasts": glm_contrasts,
+        "glm_contrast_flat_path": glm_contrast_flat_path,
+        "glm_contrast_flat_h": glm_contrast_flat_h,
     }
 
 

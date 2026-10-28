@@ -91,7 +91,7 @@ def test_an_hbt_row_leaves_the_scale_where_either_half_is_bad():
 def test_each_chromophore_is_a_row_on_its_own_scale(monkeypatch):
     seen = []
 
-    def fake(raw_haemo, results_df, clim, view, size, title, chroma):
+    def fake(raw_haemo, results_df, clim, view, size, title, chroma, quantity="beta"):
         seen.append((title, clim["pos_lims"][-1]))
         return _tiny_png(12, 8)
 
@@ -111,7 +111,7 @@ def test_each_chromophore_is_a_row_on_its_own_scale(monkeypatch):
 def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
     seen = []
 
-    def fake(raw_haemo, results_df, clim, view, size, title, chroma):
+    def fake(raw_haemo, results_df, clim, view, size, title, chroma, quantity="beta"):
         seen.append((title, clim["pos_lims"][-1]))
         return _tiny_png()
 

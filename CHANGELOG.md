@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - The subject cohort page links the dyad cohort page when the tree holds dyads
 - The rest FC panel and the stage correlation panel order channels by source then detector number, so S2_D9 precedes S2_D10
 - With `--roi-mapping`, the subject page's FC panel over runs joined by `--combine-runs` is ordered and marked by ROI, as each run report's is
+- With `--contrast-file`, the GLM page draws each t contrast's effect on the cortex, or on the flat map, as it draws the betas
 - `nirspipe-rate export` writes a rater column and takes `--rater NAME` for one rater's files; `--bad-channels` and `--bad-spans` refuse a table holding several raters
 
 ### Fixed

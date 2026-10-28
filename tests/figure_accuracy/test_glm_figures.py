@@ -100,3 +100,26 @@ def test_the_record_and_the_report_carry_the_low_band_power(glm_run):
         assert section[f"whitening_lowband_{chroma}"] == pytest.approx(expected)
     html = glm_run.report.read_text(encoding="utf-8")
     assert "GLM residual" in html and "Residual low-band power HbO" in html
+
+
+def test_each_contrast_is_drawn_with_the_effect_written_to_disk(glm_contrast_run):
+    """The second activation call draws the contrasts: each one's effect, read back from its table."""
+    calls = glm_contrast_run.captured["_calls"]["activation_condition_figures"]
+    assert len(calls) == 2
+    drawn, kwargs = calls[1][0][1], calls[1][1]
+    assert list(drawn) == ["whole", "half"] and kwargs["quantity"] == "contrast"
+    table = pd.read_csv(glm_contrast_run.table("_desc-contrast_nirsmap.tsv"), sep="\t")
+    for name, rows in drawn.items():
+        on_disk = table[table["contrast"] == name].set_index("ch_name")["effect"]
+        np.testing.assert_allclose(rows.set_index("ch_name")["theta"], on_disk.loc[rows["ch_name"]])
+    # the half contrast is half the whole one, channel by channel
+    whole, half = (drawn[n].set_index("ch_name")["theta"] for n in ("whole", "half"))
+    np.testing.assert_allclose(half, whole / 2, rtol=1e-6)
+
+
+def test_the_page_shows_one_contrast_figure_per_contrast(glm_contrast_run):
+    written = sorted(p.name for p in glm_contrast_run.figures.glob("*desc-glmcontrast*"))
+    assert [n.split("_cond-")[1].split("_")[0] for n in written] == ["half", "whole"]
+    page = (glm_contrast_run.out / "sub-01" / "sub-01_task-tapping_report.html").read_text(
+        encoding="utf-8")
+    assert "<h3>Contrasts</h3>" in page and all(f"figures/{n}" in page for n in written)
