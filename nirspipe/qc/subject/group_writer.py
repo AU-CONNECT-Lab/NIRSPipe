@@ -338,7 +338,7 @@ def channels_kept(output_dir: Path) -> dict:
 
     ::
 
-      sub-01 keeps S1_D1 in run 1 only, sub-02 rejects it  ->  S1_D1  task-rest  1 of 2
+      sub-01 keeps S1_D1 in run 1 only, sub-02 rejects it  ->  S1_D1  task-rest  1/2
 
     A subject keeps a pair when any of its runs of the task did, sessions included; the
     count is over the subjects whose runs of the task list the pair.
@@ -358,7 +358,7 @@ def channels_kept(output_dir: Path) -> dict:
         return {}
     tasks = sorted(listed)
     rows = [{"pair": pair, "separation": sep,
-             "cells": [f"{len(kept.get(task, {}).get(pair, ()))} of {len(listed[task][pair])}"
+             "cells": [f"{len(kept.get(task, {}).get(pair, ()))}/{len(listed[task][pair])}"
                        if pair in listed[task] else None for task in tasks]}
             for pair, sep in separation.items()]
     return {"tasks": tasks, "rows": rows}
@@ -399,7 +399,7 @@ def optode_losses(output_dir: Path) -> dict:
 
     ::
 
-      run 1 rejects S1_D1 and S1_D2, run 2 rejects neither  ->  S1  task-rest  50% (2 of 4)
+      run 1 rejects S1_D1 and S1_D2, run 2 rejects neither  ->  S1  task-rest  50% (2/4)
 
     Short channels are left out, as on each run's optode map.
     """
@@ -418,7 +418,7 @@ def optode_losses(output_dir: Path) -> dict:
         if optode not in counts[task]:
             return None
         bad, listed = counts[task][optode]
-        return f"{bad / listed:.0%} ({bad} of {listed})"
+        return f"{bad / listed:.0%} ({bad}/{listed})"
 
     return {"tasks": tasks,
             "rows": [{"optode": o, "cells": [cell(t, o) for t in tasks]} for o in optodes]}
@@ -429,7 +429,7 @@ def region_losses(output_dir: Path, roi_map: "dict[str, list[str]] | None") -> d
 
     ::
 
-      run 1 keeps 0 of L's 2 long channels, run 2 keeps 1  ->  L  task-rest  1 of 2
+      run 1 keeps 0 of L's 2 long channels, run 2 keeps 1  ->  L  task-rest  1/2
 
     A run whose recording has none of the region's long channels counts as keeping none,
     since the region drops out of its region outputs either way. Each cell carries the
@@ -453,7 +453,7 @@ def region_losses(output_dir: Path, roi_map: "dict[str, list[str]] | None") -> d
     regions = list(next(iter(lost.values())))
     return {"tasks": tasks,
             "rows": [{"region": region,
-                      "cells": [{"text": f"{len(lost[t][region])} of {runs[t]}",
+                      "cells": [{"text": f"{len(lost[t][region])}/{runs[t]}",
                                  "runs": lost[t][region]} for t in tasks]}
                      for region in regions]}
 

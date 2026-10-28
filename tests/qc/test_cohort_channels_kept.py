@@ -52,9 +52,9 @@ def test_each_pair_counts_the_subjects_that_kept_it_per_task(tmp_path):
     kept = channels_kept(tmp_path)
     assert kept["tasks"] == ["task-nback", "task-rest"]
     assert kept["rows"] == [
-        {"pair": "S1_D1", "separation": "long", "cells": ["1 of 1", "2 of 3"]},
-        {"pair": "S2_D2", "separation": "long", "cells": ["0 of 1", "3 of 3"]},
-        {"pair": "S3_D3", "separation": "short", "cells": ["1 of 1", "2 of 2"]},
+        {"pair": "S1_D1", "separation": "long", "cells": ["1/1", "2/3"]},
+        {"pair": "S2_D2", "separation": "long", "cells": ["0/1", "3/3"]},
+        {"pair": "S3_D3", "separation": "short", "cells": ["1/1", "2/2"]},
     ]
 
 
@@ -77,9 +77,9 @@ def test_the_page_prints_the_counts_under_quality_metrics(tmp_path):
     assert 'href="#ChannelsKept"' in html
     assert table_under(page, "Channels kept") == [
         ["Source-detector", "Separation", "task-nback", "task-rest"],
-        ["S1_D1", "long", "1 of 1", "2 of 3"],
-        ["S2_D2", "long", "0 of 1", "3 of 3"],
-        ["S3_D3", "short", "1 of 1", "2 of 2"],
+        ["S1_D1", "long", "1/1", "2/3"],
+        ["S2_D2", "long", "0/1", "3/3"],
+        ["S3_D3", "short", "1/1", "2/2"],
     ]
 
 
@@ -107,10 +107,10 @@ def test_each_optode_pools_its_long_channels_over_the_runs_of_a_task(tmp_path):
     # rest: S1 2 of 2 then 0 of 2; D1 1 of 1 then 0 of 1; D2 1 of 2 then 0 of 2; S2 0 of 1
     # twice. nback: S2_D2 alone rejected. S3 and D3 have only the short pair
     assert got["rows"] == [
-        {"optode": "S1", "cells": ["0% (0 of 2)", "50% (2 of 4)"]},
-        {"optode": "S2", "cells": ["100% (1 of 1)", "0% (0 of 2)"]},
-        {"optode": "D1", "cells": ["0% (0 of 1)", "50% (1 of 2)"]},
-        {"optode": "D2", "cells": ["50% (1 of 2)", "25% (1 of 4)"]},
+        {"optode": "S1", "cells": ["0% (0/2)", "50% (2/4)"]},
+        {"optode": "S2", "cells": ["100% (1/1)", "0% (0/2)"]},
+        {"optode": "D1", "cells": ["0% (0/1)", "50% (1/2)"]},
+        {"optode": "D2", "cells": ["50% (1/2)", "25% (1/4)"]},
     ]
 
 
@@ -122,7 +122,7 @@ def test_the_page_prints_the_optodes_after_the_channels(tmp_path):
             < html.index('<section id="Table"'))
     assert 'href="#Optodes"' in html
     assert table_under(page, "Optodes")[0] == ["Optode", "task-nback", "task-rest"]
-    assert table_under(page, "Optodes")[1] == ["S1", "0% (0 of 2)", "50% (2 of 4)"]
+    assert table_under(page, "Optodes")[1] == ["S1", "0% (0/2)", "50% (2/4)"]
 
 
 def test_no_channel_table_leaves_the_optodes_out(tmp_path):
@@ -148,12 +148,12 @@ def test_each_region_counts_the_runs_of_a_task_that_kept_none_of_it(tmp_path):
     # rest: sub-01 loses S1_D1 and S1_D2, sub-02 loses nothing; nback: sub-02 loses S2_D2,
     # R's only long channel. F has no channel in any run, so every run counts
     assert got["rows"] == [
-        {"region": "L", "cells": [{"text": "0 of 1", "runs": []},
-                                  {"text": "1 of 2", "runs": ["sub-01_task-rest"]}]},
-        {"region": "R", "cells": [{"text": "1 of 1", "runs": ["sub-02_task-nback"]},
-                                  {"text": "0 of 2", "runs": []}]},
-        {"region": "F", "cells": [{"text": "1 of 1", "runs": ["sub-02_task-nback"]},
-                                  {"text": "2 of 2",
+        {"region": "L", "cells": [{"text": "0/1", "runs": []},
+                                  {"text": "1/2", "runs": ["sub-01_task-rest"]}]},
+        {"region": "R", "cells": [{"text": "1/1", "runs": ["sub-02_task-nback"]},
+                                  {"text": "0/2", "runs": []}]},
+        {"region": "F", "cells": [{"text": "1/1", "runs": ["sub-02_task-nback"]},
+                                  {"text": "2/2",
                                    "runs": ["sub-01_task-rest", "sub-02_task-rest"]}]},
     ]
 
@@ -174,9 +174,9 @@ def test_the_page_prints_the_regions_before_the_channels(tmp_path):
     assert 'href="#Regions"' in html
     assert table_under(page, "Regions") == [
         ["Region", "task-nback", "task-rest"],
-        ["L", "0 of 1", "1 of 2"],
-        ["R", "1 of 1", "0 of 2"],
-        ["F", "1 of 1", "2 of 2"],
+        ["L", "0/1", "1/2"],
+        ["R", "1/1", "0/2"],
+        ["F", "1/1", "2/2"],
     ]
     assert 'title="sub-01_task-rest, sub-02_task-rest"' in html
 
@@ -193,7 +193,7 @@ def test_raw_qc_group_level_reads_the_map(tmp_path):
     qc_cli.main([str(tmp_path / "bids"), str(out), "group", "--roi-mapping",
                  str(_map_file(tmp_path))])
     assert table_under(next(out.glob("*desc-subjects_report.html")), "Regions")[1] == [
-        "L", "0 of 1", "1 of 2"]
+        "L", "0/1", "1/2"]
 
 
 def test_the_pipeline_group_level_reads_the_map(tmp_path):
@@ -201,4 +201,4 @@ def test_the_pipeline_group_level_reads_the_map(tmp_path):
     _shared_tree(out)
     run_group_level({"output_dir": str(out), "roi_mapping": str(_map_file(tmp_path))})
     assert table_under(next(out.glob("*desc-subjects_report.html")), "Regions")[1] == [
-        "L", "0 of 1", "1 of 2"]
+        "L", "0/1", "1/2"]
