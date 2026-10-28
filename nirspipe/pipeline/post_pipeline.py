@@ -484,7 +484,8 @@ def run_post(
         if config.fc:
             _warn_fc_without_bandpass(config)
             fc, fc_roi, fc_seed = _write_fc_derivatives(
-                raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
+                raw_resid, config, output_dir, rec, source_entities=source_entities,
+                known_spans=known_spans, raw_before=result)
 
     elif mode == "rest":
         if config.drift_model is None:
@@ -560,7 +561,8 @@ def run_post(
                                   inputs=glm_inputs(None, aux_path))
 
         alff_df, fc, fc_roi, fc_seed = _write_rest_derivatives(
-            raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
+            raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities,
+            known_spans=known_spans, raw_before=result)
 
     elif mode == "denoise":
         # The regression and the FC are independent here. Either can run without the other,
@@ -600,7 +602,8 @@ def run_post(
             _warn_fc_without_bandpass(config)
             fc, fc_roi, fc_seed = _write_fc_derivatives(
                 raw_resid if raw_resid is not None else result,
-                config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
+                config, output_dir, rec, source_entities=source_entities, known_spans=known_spans,
+                raw_before=result if raw_resid is not None else None)
 
     if config.export_mean_filled:
         # the residual FC reads: the regression's, or the last stage when none ran
@@ -746,6 +749,7 @@ def _write_fc_derivatives(
     known_spans: "list[dict] | None" = None,
     joined_rois: "dict[str, tuple[dict, dict]] | None" = None,
     joined_hbt: "mne.io.BaseRaw | None" = None,
+    raw_before: "mne.io.BaseRaw | None" = None,
 ) -> tuple:
     """Write the FC, ROI FC and seed-map TSVs for one residual.
 
@@ -759,6 +763,11 @@ def _write_fc_derivatives(
     regresses confounds alone, glm regresses the task as well, and denoise passes either its
     own confound residual or, when no regression ran, the bandpassed data itself. The
     distinction lives in the caller, not here.
+
+    ``raw_before`` is the series the regression started from. Its channel matrix is written
+    beside the residual's, named by the stage it was taken on
+    (``chromo-hbo_stat-pearson_desc-filtered_relmat.tsv``), blank wherever the residual's is,
+    so what the regression did to each connection can be read off the two.
     """
     from nirspipe.pipeline.restingstate import (
         _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
@@ -777,6 +786,8 @@ def _write_fc_derivatives(
                                     separation_bands(config))
     empty += hbt_names(empty) if "hbt" in config.chromophores else []
     src_bp = rec.path_of(raw_resid)
+    before_stage = stage_of(raw_before) if raw_before is not None else None
+    before = with_hbt(raw_before, config.chromophores) if before_stage else None
 
     def _path(extra: dict, statistic: str) -> Path:
         """One relationship matrix. What was computed goes in stat-, not in the suffix."""
@@ -816,6 +827,17 @@ def _write_fc_derivatives(
         write_tsv(fc_df, fc_path, index=True, index_label="channel")
         _sidecar(fc_path, "fc", chromophore=chromo)
         logger.info("sub-%s | fc (%s) -> %s", config.subject, chromo, fc_path)
+
+        if before is not None:
+            fc_before = compute_fc(before, chromo).reindex_like(fc_df).where(fc_df.notna())
+            before_path = _path({**chromo_entities, "desc": before_stage}, "pearson")
+            write_tsv(fc_before, before_path, index=True, index_label="channel")
+            write_step_sidecar(before_path, "fc", rec.path_of(raw_before), bads,
+                               excluded_spans=excluded_spans(raw_before, known=known_spans or ()),
+                               chromophores=list(config.chromophores), chromophore=chromo,
+                               **kept)
+            logger.info("sub-%s | fc before the regression (%s) -> %s", config.subject, chromo,
+                        before_path)
 
         fcz_path = _path(chromo_entities, "fisherz")
         write_tsv(fisher_z(fc_df), fcz_path, index=True, index_label="channel")
@@ -884,6 +906,7 @@ def _write_rest_derivatives(
     rec: Recorder,
     source_entities: dict[str, str] | None = None,
     known_spans: "list[dict] | None" = None,
+    raw_before: "mne.io.Raw | None" = None,
 ) -> tuple:
     """Write ALFF/fALFF and everything :func:`_write_fc_derivatives` writes.
 
@@ -941,7 +964,8 @@ def _write_rest_derivatives(
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
     fc, fc_roi, fc_seed = _write_fc_derivatives(
-        raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans)
+        raw_resid, config, output_dir, rec, source_entities=source_entities, known_spans=known_spans,
+        raw_before=raw_before)
     return alff_df, fc, fc_roi, fc_seed
 
 

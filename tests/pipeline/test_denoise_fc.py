@@ -149,3 +149,45 @@ def test_alff_is_not_written_by_the_denoise_mode(haemo, tmp_path):
     out = _denoise(haemo, tmp_path, short_channel="mean", fc=True)
     assert out[_ALFF_DF] is None
     assert _names(tmp_path, "*_stat-alff_nirsmap.tsv") == []
+
+
+# ---- the matrix before the regression ----
+
+def _matrix(path):
+    import pandas as pd
+    return pd.read_csv(path, sep="\t", index_col=0)
+
+
+def test_after_a_regression_the_matrix_before_it_is_written_beside_the_residual_s(haemo, tmp_path):
+    _denoise(haemo, tmp_path / "plain", fc=True)
+    _denoise(haemo, tmp_path / "regressed", short_channel="mean", fc=True)
+    for chromo in ("hbo", "hbr"):
+        before = next((tmp_path / "regressed").rglob(
+            f"sub-01_task-rest_chromo-{chromo}_stat-pearson_desc-filtered_relmat.tsv"))
+        after = next((tmp_path / "regressed").rglob(
+            f"sub-01_task-rest_chromo-{chromo}_stat-pearson_relmat.tsv"))
+        # the bandpassed data with no regression is the same series, correlated the same way
+        plain = next((tmp_path / "plain").rglob(
+            f"sub-01_task-rest_chromo-{chromo}_stat-pearson_relmat.tsv"))
+        b, a, p = _matrix(before), _matrix(after), _matrix(plain)
+        assert list(b.index) == list(a.index)
+        assert b.isna().equals(a.isna()), "blank where the residual's matrix is"
+        assert (b.notna() & ~p.reindex_like(b).isna()).any().any()
+        assert ((b - p.reindex_like(b)).abs().max().max()) < 1e-9
+        sidecar = json.loads(before.with_suffix(".json").read_text())
+        assert sidecar["Sources"][0].endswith("_desc-filtered_nirs.snirf")
+
+
+def test_without_a_regression_there_is_no_before(haemo, tmp_path):
+    _denoise(haemo, tmp_path, fc=True)
+    assert _names(tmp_path, "*_desc-*_relmat.tsv") == []
+
+
+def test_rest_mode_writes_it_too(haemo, tmp_path):
+    config = PostConfig(subject="01", high_pass=0.01, low_pass=0.1, drift_model="cosine",
+                        drift_high_pass=0.01, short_channel="mean", **_BANDS)
+    run_post(haemo.copy(), config, output_dir=tmp_path, mode="rest",
+             source_entities={"task": "rest"})
+    assert _names(tmp_path, "*_desc-filtered_relmat.tsv") == [
+        "sub-01_task-rest_chromo-hbo_stat-pearson_desc-filtered_relmat.tsv",
+        "sub-01_task-rest_chromo-hbr_stat-pearson_desc-filtered_relmat.tsv"]
