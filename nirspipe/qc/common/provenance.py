@@ -68,6 +68,7 @@ def _label(key: str) -> str:
       sub-01_task-rest_desc-preproc_nirs                   -> "preproc"
       sub-01_task-rest_chromo-hbo_stat-pearson_relmat      -> "relmat pearson hbo"
       group-G1_task-rest_chromo-hbo_cond-game1_stat-isc_relmat -> "relmat isc hbo (game1)"
+      group-G1_task-rest_seg-roi_agg-roi_stat-isc_relmat   -> "relmat isc roi"
       sub-01_task-rest_design                              -> "design"
       design_matrix                                        -> "design_matrix"
 
@@ -89,8 +90,10 @@ def _label(key: str) -> str:
         return key
     suffix = "_".join(rest)
     cond = entities.pop("cond", None)
-    qualifiers = [v for k, v in sorted(entities.items(), key=lambda kv: kv[0] not in
-                                       ("stat", "desc")) if k not in _IDENTITY]
+    # a value two entities share is said once: seg-roi_agg-roi is "roi", not "roi roi"
+    qualifiers = list(dict.fromkeys(
+        v for k, v in sorted(entities.items(), key=lambda kv: kv[0] not in ("stat", "desc"))
+        if k not in _IDENTITY))
     if suffix in ("", "nirs"):
         head = entities.get("desc") or suffix or key
     else:
@@ -216,6 +219,8 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
     named nodes drawn on top of each other. With it the graph is that run alone.
     """
     nodes: dict[str, Node] = {}
+    # the dataset each source sits in, read off its BIDS URI, for the roots' second line
+    origins: dict[str, str] = {}
 
     pattern = f"{label}_*.json" if label else "*.json"
     for sidecar in sorted(Path(nirs_dir).glob(pattern)):
@@ -229,6 +234,10 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
         # a channel position table keeps its placement record under its own name
         params = meta.get("parameters") or meta.get("optode_placement") or {}
         data = meta.get("data") or {}
+        for src in meta.get("Sources") or []:
+            parts = str(src).split(":")
+            if parts[0] == "bids" and len(parts) > 2 and parts[1]:
+                origins.setdefault(_key(src), parts[1])
         nodes[key] = Node(
             key=key,
             label=_label(key),
@@ -247,8 +256,10 @@ def scan(nirs_dir: Path, label: str | None = None) -> dict[str, Node]:
     for node in list(nodes.values()):
         for src in node.sources:
             if src not in nodes:
-                # a root has no sidecar to describe it, so the box would carry a bare name
-                nodes[src] = Node(key=src, label=_label(src), detail="raw data")
+                # a root has no sidecar to describe it, so the box would carry a bare name;
+                # a dyad's inputs are the members' preprocessed files, not raw recordings
+                nodes[src] = Node(key=src, label=_label(src),
+                                  detail=f"{origins.get(src, 'raw')} data")
 
     for node in nodes.values():
         node.domain = _domain_of(node.label, is_root=not node.sources and node.step is None)

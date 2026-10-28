@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - The Raw signal, the channel quality grids, the per-channel tables and `desc-channel_qc.tsv` list channels by source then detector number, a pair's two wavelengths side by side
 - With `--events-path`, the run report's epoch figures and per-trial QC read the recording's markers again; the events table feeds only the GLM design
 - Both reports print the DPF as `age 30 (6.30, 5.23)` or the numbers given, where the run report printed `age` and the raw report unrounded factors
+- The provenance graph feeds outputs that share parents through one bar, so no arrow crosses a box; inputs name their dataset, labels repeat no word
 
 ## [0.78.0] - 2026-10-28
 

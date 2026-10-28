@@ -49,8 +49,16 @@ def _fit(text: str, base: float, max_chars: int) -> float:
     return base if longest <= max_chars else base * max_chars / longest
 
 
+def _by_parents(column: list[Node]) -> list[list[Node]]:
+    """The column's nodes grouped by their parents, each group where its first node stood."""
+    groups: dict[tuple, list[Node]] = {}
+    for node in column:
+        groups.setdefault(tuple(sorted(node.sources)), []).append(node)
+    return list(groups.values())
+
+
 def _layout(columns: dict[int, list[Node]]) -> tuple[dict, list[list[str]]]:
-    """Each node's (x, y), and the columns that wrapped, as lists of keys.
+    """Each node's (x, y), and the blocks of the columns that wrapped, as lists of keys.
 
     ::
 
@@ -58,7 +66,8 @@ def _layout(columns: dict[int, list[Node]]) -> tuple[dict, list[list[str]]]:
       a nine-step chain (wider than tall)          ->  one row, as before
 
     Only a tall graph wraps: a wrapped column adds width, which a wide graph already
-    squeezed to the page cannot spare.
+    squeezed to the page cannot spare. A wrapped column is one block per set of parents,
+    each starting a row of its own, so no arrow into one block crosses another.
     """
     width = max(columns) * _X_GAP + _BOX_W
     height = (max(len(c) for c in columns.values()) - 1) * _Y_GAP + _BOX_H
@@ -68,14 +77,18 @@ def _layout(columns: dict[int, list[Node]]) -> tuple[dict, list[list[str]]]:
     for depth in sorted(columns):
         column = columns[depth]
         k = math.ceil(len(column) / _MAX_ROWS) if height > width else 1
-        rows = math.ceil(len(column) / k)
-        for i, node in enumerate(column):
-            # a row at a time, so a short last row sits at the left like text; centred
-            # vertically so the trunk of the graph stays level
-            row, j = divmod(i, k)
-            pos[node.key] = (x + j * _SUB_GAP, ((rows - 1) / 2 - row) * _Y_GAP)
-        if k > 1:
-            blocks.append([n.key for n in column])
+        groups = _by_parents(column) if k > 1 else [column]
+        rows = sum(math.ceil(len(group) / k) for group in groups)
+        first = 0
+        for group in groups:
+            for i, node in enumerate(group):
+                # a row at a time, so a short last row sits at the left like text; centred
+                # vertically so the trunk of the graph stays level
+                row, j = divmod(i, k)
+                pos[node.key] = (x + j * _SUB_GAP, ((rows - 1) / 2 - first - row) * _Y_GAP)
+            first += math.ceil(len(group) / k)
+            if k > 1:
+                blocks.append([n.key for n in group])
         x += _X_GAP + (k - 1) * _SUB_GAP
     return pos, blocks
 
@@ -98,9 +111,15 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         return None
 
     columns: dict[int, list[Node]] = {}
-    # a QC record goes last in its column: it draws no edge and joins no bundle
-    for node in sorted(nodes.values(), key=lambda n: (n.depth, n.checkpoint, n.label)):
-        columns.setdefault(node.depth, []).append(node)
+    last = max(n.depth for n in nodes.values())
+    # a QC record goes last in its column: it draws no edge and joins no bundle. An output
+    # whose sidecar names no parents joins the outputs rather than standing among the inputs
+    def column_of(node: Node) -> int:
+        return last if node.step is not None and not node.sources else node.depth
+
+    for node in sorted(nodes.values(),
+                       key=lambda n: (column_of(n), not n.sources, n.checkpoint, n.label)):
+        columns.setdefault(column_of(node), []).append(node)
 
     pos, blocks = _layout(columns)
     in_block = {key: i for i, block in enumerate(blocks) for key in block}
@@ -124,7 +143,8 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
         block = in_block.get(node.key)
         fed = ([k for k in blocks[block] if not nodes[k].checkpoint]
                if block is not None else [])
-        shared = bool(fed) and len({tuple(sorted(nodes[k].sources)) for k in fed}) == 1
+        # a block of one box takes its arrows straight in
+        shared = len(fed) > 1 and len({tuple(sorted(nodes[k].sources)) for k in fed}) == 1
         for src in node.sources:
             if src not in pos:
                 continue

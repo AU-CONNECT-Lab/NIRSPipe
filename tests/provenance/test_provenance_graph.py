@@ -68,6 +68,7 @@ def test_empty_directory_yields_no_nodes(tmp_path):
     ("sub-01_task-tapping_stat-alff_nirsmap", "nirsmap alff"),
     ("sub-01_task-tapping_desc-glm_nirsmap", "nirsmap glm"),
     ("group-G1_task-rest_chromo-hbo_cond-game1_stat-isc_relmat", "relmat isc hbo (game1)"),
+    ("group-G1_task-rest_seg-roi_agg-roi_stat-isc_relmat", "relmat isc roi"),  # said once
     ("sub-01_task-tapping_design", "design"),               # nothing past who it belongs to
     ("design_matrix", "design_matrix"),                     # no BIDS entities at all
 ])
@@ -273,6 +274,15 @@ def test_a_root_says_it_is_the_recording(tmp_path):
     assert scan(tmp_path)["sub-01_task-tapping_nirs"].detail == "raw data"
 
 
+@pytest.mark.parametrize("dataset, expected", [("raw", "raw data"),
+                                                ("preprocessed", "preprocessed data")])
+def test_a_root_names_the_dataset_its_uri_points_into(tmp_path, dataset, expected):
+    # a dyad reads its members' residuals out of the preprocessing tree, not raw recordings
+    _sidecar(tmp_path, "group-1_task-x_stat-isc_relmat", step="hyper_isc",
+             sources=[f"bids:{dataset}:sub-01/nirs/sub-01_task-x_desc-errts_nirs.snirf"])
+    assert scan(tmp_path)["sub-01_task-x_desc-errts_nirs"].detail == expected
+
+
 # ---- a checkpoint is a node, not a step ----
 
 def _chain_plus_record(directory):
@@ -445,6 +455,37 @@ def test_a_tall_fan_wraps_into_a_grid_fed_by_one_arrow_per_parent():
     out_x = [round(x, 6) for name, (x, _) in _boxes(fig).items() if name.startswith("out")]
     assert len(set(out_x)) == 4 and all(out_x.count(x) == 5 for x in set(out_x))
     assert _arrows(fig) == 2
+
+
+def test_a_wrapped_column_gives_each_set_of_parents_rows_of_its_own():
+    from nirspipe.qc.common.provenance import Node
+    from nirspipe.qc.figures.common.provenance_figure import provenance_figure
+
+    nodes = {k: Node(k, k) for k in ("a", "b", "c", "d")}
+    nodes["chan"] = Node("chan", "chan", step="s", sources=["a", "b"], depth=1)
+    nodes.update({f"out{i}": Node(f"out{i}", f"out{i}", step="s", sources=["c", "d"], depth=1)
+                  for i in range(9)})
+    fig = provenance_figure(nodes)
+
+    boxes = _boxes(fig)
+    assert all(boxes[f"out{i}"][1] != pytest.approx(boxes["chan"][1]) for i in range(9))
+    # two arrows straight into the lone box, one per parent into the bar of the nine,
+    # where every box took one arrow per parent
+    assert _arrows(fig) == 4
+
+
+def test_an_output_whose_sidecar_names_no_parents_sits_last_among_the_outputs():
+    from nirspipe.qc.common.provenance import Node
+    from nirspipe.qc.figures.common.provenance_figure import provenance_figure
+
+    nodes = {k: Node(k, k) for k in ("a", "b")}
+    nodes["bad"] = Node("bad", "bad", step="hyper_bads")
+    nodes.update({f"out{i}": Node(f"out{i}", f"out{i}", step="s", sources=["a", "b"], depth=1)
+                  for i in range(3)})
+    boxes = _boxes(provenance_figure(nodes))
+
+    assert boxes["bad"][0] == pytest.approx(boxes["out0"][0])
+    assert boxes["bad"][1] < min(boxes[f"out{i}"][1] for i in range(3))
 
 
 def test_a_long_chain_stays_one_row():
