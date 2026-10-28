@@ -152,6 +152,16 @@ def test_the_panel_rows_share_one_channel_order():
     assert list(heat.x) == list(strip["ticktext"])
 
 
+def test_the_panel_orders_channels_by_source_then_detector_number():
+    """S2_D9 before S2_D10 and S9 before S10, which string order gets backwards."""
+    pairs = ["S10_D1", "S2_D10", "S1_D1", "S2_D9", "S9_D2"]
+    alff = pd.DataFrame({"channel": [f"{p} hbo" for p in pairs], "alff": np.arange(5.0),
+                         "falff": np.arange(5.0) / 10})
+    fig = rest_channel_panel({"hbo": _fc_frame(pairs, "hbo")}, alff)
+    heat = next(t for t in fig.data if t.type == "heatmap")
+    assert list(heat.x) == ["S1_D1", "S2_D9", "S2_D10", "S9_D2", "S10_D1"]
+
+
 def test_a_rejected_channel_sits_below_the_measured_range_not_on_zero():
     """A channel whose amplitude really is near zero belongs on the axis; if the two land on
     the same row a reader cannot tell a dead channel from a rejected one."""

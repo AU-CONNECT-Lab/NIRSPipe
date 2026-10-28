@@ -23,7 +23,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from nirspipe.utils import pair_of
+from nirspipe.utils import pair_of, pair_order
 from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 
 # The separation groups, in the order they are drawn. "mid" is the 10-15 mm gap that
@@ -81,7 +81,7 @@ def _pair_group(raw_haemo: mne.io.Raw, sep_bands=None) -> "dict[str, str]":
 
 
 def _channel_order(raw_haemo: mne.io.Raw, groups: "dict[str, str]") -> "list[str]":
-    """HbO block then HbR block, each sorted by separation group then name.
+    """HbO block then HbR block, each sorted by separation group then source and detector number.
 
     The two blocks end up carrying the same pair order, so a cell in the HbO × HbR corner
     sits at the crossing of one pair's two rows.
@@ -90,7 +90,7 @@ def _channel_order(raw_haemo: mne.io.Raw, groups: "dict[str, str]") -> "list[str
     names = [n for n in raw_haemo.ch_names if n.endswith(("hbo", "hbr"))]
     return sorted(names, key=lambda n: (n.endswith("hbr"),
                                         rank.get(groups.get(pair_of(n), "mid"), 9),
-                                        pair_of(n)))
+                                        pair_order(n)))
 
 
 def _stage(raw: mne.io.Raw, order: "list[str]"):

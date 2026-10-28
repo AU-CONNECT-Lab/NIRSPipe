@@ -1,5 +1,6 @@
 """Shared utilities."""
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +48,15 @@ def pair_of(ch: Any) -> str:
     "S1_D1 760" -> "S1_D1",  "S1_D1 hbo" -> "S1_D1",  "S1_D1" -> "S1_D1"
     """
     return str(ch).rsplit(" ", 1)[0]
+
+
+def pair_order(ch: Any) -> tuple:
+    """A sort key that orders pairs by source then detector number, S2_D9 before S2_D10.
+
+    "S10_D1 hbo" -> (0, 10, 1, "");  a name not of the S<n>_D<n> form sorts after, by text.
+    """
+    m = re.fullmatch(r"S(\d+)_D(\d+)", pair_of(ch))
+    return (0, int(m[1]), int(m[2]), "") if m else (1, 0, 0, pair_of(ch))
 
 
 def fisher_r_to_z(r: Any) -> np.ndarray:

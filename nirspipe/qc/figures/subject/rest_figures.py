@@ -26,7 +26,7 @@ from plotly.subplots import make_subplots
 
 from nirspipe.pipeline.chromophores import chroma_channels, chroma_of
 from nirspipe.qc.common.figure_io import fig_png_b64, stack_png_b64
-from nirspipe.utils import pair_of
+from nirspipe.utils import pair_of, pair_order
 from nirspipe.utils.logging import get_logger
 
 from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
@@ -62,8 +62,8 @@ _ROI_STRIP = (-1.35, -0.8)
 def _pair_blocks(pairs, raw, sep_bands):
     """The panel's channel order: ``(pairs, x positions, block spans)``.
 
-    Grouped by separation and sorted by name inside a group, which is the per-channel
-    table's order.
+    Grouped by separation and, inside a group, by source then detector number, the order
+    most montages are recorded in and so the per-channel table's.
 
     Without ``raw`` there is no separation to block by and the pairs are one list, which is
     what a caller holding only the tables can draw.
@@ -82,7 +82,7 @@ def _pair_blocks(pairs, raw, sep_bands):
 
     order, xs, spans, x = [], [], [], 0.0
     for key, label in blocks:
-        members = sorted(groups.get(key, []))
+        members = sorted(groups.get(key, []), key=pair_order)
         if not members:
             continue
         start = x
@@ -250,7 +250,7 @@ def rest_channel_panel(
     if not frames:
         return None
 
-    pairs = sorted({pair_of(c) for f in frames.values() for c in f.columns})
+    pairs = sorted({pair_of(c) for f in frames.values() for c in f.columns}, key=pair_order)
     measured = []
     for chromo, frame in frames.items():
         names = [f"{p} {chromo}" for p in pairs]
