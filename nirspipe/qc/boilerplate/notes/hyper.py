@@ -71,6 +71,11 @@ NOTES = {
         "A channel set over each member&rsquo;s column; hover a label for its meaning. "
         "<b>Mean GVTD</b> is the member&rsquo;s GVTD over its own median, before &rarr; "
         "after correction.",
+    "hyper_raw.regions":
+        "Each member&rsquo;s long channels kept in each region of "
+        "<code>--roi-mapping</code>, out of those the map lists; hover a cell for the rejected "
+        "ones. A region a member keeps none of drops out of every region output on that "
+        "member&rsquo;s side.",
     "hyper_raw.group_sqm":
         "The dyad&rsquo;s own numbers, a column per channel set; a pair is good when every "
         "member kept it. <b>Both at once</b> is GVTD where both members moved together, "

@@ -28,7 +28,7 @@ from nirspipe.pipeline.hyper.wtc import WTCResult
 from nirspipe.pipeline.hyper.roi import roi_maps_from_channels
 from nirspipe.qc.common.channel_table import (
     WAVELENGTH_COLUMNS, channel_columns, channel_rows, format_rows, pair_rows, pair_wavelengths,
-    roi_overlap_note,
+    region_table, roi_overlap_note,
 )
 from nirspipe.qc.boilerplate import collect_software_versions, generate_methods_text
 from nirspipe.qc.boilerplate.notes import section_note
@@ -752,6 +752,43 @@ def decision_rows(sqm_data: dict, subject_ids: list[str]) -> list[dict]:
             for pair, sep in order]
 
 
+def dyad_region_table(sqm_data: dict, subject_ids: list[str],
+                      roi_map: "dict | None") -> dict:
+    """Each ``--roi-mapping`` region's long channels kept, a column per member: ``{"rows", "notes"}``.
+
+    ::
+
+      -> {"rows": [{"region": "r_tpj",
+                    "cells": [{"text": "5 of 5", "cls": "", "rejected": ""},
+                              {"text": "0 of 5", "cls": "bad", "rejected": "S10_D10, ..."}]}],
+          "notes": ["sub-201: listed but not counted ... S5_D5 (short)."]}
+
+    Read from each member's raw QC record, under the verdicts its own channel table shows.
+    """
+    if not roi_map:
+        return {"rows": [], "notes": []}
+    tables, notes = {}, []
+    for sid in subject_ids:
+        member = sqm_data.get(sid) or {}
+        rows = channel_rows({"per_channel": member.get("per_channel") or {}},
+                            (member.get("per_channel_all") or {}).get("sci_per_channel") or {},
+                            member.get("bad_channels") or [])
+        table = region_table(rows, roi_map)
+        tables[sid] = {row["region"]: row for row in table["rows"]}
+        if table["not_counted"]:
+            notes.append(f"{sid}: " + section_note("metrics.regions_not_counted",
+                                                   pairs=table["not_counted"]))
+
+    def cell(row: dict) -> dict:
+        return {"text": f"{row['kept']} of {row['listed']}", "cls": "" if row["kept"] else "bad",
+                "rejected": ", ".join(row["rejected"])}
+
+    return {"rows": [{"region": str(region),
+                      "cells": [cell(tables[sid][str(region)]) for sid in subject_ids]}
+                     for region in roi_map],
+            "notes": notes}
+
+
 def decision_wavelengths(sqm_data: dict, subject_ids: list[str]) -> list[str]:
     """The wavelengths the channel table's header names: the members', when they agree."""
     found = {tuple(pair_wavelengths([{"name": ch} for ch in
@@ -853,6 +890,7 @@ def build_hyper_report(
         wavelength_columns=WAVELENGTH_COLUMNS,
         decision_rows_json=json.dumps(
             decision_rows(sqm_data, meta["subject_ids"]), default=str),
+        regions=dyad_region_table(sqm_data, subject_ids, roi_map),
         channels_tsv_notes=[
             section_note("hyper_raw.channels_tsv", sid=sid, pairs=", ".join(pairs))
             for sid in subject_ids

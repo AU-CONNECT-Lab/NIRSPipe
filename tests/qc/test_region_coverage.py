@@ -92,3 +92,49 @@ def test_the_raw_report_carries_the_same_table(tmp_path):
         ("front", 1, 2, ["S1_D1"]), ("back", 1, 2, ["S3_D3"]), ("scalp", 0, 0, [])]
     assert "S5_D5 (short)" in data["regions"]["note"]
     assert (html.index('<section id="Regions"') < html.index('<section id="Channels"'))
+
+
+# ---- a dyad's members side by side ----
+
+def _member(bad: tuple) -> dict:
+    """A member's raw QC record: three long pairs and the short S5_D5, ``bad`` rejected."""
+    long_names = [f"{p} {wl}" for p in ("S1_D1", "S2_D2", "S3_D3") for wl in (760, 850)]
+    short_names = ["S5_D5 760", "S5_D5 850"]
+    return {"per_channel": {"raw_long": {"sci_per_channel": dict.fromkeys(long_names, 0.9)},
+                            "raw_short": {"sci_per_channel": dict.fromkeys(short_names, 0.9)}},
+            "per_channel_all": {"sci_per_channel": dict.fromkeys(long_names + short_names, 0.9)},
+            "bad_channels": [f"{p} {wl}" for p in bad for wl in (760, 850)]}
+
+
+def test_the_dyad_table_puts_each_member_s_count_side_by_side():
+    from nirspipe.qc.hyper.hyper_report import dyad_region_table
+
+    got = dyad_region_table({"sub-01": _member(()), "sub-02": _member(("S1_D1", "S3_D3"))},
+                            ["sub-01", "sub-02"],
+                            {"front": ["S1_D1", "S2_D2"], "back": ["S3_D3"], "scalp": ["S5_D5"]})
+    assert got["rows"] == [
+        {"region": "front", "cells": [{"text": "2 of 2", "cls": "", "rejected": ""},
+                                      {"text": "1 of 2", "cls": "", "rejected": "S1_D1"}]},
+        {"region": "back", "cells": [{"text": "1 of 1", "cls": "", "rejected": ""},
+                                     {"text": "0 of 1", "cls": "bad", "rejected": "S3_D3"}]},
+        {"region": "scalp", "cells": [{"text": "0 of 0", "cls": "bad", "rejected": ""}] * 2},
+    ]
+    assert [n.split(":")[0] for n in got["notes"]] == ["sub-01", "sub-02"]
+    assert all(n.endswith("S5_D5 (short).") for n in got["notes"])
+
+
+def test_the_dyad_raw_page_prints_the_members_side_by_side(mini_hyper_bids, tmp_path):
+    from tests._raw_qc import raw_qc
+
+    bids, pairs = mini_hyper_bids
+    roi = tmp_path / "roi.json"
+    roi.write_text(json.dumps({"front": ["S1_D1", "S2_D2"], "back": ["S3_D3", "S4_D4"]}))
+    out = tmp_path / "qc"
+    raw_qc(bids, out, pairs, group=("--task-label", "hold", "--roi-mapping", str(roi)))
+    (page,) = (out / "group-G01").glob("group-G01_task-hold_desc-raw_report.html")
+    # S3_D3 does not couple in either member's recording
+    assert table_under(page, "Region coverage") == [
+        ["Region", "sub-11", "sub-12"],
+        ["front", "2 of 2", "2 of 2"],
+        ["back", "1 of 2", "1 of 2"],
+    ]

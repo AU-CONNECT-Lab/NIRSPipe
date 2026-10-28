@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - The cohort page lists each optode's share of its long channels rejected, pooled over each task's runs
 - With `--roi-mapping`, the run report lists each region's long channels kept and the rejected ones, naming listed pairs that are not long channels
 - With `--roi-mapping`, the raw report lists each region's long channels kept, as the run report does
+- With `--roi-mapping`, the dyad raw page lists each member's long channels kept per region, side by side
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed

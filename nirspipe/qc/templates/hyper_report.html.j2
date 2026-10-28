@@ -249,6 +249,25 @@
 </section>
 {% endif %}
 
+{% if regions and regions.rows %}
+<section id="Regions" class="step">
+  <h3 class="step-title">Region coverage</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('hyper_raw.regions') }}</p>
+    <table class="qm-table qm-flat" id="region-table">
+      <thead><tr><th>Region</th>{% for sid in subject_ids %}<th>{{ sid }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {%- for row in regions.rows %}
+        <tr><td>{{ row.region }}</td>
+          {%- for cell in row.cells %}<td class="qv {{ cell.cls }}"{% if cell.rejected %} title="Rejected: {{ cell.rejected }}"{% endif %}>{{ cell.text }}</td>{% endfor %}</tr>
+      {%- endfor %}
+      </tbody>
+    </table>
+    {% for line in regions.notes %}<p class="qm-note">{{ line }}</p>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <section id="hyper-decisions-card" class="step">
   <h3 class="step-title">Channel decisions</h3>
   <div class="details-body">
