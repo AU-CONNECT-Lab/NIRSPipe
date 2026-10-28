@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - The channel quality grids carry a PSP colour bar when PSP has no line
 - Runs that compute FC after a regression also write the channel matrix of the series before it (`stat-pearson_desc-filtered_relmat.tsv`)
 - The cohort page draws, per task, every run's connectivity values before and after the regression
-- The cohort tree writes `desc-fcmovement_qc.tsv`: each connection's r, across a task's runs, between head movement and its FC
+- The cohort page draws each connection's r between head movement and FC across a task's runs, beside the spread with no relation and against distance, and writes them to `desc-fcmovement_qc.tsv`
 
 ### Changed
 - The heart rate no longer reads the pulse's second harmonic, which it often did below about 75 bpm

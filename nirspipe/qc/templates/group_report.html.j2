@@ -64,6 +64,7 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
 {% endif %}
 {% set _ = _sections.append(("Windowed", "Over time")) %}
 {% if figure_paths.fcdistribution %}{% set _ = _sections.append(("Connectivity", "Connectivity")) %}{% endif %}
+{% if figure_paths.fcmovement %}{% set _ = _sections.append(("FCMovement", "Against movement")) %}{% endif %}
 {% set _ = _sections.append(("Outliers", "Outliers")) %}
 {% set _ = _sections.append(("Metrics", "Quality Metrics")) %}
 {% if regions %}{% set _ = _sections.append(("Regions", "Regions")) %}{% endif %}
@@ -206,6 +207,17 @@ table.group-table th .sort-ind { color: var(--faint); font-size: 0.7rem; margin-
     <p class="step-desc">{{ section_note('group.fc_distribution') }}</p>
     <iframe class="plot-frame" src="{{ figure_paths.fcdistribution.src }}"
             style="height:{{ figure_paths.fcdistribution.h }}px"></iframe>
+  </div>
+</section>
+{% endif %}
+
+{% if figure_paths.fcmovement %}
+<section id="FCMovement" class="step">
+  <h3 class="step-title">Connectivity against movement</h3>
+  <div class="details-body">
+    <p class="step-desc">{{ section_note('group.fc_movement', min_runs=fc_movement_min_runs) }}</p>
+    <iframe class="plot-frame" src="{{ figure_paths.fcmovement.src }}"
+            style="height:{{ figure_paths.fcmovement.h }}px"></iframe>
   </div>
 </section>
 {% endif %}

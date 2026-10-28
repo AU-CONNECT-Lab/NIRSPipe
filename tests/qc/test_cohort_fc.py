@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nirspipe.qc.figures.subject.group_figures import build_fc_distributions
+from nirspipe.qc.figures.subject.group_figures import build_fc_distributions, build_fc_movement
 from nirspipe.qc.subject.group_writer import build_group_raw_report, fc_distributions
 from nirspipe.qc.subject.record_io import write_record
 
@@ -169,3 +169,31 @@ def test_the_page_writes_the_table_with_its_column_descriptions(tmp_path):
     assert sorted(table["chromophore"]) == ["hbo", "hbr"]
     sidecar = json.loads((tmp_path / "desc-fcmovement_qc.json").read_text())
     assert set(sidecar) == set(table.columns)
+
+
+def test_the_figure_counts_connections_beside_the_spread_with_no_relation():
+    # ten HbO connections over seven runs: with no relation arctanh r ~ N(0, 1/4), whose
+    # density at r = 0 is 2 / sqrt(2 pi) = 0.798; ten connections in bins of 0.05 -> 0.399
+    table = pd.DataFrame({"task": "task-rest", "chromophore": "hbo",
+                          "channel_a": [f"S{k}_D1" for k in range(10)], "channel_b": "S20_D20",
+                          "n_runs": 7, "r": np.linspace(-0.45, 0.45, 10),
+                          "distance_mm": np.linspace(20, 110, 10)})
+    fig = build_fc_movement(table)
+    bars = [t for t in fig.data if t.type == "bar"]
+    assert len(bars) == 1 and sum(bars[0].y) == 10
+    curve = next(t for t in fig.data if t.name == "no relation, 7 runs")
+    at_zero = float(np.interp(0.0, curve.x, curve.y))
+    assert at_zero == pytest.approx(0.399, abs=0.002)
+    dots = next(t for t in fig.data if t.type == "scatter" and t.mode == "markers")
+    assert list(dots.x) == list(table["distance_mm"]) and list(dots.y) == list(table["r"])
+    assert build_fc_movement(table.iloc[0:0]) is None
+
+
+def test_the_page_draws_the_movement_section(tmp_path):
+    z = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+    _movement_tree(tmp_path, [1.0, 2.0, 3.0, 4.0, 5.0],
+                   lambda k: {("S1_D1", "S2_D2"): np.tanh(z[k])})
+    html = build_group_raw_report(tmp_path).read_text(encoding="utf-8")
+    assert '<section id="FCMovement"' in html and 'href="#FCMovement"' in html
+    assert "figures/desc-fcmovement_nirs.html" in html
+    assert "at least 5 runs" in html

@@ -25,6 +25,7 @@ from nirspipe.qc.figures.subject.group_figures import (
     build_condition_panels,
     build_deviation_strip,
     build_fc_distributions,
+    build_fc_movement,
     build_grouped_boxes,
     build_window_grid,
     check_only,
@@ -714,6 +715,7 @@ def _render_group(
     with guard("Connectivity against movement", errors, out_desc):
         fc_movement = fc_against_movement(output_dir, full_rows)
         _write_fc_movement(output_dir, fc_movement)
+        _save("fcmovement", "fcmovement", build_fc_movement(fc_movement))
 
     for task in swapped_label_tasks(full_rows):
         msg = section_note("caveat.labels_swapped", task=task["task"], k=len(task["runs"]),
@@ -747,6 +749,7 @@ def _render_group(
         headline_rows=_headline_rows(df) if not df.empty else [],
         small_cohort=0 < len(df) < SMALL_COHORT_N,
         score_threshold=SCORE_THRESHOLD,
+        fc_movement_min_runs=FC_MOVEMENT_MIN_RUNS,
         smooth_s=SMOOTH_S,
         sci_window_s=SCI_WINDOW_S,
         conditions=conditions,

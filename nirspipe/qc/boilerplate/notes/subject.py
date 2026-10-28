@@ -426,6 +426,15 @@ NOTES = {
         "them where they were. Read from each run&rsquo;s channel matrices, the one before the "
         "regression ending in <code>_desc-filtered_relmat.tsv</code>; runs without a "
         "regression are left out.",
+    "group.fc_movement":
+        "Every connection between two kept long channels that at least {min_runs} runs of the "
+        "task share, its r across those runs between each run&rsquo;s head movement (GVTD "
+        "band-passed to the movement band, averaged over its long channels) and the "
+        "connection&rsquo;s connectivity (Fisher z). Left, how many connections reach each r; "
+        "the dotted curve is how r spreads over that many runs when the two are unrelated, so "
+        "connections well right of it rise with movement and well left of it fall. Right, the "
+        "same r against the distance between the two channels. Descriptive, no test. Every "
+        "value is in <code>desc-fcmovement_qc.tsv</code>.",
     "group.regions":
         "For each region of the <code>--roi-mapping</code> given at this level, the runs of the "
         "task that kept none of its long channels, out of the runs of the task; hover a count "

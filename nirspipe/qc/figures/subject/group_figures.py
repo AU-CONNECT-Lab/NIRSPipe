@@ -998,3 +998,71 @@ def build_fc_distributions(by_task: dict) -> "go.Figure | None":
                       margin=dict(t=40, l=60, r=40, b=50))
     return fig
 
+
+# the connections' r are counted in bins this wide
+FC_MOVEMENT_BIN = 0.05
+
+
+def no_relation_density(r: np.ndarray, n_runs: int) -> np.ndarray:
+    """The density r takes across ``n_runs`` runs when the two measures are unrelated (Fisher: arctanh r ~ N(0, 1/(n - 3)))."""
+    sd = 1.0 / np.sqrt(n_runs - 3)
+    z = np.arctanh(r)
+    return np.exp(-0.5 * (z / sd) ** 2) / (sd * np.sqrt(2 * np.pi)) / (1 - r ** 2)
+
+
+def build_fc_movement(table: pd.DataFrame) -> "go.Figure | None":
+    """Each connection's r with movement: counted by r beside the spread with no relation, and against the channels' distance; a row per task.
+
+    ``table`` is :func:`~nirspipe.qc.subject.group_writer.fc_against_movement`. None when
+    it is empty.
+    """
+    if table.empty:
+        return None
+    tasks = sorted(table["task"].unique())
+    fig = make_subplots(
+        rows=len(tasks), cols=2, column_widths=[0.45, 0.55], horizontal_spacing=0.1,
+        vertical_spacing=min(0.12, 0.4 / len(tasks)),
+        subplot_titles=[t for task in tasks
+                        for t in (f"{task}: connections by r", "r against distance")])
+    edges = np.arange(-1.0, 1.0 + FC_MOVEMENT_BIN / 2, FC_MOVEMENT_BIN)
+    for i, task in enumerate(tasks, 1):
+        rows = table[table["task"] == task]
+        tallest = 0
+        for chroma, (label, colour) in CHROMA_STYLE.items():
+            part = rows[rows["chromophore"] == chroma]
+            if part.empty:
+                continue
+            counts, _ = np.histogram(part["r"], edges)
+            tallest = max(tallest, len(part))
+            fig.add_trace(go.Bar(
+                x=(edges[:-1] + edges[1:]) / 2, y=counts, width=FC_MOVEMENT_BIN, name=label,
+                legendgroup=chroma, showlegend=(i == 1), marker_color=colour, opacity=0.55,
+                hovertemplate=f"{label}: %{{y}} connections at r %{{x:.2f}}<extra></extra>"),
+                row=i, col=1)
+            fig.add_trace(go.Scatter(
+                x=part["distance_mm"], y=part["r"], mode="markers", name=label,
+                legendgroup=chroma, showlegend=False,
+                marker=dict(color=colour, size=5, opacity=0.6),
+                text=part["channel_a"] + " – " + part["channel_b"] + ", " + part["n_runs"].astype(str) + " runs",
+                hovertemplate="%{text}<br>r %{y:.2f}, %{x:.0f} mm<extra></extra>"), row=i, col=2)
+        n_runs = int(rows["n_runs"].median())
+        r = np.linspace(-0.995, 0.995, 399)
+        fig.add_trace(go.Scatter(
+            x=r, y=no_relation_density(r, n_runs) * tallest * FC_MOVEMENT_BIN, mode="lines",
+            name=f"no relation, {n_runs} runs", line=dict(color="#555", width=1.5, dash="dot"),
+            hoverinfo="skip"), row=i, col=1)
+        fig.update_xaxes(range=[-1, 1], title_text="r between movement and FC", row=i, col=1)
+        fig.update_yaxes(title_text="connections", row=i, col=1)
+        fig.update_xaxes(title_text="distance between the channels (mm)", row=i, col=2)
+        fig.update_yaxes(range=[-1, 1], title_text="r", row=i, col=2)
+    fig.update_xaxes(gridcolor="#f0f0f0", zeroline=False)
+    fig.update_yaxes(gridcolor="#f0f0f0", zeroline=False)
+    fig.update_annotations(font_size=11)
+    height = 110 + 330 * len(tasks)
+    # top right, in the margin above the first row's titles
+    fig.update_layout(barmode="overlay", height=height, plot_bgcolor="white",
+                      paper_bgcolor="white", margin=dict(t=90, l=60, r=30, b=50),
+                      legend=dict(orientation="h", x=1, xanchor="right", yanchor="bottom",
+                                  y=1 + 45 / (height - 140)))
+    return fig
+
