@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from nirspipe.qc.figures.common._utils import HEART_RATE_COLOR
-from tests._fingerprint import CARDIAC_FREQ, CLI_ARGS, SYSTEMIC_FREQ
+from tests._fingerprint import BLOCKS, CARDIAC_FREQ, CLI_ARGS, SYSTEMIC_FREQ
 from tests.figure_accuracy._payload import one_figure
 from tests.figure_accuracy._read import traces, xy
 
@@ -79,6 +79,28 @@ def test_the_summary_names_the_planted_heart_rate(denoise_run):
     assert float(hz) == pytest.approx(CARDIAC_FREQ, abs=0.05)
     assert int(bpm) == pytest.approx(CARDIAC_FREQ * 60, abs=3)
     assert "outside the cardiac band" not in html
+
+
+def test_the_run_page_shows_the_raw_viewer_s_mean_spectrum(denoise_run, raw_viewer_run):
+    # one recording through one builder; the raw viewer's own tests check it against Welch
+    ours, theirs = (one_figure(run.figure("rawpsd")) for run in (denoise_run, raw_viewer_run))
+    lines = {t["name"]: xy(t) for t in ours["data"] if t.get("name")}
+    assert {name.split(" (")[0] for name in lines} == {"Long channels", "Short channels"}
+    for trace in theirs["data"]:
+        if trace.get("name"):
+            np.testing.assert_allclose(lines[trace["name"]], xy(trace), rtol=1e-9)
+    marks = [s["x0"] for s in ours["layout"]["shapes"] if s["type"] == "line"]
+    assert marks == [pytest.approx(CARDIAC_FREQ, abs=0.05)]
+
+
+def test_the_mean_spectrum_sits_under_the_raw_signal_and_off_the_condition_pages(
+        denoise_run, condition_run):
+    html = denoise_run.report.read_text(encoding="utf-8")
+    raw, spectrum, detail = (html.index(s) for s in (
+        'id="RawSignal"', "desc-rawpsd_nirs.html", "Per-channel HbO / HbR"))
+    assert raw < spectrum < detail
+    page = condition_run.report.parent / f"sub-01_task-main_cond-{BLOCKS[0][0]}_report.html"
+    assert "desc-rawpsd" not in page.read_text(encoding="utf-8")
 
 
 def test_the_bands_are_the_ones_the_run_was_given(psd):

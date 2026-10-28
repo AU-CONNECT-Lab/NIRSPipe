@@ -128,6 +128,7 @@ from nirspipe.qc.figures import (
     build_channel_figure,
     build_evoked_topo_figure,
     build_motion_detail_figure,
+    build_psd_mean_figure,
     build_ts_figure,
     channel_quality_heatmap,
     condition_quality_heatmap,
@@ -522,6 +523,30 @@ def _section_raw_overview(
         out["raw_overview_path"] = _fig_href(fname)
         out["raw_overview_markers"] = [
             {k: m[k] for k in ("description", "onset", "duration", "color")} for m in markers]
+    return out
+
+
+def _section_raw_psd(
+    raw_intensity: mne.io.Raw,
+    config: Any,
+    heart_rate: "float | None",
+    subject: str,
+    errors: list,
+    figures_dir: Path,
+    fig_name,
+    sep_bands=None,
+) -> dict:
+    """The raw report's mean spectrum of the light, read for the pulse before conversion."""
+    out = {"raw_psd_path": None, "raw_psd_h": 0}
+    with _guard("Mean PSD", errors, subject):
+        fig = build_psd_mean_figure(raw_intensity,
+                                    cardiac=(config.cardiac_l_freq, config.cardiac_h_freq),
+                                    resp=(config.resp_l_freq, config.resp_h_freq),
+                                    sep_bands=sep_bands, heart_rate=heart_rate)
+        if fig is not None:
+            fname = fig_name("rawpsd")
+            out["raw_psd_h"] = _save_figure_html(fig, figures_dir / fname)
+            out["raw_psd_path"] = _fig_href(fname)
     return out
 
 
@@ -2482,6 +2507,8 @@ def build_subject_report(
     hr_note = heart_rate_note(heart_rate, (config.cardiac_l_freq, config.cardiac_h_freq))
     if hr_note:
         _note(notes, subject, hr_note)
+    raw_psd_vars      = _section_raw_psd(raw_intensity, config, heart_rate, subject, errors,
+                                         figures_dir, fig_name, sep_bands=sep_bands)
     trigger_vars      = _section_trigger_timeline(raw_intensity, subject, errors,
                                                   figures_dir, fig_name)
     run_cutoffs       = resolve_cutoffs(config)
@@ -2561,6 +2588,7 @@ def build_subject_report(
         **topomap_vars,
         **haemo_vars,
         **overview_vars,
+        **raw_psd_vars,
         **channel_det_vars,
         **psd_det_vars,
         **sqm_vars,
@@ -2596,7 +2624,7 @@ def build_subject_report(
             _write_condition_reports(
                 report_vars,
                 section_vars=(sci_vars, motion_vars, motion_det_vars, trial_image_vars,
-                              topomap_vars, haemo_vars, overview_vars,
+                              topomap_vars, haemo_vars, overview_vars, raw_psd_vars,
                               channel_det_vars, psd_det_vars,
                               brain_vars, epoch_vars, trigger_vars, trial_qc_vars,
                               glm_vars, rest_vars, carpet_vars, cond_summary_vars,

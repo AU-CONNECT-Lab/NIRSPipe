@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The cohort page draws each connection's r between head movement and FC across a task's runs, beside the spread with no relation and against distance, and writes them to `desc-fcmovement_qc.tsv`
 - The run report's summary gives the recording's duration and the passing-window share screening requires, as the raw report does; condition pages give their window
 - The run report's Run summary lists Mean CP and Flat channels per channel set, as the raw report does
+- The run report shows the raw report's mean spectrum of the optical density, long and short channels and the heart rate, under the raw signal
 
 ### Changed
 - The cohort page's per-task tables pool every acquisition of a task into one column
