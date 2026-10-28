@@ -1038,6 +1038,29 @@ def _section_short_share(raw_haemo: mne.io.Raw, record: dict, sep_bands, subject
     return {"short_share_path": path, "short_share_h": h}
 
 
+def _section_nuisance(nirs_dir: "Path | None", sqm_label: "str | None", raw_haemo: mne.io.Raw,
+                      psd_stages: "list | None", od: "mne.io.Raw | None", imu: "dict | None",
+                      sep_bands, subject: str, errors: list, figures_dir: Path, fig_name) -> dict:
+    """The nuisance series' correlations on the series the confound regression was fitted to, or the last stage before one."""
+    path, h = None, 0
+    with _guard("Nuisance correlations", errors, subject):
+        from nirspipe.qc.figures.subject.nuisance_figures import (
+            nuisance_correlation_figure, nuisance_series)
+        label = sqm_label or f"sub-{subject}"
+        design_path = nirs_dir / f"{label}_design.tsv" if nirs_dir is not None else None
+        design = read_table(design_path) if design_path is not None and design_path.exists() else None
+        before = {lab: raw for lab, raw in (psd_stages or []) if lab != "desc-errts"}
+        if design is not None:
+            source = (_sidecar_of(nirs_dir, sqm_label, subject, "design").get("Sources") or [""])[0]
+            haemo = before.get(f"desc-{entity_of(Path(source).name, 'desc')}", raw_haemo)
+        else:
+            haemo = next(reversed(before.values()), raw_haemo)
+        fig = nuisance_correlation_figure(nuisance_series(haemo, design, od, imu, sep_bands))
+        if fig is not None:
+            path, h = _save_plotly_html(fig, figures_dir / fig_name("nuisancecorr"))
+    return {"nuisance_path": path, "nuisance_h": h}
+
+
 def _carpet_stages(raw_haemo: mne.io.Raw, psd_stages: "list | None") -> tuple:
     """``([(label, raw)], reference)``: the denoised haemo stage, and desc-preproc.
 
@@ -2269,6 +2292,10 @@ def build_subject_report(
                                        record=record, sep_bands=sep_bands, mode=mode)
     short_share_vars = _section_short_share(raw_haemo, record, sep_bands, subject, errors,
                                             figures_dir, fig_name)
+    nuisance_vars = _section_nuisance(
+        nirs_dir, sqm_label, raw_haemo, psd_stages,
+        raw_after_motion if raw_after_motion is not None else raw_before_motion, imu,
+        sep_bands, subject, errors, figures_dir, fig_name)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
     carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None,
                                          subject, errors, figures_dir, fig_name,
@@ -2500,6 +2527,7 @@ def build_subject_report(
         **cond_summary_vars,
         **carpet_vars,
         **short_share_vars,
+        **nuisance_vars,
         gvtd_set=gvtd_set,
         # the set GVTD was actually measured on, so the note says so on a per-condition page
         # too

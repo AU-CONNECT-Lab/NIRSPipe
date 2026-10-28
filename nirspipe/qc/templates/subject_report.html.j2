@@ -302,6 +302,15 @@
               style="height:{{ short_share_h }}px"></iframe>
       <p class="fig-path">{{ short_share_path }}</p>
     {% endif %}
+
+    {% if nuisance_path %}
+      <h3>Nuisance correlations</h3>
+      <p class="panel-note">{{ section_note('haemo.nuisance') }}</p>
+      <iframe class="plotly-frame" src="{{ nuisance_path }}"
+              title="Correlations among the nuisance series and with the global signals"
+              style="height:{{ nuisance_h }}px"></iframe>
+      <p class="fig-path">{{ nuisance_path }}</p>
+    {% endif %}
   </div>
 </section>
 

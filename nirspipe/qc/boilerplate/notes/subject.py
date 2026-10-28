@@ -100,6 +100,17 @@ NOTES = {
         "carried, on the series the regression was fitted to and over the frames it kept: a "
         "high share means much of that channel was scalp or systemic signal. Descriptive. "
         "Rejected channels are faded; the metrics table gives the mean over kept ones.",
+    "haemo.nuisance":
+        "Left, the correlations among the nuisance series: the design's short-channel, aux "
+        "and drift columns, GVTD band-passed to the motion band and the head-motion sensor "
+        "where the recording has one, beside the global signals, the mean of the kept long "
+        "channels per chromophore. At most 20 are drawn, those with the largest |r| with "
+        "either global signal. Right, each one's |r| with the two global signals, strongest "
+        "first. The short-channel PCA components are orthogonal among themselves by "
+        "construction, as are the drift terms. All on the series the regression was fitted "
+        "to, over the frames it kept, GVTD and the sensor interpolated onto its samples; "
+        "without a regression, on the last stage before one. A nuisance series that tracks "
+        "the global signal means the global signal carries that nuisance.",
     "carpet.after_named":
         "Per-channel z-scored haemoglobin for <code>{stage}</code>, HbO above HbR, marked "
         "by the red and blue bar.",

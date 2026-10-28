@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - With `--roi-mapping`, the dyad raw page lists each member's long channels kept per region, side by side
 - With `--roi-mapping` at group level, both commands' cohort page counts per task the runs in which each region kept no long channel
 - The quality record, channel table and run report give each long channel's variance share carried by the fitted short-channel regressors, on a head map and as set means
+- The run report draws the correlations among the nuisance series (short-channel, aux, drift, GVTD, head motion) and each one's correlation with the global signals
 
 ### Fixed
 - The run report's per-channel table was drawn below the Quality Figures sections, which its unclosed table had swallowed
