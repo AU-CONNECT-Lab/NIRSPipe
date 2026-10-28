@@ -114,6 +114,12 @@ CASES = [
     ("one page's human ratings",
      dict(subject="01", task="rest", desc="rawrating"), "qc", ".json",
      "sub-01/nirs/sub-01_task-rest_desc-rawrating_qc.json"),
+    ("one rater's channel decisions, beside another rater's",
+     dict(subject="01", task="rest", rater="QY", desc="rawdecision"), "qc", ".json",
+     "sub-01/nirs/sub-01_task-rest_rater-QY_desc-rawdecision_qc.json"),
+    ("one rater's ratings of a dyad page",
+     dict(group="G1", task="rest", rater="QY", desc="rawrating"), "qc", ".json",
+     "group-G1/nirs/group-G1_task-rest_rater-QY_desc-rawrating_qc.json"),
     # the chromophore leads because pybids' own task- pattern needs a separator before it,
     # so a root-level name cannot start with task-. Every entity this package declares is
     # anchored to the start as well as to an underscore, which is why they can.

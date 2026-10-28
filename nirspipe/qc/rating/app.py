@@ -47,16 +47,18 @@ def _write_rating_file(path: Path, stem: str, ratings: dict, notes: dict) -> Non
     _write_json(path, {"stem": stem, "rated_at": _utc_now_iso(), "ratings": ratings, "notes": notes})
 
 
-def _save_ratings(output_dir: Path, stem: str, data: dict, log_name: "str | None") -> None:
+def _save_ratings(output_dir: Path, stem: str, data: dict, log_name: "str | None",
+                  rater: "str | None" = None) -> None:
     """Write one page's rating file and, when the viewer keeps one, append the save to its log."""
     ratings, notes = data.get("ratings", {}), data.get("notes", {})
-    _write_rating_file(rating_path(output_dir, stem), stem, ratings, notes)
+    _write_rating_file(rating_path(output_dir, stem, rater), stem, ratings, notes)
     if log_name is None:
         return
     # beside the run logs, which .bidsignore already waves through
     out = output_dir / "logs" / log_name
     out.parent.mkdir(parents=True, exist_ok=True)
-    record = {"stem": stem, "rated_at": _utc_now_iso(), **ratings, "notes": notes}
+    record = {"stem": stem, **({"rater": rater} if rater else {}), "rated_at": _utc_now_iso(),
+              **ratings, "notes": notes}
     with out.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -95,9 +97,10 @@ def _span_error(data) -> "str | None":
 
 
 class FNIRSRatingApp:
-    def __init__(self, output_dir: Path, subjects: list[str]):
+    def __init__(self, output_dir: Path, subjects: list[str], rater: "str | None" = None):
         self.output_dir = output_dir
         self.subjects = subjects
+        self.rater = rater
         self.app = Flask(__name__)
         self._setup_routes()
 
@@ -139,7 +142,8 @@ class FNIRSRatingApp:
         # the report page owns its own module list: only it knows which panels were drawn
         @app.route("/sub-<pid>/load_ratings/<stem>", methods=["GET"])
         def load_ratings(pid, stem):
-            return jsonify(_read_rating_file(rating_path(self.output_dir, stem)))
+            return jsonify({**_read_rating_file(rating_path(self.output_dir, stem, self.rater)),
+                            "rater": self.rater})
 
         @app.route("/sub-<pid>/save_ratings", methods=["POST"])
         def save_ratings(pid):
@@ -147,7 +151,8 @@ class FNIRSRatingApp:
             if not data or not data.get("id"):
                 return jsonify({"status": "fail", "message": "Missing id"}), 400
             return _respond(
-                lambda: _save_ratings(self.output_dir, data["id"], data, "group_ratings.jsonl"),
+                lambda: _save_ratings(self.output_dir, data["id"], data, "group_ratings.jsonl",
+                                      self.rater),
                 f"save_ratings for {data['id']}")
 
 
@@ -160,12 +165,14 @@ class _ReportViewer:
     # False serves the page read-only for ratings and decisions, which only nirspipe-rate makes
     rates: bool = True
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None,
+                 rater: "str | None" = None):
         self.html_path     = html_path
         self.stem          = html_path.stem
         self.output_dir    = output_dir
         self.sci_threshold = sci_threshold
-        self.ratings_path  = rating_path(output_dir, self.stem)
+        self.rater         = rater
+        self.ratings_path  = rating_path(output_dir, self.stem, rater)
         self.app = Flask(__name__)
         self._setup_routes()
 
@@ -187,8 +194,8 @@ class _ReportViewer:
             return jsonify(self._config())
 
         def load_ratings(stem=None):
-            path = rating_path(self.output_dir, stem) if stem else self.ratings_path
-            return jsonify(_read_rating_file(path))
+            path = rating_path(self.output_dir, stem, self.rater) if stem else self.ratings_path
+            return jsonify({**_read_rating_file(path), "rater": self.rater})
 
         def save_ratings():
             data = request.json
@@ -196,8 +203,9 @@ class _ReportViewer:
                 return _empty_body()
             # the page says which report it is; a condition page must not write into the run's
             stem = data.get("id") or self.stem
-            return _respond(lambda: _save_ratings(self.output_dir, stem, data, self.log_name),
-                            f"save_{tag}_ratings")
+            return _respond(
+                lambda: _save_ratings(self.output_dir, stem, data, self.log_name, self.rater),
+                f"save_{tag}_ratings")
 
         if self.rates:
             app.add_url_rule(f"/load_{tag}_ratings", "load_ratings", load_ratings)
@@ -230,14 +238,15 @@ class RawRatingApp(_ReportViewer):
     default_port = RAW_PORT
     log_name = "group_raw_ratings.jsonl"
 
-    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None):
+    def __init__(self, html_path: Path, output_dir: Path, sci_threshold: "float | None" = None,
+                 rater: "str | None" = None):
         run = {k: entity_of(html_path.stem, k) for k in ("sub", "task", "ses")}
         # the page's own key in the files below, which hold every run of its task
         self.run_label = html_path.stem.removesuffix("_desc-raw_report")
         self.decisions_path = channel_decisions_path(
-            output_dir, run["sub"], run["task"], run["ses"])
-        self.spans_path = bad_spans_path(output_dir, run["sub"], run["task"], run["ses"])
-        super().__init__(html_path, output_dir, sci_threshold)
+            output_dir, run["sub"], run["task"], run["ses"], rater)
+        self.spans_path = bad_spans_path(output_dir, run["sub"], run["task"], run["ses"], rater)
+        super().__init__(html_path, output_dir, sci_threshold, rater)
 
     def _config(self) -> dict:
         # bad stretches are marked where decisions are made, never on a read-only page
@@ -288,6 +297,7 @@ class HyperRatingApp(_ReportViewer):
         subject_ids: list[str],
         sci_threshold: "float | None" = None,
         decisions_dir: "Path | None" = None,
+        rater: "str | None" = None,
     ):
         # the members' decisions live beside their raw pages in the nirspipe tree
         self.decisions_dir = decisions_dir or output_dir
@@ -296,11 +306,11 @@ class HyperRatingApp(_ReportViewer):
         self.group_id  = entity_of(stem, "group") or "unknown"
         self.session   = entity_of(stem, "ses")
         self.task      = entity_of(stem, "task") or "unknown"
-        super().__init__(html_path, output_dir, sci_threshold)
+        super().__init__(html_path, output_dir, sci_threshold, rater)
 
     def _decisions_path(self, sid: str) -> Path:
         return channel_decisions_path(self.decisions_dir, sid,
-                                      task=self.task, session=self.session)
+                                      task=self.task, session=self.session, rater=self.rater)
 
     # the dyad page's verdicts sit under their own key, apart from each run's own
     def _load_decisions(self) -> dict:

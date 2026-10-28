@@ -161,24 +161,27 @@ def record_table_name(label: str, desc: str, suffix: str,
                            **_label_entities(label)).name
 
 
-def rating_path(output_dir, report_stem: str):
+def rating_path(output_dir, report_stem: str, rater: "str | None" = None):
     """Where the human ratings of one report page are kept.
 
     ``(out, "sub-01_task-rest_desc-raw_report")``
         -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawrating_qc.json``
     ``(out, "sub-01_task-rest_cond-game1_report")``
         -> ``out/sub-01/nirs/sub-01_task-rest_cond-game1_desc-rating_qc.json``
+    ``(out, "sub-01_task-rest_desc-raw_report", rater="qy")``
+        -> ``out/sub-01/nirs/sub-01_task-rest_rater-qy_desc-rawrating_qc.json``
 
     One file per rated page, because a run and each of its condition pages are separate
-    reports rated separately. The raw viewer's ratings take ``rawrating`` for the reason its
-    figures take a ``raw`` prefix: the two viewers rate the same run at different stages and
-    would otherwise ask for one name.
+    reports rated separately, and one per rater, so a second rater never overwrites the first.
+    The raw viewer's ratings take ``rawrating`` for the reason its figures take a ``raw``
+    prefix: the two viewers rate the same run at different stages and would otherwise ask for
+    one name.
     """
     entities = parse_path(report_stem + ".html")
     path = derivative_path(
         output_dir, "qc", ".json",
         **_label_entities(report_stem),
-        pairing=entities.get("pairing"), condition=entities.get("condition"),
+        pairing=entities.get("pairing"), condition=entities.get("condition"), rater=rater,
         desc="rawrating" if entities.get("desc") == "raw" else "rating")
     # the rating servers write straight to this path, so the folder has to be there
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -186,32 +189,31 @@ def rating_path(output_dir, report_stem: str):
 
 
 def channel_decisions_path(output_dir, subject: str, task: "str | None" = None,
-                           session: "str | None" = None):
+                           session: "str | None" = None, rater: "str | None" = None):
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
     ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawdecision_qc.json``
+    ``(out, "01", task="rest", rater="qy")``
+        -> ``out/sub-01/nirs/sub-01_task-rest_rater-qy_desc-rawdecision_qc.json``
 
-    One function for the four call sites: the rating server, the dyad rating server, the
-    Hyper Preparation page and the Data Prep page. The Hyper Preparation page passes no
-    session because it holds none, so on a two-session tree it reads a path the others
-    never write.
+    One function for the run's rating server and the dyad's, which write the same file.
     """
     path = derivative_path(output_dir, "qc", ".json",
                            subject=str(subject).removeprefix("sub-"),
-                           session=session, task=task, desc="rawdecision")
+                           session=session, task=task, rater=rater, desc="rawdecision")
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def bad_spans_path(output_dir, subject: str, task: "str | None" = None,
-                   session: "str | None" = None):
+                   session: "str | None" = None, rater: "str | None" = None):
     """Where the raw QC page keeps the stretches a reviewer marked bad, per run.
 
     ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawspans_qc.json``
     """
     path = derivative_path(output_dir, "qc", ".json",
                            subject=str(subject).removeprefix("sub-"),
-                           session=session, task=task, desc="rawspans")
+                           session=session, task=task, rater=rater, desc="rawspans")
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 

@@ -14,6 +14,22 @@ from nirspipe.io.naming import report_name
 from nirspipe.cli import _shared
 
 
+def rater_name(value: str) -> str:
+    """A rater's name as it goes into file names: letters and digits only."""
+    text = str(value).strip()
+    if not text.isalnum() or not text.isascii():
+        raise argparse.ArgumentTypeError(
+            f"{value!r}: a rater's name goes into file names, so letters and digits only, "
+            "e.g. 'QY' or 'rater2'")
+    return text
+
+
+def _say_rater(rater: str | None) -> None:
+    if rater:
+        print(f"Rating as {rater}: ratings, channel decisions and marked stretches go to "
+              f"files named rater-{rater}.")
+
+
 def _serve(opened: list, port: int | None, default_port: int, log_name: str) -> None:
     from nirspipe.interface.server import WebApp
 
@@ -24,7 +40,8 @@ def _serve(opened: list, port: int | None, default_port: int, log_name: str) -> 
     web.serve(port, default_port, log_name, paths if len(opened) == 1 else [""])
 
 
-def open_rate(output_dir: Path, participant_label: list[str] | None) -> list:
+def open_rate(output_dir: Path, participant_label: list[str] | None,
+              rater: str | None = None) -> list:
     """[(viewer, label, entry pages)] for the run reports; exits when there is nothing to rate."""
     from nirspipe.qc.rating.app import FNIRSRatingApp
 
@@ -32,21 +49,24 @@ def open_rate(output_dir: Path, participant_label: list[str] | None) -> list:
     if not subjects:
         print("No subjects found in output directory.", file=sys.stderr)
         raise SystemExit(1)
-    return [(FNIRSRatingApp(output_dir, subjects), "Run reports",
+    return [(FNIRSRatingApp(output_dir, subjects, rater), "Run reports",
              tuple(f"sub-{subject}/" for subject in subjects))]
 
 
-def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None) -> None:
+def cmd_rate(output_dir: Path, participant_label: list[str] | None, port: int | None,
+             rater: str | None = None) -> None:
     """Launch QC rating interface for nirspipe reports."""
     from nirspipe.qc.rating.app import RATE_PORT
 
-    _serve(open_rate(output_dir, participant_label), port, RATE_PORT, "nirspipe-rate")
+    opened = open_rate(output_dir, participant_label, rater)
+    _say_rater(rater)
+    _serve(opened, port, RATE_PORT, "nirspipe-rate")
 
 
 def open_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
-    sci_threshold: float, run_label: str | None = None,
+    sci_threshold: float, run_label: str | None = None, rater: str | None = None,
 ) -> list:
     """[(viewer, label, entry pages)], one per raw report the selection matches; exits on none."""
     from nirspipe.qc.rating.app import RawRatingApp
@@ -60,28 +80,31 @@ def open_raw(
     if not pages:
         print(f"Error: no raw report in {sub_dir} matches the selection", file=sys.stderr)
         raise SystemExit(1)
-    return [(RawRatingApp(page, output_dir, sci_threshold), page.stem, ("",)) for page in pages]
+    return [(RawRatingApp(page, output_dir, sci_threshold, rater), page.stem, ("",))
+            for page in pages]
 
 
 def cmd_raw(
     output_dir: Path, participant_label: str,
     session_label: str | None, task_label: str | None,
     sci_threshold: float, port: int | None, run_label: str | None = None,
+    rater: str | None = None,
 ) -> None:
     """Launch interactive raw QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import RAW_PORT
 
     opened = open_raw(output_dir, participant_label, session_label, task_label, sci_threshold,
-                      run_label)
+                      run_label, rater)
     for viewer, _label, _entries in opened:
         print(f"Launching raw viewer: {viewer.html_path.name} ...")
+    _say_rater(rater)
     _serve(opened, port, RAW_PORT, "nirspipe-rate raw")
 
 
 def open_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
     session_label: str | None, sci_threshold: float,
-    derivatives_dir: Path | None = None,
+    derivatives_dir: Path | None = None, rater: str | None = None,
 ) -> tuple:
     """(viewer, label, entry pages) for one dyad's raw report; exits when it or the group is missing."""
     from nirspipe.io.groups import parse_group_csv
@@ -102,23 +125,24 @@ def open_hyper(
         raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
     return [(HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
-                            decisions_dir=derivatives_dir), html_path.stem, ("",))]
+                            decisions_dir=derivatives_dir, rater=rater), html_path.stem, ("",))]
 
 
 def cmd_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
     session_label: str | None, sci_threshold: float, port: int | None,
-    derivatives_dir: Path | None = None,
+    derivatives_dir: Path | None = None, rater: str | None = None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import HYPER_PORT
 
     opened = open_hyper(output_dir, group_id, task_label, pairs_csv, session_label,
-                        sci_threshold, derivatives_dir)
+                        sci_threshold, derivatives_dir, rater)
     if derivatives_dir is None:
         print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
               "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
     print(f"Launching hyper viewer: {opened[0][0].html_path.name} ...")
+    _say_rater(rater)
     _serve(opened, port, HYPER_PORT, "nirspipe-rate hyper")
 
 
@@ -145,6 +169,13 @@ def cmd_export(trees: list[Path], out_dir: Path | None) -> None:
             print(f"  {line}", file=sys.stderr)
 
 
+def _add_rater(parser: argparse.ArgumentParser, kept: str) -> None:
+    parser.add_argument("--rater", type=rater_name, default=None,
+                        help=f"Your name or initials, letters and digits. Your {kept} go to "
+                             "files of your own, so raters never overwrite each other. "
+                             "Default: the shared files.")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nirspipe-rate",
@@ -160,6 +191,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Subject ID(s) to open. Default: all found.")
     pr.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 8765, or the next free port above it.")
+    _add_rater(pr, "ratings")
     pr.set_defaults(func=cmd_rate)
 
     pw = sub.add_parser("raw", help="Launch interactive raw QC viewer: rate sections, decide channels, mark bad stretches.")
@@ -179,6 +211,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "cells stay the run's own line. Off when not given.")
     pw.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5052, or the next free port above it.")
+    _add_rater(pw, "ratings, channel decisions and marked stretches")
     pw.set_defaults(func=cmd_raw)
 
     ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
@@ -202,6 +235,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ph.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
                     help="The nirspipe tree. Each member's channel decisions are kept there, "
                          "in the file their raw page reads; without it they go to OUTPUT_DIR.")
+    _add_rater(ph, "ratings and channel decisions")
     ph.set_defaults(func=cmd_hyper)
 
     pe = sub.add_parser("export", help="Export channel decisions for nirspipe --bad-channels.")

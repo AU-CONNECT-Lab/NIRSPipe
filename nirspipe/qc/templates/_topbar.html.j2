@@ -132,6 +132,7 @@ body.rating-static-mode #qc-container .qc-module {
   color: var(--faint);
   white-space: nowrap;
 }
+.qc-rater { border-left: 1px solid var(--rule); color: var(--muted); }
 
 /* ---- navigation only: one row, no pill row under it ---- */
 #qc-container.qc-one-row .qc-grid { grid-template-rows: auto; padding-top: 0; padding-bottom: 0; }
@@ -247,6 +248,12 @@ h1[id], h2[id], h3[id], details[id], section[id] {
       Object.assign(ratings, data.ratings || {});
       Object.assign(notes,   data.notes   || {});
       cells.forEach(updateDisplay);
+      if (data.rater) {
+        var chip = document.createElement("span");
+        chip.className = "qc-chip qc-rater";
+        chip.textContent = "rating as " + data.rater;
+        document.getElementById("qc-container").appendChild(chip);
+      }
     })
     .catch(function() {
       document.body.classList.add("rating-static-mode");

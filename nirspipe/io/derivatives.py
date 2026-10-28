@@ -61,6 +61,7 @@ def build_output_path(
 
 def channel_decisions_path(
     output_dir: Path, subject: str, task: str | None = None, session: str | None = None,
+    rater: str | None = None,
 ) -> Path:
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
@@ -68,7 +69,7 @@ def channel_decisions_path(
     """
     from nirspipe.io.naming import channel_decisions_path as _path
 
-    return _path(output_dir, subject, task, session)
+    return _path(output_dir, subject, task, session, rater)
 
 
 def subject_report_dir(output_dir: Path, subject_id: str) -> Path:

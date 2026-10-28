@@ -90,6 +90,7 @@ def test_the_ignored_records_are_the_ones_the_writers_name(tmp_path):
         rating_path(tmp_path, "sub-01_task-rest_desc-raw_report").name,
         rating_path(tmp_path, "sub-01_task-rest_report").name,
         channel_decisions_path(tmp_path, "01", task="rest").name,
+        channel_decisions_path(tmp_path, "01", task="rest", rater="QY").name,
         "group-G1_task-rest_desc-sqm_qc.json",
     ]
     kept = ["sub-01_task-rest_desc-preproc_nirs.json", "sub-01_task-rest_desc-channel_qc.tsv",
