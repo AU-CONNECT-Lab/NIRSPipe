@@ -25,7 +25,7 @@ def _process(tmp_path, motion_correction, conditions=False):
         raw.set_annotations(mne.Annotations([20.0, 150.0], [100.0, 100.0], ["rest", "talk"]))
     path = _write_subject(bids, "01", "tap", raw)
     run = {"label": "sub-01_task-tap", "snirf_path": path, "session": None}
-    return _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, [6.0],
+    return _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0],
                         motion_correction=motion_correction)
 
 

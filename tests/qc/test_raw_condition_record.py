@@ -22,7 +22,7 @@ def test_the_record_reads_back_with_each_condition_share(tmp_path):
     out = tmp_path / "out"
     write_dataset_description(out, source=bids)
     _, ctx = _process_run({"label": "sub-01_task-tap", "snirf_path": path, "session": None},
-                          0.8, out / "sub-01", 0.7, 1.5, [6.0])
+                          0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0])
     record = read_record(ctx["sqm_path"])
     assert set(record["by_condition"]) == {"rest", "talk"}
     for entry in record["by_condition"].values():

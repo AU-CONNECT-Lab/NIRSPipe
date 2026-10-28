@@ -63,7 +63,7 @@ def test_every_condition_page_names_the_set_the_strip_groups(pages):
 
 def test_without_a_map_the_carpet_has_no_strip_and_no_note(tmp_path):
     out, run = _run(tmp_path)
-    payload, _ = _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, [6.0])
+    payload, _ = _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0])
     fig = payload["carpet_gvtd"]["figure"]
     assert not _legend_squares(fig)
     assert not [sh for sh in fig["layout"]["shapes"] if sh["type"] == "rect" and sh["x1"] < -0.015]
