@@ -210,23 +210,6 @@ def _single_trial_conditions(
 
 
 
-def _with_design_events(raw: mne.io.Raw, events_path: str) -> mne.io.Raw:
-    """A copy of ``raw`` whose markers are the ``--events-path`` table's rows, its ``BAD_`` spans kept."""
-    table = read_table(events_path)
-    table = table[table["trial_type"].map(is_marker)]
-    ann = raw.annotations
-    kept = [i for i, d in enumerate(ann.description) if not is_marker(d)]
-    # the table's onsets are seconds into the data, as the design reads them
-    shift = raw.first_time if ann.orig_time is not None else 0.0
-    out = raw.copy()
-    out.set_annotations(mne.Annotations(
-        onset=np.r_[ann.onset[kept], table["onset"].to_numpy(float) + shift],
-        duration=np.r_[ann.duration[kept], table["duration"].to_numpy(float)],
-        description=[*ann.description[kept], *table["trial_type"].astype(str)],
-        orig_time=ann.orig_time))
-    return out
-
-
 def _epoch_window_mismatch(raw_haemo: mne.io.Raw, epoch_tmax: float) -> "float | None":
     """The events' own length when it outruns the window the figures average over.
 
@@ -2250,7 +2233,6 @@ def build_subject_report(
     filled_settings: list[tuple[str, Any, str]] | None = None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
     short_channel_requested: bool = False,
-    events_path: "str | None" = None,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
@@ -2416,15 +2398,9 @@ def build_subject_report(
     epoch_lowpassed   = epoch_haemo.info["lowpass"] > config.cardiac_l_freq
     if epoch_lowpassed:
         epoch_haemo = _below_cardiac(epoch_haemo, config.cardiac_l_freq)
-    # with --events-path the epoch figures take the design's events, so they name what it fits
-    epoch_raw, trial_intensity = raw_haemo, raw_intensity
-    if events_path:
-        epoch_raw, epoch_haemo, trial_intensity = (
-            r if r is None else _with_design_events(r, events_path)
-            for r in (raw_haemo, epoch_haemo, raw_intensity))
-    epoch_skip        = _no_epoch_reason(epoch_raw, epoch_tmin, epoch_tmax)
+    epoch_skip        = _no_epoch_reason(raw_haemo, epoch_tmin, epoch_tmax)
     if epoch_skip is None:
-        singles = _single_trial_conditions(epoch_raw, epoch_tmin, epoch_tmax)
+        singles = _single_trial_conditions(raw_haemo, epoch_tmin, epoch_tmax)
         if singles:
             msg = section_note("caveat.single_trial", conds=", ".join(singles))
             # a run note like any other, logged as a warning rather than note()'s info
@@ -2433,7 +2409,7 @@ def build_subject_report(
     # the window note only matters to figures that get drawn; asked before the skip it would
     # tell a reader to widen a window for a section that is not there
     if epoch_skip is None and getattr(config, "epoch_tmin", None) is None:
-        outruns = _epoch_window_mismatch(epoch_raw, epoch_tmax)
+        outruns = _epoch_window_mismatch(raw_haemo, epoch_tmax)
         if outruns is not None:
             _note(notes, subject, section_note("caveat.epoch_window", tmin=epoch_tmin,
                                                tmax=epoch_tmax, outruns=outruns))
@@ -2461,7 +2437,7 @@ def build_subject_report(
                                                     fig_name, epoch_tmin=epoch_tmin,
                                                     epoch_tmax=epoch_tmax,
                                                     sep_bands=sep_bands)
-        trial_qc_vars     = _section_trial_qc(trial_intensity, config, subject, errors,
+        trial_qc_vars     = _section_trial_qc(raw_intensity, config, subject, errors,
                                               figures_dir, fig_name, notes)
     glm_vars          = _section_glm(design_matrix, glm_est, raw_haemo, subject, errors,
                                      figures_dir, fig_name, segments=segments,

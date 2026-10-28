@@ -445,7 +445,6 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         roi_map_name=_roi_map_name(args),
                         filled_settings=filled_settings,
                         short_channel=post.get("short_channel"),
-                        events_path=post.get("events_path"),
                     ) or []])
 
                 if not args.get("no_report") and prep_runs:
@@ -801,7 +800,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None, events_path=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None):
     from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -852,7 +851,6 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         filled_settings=filled_settings,
         chromophores=in_order(args.get("chromophores") or DEFAULT_CHROMOPHORES),
         short_channel_requested=bool(short_channel),
-        events_path=events_path,
     )
 
 
@@ -922,8 +920,6 @@ def _run_post_for_subject(
                     **dict(zip(_POST_FIELDS, (glm_est, dm, alff_df, fc, denoised, fc_seed, fc_roi))),
                     # the run's own, auto decided on its montage, for the report's notes
                     "short_channel": post_config.short_channel,
-                    # the design's events, so the report's epoch figures name its conditions
-                    "events_path": post_config.events_path,
                 }
                 if src_entities.get("run") is not None:
                     # every entity but the run: files told apart by acq are not runs of one series
