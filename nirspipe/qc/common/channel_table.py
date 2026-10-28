@@ -489,6 +489,9 @@ MOTION_SPLIT_COLUMNS = (
     ("motion_corrected_n_segments", "Corrected segments"),
 )
 
+# optical-density metrics no set table has a column for; templates read it as `od_loose_keys`
+OD_LOOSE_KEYS = ("cp_mean", "n_flat_channels")
+
 # A share and the count it is a share of, printed in one cell as `12.9% (1098)` so the count
 # needs no row of its own. Templates read it as the global `count_beside`.
 COUNT_BESIDE = {

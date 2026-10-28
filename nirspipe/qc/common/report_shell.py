@@ -127,13 +127,14 @@ def template_env(**options: Any):
     from jinja2 import Environment, FileSystemLoader
 
     from nirspipe.qc.boilerplate.notes import section_note
-    from nirspipe.qc.common.channel_table import COUNT_BESIDE
+    from nirspipe.qc.common.channel_table import COUNT_BESIDE, OD_LOOSE_KEYS
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False,
                       **options)
     env.globals["section_note"] = section_note
     env.globals["nav_bar"] = nav_bar
     env.globals["count_beside"] = COUNT_BESIDE
+    env.globals["od_loose_keys"] = OD_LOOSE_KEYS
     return env
 
 

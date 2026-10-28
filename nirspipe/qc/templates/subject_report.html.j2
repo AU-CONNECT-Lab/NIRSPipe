@@ -649,6 +649,10 @@
     {%- for key, text in od_split_columns if key not in count_beside.values() %}
     <tr><td>{{ ql(key, text) }}</td>{{ set_cells(key, sqm_all, sqm_long, sqm_short) }}</tr>
     {%- endfor %}
+    {#- what the raw viewer lists beside its tables; a set that never measured one shows a dash -#}
+    {%- for key in od_loose_keys if [sqm_all.get(key), sqm_long.get(key)] | select('ne', none) | list %}
+    <tr><td>{{ ql(key, metric_label(key)) }}</td>{{ set_cells(key, sqm_all, sqm_long, sqm_short) }}</tr>
+    {%- endfor %}
     {%- else %}
     {%- for key, text in [
           ('channel_retention_rate', metric_label('channel_retention_rate', condition=(condition_label|default('')) != '')),
@@ -659,6 +663,9 @@
           ('snr_mean', 'Mean SNR μ/σ (intensity, %g s)'|format(cv_window_s)),
           ('cv_mean', 'Mean CV (intensity, %g s)'|format(cv_window_s))] %}
     {{ span_row(key, text, mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
+    {%- endfor %}
+    {%- for key in od_loose_keys if sqm.get(key) is not none %}
+    {{ span_row(key, metric_label(key), mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
     {%- endfor %}
     {%- endif %}
 

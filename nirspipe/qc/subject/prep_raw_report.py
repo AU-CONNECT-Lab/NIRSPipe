@@ -30,8 +30,8 @@ from nirspipe.qc.common.figure_io import (
 )
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from nirspipe.qc.common.channel_table import (
-    HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, RAW_CHANNEL_METRICS_SUFFIX,
-    WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
+    HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_LOOSE_KEYS, OD_SPLIT_COLUMNS,
+    RAW_CHANNEL_METRICS_SUFFIX, WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
     channel_rows, format_rows, heart_rate_note, heatmap_args, pair_rows, pair_wavelengths,
     placement_note, region_table, template_note,
     save_channel_csv,
@@ -82,14 +82,14 @@ _MAX_TS_PTS   = 4000
 # Derived by subtracting what the tables carry rather than written out again, so a column
 # added to either one leaves the list on its own.
 _VIEW_MONTAGE_KEYS = tuple(
-    k for k in ("cp_mean", "n_flat_channels", "mean_amp_mean",
+    k for k in (*OD_LOOSE_KEYS, "mean_amp_mean",
                 "spike_count", "spike_pct_frames", "spike_num_frames", *IMU_STAT_KEYS)
     if k not in {key for key, _ in (*OD_SPLIT_COLUMNS, *MOTION_SPLIT_COLUMNS)}
 )
 _VIEW_SCALAR_KEYS = (
     "channel_retention_rate", "sci_win_mean", "sci_mean", "good_frac_mean", "psp_mean",
     "heart_rate", "snr_mean", "cv_mean",
-    "cp_mean", "n_flat_channels", "mean_amp_mean", "n_saturated_channels",
+    *OD_LOOSE_KEYS, "mean_amp_mean", "n_saturated_channels",
     "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_thresh",
     "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
     "spike_count", "spike_pct", "spike_pct_frames", "spike_num_frames",
