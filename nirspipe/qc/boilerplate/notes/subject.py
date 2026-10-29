@@ -329,11 +329,11 @@ NOTES = {
     "metrics.regions_not_counted":
         "Listed but not counted, not being long channels of this recording: {pairs}.",
     "channel_summary":
-        "Green pass, red fail, grey missing, blue-grey measured with no line. Only Status "
-        "rejects a channel: too few passing windows (<code>--min-good-frac</code>), a window "
-        "passing on SCI (<code>--sci-threshold</code> {sci}) and on PSP only with "
-        "<code>--psp-threshold</code>, or a rejection by hand. The other rows are for "
-        "reference.",
+        "Green pass, red fail, grey missing; PSP with no line takes its value's colour on the "
+        "bar beside the grid. Only Status rejects a channel: too few passing windows "
+        "(<code>--min-good-frac</code>), a window passing on SCI (<code>--sci-threshold</code> "
+        "{sci}) and on PSP only with <code>--psp-threshold</code>, or a rejection by hand. The "
+        "other rows are for reference.",
     "condition_summary":
         "The condition pages&rsquo; channel grids in one figure, one metric&rsquo;s "
         "conditions on adjacent rows, same cutoffs (<code>--sci-threshold</code> {sci}). "
