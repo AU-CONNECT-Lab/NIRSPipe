@@ -1077,6 +1077,26 @@ COHORT_SECTIONS = {
     "excluded": "From the run's BAD_ spans: --keep-spans, --bad-spans, --gvtd-censor and any the input carried.",
 }
 COHORT_ID_COLUMN = "The run this row describes, by its BIDS entities."
+# the run x condition table: its own columns, and what each metric column adds to the run's text
+CONDITION_COLUMNS = {
+    "bids_name": COHORT_ID_COLUMN,
+    "condition": "The condition, as the recording's annotation names it; a description that "
+                 "recurs is numbered, name#2.",
+    "onset": "Where the condition's window starts, in seconds from the recording's start.",
+    "duration": "The window's length in seconds.",
+    "kept_s": "Seconds of the window outside every BAD_ span.",
+    "counted_windows": "Screening windows inside the condition's window and clear of BAD_ spans, "
+                       "the ones its passing share counts; 0 leaves the condition unassessed.",
+}
+CONDITION_METRICS = {
+    "channel_retention_rate": "Share of channels passing in this condition, its windows here "
+                              "judged against the run's line; a channel marked by hand or "
+                              "non-finite fails every condition. An assessment for choosing "
+                              "conditions: the data were processed under the run's verdict.",
+    "good_frac_mean": f"Share of the condition's {SCREEN_WINDOW_S:g} s windows passing on SCI, "
+                      "and on PSP when it has a line, averaged over the channels.",
+}
+CONDITION_WINDOW = "Measured over the condition's window."
 
 def record_key_summary(key: str) -> str:
     """What one record key holds, or '' when nothing describes it."""

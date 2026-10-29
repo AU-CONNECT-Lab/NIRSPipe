@@ -13,9 +13,11 @@ import pandas as pd
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import (
-    COHORT_ID_COLUMN, COHORT_SECTIONS, format_metric, metric_label, record_key_summary,
+    COHORT_ID_COLUMN, COHORT_SECTIONS, CONDITION_COLUMNS, CONDITION_METRICS, CONDITION_WINDOW,
+    format_metric, metric_label, record_key_summary,
 )
 from nirspipe.qc.metrics.coupling import SCI_WINDOW_S, labels_look_swapped
+from nirspipe.qc.metrics.imu import IMU_QUANTITIES
 from nirspipe.qc.common.figure_io import _save_figure_html
 from nirspipe.qc.figures.subject.group_figures import (
     SCORE_THRESHOLD,
@@ -155,6 +157,83 @@ def _column_dictionary(columns) -> dict:
         entry["Description"] = " ".join(filter(None, (text, COHORT_SECTIONS.get(section))))
         out[column] = entry
     return out
+
+
+# a condition entry's channel sets, as the cohort table's section suffixes
+_CONDITION_SETS = {"all": "", "long": "_long", "short": "_short"}
+_CONDITION_FAMILIES = ("od_by_set", "motion_by_set", "haemo_by_set")
+# the stage a haemoglobin key's suffix names, where the run's own value of it sits
+_HAEMO_STAGE_SUFFIXES = (("_prereg", "filtered"), ("_postreg", "errts"), ("_errts", "errts"))
+
+
+def _condition_column(family: str, key: str, row: dict) -> "tuple[str, str]":
+    """The section and metric a condition's value is named by: those of its run's value.
+
+    ::
+
+      od_by_set sci_win_mean                    -> raw, sci_win_mean
+      motion_by_set gvtd_filt_mean              -> motion_post, or raw without a correction
+      haemo_by_set gcor_hbo_postreg (pipeline)  -> errts, gcor_hbo
+      haemo_by_set hbo_hbr_corr_mean_post (raw) -> rawhaemo_post, hbo_hbr_corr_mean
+    """
+    if family == "od_by_set":
+        return "raw", key
+    if family == "motion_by_set":
+        if key.startswith("motion_corrected"):
+            return "motion", key
+        # spikes are found on the recording before correction, GVTD on the corrected copy
+        if key.startswith("spike"):
+            return "raw", key
+        return ("motion_post" if "motion_post" in row else "raw"), key
+    base = "preproc" if "preproc" in row else "rawhaemo"
+    for suffix, stage in (*_HAEMO_STAGE_SUFFIXES, ("_post", f"{base}_post")):
+        if key.endswith(suffix):
+            return stage, key[: -len(suffix)]
+    return base, key
+
+
+def condition_rows(row: dict) -> list[dict]:
+    """One row per condition of a run, its values under the cohort table's column names."""
+    out = []
+    for condition, entry in (row.get("by_condition") or {}).items():
+        start, stop = entry.get("window_s") or (None, None)
+        flat = {"bids_name": row["bids_name"], "condition": condition, "onset": start,
+                "duration": None if start is None else stop - start,
+                "kept_s": entry.get("kept_s"), "counted_windows": entry.get("counted_windows")}
+        for family in _CONDITION_FAMILIES:
+            for set_name, values in (entry.get(family) or {}).items():
+                for key, value in (values or {}).items():
+                    if isinstance(value, (int, float)) and not isinstance(value, bool):
+                        section, metric = _condition_column(family, key, row)
+                        flat[f"{section}{_CONDITION_SETS[set_name]}_{metric}"] = value
+        # the rest of the flat scalars repeat the families above, bar these
+        scalars = entry.get("scalars") or {}
+        flat.update({f"imu_{k}": v for k, v in scalars.items()
+                     if k.startswith(tuple(IMU_QUANTITIES)) and isinstance(v, (int, float))})
+        flat.update({f"raw_{k}": scalars[k] for k in ("n_long_channels", "n_short_channels")
+                     if isinstance(scalars.get(k), (int, float))})
+        out.append(flat)
+    return out
+
+
+def _write_conditions_table(output_dir: Path, full_rows: list[dict]) -> "Path | None":
+    """``desc-conditions_qc.tsv``, one row per run and condition; None when no run has one."""
+    rows = [r for row in full_rows for r in condition_rows(row)]
+    if not rows:
+        return None
+    table = pd.DataFrame(rows)
+    front = list(CONDITION_COLUMNS)
+    table = table[front + sorted(c for c in table.columns if c not in front)]
+    path = output_dir / derivative_path("", "qc", ".tsv", desc="conditions").name
+    write_tsv(table, path)
+    sidecar = {c: {"Description": CONDITION_COLUMNS[c]} for c in front}
+    for column, entry in _column_dictionary(table.columns[len(front):]).items():
+        metric = next((m for m in CONDITION_METRICS if column.endswith(f"_{m}")), None)
+        text = CONDITION_METRICS[metric] if metric else entry["Description"]
+        sidecar[column] = {**entry, "Description": f"{text} {CONDITION_WINDOW}"}
+    path.with_suffix(".json").write_text(json.dumps(sidecar, indent=2) + "\n", encoding="utf-8")
+    logger.info("conditions TSV -> %s (rows=%d)", path, len(table))
+    return path
 
 
 def _bids_name_from_sqm_path(path: Path) -> str:
@@ -610,6 +689,8 @@ def _render_group(
         json.dumps(_column_dictionary(df.columns), indent=2) + "\n", encoding="utf-8")
     logger.info("group TSV  -> %s (rows=%d, cols=%d)", tsv_path, len(df), len(df.columns))
     channel_path = _write_channel_table(output_dir, out_desc, full_rows)
+    with guard("conditions table", errors, out_desc):
+        _write_conditions_table(output_dir, full_rows)
 
     metric_cols = [c for c in df.columns if c != "bids_name"]
 
