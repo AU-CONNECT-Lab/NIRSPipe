@@ -164,6 +164,27 @@ def _has_confounds(config: PostConfig) -> bool:
             or config.drift_model not in (None, "none"))
 
 
+def _confound_kwargs(config: PostConfig, aux_kwargs: dict) -> dict:
+    """run_glm_pipeline's arguments for the empty design rest and denoise regress confounds on."""
+    return dict(
+        stim_dur=None,
+        hrf_model="spm",
+        noise_model=config.noise_model,
+        # rest has refused a missing drift model by now; denoise runs without one
+        drift_model=config.drift_model or "none",
+        high_pass=config.drift_high_pass,
+        drift_order=config.drift_order,
+        fir_delays=None,
+        short_channel=config.short_channel,
+        short_channel_auto=config.short_channel_auto,
+        sep_bands=separation_bands(config),
+        **aux_kwargs,
+        events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
+        chromophores=config.chromophores,
+        p_correction=config.p_correction,
+    )
+
+
 def _warn_unmatched_design_band(config: PostConfig) -> None:
     """A task model fitted to bandpassed data needs a drift basis that covers the cutoff.
 
@@ -492,27 +513,12 @@ def run_post(
             raise ValueError("rest mode requires --drift-model")
         _warn_lowpass_breaks_whitening(config, mode)
         logger.info("sub-%s | rest confound regression", config.subject)
-        rest_glm_kwargs = dict(
-            stim_dur=None,
-            hrf_model="spm",
-            noise_model=config.noise_model,
-            drift_model=config.drift_model,
-            high_pass=config.drift_high_pass,
-            drift_order=config.drift_order,
-            fir_delays=None,
-            short_channel=config.short_channel,
-            short_channel_auto=config.short_channel_auto,
-            sep_bands=separation_bands(config),
-            **aux_kwargs,
-            events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
-            chromophores=config.chromophores,
-            p_correction=config.p_correction,
-        )
+        confound_kwargs = _confound_kwargs(config, aux_kwargs)
         _, glm_est, dm, raw_resid = run_glm_pipeline(
             result,
             output_dir=str(nirs_dir),
             source_path=rec.path_of(result),
-            **rest_glm_kwargs,
+            **confound_kwargs,
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                           inputs=glm_inputs(None, aux_path))
@@ -544,7 +550,7 @@ def run_post(
                 # its input skipped the bandpass, so band-matching the aux to one would
                 # put the regressors in a narrower band than the data they explain
                 _, _, _, raw_resid_bb = run_glm_pipeline(
-                    result_bb, **{**rest_glm_kwargs, "data_band": None})
+                    result_bb, **{**confound_kwargs, "data_band": None})
                 # Same regression, un-bandpassed input. Re-stamp so it stops sharing the "errts"
                 # stage with the bandpassed residual, whose file it would otherwise be credited to.
                 # carry the regression's own parameters over; a bare re-stamp overwrites them
@@ -576,22 +582,9 @@ def run_post(
             logger.info("sub-%s | denoise confound regression", config.subject)
             _, glm_est, dm, raw_resid = run_glm_pipeline(
                 result,
-                stim_dur=None,
-                hrf_model="spm",
-                noise_model=config.noise_model,
-                drift_model=config.drift_model or "none",
-                high_pass=config.drift_high_pass,
-                drift_order=config.drift_order,
-                fir_delays=None,
-                short_channel=config.short_channel,
-                short_channel_auto=config.short_channel_auto,
-                sep_bands=separation_bands(config),
-                **aux_kwargs,
-                events=pd.DataFrame({"trial_type": [], "onset": [], "duration": []}),
                 output_dir=str(nirs_dir),
                 source_path=rec.path_of(result),
-                chromophores=config.chromophores,
-                p_correction=config.p_correction,
+                **_confound_kwargs(config, aux_kwargs),
             )
             _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
                               inputs=glm_inputs(None, aux_path))
