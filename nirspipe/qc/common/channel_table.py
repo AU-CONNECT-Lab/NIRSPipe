@@ -446,6 +446,8 @@ def channel_columns(drop: "Sequence[str]" = ()) -> list[tuple[str, str]]:
 # share the verdict rests on, the verdict itself as a flag, and the criterion it failed.
 CSV_FIELDS = (*(key for key, _ in channel_columns(("status", "region", "short_share"))),
               "short_share_hbo", "short_share_hbr", "good_frac", "is_bad", "reason")
+# raw QC regresses nothing, so its table has no short-channel share
+RAW_CSV_FIELDS = tuple(f for f in CSV_FIELDS if not f.startswith("short_share_"))
 
 
 # The optical-density metrics the "one file, three channel sets" table prints, in column
@@ -900,7 +902,8 @@ def optode_rejections(pairs: "dict[str, dict[str, Any]]") -> "dict[str, tuple[in
 def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
                      sci_threshold: "float | None",
                      psp_threshold: float | None = None,
-                     suffix: str = CHANNEL_METRICS_SUFFIX) -> None:
+                     suffix: str = CHANNEL_METRICS_SUFFIX,
+                     fields: "Sequence[str]" = CSV_FIELDS) -> None:
     """Per-channel metrics for one run. The name carries the run's entities, or a subject
     with several tasks would keep only whichever ran last.
 
@@ -915,7 +918,7 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     out_path = Path(out_dir) / (label + suffix)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     # an empty reason or separation is not applicable, which BIDS writes as n/a too
-    table = pd.DataFrame(rows).reindex(columns=list(CSV_FIELDS)).replace("", None)
+    table = pd.DataFrame(rows).reindex(columns=list(fields)).replace("", None)
     write_tsv(table, out_path)
     out_path.with_suffix(".json").write_text(
         json.dumps(column_entries(table.columns, CHANNEL_QC_COLUMNS), indent=2) + "\n",

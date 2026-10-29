@@ -44,6 +44,18 @@ def test_a_tree_without_dyads_links_no_dyad_page(tree, tmp_path):
     assert "desc-groups_report.html" not in page
 
 
+def test_raw_qcs_channel_table_has_no_short_channel_share_and_describes_its_columns(tree):
+    from nirspipe.io.tables import read_table
+
+    tables = sorted(tree.glob("sub-*/nirs/*_desc-rawchannel_qc.tsv"))
+    assert tables
+    for path in tables:
+        columns = list(read_table(path).columns)
+        # raw QC regresses nothing, so the share would be n/a on every row
+        assert not [c for c in columns if c.startswith("short_share")]
+        assert set(json.loads(path.with_suffix(".json").read_text())) == set(columns)
+
+
 def test_a_finished_raw_qc_run_is_not_listed_as_unfinished(tree):
     from nirspipe.qc.subject.group_writer import unfinished_subjects
     from nirspipe.utils import load_toml

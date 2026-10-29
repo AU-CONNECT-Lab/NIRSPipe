@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - The dyad cohort table keys its rows by `bids_name`, is no longer rounded, gives `pct_all_good` as a share and has a column dictionary
 - The null draws tables leave out the rows a rejected channel left blank, which were about two thirds of them
 - FC matrices leave out short channels, as ISC does; the Pearson diagonal is exactly 1, the matrix exactly symmetric, and the Fisher z diagonal n/a instead of 0
+- Raw QC's channel table drops the two short-channel share columns, which were always empty there
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge

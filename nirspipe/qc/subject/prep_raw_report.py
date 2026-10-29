@@ -33,7 +33,8 @@ from nirspipe.qc.common.figure_io import (
 from nirspipe.qc.common.windows import markers_on_data_axis, refuse_colliding_labels
 from nirspipe.qc.common.channel_table import (
     HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_LOOSE_KEYS, OD_SPLIT_COLUMNS,
-    RAW_CHANNEL_METRICS_SUFFIX, WAVELENGTH_COLUMNS, channel_columns, metric_set_table,
+    RAW_CHANNEL_METRICS_SUFFIX, RAW_CSV_FIELDS, WAVELENGTH_COLUMNS, channel_columns,
+    metric_set_table,
     channel_rows, format_rows, heart_rate_note, heatmap_args, pair_rows, pair_wavelengths,
     placement_note, region_table, template_note,
     save_channel_csv,
@@ -809,7 +810,7 @@ def _process_run(
     write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"],
-                     suffix=RAW_CHANNEL_METRICS_SUFFIX)
+                     suffix=RAW_CHANNEL_METRICS_SUFFIX, fields=RAW_CSV_FIELDS)
 
     n_total = len(sci_scores)
     bad_rate = 100 * len(bad_channels) / n_total if n_total else 0.0
