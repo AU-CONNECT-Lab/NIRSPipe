@@ -6,11 +6,11 @@ title: Processing workflow
 
 `nirspipe ... participant` runs each subject through preprocessing and then, when `--mode` is given, through postprocessing. The steps always run in the same order. `nirspipe ... group` then builds the cohort pages from every run's quality record. Dyad analysis has its own commands, described in [Hyperscanning](hyperscanning.md). Every flag is listed in [Usage](usage.md), and every file in [Outputs](outputs.md).
 
-In the diagrams, rounded boxes are files written to `sub-<label>/nirs/`, plain boxes are operations, and dashed edges are optional. Each run also draws its own provenance graph, `sub-<label>/figures/<run>_desc-provenance_nirs.png`, showing what that run did.
+In the diagrams, rounded boxes are files written to `sub-<label>/[ses-<label>/]nirs/`, plain boxes are operations, and dashed edges are optional. Each run also draws its own provenance graph, `sub-<label>/figures/<run>_desc-provenance_nirs.png`, showing what that run did.
 
 ## Preprocessing
 
-Preprocessing turns raw light intensity into haemoglobin concentration changes in five steps. Each step writes a SNIRF file with a JSON sidecar that records its settings.
+Preprocessing turns raw light intensity into haemoglobin concentration changes in four steps. Each step writes a SNIRF file with a JSON sidecar that records its settings. Preprocessing also saves the channel positions and, when the recording has any, its auxiliary channels as tables.
 
 ```mermaid
 flowchart TD
@@ -24,8 +24,8 @@ flowchart TD
     PASS --> OD
 
     OD --> SCI["windowed coupling<br/><small>SCI and PSP per window, cardiac band</small>"]
-    MANUAL[/"--bad-channels"/] -.-> MERGE
-    SCI --> MERGE["mark bad channels<br/><small>passing windows &lt; min-good-frac ∪ manual</small>"]
+    MANUAL[/"--bad-channels · channels.tsv"/] -.-> MERGE
+    SCI --> MERGE["mark bad channels<br/><small>passing windows &lt; min-good-frac ∪ listed</small>"]
     MERGE --> SCIF(["desc-sci"])
 
     SCIF --> MOT["motion correction<br/><small>tddr | wavelet | tpca | spline | spline_sg | wavelet_tddr | spline_wavelet | none</small>"]
@@ -33,6 +33,9 @@ flowchart TD
 
     MOTF --> BL["modified Beer-Lambert<br/><small>OD → HbO/HbR, dpf</small>"]
     BL --> PRE(["desc-preproc"])
+
+    IN --> PLACE["place the optodes<br/><small>on the head template</small>"]
+    PLACE --> POS(["space-&lt;template&gt;<br/>channels.tsv"])
 
     IN -.-> AUXX["read the snirf aux group<br/><small>only if the file has one</small>"]
     AUXX -.-> AUX(["desc-aux<br/>timeseries.tsv.gz"])
@@ -45,7 +48,7 @@ flowchart TD
     classDef side fill:#eaeded,stroke:#7f8c8d
     class OD,SCIF,MOTF od
     class PRE,POST haemo
-    class AUX side
+    class AUX,POS side
 ```
 
 Quality metrics are measured once at the end, from the files these steps leave behind; see [QC](qc.md).
@@ -75,7 +78,7 @@ The heartbeat is looked for in the cardiac band, `--cardiac-l-freq` to `--cardia
 | 12 to 18 years | 43 to 108 | 0.7 to 1.8 | 11 to 23 | 0.1 to 0.4 |
 | adults | 47 to 103 | 0.7 to 1.8 | 9 to 28 | 0.1 to 0.5 |
 
-The rates come from Fleming et al. (2011) for children, Ostchega et al. (2011) for adult heart rate and Rückert-Eheberg et al. (2025) for adult breathing rate. `--resp-l-freq` / `--resp-h-freq` set the respiration band the reports use.
+The rates come from Fleming et al. (2011) for children, Ostchega et al. (2011) for adult heart rate and Rückert-Eheberg et al. (2025) for adult breathing rate. `--resp-l-freq` / `--resp-h-freq` set the respiration band the reports use. Like the cardiac band, it has no default: give it, or let `--population` fill it in.
 
 The recording is cut into 10 s windows. A window passes when the channel's SCI reaches `--sci-threshold`, and a channel is marked bad when fewer than `--min-good-frac` of its windows pass (0.75 by default). `--psp-threshold` is optional; when given, a window has to pass PSP as well. With `--screen-scope task`, only windows inside the task blocks count, so a noisy pause between blocks is not held against a channel. For example, for adults:
 
@@ -113,7 +116,7 @@ Motion artifacts are corrected in optical density. `--motion-correction` picks t
 | `spline_sg` | Spline interpolation followed by Savitzky-Golay smoothing | Jahani et al. (2018) |
 | `wavelet_tddr` | `wavelet`, then `tddr` on its output | |
 | `spline_wavelet` | `spline`, then `wavelet` on its output | Di Lorenzo et al. (2019) |
-| `none` | No correction; `desc-motcorrected` is not written | |
+| `none` | No correction. `desc-motcorrected` is still written, identical to `desc-sci` | |
 
 The methods differ in how much of the brain response they keep, not only in how much noise they remove: `tddr` makes a small response slightly smaller even when there was no motion. Response sizes are only comparable between recordings corrected the same way, so correct a whole study with one method. `--motion-std-thresh` and `--wavelet-iqr` tune the methods that use them ([Usage](usage.md#nirspipe)).
 
@@ -167,7 +170,7 @@ Placement uses the landmarks in the file (nasion, preauricular points) when ther
 
 ```mermaid
 flowchart TD
-    PRE(["desc-preproc"]) --> BP{"--high-pass /<br/>--low-pass given?"}
+    PRE(["desc-preproc"]) --> BP{"a cutoff set?<br/><small>by flag, --config or the mode</small>"}
     BP -->|yes| BPF["bandpass"]
     BPF --> FILT(["desc-filtered"])
     BP -->|no| RS
@@ -199,20 +202,20 @@ When a recording has corrupted time marked ([Excluded time](#excluded-time)), it
 `--high-pass` and `--low-pass` set the bandpass; `none` switches off a cutoff the mode would otherwise fill in. The default filter is a zero-phase Butterworth (`--filter-method iir`, `--filter-order 4`); `--filter-method fir` is the alternative. Writes `desc-filtered`. `--resample-sfreq` then resamples, writing `desc-resampled`.
 
 :::{warning}
-A low-pass filter, or resampling, makes the autoregressive noise models (`--noise-model`) less accurate. In a task GLM the betas are fine, but the t values come out too large. If you need a low-pass before a GLM, consider `--noise-model ols`. The run warns when this applies.
+A low-pass filter, or resampling, makes the autoregressive noise models (`--noise-model`) less accurate. In a task GLM the betas are fine, but the t values come out too large. Before a GLM, leave both off if you can. If you need them, use `--noise-model ols` and treat its t values as uncalibrated too, since it does not model the correlated noise at all. The run warns when this applies.
 :::
 
 ### Mode: denoise
 
-Cleans the data for analyses done outside the package. It applies the bandpass and resampling and, when short-channel regression or `--drift-model` is on, regresses those out and writes the result as `desc-errts`. With `--fc` it also computes connectivity, as in rest mode.
+Cleans the data for analyses done outside the package. It applies the bandpass (0.01 to 0.5 Hz by default) and resampling and, when short-channel regression or `--drift-model` is on, regresses those out and writes the result as `desc-errts`. With `--fc` it also computes connectivity, as in rest mode.
 
 ### Mode: glm
 
-A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual (`desc-errts`), the design matrix (`design.tsv`), the fit per channel (`desc-glm_nirsmap.tsv`) and each condition's block average (`desc-blockavg_timeseries.tsv`).
+A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual (`desc-errts`), the design matrix (`design.tsv`), the fit per channel (`desc-glm_nirsmap.tsv`), each condition's block average (`desc-blockavg_timeseries.tsv`) and a check of how well the noise model whitened the residual (`desc-whitening_nirsmap.tsv`).
 
 **Events.** The design comes from the SNIRF annotations, each given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path`. Use one or the other. Every event needs a duration above 0; give each event its real length (a button press can be 0.1 s).
 
-**Design.** `--hrf-model` sets the response shape (`spm` by default). `--drift-model` sets the slow-drift model (`cosine` by default), with its cutoff set by `--drift-high-pass` ([Choosing the drift cutoff](#choosing-the-drift-cutoff)).
+**Design.** `--hrf-model` sets the response shape (`spm` by default). `--drift-model` sets the slow-drift model (`cosine` by default), with its cutoff set by `--drift-high-pass`. The cutoff has no default, because it depends on your design: give it in Hz, or `auto` ([Choosing the drift cutoff](#choosing-the-drift-cutoff)).
 
 ```{figure} figures/glm_design.png
 :alt: A GLM design matrix drawn as an image
@@ -229,13 +232,13 @@ A design matrix as the report draws it: the condition regressors, the short-chan
 
 **P values.** The tables give uncorrected, two-sided p values, each on its channel's own residual degrees of freedom, which the `df` column states (fewer than the samples under the robust and censored fits). `--p-correction` (`fdr_bh`, `fdr_by`, `holm` or `bonferroni`) adds corrected ones, over the good long channels.
 
-**Block average.** Each condition's trials averaged per channel, from `--epoch-tmin` to `--epoch-tmax` (-5 to 25 s by default). Trials that touch excluded time are left out.
+**Block average.** Each condition's trials averaged per channel, from `--epoch-tmin` to `--epoch-tmax` (-5 to 25 s by default), each trial less its mean before onset. Trials that touch excluded time are left out.
 
 Bad channels are fitted too and flagged with `bad = True`, so every subject's table has the same rows.
 
 #### Choosing the drift cutoff
 
-The cosine drift model removes slow changes below `--drift-high-pass`. Set the cutoff too high and it removes part of your task too, because a condition that repeats every `T` seconds is itself a slow rhythm at `1/T` Hz. A common choice, the one nilearn and MNE-NIRS suggest, is `1/(2T)`, with `T` the longest gap between two trials of the same condition: blocks every 60 s give 1/120, about 0.008 Hz. If you also use `--high-pass`, do not set the cutoff below it. The run warns you when the value is outside these limits.
+The cosine drift model removes slow changes below `--drift-high-pass`. Set the cutoff too high and it removes part of your task too, because a condition that repeats every `T` seconds is itself a slow rhythm at `1/T` Hz. A common choice, the one nilearn and MNE-NIRS suggest, is `1/(2T)`, with `T` the longest gap between two trials of the same condition: blocks every 60 s give 1/120, about 0.008 Hz. If you also use `--high-pass`, do not set the cutoff below it. The run warns you when the cutoff is below `--high-pass`, or high enough to remove a condition (`1/T` or above).
 
 `--drift-high-pass auto` applies this rule to each run from its own events, never above 0.01 Hz (nilearn's default), and the report says which condition set the value. It works with `--mode glm` only. Type a number instead when every run should use the same value, or when the recording has markers that are not conditions, such as a start and an end marker; `nirspipe-prep edit-markers` can also remove them.
 
@@ -246,20 +249,21 @@ Resting-state analysis: drift and short channels are regressed out, then connect
 ```mermaid
 flowchart TD
     PRE(["desc-preproc"])
-    PRE --> A["bandpass + resample"]
-    PRE --> B["resample only<br/><small>no bandpass</small>"]
+    PRE --> A["bandpass"]
+    PRE --> B["no bandpass"]
 
-    A --> AR(["desc-resampled"])
+    A --> AF(["desc-filtered"])
     B --> BR["broadband copy<br/><small>in memory, never written</small>"]
 
-    AR --> REG1["confound regression<br/><small>empty events, drift + short channels</small>"]
-    BR --> REG2["same regression<br/><small>identical settings</small>"]
+    AF --> REG1["confound regression<br/><small>empty events, drift + short channels</small>"]
+    BR --> REG2["same regression<br/><small>drift + short channels</small>"]
 
     REG1 --> E1(["desc-errts"])
     REG2 --> E2(["desc-errtsbroad"])
 
     E1 --> FC["functional connectivity<br/><small>per chromophore</small>"]
-    FC --> FCF(["chromo-hbo/hbr_stat-pearson_relmat.tsv<br/>chromo-hbo/hbr_stat-fisherz_relmat.tsv"])
+    AF -->|"also before the regression"| FC
+    FC --> FCF(["chromo-hbo/hbr_stat-pearson_relmat.tsv<br/>chromo-hbo/hbr_stat-fisherz_relmat.tsv<br/>chromo-hbo/hbr_stat-pearson_desc-filtered_relmat.tsv"])
     FC --> ROI{"--roi-mapping"}
     ROI -->|given| ROIF(["seg-&lt;map&gt;_agg-roi / agg-seed relmat.tsv<br/><small>bad channels excluded from ROI means</small>"])
 
@@ -271,14 +275,14 @@ flowchart TD
     classDef haemo fill:#fadbd8,stroke:#c0392b
     classDef derivative fill:#d6eaf8,stroke:#2874a6
     classDef input fill:#ecf0f1,stroke:#7f8c8d
-    class PRE,AR,E1,E2 haemo
+    class PRE,AF,E1,E2 haemo
     class FCF,ROIF,ALFFF,AROIF derivative
     class BR input
 ```
 
-The regression runs twice: once on the bandpassed data for connectivity (`desc-errts`), and once on data without the bandpass for ALFF (`desc-errtsbroad`), because fALFF compares the band with the whole spectrum.
+The regression runs twice: once on the bandpassed data for connectivity (`desc-errts`), and once on data without the bandpass for ALFF (`desc-errtsbroad`), because fALFF compares the band with the whole spectrum. With `--resample-sfreq`, both are resampled before the regression, which then starts from `desc-resampled` rather than `desc-filtered`. ALFF needs both band edges and a drift model that removes a linear trend (`cosine`, or `polynomial` of order 1 or more). When either is missing, the run skips ALFF and says so.
 
-**Connectivity.** The Pearson correlation between every pair of long channels, per chromophore, with its Fisher z. Short channels are left out, as in the dyad tables. A bad channel is a blank row and column. The diagonal is 1 in the correlation matrix and blank in the Fisher z one, where it would be infinite.
+**Connectivity.** The Pearson correlation between every pair of long channels, per chromophore, with its Fisher z. Short channels are left out, as in the dyad tables. A bad channel is a blank row and column. The diagonal is 1 in the correlation matrix and blank in the Fisher z one, where it would be infinite. A third matrix, named after the file the regression started from (`desc-filtered`), holds the correlations before the regression, so you can see what it changed.
 
 **Amplitude.** Per channel:
 
