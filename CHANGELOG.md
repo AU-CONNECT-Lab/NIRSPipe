@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-10-28
+
 ### Added
 - The channel quality grids carry a PSP colour bar when PSP has no line
 - Runs that compute FC after a regression also write the channel matrix of the series before it (`stat-pearson_desc-filtered_relmat.tsv`)
