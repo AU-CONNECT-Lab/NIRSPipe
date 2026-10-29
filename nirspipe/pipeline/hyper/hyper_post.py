@@ -28,7 +28,7 @@ from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from nirspipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
 from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
 from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
-from nirspipe.io.tables import join_whole_run, write_tsv
+from nirspipe.io.tables import WHOLE_RUN, join_whole_run, write_tsv
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -598,7 +598,9 @@ def run_hyper_post(
             cond_windows = (condition_windows(ref_raw, min_duration=1.0 / wtc_fmin)
                             if ref_raw else [])
         # after any split into equal windows, which makes labels of its own
-        refuse_colliding_labels([w[0] for w in cond_windows], reserved=("all",))
+        refuse_colliding_labels([w[0] for w in cond_windows], reserved={
+            "all": "cond-all is the table holding every condition",
+            "wholerun": f"{WHOLE_RUN} is the condition the tables give the whole run"})
         if not cond_windows:
             note(notes, scope,
                  "--wtc-by-condition asked for, but no annotation window is long enough "
@@ -785,7 +787,7 @@ def run_hyper_post(
     chan_band_df = _stack("chan")
     roi_band_df = _stack("roichan")
 
-    # ---- one table per kind: the whole run's rows, condition n/a, then each condition's ----
+    # ---- one table per kind: the whole run's rows, condition whole_run, then each condition's ----
     # the windows are the one thing a reader cannot reconstruct from the table
     spans = {label: [round(t0, 3), round(t1, 3)] for label, t0, t1 in cond_windows}
     by_condition = dict(conditions=[w[0] for w in cond_windows],
@@ -909,8 +911,8 @@ def run_hyper_post(
             # the same numbers one row per pairing, which is the shape the z, the lag and
             # the null columns fit in and the shape a group analysis reads
             pairs_df.insert(0, "chromophore", ch_type)
-            if label:
-                pairs_df.insert(0, "condition", label)
+            if cond_windows:
+                pairs_df.insert(1, "condition", label or WHOLE_RUN)
             isc_pair_frames.append(_with_kept(pairs_df, *(window or run_span)))
             sources = paths_from(aligned_raws.values())
             own_window = ({"condition_window_s": [round(window[0], 3), round(window[1], 3)]}
@@ -948,8 +950,8 @@ def run_hyper_post(
                          if wtc_channel_cross or i == j])
                     rows["r_z"] = fisher_r_to_z(rows["r"])
                     rows.insert(0, "chromophore", ch_type)
-                    if label:
-                        rows.insert(0, "condition", label)
+                    if cond_windows:
+                        rows.insert(1, "condition", label or WHOLE_RUN)
                     isc_roi_frames.append(_with_kept(rows, *(window or run_span)))
         return channel_level, roi_level, arc_level
 

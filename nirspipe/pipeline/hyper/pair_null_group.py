@@ -35,7 +35,7 @@ from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map, correct_p
 from nirspipe.utils.logging import get_logger
 from nirspipe.io.derivatives import occasion_label
 from nirspipe.io.naming import derivative_path, parse_path
-from nirspipe.io.tables import LABEL_DTYPES, write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, WHOLE_RUN, write_tsv
 
 logger = get_logger("pipeline.pair_null_group")
 
@@ -213,8 +213,8 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
     A table missing a column the others have concatenates to NaN and then leaves the groupby
     without a word, taking that occasion's contribution to every mean with it.
 
-    Every reading here is per condition, so a table's whole-run rows (condition n/a) are
-    dropped, and a table with no ``condition`` column is refused.
+    Every reading here is per condition, so a table's whole-run rows (condition whole_run)
+    are dropped, and a table with no ``condition`` column is refused.
     """
     frames = []
     for path in sorted(Path(output_dir).rglob(f"group-*_task-{task}{suffix}")):
@@ -225,7 +225,7 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
                 f"{path.name} has no condition column: its run had no conditions, or it "
                 f"predates the table holding the whole run and the conditions as one. Rerun "
                 f"`nirspipe-hyper` for that dyad with --wtc-by-condition.")
-        frame = frame[frame["condition"].notna()]
+        frame = frame[frame["condition"] != WHOLE_RUN]
         missing = [c for c in needs if c not in frame.columns]
         if missing:
             raise ValueError(

@@ -72,7 +72,7 @@ def test_every_planted_coupling_stands_above_every_other_cell_of_its_pairing(gro
 def test_each_coupling_s_phase_at_every_scale_is_its_lag(groups, group):
     phase = groups.table(group, "stat-wtcphase_relmat.tsv")
     # a coupling with no block runs through the whole recording: its whole-run rows
-    phase = phase[phase["condition"].isna()]
+    phase = phase[phase["condition"] == "whole_run"]
     for c in groups.truth.couplings:
         if groups.truth.member(c.a).group != group or c.block is not None:
             continue

@@ -119,10 +119,11 @@ def test_a_table_on_disk_that_cannot_be_read_is_still_reported(tmp_path, caplog)
 # ---- the whole run and the conditions in one table ----
 
 def test_each_condition_row_of_the_table_is_a_window(tmp_path):
-    """Numeric labels, which beside the whole run's n/a would read as 1.0 and 2.0."""
+    """Numeric labels, which read as numbers would come back as 1.0 and 2.0."""
     (tmp_path / "nirs").mkdir()
     table = tmp_path / "nirs" / name("G01", "main")
-    pd.DataFrame({"sub1": "a", "sub2": "b", "chromophore": "hbo", "condition": [None, "1", "2"],
+    pd.DataFrame({"sub1": "a", "sub2": "b", "chromophore": "hbo",
+                  "condition": ["whole_run", "1", "2"],
                   "label": "S1_D1", "coherence": [0.4, 0.6, 0.2]}).to_csv(
         table, sep="\t", index=False, na_rep="n/a")
     table.with_suffix(".json").write_text(json.dumps({"parameters": {

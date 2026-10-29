@@ -94,7 +94,7 @@ class Groups:
 def wtc_tables(groups: Groups, group: str) -> pd.DataFrame:
     """The channel band means of the whole run and every condition, the run's condition ""."""
     table = groups.table(group, "stat-wtc_relmat.tsv")
-    return table.assign(condition=table["condition"].fillna(""))
+    return table.assign(condition=table["condition"].replace("whole_run", ""))
 
 
 def band_mean(wtc: np.ndarray, coi: np.ndarray, freqs: np.ndarray, band=BAND) -> float:

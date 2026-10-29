@@ -19,8 +19,11 @@ _CANDIDATES = ("\t", ",", ";", "|")
 # how BIDS codes a missing or non-applicable value in a table
 NA = "n/a"
 
-# a condition label is text: beside a whole-run row's n/a, a label "1" would read as 1.0
+# a condition label is text: read as numbers, a label "1" would come back as 1.0
 LABEL_DTYPES = {"condition": str}
+
+# the condition a whole-run row carries in a table that also holds conditions
+WHOLE_RUN = "whole_run"
 
 
 def write_tsv(frame: pd.DataFrame, path, **kwargs):
@@ -80,14 +83,16 @@ def read_tsv_or_none(path: Path, lost: str) -> "pd.DataFrame | None":
 
 def join_whole_run(whole: "list[pd.DataFrame]",
                    by_condition: "list[pd.DataFrame]") -> "pd.DataFrame | None":
-    """The whole run's rows and every condition's as one table, ``condition`` n/a on the first.
+    """The whole run's rows, ``condition`` whole_run, and every condition's as one table.
 
     ::
 
       whole [chromophore, label, coherence], by_condition [chromophore, condition, label, ...]
         -> [chromophore, condition, label, coherence], whole-run rows first
     """
-    frames = list(whole) + list(by_condition)
+    # with no condition rows the table keeps no condition column, which says as much
+    whole = [w.assign(condition=WHOLE_RUN) for w in whole] if by_condition else list(whole)
+    frames = whole + list(by_condition)
     if not frames:
         return None
     table = pd.concat(frames, ignore_index=True)
@@ -104,14 +109,14 @@ def split_whole_run(frame: "pd.DataFrame | None",
 
     ::
 
-      condition [n/a, n/a, game, rest]  ->  (2 rows, no condition column), (2 rows)
-      no condition column               ->  (every row, None)
+      condition [whole_run, whole_run, game, rest]  ->  (2 rows, no condition column), (2 rows)
+      no condition column                           ->  (every row, None)
     """
     if frame is None:
         return None, None
     if "condition" not in frame.columns:
         return (frame if not frame.empty else None), None
-    windowed = frame["condition"].notna()
+    windowed = frame["condition"] != WHOLE_RUN
     whole = frame[~windowed].drop(columns="condition")
     by_condition = frame[windowed]
     return (whole if not whole.empty else None), (by_condition if not by_condition.empty

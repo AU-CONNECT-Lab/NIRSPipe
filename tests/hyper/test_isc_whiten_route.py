@@ -68,7 +68,7 @@ def test_the_correlation_is_the_whole_record_whitening_cut_past_its_transient(
     _, _, expected, _ = compute_isc_pairs(whole, list(SUBS), "hbo", skip_s=WHITEN_S,
                                           cross=False)
     written = _table(white, statistic="isc")
-    written = written[(written["chromophore"] == "hbo") & written["condition"].isna()]
+    written = written[(written["chromophore"] == "hbo") & (written["condition"] == "whole_run")]
     assert written["r"].to_numpy() == pytest.approx(expected["r"].to_numpy(), abs=1e-9,
                                                     nan_ok=True)
 

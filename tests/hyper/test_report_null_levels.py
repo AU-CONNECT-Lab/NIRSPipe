@@ -92,8 +92,7 @@ def _phase_n(out, entities, condition=None) -> int:
     path = group_output_path(out, "G1", {"task": "tap", **entities}, "relmat", ".tsv")
     table = pd.read_csv(path, sep="\t")
     if "condition" in table.columns:
-        # the whole run's rows carry no condition
-        keep = table["condition"].isna() if condition is None else table["condition"] == condition
+        keep = table["condition"] == (condition or "whole_run")
         table = table[keep]
     return int(table["phase_n"].sum())
 

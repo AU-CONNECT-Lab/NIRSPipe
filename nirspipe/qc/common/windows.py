@@ -131,13 +131,13 @@ def condition_windows(
     return windows
 
 
-def refuse_colliding_labels(labels, reserved: "tuple[str, ...]" = ()) -> None:
+def refuse_colliding_labels(labels, reserved: "dict[str, str] | None" = None) -> None:
     """Raise when two condition labels would name one file, or one takes a reserved name.
 
-    ::
+    ``reserved`` maps a name, as its letters and digits, to what the output uses it for::
 
-      ["game 1", "game1"]            -> StageError: both are cond-game1
-      ["all"], reserved=("all",)     -> StageError: cond-all is the table of every condition
+      ["game 1", "game1"]                          -> StageError: both are cond-game1
+      ["all"], reserved={"all": "cond-all is ..."} -> StageError naming what cond-all is
 
     A label reaches a file name through a slug of its letters and digits, so two labels that
     differ only in the rest would write the same file, the later one replacing the earlier.
@@ -152,12 +152,12 @@ def refuse_colliding_labels(labels, reserved: "tuple[str, ...]" = ()) -> None:
             f"conditions {shown} would be written to one file, since a file name keeps only "
             "the letters and digits of a condition. Rename the annotations so that they "
             "differ in a letter or digit.")
-    taken = sorted(set(by_slug) & set(reserved))
+    taken = sorted(set(by_slug) & set(reserved or {}))
     if taken:
+        named = ", ".join(repr(label) for slug in taken for label in by_slug[slug])
         raise StageError(
-            f"a condition named {', '.join(repr(t) for t in taken)} takes a name the output "
-            f"reserves: cond-{taken[0]} is the table holding every condition. Rename the "
-            "annotation.")
+            f"a condition named {named} takes a name the output reserves: "
+            f"{'; '.join(reserved[slug] for slug in taken)}. Rename the annotation.")
 
 
 def split_windows(

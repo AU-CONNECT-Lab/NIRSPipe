@@ -27,7 +27,7 @@ from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
 from nirspipe.utils import cone_margin_s
-from nirspipe.io.tables import split_whole_run, write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, split_whole_run, write_tsv
 from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
@@ -888,17 +888,13 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
     """The true dyad's ISC in the shape the null summary ranks against, or None.
 
     The real table carries `r`; the null's summary code is the coherence null's and keys on
-    `coherence`, so the column is renamed rather than the code duplicated. A whole-run row
-    has no condition, which is how the two halves are told apart in one file.
+    `coherence`, so the column is renamed rather than the code duplicated.
     """
     if not path.exists():
         return None
-    real = pd.read_csv(path, sep="\t").rename(columns={"r": "coherence"})
-    if "condition" not in real.columns:
-        return None if by_condition else real
-    has_cond = real["condition"].notna()
-    part = real[has_cond] if by_condition else real[~has_cond]
-    return part.drop(columns=[] if by_condition else ["condition"]) if not part.empty else None
+    real = pd.read_csv(path, sep="\t", dtype=LABEL_DTYPES).rename(columns={"r": "coherence"})
+    whole, by_cond = split_whole_run(real)
+    return by_cond if by_condition else whole
 
 
 def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,

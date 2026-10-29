@@ -291,9 +291,9 @@ def test_the_dyad_tables_record_kept_seconds_and_a_wholly_excluded_condition_is_
         wtc_chroma=("hbo",), wtc_by_condition=True, no_report=True)
 
     table = _table(tmp_path, statistic="wtc")
-    whole = table[table["condition"].isna()]
+    whole = table[table["condition"] == "whole_run"]
     assert (whole["kept_s"] == DURATION - 30.0 - 195.0).all()
-    by_cond = table[table["condition"].notna()].set_index("condition")
+    by_cond = table[table["condition"] != "whole_run"].set_index("condition")
     assert (by_cond.loc["rest", "kept_s"] == 150.0).all()
     assert by_cond.loc["rest", "coherence"].notna().all()
     assert (by_cond.loc["talk", "kept_s"] == 0.0).all()
@@ -302,7 +302,7 @@ def test_the_dyad_tables_record_kept_seconds_and_a_wholly_excluded_condition_is_
     isc = _table(tmp_path, statistic="isc")
     talk = isc[isc["condition"] == "talk"]
     assert (talk["kept_s"] == 0.0).all() and talk["r"].isna().all()
-    assert (isc[isc["condition"].isna()]["kept_s"] == DURATION - 30.0 - 195.0).all()
+    assert (isc[isc["condition"] == "whole_run"]["kept_s"] == DURATION - 30.0 - 195.0).all()
 
 
 def test_a_level_drawn_under_other_spans_is_not_reused():

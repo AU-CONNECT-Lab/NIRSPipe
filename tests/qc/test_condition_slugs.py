@@ -49,8 +49,8 @@ def test_a_numbered_repeat_colliding_with_another_condition_is_refused():
 
 def test_a_reserved_name_is_refused_only_where_it_is_reserved():
     refuse_colliding_labels(["all"])
-    with pytest.raises(StageError, match="cond-all"):
-        refuse_colliding_labels(["all"], reserved=("all",))
+    with pytest.raises(StageError, match="cond-all is the table"):
+        refuse_colliding_labels(["all"], reserved={"all": "cond-all is the table"})
 
 
 def test_the_windows_themselves_keep_every_label():
@@ -74,6 +74,11 @@ def _dyad(tmp_path, descriptions):
 def test_a_condition_named_all_is_refused_by_the_dyad_report(tmp_path):
     with pytest.raises(StageError, match="all"):
         _dyad(tmp_path, ["rest", "all"])
+
+
+def test_a_condition_named_like_the_whole_run_is_refused_by_the_dyad_report(tmp_path):
+    with pytest.raises(StageError, match="'whole run'.*whole_run is the condition"):
+        _dyad(tmp_path, ["rest", "whole run"])
 
 
 def test_colliding_conditions_are_refused_by_the_dyad_report(tmp_path):

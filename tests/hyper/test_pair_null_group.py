@@ -338,7 +338,7 @@ def _write_tree(root, crossed=False):
 
 def _with_whole_run(real):
     """The whole run's rows ahead of the conditions', as the real table holds them; never read."""
-    whole = real.drop(columns=["condition"]).assign(coherence=0.99)
+    whole = real.assign(condition="whole_run", coherence=0.99)
     return pd.concat([whole, real], ignore_index=True)[list(real.columns)]
 
 
@@ -563,7 +563,8 @@ def test_a_real_table_holding_the_whole_run_only_is_refused(tmp_path):
     _write_tree(tmp_path)
     path = tmp_path / "group-G03" / "nirs" / name("G03", "main", "wtc")
     old = pd.read_csv(path, sep=SEP)
-    old[old.condition.isna()].drop(columns=["condition"]).to_csv(path, sep=SEP, index=False)
+    old[old.condition == "whole_run"].drop(columns=["condition"]).to_csv(path, sep=SEP,
+                                                                       index=False)
     with pytest.raises(ValueError, match="no condition column"):
         write_group_null(tmp_path, "main", n_resample=200, seed=3)
 

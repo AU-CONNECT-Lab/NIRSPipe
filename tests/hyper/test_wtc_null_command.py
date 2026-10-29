@@ -303,14 +303,14 @@ def _write_windowed_null(tmp_path, monkeypatch, make_raw):
 
 
 def test_windows_add_condition_rows_to_the_whole_run_table(tmp_path, monkeypatch, make_raw):
-    """One table, as the real side has: the whole run's rows condition n/a, then each window's."""
+    """One table, as the real side has: the whole run's rows (whole_run), then each window's."""
     out = _write_windowed_null(tmp_path, monkeypatch, make_raw)
 
     assert out.name == name("G01", "main", "wtc-phasenull")
     df = pd.read_csv(out, sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
-    assert df["condition"].isna().sum() == 1
-    assert set(df["condition"].dropna()) == {"rest", "talk"}
+    assert (df["condition"] == "whole_run").sum() == 1
+    assert set(df["condition"]) == {"whole_run", "rest", "talk"}
     assert not list(tmp_path.rglob("*_cond-all_null-phase_stat-wtc_relmat.tsv"))
 
 
@@ -328,7 +328,7 @@ def test_each_half_is_ranked_against_its_own_real_rows(tmp_path, monkeypatch, ma
     from nirspipe.io.derivatives import group_output_path
 
     # a condition's row first, so a lookup on the cell alone would find it before the run's
-    real = pd.DataFrame({"chromophore": "hbo", "condition": ["rest", "talk", None],
+    real = pd.DataFrame({"chromophore": "hbo", "condition": ["rest", "talk", "whole_run"],
                          "sub1": "a", "sub2": "b", "label": "S1_D1",
                          "coherence": [0.0, 0.9, 0.9]})
     real.to_csv(group_output_path(tmp_path, "G01", {"task": "main", "statistic": "wtc"},

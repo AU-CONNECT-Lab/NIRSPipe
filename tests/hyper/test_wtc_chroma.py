@@ -352,7 +352,7 @@ def test_the_per_condition_rows_carry_both_chromophores(by_condition, kind):
     `condition` column: two inserts at position 0, so the order matters."""
     df = pd.read_csv(by_condition / name("G1", "tap", kind), sep="\t")
     assert list(df.columns[:2]) == ["chromophore", "condition"]
-    df = df[df["condition"].notna()]
+    df = df[df["condition"] != "whole_run"]
     counts = df.groupby(["chromophore", "condition"]).size().unstack()
     assert sorted(counts.index) == ["hbo", "hbr"]
     assert sorted(counts.columns) == ["chat", "quiet"]
@@ -361,11 +361,11 @@ def test_the_per_condition_rows_carry_both_chromophores(by_condition, kind):
 
 def test_the_whole_run_pass_still_stands_beside_the_conditions(by_condition):
     """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis: its
-    rows come first in the one table, condition n/a."""
+    rows come first in the one table, condition whole_run."""
     table = pd.read_csv(by_condition / name("G1", "tap"), sep="\t")
-    whole = table[table["condition"].isna()]
+    whole = table[table["condition"] == "whole_run"]
     assert set(whole["chromophore"]) == {"hbo", "hbr"}
-    assert whole.index.max() < table[table["condition"].notna()].index.min()
+    assert whole.index.max() < table[table["condition"] != "whole_run"].index.min()
 
 
 def test_the_condition_windows_reach_the_sidecar(by_condition):

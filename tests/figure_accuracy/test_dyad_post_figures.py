@@ -34,7 +34,8 @@ def _cond(scope):
 
 
 def _cells(rows, a, b, chroma, scope, label2=True):
-    sel = rows[(rows.sub1 == a) & (rows.sub2 == b) & (rows.condition.fillna("") == scope)]
+    sel = rows[(rows.sub1 == a) & (rows.sub2 == b)
+               & (rows.condition.replace("whole_run", "") == scope)]
     if "chromophore" in sel:
         sel = sel[sel.chromophore == chroma]
     return {(r.label, r.label2 if label2 else r.label): r.coherence for r in sel.itertuples()}
@@ -225,7 +226,8 @@ def test_the_channel_matrix_puts_each_coupling_on_its_own_cell(groups, group, sc
 
 def _roi_cells(groups, group, a, b, chroma, scope):
     table = groups.table(group, "seg-roidyad_agg-roi_stat-wtc_relmat.tsv")
-    return _cells(table.assign(condition=table["condition"].fillna("")), a, b, chroma, scope)
+    return _cells(table.assign(condition=table["condition"].replace("whole_run", "")), a, b,
+                  chroma, scope)
 
 
 @pytest.mark.parametrize("group", GROUPS)
@@ -340,7 +342,7 @@ def test_the_roi_isc_long_table_is_the_roi_isc_matrix(groups, group, scope):
     long = pd.read_csv(groups.gdir(group) / "nirs" /
                        f"group-{group}_task-main_seg-roidyad_agg-roi_stat-isc_relmat.tsv",
                        sep="\t")
-    rows = long[long["condition"] == scope] if scope else long[long["condition"].isna()]
+    rows = long[long["condition"] == (scope or "whole_run")]
     for a, b in _pairings(groups, group):
         for chroma in ("hbo", "hbr"):
             matrix = pd.read_csv(
