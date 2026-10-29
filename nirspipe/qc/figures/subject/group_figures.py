@@ -73,6 +73,8 @@ _UNCHARTED_METRICS = frozenset({"gyro_speed_gvtd_rho", "accel_jerk_gvtd_rho",
 # every channel.
 _CHANNEL_SETS = ("all", "long", "short")
 _SET_COLOURS = {"all": "#34495e", "long": "#3498db", "short": "#e67e22"}
+# an upper bound for Plotly's 12 px tick font, measured off a rendered chart
+_TICK_CHAR_PX = 7.0
 
 
 def _split_column(col: str) -> tuple[str, str, str]:
@@ -904,6 +906,14 @@ def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -
     if drawn == 0:
         return None
 
+    width = 150 + (46 + 26 * len(sets)) * k
+    # a slanted label runs left from its tick, past the plot's edge for an early long one
+    left = 58
+    if k > 1:
+        unit = (width - left - 14) / (k + 0.2)
+        reach = max(len(lab) * _TICK_CHAR_PX * np.cos(np.radians(30)) + 6 - (i + 0.6) * unit
+                    for i, lab in enumerate(labels))
+        left = max(left, int(np.ceil(reach)) + 4)
     fig.update_xaxes(
         tickvals=list(range(k)), ticktext=labels, range=[-0.6, k - 0.4],
         tickangle=-30 if k > 1 else 0, gridcolor="#f2f2f2",
@@ -912,8 +922,8 @@ def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -
     fig.update_layout(
         title=dict(text=f"{title} ({cats[0][0]})" if one_stage and cats[0][0] else title,
                    x=0.02, xanchor="left", font=dict(size=12)),
-        width=150 + (46 + 26 * len(sets)) * k, height=340,
-        margin=dict(l=58, r=14, t=34, b=70),
+        width=width + left - 58, height=340,
+        margin=dict(l=left, r=14, t=34, b=70),
         boxmode="overlay", plot_bgcolor="white",
         legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1.0,
                     font=dict(size=10)),

@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge
+
 ## [0.79.0] - 2026-10-28
 
 ### Added
