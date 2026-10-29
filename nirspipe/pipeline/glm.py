@@ -9,7 +9,7 @@ import mne
 import mne.io
 from scipy import stats
 
-from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.io.tables import column_entries, read_table, write_tsv
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -759,6 +759,47 @@ def _whitening_of(glm_est: Any, haemo: mne.io.Raw, residual: np.ndarray, keep: n
 _GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", "Detector",
                              "Chroma", "ch_name", "bad"})
 
+# the column dictionaries written into the GLM and contrast tables' sidecars
+_CHANNEL_COLUMNS = {
+    "Source": "Source optode number.",
+    "Detector": "Detector optode number.",
+    "Chroma": "Chromophore: hbo, hbr or hbt.",
+    "ch_name": "Channel name: source-detector pair and chromophore.",
+    "bad": "Whether the channel was rejected on this run. Its row is kept so every run's "
+           "table has the same rows.",
+    "df": "The channel's residual degrees of freedom, effective ones under the robust and "
+          "censored fits.",
+    "family": "How many p values the correction for this row's regressor or contrast and "
+              "chromophore was taken over: those of its kept long channels.",
+}
+GLM_COLUMNS = {
+    "Condition": "The design-matrix regressor this row estimates: a condition, a drift term, "
+                 "a short-channel or auxiliary regressor, or the constant.",
+    "theta": "The regressor's fitted weight, in M per unit of the regressor. A condition's "
+             "regressor is its blocks convolved with the HRF and has no unit, so its theta is "
+             "in M; a short-channel regressor is in M, so its theta has none.",
+    "se": "Standard error of theta, in theta's unit.",
+    "t": "theta over se.",
+    "p_value": "Two-sided p of t on df, uncorrected.",
+    "mse": "Mean squared residual of the channel's fit.",
+    **_CHANNEL_COLUMNS,
+}
+CONTRAST_COLUMNS = {
+    "contrast": "The contrast's name; its weights are in this sidecar's "
+                "parameters.contrast_weights.",
+    "ContrastType": "The contrast's test, t.",
+    "effect": "The contrast's weighted sum of the regressors' theta; in M when it weighs "
+              "condition regressors.",
+    "stat": "t of the contrast: effect over its standard error.",
+    "p_value": "Two-sided p of stat on df, uncorrected.",
+    "z_score": "The standard normal z with the same tail probability as stat on df, signed "
+               "as stat.",
+    **_CHANNEL_COLUMNS,
+}
+GLM_UNITS = {"mse": "M^2"}
+P_CORRECTED = ("p_value corrected by {method} over the row's family; n/a for a row outside "
+               "it, such as a short or rejected channel.")
+
 
 def on_residual_df(table: pd.DataFrame, stat: str, dof: "dict[str, float]") -> pd.DataFrame:
     """``df`` as each channel's own residual df, and ``p_value`` two-sided on it from ``stat``."""
@@ -875,12 +916,18 @@ def _save_glm_outputs(
     write_tsv(design_matrix.assign(censored=flags), dm_path)
     write_step_sidecar(dm_path, "design_matrix", source_path, bads, inputs=inputs, **params)
 
+    corrected = {f"p_{p_correction}": P_CORRECTED.format(method=p_correction)}
+
     # robust and censored fits carry an effective df of their own, so it is read per channel
     dof = {ch: float(glm_est.data[ch].df_residuals) for ch in glm_est.ch_names}
     res_path = _named("nirsmap", desc="glm")
-    write_tsv(_corrected(_mark_bads(on_residual_df(glm_est.to_dataframe(), "t", dof)),
-                         "Condition"), res_path)
-    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **p_params)
+    glm_table = _corrected(_mark_bads(on_residual_df(glm_est.to_dataframe(), "t", dof)),
+                           "Condition")
+    write_tsv(glm_table, res_path)
+    write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs,
+                       columns=column_entries(glm_table.columns, {**GLM_COLUMNS, **corrected},
+                                              GLM_UNITS),
+                       **p_params)
 
     if contrasts:
         frames = []
@@ -889,9 +936,12 @@ def _save_glm_outputs(
             df.insert(0, "contrast", name)
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")
-        write_tsv(_corrected(pd.concat(frames, ignore_index=True), "contrast"), con_path)
+        con_table = _corrected(pd.concat(frames, ignore_index=True), "contrast")
+        write_tsv(con_table, con_path)
         # the weights as the file gave them: the TSV names each contrast, nothing else does
         write_step_sidecar(con_path, "contrasts", source_path, bads, inputs=inputs,
+                           columns=column_entries(con_table.columns,
+                                                  {**CONTRAST_COLUMNS, **corrected}),
                            contrast_weights=contrast_def, **p_params)
 
     if whitening is not None:

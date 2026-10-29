@@ -203,6 +203,27 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
 
 _ALFF_COLUMNS = ("alff", "falff", "malff", "zalff")
 
+# the column dictionaries written into the ALFF tables' sidecars
+ALFF_COLUMNS = {
+    "channel": "Channel name: source-detector pair and chromophore.",
+    "alff": "Mean spectral amplitude, the square root of the periodogram power, between "
+            "parameters.high_pass and parameters.low_pass, on the residual before its low-pass.",
+    "falff": "The band's summed amplitude over the summed amplitude of every frequency above "
+             "0, 0 to 1.",
+    "malff": "alff over the mean alff of the run's kept channels of the same chromophore.",
+    "zalff": "alff minus that mean, over the same channels' standard deviation (ddof 0).",
+    "bad": "Whether the channel was rejected on this run; its values are n/a and its row is "
+           "kept so every run's table has the same rows.",
+}
+ALFF_ROI_COLUMNS = {
+    "roi": "The --roi-mapping region.",
+    "chromophore": "Chromophore: hbo, hbr or hbt.",
+    "n_channels": "The region's kept channels the row averages; 0 leaves its values n/a.",
+    **{column: f"{column} of the channel table beside it, averaged over the region's kept "
+               "channels." for column in _ALFF_COLUMNS},
+}
+ALFF_UNITS = {"alff": "M"}
+
 
 def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
                      roi_map: "dict[str, list[str]]",
@@ -246,6 +267,26 @@ def compute_alff_roi(alff_df: pd.DataFrame, raw: mne.io.Raw,
             rows.append({"roi": roi, "chromophore": chromophore, "n_channels": len(usable),
                          **usable.mean().to_dict()})
     return pd.DataFrame(rows, columns=["roi", "chromophore", "n_channels", *_ALFF_COLUMNS])
+
+
+# what each FC matrix holds, the Description of its sidecar
+_KEPT_FRAMES = "over the frames outside every BAD_ span"
+FC_DESCRIPTIONS = {
+    "fc": f"Pearson r between two channels' series of one chromophore, {_KEPT_FRAMES}. A "
+          "rejected channel keeps its row and column, n/a, so every run's matrix has the same "
+          "shape. The diagonal is 1 up to floating-point rounding.",
+    "fc_before": f"Pearson r between two channels' series before the confound regression, at "
+                 f"the stage desc- names, {_KEPT_FRAMES}; n/a wherever the residual's matrix "
+                 "is.",
+    "fc_roi": f"Pearson r between two regions' mean series, each the average of the region's "
+              f"kept channels, {_KEPT_FRAMES}. A region with no kept channel is n/a.",
+    "fc_seed": f"Pearson r between each region's mean series (rows) and each channel "
+               f"(columns), {_KEPT_FRAMES}. A region's own channels and a rejected channel "
+               "are n/a.",
+}
+FISHER_Z_DESCRIPTION = ("Fisher z, arctanh(r), of the stat-pearson matrix of the same name, r "
+                        "clipped just below 1 in size.")
+FISHER_Z_DIAGONAL = " The diagonal is written 0."
 
 
 def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:

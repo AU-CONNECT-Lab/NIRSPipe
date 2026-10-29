@@ -217,20 +217,24 @@ def read_json(path: Path) -> dict[str, Any]:
 
 def write_step_sidecar(path: Path, step: str, source: "str | None", bads: "list[str]",
                        excluded_spans: "list[dict] | None" = None,
-                       inputs: "Iterable[str | Path]" = (), **params: Any) -> None:
+                       inputs: "Iterable[str | Path]" = (), description: "str | None" = None,
+                       columns: "dict | None" = None, **params: Any) -> None:
     """The sidecar of one post-stage output: the step, the files it came from, its settings, the bads.
 
     ``inputs`` are tables the step read beside ``source``, such as an events table.
+    ``description`` says what the values are; ``columns`` are a table's BIDS column entries.
     """
     linked, external = split_sources(inputs, path)
     write_sidecar_json(path, {
         "pipeline_version": __version__,
         "step": step,
+        **({"Description": description} if description else {}),
         "Sources": ([source] if source else []) + linked,
         **({"external_sources": external} if external else {}),
         "parameters": params,
         "bad_channels": bads,
         **({"excluded_spans": excluded_spans} if excluded_spans is not None else {}),
+        **(columns or {}),
     })
 
 

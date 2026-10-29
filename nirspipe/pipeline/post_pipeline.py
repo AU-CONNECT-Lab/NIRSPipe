@@ -22,7 +22,7 @@ from nirspipe.pipeline.censor_fill import DEFAULT_CENSOR_FILL, fill_corrupted
 from nirspipe.pipeline.chromophores import (DEFAULT_CHROMOPHORES, chroma_of, hbt_names, hbt_of,
                                             in_order, with_hbt)
 from nirspipe.pipeline.glm_censored import kept_frames
-from nirspipe.io.tables import read_table, write_tsv
+from nirspipe.io.tables import column_entries, read_table, write_tsv
 from nirspipe.pipeline.denoise import (
     DEFAULT_FILTER_METHOD,
     DEFAULT_FILTER_ORDER,
@@ -763,7 +763,8 @@ def _write_fc_derivatives(
     so what the regression did to each connection can be read off the two.
     """
     from nirspipe.pipeline.restingstate import (
-        _roi_members, compute_fc, compute_fc_roi, compute_fc_seed, fisher_z,
+        FC_DESCRIPTIONS, FISHER_Z_DESCRIPTION, FISHER_Z_DIAGONAL, _roi_members, compute_fc,
+        compute_fc_roi, compute_fc_seed, fisher_z,
     )
 
     entities = carry_entities(source_entities)
@@ -801,8 +802,8 @@ def _write_fc_derivatives(
     if kept is None:
         return fc, fc_roi, fc_seed
 
-    def _sidecar(path: Path, step: str, **params) -> None:
-        write_step_sidecar(path, step, src_bp, bads,
+    def _sidecar(path: Path, step: str, description: str, **params) -> None:
+        write_step_sidecar(path, step, src_bp, bads, description=description,
                            excluded_spans=excluded_spans(raw_resid, known=known_spans or ()),
                            chromophores=list(config.chromophores), **params, **kept)
 
@@ -818,7 +819,7 @@ def _write_fc_derivatives(
 
         fc_path = _path(chromo_entities, "pearson")
         write_tsv(fc_df, fc_path, index=True, index_label="channel")
-        _sidecar(fc_path, "fc", chromophore=chromo)
+        _sidecar(fc_path, "fc", FC_DESCRIPTIONS["fc"], chromophore=chromo)
         logger.info("sub-%s | fc (%s) -> %s", config.subject, chromo, fc_path)
 
         if before is not None:
@@ -827,6 +828,7 @@ def _write_fc_derivatives(
             write_tsv(fc_before, before_path, index=True, index_label="channel")
             write_step_sidecar(before_path, "fc", rec.path_of(raw_before), bads,
                                excluded_spans=excluded_spans(raw_before, known=known_spans or ()),
+                               description=FC_DESCRIPTIONS["fc_before"],
                                chromophores=list(config.chromophores), chromophore=chromo,
                                **kept)
             logger.info("sub-%s | fc before the regression (%s) -> %s", config.subject, chromo,
@@ -834,7 +836,8 @@ def _write_fc_derivatives(
 
         fcz_path = _path(chromo_entities, "fisherz")
         write_tsv(fisher_z(fc_df), fcz_path, index=True, index_label="channel")
-        _sidecar(fcz_path, "fisher_z", chromophore=chromo)
+        _sidecar(fcz_path, "fisher_z", FISHER_Z_DESCRIPTION + FISHER_Z_DIAGONAL,
+                 chromophore=chromo)
         logger.info("sub-%s | fcz (%s) -> %s", config.subject, chromo, fcz_path)
 
         if config.roi_map:
@@ -854,12 +857,14 @@ def _write_fc_derivatives(
                 # the members, not the map: an ROI correlation averages them into a
                 # signal that exists nowhere else, and which ones survived is a property
                 # of this run, so without them the number cannot be reproduced
-                _sidecar(fc_roi_path, "fc_roi", chromophore=chromo, roi_channels=members)
+                _sidecar(fc_roi_path, "fc_roi", FC_DESCRIPTIONS["fc_roi"], chromophore=chromo,
+                         roi_channels=members)
                 logger.info("sub-%s | fc_roi (%s) -> %s", config.subject, chromo, fc_roi_path)
 
                 fcroiz_path = _path(_roi({**chromo_entities, "aggregation": "roi"}), "fisherz")
                 write_tsv(fisher_z(fc_roi_df), fcroiz_path, index=True, index_label="roi")
-                _sidecar(fcroiz_path, "fisher_z", chromophore=chromo, roi_channels=members)
+                _sidecar(fcroiz_path, "fisher_z", FISHER_Z_DESCRIPTION + FISHER_Z_DIAGONAL,
+                         chromophore=chromo, roi_channels=members)
                 logger.info("sub-%s | fc_roiz (%s) -> %s", config.subject, chromo, fcroiz_path)
 
                 fc_roi[chromo] = fc_roi_df
@@ -876,12 +881,13 @@ def _write_fc_derivatives(
                 # the channels each seed was actually built from, which is the requested map
                 # minus whatever was rejected; without it a reader cannot tell why a cell
                 # inside a listed ROI holds a value instead of being blank
-                _sidecar(fcseed_path, "fc_seed", chromophore=chromo, seed_channels=members)
+                _sidecar(fcseed_path, "fc_seed", FC_DESCRIPTIONS["fc_seed"], chromophore=chromo,
+                         seed_channels=members)
                 logger.info("sub-%s | fc_seed (%s) -> %s", config.subject, chromo, fcseed_path)
 
                 fcseedz_path = _path(_roi({**chromo_entities, "aggregation": "seed"}), "fisherz")
                 write_tsv(fisher_z(fc_seed_df), fcseedz_path, index=True, index_label="roi")
-                _sidecar(fcseedz_path, "fisher_z", chromophore=chromo)
+                _sidecar(fcseedz_path, "fisher_z", FISHER_Z_DESCRIPTION, chromophore=chromo)
                 logger.info("sub-%s | fc_seedz (%s) -> %s", config.subject, chromo, fcseedz_path)
 
                 fc_seed[chromo] = fc_seed_df
@@ -907,7 +913,9 @@ def _write_rest_derivatives(
     ALFF/fALFF use the broadband residual (raw_resid_bb); every FC product uses the
     bandpassed one.
     """
-    from nirspipe.pipeline.restingstate import _roi_members, compute_alff, compute_alff_roi
+    from nirspipe.pipeline.restingstate import (
+        ALFF_COLUMNS, ALFF_ROI_COLUMNS, ALFF_UNITS, _roi_members, compute_alff, compute_alff_roi,
+    )
 
     entities = carry_entities(source_entities)
 
@@ -932,6 +940,7 @@ def _write_rest_derivatives(
         spans = excluded_spans(raw_resid_bb, known=known_spans or ())
         write_step_sidecar(alff_path, "alff", rec.path_of(raw_resid_bb),
                        list(series.info["bads"]), excluded_spans=spans,
+                       columns=column_entries(alff_df.columns, ALFF_COLUMNS, ALFF_UNITS),
                        low_pass=config.low_pass, high_pass=config.high_pass,
                        chromophores=list(config.chromophores), **kept)
         logger.info("sub-%s | alff -> %s", config.subject, alff_path)
@@ -948,6 +957,8 @@ def _write_rest_derivatives(
                 write_tsv(alff_roi_df, alff_roi_path)
                 write_step_sidecar(alff_roi_path, "alff_roi", rec.path_of(raw_resid_bb),
                                list(series.info["bads"]), excluded_spans=spans,
+                               columns=column_entries(alff_roi_df.columns, ALFF_ROI_COLUMNS,
+                                                      ALFF_UNITS),
                                low_pass=config.low_pass, high_pass=config.high_pass,
                                roi_channels={c: _roi_members(series, config.roi_map, c)
                                              for c in config.chromophores},

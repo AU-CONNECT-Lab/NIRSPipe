@@ -1000,6 +1000,30 @@ RECORD_CHANNEL_COLUMNS = {
     "metric": "What was measured.",
     "value": "The measured value.",
 }
+# the columns of the per-channel verdict tables, desc-channel_qc and desc-rawchannel_qc
+CHANNEL_QC_COLUMNS = {
+    "name": "Channel name: source-detector pair and wavelength. A value measured on the pair "
+            "(SCI, PSP, passing windows, the correlation, the short-channel shares) is repeated "
+            "on both of its wavelengths.",
+    "sci_win": RECORD_CHANNEL_METRICS["sci_win_per_channel"],
+    "sci_whole": RECORD_CHANNEL_METRICS["sci_per_channel"],
+    "psp": RECORD_CHANNEL_METRICS["psp_per_channel"],
+    "snr": RECORD_CHANNEL_METRICS["snr_per_channel"],
+    "cv": RECORD_CHANNEL_METRICS["cv_per_channel"],
+    "spike": RECORD_CHANNEL_METRICS["spike_pct_per_channel"],
+    "saturated": RECORD_CHANNEL_METRICS["saturated_per_channel"],
+    "corr": "Correlation between HbO and HbR of the pair before filtering, the record's preproc "
+            "section; raw QC's table reads rawhaemo, before motion correction.",
+    "separation": "The channel set its source-detector separation puts it in: long, short, or "
+                  "unclassified between the two ranges; n/a when the montage was not split.",
+    "short_share_hbo": "Share of the pair's HbO variance its fitted short-channel regressors "
+                       "carry, 0 to 1; n/a on a run without that regression.",
+    "short_share_hbr": "The same for HbR.",
+    "good_frac": RECORD_CHANNEL_METRICS["good_frac_per_channel"],
+    "is_bad": "Whether the channel was rejected on this run.",
+    "reason": "The criterion a rejected channel failed: passing windows, or manual when its "
+              "scores pass every line; n/a for a kept channel.",
+}
 _GVTD_FAMILIES = {
     "gvtd_per_window": "Unfiltered GVTD averaged within each window",
     "gvtd_p95_per_window": "The 95th percentile of unfiltered GVTD within each window",

@@ -12,6 +12,7 @@ does not carry is asking for a metric that was never stored.
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -20,9 +21,11 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.io.optode_space import placement_of
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import column_entries, write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
-from nirspipe.qc.boilerplate.vocabulary import MISSING_VALUE, condition_label
+from nirspipe.qc.boilerplate.vocabulary import (
+    CHANNEL_QC_COLUMNS, MISSING_VALUE, condition_label,
+)
 from nirspipe.qc.metrics._helpers import bands_from_record, in_long_band, in_short_band
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
@@ -914,4 +917,7 @@ def save_channel_csv(rows: list[dict], label: str, out_dir: Path,
     # an empty reason or separation is not applicable, which BIDS writes as n/a too
     table = pd.DataFrame(rows).reindex(columns=list(CSV_FIELDS)).replace("", None)
     write_tsv(table, out_path)
+    out_path.with_suffix(".json").write_text(
+        json.dumps(column_entries(table.columns, CHANNEL_QC_COLUMNS), indent=2) + "\n",
+        encoding="utf-8")
     logger.info("%s | channel metrics CSV saved: %s", label, out_path)

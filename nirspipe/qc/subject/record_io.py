@@ -11,7 +11,7 @@ import pandas as pd
 
 from nirspipe.exceptions import StageError
 from nirspipe.io.naming import record_table_name
-from nirspipe.io.tables import NA, write_tsv
+from nirspipe.io.tables import NA, column_entries, write_tsv
 from nirspipe.qc.boilerplate.vocabulary import (
     RECORD_CHANNEL_COLUMNS, RECORD_CHANNEL_METRICS, RECORD_SECTIONS, RECORD_WINDOW_COLUMNS,
 )
@@ -55,17 +55,6 @@ def _window_length(windowed: dict) -> "float | None":
     return None
 
 
-def _described(descriptions: dict, keys, units: "dict | None" = None) -> dict:
-    out = {}
-    for key in keys:
-        entry = {"Description": descriptions[key]} if key in descriptions else {}
-        if units and units.get(key):
-            entry["Units"] = units[key]
-        if entry:
-            out[key] = entry
-    return out
-
-
 def _matrix_tables(windowed: dict, label: str, desc: str, header: dict) -> dict:
     tables = {}
     for stat in MATRIX_STATS:
@@ -91,7 +80,7 @@ def _summary_table(windowed: dict, label: str, desc: str, header: dict, imu: dic
     frame = pd.DataFrame({key: np.asarray(values, dtype=float) for key, values in series.items()})
     units = {f"{name}{part}_per_window": imu[f"{name}_unit"]
              for name in IMU_QUANTITIES if imu.get(f"{name}_unit") for part in ("", "_p95")}
-    sidecar = {**header, **_described(RECORD_WINDOW_COLUMNS, frame.columns, units)}
+    sidecar = {**header, **column_entries(frame.columns, RECORD_WINDOW_COLUMNS, units)}
     return {record_table_name(label, desc, "timeseries", statistic=SUMMARY_STAT): (frame, sidecar)}
 
 
@@ -111,7 +100,7 @@ def channel_frame(per_channel: dict) -> pd.DataFrame:
 
 def channel_columns(frame: pd.DataFrame) -> dict:
     """Sidecar entries for a channel table, levels limited to those it holds."""
-    columns = _described(RECORD_CHANNEL_COLUMNS, CHANNEL_COLUMNS)
+    columns = column_entries(CHANNEL_COLUMNS, RECORD_CHANNEL_COLUMNS)
     columns["section"]["Levels"] = _described_levels(RECORD_SECTIONS, frame["section"])
     columns["metric"]["Levels"] = _described_levels(RECORD_CHANNEL_METRICS, frame["metric"])
     return columns

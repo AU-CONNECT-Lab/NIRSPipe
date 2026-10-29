@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- The channel QC, GLM, contrast and ALFF tables describe each column and its unit in their sidecars, and FC matrix sidecars say what they hold
+
 ### Changed
 - The re-paired null's ISC draws table names its correlation `r`, as the real table and the phase-null draws do, instead of `coherence`
 - Hyperscanning and dyad usable-time tables give the whole run's rows `condition` whole_run instead of n/a or `whole run`; a condition named so is refused

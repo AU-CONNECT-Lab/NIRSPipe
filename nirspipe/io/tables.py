@@ -32,6 +32,18 @@ def write_tsv(frame: pd.DataFrame, path, **kwargs):
     return path
 
 
+def column_entries(columns, descriptions: dict, units: "dict | None" = None) -> dict:
+    """BIDS sidecar entries, Description and Units, for the given columns that either dict names."""
+    out = {}
+    for column in columns:
+        entry = {"Description": descriptions[column]} if column in descriptions else {}
+        if units and units.get(column):
+            entry["Units"] = units[column]
+        if entry:
+            out[column] = entry
+    return out
+
+
 def _sniff_delimiter(path: Path) -> str:
     """Pick a delimiter off the header line of a table whose extension does not say.
 
