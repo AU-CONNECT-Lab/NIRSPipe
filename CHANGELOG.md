@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge
+- First-level GLM p values were far too large, their `df` being the number of regressors; `--p-correction` inherited them
 
 ## [0.79.0] - 2026-10-28
 

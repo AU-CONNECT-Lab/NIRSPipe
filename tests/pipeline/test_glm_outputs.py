@@ -6,6 +6,7 @@ first rather than over it. Which entities carry over is what the tests below pin
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -19,13 +20,16 @@ PREPROC = "/out/sub-01/nirs/sub-01_task-tapping_desc-preproc_nirs.snirf"
 
 
 class _FakeGLM:
-    """Stands in for mne_nirs' RegressionResults: _save_glm_outputs only reads to_dataframe."""
+    """Stands in for mne_nirs' RegressionResults: the tidy frame and each channel's residual df."""
 
     def __init__(self, ch_names):
-        self._ch_names = ch_names
+        self.ch_names = ch_names
+        self.data = {ch: SimpleNamespace(df_residuals=10.0) for ch in ch_names}
 
     def to_dataframe(self):
-        return pd.DataFrame({"ch_name": self._ch_names, "theta": [1.0] * len(self._ch_names)})
+        return pd.DataFrame({"Condition": "tapping", "ch_name": self.ch_names,
+                             "Chroma": [ch.split()[-1] for ch in self.ch_names],
+                             "theta": 1.0, "t": 2.0})
 
 
 class _FakeContrast(_FakeGLM):

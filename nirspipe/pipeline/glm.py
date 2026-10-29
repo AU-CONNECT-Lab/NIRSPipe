@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import mne
 import mne.io
+from scipy import stats
 
 from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.pipeline.denoise import (
@@ -759,6 +760,15 @@ _GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", 
                              "Chroma", "ch_name", "bad"})
 
 
+def on_residual_df(table: pd.DataFrame, stat: str, dof: "dict[str, float]") -> pd.DataFrame:
+    """``df`` as each channel's own residual df, and ``p_value`` two-sided on it from ``stat``."""
+    out = table.copy()
+    # mne-nirs writes the design's rank as df and takes its p from that
+    out["df"] = out["ch_name"].map(dof).astype(float)
+    out["p_value"] = 2 * stats.t.sf(np.abs(out[stat].astype(float)), out["df"])
+    return out
+
+
 def blank_self_fitted(df: pd.DataFrame, channels: "list[str]") -> pd.DataFrame:
     """Every statistic of a channel fitted against a copy of itself set to n/a, rows kept."""
     rows = df["ch_name"].isin(channels) if "ch_name" in df.columns else None
@@ -857,8 +867,11 @@ def _save_glm_outputs(
     write_tsv(design_matrix.assign(censored=flags), dm_path)
     write_step_sidecar(dm_path, "design_matrix", source_path, bads, inputs=inputs, **params)
 
+    # robust and censored fits carry an effective df of their own, so it is read per channel
+    dof = {ch: float(glm_est.data[ch].df_residuals) for ch in glm_est.ch_names}
     res_path = _named("nirsmap", desc="glm")
-    write_tsv(_corrected(_mark_bads(glm_est.to_dataframe()), "Condition"), res_path)
+    write_tsv(_corrected(_mark_bads(on_residual_df(glm_est.to_dataframe(), "t", dof)),
+                         "Condition"), res_path)
     write_step_sidecar(res_path, "glm_fit", source_path, bads, inputs=inputs, **p_params)
 
     if contrasts:
