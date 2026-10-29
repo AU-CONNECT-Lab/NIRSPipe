@@ -146,7 +146,9 @@ def optode_layout_static(
     if any(n.upper() not in shares for n in opt_xy):
         handles.append(Line2D([], [], ls="", marker="o", ms=4.5, mfc=NO_SHARE_COLOR,
                               mec=_NO_SHARE_EDGE, label="Short channels only"))
-    ax.legend(handles=handles, fontsize=8, loc="upper right", framealpha=0.7)
+    # top right, outside the head, which reaches the axes' corner
+    ax.legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.0, 1.0),
+              frameon=False)
     ax.set_title(f"Optode flat map: {sci_legend(sci_threshold)}", fontsize=8)
 
     if shares:
