@@ -23,7 +23,7 @@ The metrics work on any recording, whatever its design. The one exception is CNR
 
 `nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, once preprocessing and postprocessing have both finished. `nirspipe-qc ... participant` writes the raw part of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` writes a dyad record under `group-<id>/nirs/`. The cohort pages are built from these records.
 
-The record is split into sections named after the stage they were measured on (`raw`, `motion`, `preproc`, `errts` and so on), and each is measured on all channels, the long channels and the short channels separately. Measures taken on the raw signal include rejected channels; measures taken on haemoglobin leave them out. `<run>_desc-channel_qc.tsv` beside the record holds one row per channel, with its metrics and its verdict.
+The record is split into sections named after the stage they were measured on (`raw`, `motion`, `preproc`, `errts` and so on), and each is measured on all channels, the long channels and the short channels separately: `raw` is every channel, `raw_long` and `raw_short` the two sets. The per-window series and the flagged stretches (GVTD above its threshold, spikes, corrected samples) are named the same way: `gvtd_filt_per_window` is every channel, `gvtd_filt_per_window_long` and `_short` the sets. Measures taken on the raw signal include rejected channels; measures taken on haemoglobin leave them out. `<run>_desc-channel_qc.tsv` beside the record holds one row per channel, with its metrics and its verdict, and the `.json` beside it says what each column holds. An older record, which named the long set's series plainly and every channel's `_all`, is refused rather than read the wrong way round; rerun the command that wrote it.
 
 ## Metrics
 
@@ -227,6 +227,8 @@ The page has the same order as the run report. The raw signal is unfiltered, so 
 
 `nirspipe-qc ... group` (or `nirspipe ... group`) gathers every run's quality record into `desc-subjects_qc.tsv`, one row per run, and draws `desc-subjects_report.html`. A run with both a pipeline and a raw record uses the pipeline's. `desc-subjects_qc.json` describes every column.
 
+`desc-conditions_qc.tsv` holds the same numbers per condition: one row per run and condition, under the same column names, each measured over the condition's window, with the window itself (`onset`, `duration`), its `kept_s` outside every `BAD_` span and the `counted_windows` its passing share counts. A condition's `channel_retention_rate` is the share of channels passing in that condition. It helps choose which conditions to keep and rejects nothing: the data were processed under the run's own verdict, as on the condition pages. `desc-conditions_qc.json` describes every column.
+
 | Panel | Shows |
 |-------|-------|
 | Not finished | Only when some subject's last `nirspipe` run failed or was stopped: the subject, its status, when it started and the first line of its error. |
@@ -262,7 +264,9 @@ With `--pairs-csv`, `nirspipe-qc ... group` also gathers each dyad's raw record 
 | Where the time went | The usable share per channel pair, and per condition for the dyads that lost the most. A pair that is poor in every dyad points at the cap, not at a dyad. |
 | Quality Metrics | The cohort summary and every dyad's numbers. |
 
-`usable_stretch_s` is the typical longest unbroken usable stretch, which matters because coherence needs continuous data.
+`usable_stretch_s` is the typical longest unbroken usable stretch, which matters because coherence needs continuous data. Every share in the table is a fraction from 0 to 1, and `desc-groups_qc.json` describes every column.
+
+`desc-groupconditions_qc.tsv` holds the same for each condition: one row per dyad and condition, read from the dyad's usable-time table, under the same column names. It has no `usable_stretch_s`, which needs the windows in their order.
 
 ## Dyad reports
 

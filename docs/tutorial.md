@@ -75,7 +75,7 @@ Each person's pages start at `derivatives/sub-101/sub-101_desc-index_report.html
 nirspipe timed/marker_edited derivatives group --skip-bids-validation
 ```
 
-Writes `derivatives/desc-subjects_report.html` and `derivatives/desc-subjects_qc.tsv`.
+Writes `derivatives/desc-subjects_report.html`, `derivatives/desc-subjects_qc.tsv`, and `derivatives/desc-conditions_qc.tsv` with the same numbers for each condition.
 
 ## 5. Dyad analysis
 

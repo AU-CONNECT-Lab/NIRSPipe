@@ -34,6 +34,7 @@ derivatives/nirspipe/
 ├── plotly-<version>.min.js             ← the reports' Plotly.js when the CDN does not load
 ├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc group)
 ├── desc-subjects_qc.json                ← what each of its columns holds
+├── desc-conditions_qc.tsv               ← the same per run and condition, with its .json
 ├── desc-subjects_report.html            ← cohort page
 ├── desc-subjects_nirsmap.tsv            ← every run's per-channel values, one long table
 ├── desc-fcmovement_qc.tsv               ← per task, each connection's r between movement and FC across runs
@@ -89,7 +90,7 @@ With `nirspipe-rate --rater`, the rating files carry the rater before `desc-` (`
 
 A step that did not run writes nothing: `desc-motcorrected` is absent under `--motion-correction none`, `desc-filtered` when both cutoffs are off, and the quality record has no section for a stage that does not exist.
 
-**Tables.** Every table is tab-separated and writes a missing value as `n/a`, as BIDS requires. pandas reads `n/a` as missing by default; in R, pass `na = c("", "NA", "n/a")` to `read.delim` or `readr::read_tsv`, or the column is read as text. A connectivity matrix keeps every channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have the same shape. The quality record is described in [QC](qc.md#the-quality-record).
+**Tables.** Every table is tab-separated and writes a missing value as `n/a`, as BIDS requires. pandas reads `n/a` as missing by default; in R, pass `na = c("", "NA", "n/a")` to `read.delim` or `readr::read_tsv`, or the column is read as text. A connectivity matrix keeps every long channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have the same shape; short channels are left out, as in the dyad tables. Its diagonal is 1, and blank in the Fisher z matrix, where it would be infinite. Each table's sidecar describes its columns and, where a column has one, its unit (haemoglobin is in M, mol/L). In the GLM and contrast tables, `df` is each channel's own residual degrees of freedom and `p_value` is two-sided on it. The quality record is described in [QC](qc.md#the-quality-record).
 
 ## The raw QC tree
 
@@ -100,7 +101,9 @@ derivatives/nirspipe-qc/
 ├── dataset_description.json
 ├── .bidsignore
 ├── desc-subjects_qc.tsv, desc-subjects_report.html    ← group level: the cohort of runs
+├── desc-conditions_qc.tsv                             ← group level: the same per run and condition
 ├── desc-groups_qc.tsv, desc-groups_report.html        ← group level + --pairs-csv: the cohort of dyads
+├── desc-groupconditions_qc.tsv                        ← group level + --pairs-csv: the same per dyad and condition
 ├── sub-<label>/
 │   ├── sub-<label>_desc-index_report.html
 │   ├── <run>_desc-raw_report.html                     ← participant level
@@ -124,7 +127,7 @@ Per group and task the group level writes:
 | `desc-sqm_qc.json` | The dyad's quality record, which the cohort of dyads reads |
 | `desc-subject_qc.tsv` | One row per member: every scalar of its raw quality view |
 | `desc-channel_qc.tsv` | One row per member and channel: `sci_win`, `sci_whole`, `is_bad` |
-| `desc-usable_qc.tsv` | One row per channel pair and condition: `usable_frac`, `one_member_frac`, `neither_frac`, `n_windows` |
+| `desc-usable_qc.tsv` | One row per channel pair and condition (`whole_run` for a dyad with no conditions): `usable_frac`, `one_member_frac`, `neither_frac`, `n_windows` |
 
 ## The `nirspipe-hyper` tree
 
@@ -154,20 +157,20 @@ derivatives/nirspipe-hyper/
 
 | File | Holds |
 |------|-------|
-| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing, chromophore and window: `chromophore`, `condition` (`n/a` for the whole recording), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `kept_s` |
+| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing, chromophore and window: `chromophore`, `condition` (`whole_run` for the whole recording; a table with no conditions has no `condition` column), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `kept_s` |
 | `seg-<map>_agg-roi_stat-wtc_relmat.tsv`, `seg-<map>_agg-homologous_stat-wtc_relmat.tsv` | The region tables, laid out the same way |
 | `stat-wtcphase_relmat.tsv` | Relative phase per frequency, with `lag_s`, laid out the same way |
 | `null-phase_stat-wtc_relmat.tsv` and its region twins | The phase-scrambled null, laid out the same way: the same columns plus `null_sd`, `null_p95`, `n_iter`, `percentile` (with `--wtc-phase-null`) |
-| `cond-all_null-phase_stat-wtc_desc-draws_relmat.tsv` | Every iteration of that null |
+| `cond-all_null-phase_stat-wtc_desc-draws_relmat.tsv` | Every iteration of that null, one row per pairing it measured: a pairing a rejected channel left blank has no row |
 | `chromo-<c>_stat-wtc_relmat.npz` | The full time-frequency maps (with `--wtc-save-maps`) |
-| `stat-isc_relmat.tsv` | The correlations, one row per pairing and window: `chromophore`, `sub1`, `sub2`, `label`, `label2`, `condition`, `r`, `r_z`, and `lag_s` and the null columns where asked for |
+| `stat-isc_relmat.tsv` | The correlations, one row per pairing and window: `chromophore`, `condition`, `sub1`, `sub2`, `label`, `label2`, `r`, `r_z`, and `lag_s` and the null columns where asked for |
 | `seg-<map>_agg-roi_stat-isc_relmat.tsv` | The region correlations, laid out as `stat-isc_relmat.tsv` |
 | `chromo-<c>[_cond-<c>]_stat-isc_relmat.tsv`, `..._seg-<map>_agg-roi_...` | The correlation matrices, per chromophore and window |
-| `cond-all_null-phase_stat-isc_desc-draws_relmat.tsv` | Every surrogate of the correlation (with `--isc-phase-null`) |
+| `cond-all_null-phase_stat-isc_desc-draws_relmat.tsv` | Every surrogate of the correlation (with `--isc-phase-null`), one row per pairing it measured |
 | `desc-bad_qc.tsv` | Each member's excluded channels and the runs that rejected them |
 | `space-<template>_channels.tsv` | Each member's channel positions and cortical regions |
 
-`nirspipe-hyper-pairnull` writes its tables beside them, named with `null-pair` (`cond-all_null-pair_stat-wtc_relmat.tsv`, `cond-all_null-pair_stat-isc_relmat.tsv` and their draws). `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map. Each table's sidecar records the settings it was computed with.
+`nirspipe-hyper-pairnull` writes its tables beside them, named with `null-pair` (`cond-all_null-pair_stat-wtc_relmat.tsv`, `cond-all_null-pair_stat-isc_relmat.tsv` and their draws, whose correlation column is `r` as in the real table). `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map. Each table's sidecar records the settings it was computed with.
 
 ## Sidecars and provenance
 

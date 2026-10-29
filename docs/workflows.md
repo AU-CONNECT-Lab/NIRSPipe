@@ -227,7 +227,7 @@ A design matrix as the report draws it: the condition regressors, the short-chan
 
 **Contrasts.** `--contrast-file` names a table of contrasts between conditions ([Contrast file](usage.md#contrast-file)), written to `desc-contrast_nirsmap.tsv`.
 
-**P values.** The tables give uncorrected p values. `--p-correction` (`fdr_bh`, `fdr_by`, `holm` or `bonferroni`) adds corrected ones, over the good long channels.
+**P values.** The tables give uncorrected, two-sided p values, each on its channel's own residual degrees of freedom, which the `df` column states (fewer than the samples under the robust and censored fits). `--p-correction` (`fdr_bh`, `fdr_by`, `holm` or `bonferroni`) adds corrected ones, over the good long channels.
 
 **Block average.** Each condition's trials averaged per channel, from `--epoch-tmin` to `--epoch-tmax` (-5 to 25 s by default). Trials that touch excluded time are left out.
 
@@ -278,7 +278,7 @@ flowchart TD
 
 The regression runs twice: once on the bandpassed data for connectivity (`desc-errts`), and once on data without the bandpass for ALFF (`desc-errtsbroad`), because fALFF compares the band with the whole spectrum.
 
-**Connectivity.** The Pearson correlation between every pair of channels, per chromophore, with its Fisher z. A bad channel is a blank row and column.
+**Connectivity.** The Pearson correlation between every pair of long channels, per chromophore, with its Fisher z. Short channels are left out, as in the dyad tables. A bad channel is a blank row and column. The diagonal is 1 in the correlation matrix and blank in the Fisher z one, where it would be infinite.
 
 **Amplitude.** Per channel:
 
@@ -327,4 +327,4 @@ Excluded time applies to all channels at once. For a problem on a single channel
 
 ## Group level
 
-`nirspipe BIDS_DIR OUTPUT_DIR group` reads the quality records under `OUTPUT_DIR` and writes the cohort page, `desc-subjects_report.html` with its table `desc-subjects_qc.tsv`, and, when the tree has dyad records, the dyad cohort page `desc-groups_report.html`. See [QC](qc.md#cohort-reports).
+`nirspipe BIDS_DIR OUTPUT_DIR group` reads the quality records under `OUTPUT_DIR` and writes the cohort page, `desc-subjects_report.html` with its table `desc-subjects_qc.tsv` and the same per condition, `desc-conditions_qc.tsv`, and, when the tree has dyad records, the dyad cohort page `desc-groups_report.html`. See [QC](qc.md#cohort-reports).
