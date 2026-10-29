@@ -63,6 +63,7 @@ def optode_layout_static(
     drawn as laid out, with no head.
     """
     import matplotlib.pyplot as plt
+    from matplotlib.cm import ScalarMappable
     from matplotlib.colors import LinearSegmentedColormap, Normalize
     from matplotlib.lines import Line2D
 
@@ -152,7 +153,7 @@ def optode_layout_static(
     ax.set_title(f"Optode flat map: {sci_legend(sci_threshold)}", fontsize=8)
 
     if shares:
-        bar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax,
+        bar = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax,
                            shrink=0.4, aspect=16, pad=0.02)
         bar.set_ticks([0.0, 0.5, 1.0], labels=["0%", "50%", "100%"])
         bar.set_label("Optode: long channels rejected", fontsize=7)
