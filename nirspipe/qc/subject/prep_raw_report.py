@@ -140,7 +140,7 @@ def _store_matrices(windowed: dict, series: dict) -> None:
             windowed[key] = np.asarray(series[key]).tolist()
 
 
-def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> None:
+def _store_spans(windowed: dict, raw, raw_after, sep_bands, errors: list, label: str) -> None:
     """The flagged spans, kept as spans so a condition counts the run's own boolean.
 
     ::
@@ -152,8 +152,9 @@ def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> No
     long ones, and GVTD is an RMS across whatever it is given, so each set has its own trace
     and its own threshold. The long set keeps the plain key, as the pipeline's record does.
 
-    No ``motion_corrected_spans_s``: that needs the optical density either side of the
-    correction step and this pass runs before it. The key is absent rather than empty.
+    Spikes are found on the recording as delivered and GVTD on ``raw_after``, the corrected
+    copy where a correction ran, as the pipeline's record finds them, so a condition's GVTD
+    share reads the file its GVTD means were taken from.
     """
     from nirspipe.qc.metrics import (
         gvtd_above_segments, long_short_channels, spike_segments,
@@ -162,7 +163,8 @@ def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> No
     long_names, short_names = long_short_channels(raw, sep_bands)
     with guard("Spike spans", errors, label):
         for key, names in (("spike_spans_s", long_names),
-                           ("spike_spans_short_s", short_names)):
+                           ("spike_spans_short_s", short_names),
+                           ("spike_spans_all_s", list(raw.ch_names))):
             if names:
                 picked = raw.copy().pick(names)
             elif key == "spike_spans_s":
@@ -170,14 +172,15 @@ def _store_spans(windowed: dict, raw, sep_bands, errors: list, label: str) -> No
             else:
                 continue
             windowed[key] = [list(span) for span in spike_segments(picked)]
+    gvtd_raw = raw if raw_after is None else raw_after
     with guard("GVTD above-threshold spans", errors, label):
         windowed["gvtd_above_spans_s"] = [
-            list(span) for span in gvtd_above_segments(raw, sep_bands)]
+            list(span) for span in gvtd_above_segments(gvtd_raw, sep_bands)]
         for key, picks in (("gvtd_above_spans_short_s", short_names),
-                           ("gvtd_above_spans_all_s", list(raw.ch_names))):
+                           ("gvtd_above_spans_all_s", list(gvtd_raw.ch_names))):
             if picks:
                 windowed[key] = [list(span) for span in
-                                 gvtd_above_segments(raw, sep_bands, picks=picks)]
+                                 gvtd_above_segments(gvtd_raw, sep_bands, picks=picks)]
 
 
 def _process_run(
@@ -368,7 +371,7 @@ def _process_run(
     # per-condition number is a column selection out of these, and without them on disk it
     # could only be recomputed. Same keys the pipeline's own record writes.
     _store_matrices(windowed, series)
-    _store_spans(windowed, raw, sep_bands, errors, label)
+    _store_spans(windowed, raw, raw_motcorr, sep_bands, errors, label)
 
     if raw_motcorr is not None:
         with guard("Motion sections", errors, label):

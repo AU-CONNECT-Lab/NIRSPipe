@@ -1,11 +1,15 @@
-"""Raw QC takes the pipeline's reviewer marks and gives the same verdict, and its record says how it screened."""
+"""Raw QC takes the pipeline's reviewer marks and gives the same verdict, keeps the run's span lists as the pipeline's record does, and its record says how it screened."""
 
 import json
 
+import numpy as np
 import pytest
 
 from nirspipe.cli import qc as qc_cli
 from nirspipe.cli import run as run_cli
+from nirspipe.io.snirf import read_raw_snirf
+from nirspipe.qc.metrics import gvtd_above_segments
+from nirspipe.qc.subject.record_io import read_record
 from nirspipe.utils import pair_of
 
 from tests._fingerprint import DPF, make_fingerprint_dataset
@@ -75,3 +79,41 @@ def test_the_record_carries_the_settings_it_screened_with(tmp_path):
     assert params["template"] == "fsaverage"
     # the pipeline's default, so a run that names none corrects as nirspipe would
     assert params["motion_correction"] == "tddr"
+
+
+# the run's flagged stretches, which a condition counts over its own window
+SPAN_KEYS = ("gvtd_above_spans_s", "gvtd_above_spans_short_s", "gvtd_above_spans_all_s",
+             "spike_spans_s", "spike_spans_short_s", "spike_spans_all_s")
+SPAN_SETTINGS = ("--participant-label", "01", "--dpf", "6", "--sci-threshold", "0.8",
+                 "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
+                 "--resp-l-freq", "0.1", "--resp-h-freq", "0.4",
+                 "--motion-correction", "tddr", "--skip-bids-validation")
+
+
+@pytest.fixture(scope="module")
+def windowed(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("spans")
+    bids = make_bids_dataset(tmp, subjects=("01",), tasks=("mixed",))
+    run_cli.main([str(bids), str(tmp / "pipe"), "participant", *SPAN_SETTINGS, "--no-report"])
+    qc_cli.main([str(bids), str(tmp / "qc"), "participant", *SPAN_SETTINGS])
+    pipe = read_record(next((tmp / "pipe").rglob("*_desc-sqm_qc.json")))
+    raw_qc = read_record(next((tmp / "qc").rglob("*_desc-sqmraw_qc.json")))
+    return bids, pipe["windowed"], raw_qc["windowed"]
+
+
+@pytest.mark.parametrize("key", SPAN_KEYS)
+def test_raw_qc_keeps_each_span_list_as_the_pipeline_record_does(windowed, key):
+    _bids, pipe, raw_qc = windowed
+    assert key in pipe and key in raw_qc
+    assert len(raw_qc[key]) == len(pipe[key])
+    if pipe[key]:
+        np.testing.assert_allclose(np.asarray(raw_qc[key], float),
+                                   np.asarray(pipe[key], float), rtol=0, atol=1e-9)
+
+
+def test_the_recording_moves_its_gvtd_spans_across_the_correction(windowed):
+    # without this the parity above would hold for spans taken on either side of the correction
+    bids, _pipe, raw_qc = windowed
+    raw = read_raw_snirf(next(bids.rglob("*_nirs.snirf")), preload=True, verbose=False)
+    before = [list(span) for span in gvtd_above_segments(raw)]
+    assert before and before != raw_qc["gvtd_above_spans_s"]

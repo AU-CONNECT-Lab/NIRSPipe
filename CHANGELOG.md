@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge
 - First-level GLM p values were far too large, their `df` being the number of regressors; `--p-correction` inherited them
 - Contrast p values were one-sided, so a negative contrast such as an HbR decrease never read significant; the table now states its `df`
+- Raw QC took the GVTD share on its condition pages and subject index before motion correction, unlike the GVTD means beside it
+- Raw QC's condition pages lacked the all-channel spike share that the pipeline's condition pages give
 
 ## [0.79.0] - 2026-10-28
 
