@@ -132,7 +132,8 @@ def test_the_merged_table_and_the_cohort_page_carry_the_occasion(tree):
     merged = pd.read_csv(tree["hyper"] / "stat-wtc_relmat.tsv", sep="\t", dtype=str)
     assert set(merged["session"]) == {OCCASION}
     table = pd.read_csv(tree["qc"] / "desc-groups_qc.tsv", sep="\t", dtype=str)
-    assert sorted(table["label"]) == [f"group-{gid}_ses-{OCCASION}_task-{TASK}" for gid in GROUPS]
+    assert sorted(table["bids_name"]) == [f"group-{gid}_ses-{OCCASION}_task-{TASK}"
+                                          for gid in GROUPS]
 
 
 def test_the_group_level_session_label_selects_occasions_not_member_sessions(tree):

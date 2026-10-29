@@ -371,11 +371,11 @@ function _set(id, text, cls) {
 (function() {
   var q = _SQM;
   var pct = q.pct_all_good;
-  var goodCls = pct != null ? (pct >= 80 ? "qm-ok" : pct >= 50 ? "qm-warn" : "qm-bad") : "";
+  var goodCls = pct != null ? (pct >= 0.8 ? "qm-ok" : pct >= 0.5 ? "qm-warn" : "qm-bad") : "";
   _set("sum-n-pairs", q.n_total != null ? String(q.n_total) : "—");
   _set("sum-all-good",
        (q.n_all_good != null ? q.n_all_good : "—") +
-         (pct != null ? " (" + pct.toFixed(0) + "%)" : ""), goodCls);
+         (pct != null ? " (" + (pct * 100).toFixed(0) + "%)" : ""), goodCls);
   _set("sum-all-bad", q.n_all_bad != null ? String(q.n_all_bad) : "—",
        q.n_all_bad > 0 ? "qm-bad" : "");
   _set("sum-usable",

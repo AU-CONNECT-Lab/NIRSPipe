@@ -111,7 +111,7 @@ def test_the_merged_table_carries_the_session(tree):
 
 def test_the_cohort_page_has_a_row_per_session(tree):
     table = pd.read_csv(tree.parent / "qc" / "desc-groups_qc.tsv", sep="	", dtype=str)
-    assert sorted(table["label"]) == [f"group-G01_ses-{ses}_task-{TASK}" for ses in SESSIONS]
+    assert sorted(table["bids_name"]) == [f"group-G01_ses-{ses}_task-{TASK}" for ses in SESSIONS]
 
 
 def test_the_group_null_writes_its_page_with_every_link_on_disk(tree):

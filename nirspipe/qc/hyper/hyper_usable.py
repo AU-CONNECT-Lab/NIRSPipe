@@ -72,12 +72,11 @@ def usable_scalars(grid: dict, subject_ids: list[str]) -> dict:
     return {
         "n_long_pairs": len(rows),
         "n_windows": int(status.shape[1]),
-        "usable_pairs_mean": round(float(usable.sum(axis=0).mean()), 2),
-        "usable_window_frac": round(float(usable.mean()), 4),
-        "one_member_frac": round(float((status == 1).mean()), 4),
-        "neither_frac": round(float((status == 0).mean()), 4),
-        "usable_stretch_s": round(
-            float(np.median([_longest_run(row) for row in usable])) * window_s, 1),
+        "usable_pairs_mean": float(usable.sum(axis=0).mean()),
+        "usable_window_frac": float(usable.mean()),
+        "one_member_frac": float((status == 1).mean()),
+        "neither_frac": float((status == 0).mean()),
+        "usable_stretch_s": float(np.median([_longest_run(row) for row in usable])) * window_s,
     }
 
 
@@ -111,9 +110,9 @@ def usable_table(grid: dict, subject_ids: list[str],
             cells = status[i, keep]
             out.append({
                 "pair": pair, "condition": str(name),
-                "usable_frac": round(float((cells == 2).mean()), 4),
-                "one_member_frac": round(float((cells == 1).mean()), 4),
-                "neither_frac": round(float((cells == 0).mean()), 4),
+                "usable_frac": float((cells == 2).mean()),
+                "one_member_frac": float((cells == 1).mean()),
+                "neither_frac": float((cells == 0).mean()),
                 "n_windows": int(keep.sum()),
             })
     return pd.DataFrame(out)

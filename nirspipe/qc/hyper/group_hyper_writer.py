@@ -74,8 +74,30 @@ _COLUMNS = (
     ("aligned_duration_s", "Aligned", "{:.0f} s"),
     ("max_offset_s", "Max offset", "{:.2f} s"),
     ("offsets_equal", "Offsets equal", "{}"),
-    ("pct_all_good", "Good in both", "{:.0f}%"),
+    ("pct_all_good", "Good in both", "{:.0%}"),
 )
+
+# the column dictionary written beside desc-groups_qc.tsv
+GROUPS_QC_COLUMNS = {
+    "bids_name": "The dyad recording this row describes, by its BIDS entities.",
+    "n_long_pairs": "Long channel pairs both members carry, the pairs the shares below count.",
+    "n_windows": "Screening windows the aligned recording was cut into.",
+    "usable_pairs_mean": "Pairs passing in both members at once, averaged over the windows.",
+    "usable_window_frac": "Share of pair-windows passing in both members at once.",
+    "one_member_frac": "Share of pair-windows passing in one member only: one cap or one "
+                       "optode lost the signal.",
+    "neither_frac": "Share of pair-windows passing in neither member: both lost it at once.",
+    "usable_stretch_s": "Each pair's longest unbroken stretch passing in both members, the "
+                        "median over pairs, in seconds.",
+    "aligned_duration_s": "Length of the members' shared recording after alignment, in "
+                          "seconds.",
+    "max_offset_s": "The largest crop a member took to align on the shared trigger, in "
+                    "seconds.",
+    "offsets_equal": "Whether every member was cropped by the same amount; says which case "
+                     "this is, not a fault.",
+    "pct_all_good": "Share of the channel pairs, long and short, that screening kept in "
+                    "every member.",
+}
 
 _USABLE_KEYS = ("n_long_pairs", "n_windows", "usable_pairs_mean", "usable_window_frac",
                 "one_member_frac", "neither_frac", "usable_stretch_s")
@@ -223,8 +245,12 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
                            "panels that split the usable time are empty")
 
     tsv_path = output_dir / derivative_path("", "qc", ".tsv", desc="groups").name
-    write_tsv(pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats]),
-              tsv_path)
+    table = (pd.DataFrame([{k: v for k, v in f.items() if k != "href"} for f in flats])
+             .rename(columns={"label": "bids_name"}))
+    write_tsv(table, tsv_path)
+    tsv_path.with_suffix(".json").write_text(json.dumps(
+        {c: {"Description": GROUPS_QC_COLUMNS[c]} for c in table.columns
+         if c in GROUPS_QC_COLUMNS}, indent=2) + "\n", encoding="utf-8")
 
     def cell(flat: dict, key: str, fmt: str) -> "str | None":
         text = _format(flat.get(key), fmt)

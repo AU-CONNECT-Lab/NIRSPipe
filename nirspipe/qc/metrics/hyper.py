@@ -366,15 +366,14 @@ def motion_summary(motion: dict) -> dict:
             entries = motion["series"][stage].get(name) or []
             if not entries:
                 continue
-            row = {sid: round(float(np.nanmean(y)), 3) for sid, y in entries}
+            row = {sid: float(np.nanmean(y)) for sid, y in entries}
             if len(entries) > 1:
                 mins = np.minimum.reduce([y for _, y in entries])
-                row["together"] = round(float(np.nanmean(mins)), 3)
+                row["together"] = float(np.nanmean(mins))
             per_set[stage] = row
         before, after = per_set.get("before"), per_set.get("after")
         if before and after and before.get("together"):
-            per_set["reduction"] = round(
-                1.0 - after["together"] / before["together"], 3)
+            per_set["reduction"] = 1.0 - after["together"] / before["together"]
         out[name] = per_set
     # not nested under a set: the spike test runs on the canonical set alone, so a count
     # printed under "short" would be a claim about channels it never looked at
@@ -417,13 +416,14 @@ def compute_hyper_sqm(
 
     counts = tally(ch_set)
     n_total  = counts["n_total"]
-    pct_good = round(counts["n_all_good"] / n_total * 100, 1) if n_total > 0 else None
+    # a share, as every _pct key the records carry
+    pct_good = counts["n_all_good"] / n_total if n_total > 0 else None
 
     aligned_duration_s = None
     if aligned_raws:
-        aligned_duration_s = round(float(next(iter(aligned_raws.values())).times[-1]), 1)
+        aligned_duration_s = float(next(iter(aligned_raws.values())).times[-1])
 
-    max_offset_s = round(max(offsets.values()), 3) if offsets else None
+    max_offset_s = float(max(offsets.values())) if offsets else None
 
     out = dict(
         **counts,
