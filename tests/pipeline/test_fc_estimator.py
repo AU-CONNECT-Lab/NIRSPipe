@@ -106,8 +106,25 @@ def test_fisher_z_leaves_a_rectangular_frame_alone(haemo, roi_map):
     z = fisher_z(seed)
 
     assert z.shape == seed.shape
-    assert not (z.to_numpy()[np.eye(*z.shape, dtype=bool)] == 0).all()
-    assert np.allclose(np.diag(fisher_z(compute_fc(haemo, "hbo")).to_numpy()), 0.0)
+    assert np.array_equal(np.isnan(z.to_numpy()), seed.isna().to_numpy())
+    assert np.isnan(np.diag(fisher_z(compute_fc(haemo, "hbo")).to_numpy())).all()
+
+
+def test_fisher_z_keeps_a_seed_maps_i_i_cell_even_when_the_counts_match(haemo):
+    """Two seeds against two channels is square by shape, not a self-correlation matrix."""
+    hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
+    raw = haemo.copy().pick(hbo[:4])
+    seed = compute_fc_seed(raw, {"A": [hbo[0]], "B": [hbo[1]]}, "hbo")[hbo[2:4]]
+    assert seed.shape == (2, 2)
+    assert np.isfinite(np.diag(fisher_z(seed).to_numpy())).all()
+
+
+def test_the_matrices_are_exactly_symmetric_with_an_exact_unit_diagonal(haemo, roi_map):
+    for fc in (compute_fc(haemo, "hbo"), compute_fc_roi(haemo, roi_map, "hbo")):
+        m = fc.to_numpy()
+        finite = np.isfinite(np.diag(m))
+        assert (np.diag(m)[finite] == 1.0).all()
+        assert np.array_equal(m, m.T, equal_nan=True)
 
 
 # ---- an ROI with no good channel ----
@@ -131,10 +148,11 @@ def test_an_roi_with_no_good_channel_stays_in_the_matrix_as_blank(lost_roi):
     assert np.isfinite(fc.loc[["A", "B"], ["A", "B"]].to_numpy()).all()
 
 
-def test_its_fisher_z_diagonal_is_blank_rather_than_zero(lost_roi):
+def test_its_fisher_z_diagonal_is_blank(lost_roi):
     raw, rois = lost_roi
-    z = np.diag(fisher_z(compute_fc_roi(raw, rois, "hbo")).to_numpy())
-    assert z[:2] == pytest.approx([0.0, 0.0]) and np.isnan(z[2])
+    z = fisher_z(compute_fc_roi(raw, rois, "hbo")).to_numpy()
+    assert np.isnan(np.diag(z)).all()
+    assert np.isfinite(z[0, 1]) and np.isnan(z[0, 2])
 
 
 def test_its_seed_row_is_kept_and_blank(lost_roi):

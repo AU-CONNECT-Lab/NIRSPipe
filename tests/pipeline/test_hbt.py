@@ -170,10 +170,9 @@ def test_the_hbt_fc_is_the_correlation_of_the_summed_residuals(runs):
     summed = [errts.get_data(picks=[f"{p} hbo"])[0] + errts.get_data(picks=[f"{p} hbr"])[0]
               for p in (a, b)]
     assert fc.loc[f"{a} hbt", f"{b} hbt"] == pytest.approx(np.corrcoef(*summed)[0, 1], abs=1e-12)
-    # bad by its half, and the short pair, both of whose halves were the whole regressor
+    # bad by its half; the short pair is left out, as every FC product leaves short channels
     assert fc.loc["S2_D2 hbt"].isna().all()
-    short = [c for c in fc.index if c.startswith(f"S{len(fc)}_")]
-    assert short and fc.loc[short[0]].isna().all()
+    assert "S5_D5 hbt" not in fc.index and "S5_D5 hbt" not in fc.columns
 
 
 def test_hbt_alff_is_scaled_within_hbt_and_the_rest_is_unchanged(runs):

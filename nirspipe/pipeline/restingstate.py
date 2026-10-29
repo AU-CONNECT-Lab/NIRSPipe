@@ -274,19 +274,20 @@ _KEPT_FRAMES = "over the frames outside every BAD_ span"
 FC_DESCRIPTIONS = {
     "fc": f"Pearson r between two channels' series of one chromophore, {_KEPT_FRAMES}. A "
           "rejected channel keeps its row and column, n/a, so every run's matrix has the same "
-          "shape. The diagonal is 1 up to floating-point rounding.",
+          "shape. Short channels are left out. The diagonal is 1.",
     "fc_before": f"Pearson r between two channels' series before the confound regression, at "
                  f"the stage desc- names, {_KEPT_FRAMES}; n/a wherever the residual's matrix "
                  "is.",
     "fc_roi": f"Pearson r between two regions' mean series, each the average of the region's "
-              f"kept channels, {_KEPT_FRAMES}. A region with no kept channel is n/a.",
+              f"kept channels with short ones left out, {_KEPT_FRAMES}. A region with no kept "
+              "channel is n/a.",
     "fc_seed": f"Pearson r between each region's mean series (rows) and each channel "
-               f"(columns), {_KEPT_FRAMES}. A region's own channels and a rejected channel "
-               "are n/a.",
+               f"(columns, short channels left out), {_KEPT_FRAMES}. A region's own channels "
+               "and a rejected channel are n/a.",
 }
 FISHER_Z_DESCRIPTION = ("Fisher z, arctanh(r), of the stat-pearson matrix of the same name, r "
                         "clipped just below 1 in size.")
-FISHER_Z_DIAGONAL = " The diagonal is written 0."
+FISHER_Z_DIAGONAL = " The diagonal is n/a, arctanh(1) being infinite."
 
 
 def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
@@ -328,8 +329,14 @@ def compute_fc(raw: mne.io.Raw, chromophore: str) -> pd.DataFrame:
 def _corr(rows: np.ndarray) -> np.ndarray:
     """Pearson r between rows, pairwise over the frames both rows have when any frame is NaN."""
     if not np.isnan(rows).any():
-        return np.corrcoef(rows)
-    return pd.DataFrame(rows.T).corr().to_numpy(copy=True)
+        r = np.corrcoef(rows)
+    else:
+        r = pd.DataFrame(rows.T).corr().to_numpy(copy=True)
+    # rounding leaves the diagonal a hair off 1 and the two triangles a hair apart
+    lower = np.tril_indices_from(r, -1)
+    r[lower] = r.T[lower]
+    np.fill_diagonal(r, np.where(np.isfinite(np.diag(r)), 1.0, np.nan))
+    return r
 
 
 def _kept(raw: mne.io.Raw, data: np.ndarray) -> np.ndarray:
@@ -339,7 +346,7 @@ def _kept(raw: mne.io.Raw, data: np.ndarray) -> np.ndarray:
 
 
 def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
-    r"""Fisher r-to-z of an FC matrix (diagonal set to 0), for group-level stats.
+    r"""Fisher r-to-z of an FC matrix (diagonal n/a), for group-level stats.
 
     .. math::
 
@@ -349,11 +356,11 @@ def fisher_z(fc: pd.DataFrame) -> pd.DataFrame:
     r is clipped just below :math:`\pm 1` to keep perfect correlations from diverging.
     """
     z = fisher_r_to_z(fc.to_numpy())
-    # only a square matrix has a self-correlation diagonal; a seed map is ROI x channel, where
-    # position (i, i) is an ordinary pair and zeroing it would delete a real value
-    if z.ndim == 2 and z.shape[0] == z.shape[1]:
-        # a blank row (bad channel, empty ROI) keeps a blank diagonal rather than a 0
-        np.fill_diagonal(z, np.where(np.isfinite(np.diag(z)), 0.0, np.nan))
+    # only a matrix labelled alike on both axes has a self-correlation diagonal; a seed map is
+    # ROI x channel, where position (i, i) is an ordinary pair even when the two counts match
+    if list(fc.index) == list(fc.columns):
+        # arctanh(1) is infinite, and the clip would put an arbitrary 7.25 there
+        np.fill_diagonal(z, np.nan)
     return pd.DataFrame(z, index=fc.index, columns=fc.columns)
 
 

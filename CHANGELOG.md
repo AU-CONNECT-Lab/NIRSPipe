@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Hyperscanning and dyad usable-time tables give the whole run's rows `condition` whole_run instead of n/a or `whole run`; a condition named so is refused
 - The dyad cohort table keys its rows by `bids_name`, is no longer rounded, gives `pct_all_good` as a share and has a column dictionary
 - The null draws tables leave out the rows a rejected channel left blank, which were about two thirds of them
+- FC matrices leave out short channels, as ISC does; the Pearson diagonal is exactly 1, the matrix exactly symmetric, and the Fisher z diagonal n/a instead of 0
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge

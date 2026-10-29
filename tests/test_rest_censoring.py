@@ -93,11 +93,18 @@ def test_without_spans_alff_never_reaches_lomb_scargle(monkeypatch):
         compute_alff(_spanned(), low_pass=0.08, high_pass=0.01)
 
 
+def _assert_corrcoef(fc, rows):
+    """Upper triangle np.corrcoef's bit for bit; the diagonal exactly 1, the lower a mirror."""
+    m, expected = fc.to_numpy(), np.corrcoef(rows)
+    upper = np.triu_indices_from(m, 1)
+    np.testing.assert_array_equal(m[upper], expected[upper])
+    assert (np.diag(m) == 1.0).all() and np.array_equal(m, m.T)
+
+
 def test_without_spans_fc_is_todays_corrcoef_bit_for_bit():
     raw = _raw()
     picks = [c for c in raw.ch_names if c.endswith(" hbo")]
-    np.testing.assert_array_equal(compute_fc(raw, "hbo").to_numpy(),
-                                  np.corrcoef(raw.get_data(picks=picks)))
+    _assert_corrcoef(compute_fc(raw, "hbo"), raw.get_data(picks=picks))
 
 
 # ---- with spans only kept frames count ----
@@ -106,8 +113,7 @@ def test_fc_is_pearson_on_the_kept_frames():
     raw = _spanned()
     keep = kept_frames(raw)
     picks = [c for c in raw.ch_names if c.endswith(" hbr")]
-    np.testing.assert_array_equal(compute_fc(raw, "hbr").to_numpy(),
-                                  np.corrcoef(raw.get_data(picks=picks)[:, keep]))
+    _assert_corrcoef(compute_fc(raw, "hbr"), raw.get_data(picks=picks)[:, keep])
 
 
 def test_nothing_inside_a_span_reaches_fc_or_alff():

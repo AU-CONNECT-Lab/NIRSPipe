@@ -19,6 +19,7 @@ from nirspipe.io.naming import derivative_path
 
 from nirspipe.pipeline.post_pipeline import PostConfig, run_post
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
+from nirspipe.qc.metrics._helpers import long_short_channels
 
 from tests._synth import synth_raw
 
@@ -81,6 +82,13 @@ def _one(out_dir, suffix, chromo="hbo"):
     return path
 
 
+def _long_hbo(haemo) -> list[str]:
+    """The HbO channels an FC matrix is indexed by: every one but the short channels."""
+    short = set(long_short_channels(haemo)[1])
+    assert short, "fixture no longer has a short channel to leave out"
+    return [c for c in haemo.ch_names if c.endswith("hbo") and c not in short]
+
+
 def _alff(out_dir, roi=False):
     entities = dict(subject="01", task="rest", statistic="alff")
     if roi:
@@ -107,13 +115,16 @@ def test_the_roi_products_are_absent_without_a_roi_map(haemo, tmp_path):
 # ---- shape and labelling survive the write ----
 def test_the_channel_matrix_is_square_and_channel_labelled(rest_out, haemo):
     fc = pd.read_csv(_one(rest_out, "fc"), sep="\t", index_col="channel")
-    hbo = [c for c in haemo.ch_names if c.endswith("hbo")]
+    hbo = _long_hbo(haemo)
     good = [i for i, c in enumerate(hbo) if c not in set(haemo.info["bads"])]
 
     assert list(fc.index) == list(fc.columns) == hbo
     # a rejected channel is blanked whole, its own self-correlation included: a diagonal 1
     # sitting in an otherwise empty row would be the one cell claiming the channel is there
-    assert np.allclose(np.diag(fc.to_numpy())[good], 1.0)
+    assert (np.diag(fc.to_numpy())[good] == 1.0).all()
+    assert np.array_equal(fc.to_numpy(), fc.to_numpy().T, equal_nan=True)
+    fcz = pd.read_csv(_one(rest_out, "fcz"), sep=chr(9), index_col="channel")
+    assert np.isnan(np.diag(fcz.to_numpy())).all()
 
     rejected = [c for c in hbo if c in set(haemo.info["bads"])]
     assert rejected, "fixture no longer rejects a channel"
@@ -124,7 +135,7 @@ def test_the_seed_map_is_roi_by_channel_on_disk(rest_out, haemo, roi_map):
     seed = pd.read_csv(_one(rest_out, "fcseed"), sep="\t", index_col="roi")
 
     assert list(seed.index) == list(roi_map)
-    assert list(seed.columns) == [c for c in haemo.ch_names if c.endswith("hbo")]
+    assert list(seed.columns) == _long_hbo(haemo)
 
 
 def test_a_seed_stays_blank_rather_than_zero_through_the_tsv(rest_out, haemo, roi_map):

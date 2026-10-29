@@ -354,15 +354,16 @@ def test_a_perfect_correlation_is_clipped_rather_than_infinite():
     """arctanh(1) diverges, and one perfect pair would take a whole group mean with it.
     The clip is what makes r = 1 and r = 0.999999 the same finite number."""
     z = fisher_z(pd.DataFrame([[1.0, 1.0], [-1.0, 1.0]]))
-    assert np.isfinite(z.to_numpy()).all()
+    assert np.isfinite(z.to_numpy()[~np.eye(2, dtype=bool)]).all()
     assert_allclose(z.to_numpy()[1, 0], -7.254328619247669, atol=1e-12)
-    assert_allclose(fisher_z(pd.DataFrame([[0.999999]])).to_numpy(),
-                    fisher_z(pd.DataFrame([[1.0]])).to_numpy())
+    # a frame labelled differently on its two axes has no diagonal to blank
+    assert_allclose(fisher_z(pd.DataFrame([[0.999999]], columns=["c"])).to_numpy(),
+                    fisher_z(pd.DataFrame([[1.0]], columns=["c"])).to_numpy())
 
 
 def test_a_square_matrix_loses_its_self_correlation_diagonal():
     z = fisher_z(pd.DataFrame(np.full((3, 3), 0.5)))
-    assert_allclose(np.diag(z.to_numpy()), 0.0)
+    assert np.isnan(np.diag(z.to_numpy())).all()
     assert (z.to_numpy()[~np.eye(3, dtype=bool)] > 0).all()
 
 
