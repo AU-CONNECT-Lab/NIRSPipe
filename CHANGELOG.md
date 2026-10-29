@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - The re-paired null's ISC draws table names its correlation `r`, as the real table and the phase-null draws do, instead of `coherence`
-- Hyperscanning tables holding conditions give the whole run's rows `condition` whole_run instead of n/a; a condition named so is refused
+- Hyperscanning and dyad usable-time tables give the whole run's rows `condition` whole_run instead of n/a or `whole run`; a condition named so is refused
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge

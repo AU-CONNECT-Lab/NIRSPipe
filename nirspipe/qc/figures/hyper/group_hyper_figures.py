@@ -19,6 +19,7 @@ from plotly.subplots import make_subplots
 from nirspipe.qc.figures.hyper.hyper_figures import (
     _BAD_COLOR, _GOOD_COLOR, _MIX_COLOR,
 )
+from nirspipe.io.tables import WHOLE_RUN
 from nirspipe.utils.logging import get_logger
 
 logger = get_logger("qc.group_hyper_figures")
@@ -187,6 +188,7 @@ def build_condition_dials(rows: list[dict], order: list[str]) -> "go.Figure | No
     frame = _frame(rows, order, "by_cond").dropna(axis=1, how="all")
     if frame.empty or not len(frame.columns):
         return None
+    frame = frame.rename(columns={WHOLE_RUN: "whole run"})
 
     by_label = _by_label(rows)
     worst = order[:N_DIALS]

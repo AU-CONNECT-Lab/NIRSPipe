@@ -21,7 +21,7 @@ import pandas as pd
 from nirspipe.qc.metrics.hyper import dyad_status
 from nirspipe.utils.logging import get_logger
 from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
-from nirspipe.io.tables import write_tsv
+from nirspipe.io.tables import WHOLE_RUN, write_tsv
 
 logger = get_logger("qc.hyper_usable")
 
@@ -87,7 +87,7 @@ def usable_table(grid: dict, subject_ids: list[str],
 
     Columns: ``pair``, ``condition``, ``usable_frac``, ``one_member_frac``,
     ``neither_frac``, ``n_windows``. A dyad with no annotated blocks gets one row per pair
-    under the condition ``whole run``, so the table has the same shape either way and a
+    under the condition ``whole_run``, so the table has the same shape either way and a
     cohort panel does not have to know which it is reading.
 
     The windows are on the dyad's aligned clock, :func:`passing_grid` having already put
@@ -100,7 +100,7 @@ def usable_table(grid: dict, subject_ids: list[str],
     t = np.asarray(grid["t"], dtype=float)
     status = dyad_status(grid, subject_ids)[rows]
     pairs = [grid["pairs"][i] for i in rows]
-    spans = dict(conditions or {}) or {"whole run": (float(t.min()), float(t.max()) + 1)}
+    spans = dict(conditions or {}) or {WHOLE_RUN: (float(t.min()), float(t.max()) + 1)}
 
     out = []
     for i, pair in enumerate(pairs):
