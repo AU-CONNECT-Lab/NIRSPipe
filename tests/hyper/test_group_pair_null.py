@@ -82,7 +82,7 @@ def test_every_pairing_is_drawn_under_the_draws_it_shares(run):
         for pair in (("sub-01", "sub-02"), ("sub-01", "sub-03"), ("sub-02", "sub-03"))}
 
 
-@pytest.mark.parametrize("statistic, value", [("wtc", "coherence"), ("isc", "coherence")])
+@pytest.mark.parametrize("statistic, value", [("wtc", "coherence"), ("isc", "r")])
 def test_the_later_member_has_one_stand_in_per_draw_across_its_pairings(run, statistic, value):
     draws = pd.read_csv(_file(run(TRIADS), f"null-pair_stat-{statistic}_desc-draws"), sep="\t")
     if "label2" not in draws.columns:
@@ -93,6 +93,11 @@ def test_the_later_member_has_one_stand_in_per_draw_across_its_pairings(run, sta
     assert np.allclose(first, second, rtol=0, atol=1e-12, equal_nan=True)
     copies = _by_draw(draws, "sub-01", "sub-02", value)
     assert not np.allclose(copies, first, equal_nan=True)
+
+
+def test_the_correlation_draws_carry_r_as_the_real_table_and_the_phase_draws_do(run):
+    draws = pd.read_csv(_file(run(TRIADS), "null-pair_stat-isc_desc-draws"), sep="	")
+    assert {"r", "r_z"} <= set(draws.columns) and "coherence" not in draws.columns
 
 
 def test_the_sidecar_counts_draws_not_stand_ins(run):

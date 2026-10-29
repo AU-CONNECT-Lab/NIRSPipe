@@ -948,9 +948,10 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
         logger.info("re-paired ISC saved: %s", path)
 
     if draw_frames:
-        path = write_tsv(pd.concat(draw_frames, ignore_index=True),
-                         path_of({"condition": "all", "nulldist": "pair",
-                                  "statistic": "isc", "desc": "draws"}))
+        # back to r on the way out, the name the real table and the phase draws use
+        draws = pd.concat(draw_frames, ignore_index=True).rename(columns={"coherence": "r"})
+        path = write_tsv(draws, path_of({"condition": "all", "nulldist": "pair",
+                                         "statistic": "isc", "desc": "draws"}))
         _hyper_sidecar(path, "hyper_isc_bycondition_pairnull_draws", sources,
                        **({"conditions": [w[0] for w in windows]} if windows else {}),
                        **isc_params)

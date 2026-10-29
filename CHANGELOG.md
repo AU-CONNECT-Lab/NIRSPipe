@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- The re-paired null's ISC draws table names its correlation `r`, as the real table and the phase-null draws do, instead of `coherence`
+
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge
 - First-level GLM p values were far too large, their `df` being the number of regressors; `--p-correction` inherited them
