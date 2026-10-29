@@ -33,7 +33,8 @@ class _FakeGLM:
 
 
 class _FakeContrast(_FakeGLM):
-    pass
+    def to_dataframe(self):
+        return super().to_dataframe().rename(columns={"t": "stat"})
 
 
 @pytest.fixture

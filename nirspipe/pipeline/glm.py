@@ -763,9 +763,17 @@ _GLM_ID_COLUMNS = frozenset({"Condition", "ContrastType", "contrast", "Source", 
 def on_residual_df(table: pd.DataFrame, stat: str, dof: "dict[str, float]") -> pd.DataFrame:
     """``df`` as each channel's own residual df, and ``p_value`` two-sided on it from ``stat``."""
     out = table.copy()
+    if "df" not in out.columns:
+        out.insert(list(out.columns).index(stat) + 1, "df", np.nan)
     # mne-nirs writes the design's rank as df and takes its p from that
     out["df"] = out["ch_name"].map(dof).astype(float)
-    out["p_value"] = 2 * stats.t.sf(np.abs(out[stat].astype(float)), out["df"])
+    t = out[stat].astype(float)
+    # nilearn's contrast p is one-sided, on one channel's df for every channel
+    one_sided = stats.t.sf(np.abs(t), out["df"])
+    out["p_value"] = 2 * one_sided
+    if "z_score" in out.columns:
+        # signed, with nilearn's floor on p so that it stays finite
+        out["z_score"] = np.sign(t) * stats.norm.isf(np.clip(one_sided, 1e-300, None))
     return out
 
 
@@ -877,7 +885,7 @@ def _save_glm_outputs(
     if contrasts:
         frames = []
         for name, result in contrasts.items():
-            df = _mark_bads(result.to_dataframe())
+            df = _mark_bads(on_residual_df(result.to_dataframe(), "stat", dof))
             df.insert(0, "contrast", name)
             frames.append(df)
         con_path = _named("nirsmap", desc="contrast")

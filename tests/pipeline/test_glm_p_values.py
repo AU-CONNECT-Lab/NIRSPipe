@@ -1,4 +1,4 @@
-"""The GLM table's df and p values, against statsmodels fitting the same data on the same design."""
+"""The GLM and contrast tables' df and p values, against statsmodels fitting the same data and design."""
 
 from __future__ import annotations
 
@@ -36,9 +36,9 @@ def _haemo() -> mne.io.RawArray:
     return raw
 
 
-def _fit(haemo: mne.io.RawArray, out) -> None:
+def _fit(haemo: mne.io.RawArray, out, noise_model: str = "ols") -> None:
     out.mkdir(parents=True)
-    run_glm_pipeline(haemo.copy(), stim_dur=10.0, hrf_model="spm", noise_model="ols",
+    run_glm_pipeline(haemo.copy(), stim_dur=10.0, hrf_model="spm", noise_model=noise_model,
                      drift_model="polynomial", high_pass=None, drift_order=1, fir_delays=None,
                      contrast_def={"tap": {"tap": 1}, "minus_tap": {"tap": -1}},
                      output_dir=str(out),
@@ -81,3 +81,47 @@ def test_a_planted_dip_reads_significant_in_the_glm_table(fitted):
     table = fitted[2]["glm"]
     row = table[(table["ch_name"] == DIPPING) & (table["Condition"] == "tap")].iloc[0]
     assert row["t"] < -10 and row["p_value"] < 1e-20
+
+
+def test_the_contrast_p_is_the_two_sided_t_test_statsmodels_runs(fitted):
+    design, ols, tables = fitted
+    weights = {"tap": 1.0, "minus_tap": -1.0}
+    for _, row in tables["contrast"].iterrows():
+        vector = np.where(design.columns == "tap", weights[row["contrast"]], 0.0)
+        test = ols[row["ch_name"]].t_test(vector)
+        assert row["df"] == test.df_denom
+        np.testing.assert_allclose(row["stat"], np.asarray(test.tvalue).item(), rtol=1e-8)
+        np.testing.assert_allclose(row["p_value"], np.asarray(test.pvalue).item(), rtol=1e-6,
+                                   atol=1e-300)
+
+
+def test_a_contrast_and_its_negation_share_their_p_and_mirror_their_z(fitted):
+    table = fitted[2]["contrast"]
+    tap = table[table["contrast"] == "tap"].set_index("ch_name")
+    neg = table[table["contrast"] == "minus_tap"].set_index("ch_name").loc[tap.index]
+    np.testing.assert_allclose(tap["p_value"], neg["p_value"], rtol=1e-12)
+    np.testing.assert_allclose(tap["z_score"], -neg["z_score"], rtol=1e-12)
+
+
+def test_a_planted_dip_reads_significant_in_its_contrast(fitted):
+    table = fitted[2]["contrast"]
+    row = table[(table["ch_name"] == DIPPING) & (table["contrast"] == "tap")].iloc[0]
+    assert row["stat"] < -10 and row["p_value"] < 1e-20 and row["z_score"] < -10
+
+
+@pytest.fixture(scope="module")
+def robust(tmp_path_factory):
+    out = tmp_path_factory.mktemp("glm_irls") / "sub-01" / "nirs"
+    _fit(_haemo(), out, noise_model="ar_irls")
+    return {kind: read_table(out / f"sub-01_task-x_desc-{kind}_nirsmap.tsv")
+            for kind in ("glm", "contrast")}
+
+
+def test_a_robust_fit_tests_each_channel_on_its_own_effective_df(robust):
+    per_channel = robust["glm"].groupby("ch_name")["df"]
+    assert (per_channel.nunique() == 1).all()
+    glm_df = per_channel.first()
+    # the channels' df differ, so one df handed to all of them would show
+    assert glm_df.nunique() == len(glm_df)
+    for _, rows in robust["contrast"].groupby("contrast"):
+        np.testing.assert_allclose(rows.set_index("ch_name")["df"].loc[glm_df.index], glm_df)
