@@ -95,6 +95,32 @@ def test_the_later_member_has_one_stand_in_per_draw_across_its_pairings(run, sta
     assert not np.allclose(copies, first, equal_nan=True)
 
 
+def test_a_stand_ins_rejected_channel_leaves_its_pairings_out_of_that_draw(run, monkeypatch):
+    """sub-06 stands in for sub-03 in draw sub-05+sub-06 with S1_D1 rejected: those pairings
+    have no value there, so the draws hold no row for them and every row they hold has one."""
+    from nirspipe.pipeline.hyper import group_io
+    load = group_io.load_group_haemo
+
+    def rejecting(out, entries, desc="preproc"):
+        raws = load(out, entries, desc)
+        if "sub-06" in raws:
+            raws["sub-06"].info["bads"] = ["S1_D1 hbo", "S1_D1 hbr"]
+        return raws
+
+    monkeypatch.setattr(group_io, "load_group_haemo", rejecting)
+    root = run(TRIADS)
+    for statistic, value in (("wtc", "coherence"), ("isc", "r")):
+        draws = pd.read_csv(_file(root, f"null-pair_stat-{statistic}_desc-draws"), sep="	")
+        side = draws["label2"] if "label2" in draws.columns else draws["label"]
+        stand_in = (draws["sub2"] == "sub-03") & (draws["draw"] == "sub-05+sub-06")
+        assert draws[value].notna().all(), statistic
+        assert not (stand_in & (side == "S1_D1")).any(), statistic
+        # the same pairings in the other draw, and the rest of this one, stay
+        assert ((draws["sub2"] == "sub-03") & (draws["draw"] == "sub-08+sub-09")
+                & (side == "S1_D1")).any(), statistic
+        assert (stand_in & (side == "S2_D2")).any(), statistic
+
+
 def test_the_correlation_draws_carry_r_as_the_real_table_and_the_phase_draws_do(run):
     draws = pd.read_csv(_file(run(TRIADS), "null-pair_stat-isc_desc-draws"), sep="	")
     assert {"r", "r_z"} <= set(draws.columns) and "coherence" not in draws.columns

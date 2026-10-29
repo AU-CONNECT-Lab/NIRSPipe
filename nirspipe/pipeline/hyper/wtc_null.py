@@ -22,7 +22,8 @@ from pathlib import Path
 import pandas as pd
 
 from nirspipe.io.derivatives import group_output_path
-from nirspipe.io.tables import LABEL_DTYPES, join_whole_run, split_whole_run, write_tsv
+from nirspipe.io.tables import (LABEL_DTYPES, join_whole_run, measured_draws, split_whole_run,
+                                write_tsv)
 from nirspipe.utils import ROI_MIN_CHANNELS, bare_roi_map
 
 logger = logging.getLogger(__name__)
@@ -323,7 +324,7 @@ def write_wtc_null(
     if draw_frames:
         path = _path({"condition": "all", "nulldist": "phase", "statistic": "wtc",
                       "desc": "draws"})
-        write_tsv(pd.concat(draw_frames, ignore_index=True), path)
+        write_tsv(measured_draws(pd.concat(draw_frames, ignore_index=True), "coherence"), path)
         _hyper_sidecar(path, "hyper_wtc_bycondition_phasenull_draws", sources,
                        conditions=conditions, **params)
         logger.info("Phase-scrambled WTC draws saved: %s", path)

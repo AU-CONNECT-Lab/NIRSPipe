@@ -28,7 +28,7 @@ from nirspipe.pipeline.hyper.whiten import whiten_order, whiten_raws
 from nirspipe.qc.common.figure_io import _pair_fname, get_channel_pairs, pair_slug
 from nirspipe.qc.common.windows import condition_windows, refuse_colliding_labels
 from nirspipe.qc.metrics._helpers import bands_to_record, separation_bands
-from nirspipe.io.tables import WHOLE_RUN, join_whole_run, write_tsv
+from nirspipe.io.tables import WHOLE_RUN, join_whole_run, measured_draws, write_tsv
 
 logger = get_logger("pipeline.hyper_post")
 
@@ -1011,7 +1011,7 @@ def run_hyper_post(
         # every surrogate kept, not only their summary, so the correlation can be read above
         # the cell the way the coherence can
         with guard("ISC phase draws", errors, scope):
-            draws = pd.concat(isc_draw_frames, ignore_index=True)
+            draws = measured_draws(pd.concat(isc_draw_frames, ignore_index=True), "r")
             front = ["chromophore", "condition"]
             draws = draws[front + [c for c in draws.columns if c not in front]]
             path = group_output_path(output_dir, group_id,

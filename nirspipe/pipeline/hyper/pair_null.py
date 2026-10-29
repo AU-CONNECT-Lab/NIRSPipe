@@ -27,7 +27,7 @@ from nirspipe.pipeline.hyper._gpu import device_params
 from nirspipe.pipeline.hyper.surrogate import (compute_wtc_pair_null, _average_iterations,
                                                  _null_percentile, _p95)
 from nirspipe.utils import cone_margin_s
-from nirspipe.io.tables import LABEL_DTYPES, split_whole_run, write_tsv
+from nirspipe.io.tables import LABEL_DTYPES, measured_draws, split_whole_run, write_tsv
 from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
@@ -828,7 +828,10 @@ def run_pair_null(
              {"conditions": [w[0] for w in windows]})):
         if not bucket:
             continue
-        path = write_tsv(pd.concat(bucket, ignore_index=True), _path(entities))
+        table = pd.concat(bucket, ignore_index=True)
+        if entities.get("desc") == "draws":
+            table = measured_draws(table, "coherence")
+        path = write_tsv(table, _path(entities))
         _hyper_sidecar(path, step, sources, **extra, **params)
         logger.info("re-paired WTC table saved: %s", path)
         # the draws are the same null at full detail, so they are not what to return
@@ -945,7 +948,8 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
 
     if draw_frames:
         # back to r on the way out, the name the real table and the phase draws use
-        draws = pd.concat(draw_frames, ignore_index=True).rename(columns={"coherence": "r"})
+        draws = measured_draws(pd.concat(draw_frames, ignore_index=True)
+                               .rename(columns={"coherence": "r"}), "r")
         path = write_tsv(draws, path_of({"condition": "all", "nulldist": "pair",
                                          "statistic": "isc", "desc": "draws"}))
         _hyper_sidecar(path, "hyper_isc_bycondition_pairnull_draws", sources,

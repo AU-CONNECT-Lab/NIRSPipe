@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - The re-paired null's ISC draws table names its correlation `r`, as the real table and the phase-null draws do, instead of `coherence`
 - Hyperscanning and dyad usable-time tables give the whole run's rows `condition` whole_run instead of n/a or `whole run`; a condition named so is refused
 - The dyad cohort table keys its rows by `bids_name`, is no longer rounded, gives `pct_all_good` as a share and has a column dictionary
+- The null draws tables leave out the rows a rejected channel left blank, which were about two thirds of them
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge

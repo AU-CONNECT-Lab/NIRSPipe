@@ -115,6 +115,11 @@ def join_whole_run(whole: "list[pd.DataFrame]",
     return table
 
 
+def measured_draws(draws: pd.DataFrame, value: str) -> pd.DataFrame:
+    """A null's draw rows that hold a value; one a rejected channel left blank holds nothing."""
+    return draws.dropna(subset=[value])
+
+
 def split_whole_run(frame: "pd.DataFrame | None",
                     ) -> "tuple[pd.DataFrame | None, pd.DataFrame | None]":
     """A table's whole-run rows and its condition rows, each None when it has none.
