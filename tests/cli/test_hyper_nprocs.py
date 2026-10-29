@@ -28,7 +28,8 @@ def _flag(name: str) -> list[str]:
     return [name, *CLI_ARGS[i:j]]
 
 
-_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq")
+_RAW_ARGS = [a for flag in ("--dpf", "--sci-threshold", "--cardiac-l-freq", "--cardiac-h-freq",
+                             "--resp-l-freq", "--resp-h-freq")
              for a in _flag(flag)]
 
 

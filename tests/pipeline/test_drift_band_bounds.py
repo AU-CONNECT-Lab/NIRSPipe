@@ -206,8 +206,11 @@ def test_every_mode_fits_the_model_that_was_asked_for():
     from nirspipe.pipeline import post_pipeline
 
     src = inspect.getsource(post_pipeline.run_post)
-    assert 'noise_model="ols"' not in src
-    assert src.count("noise_model=config.noise_model") >= 3
+    shared = inspect.getsource(post_pipeline._confound_kwargs)
+    assert 'noise_model="ols"' not in src + shared
+    # glm hands it to its own fit; rest and denoise through the one confound argument set
+    assert "noise_model=config.noise_model" in src
+    assert "noise_model=config.noise_model" in shared and src.count("confound_kwargs") >= 2
 
 
 # ---- which events the warning reads ----
