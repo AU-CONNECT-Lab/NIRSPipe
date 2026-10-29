@@ -179,7 +179,7 @@ The processing stage is part of the file name (`desc-`). Do not rename files by 
 
 The sidecars find their sources through relative links to the raw dataset and, for a dyad tree, to the `nirspipe` tree. When you move or share the trees, keep them in the same places relative to each other.
 
-**The provenance graph.** Each run gets a graph of how its files were made, `figures/<run>_desc-provenance_nirs.png`, which the run report shows. Each input names the dataset it was read from (raw data, or preprocessed data for a dyad), and outputs made from the same files are fed by one bar. A file that has gone missing is drawn with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs for any past run.
+**The provenance graph.** Each run gets a graph of how its files were made, `figures/<run>_desc-provenance_nirs.png`, which the run report shows. Each input names the dataset it was read from (raw data, or preprocessed data for a dyad). A file that has gone missing is drawn with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs for any past run.
 
 ```{figure} figures/provenance.png
 :alt: A provenance graph of one run, one box per file
