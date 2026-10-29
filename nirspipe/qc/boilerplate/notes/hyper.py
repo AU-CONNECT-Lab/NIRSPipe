@@ -43,7 +43,7 @@ NOTES = {
         "member&rsquo;s usual level. The grey floor is the lower of the two, high only where "
         "both moved at once.",
     "hyper_raw.motion_before":
-        "The amber strip marks spans where <em>every</em> member spiked at once. The grey "
+        "The green strip marks spans where <em>every</em> member spiked at once. The grey "
         "carpets are each member&rsquo;s z-scored optical density, as in the subject report.",
     "hyper_raw.motion_roi":
         "On each carpet the long rows are grouped by ROI, coloured by the outer strip and "
@@ -79,7 +79,7 @@ NOTES = {
     "hyper_raw.group_sqm":
         "The dyad&rsquo;s own numbers, a column per channel set; a pair is good when every "
         "member kept it. <b>Both at once</b> is GVTD where both members moved together, "
-        "before &rarr; after correction; the spans row counts the amber strip.",
+        "before &rarr; after correction; the spans row counts the green strip.",
     "hyper_raw.channel_summary":
         "Green is kept by every member, yellow mixed, red kept by none.",
     "hyper_raw.channel_decisions":
