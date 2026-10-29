@@ -643,18 +643,18 @@ def _cardiac_ratio_metrics(raw: mne.io.Raw, bad_channels: "list[str]", cardiac_l
                            cardiac_h_freq: float) -> dict[str, Any]:
     r"""HbO over HbR power of the pulse, with the two wavelength labels as given and swapped.
 
-    For each kept pair whose pulse is clear, from the band means over the cardiac band of the
-    Welch auto-spectra :math:`S_{11}, S_{22}` and the real cross-spectrum :math:`S_{12}` of
-    its two optical densities,
+    For each kept pair whose pulse is clear,
 
     .. math::
 
         R = \frac{\mathbf{m}_{O} S \mathbf{m}_{O}^\top}{\mathbf{m}_{R} S \mathbf{m}_{R}^\top},
         \qquad S = \begin{pmatrix} S_{11} & S_{12} \\ S_{12} & S_{22} \end{pmatrix},
 
-    where :math:`\mathbf{m}_{O}` and :math:`\mathbf{m}_{R}` are the rows of the pseudo-inverse
-    of the 2 × 2 extinction matrix the conversion uses; :math:`R_\mathrm{swapped}` takes the
-    matrix with its rows swapped. The record keeps the median of each over the pairs. The
+    where :math:`S_{11}, S_{22}` are the band means over the cardiac band of the Welch
+    auto-spectra of the pair's two optical densities and :math:`S_{12}` that of their real
+    cross-spectrum; :math:`\mathbf{m}_{O}` and :math:`\mathbf{m}_{R}` are the rows of the
+    pseudo-inverse of the 2 × 2 extinction matrix the conversion uses; and
+    :math:`R_\mathrm{swapped}` takes the matrix with its rows swapped. The record keeps the median of each over the pairs. The
     pulse is arterial and arterial blood is nearly all oxygenated, so labels as given read
     far above 1 and swapped ones below; :func:`labels_look_swapped` compares the two.
 

@@ -28,6 +28,8 @@ GROUPS = {
     "coupling": [
         "sci_mean", "sci_win_mean", "channel_retention_rate", "psp_mean", "good_frac_mean",
         "cp_mean", "cv_mean", "snr_mean", "snr_pass_rate", "n_flat_channels", "mean_amp_mean",
+        "heart_rate",
+        ("Cardiac HbO/HbR ratio", ["cardiac_ratio", "cardiac_ratio_swapped", "cardiac_ratio_n"]),
         ("Saturation", ["n_saturated_channels", "saturated_pct"]),
         ("Source-detector separation", ["ch_dist_mean", "ch_dist_min", "ch_dist_max"]),
     ],
@@ -58,6 +60,7 @@ GROUPS = {
         ("Cardiac band share", ["cardiac_band_frac_hbo", "cardiac_band_frac_hbr"]),
         ("Respiration band power", ["resp_band_power_hbo", "resp_band_power_hbr"]),
         ("Respiration band share", ["resp_band_frac_hbo", "resp_band_frac_hbr"]),
+        ("Short-channel share", ["short_share_hbo", "short_share_hbr", "short_share_hbt"]),
         "pct_data_retained",
     ],
     "whitening": [("Residual low-band power", ["whitening_lowband_hbo", "whitening_lowband_hbr"])],
@@ -74,6 +77,8 @@ DEFINED_IN = {
     "hbo_hbr_corr_mean": "haemo.haemo_quality_metrics",
     "cnr_hbo_mean": "haemo._cnr_metrics",
     "gcor_hbo": "haemo._gcor",
+    "heart_rate": "coupling._heart_rate_metrics",
+    "cardiac_ratio": "coupling._cardiac_ratio_metrics",
 }
 
 PER_CHANNEL = {
@@ -86,6 +91,7 @@ PER_CHANNEL = {
     "saturated_pct": "saturated_per_channel",
     "hbo_hbr_corr_mean": "hbo_hbr_corr_per_channel",
     "motion_corrected_frac_mean": "motion_corrected_frac_per_channel",
+    "heart_rate": "heart_rate_per_channel",
 }
 
 _SECTIONS = {"Parameters", "Returns", "Raises", "Notes", "References", "Examples", "See Also"}
