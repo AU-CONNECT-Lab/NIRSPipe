@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-10-29
+
 ### Added
 - The channel QC, GLM, contrast and ALFF tables describe each column and its unit in their sidecars, and FC matrix sidecars say what they hold
 - The cohort pass of `nirspipe` and `nirspipe-qc` writes `desc-conditions_qc.tsv`, each run's conditions under the cohort table's column names, with a column dictionary
