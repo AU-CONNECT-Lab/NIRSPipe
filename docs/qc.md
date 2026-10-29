@@ -72,6 +72,8 @@ How well the optodes touched the scalp, and how strong and steady the light was.
 
 SNR is labelled μ/σ, the mean intensity over its standard deviation, so its line of 20 is the same as a CV of 5%. Some papers give SNR in decibels instead; 20 is about 26 dB.
 
+Two checks read the pulse itself. The heart rate should lie inside the cardiac band that SCI and PSP look in; when it does not, the report says so, and the band (`--cardiac-l-freq`, `--cardiac-h-freq` or `--population`) is probably wrong for your participants. The cardiac HbO/HbR ratio checks the two wavelength labels: the pulse is arterial, so it should show up mostly in HbO. When most runs of a task read the other way round, the cohort page warns that the labels may be swapped.
+
 ```{eval-rst}
 .. metric-reference:: coupling
 ```
@@ -127,7 +129,7 @@ Every report follows one layout: a summary, the processing steps in order, **Qua
 
 ### Summary
 
-The subject, the command, the settings, and every setting nobody typed, with whether `--config` or the mode set it. Run notes follow: anything the run had to decide for itself, such as channels whose separation falls between the short and long ranges.
+The subject, the recording's duration, the screening rule (the SCI line and the share of passing windows a channel needs), the command, the settings, and every setting nobody typed, with whether `--config` or the mode set it. An age-based DPF is printed with the factor it gave each wavelength, for example `age 30 (6.30, 5.23)`. Run notes follow: anything the run had to decide for itself, such as channels whose separation falls between the short and long ranges.
 
 If the recording's optodes could not be placed on the head, the summary says so. Everything drawn on the brain is then not anatomical; the short/long split and the screening are not affected.
 
@@ -135,18 +137,22 @@ A run with excluded time gets an **Excluded** section: the kept seconds, each sp
 
 ### Preprocessing
 
-- **Raw signal.** Every channel's raw intensity, with the condition blocks shaded, beside the event table. Short channels are dashed and rejected ones grey. Click a trace to see that channel's HbO/HbR and spectrum below.
-- **Signal quality.** Heatmaps of windowed SCI, PSP and CV (channels by time) against the run's lines, then the same windows on the head with a slider, and the 3D brain views with each channel coloured by SCI.
+- **Raw signal.** Every channel's raw intensity, with the condition blocks shaded, beside the event table. Channels are listed by source, then detector number, with a pair's two wavelengths together; short channels sit in their own block below, in lighter shades, and rejected ones are grey. Click a trace to see that channel's HbO/HbR and spectrum below. Under it, the mean spectrum of the optical density, one mean per channel set with each channel faint behind it and the heart rate marked.
+- **Signal quality.** Heatmaps of windowed SCI, PSP and CV (channels by time) against the run's lines, then the same windows on the head with a slider, and the 3D brain views with each channel coloured by SCI. On the brain views each source and detector is filled by the share of its long channels that were rejected: a solid red optode lost all of them, which points at that optode rather than at its channels.
 - **Motion.** The motion trace (GVTD) above a picture of every channel's signal, before and after correction on one scale. The motion sensor is drawn above it when the recording has one. A per-channel selector and a zoom on the largest motion events show what the correction did.
 - **HbO / HbR.** How HbO and HbR correlate in each channel. Healthy channels usually show a negative correlation, but so can a dead channel, because noise at the two wavelengths converts to anticorrelated HbO and HbR; rejected channels are therefore ranked apart.
+- **Short-channel regression.** When short channels were regressed out, a head map of how much of each long channel's variance the short-channel regressors carried. A high share means much of that channel was scalp or systemic signal. Descriptive: nothing is rejected on it.
+- **Nuisance correlations.** How the series a regression removes (the short-channel, aux and drift regressors, the motion trace, and the motion sensor where there is one) correlate with each other and with the global signal, the mean of the kept long channels.
 - **Spectra by stage.** The mean spectrum before and after postprocessing, with the cardiac and respiration bands and the filter cutoffs marked. After a high-pass, the first and last stretch of the run (one period of the cutoff) partly show the filter settling rather than data.
 - **Epoch preview** (task data). The event timeline, the average response per condition, maps of the response on the head stepped by a slider, and each trial as an image. A condition with fewer than three trials is drawn on its own scale, and one with a single trial is named in the run notes. When the run applied no low-pass, these figures are smoothed for display only, so the heartbeat does not show as a ripple.
 
 ### Postprocessing
 
-- **glm.** The design matrix, an activation map per condition on the cortex, the beta table and, with `--contrast-file`, the contrasts.
+- **glm.** The design matrix, each condition's betas on the cortex and, with `--contrast-file`, each t contrast drawn the same way. The numbers behind the maps are in `desc-glm_nirsmap.tsv` and `desc-contrast_nirsmap.tsv` (F contrasts are only there). A last panel checks whether the noise model left the residual white.
 - **denoise.** The filter settings and the signal after denoising; with `--fc`, the connectivity figures.
 - **rest.** mALFF on the cortex, the correlation matrices with mALFF and fALFF beside them, and, with `--roi-mapping`, the region matrix and the seed maps.
+
+The channel correlation matrices show every kept channel, grouped by region with `--roi-mapping` and otherwise listed by source, then detector number, on a colour scale centred on 0.
 
 **Reading the rest figures.** ALFF is how strongly a channel's signal fluctuates at rest. mALFF divides it by the run's average, so 1 is an average channel and 1.5 one half again as strong. A low value means the signal there is quiet, not that the channel is poor, and since each run has its own scale, compare colours between runs only as a pattern. A seed map colours each channel by how it follows the seed region: red when it rises and falls with the seed, blue when it moves against it.
 
@@ -175,12 +181,14 @@ The run summary of one run. A cell with an arrow holds the value before and afte
 
 An uncoloured metric has no cutoff; it has not passed anything. None of these averages rejects a channel; only the screening does.
 
-**Per-channel table.** One row per source-detector pair: its region, its nearest cortical region, its status and its quality values, grouped into long, short and neither. Status is `BAD` for a channel the screening rejected and `BAD (manual)` for one you rejected.
+**Region coverage.** With `--roi-mapping`: the long channels each region lists, and how many the screening and your own marks left. A region with none left has no value in any output built per region.
+
+**Per-channel table.** One row per source-detector pair, by source then detector number: its region, its nearest cortical region, its status and its quality values, grouped into long, short and neither. Status is `BAD` for a channel the screening rejected and `BAD (manual)` for one you rejected. After short-channel regression, the table also gives each long channel's short-channel share.
 
 ### Quality Figures
 
 - **By denoising stage.** Each metric across the processing stages, so you can see what each step did.
-- **By channel.** A pass/fail grid over status, passing windows, SCI, CV, PSP and SNR, long channels first.
+- **By channel.** A pass/fail grid over status, passing windows, SCI, CV, PSP and SNR, long channels first, each set by source then detector number. Without `--psp-threshold`, PSP has no line to pass or fail, so its row is coloured from 0 to 0.1 instead, greener when higher, with a colour bar beside the grid.
 - **By condition.** With `--by-condition`: whether each channel passes in each condition on its own. A guide to choosing conditions; it rejects nothing.
 - **By trial.** Every trial scored on its own. The colour compares trials within a row; it is not a threshold. Trials shorter than 5 s are not scored.
 
@@ -226,8 +234,12 @@ The page has the same order as the run report. The raw signal is unfiltered, so 
 | Distributions | Each metric across runs; click a point to open its report. |
 | By condition | Where the records carry conditions: each metric per condition, one line per run. |
 | Over time | Windowed SCI, CV and motion per channel set, every run pale under the cohort median. |
+| Connectivity before and after the regression | Where runs computed connectivity after a regression: every connection's r before it and after it, one curve per run. A regression that removed a shared signal moves the curves toward 0. |
+| Connectivity against movement | Per task, whether connections are stronger in the runs where the head moved more: each connection's r across runs between movement and its connectivity, beside the spread expected with no relation, and against the distance between its two channels. The values are in `desc-fcmovement_qc.tsv`. |
 | Outliers | Runs that sit far from the cohort over many metrics at once, with the metrics that put them there. The place to start. |
-| Quality Metrics | The cohort summary; **Channels kept**, how many subjects kept each source-detector pair, per task; and every value in a sortable table. |
+| Quality Metrics | The cohort summary; **Channels kept**, how many subjects kept each source-detector pair, per task; **Optodes**, the share of each source's and detector's long channels rejected over the task's runs, where an optode that loses most of its channels points at the optode; **Regions**, with `--roi-mapping` at this level, how many runs kept none of a region's long channels; and every value in a sortable table. |
+
+Every per-task panel and table pools the runs of a task, whatever their `acq`. When more than half of a task's runs read as if their two wavelength labels were swapped (the cardiac HbO/HbR ratio, [Coupling and signal level](#coupling-and-signal-level)), the page says so and names the runs.
 
 ```{figure} figures/qc_cohort_distributions.png
 :alt: Box plots of coupling and retention metrics across a cohort, one point per run
@@ -263,9 +275,9 @@ With `--pairs-csv`, `nirspipe-qc ... group` also gathers each dyad's raw record 
 | Alignment | How each member was shifted onto the shared clock, and how far each block's onset differs between members, red beyond two samples. |
 | Per-channel signals | Both members' traces and spectra, one channel at a time. |
 | Shared usable time | The usable share per channel pair and condition. |
-| Motion | Both members' motion traces, and when they moved at the same time, before and after correction. |
+| Motion | Both members' motion traces, and when they moved at the same time, before and after correction; a green strip marks spans where every member spiked at once. |
 | Where on the head | Each member's passing windows on the montage, per block and with a slider. |
-| Member and dyad metrics | Each member's numbers side by side, and the dyad's own: pairs good in every member, shared movement, the largest offset. |
+| Member and dyad metrics | Each member's numbers side by side, the heart rate among them, and the dyad's own: pairs good in every member, shared movement, the largest offset. With `--roi-mapping`, each region's long channels kept in each member. |
 | Channel decisions | Each member's per-channel table side by side, with the rating decision. |
 
 ```{figure} figures/qc_dyad_usable.png
@@ -288,7 +300,7 @@ When the members were screened with different lines or cardiac bands, the figure
 | Coherence matrices | The band mean of each chromophore, per channel and per region pairing. |
 | ISC | The correlation matrix and a circle of the pairings that stand out. |
 | All values | Every number behind the panels, one row per pairing. |
-| Member metrics | Each member's quality numbers; on a condition page, that window's. |
+| Member metrics | Each member's quality numbers, the heart rate among them; on a condition page, that window's. |
 | By condition | Each member's channels, with the whole-run screening every coherence used and how each channel did in each condition. |
 
 The dyad index, `group-<id>_desc-index_report.html`, lists every analysed window with its coherence, the share outside the cone of influence, how many values beat the null, and the ISC. A cell far from the dyad's other windows is marked. `nirspipe-hyper-groupnull` writes its own page per task at the tree root ([Hyperscanning](hyperscanning.md#above-the-channel-nirspipe-hyper-groupnull)).
@@ -303,11 +315,15 @@ The dyad index, `group-<id>_desc-index_report.html`, lists every analysed window
 | `nirspipe-rate raw OUTPUT_DIR --participant-label <id>` | One subject's raw reports and their condition pages; `--session-label`, `--task-label` and `--run-label` narrow it to some recordings | 5052 |
 | `nirspipe-rate hyper OUTPUT_DIR --group-id <id> --task-label <t> --pairs-csv <file>` | One dyad's raw report, in the raw QC tree | 5053 |
 
-If the default port is busy, the next free one is used. Click a section's cell to cycle unrated, good, bad and other; ctrl-click adds a comment. Click a channel chip to cycle undecided, good and bad; a red tint marks a pair the screening rejected but does not decide for you. Channel decisions apply to the whole run, so condition pages take none.
+If the default port is busy, the next free one is used. When more than one person rates the same reports, each starts the viewer with `--rater` and their initials, for example `nirspipe-rate raw OUTPUT_DIR --participant-label 01 --rater QY`. Each rater's verdicts, channel decisions and marked stretches then go to files of their own, so nobody overwrites anyone else, and the rating bar shows who is rating. Without `--rater`, everyone shares one set of files.
+
+Click a section's cell to cycle unrated, good, bad and other; ctrl-click adds a comment. Click a channel chip to cycle undecided, good and bad; a red tint marks a pair the screening rejected but does not decide for you. Channel decisions apply to the whole run, so condition pages take none.
 
 On a raw run page, **Mark bad stretches** under the Events table lets you drag across the Raw Signal plot to mark a stretch as bad. Each stretch is listed with editable start and end, and is saved as you go.
 
 **Using the ratings.** `nirspipe-rate export TREE [TREE ...]` collects the channel decisions into `desc-ratedchannels_qc.tsv`: per rated run, the pairs rated bad in `bad_channels` and the pairs rated good in `keep_channels`. Pass it to `nirspipe --bad-channels`; a pair you rated good is kept even when screening rejected it ([Tables that name recordings](data-preparation.md#tables-that-name-recordings)). Marked stretches go to `desc-ratedspans_qc.tsv`, for `nirspipe --bad-spans` ([Choosing stretches of a recording](data-preparation.md#choosing-stretches-of-a-recording)). Each page's final verdict is listed in `desc-ratedpages_qc.tsv`, for reading only. For dyads, also pass the `nirspipe` tree given to `hyper` as `--derivatives-dir`, since the members' decisions are kept there.
+
+With several raters, the exported tables carry a `rater` column, but `nirspipe` applies one rater's decisions and refuses a table that holds several. Export the rater you want with `nirspipe-rate export TREE --rater QY`, or settle the raters' tables into one yourself and blank its `rater` column.
 
 A pair rated both bad and good for one recording is listed as a warning, and `nirspipe` refuses the table until you settle it in the viewer. A recording that is unusable as a whole is left out by not selecting it: a subject through `--participant-label`, a dyad by deleting its `pairs.csv` row before `nirspipe-hyper` runs.
 
@@ -318,6 +334,8 @@ The ratings are saved beside the reports:
 | `rate` | `sub-<id>/nirs/<page>_desc-rating_qc.json`, every save also in `logs/group_ratings.jsonl` | none |
 | `raw` | `sub-<id>/nirs/<page>_desc-rawrating_qc.json`, every save also in `logs/group_raw_ratings.jsonl` | `sub-<id>/nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json`; marked stretches in `..._desc-rawspans_qc.json` |
 | `hyper` | `group-<id>/nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
+
+With `--rater QY`, each of these files carries `rater-QY` before its `desc-`, for example `sub-01_task-rest_rater-QY_desc-rawdecision_qc.json`; the `.jsonl` logs keep their names and record the rater with every save.
 
 The GUI's Raw QC page opens these viewers and runs the export for you ([GUI](gui.md#raw-qc)).
 
@@ -331,4 +349,4 @@ The hyperscanning sentences still cite placeholder entries whose author reads `T
 
 ## Figure files
 
-Every figure is saved in a `figures/` folder beside the pages that show it: `sub-<label>/figures/`, `group-<id>/figures/`, or `figures/` at the root for the cohort pages. `.html` files are interactive figures and `.png` files static ones, named after the run and the panel, for example `sub-01_task-rest_desc-carpet_nirs.html`.
+Every figure is saved in a `figures/` folder beside the pages that show it: `sub-<label>/figures/`, `group-<id>/figures/`, or `figures/` at the root for the cohort pages. `.html` files are interactive figures and `.png` files static ones at 300 dpi, named after the run and the panel, for example `sub-01_task-rest_desc-carpet_nirs.html`.

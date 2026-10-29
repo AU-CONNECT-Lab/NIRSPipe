@@ -21,6 +21,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 | `null-` | Which null a table holds: `phase` or `pair` |
 | `band-` | A re-averaged band from `nirspipe-hyper-band` |
 | `chan-`, `label-` | A channel or a region, in figure names |
+| `rater-` | Who saved a rating file, with `nirspipe-rate --rater` |
 
 The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. A run's outputs keep its input's `ses`, `task`, `acq` and `run`. Some of these entities and suffixes (`group-`, `chromo-`, `relmat`, `nirsmap` and others) are not yet part of BIDS, so a BIDS validator may flag them.
 
@@ -34,7 +35,10 @@ derivatives/nirspipe/
 ├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc group)
 ├── desc-subjects_qc.json                ← what each of its columns holds
 ├── desc-subjects_report.html            ← cohort page
+├── desc-subjects_nirsmap.tsv            ← every run's per-channel values, one long table
+├── desc-fcmovement_qc.tsv               ← per task, each connection's r between movement and FC across runs
 ├── desc-ratedchannels_qc.tsv            ← nirspipe-rate export: the --bad-channels table
+├── desc-ratedspans_qc.tsv               ← nirspipe-rate export: the --bad-spans table
 ├── desc-ratedpages_qc.tsv               ← nirspipe-rate export: every FINAL verdict, for reading
 ├── figures/                             ← the cohort page's figures
 ├── logs/                                ← the rating viewers' saved verdicts
@@ -73,12 +77,15 @@ derivatives/nirspipe/
         ├── <run>_stat-alff_nirsmap.tsv             ← rest: alff, falff, malff, zalff per channel
         ├── <run>_seg-<map>_agg-roi_stat-alff_nirsmap.tsv                ← + --roi-mapping
         ├── <run>_chromo-<c>_stat-{pearson,fisherz}_relmat.tsv           ← rest or --fc, one per chromophore
+        ├── <run>_chromo-<c>_stat-pearson_desc-<stage>_relmat.tsv        ← the same before the regression, on the stage it started from
         ├── <run>_chromo-<c>_seg-<map>_agg-{roi,seed}_stat-{pearson,fisherz}_relmat.tsv  ← + --roi-mapping
         ├── <task>_desc-<stage>_nirs.snirf          ← --combine-runs: the task's runs joined, named without run-
         ├── <task>_chromo-<c>_..._relmat.tsv        ← --combine-runs: FC of the joined series, as above
         ├── <page>_desc-rating_qc.json, <page>_desc-rawrating_qc.json    ← section ratings
         └── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
 ```
+
+With `nirspipe-rate --rater`, the rating files carry the rater before `desc-` (`..._rater-QY_desc-rawdecision_qc.json`), and the exported tables a `rater` column ([Rating](qc.md#rating)).
 
 A step that did not run writes nothing: `desc-motcorrected` is absent under `--motion-correction none`, `desc-filtered` when both cutoffs are off, and the quality record has no section for a stage that does not exist.
 
@@ -172,7 +179,7 @@ The processing stage is part of the file name (`desc-`). Do not rename files by 
 
 The sidecars find their sources through relative links to the raw dataset and, for a dyad tree, to the `nirspipe` tree. When you move or share the trees, keep them in the same places relative to each other.
 
-**The provenance graph.** Each run gets a graph of how its files were made, `figures/<run>_desc-provenance_nirs.png`, which the run report shows. A file that has gone missing is drawn with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs for any past run.
+**The provenance graph.** Each run gets a graph of how its files were made, `figures/<run>_desc-provenance_nirs.png`, which the run report shows. Each input names the dataset it was read from (raw data, or preprocessed data for a dyad), and outputs made from the same files are fed by one bar. A file that has gone missing is drawn with a dashed red outline. `nirspipe-provenance OUTPUT_DIR` redraws the graphs for any past run.
 
 ```{figure} figures/provenance.png
 :alt: A provenance graph of one run, one box per file

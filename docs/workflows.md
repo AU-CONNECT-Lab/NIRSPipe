@@ -62,7 +62,7 @@ Raw intensity is converted to optical density with MNE-Python and written as `de
 
 Screening finds channels whose optodes did not touch the scalp well. It looks for the heartbeat in each channel: a channel with good contact shows a clear cardiac pulse. Two measures are computed, the scalp coupling index (SCI) and peak spectral power (PSP).
 
-The heartbeat is looked for in the cardiac band, `--cardiac-l-freq` to `--cardiac-h-freq`. It has no default, because heart rate depends on age. Pick it from the table below, or let `--population` fill it in ([Population](usage.md#population)). A task that raises the heart rate, such as exercise, needs a higher top edge.
+The heartbeat is looked for in the cardiac band, `--cardiac-l-freq` to `--cardiac-h-freq`. It has no default, because heart rate depends on age. Pick it from the table below, or let `--population` fill it in ([Population](usage.md#population)). A task that raises the heart rate, such as exercise, needs a higher top edge. The reports give the heart rate measured from the recording and say when it falls outside the band you chose.
 
 | Age | Heart rate (beats/min) | Cardiac band (Hz) | Breathing rate (breaths/min) | Respiration band (Hz) |
 |---|---|---|---|---|
