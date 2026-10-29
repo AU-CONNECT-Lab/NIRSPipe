@@ -196,7 +196,7 @@ An uncoloured metric has no cutoff; it has not passed anything. None of these av
 :alt: A pass/fail grid of status, passing windows, SCI, CV, PSP and SNR per channel
 :width: 100%
 
-The pass/fail grid by channel and wavelength, long channels first. S3_D3 is rejected with a green SCI cell: the cell averages SCI over windows, and rejection counts the windows that clear both lines.
+The pass/fail grid by channel and wavelength, long channels first. S2_D2 is rejected with a green SCI cell: the cell averages SCI over windows, and rejection counts the windows that clear both lines.
 ```
 
 A channel can be `BAD` while its SCI cell is green: the cell is the average SCI over the run, but rejection counts how many windows pass. A channel that is good for half the run and bad for the other half can have a fine average and still be rejected.
