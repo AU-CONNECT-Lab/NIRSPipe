@@ -228,8 +228,9 @@ def test_the_re_paired_hbt_null_is_the_hbo_null_of_the_summed_pairs(
     _draw_null(tmp_path / "sum", {s: _summed_as_hbo(r) for s, r in raws.items()}, ("hbo",),
                monkeypatch, with_t=False)
 
-    hbt = _draws(tmp_path / "hbt", statistic, "hbt")["coherence"]
-    summed = _draws(tmp_path / "sum", statistic, "hbo")["coherence"]
+    value = "coherence" if statistic == "wtc" else "r"
+    hbt = _draws(tmp_path / "hbt", statistic, "hbt")[value]
+    summed = _draws(tmp_path / "sum", statistic, "hbo")[value]
     assert len(hbt) and hbt.notna().any()
     pd.testing.assert_series_equal(hbt, summed, check_exact=False, rtol=0, atol=1e-12)
 
