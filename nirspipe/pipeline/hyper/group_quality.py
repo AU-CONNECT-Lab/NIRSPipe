@@ -17,6 +17,7 @@ import pandas as pd
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.qc.metrics.windowed import long_or_all
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
 from nirspipe.io.head_template import CORTEX_ATLASES
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
@@ -505,7 +506,7 @@ def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
     # GVTD is an RMS across channels, so it has no matrix and rides along as one series.
     # Only a stored record carries it; the dyad's own pass does not measure motion, and a
     # panel that draws it has to cope with the row being absent rather than assume it.
-    gvtd = windowed.get("gvtd_filt_per_window")
+    gvtd = long_or_all(windowed, "gvtd_filt_per_window")
     if gvtd:
         out["gvtd"] = np.asarray(gvtd, dtype=float)
     return out

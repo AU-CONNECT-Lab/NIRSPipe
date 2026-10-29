@@ -26,3 +26,19 @@ def test_a_nested_value_is_refused_when_written(tmp_path):
     with pytest.raises(ValueError, match="raw.share_by_condition"):
         write_record(tmp_path / _PATH, _record(nested))
     assert not (tmp_path / _PATH).exists()
+
+
+@pytest.mark.parametrize("stale", ["gvtd_filt_per_window_all", "spike_spans_all_s"])
+def test_a_record_naming_every_channel_all_is_refused_rather_than_read_as_long(tmp_path, stale):
+    """Before the windowed keys followed the sections, the plain key held the long set."""
+    from nirspipe.exceptions import StageError
+
+    values = [[0.0, 1.0]] if stale.endswith("_s") else [1.0, 2.0]
+    record = {**_record({}), "windowed": {"qc_window_s": 10.0, stale: values,
+                                          "gvtd_filt_per_window": [3.0, 4.0]}}
+    with pytest.raises(StageError, match=stale):
+        read_record(write_record(tmp_path / _PATH, record))
+    current = {**_record({}), "windowed": {"qc_window_s": 10.0, "spike_spans_long_s": [[0.0, 1.0]],
+                                           "gvtd_filt_per_window_long": [1.0, 2.0],
+                                           "gvtd_filt_per_window": [3.0, 4.0]}}
+    assert read_record(write_record(tmp_path / _PATH, current))["windowed"]["spike_spans_long_s"]

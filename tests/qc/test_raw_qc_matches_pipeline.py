@@ -82,8 +82,8 @@ def test_the_record_carries_the_settings_it_screened_with(tmp_path):
 
 
 # the run's flagged stretches, which a condition counts over its own window
-SPAN_KEYS = ("gvtd_above_spans_s", "gvtd_above_spans_short_s", "gvtd_above_spans_all_s",
-             "spike_spans_s", "spike_spans_short_s", "spike_spans_all_s")
+SPAN_KEYS = ("gvtd_above_spans_s", "gvtd_above_spans_long_s", "gvtd_above_spans_short_s",
+             "spike_spans_s", "spike_spans_long_s", "spike_spans_short_s")
 SPAN_SETTINGS = ("--participant-label", "01", "--dpf", "6", "--sci-threshold", "0.8",
                  "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5",
                  "--resp-l-freq", "0.1", "--resp-h-freq", "0.4",
@@ -116,4 +116,4 @@ def test_the_recording_moves_its_gvtd_spans_across_the_correction(windowed):
     bids, _pipe, raw_qc = windowed
     raw = read_raw_snirf(next(bids.rglob("*_nirs.snirf")), preload=True, verbose=False)
     before = [list(span) for span in gvtd_above_segments(raw)]
-    assert before and before != raw_qc["gvtd_above_spans_s"]
+    assert before and before != raw_qc["gvtd_above_spans_long_s"]

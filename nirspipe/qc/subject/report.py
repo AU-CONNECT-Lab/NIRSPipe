@@ -153,7 +153,7 @@ from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import span_kind
 from nirspipe.qc.metrics.windowed import (
-    _in_scope, passing_mask_from_matrices, window_centers,
+    _in_scope, passing_mask_from_matrices, window_centers, windowed_key,
 )
 from nirspipe.qc.metrics.hyper import passing_grid, member_series
 from nirspipe.qc.figures.common.head_map import build_head_slider, head_geometry
@@ -846,16 +846,16 @@ def _section_motion(
     carpet_gvtd_h = 600
     bad_segment_zoom_path = None
 
-    def _spans(key: str) -> "list | None":
-        value = (windowed or {}).get(key)
+    def _spans(stem: str, channel_set: str) -> "list | None":
+        value = (windowed or {}).get(windowed_key(stem, channel_set, spans=True))
         return [tuple(span) for span in value] if value else None
 
-    corrected_segments = _spans("motion_corrected_spans_s")
-    spike_spans = _spans("spike_spans_s")
+    corrected_segments = _spans("motion_corrected_spans", gvtd_set)
+    spike_spans = _spans("spike_spans", gvtd_set)
     # keyed by channel set, so each GVTD row shades the spans found on its own channels
-    spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans_short_s")}
+    spike_by_set = {gvtd_set: spike_spans, "short": _spans("spike_spans", "short")}
     corrected_by_set = {gvtd_set: corrected_segments,
-                        "short": _spans("motion_corrected_spans_short_s")}
+                        "short": _spans("motion_corrected_spans", "short")}
 
     if not skip_carpet:
         with _guard("Carpet + GVTD", errors, subject):

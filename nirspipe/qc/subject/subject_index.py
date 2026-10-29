@@ -28,6 +28,7 @@ from nirspipe.utils import pair_of
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.vocabulary import format_metric, with_unit
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.metrics.windowed import long_or_all
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
 from nirspipe.qc.common.figure_io import figure_namer, _save_figure_html
@@ -114,15 +115,15 @@ _COND_COLUMNS = (
     ("Retention",       "channel_retention_rate",  "{:.0%}"),
 )
 
-# The span list behind each share, and the key it fills. The whole-run row counts these over
-# the full recording rather than reading the record's own scalar of the same name: a
-# condition's `gvtd_pct_above_thresh` is the corrected file against its own threshold, while
-# `raw_long_gvtd_pct_above_thresh` is the uncorrected file against its own. Same rule, same
-# spans, one column.
+# The spans behind each share, read on the long set, and the key it fills. The whole-run row
+# counts these over the full recording rather than reading the record's own scalar of the
+# same name: a condition's `gvtd_pct_above_thresh` is the corrected file against its own
+# threshold, while `raw_long_gvtd_pct_above_thresh` is the uncorrected file against its own.
+# Same rule, same spans, one column.
 _WHOLE_RUN_SPANS = (
-    ("gvtd_pct_above_thresh", "gvtd_above_spans_s"),
-    ("spike_pct_frames",      "spike_spans_s"),
-    ("motion_corrected_pct",  "motion_corrected_spans_s"),
+    ("gvtd_pct_above_thresh", "gvtd_above_spans"),
+    ("spike_pct_frames",      "spike_spans"),
+    ("motion_corrected_pct",  "motion_corrected_spans"),
 )
 
 
@@ -366,11 +367,11 @@ def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
     values = {key: long_section.get(key)
               for key in ("sci_win_mean", "snr_mean", "channel_retention_rate")}
 
-    per_window = windowed.get("gvtd_filt_per_window")
+    per_window = long_or_all(windowed, "gvtd_filt_per_window")
     values["gvtd_filt_mean"] = statistics.fmean(per_window) if per_window else None
-    for key, stored in _WHOLE_RUN_SPANS:
-        values[key] = (span_share(windowed.get(stored), 0.0, duration_s)
-                       if windowed.get(stored) and duration_s else None)
+    for key, stem in _WHOLE_RUN_SPANS:
+        spans = long_or_all(windowed, stem, spans=True)
+        values[key] = span_share(spans, 0.0, duration_s) if spans and duration_s else None
     return values
 
 

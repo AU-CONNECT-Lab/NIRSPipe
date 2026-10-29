@@ -1030,8 +1030,8 @@ _GVTD_FAMILIES = {
     "gvtd_filt_per_window": f"GVTD band-passed to {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz, averaged within each window",
     "gvtd_filt_p95_per_window": "The 95th percentile of the band-passed GVTD within each window",
 }
-_GVTD_SETS = {"": ", over the long channels.", "_short": ", over the short channels.",
-              "_all": ", over every channel."}
+_GVTD_SETS = {"": ", over every channel.", "_long": ", over the long channels.",
+              "_short": ", over the short channels."}
 _GVTD_FILE = " Measured on the motion-corrected optical density when the run corrected motion."
 RECORD_WINDOW_COLUMNS = {
     "sci_per_window": "Scalp coupling index in each window, averaged over every channel.",

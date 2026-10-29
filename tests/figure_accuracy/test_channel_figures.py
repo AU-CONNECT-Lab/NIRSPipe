@@ -141,7 +141,7 @@ def _shaded(fig, name="corrected"):
 def _spans_for(request, run_name, desc, record, short):
     run = request.getfixturevalue(run_name)
     windowed = read_record(run.nirs / f"sub-01_task-tapping_desc-{record}_qc.json")["windowed"]
-    key = "motion_corrected_spans_short_s" if short else "motion_corrected_spans_s"
+    key = "motion_corrected_spans_short_s" if short else "motion_corrected_spans_long_s"
     expected = np.asarray(windowed[key], float).reshape(-1, 2)
     pairs = [p for p in run.truth.pairs if p.short == short]
     return expected, {p.name: _shaded(plotly_figures(run.figure(desc, chan=f"{_fname(p.name)}760"))[0])

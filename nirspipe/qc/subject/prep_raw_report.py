@@ -48,7 +48,7 @@ from nirspipe.qc.metrics import (
     screen_channels, screening_gap, screening_scores,
 )
 from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, separation_orphans
-from nirspipe.qc.metrics.windowed import _in_scope, window_centers
+from nirspipe.qc.metrics.windowed import _in_scope, window_centers, windowed_key
 from nirspipe.qc.common.report_shell import (
     collapse_messages, footer_vars, guard, note, page_vars, render,
 )
@@ -146,42 +146,44 @@ def _store_spans(windowed: dict, raw, raw_after, sep_bands, errors: list, label:
 
     ::
 
-      windowed["spike_spans_s"] -> [[412.0, 1.3], [880.5, 0.8]]
+      windowed["spike_spans_long_s"] -> [[412.0, 1.3], [880.5, 0.8]]
 
     Two families, each on its own channel sets, because both tests are over a set rather
     than over a channel: a spike span found on the short channels is not a claim about the
     long ones, and GVTD is an RMS across whatever it is given, so each set has its own trace
-    and its own threshold. The long set keeps the plain key, as the pipeline's record does.
+    and its own threshold. Every channel under the plain key, as the pipeline's record has it.
 
     Spikes are found on the recording as delivered and GVTD on ``raw_after``, the corrected
     copy where a correction ran, as the pipeline's record finds them, so a condition's GVTD
     share reads the file its GVTD means were taken from.
     """
     from nirspipe.qc.metrics import (
-        gvtd_above_segments, long_short_channels, spike_segments,
+        gvtd_above_segments, gvtd_channel_picks, long_short_channels, spike_segments,
     )
 
     long_names, short_names = long_short_channels(raw, sep_bands)
     with guard("Spike spans", errors, label):
-        for key, names in (("spike_spans_s", long_names),
-                           ("spike_spans_short_s", short_names),
-                           ("spike_spans_all_s", list(raw.ch_names))):
+        for channel_set, names in (("all", list(raw.ch_names)), ("long", long_names),
+                                   ("short", short_names)):
             if names:
-                picked = raw.copy().pick(names)
-            elif key == "spike_spans_s":
-                picked = raw               # unsplit montage: every channel, as the record does
-            else:
-                continue
-            windowed[key] = [list(span) for span in spike_segments(picked)]
+                windowed[windowed_key("spike_spans", channel_set, spans=True)] = [
+                    list(span) for span in spike_segments(raw.copy().pick(names))]
     gvtd_raw = raw if raw_after is None else raw_after
     with guard("GVTD above-threshold spans", errors, label):
-        windowed["gvtd_above_spans_s"] = [
-            list(span) for span in gvtd_above_segments(gvtd_raw, sep_bands)]
-        for key, picks in (("gvtd_above_spans_short_s", short_names),
-                           ("gvtd_above_spans_all_s", list(gvtd_raw.ch_names))):
+        # the long set is the canonical trace's, absent on a montage that never split
+        gvtd_long, canonical = gvtd_channel_picks(gvtd_raw, sep_bands)
+        for channel_set, picks in (("all", list(gvtd_raw.ch_names)),
+                                   ("long", gvtd_long if canonical == "long" else []),
+                                   ("short", short_names)):
             if picks:
-                windowed[key] = [list(span) for span in
-                                 gvtd_above_segments(gvtd_raw, sep_bands, picks=picks)]
+                windowed[windowed_key("gvtd_above_spans", channel_set, spans=True)] = [
+                    list(span) for span in gvtd_above_segments(gvtd_raw, sep_bands, picks=picks)]
+
+
+def _span_sets(windowed: dict, stem: str, first: str) -> dict:
+    """{channel set: spans} for the GVTD panel's first set and the short one, which it shades."""
+    return {name: [tuple(sp) for sp in windowed.get(windowed_key(stem, name, spans=True)) or []]
+            or None for name in (first, "short")}
 
 
 def _process_run(
@@ -487,13 +489,10 @@ def _process_run(
         carpet_after = (None if raw_motcorr is None
                         else raw_motcorr.copy().pick(
                             [c for c in gvtd_picks if c in raw_motcorr.ch_names]))
+        corrected = _span_sets(windowed, "motion_corrected_spans", gvtd_set)[gvtd_set]
         fig   = carpet_gvtd_figure(raw_carpet, raw_carpet.ch_names,
-                                   corrected_segments=[tuple(sp) for sp in
-                                                       windowed.get("motion_corrected_spans_s") or []] or None,
-                                   spike_segments={gvtd_set: [tuple(sp) for sp in
-                                                              windowed.get("spike_spans_s") or []] or None,
-                                                   "short": [tuple(sp) for sp in
-                                                             windowed.get("spike_spans_short_s") or []] or None},
+                                   corrected_segments=corrected,
+                                   spike_segments=_span_sets(windowed, "spike_spans", gvtd_set),
                                    raw_after=carpet_after,
                                    channel_set=gvtd_set, blocks=gvtd_blocks, imu=imu,
                                    roi_map=roi_map)
@@ -602,18 +601,10 @@ def _process_run(
             )
             built = _motion_detail_figures(
                 raw_od, raw_motcorr, label, errors,
-                corrected_by_set={
-                    gvtd_blocks[0][0] if gvtd_blocks else "all":
-                        [tuple(sp) for sp in windowed.get("motion_corrected_spans_s") or []] or None,
-                    "short": [tuple(sp) for sp in
-                              windowed.get("motion_corrected_spans_short_s") or []] or None,
-                },
-                spike_by_set={
-                    gvtd_blocks[0][0] if gvtd_blocks else "all":
-                        [tuple(sp) for sp in windowed.get("spike_spans_s") or []] or None,
-                    "short": [tuple(sp) for sp in
-                              windowed.get("spike_spans_short_s") or []] or None,
-                },
+                corrected_by_set=_span_sets(windowed, "motion_corrected_spans",
+                                            gvtd_blocks[0][0] if gvtd_blocks else "all"),
+                spike_by_set=_span_sets(windowed, "spike_spans",
+                                        gvtd_blocks[0][0] if gvtd_blocks else "all"),
                 gvtd_blocks=gvtd_blocks or None,
                 imu=imu,
             )

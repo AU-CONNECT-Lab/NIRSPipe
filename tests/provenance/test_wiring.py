@@ -205,7 +205,8 @@ def test_the_windowed_metrics_actually_ran(baseline):
     record = read_record(written[0])
     windowed = record.get("windowed") or {}
     for name in ("sci_matrix", "sci_times", "psp_matrix", "psp_times", "qc_window_s",
-                 "spike_spans_s", "motion_corrected_spans_s"):
+                 "spike_spans_s", "spike_spans_long_s", "motion_corrected_spans_s",
+                 "motion_corrected_spans_long_s"):
         assert name in windowed, name
     n_ch = len(_stage(nirs_dir, "motcorrected").ch_names)
     assert len(windowed["sci_matrix"]) == n_ch

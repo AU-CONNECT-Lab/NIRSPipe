@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - The null draws tables leave out the rows a rejected channel left blank, which were about two thirds of them
 - FC matrices leave out short channels, as ISC does; the Pearson diagonal is exactly 1, the matrix exactly symmetric, and the Fisher z diagonal n/a instead of 0
 - Raw QC's channel table drops the two short-channel share columns, which were always empty there
+- The quality record's per-window GVTD series and flagged spans name every channel plainly and the sets `_long`, `_short`, as its sections do; older records are refused
 
 ### Fixed
 - The cohort page's box charts widen their left margin for a long first label, which fell off the chart's left edge

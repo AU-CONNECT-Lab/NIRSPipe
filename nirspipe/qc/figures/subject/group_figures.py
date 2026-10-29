@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from nirspipe.qc.boilerplate.vocabulary import grid_window_label, shared_window
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
 from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.metrics.windowed import windowed_key
 from nirspipe.qc.figures.common._utils import (CHROMA_STYLE, CONDITION_PALETTE, LONG_COLOR,
                                                   SHORT_COLOR, _hex_to_rgba)
 
@@ -318,10 +319,8 @@ _WINDOW_MATRICES = [
 ]
 
 # GVTD is stored as a series per channel set already. The motion-band one, being the trace
-# that follows head movement; the bare key is the long channels, following `spike_spans_s`,
-# and `_short` and `_all` name the others.
-_GVTD_SETS = {"long": "gvtd_filt_per_window", "short": "gvtd_filt_per_window_short",
-              "all": "gvtd_filt_per_window_all"}
+# that follows head movement.
+_GVTD_SETS = {name: windowed_key("gvtd_filt_per_window", name) for name in ("long", "short", "all")}
 _GVTD_LABEL = f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"
 
 # Each windowed series is smoothed over this many seconds and then sampled at that same step.

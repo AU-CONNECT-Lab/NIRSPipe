@@ -184,39 +184,36 @@ def attach_windowed_series(
         except Exception as exc:
             logger.warning("windowed CV failed: %s", exc)
 
-    gvtd_per_window = gvtd_p95_per_window = gvtd_t = None
-    gvtd_filt_per_window = gvtd_filt_p95_per_window = None
     raw_gvtd = raw_od if gvtd_od is None else gvtd_od
     # One series per separation set, because GVTD is an RMS *across* channels: a long-channel
     # series cannot be recovered from an all-channel one the way an SCI column can be picked
-    # out of the stored matrix. The plain keys are the long channels, following
-    # `spike_spans_s`, and `_short` / `_all` name the others.
-    gvtd_sets: "dict[str, list[str] | None]" = {"": None, "_short": None, "_all": None}
+    # out of the stored matrix. Every channel under the plain key, as the scalar sections
+    # name them, and the long and short sets suffixed.
+    gvtd_sets: "dict[str, list[str] | None]" = {"all": None}
     try:
         long_names, short_names = long_short_channels(raw_gvtd, sep_bands)
-        gvtd_sets = {"": long_names or None, "_short": short_names or None, "_all": None}
+        gvtd_sets.update(long=long_names or None, short=short_names or None)
     except Exception as exc:
         logger.warning("GVTD separation split failed (%s); only the pooled series is stored", exc)
 
-    for suffix, names in gvtd_sets.items():
-        if suffix != "_all" and not names:
+    for channel_set, names in gvtd_sets.items():
+        if channel_set != "all" and not names:
             continue
         try:
             picked = raw_gvtd.copy().pick(names) if names else raw_gvtd
             means, p95s, times = compute_windowed_gvtd(picked, window_s)
             f_means, f_p95s, _ = compute_windowed_filtered_gvtd(picked, window_s)
         except Exception as exc:
-            logger.warning("windowed GVTD%s failed: %s", suffix or " (long)", exc)
+            logger.warning("windowed GVTD (%s) failed: %s", channel_set, exc)
             continue
-        if suffix == "":
-            gvtd_per_window, gvtd_p95_per_window, gvtd_t = means, p95s, times
-            gvtd_filt_per_window, gvtd_filt_p95_per_window = f_means, f_p95s
+        if means is None or not len(means):
             continue
-        if means is not None and len(means):
-            sqm[f"gvtd_per_window{suffix}"] = np.asarray(means).tolist()
-            sqm[f"gvtd_p95_per_window{suffix}"] = np.asarray(p95s).tolist()
-            sqm[f"gvtd_filt_per_window{suffix}"] = np.asarray(f_means).tolist()
-            sqm[f"gvtd_filt_p95_per_window{suffix}"] = np.asarray(f_p95s).tolist()
+        for stem, values in (("gvtd_per_window", means), ("gvtd_p95_per_window", p95s),
+                             ("gvtd_filt_per_window", f_means),
+                             ("gvtd_filt_p95_per_window", f_p95s)):
+            sqm[windowed_key(stem, channel_set)] = np.asarray(values).tolist()
+        # every set is cut on the one grid
+        sqm.setdefault("gvtd_window_times_s", window_centers(times).tolist())
 
     # SCI/PSP matrices are channel × window; collapse to a per-window mean over channels
     if sci_matrix is not None and sci_times is not None:
@@ -233,14 +230,6 @@ def attach_windowed_series(
         sqm["snr_per_window"]     = np.where(cv_mean > 0, 1.0 / cv_mean, np.nan).tolist()
         sqm["cv_window_times_s"]  = window_centers(cv_times).tolist()
 
-    if gvtd_per_window is not None and len(gvtd_per_window):
-        sqm["gvtd_per_window"]     = np.asarray(gvtd_per_window).tolist()
-        sqm["gvtd_p95_per_window"] = np.asarray(gvtd_p95_per_window).tolist()
-        sqm["gvtd_window_times_s"] = window_centers(gvtd_t).tolist()
-    if gvtd_filt_per_window is not None and len(gvtd_filt_per_window):
-        sqm["gvtd_filt_per_window"]     = np.asarray(gvtd_filt_per_window).tolist()
-        sqm["gvtd_filt_p95_per_window"] = np.asarray(gvtd_filt_p95_per_window).tolist()
-
     series.update(sci_matrix=sci_matrix, sci_times=sci_times,
                   psp_matrix=psp_matrix, psp_times=psp_times,
                   cv_matrix=cv_matrix, cv_times=cv_times)
@@ -256,6 +245,29 @@ def attach_windowed_series(
             raise ValueError(f"{key}_matrix has {len(matrix)} rows for {len(names or ())} channels")
         series[f"{key}_channels"] = list(names)
     return series
+
+
+# the channel sets of a record's windowed section: every channel under the plain key, as the
+# scalar sections name them, and the long and short sets suffixed
+WINDOWED_SETS = {"all": "", "long": "_long", "short": "_short"}
+
+
+def windowed_key(stem: str, channel_set: str = "all", spans: bool = False) -> str:
+    """One channel set's key in the windowed section.
+
+    ::
+
+      windowed_key("gvtd_filt_per_window", "long")      -> "gvtd_filt_per_window_long"
+      windowed_key("spike_spans", "short", spans=True)  -> "spike_spans_short_s"
+    """
+    return f"{stem}{WINDOWED_SETS[channel_set]}{'_s' if spans else ''}"
+
+
+def long_or_all(windowed: dict, stem: str, spans: bool = False):
+    """The long set's entry, or every channel's on a montage that never split, as the
+    scalar sections fill a skipped ``_long`` from the whole."""
+    key = windowed_key(stem, "long", spans)
+    return windowed[key] if key in windowed else windowed.get(windowed_key(stem, "all", spans))
 
 
 # The window the SCI and PSP pass lines were established at. Not the report's `window_s`:

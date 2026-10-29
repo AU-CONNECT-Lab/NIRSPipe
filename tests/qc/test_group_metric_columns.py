@@ -35,7 +35,7 @@ def test_the_over_time_grid_draws_the_motion_band_gvtd():
     """The unfiltered trace does not follow head movement; the grid draws the one that does."""
     times = [5.0 + 10.0 * i for i in range(30)]
     rows = [{"bids_name": f"sub-0{k}_task-rest", "gvtd_window_times_s": times,
-             "gvtd_per_window": [1.0] * 30, "gvtd_filt_per_window": [2.0 + k] * 30}
+             "gvtd_per_window_long": [1.0] * 30, "gvtd_filt_per_window_long": [2.0 + k] * 30}
             for k in range(3)]
     fig = build_window_grid(rows)
     drawn = {round(float(v), 6) for tr in fig.data if tr.y is not None for v in tr.y
@@ -49,7 +49,7 @@ def test_runs_windowed_at_different_rates_share_every_column():
     # window centres follow the sampling rate, so no two runs share a sample time
     rows = [{"bids_name": f"sub-0{k}_task-rest", "qc_window_s": 10.0,
              "gvtd_window_times_s": [5.0 + 0.07 * k + (10.0 + 0.15 * k) * i for i in range(180)],
-             "gvtd_filt_per_window": [float(k)] * 180}
+             "gvtd_filt_per_window_long": [float(k)] * 180}
             for k in range(3)]
     grid, stack, _ = _stacked_series(rows, "gvtd", "long")
     shared = grid <= min(r["gvtd_window_times_s"][-1] for r in rows)

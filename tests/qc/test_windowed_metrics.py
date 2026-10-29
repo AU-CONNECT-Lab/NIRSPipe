@@ -196,3 +196,23 @@ def test_a_flat_channel_leaves_the_windowed_sci_without_a_warning(od_raw):
     assert [str(w.message) for w in caught if w.category is RuntimeWarning] == []
     assert od_raw.ch_names[0] not in out["sci_win_per_channel"]
     assert out["sci_win_per_channel"]
+
+
+# ---- every channel under the plain key, the sets suffixed, as the record's sections ----
+def test_the_plain_gvtd_series_is_every_channel_and_each_set_is_suffixed():
+    import mne
+
+    from nirspipe.qc.metrics import long_short_channels
+    from tests._synth import synth_raw
+
+    od = mne.preprocessing.nirs.optical_density(synth_raw("01", "rest", duration=200.0),
+                                                verbose="error")
+    sqm: dict = {}
+    attach_windowed_series(sqm, od, *CARDIAC, WINDOW_S)
+    long_names, short_names = long_short_channels(od)
+    assert long_names and short_names
+    for key, names in (("gvtd_per_window", od.ch_names), ("gvtd_per_window_long", long_names),
+                       ("gvtd_per_window_short", short_names)):
+        means, _, _ = compute_windowed_gvtd(od.copy().pick(names), WINDOW_S)
+        np.testing.assert_array_equal(np.asarray(sqm[key]), np.asarray(means), err_msg=key)
+    assert not [k for k in sqm if k.endswith("_all")]

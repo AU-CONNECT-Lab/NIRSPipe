@@ -190,4 +190,10 @@ def read_record(path: Path) -> dict[str, Any]:
         else:
             windowed[f"{kind}_matrix"] = frame.to_numpy(dtype=float).T.tolist()
             windowed[f"{kind}_channels"] = list(frame.columns)
+    # read as it stands, its long set's series would pass for every channel's
+    stale = sorted(k for k in record.get("windowed") or {} if k.endswith(("_all", "_all_s")))
+    if stale:
+        raise StageError(f"{path.name} keeps every channel's series under {stale[0]} and the "
+                         "long set's under the plain key, which this version reads the other "
+                         "way round; rerun the command that wrote it.")
     return record
