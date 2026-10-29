@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - `--by-condition` runs no longer warn that the short-channel share, the wavelength check and the nuisance figure lack a per-condition form; the pages are unchanged
+- The cohort page's connectivity caption names the matrix before the regression by its stage, `desc-resampled` under `--resample-sfreq`, where it always said `desc-filtered`
 
 ## [0.78.0] - 2026-10-28
 

@@ -424,7 +424,8 @@ NOTES = {
         "residual, the series the run&rsquo;s connectivity is computed on. A regression that "
         "removed a shared signal moves the curves toward 0; one that removed little leaves "
         "them where they were. Read from each run&rsquo;s channel matrices, the one before the "
-        "regression ending in <code>_desc-filtered_relmat.tsv</code>; runs without a "
+        "regression named by the stage it started from (<code>_desc-filtered_relmat.tsv</code>, "
+        "<code>_desc-resampled_relmat.tsv</code> under --resample-sfreq); runs without a "
         "regression are left out.",
     "group.fc_movement":
         "Every connection between two kept long channels that at least {min_runs} runs of the "
