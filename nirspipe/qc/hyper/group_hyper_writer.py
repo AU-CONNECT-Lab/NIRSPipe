@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 from nirspipe.qc.boilerplate import collect_software_versions
-from nirspipe.io.tables import read_tsv_or_none, write_tsv
+from nirspipe.io.tables import WHOLE_RUN, read_tsv_or_none, write_tsv
 from nirspipe.io.naming import derivative_path, report_name
 from nirspipe.qc.common.figure_io import _save_figure_html
 from nirspipe.qc.figures.hyper.group_hyper_figures import (
@@ -99,6 +99,20 @@ GROUPS_QC_COLUMNS = {
                     "every member.",
 }
 
+# the column dictionary written beside desc-groupconditions_qc.tsv
+GROUP_CONDITIONS_COLUMNS = {
+    "bids_name": GROUPS_QC_COLUMNS["bids_name"],
+    "condition": "The condition, as the dyad's usable-time table names it.",
+    "n_long_pairs": GROUPS_QC_COLUMNS["n_long_pairs"],
+    "n_windows": "Screening windows inside the condition's block, on the dyad's aligned clock.",
+    "usable_pairs_mean": "Pairs passing in both members at once in this condition, averaged "
+                         "over its windows.",
+    "usable_window_frac": "Share of the condition's pair-windows passing in both members at "
+                          "once.",
+    "one_member_frac": "Share of the condition's pair-windows passing in one member only.",
+    "neither_frac": "Share of the condition's pair-windows passing in neither member.",
+}
+
 _USABLE_KEYS = ("n_long_pairs", "n_windows", "usable_pairs_mean", "usable_window_frac",
                 "one_member_frac", "neither_frac", "usable_stretch_s")
 
@@ -134,6 +148,28 @@ def _offsets_equal(record: dict) -> "bool | None":
     return len({round(float(v), 3) for v in values}) == 1 if values else None
 
 
+def condition_rows(label: str, table: "pd.DataFrame | None") -> list[dict]:
+    """One row per condition of a dyad, from its usable-time table; the whole run is not one."""
+    if table is None or table.empty or "condition" not in table.columns:
+        return []
+    out = []
+    for condition, part in table[table["condition"] != WHOLE_RUN].groupby("condition",
+                                                                          sort=False):
+        def mean(column: str) -> "float | None":
+            return float(part[column].mean()) if column in part else None
+
+        # every pair has each of its condition's windows, so a mean over pairs is one over
+        # pair-windows, and the summed share is the mean count of usable pairs
+        out.append({"bids_name": label, "condition": condition,
+                    "n_long_pairs": int(part["pair"].nunique()),
+                    "n_windows": int(part["n_windows"].max()) if "n_windows" in part else None,
+                    "usable_pairs_mean": float(part["usable_frac"].sum()),
+                    "usable_window_frac": mean("usable_frac"),
+                    "one_member_frac": mean("one_member_frac"),
+                    "neither_frac": mean("neither_frac")})
+    return out
+
+
 def collect_rows(output_dir: Path) -> list[dict]:
     """One row per dyad-task under ``output_dir``, for the panels and the table.
 
@@ -162,6 +198,7 @@ def collect_rows(output_dir: Path) -> list[dict]:
             "usable": {k: record[k] for k in _USABLE_KEYS if k in record},
             "by_pair": _shares(table, "pair"),
             "by_cond": _shares(table, "condition"),
+            "conditions": condition_rows(label, table),
             "record": record,
         })
     return rows
@@ -251,6 +288,14 @@ def build_group_hyper_report(output_dir: Path) -> "Path | None":
     tsv_path.with_suffix(".json").write_text(json.dumps(
         {c: {"Description": GROUPS_QC_COLUMNS[c]} for c in table.columns
          if c in GROUPS_QC_COLUMNS}, indent=2) + "\n", encoding="utf-8")
+
+    by_condition = [c for row in rows for c in row["conditions"]]
+    if by_condition:
+        cond_path = output_dir / derivative_path("", "qc", ".tsv", desc="groupconditions").name
+        write_tsv(pd.DataFrame(by_condition, columns=list(GROUP_CONDITIONS_COLUMNS)), cond_path)
+        cond_path.with_suffix(".json").write_text(json.dumps(
+            {c: {"Description": d} for c, d in GROUP_CONDITIONS_COLUMNS.items()}, indent=2)
+            + "\n", encoding="utf-8")
 
     def cell(flat: dict, key: str, fmt: str) -> "str | None":
         text = _format(flat.get(key), fmt)

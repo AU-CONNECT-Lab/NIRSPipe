@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - The channel QC, GLM, contrast and ALFF tables describe each column and its unit in their sidecars, and FC matrix sidecars say what they hold
 - The cohort pass of `nirspipe` and `nirspipe-qc` writes `desc-conditions_qc.tsv`, each run's conditions under the cohort table's column names, with a column dictionary
+- The dyad cohort pass writes `desc-groupconditions_qc.tsv`, each dyad's conditions from its usable-time table under the dyad cohort table's column names
 
 ### Changed
 - The re-paired null's ISC draws table names its correlation `r`, as the real table and the phase-null draws do, instead of `coherence`
