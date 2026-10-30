@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - mALFF and zALFF are standardised against the run's good long channels only. Under `--short-channel none` or `mean`, a short channel's scalp amplitude had entered the reference
 - FC matrices, ROI means and seed maps keep long channels only, as ISC does. A channel between the short and long ranges had been kept
+- **Breaking**: `nirspipe-hyper-pairnull` refuses a real table written under `--bads-scope subject` that does not record the tasks it pooled: rerun `nirspipe-hyper`
 
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
@@ -20,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - The run record's `log_dir` named a `logs/` folder at the tree root, where nothing is written, instead of the subject's, which holds the log and the record
 - With `--fc`, no bandpass and corrupted spans, the matrix before the regression was named `desc-filled`, a stage with no file, and credited to `desc-errts`
 - A `--roi-mapping` or `--bids-filter-file` file holding non-ASCII text, or saved with a byte-order mark, failed to load on Windows machines whose locale is not UTF-8
+- The re-paired null ignored the real run's separation-band flags, `--no-align` and, under `--bads-scope subject`, its task selection, so it could be drawn on other channels than its real table
 
 ## [0.80.0] - 2026-10-29
 

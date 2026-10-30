@@ -1133,6 +1133,7 @@ def build_hyper_post_report(
     result: "HyperPostResult | None" = None,
     desc: str | None = None,
     bads_scope: str | None = None,
+    bads_scope_tasks: "list[str] | None" = None,
     session: str | None = None,
     wtc_device=None,
 ) -> "Path | None":
@@ -1566,7 +1567,7 @@ def build_hyper_post_report(
                 phase_null_shared=phase_null_shared, isc_band=isc_band,
                 roi_map=roi_map, roi_map_name=roi_map_name, sep_bands=sep_bands,
                 analysis_window=analysis_window, desc=desc, bads_scope=bads_scope,
-                device=wtc_device,
+                bads_scope_tasks=bads_scope_tasks, device=wtc_device,
                 member_roles=({e.subject_id: e.role for e in group}
                               if any(e.role for e in group) else None),
             ),

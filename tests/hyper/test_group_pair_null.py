@@ -35,6 +35,10 @@ def _entries(gid, subs):
 
 @pytest.fixture
 def run(tmp_path, monkeypatch):
+    return _real_then_null(tmp_path, monkeypatch)
+
+
+def _real_then_null(tmp_path, monkeypatch, **real):
     """Write the target's real tables, then return a function drawing its re-paired null."""
     from nirspipe.pipeline.hyper import alignment, group_io, group_quality
 
@@ -44,7 +48,7 @@ def run(tmp_path, monkeypatch):
         group_id="G1", task="tap", group=_entries("G1", TARGET), aligned_raws=target,
         offsets={s: 0.0 for s in TARGET}, output_dir=tmp_path, wtc_fmin=0.02, wtc_fmax=0.2,
         wtc_band_fmin=BAND[0], wtc_band_fmax=BAND[1], wtc_chroma=("hbo",),
-        wtc_by_condition=True, no_report=True, desc="preproc", bads_scope="run")
+        wtc_by_condition=True, no_report=True, desc="preproc", bads_scope="run", **real)
     monkeypatch.setattr(group_io, "load_group_haemo", lambda out, entries, desc="preproc": {
         e.subject_id: raws[e.subject_id].copy() for e in entries})
     monkeypatch.setattr(group_quality, "load_group_sqm", lambda *a, **k: {})
@@ -72,6 +76,23 @@ def _by_draw(table, a, b, value):
 
 
 TRIADS = {"G2": ("sub-04", "sub-05", "sub-06"), "G3": ("sub-07", "sub-08", "sub-09")}
+
+
+def test_the_null_splits_channels_by_the_bands_the_real_table_was_split_by(tmp_path,
+                                                                          monkeypatch):
+    """Bands given to the real run decide which channels are long, so which rows the null has."""
+    from nirspipe.pipeline.hyper import _helpers
+
+    draw = _real_then_null(tmp_path, monkeypatch, sep_bands=(0.012, 0.020, None))
+    seen, axis = [], _helpers.long_axis_over
+
+    def _spy(raws, ch_type="hbo", sep_bands=None):
+        seen.append(tuple(sep_bands))
+        return axis(raws, ch_type, sep_bands)
+
+    monkeypatch.setattr(_helpers, "long_axis_over", _spy)
+    draw(TRIADS)
+    assert seen and {(round(a, 6), round(b, 6), c) for a, b, c in seen} == {(0.012, 0.02, None)}
 
 
 def test_every_pairing_is_drawn_under_the_draws_it_shares(run):

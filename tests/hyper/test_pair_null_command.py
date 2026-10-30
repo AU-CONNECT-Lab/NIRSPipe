@@ -35,7 +35,8 @@ def _merge(root, kind):
 
 _REAL = {"band_fmin": 0.06, "band_fmax": 0.15, "wtc_fmin": 0.004, "wtc_fmax": 0.20,
          "mask_coi": True, "aligned_duration_s": 900.0, "channel_cross": False,
-         "roi_min_channels": 1, "desc": "preproc", "bads_scope": "run", "conditions": []}
+         "roi_min_channels": 1, "desc": "preproc", "bads_scope": "run", "conditions": [],
+         "sep_short_max_mm": 10.0, "sep_long_min_mm": 15.0, "sep_long_max_mm": None}
 
 
 def _real_table(root, gid="G01", task="main", params=None, kind="wtc"):
@@ -259,11 +260,25 @@ def test_a_value_that_disagrees_with_the_real_table_is_refused():
 
 
 @pytest.mark.parametrize("key", ["channel_cross", "roi_min_channels", "desc", "bads_scope",
-                                 "conditions"])
+                                 "conditions", "sep_short_max_mm", "sep_long_min_mm",
+                                 "sep_long_max_mm"])
 def test_a_real_table_that_does_not_record_one_is_refused(tmp_path, key):
     """Nothing is guessed: the null is built the way the table says, or not at all."""
     tsv = _real_table(tmp_path, params={k: v for k, v in _REAL.items() if k != key})
     with pytest.raises(StageError, match=key):
+        real_table_params(tsv)
+
+
+def test_a_long_bound_recorded_as_off_is_not_missing(tmp_path):
+    """A null upper bound is one switched off, which the table says by recording it."""
+    got = real_table_params(_real_table(tmp_path, params={**_REAL, "sep_long_max_mm": None}))
+    assert "sep_long_max_mm" in got and got["sep_long_max_mm"] is None
+
+
+def test_a_subject_scope_table_without_its_tasks_is_refused(tmp_path):
+    """Which tasks a subject's rejections were pooled over decides the held member's channels."""
+    tsv = _real_table(tmp_path, params={**_REAL, "bads_scope": "subject"})
+    with pytest.raises(StageError, match="bads_scope_tasks"):
         real_table_params(tsv)
 
 
@@ -357,6 +372,56 @@ def test_a_crossed_null_over_an_uncrossed_table_says_so(tmp_path, monkeypatch, c
     with caplog.at_level("WARNING"), pytest.raises(_Loaded):
         _draw((tmp_path, group), cross=True)
     assert "crossed null over an uncrossed real table" in caplog.text
+
+
+# ---- the group is loaded as the real run loaded it ----
+
+def _tap_group():
+    from nirspipe.io.groups import GroupEntry
+
+    return [GroupEntry("G01", "sub-01", "tap"), GroupEntry("G01", "sub-02", "tap")]
+
+
+def _load_as_given(monkeypatch, sqm=None):
+    from nirspipe.pipeline.hyper import group_io, group_quality
+
+    monkeypatch.setattr(group_io, "load_group_haemo", lambda derivatives_dir, members, desc: {
+        m.subject_id: _haemo(i) for i, m in enumerate(members, 1)})
+    monkeypatch.setattr(group_quality, "load_group_sqm", sqm or (lambda *a, **k: {}))
+    monkeypatch.setattr(group_quality, "apply_group_bads", lambda *a, **k: None)
+
+
+def test_a_subject_scope_pools_the_tasks_the_real_run_pooled(tmp_path, monkeypatch):
+    """The real run pooled over its own selection, not over every task in the pairs table."""
+    def _sqm(derivatives_dir, members, bads_scope=None, scope_tasks=None):
+        raise _Loaded((bads_scope, scope_tasks))
+
+    _load_as_given(monkeypatch, sqm=_sqm)
+    _real_table(tmp_path, gid="G01", task="tap",
+                params={**_REAL, "bads_scope": "subject", "bads_scope_tasks": ["tap"]})
+    with pytest.raises(_Loaded) as got:
+        _draw((tmp_path, _tap_group()))
+    assert got.value.args[0] == ("subject", ["tap"])
+
+
+@pytest.mark.parametrize("step, route", [("trim_to_shortest", "trimmed"),
+                                         ("align_recordings", "aligned")])
+def test_the_group_goes_on_the_clock_the_real_table_was_computed_on(tmp_path, monkeypatch,
+                                                                   step, route):
+    """A real run made with --no-align was trimmed, so its null is trimmed too."""
+    from nirspipe.pipeline.hyper import alignment
+
+    def _stop(name):
+        def _route(*args, **kwargs):
+            raise _Loaded(name)
+        return _route
+
+    _load_as_given(monkeypatch)
+    monkeypatch.setattr(alignment, "trim_to_shortest", _stop("trimmed"))
+    monkeypatch.setattr(alignment, "align_recordings", _stop("aligned"))
+    _real_table(tmp_path, gid="G01", task="tap", params={**_REAL, "align_step": step})
+    with pytest.raises(_Loaded, match=route):
+        _draw((tmp_path, _tap_group()))
 
 
 

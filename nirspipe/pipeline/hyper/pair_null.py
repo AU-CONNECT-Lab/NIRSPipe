@@ -32,6 +32,7 @@ from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
 from nirspipe.qc.common.windows import condition_windows, split_windows
+from nirspipe.qc.metrics._helpers import bands_from_record
 from nirspipe.utils.spans import bad_spans, frames_under, span_kind
 
 logger = logging.getLogger(__name__)
@@ -213,6 +214,11 @@ def real_table_params(real_tsv: Path) -> dict:
                            "channel_cross", "roi_min_channels", "desc", "bads_scope",
                            "conditions")
                if params.get(k) is None]
+    # recorded as null is a bound switched off or every task pooled, so presence is the test
+    missing += [k for k in ("sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm")
+                if k not in params]
+    if params.get("bads_scope") == "subject" and "bads_scope_tasks" not in params:
+        missing.append("bads_scope_tasks")
     if missing:
         raise StageError(
             f"{sidecar} does not record {', '.join(missing)}, so the null cannot be built to "
@@ -516,7 +522,6 @@ def run_pair_null(
     n_max: "int | None" = None,
     desc: "str | None" = None,
     bads_scope: "str | None" = None,
-    scope_tasks: "list[str] | None" = None,
     chroma: "tuple[str, ...]" = ("hbo", "hbr"),
     cross: "bool | None" = None,
     limit_scales: bool = True,
@@ -547,17 +552,19 @@ def run_pair_null(
     and takes its band, its mask, its frequency range and its window off that sidecar. Its
     stage, its rejection scope and its ROI minimum come off it too unless given, and a given
     one that differs is refused; its crossing follows the table unless given, since a
-    homologous null over a crossed table is a legitimate cheaper one. Draw and write are one
-    step for the same reason: there is nothing to write between them, the table being ranked
-    against is already on disk.
+    homologous null over a crossed table is a legitimate cheaper one. Its separation bands,
+    the tasks a subject scope pooled rejections over, and whether the group was aligned or
+    trimmed are always the table's, so the null is drawn on the channels and the clock of the
+    table it is ranked against. Draw and write are one step for the same reason: there is
+    nothing to write between them, the table being ranked against is already on disk.
 
     ``device`` is the card the transforms run on, None for the CPU; with no run record
     here, its check against the CPU goes into the sidecars.
     """
     from nirspipe.pipeline.hyper.group_io import _hyper_sidecar, load_group_haemo
-    from nirspipe.pipeline.hyper.group_quality import (apply_group_bads, load_group_sqm,
-                                                   resolve_group_bands)
-    from nirspipe.pipeline.hyper.alignment import align_recordings, alignment_params
+    from nirspipe.pipeline.hyper.group_quality import apply_group_bads, load_group_sqm
+    from nirspipe.pipeline.hyper.alignment import (align_recordings, alignment_params,
+                                                   trim_to_shortest)
     from nirspipe.pipeline.hyper._helpers import long_axis_over
     from nirspipe.pipeline.hyper.wtc import wtc_grid_params
     from nirspipe.utils.lineage import paths_from
@@ -581,6 +588,7 @@ def run_pair_null(
 
     desc = _follow_real("--desc", desc, real_params["desc"])
     bads_scope = _follow_real("--bads-scope", bads_scope, real_params["bads_scope"])
+    scope_tasks = real_params["bads_scope_tasks"] if bads_scope == "subject" else None
     roi_min_channels = _follow_real("--wtc-roi-min-channels", roi_min_channels,
                                     int(real_params["roi_min_channels"]))
     real_crossed = bool(real_params["channel_cross"])
@@ -599,9 +607,13 @@ def run_pair_null(
                                scope_tasks=scope_tasks)
     apply_group_bads(raws, group_sqm)
     raws = {sid: with_hbt(raw, chroma) for sid, raw in raws.items()}
-    sep_bands = resolve_group_bands(members, group_sqm)
+    sep_bands = bands_from_record(real_params)
 
-    aligned_real, offsets = align_recordings(raws, task)
+    # a real run made with --no-align trimmed its members rather than aligning them
+    if real_params.get("align_step") == "trim_to_shortest":
+        aligned_real, offsets = trim_to_shortest(raws)
+    else:
+        aligned_real, offsets = align_recordings(raws, task)
     ids = [m.subject_id for m in members]
     aligned_duration = min(float(r.times[-1]) for r in aligned_real.values())
     # a stand-in need not match the whole recording's length: each condition is cut from its

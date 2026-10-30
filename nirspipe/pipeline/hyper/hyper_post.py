@@ -71,9 +71,11 @@ class HyperPostConfig:
     roi_map_name: str = "custom"
     sep_bands: Any = None
     analysis_window: "tuple[float, float] | None" = None
-    # the stage and the rejection scope the recordings were loaded with, for the sidecars
+    # the stage and the rejection scope the recordings were loaded with, for the sidecars,
+    # and the tasks a subject scope pooled over, which the re-paired null loads with
     desc: str | None = None
     bads_scope: str | None = None
+    bads_scope_tasks: "list[str] | None" = None
     # the card the transforms run on (--device), None for the CPU
     device: Any = None
     # {subject: role} from the pairs table's role column, None without one
@@ -333,6 +335,9 @@ def run_hyper_post(
                if analysis_window is not None else {}),
             **({"desc": config.desc} if config.desc else {}),
             **({"bads_scope": config.bads_scope} if config.bads_scope else {}),
+            # None pools every task's rejections
+            **({"bads_scope_tasks": config.bads_scope_tasks}
+               if config.bads_scope == "subject" else {}),
             # what groupnull reads a pairing's roles off
             **({"member_roles": dict(config.member_roles)} if config.member_roles else {}),
             # the bands decide which channels are long, so which pairings exist

@@ -422,6 +422,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         analysis_window=analysis_window,
         desc=s.desc,
         bads_scope=s.bads_scope,
+        bads_scope_tasks=s.scope_tasks,
         wtc_device=device,
     )
     if s.redraw:
@@ -733,7 +734,7 @@ def _pair_null_one_group(s: SimpleNamespace, gid, task, ses, members):
         gid, task, members, s.all_groups, s.derivatives_dir, s.output_dir,
         device=open_device(s.device),
         pool=s.wtc_pair_pool, n_max=s.wtc_pair_max, desc=s.desc,
-        bads_scope=s.bads_scope, scope_tasks=s.scope_tasks, chroma=s.chroma,
+        bads_scope=s.bads_scope, chroma=s.chroma,
         cross=s.wtc_pair_cross, limit_scales=s.wtc_limit_scales,
         roi_map=s.roi_map, roi_map_name=s.roi_name,
         roi_min_channels=s.wtc_roi_min_channels, session=ses)
@@ -776,12 +777,11 @@ def cmd_pair_null(
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
     chroma = in_order(chroma)
-    scope_tasks = sorted({key[1] for key in all_groups})
 
     settings = SimpleNamespace(
         all_groups=all_groups, derivatives_dir=derivatives_dir, output_dir=output_dir,
         wtc_pair_pool=wtc_pair_pool, wtc_pair_max=wtc_pair_max, desc=desc,
-        bads_scope=bads_scope, scope_tasks=scope_tasks, chroma=chroma,
+        bads_scope=bads_scope, chroma=chroma,
         wtc_pair_cross=wtc_pair_cross, wtc_limit_scales=wtc_limit_scales, roi_map=roi_map,
         roi_name=roi_map_name(roi_mapping), wtc_roi_min_channels=wtc_roi_min_channels,
         device=device)
