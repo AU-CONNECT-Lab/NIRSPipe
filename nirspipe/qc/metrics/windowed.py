@@ -215,12 +215,15 @@ def attach_windowed_series(
         # every set is cut on the one grid
         sqm.setdefault("gvtd_window_times_s", window_centers(times).tolist())
 
-    # SCI/PSP matrices are channel × window; collapse to a per-window mean over channels
+    # SCI/PSP matrices are channel × window, collapsed to a per-window mean over channels, a
+    # channel blanked in a window left out of that window's mean as CV's leaves it
     if sci_matrix is not None and sci_times is not None:
-        sqm["sci_per_window"]      = np.asarray(sci_matrix).mean(axis=0).tolist()
+        with np.errstate(invalid="ignore"):
+            sqm["sci_per_window"]  = np.nanmean(np.asarray(sci_matrix), axis=0).tolist()
         sqm["sci_window_times_s"]  = window_centers(sci_times).tolist()
     if psp_matrix is not None and psp_times is not None:
-        sqm["psp_per_window"]      = np.asarray(psp_matrix).mean(axis=0).tolist()
+        with np.errstate(invalid="ignore"):
+            sqm["psp_per_window"]  = np.nanmean(np.asarray(psp_matrix), axis=0).tolist()
         sqm["psp_window_times_s"]  = window_centers(psp_times).tolist()
     if cv_matrix is not None and cv_times is not None:
         with np.errstate(invalid="ignore", divide="ignore"):

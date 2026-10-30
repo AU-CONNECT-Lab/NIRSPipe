@@ -12,6 +12,7 @@ import mne
 import numpy as np
 
 from nirspipe.utils import pair_of
+from nirspipe.utils.spans import excluded_time
 from nirspipe.qc.metrics._helpers import (
     _mean_or_none, _safe_metrics, epochable_events,
 )
@@ -332,26 +333,7 @@ def _drift_metrics(raw_haemo: mne.io.Raw, order: "int | None" = None) -> dict[st
 
 @_safe_metrics("pct_data_retained", ("pct_data_retained",))
 def _retention_metrics(raw_haemo: mne.io.Raw) -> dict[str, Any]:
-    """Fraction of the recording not covered by BAD annotations (overlaps merged)."""
-    total_dur = raw_haemo.times[-1] - raw_haemo.times[0]
-    bad_spans = sorted(
-        (ann["onset"], ann["onset"] + ann["duration"])
-        for ann in raw_haemo.annotations
-        if ann["description"].upper().startswith("BAD")
-    )
-    # merge overlapping BAD spans so overlap is not double-counted
-    bad_dur = 0.0
-    cur_start = cur_end = None
-    for start, end in bad_spans:
-        if cur_end is None or start > cur_end:
-            if cur_end is not None:
-                bad_dur += cur_end - cur_start
-            cur_start, cur_end = start, end
-        else:
-            cur_end = max(cur_end, end)
-    if cur_end is not None:
-        bad_dur += cur_end - cur_start
-    bad_dur = min(bad_dur, total_dur)
-    return {
-        "pct_data_retained": float(1.0 - bad_dur / total_dur) if total_dur > 0 else None
-    }
+    """Fraction of the recording not covered by BAD annotations, the record's ``excluded`` share."""
+    excluded = excluded_time(raw_haemo)
+    total = excluded["total_s"]
+    return {"pct_data_retained": float(excluded["kept_s"] / total) if total > 0 else None}
