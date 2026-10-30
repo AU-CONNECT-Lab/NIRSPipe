@@ -771,11 +771,12 @@ def _write_fc_derivatives(
 
     series = (raw_resid.copy().add_channels([joined_hbt]) if joined_hbt is not None
               else with_hbt(raw_resid, config.chromophores))
-    # short channels sample the scalp, so no FC product carries them, as no ISC product does
-    short = long_short_channels(raw_resid, separation_bands(config))[1]
-    short = [c for c in short + hbt_names(short) if c in series.ch_names]
-    if short:
-        series = series.copy().drop_channels(short)
+    # long channels only, as ISC; a montage with no positions splits into neither and keeps all
+    long, short = long_short_channels(raw_resid, separation_bands(config))
+    off = ([c for c in series.ch_names if c not in set(long + hbt_names(long))]
+           if long or short else [])
+    if off:
+        series = series.copy().drop_channels(off)
     # the FC matrices keep their bad rows and columns so the shape stays predictable;
     # the sidecar names them so a consumer can drop or ignore them
     bads = list(series.info["bads"])

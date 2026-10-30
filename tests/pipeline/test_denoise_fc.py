@@ -9,6 +9,7 @@ because that is the only thing distinguishing the two ways of reaching it.
 
 import json
 
+import numpy as np
 import pytest
 
 from nirspipe.io.naming import derivative_path
@@ -196,6 +197,18 @@ def test_a_censor_filled_series_is_named_after_the_file_it_was_filled_from(tmp_p
         "sub-01_task-rest_chromo-hbr_stat-pearson_desc-preproc_relmat.tsv"]
     sidecar = json.loads(next(tmp_path.rglob("*_chromo-hbo_*_desc-preproc_relmat.json")).read_text())
     assert sidecar["Sources"][0].endswith("_desc-preproc_nirs.snirf")
+
+
+def test_a_channel_between_the_short_and_long_ranges_is_left_out(haemo, tmp_path, roi_map):
+    gap = haemo.copy()
+    # S2_D2 moved to 12 mm, above the 10 mm short range and below the 15 mm long one
+    for ch in gap.info["chs"]:
+        if ch["ch_name"].startswith("S2_D2 "):
+            ch["loc"][6:9] = ch["loc"][3:6] + np.array([0.012, 0.0, 0.0])
+    out = _denoise(gap, tmp_path, fc=True, roi_map=roi_map)
+    fc, seed = out[_FC]["hbo"], out[_FC_SEED]["hbo"]
+    assert not any(c.startswith("S2_D2 ") for c in [*fc.index, *seed.columns])
+    assert "S1_D1 hbo" in fc.index and "S1_D1 hbo" in seed.columns
 
 
 def test_without_a_regression_there_is_no_before(haemo, tmp_path):

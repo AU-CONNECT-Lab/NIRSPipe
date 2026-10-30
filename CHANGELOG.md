@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - mALFF and zALFF are standardised against the run's good long channels only. Under `--short-channel none` or `mean`, a short channel's scalp amplitude had entered the reference
+- FC matrices, ROI means and seed maps keep long channels only, as ISC does. A channel between the short and long ranges had been kept
 
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`

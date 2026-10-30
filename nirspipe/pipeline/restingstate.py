@@ -281,16 +281,15 @@ _KEPT_FRAMES = "over the frames outside every BAD_ span"
 FC_DESCRIPTIONS = {
     "fc": f"Pearson r between two channels' series of one chromophore, {_KEPT_FRAMES}. A "
           "rejected channel keeps its row and column, n/a, so every run's matrix has the same "
-          "shape. Short channels are left out. The diagonal is 1.",
+          "shape. Only long channels are kept. The diagonal is 1.",
     "fc_before": f"Pearson r between two channels' series before the confound regression, at "
                  f"the stage desc- names, {_KEPT_FRAMES}; n/a wherever the residual's matrix "
                  "is.",
     "fc_roi": f"Pearson r between two regions' mean series, each the average of the region's "
-              f"kept channels with short ones left out, {_KEPT_FRAMES}. A region with no kept "
-              "channel is n/a.",
-    "fc_seed": f"Pearson r between each region's mean series (rows) and each channel "
-               f"(columns, short channels left out), {_KEPT_FRAMES}. A region's own channels "
-               "and a rejected channel are n/a.",
+              f"kept long channels, {_KEPT_FRAMES}. A region with no kept channel is n/a.",
+    "fc_seed": f"Pearson r between each region's mean series (rows) and each long channel "
+               f"(columns), {_KEPT_FRAMES}. A region's own channels and a rejected channel "
+               "are n/a.",
 }
 FISHER_Z_DESCRIPTION = ("Fisher z, arctanh(r), of the stat-pearson matrix of the same name, r "
                         "clipped just below 1 in size.")
