@@ -13,6 +13,7 @@ motion correction lives in pipeline/motion.py.
 
 """
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -40,8 +41,8 @@ from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, require_cardiac_below_n
 from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from nirspipe.utils.logging import get_logger
-from nirspipe.qc.metrics import (require_screened, resolve_cutoffs, screen_channels,
-                                 screening_scores)
+from nirspipe.qc.metrics import (compute_sci_scores, require_screened, resolve_cutoffs,
+                                 screen_channels, screening_gap, screening_scores)
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S, counted_screen_windows
 from nirspipe.qc.common.screen_scope import resolve_screen_scope
 from nirspipe.utils.spans import (EDGE, add_bad_spans, bad_spans, excluded_spans,
@@ -163,6 +164,38 @@ def mark_bad_channels(
           screen_scope=screen_scope, screen_scope_windows=len(scope or []))
     return raw_od, bad_chs, sci_scores, scores.get("good_frac") or {}
 
+def mark_what_can_be_judged(
+    raw_od: mne.io.Raw,
+    threshold: float,
+    cardiac_l_freq: float,
+    cardiac_h_freq: float,
+    psp_threshold: float | None = None,
+    min_good_frac: float | None = None,
+    screen_scope: str = "run",
+    keep: "list[str] | tuple" = (),
+) -> tuple[mne.io.Raw, list[str], dict[str, float], dict[str, float]]:
+    """:func:`mark_bad_channels` for a recording that must be shown whatever its state.
+
+    What screening cannot judge rejects nothing and is stamped as ``screening_gap``, and every
+    channel may fail, so ``keep``, which only stops that refusal, has nothing to do here.
+    """
+    cutoffs = resolve_cutoffs(sci=threshold, psp=psp_threshold, good_frac=min_good_frac)
+    scope = resolve_screen_scope(raw_od, screen_scope)
+    sci_scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
+    scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
+                              have={"sci": sci_scores}, cutoffs=cutoffs, scope=scope)
+    gap = screening_gap(raw_od, scores, scope)
+    if gap:
+        logger.warning("channel screening could not judge this recording: %s", gap)
+    bad_chs = [] if gap else screen_channels(scores, cutoffs)[0]
+    raw_od.info["bads"] = bad_chs
+    stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold,
+          psp_threshold=cutoffs["psp"], min_good_frac=cutoffs["good_frac"],
+          screen_scope=screen_scope, screen_scope_windows=len(scope or []),
+          **({"screening_gap": gap} if gap else {}))
+    return raw_od, bad_chs, sci_scores, scores.get("good_frac") or {}
+
+
 def release_kept(screened: list[str], keep: list[str]) -> tuple[list[str], list[str]]:
     """Screening's rejections minus the pairs a reviewer kept, as ``(still bad, kept)``.
 
@@ -232,10 +265,12 @@ def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float],
 @dataclass
 class PrepResult:
     """Outputs from run_prep() needed for reporting and downstream use."""
-    raw_haemo: mne.io.Raw
+    raw_haemo: "mne.io.Raw | None"
     sci_scores: dict[str, float]
     bad_channels: list[str]
     censor_spans: list[tuple[float, float]] = field(default_factory=list)
+    # (step, reason) of what a lenient run went on without
+    skipped: list[tuple[str, str]] = field(default_factory=list)
 
 @dataclass
 class PrepConfig:
@@ -288,6 +323,8 @@ class PrepConfig:
     keep_spans_from: str | None = None
     # (onset, duration) stretches the user marked corrupted, on the same axis
     bad_spans: list[tuple[float, float]] = field(default_factory=list)
+    # raw QC's: what cannot be judged rejects nothing, and a failing step is skipped and named
+    lenient: bool = False
 
 def run_prep(
     raw: mne.io.Raw,
@@ -310,7 +347,23 @@ def run_prep(
     entry of the first output, and step 5 reads the aux channels back out of it.
     source_metadata is that file's sidecar, inheritance applied; every output carries
     its REQUIRED _nirs.json fields on.
+
+    Under ``config.lenient`` a recording screening cannot judge goes on with nothing rejected,
+    and a step that fails is left out, named in ``PrepResult.skipped``, with what follows it
+    taking what it can.
     """
+    skipped: list[tuple[str, str]] = []
+
+    @contextmanager
+    def step(name: str):
+        try:
+            yield
+        except Exception as exc:
+            if not config.lenient:
+                raise
+            logger.exception("sub-%s | %s failed; going on without it", config.subject, name)
+            skipped.append((name, str(exc)))
+
     entities_base = carry_entities(source_entities)
     ses = config.session
     # off the recording's own probe: a derivative's landmarks are the ones mne-nirs wrote.
@@ -395,7 +448,8 @@ def run_prep(
 
     # step 2: SCI channel marking
     logger.info("sub-%s | step 2: SCI marking (threshold=%.2f, %d ch)", config.subject, config.sci_threshold, len(raw_od.ch_names))
-    raw_od, bad_chs, sci_scores, good_frac_scores = mark_bad_channels(
+    screen = mark_what_can_be_judged if config.lenient else mark_bad_channels
+    raw_od, bad_chs, sci_scores, good_frac_scores = screen(
         raw_od, threshold=config.sci_threshold, psp_threshold=config.psp_threshold,
         min_good_frac=config.min_good_frac, screen_scope=config.screen_scope,
         cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq,
@@ -404,7 +458,7 @@ def run_prep(
                                manual=config.bad_channels, listed=config.channels_tsv_bads,
                                forced=list(non_finite), label=f"sub-{config.subject}")
     # screening alone cannot reach here with every channel bad: mark_bad_channels refuses that
-    if len(bad_chs) == len(sci_scores):
+    if len(bad_chs) == len(sci_scores) and not config.lenient:
         why = [w for w, on in (("--bad-channels", config.bad_channels),
                                ("channels.tsv", config.channels_tsv_bads),
                                ("non-finite samples", non_finite)) if on]
@@ -447,7 +501,9 @@ def run_prep(
     # what the screening counted over, which a "task" request falls back from without blocks
     counted = ("task" if (lineage_of(raw_od).params or {}).get("screen_scope_windows")
                else "run")
+    gap = (lineage_of(raw_od).params or {}).get("screening_gap")
     _save(raw_od, "sci", extra_provenance={
+        **({"screening_gap": gap} if gap else {}),
         "bad_channels": bad_chs,
         "sci_scores": {k: float(v) for k, v in sci_scores.items()},
         "good_frac_scores": {k: float(v) for k, v in good_frac_scores.items()},
@@ -471,47 +527,53 @@ def run_prep(
     logger.info("sub-%s | step 3: motion correction (%s)", config.subject, config.motion_correction)
     # no copy kept: desc-sci on disk is this same object, and the report and the record
     # both read the correction's two sides from there
-    raw_od = correct_motion(raw_od, method=config.motion_correction,
-                            std_thresh=config.motion_std_thresh, iqr_factor=config.wavelet_iqr)
-    tpca = (lineage_of(raw_od).params or {}).get("tpca")
-    spline = (lineage_of(raw_od).params or {}).get("spline")
-    spline_sg = (lineage_of(raw_od).params or {}).get("spline_sg")
-    spline_wavelet = (lineage_of(raw_od).params or {}).get("spline_wavelet")
-    _save(raw_od, "motcorrected",
-          extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline),
-                                              ("spline_sg", spline_sg),
-                                              ("spline_wavelet", spline_wavelet)) if v} or None,
-          extra_parameters={"motion_correction": config.motion_correction,
-                            **motion_settings(config.motion_correction, config.motion_std_thresh,
-                                              config.wavelet_iqr)})
-    summary = (lineage_of(raw_od).params or {}).get(config.motion_correction)
-    if overmarked(config.motion_correction, summary):
-        logger.warning("sub-%s | %s", config.subject, section_note(
-            "caveat.motion_overmarked", method=config.motion_correction,
-            share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
-            thresh=motion_settings(config.motion_correction,
-                                   config.motion_std_thresh)["motion_std_thresh"]))
+    with step("Motion correction"):
+        raw_od = correct_motion(raw_od, method=config.motion_correction,
+                                std_thresh=config.motion_std_thresh,
+                                iqr_factor=config.wavelet_iqr)
+        tpca = (lineage_of(raw_od).params or {}).get("tpca")
+        spline = (lineage_of(raw_od).params or {}).get("spline")
+        spline_sg = (lineage_of(raw_od).params or {}).get("spline_sg")
+        spline_wavelet = (lineage_of(raw_od).params or {}).get("spline_wavelet")
+        _save(raw_od, "motcorrected",
+              extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline),
+                                                  ("spline_sg", spline_sg),
+                                                  ("spline_wavelet", spline_wavelet))
+                                if v} or None,
+              extra_parameters={"motion_correction": config.motion_correction,
+                                **motion_settings(config.motion_correction,
+                                                  config.motion_std_thresh,
+                                                  config.wavelet_iqr)})
+        summary = (lineage_of(raw_od).params or {}).get(config.motion_correction)
+        if overmarked(config.motion_correction, summary):
+            logger.warning("sub-%s | %s", config.subject, section_note(
+                "caveat.motion_overmarked", method=config.motion_correction,
+                share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
+                thresh=motion_settings(config.motion_correction,
+                                       config.motion_std_thresh)["motion_std_thresh"]))
 
     # step 4: Beer-Lambert
     factors = resolve_dpf(config.dpf, raw_od, config.age)
     logger.info("sub-%s | step 4: Beer-Lambert (dpf=%s)", config.subject,
                 ", ".join(f"{d:.3f}" for d in factors))
     aged = config.age if dpf_from_age(config.dpf) else None
-    raw_haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
-    preproc_path = _save(raw_haemo, "preproc", extra_parameters={
-        "dpf": factors, **({"dpf_age": aged} if aged is not None else {}),
-        **({"dpf_population": config.population} if "dpf" in config.from_population else {})})
-    # named by the haemoglobin channels, as every analysis table after this one is
-    write_channel_coords(raw_haemo, placement,
-                         build_output_path(output_dir, config.subject,
-                                           {**entities_base, "space": space}, "channels",
-                                           ".tsv", session=ses),
-                         sources=[source_path] if source_path is not None else [],
-                         population=config.population)
+    raw_haemo = None
+    with step("Beer-Lambert"):
+        raw_haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
+        preproc_path = _save(raw_haemo, "preproc", extra_parameters={
+            "dpf": factors, **({"dpf_age": aged} if aged is not None else {}),
+            **({"dpf_population": config.population} if "dpf" in config.from_population else {})})
+        # named by the haemoglobin channels, as every analysis table after this one is
+        write_channel_coords(raw_haemo, placement,
+                             build_output_path(output_dir, config.subject,
+                                               {**entities_base, "space": space}, "channels",
+                                               ".tsv", session=ses),
+                             sources=[source_path] if source_path is not None else [],
+                             population=config.population)
 
-    # step 5: the aux channels, if the recording has any. They never enter an mne object, so
-    # this is the only chance to carry them forward: the derivative snirfs do not hold them.
-    _save_aux_table(source_path, preproc_path, config)
+        # step 5: the aux channels, if the recording has any. They never enter an mne object,
+        # so this is the only chance to carry them forward: the derivative snirfs do not hold them.
+        _save_aux_table(source_path, preproc_path, config)
 
     # SQM is not computed here. It is assembled per run from the files this pipeline left
     # on disk, once post-processing has also finished; see qc/sqm_record.py.
@@ -524,6 +586,7 @@ def run_prep(
         sci_scores=sci_scores,
         bad_channels=bad_chs,
         censor_spans=censor_spans,
+        skipped=skipped,
     )
 
 
@@ -580,6 +643,7 @@ def _screening_parameters(config: PrepConfig) -> dict:
         "channels_tsv_bads": config.channels_tsv_bads,
         # read by no step, but it tells an empty channels_tsv_bads from a skipped status column
         "ignore": config.ignore,
+        **({"lenient": True} if config.lenient else {}),
         "keep_spans": [list(span) for span in config.keep_spans],
         "keep_spans_from": config.keep_spans_from,
         "bad_spans": [list(span) for span in config.bad_spans],
