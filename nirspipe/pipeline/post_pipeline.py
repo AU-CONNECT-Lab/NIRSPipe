@@ -936,8 +936,11 @@ def _write_rest_derivatives(
         empty = sole_regressor_channels(raw_resid_bb, config.short_channel,
                                         separation_bands(config))
         empty += hbt_names(empty) if "hbt" in config.chromophores else []
+        # a montage with no positions splits into neither set and keeps every channel
+        long, short = long_short_channels(raw_resid_bb, separation_bands(config))
         alff_df = compute_alff(series, low_pass=config.low_pass,
-                               high_pass=config.high_pass, exclude=empty)
+                               high_pass=config.high_pass, exclude=empty,
+                               reference=long + hbt_names(long) if long or short else None)
         alff_df = alff_df[alff_df["channel"].map(chroma_of).isin(config.chromophores)]
         alff_df = alff_df.reset_index(drop=True)
         alff_path = build_output_path(

@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- mALFF and zALFF are standardised against the run's good long channels only. Under `--short-channel none` or `mean`, a short channel's scalp amplitude had entered the reference
+
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
 

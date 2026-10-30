@@ -84,7 +84,8 @@ def lomb_scargle(data: np.ndarray, keep: np.ndarray, sfreq: float) -> tuple[np.n
 
 
 def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
-                 exclude: "list[str] | None" = None) -> pd.DataFrame:
+                 exclude: "list[str] | None" = None,
+                 reference: "list[str] | None" = None) -> pd.DataFrame:
     r"""ALFF/fALFF per channel plus cross-channel mALFF/zALFF standardization.
 
     Expects a broadband (detrended, non-lowpassed) residual: fALFF's denominator spans the
@@ -122,6 +123,10 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
     numerical zero in the mean and SD that every other channel is scaled by, which shifts
     every other channel's mALFF. The ``bad`` column keeps meaning rejected,
     since that is what the group tables read.
+
+    ``reference`` names the channels the mean and SD may come from, None every channel. The
+    pipeline passes the long ones: a short channel samples the scalp, so its amplitude sets no
+    other channel's scale, though it is still scaled against them.
 
     Rest mode produces two residuals and this function must receive the broadband one. The
     pipeline runs the confound regression a second time without the low-pass and feeds that
@@ -169,13 +174,15 @@ def compute_alff(raw: mne.io.Raw, low_pass: float, high_pass: float,
     is_bad = np.array([c in bads for c in raw.ch_names])
     # blanked covers both reasons a channel carries no value; is_bad stays rejection-only
     blanked = np.array([c in bads or c in set(exclude or ()) for c in raw.ch_names])
+    allowed = (np.ones(len(raw.ch_names), dtype=bool) if reference is None
+               else np.isin(raw.ch_names, list(reference)))
     for suffix in (" hbo", " hbr", " hbt"):
         idx = np.array([c.endswith(suffix) for c in raw.ch_names])
         if not idx.any():
             continue
         # blanked channels are still standardized, but they do not define the reference:
         # their ALFF would shift the mean and SD that every good channel is scaled by
-        ref = idx & ~blanked
+        ref = idx & ~blanked & allowed
         if not ref.any():
             ref = idx
         grp_mean = np.nanmean(alff_vals[ref])
@@ -210,7 +217,7 @@ ALFF_COLUMNS = {
             "parameters.high_pass and parameters.low_pass, on the residual before its low-pass.",
     "falff": "The band's summed amplitude over the summed amplitude of every frequency above "
              "0, 0 to 1.",
-    "malff": "alff over the mean alff of the run's kept channels of the same chromophore.",
+    "malff": "alff over the mean alff of the run's kept long channels of the same chromophore.",
     "zalff": "alff minus that mean, over the same channels' standard deviation (ddof 0).",
     "bad": "Whether the channel was rejected on this run; its values are n/a and its row is "
            "kept so every run's table has the same rows.",

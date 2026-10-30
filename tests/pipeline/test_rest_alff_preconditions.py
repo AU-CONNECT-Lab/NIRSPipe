@@ -13,9 +13,11 @@ these tests pin is that it costs the ALFF outputs instead of silently corrupting
 
 import logging
 
+import numpy as np
 import pytest
 
 from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+from nirspipe.qc.metrics._helpers import long_short_channels
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
 from tests._synth import synth_raw
@@ -81,6 +83,17 @@ def test_fc_still_runs_when_alff_is_skipped(haemo, tmp_path, drift):
 def test_the_run_does_not_raise_on_a_drift_model_that_does_not_detrend(haemo, tmp_path):
     # rejecting the flag outright would break a legitimate FC-only configuration
     _rest(haemo, tmp_path, drift_model="none")
+
+
+def test_malff_is_scaled_on_the_good_long_channels_alone(haemo, tmp_path):
+    # with no short-channel regression the short channel keeps its scalp amplitude
+    alff_df, _, _ = _rest(haemo, tmp_path, drift_model="cosine")
+    frame = alff_df.set_index("channel")
+    long_hbo = [c for c in long_short_channels(haemo)[0]
+                if c.endswith(" hbo") and c not in haemo.info["bads"]]
+    assert len(long_hbo) >= 2
+    assert np.isclose(frame.loc[long_hbo, "malff"].mean(), 1.0)
+    assert np.isclose(frame.loc[long_hbo, "zalff"].mean(), 0.0, atol=1e-9)
 
 
 def test_the_skip_names_the_drift_model_not_the_band_edges_it_has(haemo, tmp_path, caplog):

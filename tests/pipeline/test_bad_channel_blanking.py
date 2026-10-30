@@ -307,6 +307,23 @@ def test_an_excluded_channel_is_out_of_the_standardisation_reference(haemo):
     assert np.isclose(dropped.loc[others, "malff"].mean(), 1.0)
 
 
+def test_only_the_reference_channels_set_the_scale(haemo):
+    """A short channel samples the scalp, so its amplitude must set no other channel's scale."""
+    loud = haemo.copy()
+    data = loud.get_data()
+    data[loud.ch_names.index(GOOD)] *= 50
+    loud = mne.io.RawArray(data, loud.info, verbose="error")
+    reference = [c for c in loud.ch_names if c != GOOD]
+
+    frame = compute_alff(loud, reference=reference, **BAND).set_index("channel")
+
+    others = [c for c in reference if c.endswith("hbo")]
+    assert np.isclose(frame.loc[others, "malff"].mean(), 1.0)
+    assert np.isclose(frame.loc[others, "zalff"].mean(), 0.0, atol=1e-9)
+    # scaled against the others rather than dropped
+    assert frame.loc[GOOD, "malff"] > 10
+
+
 def test_exclude_defaults_to_changing_nothing(haemo):
     a = compute_alff(haemo, **BAND)
     b = compute_alff(haemo, exclude=[], **BAND)
