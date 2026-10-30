@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nirspipe"
 dynamic = ["version"]
-description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning, QC, and run-tracking pipeline"
+description = "BIDS-native fNIRS preprocessing, postprocessing, hyperscanning and QC pipeline"
 authors = [
     { name = "Qiuyu Yu", email = "qiuyuyu.psych@gmail.com" },
 ]
@@ -32,7 +32,7 @@ dependencies = [
     "joblib>=1.3",        # parallel subjects (--nprocs)
     "threadpoolctl>=3.2", # BLAS threads per unit under --nprocs
     "flask>=3.0",         # nirspipe-gui and the nirspipe-rate viewers
-    "pycwt>=0.4",         # hyperscanning WTC (nirspipe-qc hyper-post)
+    "pycwt>=0.4",         # hyperscanning WTC (nirspipe-hyper)
     "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
     "statsmodels>=0.14",  # ar_irls's robust refit and groupnull's p corrections
     "tomli>=2.0; python_version < '3.11'",
