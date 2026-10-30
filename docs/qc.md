@@ -152,9 +152,9 @@ A run with excluded time gets an **Excluded time** section under Quality Metrics
 - **denoise.** The filter settings and the signal after denoising; with `--fc`, the connectivity figures.
 - **rest.** mALFF on the cortex, the correlation matrices with ALFF and fALFF beside them, and, with `--roi-mapping`, the region matrix and the seed maps.
 
-The channel correlation matrices show every kept channel, grouped by region with `--roi-mapping` and otherwise listed by source, then detector number, on a colour scale centred on 0.
+The channel correlation matrices show every kept long channel, grouped by region with `--roi-mapping` and otherwise listed by source, then detector number, on a colour scale centred on 0.
 
-**Reading the rest figures.** ALFF is how strongly a channel's signal fluctuates at rest. mALFF divides it by the run's average, so 1 is an average channel and 1.5 one half again as strong. A low value means the signal there is quiet, not that the channel is poor, and since each run has its own scale, compare colours between runs only as a pattern. A seed map colours each channel by how it follows the seed region: red when it rises and falls with the seed, blue when it moves against it.
+**Reading the rest figures.** ALFF is how strongly a channel's signal fluctuates at rest. mALFF divides it by the run's average over its long channels, so 1 is an average long channel and 1.5 one half again as strong. A low value means the signal there is quiet, not that the channel is poor, and since each run has its own scale, compare colours between runs only as a pattern. A seed map colours each channel by how it follows the seed region: red when it rises and falls with the seed, blue when it moves against it.
 
 :::{warning}
 Without short-channel regression, scalp and systemic blood flow reach every channel alike, so every channel can correlate strongly with every seed. A seed map that is red everywhere then shows this shared signal, not a brain network.

@@ -267,7 +267,7 @@ flowchart TD
     FC --> ROI{"--roi-mapping"}
     ROI -->|given| ROIF(["seg-&lt;map&gt;_agg-roi / agg-seed relmat.tsv<br/><small>bad channels excluded from ROI means</small>"])
 
-    E2 --> ALFF["ALFF / fALFF<br/><small>mALFF, zALFF standardized<br/>against good channels only</small>"]
+    E2 --> ALFF["ALFF / fALFF<br/><small>mALFF, zALFF standardized<br/>against good long channels only</small>"]
     ALFF --> ALFFF(["stat-alff_nirsmap.tsv"])
     ALFF --> AROI{"--roi-mapping"}
     AROI -->|given| AROIF(["seg-&lt;map&gt;_agg-roi_stat-alff_nirsmap.tsv<br/><small>measured per channel, then averaged</small>"])
@@ -282,7 +282,7 @@ flowchart TD
 
 The regression runs twice: once on the bandpassed data for connectivity (`desc-errts`), and once on data without the bandpass for ALFF (`desc-errtsbroad`), because fALFF compares the band with the whole spectrum. With `--resample-sfreq`, both are resampled before the regression, which then starts from `desc-resampled` rather than `desc-filtered`. ALFF needs both band edges and a drift model that removes a linear trend (`cosine`, or `polynomial` of order 1 or more). When either is missing, the run skips ALFF and says so.
 
-**Connectivity.** The Pearson correlation between every pair of long channels, per chromophore, with its Fisher z. Short channels are left out, as in the dyad tables. A bad channel is a blank row and column. The diagonal is 1 in the correlation matrix and blank in the Fisher z one, where it would be infinite. A third matrix, named after the file the regression started from (`desc-filtered`), holds the correlations before the regression, so you can see what it changed.
+**Connectivity.** The Pearson correlation between every pair of long channels, per chromophore, with its Fisher z. Short channels, and any between the short and long ranges, are left out, as in the dyad tables. A bad channel is a blank row and column. The diagonal is 1 in the correlation matrix and blank in the Fisher z one, where it would be infinite. A third matrix, named after the file the regression started from (`desc-filtered`), holds the correlations before the regression, so you can see what it changed.
 
 **Amplitude.** Per channel:
 
@@ -290,8 +290,8 @@ The regression runs twice: once on the bandpassed data for connectivity (`desc-e
 |--------|------------|
 | `alff` | Mean amplitude across the `[high_pass, low_pass]` band |
 | `falff` | Band amplitude over total amplitude, DC excluded, in `[0, 1]` |
-| `malff` | `alff` divided by the mean `alff` of its own chromophore |
-| `zalff` | `alff` z-scored within its own chromophore |
+| `malff` | `alff` divided by the mean `alff` of the good long channels of its chromophore |
+| `zalff` | `alff` z-scored against those same channels |
 
 ```{figure} figures/rest_connectivity.png
 :alt: HbO and HbR channel correlation matrices above ALFF and fALFF per channel
@@ -300,7 +300,7 @@ The regression runs twice: once on the bandpassed data for connectivity (`desc-e
 The rest-mode panel of the report: HbO and HbR channel correlation matrices on one scale, and ALFF and fALFF per channel for each chromophore.
 ```
 
-**Regions.** With `--roi-mapping`, each region's good channels are averaged into one signal, and region-to-region and region-to-channel (seed) connectivity are computed from those signals. ALFF is averaged within each region after it is measured.
+**Regions.** With `--roi-mapping`, each region's good long channels are averaged into one signal, and region-to-region and region-to-channel (seed) connectivity are computed from those signals. ALFF is averaged within each region after it is measured.
 
 ### Connectivity on task data
 
