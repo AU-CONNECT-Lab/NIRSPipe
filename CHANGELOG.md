@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - `channel_snr`, a whole-run SNR the record does not use, and `iter_run_files`, `unwrap_enum` and `Recorder.last`, which nothing needed
 
 ### Fixed
+- The run report's stage carpet drew its GVTD rows one sample earlier than the motion carpet drew the same trace
 - A run report condition page whose window lay past the recording drew the whole run's haemoglobin panels, and a run without a bandpass measured its condition pages' stage metrics on the whole run
 - The raw viewer printed a run's bad-channel share and heart rate rounded half up where the run report rounded half to even, 13% against 12%; both now print one formatting
 - Raw QC's corrections under `tpca` and the spline methods now leave rejected channels out, and its condition verdicts count hand-marked and `channels.tsv` channels, as the pipeline's do

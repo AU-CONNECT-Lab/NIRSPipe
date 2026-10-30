@@ -227,3 +227,15 @@ def test_the_panel_falls_back_to_the_bandpassed_stage_then_to_preproc():
 
     stages, reference = _carpet_stages(haemo, None)
     assert stages == [reference] == [("desc-preproc", haemo)]
+
+
+def test_the_gvtd_trace_sits_on_the_later_sample_of_each_difference():
+    from nirspipe.qc.figures.subject.carpet_compare import _gvtd_rows
+
+    od = _od()
+    ((_, _, times, trace, _),) = _gvtd_rows(od, None, [("all", od.ch_names)])
+    # a temporal derivative's first value is the change into the second sample, which is
+    # where the metrics and the motion carpet place it
+    assert len(times) == len(trace) == od.n_times - 1
+    assert times[0] == od.times[1]
+    assert times[-1] == od.times[-1]

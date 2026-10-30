@@ -66,7 +66,9 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
             if len(have) == len(picks) and od_a.n_times == od_b.n_times:
                 after = display_value("gvtd_filt_mean",
                                       gvtd_timetrace(od_a.get_data(picks=have), sfreq, *GVTD_MOTION_BAND))
-        out.append((name, len(picks), od_b.times[:len(g)], g, after))
+        # a derivative's value i is the change into sample i + 1, where the metrics and the
+        # motion carpet place it
+        out.append((name, len(picks), od_b.times[1:len(g) + 1], g, after))
     return out
 
 
