@@ -19,7 +19,7 @@ from nirspipe.qc.figures.common._utils import (
     physio_bands, timeline_axes, timeline_row_bands,
     timeline_row_traces,
 )
-from nirspipe.qc.metrics._helpers import (Bands, as_optical_density, epochable_events,
+from nirspipe.qc.metrics._helpers import (Bands, as_optical_density, condition_epochs,
                                           long_short_channels)
 from nirspipe.qc.common.channel_table import _neither_range_title
 from nirspipe.qc.common.figure_io import extract_markers
@@ -387,26 +387,14 @@ def build_channel_figure(
                                    [m["duration"] for m in markers],
                                    [m["description"] for m in markers])
             raw_copy = raw_haemo.copy().set_annotations(anns)
-            events_mne, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
-            if len(events_mne) > 0:
-                epochs = mne.Epochs(
-                    raw_copy, events_mne, event_id,
-                    tmin=epoch_tmin, tmax=epoch_tmax,
-                    picks=[hbo_pick, hbr_pick],
-                    baseline=(epoch_tmin, 0),
-                    preload=True, verbose=False,
-                )
+            by_cond = condition_epochs(raw_copy, epoch_tmin, epoch_tmax,
+                                       picks=[hbo_pick, hbr_pick])
+            if by_cond:
                 # one panel per condition, HbO/HbR in their usual red and blue; a condition
                 # with one epoch is not an average
-                panels = []
-                for cond in event_id:
-                    try:
-                        ep_subset = epochs[cond]
-                    except Exception:
-                        continue
-                    if len(ep_subset) < EPOCH_MIN_TRIALS:
-                        continue
-                    panels.append((cond, ep_subset.get_data()))
+                panels = [(cond, ep.get_data()) for cond, ep in by_cond.items()
+                          if len(ep) >= EPOCH_MIN_TRIALS]
+                times = next(iter(by_cond.values())).times
                 if panels:
                     # stacked, one row per condition, like the grand mean
                     n = len(panels)
@@ -418,7 +406,7 @@ def build_channel_figure(
                         for row_i, color, label in ((0, HBO_COLOR, "HbO"),
                                                     (1, HBR_COLOR, "HbR")):
                             epoch_fig.add_trace(go.Scatter(
-                                x=epochs.times.tolist(),
+                                x=times.tolist(),
                                 y=(ep[:, row_i, :].mean(axis=0) * 1e6).tolist(),
                                 name=label, mode="lines", legendgroup=label,
                                 showlegend=(i == 1),
@@ -554,40 +542,37 @@ def _trial_image_data(
     if not picks:
         return None
     try:
-        events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
-        if len(events) == 0:
+        by_cond = condition_epochs(raw_haemo, epoch_tmin, epoch_tmax, picks=picks)
+        if not by_cond:
             return None
-        epochs = mne.Epochs(
-            raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
-            picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
-        )
-        data = epochs.get_data()  # (n_trials, n_picks, n_times)
-        if data.shape[0] == 0:
-            return None
+        times = next(iter(by_cond.values())).times
         out: "list[tuple[str, np.ndarray, np.ndarray, list[str] | None]]" = []
-        pooled = len(event_id) > 1
+        pooled = len(by_cond) > 1
         if pooled:
             # the pooled panel stacks conditions in event order, so without the name of each
             # row a reader cannot tell which row belongs to which condition
-            by_code = {v: k for k, v in event_id.items()}
-            rows = [str(by_code.get(int(c), "")) for c in epochs.events[:, 2]]
+            data, _, rows = _onset_order(by_cond)
             # average over channels → (n_trials, n_times)
-            out.append((_POOLED_LABEL, data.mean(axis=1) * 1e6, epochs.times, rows))
-        for cond in event_id:
-            try:
-                cond_data = epochs[cond].get_data()
-            except Exception:
-                continue
-            if cond_data.shape[0] == 0:
-                continue
+            out.append((_POOLED_LABEL, data.mean(axis=1) * 1e6, times, rows))
+        for cond, ep in by_cond.items():
+            cond_data = ep.get_data()
             # a one-row heatmap is a colour strip above a copy of its own average; the
             # pooled panel already carries that trial, named
             if cond_data.shape[0] < 2 and pooled:
                 continue
-            out.append((str(cond), cond_data.mean(axis=1) * 1e6, epochs.times, None))
+            out.append((cond, cond_data.mean(axis=1) * 1e6, times, None))
         return out or None
     except Exception:
         return None
+
+
+def _onset_order(by_cond: "dict[str, mne.Epochs]") -> "tuple[np.ndarray, np.ndarray, list[str]]":
+    """Every condition's trials in one stack by onset: (data, event samples, condition per row)."""
+    order = sorted((int(sample), cond, i) for cond, ep in by_cond.items()
+                   for i, sample in enumerate(ep.events[:, 0]))
+    data = {cond: ep.get_data() for cond, ep in by_cond.items()}
+    return (np.stack([data[cond][i] for _, cond, i in order]),
+            np.array([sample for sample, _, _ in order]), [cond for _, cond, _ in order])
 
 
 def _smooth_trials(data: np.ndarray, trial_smooth: int) -> np.ndarray:
@@ -790,22 +775,15 @@ def _trial_image_by_span(
     if not picks or not spans:
         return None
     try:
-        events, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
-        if len(events) == 0:
+        by_cond = condition_epochs(raw_haemo, epoch_tmin, epoch_tmax, picks=picks)
+        if not by_cond:
             return None
-        epochs = mne.Epochs(
-            raw_haemo, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
-            picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
-        )
-        data = epochs.get_data()  # (n_trials, n_picks, n_times)
-        if data.shape[0] == 0:
-            return None
-        by_code = {v: k for k, v in event_id.items()}
+        data, samples, descs = _onset_order(by_cond)  # data: (n_trials, n_picks, n_times)
+        times = next(iter(by_cond.values())).times
         sfreq = float(raw_haemo.info["sfreq"])
         # the data axis, the one condition_windows measures on; an event's sample index is
         # against the original recording and a cropped input puts the two a first_time apart
-        onsets = (epochs.events[:, 0] - raw_haemo.first_samp) / sfreq
-        descs = [str(by_code.get(int(c), "")) for c in epochs.events[:, 2]]
+        onsets = (samples - raw_haemo.first_samp) / sfreq
         # an event lands on a sample and a window bound does not, so the two agree only to
         # within half a sample
         eps = 0.5 / sfreq
@@ -814,7 +792,7 @@ def _trial_image_by_span(
             keep = [i for i, onset in enumerate(onsets) if t0 + eps < onset < t1 - eps]
             if not keep:
                 continue
-            out[str(label)] = (data[keep].mean(axis=1) * 1e6, epochs.times,
+            out[str(label)] = (data[keep].mean(axis=1) * 1e6, times,
                                [descs[i] for i in keep])
         return out or None
     except Exception:
@@ -940,16 +918,12 @@ def build_epoch_preview_figure(
         return None
 
     try:
-        events_mne, event_id = epochable_events(raw_haemo, epoch_tmin, epoch_tmax)
-        if len(events_mne) == 0:
+        cond_epochs = condition_epochs(raw_haemo, epoch_tmin, epoch_tmax)
+        if not cond_epochs:
             return None
+        # any one condition's, for the channels and times every condition shares
+        epochs = next(iter(cond_epochs.values()))
 
-        epochs = mne.Epochs(
-            raw_haemo, events_mne, event_id,
-            tmin=epoch_tmin, tmax=epoch_tmax,
-            baseline=(epoch_tmin, 0),
-            preload=True, verbose=False,
-        )
         from nirspipe.qc.metrics import long_short_channels
         long_names, short_names = long_short_channels(raw_haemo, sep_bands)
 
@@ -975,17 +949,7 @@ def build_epoch_preview_figure(
 
         # one panel per condition, so HbO and HbR can keep the red/blue they carry in every
         # other panel
-        panels = []
-        for cond in event_id:
-            try:
-                ep = epochs[cond].get_data()
-            except Exception:
-                continue
-            if not ep.size:
-                continue
-            panels.append((cond, ep))
-        if not panels:
-            return None
+        panels = [(cond, ep.get_data()) for cond, ep in cond_epochs.items()]
 
         # stacked, one row per condition, rather than side by side
         n = len(panels)
@@ -1153,24 +1117,17 @@ def _topo_layers(
                                    [m["duration"] for m in usable],
                                    [m["description"] for m in usable])
             raw_copy = raw_haemo.copy().set_annotations(anns)
-            events, event_id = epochable_events(raw_copy, epoch_tmin, epoch_tmax)
-            if len(events) > 0:
-                epochs = mne.Epochs(
-                    raw_copy, events, event_id, tmin=epoch_tmin, tmax=epoch_tmax,
-                    picks=picks, baseline=(epoch_tmin, 0), preload=True, verbose=False,
-                )
+            by_cond = condition_epochs(raw_copy, epoch_tmin, epoch_tmax, picks=picks)
+            if by_cond:
                 cond_colors_ = condition_colors(usable)
-                single = len(event_id) == 1
+                single = len(by_cond) == 1
                 layers = []
-                for ci, cond in enumerate(event_id):
-                    try:
-                        ev = epochs[cond].average()
-                    except Exception:
-                        continue
+                for ci, (cond, ep) in enumerate(by_cond.items()):
+                    ev = ep.average()
                     base = cond_colors_.get(cond, CONDITION_PALETTE[ci % len(CONDITION_PALETTE)])
                     layers.append({
                         "label": str(cond),
-                        "n": len(epochs[cond]),
+                        "n": len(ep),
                         "times": ev.times.tolist(),
                         "by_ch": {name: (row * 1e6).tolist()
                                   for name, row in zip(ev.ch_names, ev.data)},

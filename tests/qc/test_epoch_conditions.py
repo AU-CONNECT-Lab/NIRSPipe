@@ -137,3 +137,58 @@ def test_the_condition_menu_names_each_condition_bare(mixed):
     fig = build_evoked_topo_figure(mixed, markers_on_data_axis(mixed), 2000, -5.0, 25.0)
     assert [b.name for b in fig.layout.updatemenus[0].buttons] == ["once", "zeta", "alpha"]
     assert not [a for a in fig.layout.annotations if a.text in {"S1_D1", "S2_D2"}]
+
+
+# ---- two conditions starting on one sample, as the block-average table already allows ----
+
+@pytest.fixture(scope="module")
+def shared():
+    return _haemo([40.0, 40.0, 100.0, 100.0, 160.0, 160.0], ["tap", "cue"] * 3)
+
+
+def _hbo(raw):
+    return list(mne.pick_types(raw.info, fnirs="hbo"))
+
+
+def test_the_grand_mean_draws_both_conditions_of_a_shared_onset(shared):
+    fig = build_epoch_preview_figure(shared, epoch_tmin=-5.0, epoch_tmax=25.0)
+    assert fig is not None and set(_titles(fig)) == {"tap (n=3)", "cue (n=3)"}
+
+
+def test_the_channel_epoch_panel_draws_both_conditions_of_a_shared_onset(shared):
+    from nirspipe.qc.common.figure_io import extract_markers
+    from nirspipe.qc.figures.subject.raw_figures import build_channel_figure
+
+    _, _, epoch_fig = build_channel_figure(shared, extract_markers(shared), "S1_D1", 2000)
+    assert epoch_fig is not None and set(_titles(epoch_fig)) == {"tap (n=3)", "cue (n=3)"}
+
+
+def test_the_trial_images_draw_both_conditions_of_a_shared_onset(shared):
+    assert set(build_trial_image_views(shared, "S1_D1 hbo", -5.0, 25.0)) == {"tap", "cue", ""}
+
+
+def test_the_condition_trial_images_keep_both_conditions_of_a_shared_onset(shared):
+    from nirspipe.qc.figures.subject.raw_figures import _trial_image_by_span
+
+    got = _trial_image_by_span(shared, _hbo(shared), [("block", 30.0, 200.0)], -5.0, 25.0)
+    assert got is not None and sorted(got["block"][2]) == ["cue"] * 3 + ["tap"] * 3
+
+
+def test_the_evoked_topo_layers_both_conditions_of_a_shared_onset(shared):
+    fig = build_evoked_topo_figure(shared, markers_on_data_axis(shared), 2000, -5.0, 25.0)
+    assert {b.name for b in fig.layout.updatemenus[0].buttons} == {"tap", "cue"}
+
+
+def test_a_window_starting_at_onset_subtracts_no_baseline(mixed):
+    """As the block-average table: no pre-onset part, so nothing to take a baseline from."""
+    from nirspipe.qc.figures.subject.raw_figures import _trial_image_data
+
+    picks = _hbo(mixed)
+    zeta = next(d for label, d, _, _ in _trial_image_data(mixed, picks, 0.0, 10.0)
+                if label == "zeta")
+    onset = mixed.time_as_index([60.0], use_rounding=True)[0]
+    assert zeta[0, 0] == pytest.approx(mixed.get_data(picks)[:, onset].mean() * 1e6)
+
+
+def test_a_window_starting_after_onset_is_still_drawn(mixed):
+    assert build_epoch_preview_figure(mixed, epoch_tmin=2.0, epoch_tmax=20.0) is not None

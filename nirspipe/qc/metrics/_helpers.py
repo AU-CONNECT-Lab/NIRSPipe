@@ -460,7 +460,8 @@ def epochable_events(raw, tmin: float, tmax: float):
 EPOCH_TMIN, EPOCH_TMAX = -5.0, 25.0
 
 
-def condition_epochs(raw: mne.io.Raw, tmin: float, tmax: float) -> "dict[str, mne.Epochs]":
+def condition_epochs(raw: mne.io.Raw, tmin: float, tmax: float,
+                     picks=None) -> "dict[str, mne.Epochs]":
     """Condition -> its trials over ``[tmin, tmax]``, each less the mean of its pre-onset part.
 
     Trials whose window leaves the recording or touches a ``BAD_`` span are not epoched, so a
@@ -471,8 +472,8 @@ def condition_epochs(raw: mne.io.Raw, tmin: float, tmax: float) -> "dict[str, mn
     out = {}
     for cond, code in event_id.items():
         epochs = mne.Epochs(raw, events[events[:, 2] == code], {cond: code}, tmin=tmin,
-                            tmax=tmax, baseline=(tmin, 0) if tmin < 0 else None, preload=True,
-                            verbose=False)
+                            tmax=tmax, picks=picks, baseline=(tmin, 0) if tmin < 0 else None,
+                            preload=True, verbose=False)
         # every trial of it dropped by MNE after the check above
         if len(epochs):
             out[str(cond)] = epochs
