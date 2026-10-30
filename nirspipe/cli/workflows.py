@@ -412,7 +412,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     # on disk by now, and --no-report still leaves the diagram behind
                     provenance_path = None
                     try:
-                        from nirspipe.qc.figures.common.provenance_figure import write_provenance
+                        from nirspipe.qc.figures.common.provenance_figure import (
+                            provenance_title, write_provenance,
+                        )
                         from nirspipe.qc.common.figure_io import figure_namer
                         # the run's own nirs/, session level included; the figure stays
                         # beside the subject's reports
@@ -421,7 +423,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             sub_dir / (f"ses-{ses}" if ses else "") / "nirs",
                             sub_dir / "figures",
                             figure_namer(label), label=label,
-                            title=label + (f"  |  mode: {args['mode']}" if args.get("mode") else ""),
+                            title=provenance_title(label, args.get("mode")),
                         ):
                             logger.info("sub-%s | provenance -> %s", subject, path)
                             if path.suffix == ".png":

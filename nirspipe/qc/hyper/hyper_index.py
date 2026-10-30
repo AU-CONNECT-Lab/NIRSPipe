@@ -301,6 +301,7 @@ def _session_rows(group_dir: Path, group_id: str, session: "str | None",
                 "task": task,
                 "condition": label,
                 "pair": " × ".join(pair) if pair and len(pairings) > 1 else None,
+                "members": list(pair) if pair else [],
                 "kind": "whole run" if label is None else "window",
                 "href": report.name if report.exists() else None,
                 # the task's other products hang off its whole-run row, being the task's and
@@ -380,7 +381,8 @@ def write_hyper_index(
         ),
         **footer_vars(versions=collect_software_versions()),
         group_id=group_id,
-        subject_ids=subject_ids or [],
+        # a rebuild names the members its tables hold, as the run that wrote them did
+        subject_ids=subject_ids or list(dict.fromkeys(m for row in rows for m in row["members"])),
         rows=rows,
         has_pairs=any(row.get("pair") for row in rows),
         has_sessions=any(row["session"] for row in rows),

@@ -184,10 +184,16 @@ def cmd_participant(
         # rebuilt rather than added to: it is assembled from the records on disk, so it
         # comes back carrying the pipeline's reports too where a run has been through both
         # commands
-        from nirspipe.qc.subject.subject_index import write_subject_index
+        from nirspipe.cli.run_record import recorded_post
+        from nirspipe.qc.subject import subject_index
+        sub_dir = subject_report_dir(output_dir, subject)
+        # a tree the pipeline also wrote keeps its mode line and its ROI grouping
+        post = recorded_post(sub_dir)
         try:
-            index = write_subject_index(subject, subject_report_dir(output_dir, subject),
-                                        " ".join(sys.argv))
+            index = subject_index.write_subject_index(
+                subject, sub_dir, " ".join(sys.argv), mode=post.get("mode"),
+                roi_map=(_app_options.load_roi_mapping(Path(post["roi_mapping"]))
+                         if post.get("roi_mapping") else None))
             if index:
                 print(f"  -> {index}")
         except Exception:
@@ -426,7 +432,8 @@ def cmd_provenance(output_dir: Path) -> None:
     Reads the JSON sidecars already on disk, so it works on any past run.
     """
     from nirspipe.qc.common.figure_io import figure_namer
-    from nirspipe.qc.figures.common.provenance_figure import write_provenance
+    from nirspipe.cli.run_record import recorded_post
+    from nirspipe.qc.figures.common.provenance_figure import provenance_title, write_provenance
 
     from nirspipe.io.derivatives import entity_of, group_label
     from nirspipe.qc.subject.sqm_record import scan_runs
@@ -449,17 +456,19 @@ def cmd_provenance(output_dir: Path) -> None:
         # an already-written report points at: a subject gets one graph per run, a group one
         # per task and session named as its dyad report names it, and the root a single graph
         if dest.name.startswith("sub-"):
-            jobs = [(label, label) for label in scan_runs(nirs_dir)]
+            # titled as the run titled it, its mode read back off its run record
+            jobs = [(label, label, provenance_title(label, recorded_post(dest, label).get("mode")))
+                    for label in scan_runs(nirs_dir)]
         elif dest.name.startswith("group-"):
             gid = dest.name.removeprefix("group-")
             labels = sorted({group_label(gid, entity_of(p, "task"), entity_of(p, "ses"))
                              for p in nirs_dir.glob("*.json") if entity_of(p, "task")})
-            jobs = [(label, label) for label in labels]
+            jobs = [(label, label, label) for label in labels]
         else:
             jobs = []
-        for name, label in jobs or [(dest.name, None)]:
+        for name, label, title in jobs or [(dest.name, None, dest.name)]:
             written = write_provenance(nirs_dir, dest / "figures", figure_namer(name),
-                                       title=name, label=label)
+                                       title=title, label=label)
             for path in written:
                 print(f"{path}")
             total += bool(written)

@@ -280,6 +280,35 @@ def record_path(sub_dir: Path, subject: str, sessions: "list[str] | None" = None
     return sub_dir / "logs" / f"{record_stem(subject, sessions, tasks)}.toml"
 
 
+def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
+    """The ``[post]`` settings of the newest pipeline run record under ``sub_dir/logs`` covering ``label``, or {}.
+
+    A record covers a run its ``[execution]`` task and session selection left in; with no
+    ``label`` any record covers. Raw QC's own records are not the pipeline's.
+    """
+    import tomllib
+
+    from nirspipe.io.derivatives import entity_of
+
+    newest = ("", {})
+    for path in sorted(Path(sub_dir, "logs").glob("*.toml")):
+        if path.name.endswith("_desc-raw.toml"):
+            continue
+        try:
+            record = tomllib.loads(path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        execution = record.get("execution") or {}
+        if label is not None and any(
+                execution.get(key) and entity_of(label, entity) not in execution[key]
+                for key, entity in (("task_label", "task"), ("session_label", "ses"))):
+            continue
+        stamp = str(execution.get("run_timestamp") or "")
+        if stamp >= newest[0]:
+            newest = (stamp, record.get("post") or {})
+    return newest[1]
+
+
 def error_line(exc: BaseException) -> str:
     """An exception as one line: its type and the first line of its message."""
     lines = str(exc).strip().splitlines()

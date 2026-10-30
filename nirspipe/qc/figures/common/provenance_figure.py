@@ -212,6 +212,10 @@ def provenance_figure(nodes: dict[str, Node], title: str | None = None):
 # Here, not beside `scan` and `simplify`: those build the graph and know nothing about
 # pictures. This draws it and saves both outputs.
 
+def provenance_title(label: str, mode: "str | None") -> str:
+    return label + (f"  |  mode: {mode}" if mode else "")
+
+
 def write_provenance(
     nirs_dir: Path,
     out_dir: Path,
