@@ -21,7 +21,7 @@ The metrics work on any recording, whatever its design. The one exception is CNR
 
 ## The quality record
 
-`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, once preprocessing and postprocessing have both finished. `nirspipe-qc ... participant` writes the raw part of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` writes a dyad record under `group-<id>/nirs/`. The cohort pages are built from these records.
+`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, once preprocessing and postprocessing have both finished. `nirspipe-qc ... participant` writes the raw part of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` writes a dyad record under `group-<id>/[ses-<s>/]nirs/`. The cohort pages are built from these records.
 
 The record is split into sections named after the stage they were measured on (`raw`, `motion`, `preproc`, `errts` and so on), and each is measured on all channels, the long channels and the short channels separately: `raw` is every channel, `raw_long` and `raw_short` the two sets. The per-window series and the flagged stretches (GVTD above its threshold, spikes, corrected samples) are named the same way: `gvtd_filt_per_window` is every channel, `gvtd_filt_per_window_long` and `_short` the sets. Measures taken on the raw signal include rejected channels; measures taken on haemoglobin leave them out. `<run>_desc-channel_qc.tsv` beside the record holds one row per channel, with its metrics and its verdict, and the `.json` beside it says what each column holds. An older record, which named the long set's series plainly and every channel's `_all`, is refused rather than read the wrong way round; rerun the command that wrote it.
 
@@ -123,7 +123,7 @@ Only for a task GLM. The GLM's t values assume that the noise model has removed 
 
 ## The run report
 
-`nirspipe` writes one self-contained HTML page per run, and a subject index that links every run and condition page. Under `--combine-runs` the index also shows each joined series: each run's length and kept time, the joined signal and the joined connectivity. Open a page directly in a browser, or through the [rating viewer](#rating).
+`nirspipe` writes one HTML page per run, and a subject index that links every run and condition page. A page loads its figures from the subject's `figures/` folder, so keep the two together when you move or share a report. Under `--combine-runs` the index also shows each joined series: each run's length and kept time, the joined signal and the joined connectivity. Open a page directly in a browser, or through the [rating viewer](#rating).
 
 Every report follows one layout: a summary, the processing steps in order, **Quality Metrics** (the tables), **Quality Figures**, and the run record last. A figure that fails to build leaves a placeholder and an entry under Errors & Warnings; the rest of the page still renders.
 
@@ -133,7 +133,7 @@ The subject, the recording's duration, the screening rule (the SCI line and the 
 
 If the recording's optodes could not be placed on the head, the summary says so. Everything drawn on the brain is then not anatomical; the short/long split and the screening are not affected.
 
-A run with excluded time gets an **Excluded** section: the kept seconds, each span with where it came from, and per condition its kept seconds and trials ([Excluded time](workflows.md#excluded-time)).
+A run with excluded time gets an **Excluded time** section under Quality Metrics: the kept seconds, each span with where it came from, and per condition its kept seconds and trials ([Excluded time](workflows.md#excluded-time)).
 
 ### Preprocessing
 
@@ -148,9 +148,9 @@ A run with excluded time gets an **Excluded** section: the kept seconds, each sp
 
 ### Postprocessing
 
-- **glm.** The design matrix, each condition's betas on the cortex and, with `--contrast-file`, each t contrast drawn the same way. The numbers behind the maps are in `desc-glm_nirsmap.tsv` and `desc-contrast_nirsmap.tsv` (F contrasts are only there). A last panel checks whether the noise model left the residual white.
+- **glm.** The design matrix, each condition's betas on the cortex and, with `--contrast-file`, each t contrast drawn the same way. The numbers behind the maps are in `desc-glm_nirsmap.tsv` and `desc-contrast_nirsmap.tsv`. A last panel checks whether the noise model left the residual white.
 - **denoise.** The filter settings and the signal after denoising; with `--fc`, the connectivity figures.
-- **rest.** mALFF on the cortex, the correlation matrices with mALFF and fALFF beside them, and, with `--roi-mapping`, the region matrix and the seed maps.
+- **rest.** mALFF on the cortex, the correlation matrices with ALFF and fALFF beside them, and, with `--roi-mapping`, the region matrix and the seed maps.
 
 The channel correlation matrices show every kept channel, grouped by region with `--roi-mapping` and otherwise listed by source, then detector number, on a colour scale centred on 0.
 
@@ -231,7 +231,7 @@ The page has the same order as the run report. The raw signal is unfiltered, so 
 
 | Panel | Shows |
 |-------|-------|
-| Not finished | Only when some subject's last `nirspipe` run failed or was stopped: the subject, its status, when it started and the first line of its error. |
+| Not finished | Only when some subject's last run, of `nirspipe` or `nirspipe-qc`, failed or was stopped: the subject, its status, when it started and the first line of its error. |
 | Overview | One row per metric, one dot per run, placed by how far it is from the cohort median. |
 | Distributions | Each metric across runs; click a point to open its report. |
 | By condition | Where the records carry conditions: each metric per condition, one line per run. |
@@ -335,9 +335,9 @@ The ratings are saved beside the reports:
 
 | Viewer | Section ratings | Channel decisions |
 |--------|-----------------|-------------------|
-| `rate` | `sub-<id>/nirs/<page>_desc-rating_qc.json`, every save also in `logs/group_ratings.jsonl` | none |
-| `raw` | `sub-<id>/nirs/<page>_desc-rawrating_qc.json`, every save also in `logs/group_raw_ratings.jsonl` | `sub-<id>/nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json`; marked stretches in `..._desc-rawspans_qc.json` |
-| `hyper` | `group-<id>/nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
+| `rate` | `sub-<id>/[ses-<s>/]nirs/<page>_desc-rating_qc.json`, every save also in `logs/group_ratings.jsonl` | none |
+| `raw` | `sub-<id>/[ses-<s>/]nirs/<page>_desc-rawrating_qc.json`, every save also in `logs/group_raw_ratings.jsonl` | `sub-<id>/[ses-<s>/]nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json`, and marked stretches in `..._desc-rawspans_qc.json` |
+| `hyper` | `group-<id>/[ses-<s>/]nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
 
 With `--rater QY`, each of these files carries `rater-QY` before its `desc-`, for example `sub-01_task-rest_rater-QY_desc-rawdecision_qc.json`; the `.jsonl` logs keep their names and record the rater with every save.
 
