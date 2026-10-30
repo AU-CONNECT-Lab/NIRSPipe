@@ -113,3 +113,16 @@ def test_the_motion_summary_carries_the_all_trace_and_names_the_canonical_set():
     out = motion_summary(motion)
     assert out["canonical"] == "long"
     assert out["all"]["before"] == {"A": 2.0, "B": 4.0, "together": 2.0}
+
+
+def test_only_the_long_set_is_coloured_where_the_montage_splits():
+    # the cutoffs are drawn for long channels, as the member's own table colours them
+    table = member_metric_table(subject_metric_tables(_by_set(), ["A", "B"], {}))
+    classes = [c["cls"] for c in _row(table, "channel_retention_rate")["cells"]]
+    assert classes[:2] == ["", ""] and classes[4:] == ["", ""]
+    assert all(classes[2:4])
+
+
+def test_a_montage_with_one_set_is_coloured():
+    table = member_metric_table(subject_metric_tables(_by_set(short=False), ["A", "B"], {}))
+    assert all(c["cls"] for c in _row(table, "channel_retention_rate")["cells"])

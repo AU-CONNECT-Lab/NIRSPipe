@@ -157,8 +157,11 @@ def subject_metric_rows(
     sci_lines: "dict[str, float | None]",
     condition: bool = False,
     grid_window: "float | None" = None,
+    colour: bool = True,
 ) -> list[dict]:
     """One entry per metric the members carry a value for, with a cell per member.
+
+    ``colour`` False leaves every cell's verdict off, for a set the cutoffs were not drawn for.
 
     ::
 
@@ -179,7 +182,8 @@ def subject_metric_rows(
             value = (sqm_data.get(sid) or {}).get(key)
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 cells.append({"text": format_metric(key, value),
-                              "cls": _metric_class(key, value, sci_lines.get(sid))})
+                              "cls": (_metric_class(key, value, sci_lines.get(sid)) if colour
+                                      else "")})
             else:
                 cells.append({"text": MISSING_VALUE, "cls": ""})
         if any(c["text"] != MISSING_VALUE for c in cells):
@@ -223,10 +227,13 @@ def subject_metric_tables(
 
     A montage with no short channel measures one set, and ``all`` and ``long`` are then the
     same numbers printed twice; it gets a single unheaded block instead. That is also what
-    a caller with no split at all passes, under ``all``.
+    a caller with no split at all passes, under ``all``. Where the montage splits, only the
+    Long block carries verdicts, as the member's own table: the cutoffs are drawn for long
+    channels.
     """
-    def _table(heading: str, data: dict) -> "dict | None":
-        metrics = subject_metric_rows(data, subject_ids, sci_lines, condition, grid_window)
+    def _table(heading: str, data: dict, colour: bool = True) -> "dict | None":
+        metrics = subject_metric_rows(data, subject_ids, sci_lines, condition, grid_window,
+                                      colour)
         if not metrics:
             return None
         return {"set": heading, "members": list(subject_ids), "metrics": metrics}
@@ -235,7 +242,7 @@ def subject_metric_tables(
     if not any(short.values()):
         one = _table("", by_set.get("all") or by_set.get("long") or {})
         return [one] if one else []
-    return [t for t in (_table(heading, by_set.get(key) or {})
+    return [t for t in (_table(heading, by_set.get(key) or {}, colour=key == "long")
                         for key, heading in _CHANNEL_SETS) if t]
 
 
