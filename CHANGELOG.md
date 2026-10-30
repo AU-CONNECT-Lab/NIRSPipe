@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it
 - The GUI's Analysis form hid `--censor-fill` unless `--gvtd-censor` or `--bad-spans` was set, though spans already in the file and dark edges are filled too
+- A rest run whose drift model removes no trend also logged that `--high-pass` and `--low-pass` were missing when ALFF was skipped, though both were set
 
 ## [0.80.0] - 2026-10-29
 

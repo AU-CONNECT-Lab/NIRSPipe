@@ -11,6 +11,8 @@ are wrong rather than noisy.
 these tests pin is that it costs the ALFF outputs instead of silently corrupting them.
 """
 
+import logging
+
 import pytest
 
 from nirspipe.pipeline.post_pipeline import PostConfig, run_post
@@ -79,3 +81,10 @@ def test_fc_still_runs_when_alff_is_skipped(haemo, tmp_path, drift):
 def test_the_run_does_not_raise_on_a_drift_model_that_does_not_detrend(haemo, tmp_path):
     # rejecting the flag outright would break a legitimate FC-only configuration
     _rest(haemo, tmp_path, drift_model="none")
+
+
+def test_the_skip_names_the_drift_model_not_the_band_edges_it_has(haemo, tmp_path, caplog):
+    with caplog.at_level(logging.WARNING):
+        _rest(haemo, tmp_path, drift_model="none")
+    assert "does not remove linear drift" in caplog.text
+    assert "--high-pass and --low-pass required" not in caplog.text

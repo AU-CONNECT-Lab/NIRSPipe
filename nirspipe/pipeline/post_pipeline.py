@@ -969,7 +969,8 @@ def _write_rest_derivatives(
                                              for c in config.chromophores},
                                chromophores=list(config.chromophores), **kept)
                 logger.info("sub-%s | alff_roi -> %s", config.subject, alff_roi_path)
-    elif raw_resid_bb is None:
+    # a drift model that leaves the trend in was already named as the reason upstream
+    elif raw_resid_bb is None and (config.high_pass is None or config.low_pass is None):
         logger.warning("sub-%s | skipping ALFF: --high-pass and --low-pass required", config.subject)
 
     fc, fc_roi, fc_seed = _write_fc_derivatives(
