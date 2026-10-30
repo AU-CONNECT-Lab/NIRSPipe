@@ -2,11 +2,10 @@
 
 ::
 
-  compute_isc                     One correlation per channel pair between two members,
-                                  optionally after a lag search. The matrix a report
-                                  draws.
-  compute_isc_pairs               The same computation delivered as a long table, with the
-                                  scrambled null beside it.
+  compute_isc_pairs               One correlation per channel pair between two members,
+                                  optionally after a lag search, as the matrix a report
+                                  draws and as a long table, with the scrambled null
+                                  beside it.
   roi_mean_of_isc                 Groups those correlations into ROIs.
 
 """
@@ -111,8 +110,7 @@ def _isc_rows(
 
     One row per axis label per member, NaN where that member has no usable channel
     there, cut to ``window`` if one was asked for. Nothing before ``skip_s`` is kept, which
-    is where a whitened record carries its filter transient. Everything
-    :func:`compute_isc` and :func:`compute_isc_pairs` disagree about happens after this.
+    is where a whitened record carries its filter transient.
 
     The fourth value marks the samples outside the pairing's excluded time, the union of
     both members' ``BAD_`` spans unless ``excluded`` gives the samples instead; None when
@@ -211,69 +209,6 @@ def _kept_share(aligned_raws: dict[str, mne.io.Raw], subject_ids: list[str],
     return float(_kept_samples(raw1, raw2, n_times, excluded)[first:last].mean())
 
 
-def compute_isc(
-    aligned_raws: dict[str, mne.io.Raw],
-    subject_ids: list[str],
-    ch_type: str = "hbo",
-    sep_bands=None,
-    window: "tuple[float, float] | None" = None,
-    max_lag_s: float = 0.0,
-    band: "tuple[float | None, float | None] | None" = None,
-    skip_s: float = 0.0,
-    excluded: "np.ndarray | None" = None,
-) -> tuple[np.ndarray, list[str]] | tuple[None, None]:
-    """Compute inter-brain Pearson r matrix (n_ch × n_ch) over long channels.
-
-    matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
-    Diagonal = same-channel ISC.
-
-    ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
-    condition gets a correlation of its own. Unlike the wavelet coherence this really is a
-    cut and not a slice of a whole-record computation: a correlation has no frequency axis
-    and ``band`` is applied over the whole record before the cut (see :func:`_band_limit`),
-    so a window carries no edge that the whole record would not have had. Both sides are z-scored inside the window, because the correlation over a
-    stretch is against that stretch's mean, not the recording's. The wavelet coherence is
-    windowed instead; see :func:`~nirspipe.pipeline.hyper.wtc.window_result`.
-
-    Both axes are the *montage's* long channels, rejected ones included, so every dyad's
-    matrix has one shape and a group analysis can stack them however their rejections
-    differ. That is the convention
-    :func:`nirspipe.pipeline.restingstate.compute_fc` follows for the same reason. A
-    rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
-    both, since sub1's copy of a channel is not needed to correlate sub2's against
-    everything else.
-
-    Position is not a safe key: a participant with one more rejected channel than the other
-    shifts every channel after it, so column j would hold a different pair than its label
-    claims. Everything here is looked up by S-D label.
-
-    Rejections arrive on ``raw.info["bads"]``, which is where
-    :func:`nirspipe.pipeline.hyper.group_io.load_group_haemo` puts them and the only place
-    the WTC path reads them from.
-
-    Raises ValueError if the members were recorded at different sampling rates, which is
-    the refusal WTC makes: alignment equalises duration, not rate.
-
-    Whitening is the caller's: hand in the copies
-    :func:`~nirspipe.pipeline.hyper.whiten.whiten_raws` made of the whole record, with
-    ``skip_s`` past their zeroed transient, so every channel of both members carries one
-    order. Whitening shrinks r, so a whitened matrix and an unwhitened one are not
-    comparable and the sidecar records which was written.
-
-    Samples under either member's ``BAD_`` spans are left out of every r; ``excluded``, the
-    excluded samples on the pair's clock, stands in for those spans when given.
-
-    Args:
-        ch_type: "hbo", "hbr" or "hbt".
-    """
-    data1, data2, ch_names, keep = _isc_rows(aligned_raws, subject_ids, ch_type, sep_bands,
-                                             window, band, skip_s, excluded)
-    if ch_names is None:
-        return None, None
-    max_lag = _lag_samples(aligned_raws, subject_ids, max_lag_s)
-    return _isc_matrix(data1, data2, max_lag, keep)[0], ch_names
-
-
 def _band_limit(data: np.ndarray, sfreq: float, band) -> np.ndarray:
     """Band-limit the rows that carry data, leaving all-NaN rows alone.
 
@@ -330,9 +265,47 @@ def compute_isc_pairs(
       a 3 x 3 matrix  ->  9 rows of sub1, sub2, label, label2, r, r_z
 
     The matrix is what the report draws; the frame is what a group analysis reads, and it is
-    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. Whitening,
-    ``skip_s`` and the excluded samples are as in :func:`compute_isc`; each surrogate is
-    correlated over the same kept samples.
+    the form the extra columns fit in. ``r_z`` is the Fisher r-to-z of ``r``. Each surrogate
+    is correlated over the same kept samples as the real pair.
+
+    matrix[i, j] = Pearson r between sub1_ch_i and sub2_ch_j.
+    Diagonal = same-channel ISC.
+
+    ``window`` restricts it to ``(tstart, tstop)`` on the aligned clock, which is how a
+    condition gets a correlation of its own. Unlike the wavelet coherence this really is a
+    cut and not a slice of a whole-record computation: a correlation has no frequency axis
+    and ``band`` is applied over the whole record before the cut (see :func:`_band_limit`),
+    so a window carries no edge that the whole record would not have had. Both sides are z-scored inside the window, because the correlation over a
+    stretch is against that stretch's mean, not the recording's. The wavelet coherence is
+    windowed instead; see :func:`~nirspipe.pipeline.hyper.wtc.window_result`.
+
+    Both axes are the *montage's* long channels, rejected ones included, so every dyad's
+    matrix has one shape and a group analysis can stack them however their rejections
+    differ. That is the convention
+    :func:`nirspipe.pipeline.restingstate.compute_fc` follows for the same reason. A
+    rejected channel of sub1 leaves a blank row and one of sub2 a blank column -- never
+    both, since sub1's copy of a channel is not needed to correlate sub2's against
+    everything else.
+
+    Position is not a safe key: a participant with one more rejected channel than the other
+    shifts every channel after it, so column j would hold a different pair than its label
+    claims. Everything here is looked up by S-D label.
+
+    Rejections arrive on ``raw.info["bads"]``, which is where
+    :func:`nirspipe.pipeline.hyper.group_io.load_group_haemo` puts them and the only place
+    the WTC path reads them from.
+
+    Raises ValueError if the members were recorded at different sampling rates, which is
+    the refusal WTC makes: alignment equalises duration, not rate.
+
+    Whitening is the caller's: hand in the copies
+    :func:`~nirspipe.pipeline.hyper.whiten.whiten_raws` made of the whole record, with
+    ``skip_s`` past their zeroed transient, so every channel of both members carries one
+    order. Whitening shrinks r, so a whitened matrix and an unwhitened one are not
+    comparable and the sidecar records which was written.
+
+    Samples under either member's ``BAD_`` spans are left out of every r; ``excluded``, the
+    excluded samples on the pair's clock, stands in for those spans when given.
 
     ``n_null`` phase-scrambles the second member and recomputes; scrambling preserves each
     signal's own power spectrum and so its autocorrelation. It adds ``null_mean``,
@@ -514,7 +487,7 @@ def roi_mean_of_isc(
     Parameters
     ----------
     isc_mat : array, shape (n_ch, n_ch)
-        What :func:`compute_isc` returned, NaN where a member lost a channel.
+        The matrix :func:`compute_isc_pairs` returned, NaN where a member lost a channel.
     ch_names : list of str
         The axis of ``isc_mat``, both sides.
     roi_map : dict

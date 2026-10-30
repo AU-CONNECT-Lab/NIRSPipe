@@ -967,7 +967,7 @@ def build_isc_panel(
     is read on and the wording of its titles.
 
     Args:
-        isc_mat:       n × n ISC matrix from compute_isc().
+        isc_mat:       n × n ISC matrix from compute_isc_pairs().
         ch_names:      Channel labels (n,), without type suffix.
         subject_ids:   [sub1_id, sub2_id, ...].
         ch_type:       "hbo", "hbr" or "hbt", shown in titles.

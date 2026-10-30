@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from nirspipe.cli.hyper import _warn_band_mismatch
-from nirspipe.pipeline.hyper.isc import _band_limit, compute_isc
+from nirspipe.pipeline.hyper.isc import _band_limit, compute_isc_pairs
 
 SFREQ = 10.0
 N = 4000
@@ -62,15 +62,15 @@ def test_band_limit_keeps_what_is_inside():
 def test_isc_without_a_band_sees_coupling_the_wtc_band_never_would():
     """The point of the flag: a 1 Hz shared component is coupling ISC reports and WTC cannot."""
     raws = _pair(shared_hz=1.0)
-    wide, _ = compute_isc(raws, ["sub-01", "sub-02"], "hbo")
-    narrow, _ = compute_isc(raws, ["sub-01", "sub-02"], "hbo", band=BAND)
+    wide, _ = compute_isc_pairs(raws, ["sub-01", "sub-02"], "hbo")[:2]
+    narrow, _ = compute_isc_pairs(raws, ["sub-01", "sub-02"], "hbo", band=BAND)[:2]
     assert np.nanmean(np.diag(wide)) > 0.8
     assert np.nanmean(np.diag(narrow)) < 0.5
 
 
 def test_a_band_does_not_destroy_in_band_coupling():
     raws = _pair(shared_hz=0.1)
-    narrow, _ = compute_isc(raws, ["sub-01", "sub-02"], "hbo", band=BAND)
+    narrow, _ = compute_isc_pairs(raws, ["sub-01", "sub-02"], "hbo", band=BAND)[:2]
     assert np.nanmean(np.diag(narrow)) > 0.8
 
 

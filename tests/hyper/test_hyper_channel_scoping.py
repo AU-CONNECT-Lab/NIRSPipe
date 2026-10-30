@@ -76,11 +76,11 @@ def test_wtc_never_pairs_the_short_channel():
 
 
 def test_isc_reads_the_same_channels_as_wtc():
-    from nirspipe.pipeline.hyper.isc import compute_isc
+    from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
     subject_ids = ["sub-11", "sub-12"]
     raws = dict(zip(subject_ids, (_haemo("11"), _haemo("12"))))
-    _, ch_names = compute_isc(raws, subject_ids, "hbo")
+    _, ch_names = compute_isc_pairs(raws, subject_ids, "hbo")[:2]
     assert SHORT_PAIR not in ch_names
 
 
@@ -102,12 +102,12 @@ def _tagged(subject: str, drop: str | None = None) -> mne.io.Raw:
 
 
 def test_isc_matches_channels_by_label_not_position():
-    from nirspipe.pipeline.hyper.isc import compute_isc
+    from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
     # sub-B rejected S2_D2, so its remaining channels sit one position earlier than sub-A's
     subject_ids = ["sub-A", "sub-B"]
     raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S2_D2")}
-    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
+    isc_mat, ch_names = compute_isc_pairs(raws, subject_ids, "hbo")[:2]
 
     assert ch_names == ["S1_D1", "S2_D2", "S3_D3", "S4_D4"]
     diag = np.diag(isc_mat)
@@ -162,12 +162,12 @@ def test_the_axis_is_the_union_of_the_two_montages():
 
 
 def test_isc_keeps_a_channel_only_one_member_has():
-    from nirspipe.pipeline.hyper.isc import compute_isc
+    from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
     subject_ids = ["sub-A", "sub-B"]
     a, b = _tagged("11"), _tagged("12")
     b.drop_channels([c for c in b.ch_names if c.startswith("S1_D1")])
-    isc_mat, ch_names = compute_isc({"sub-A": a, "sub-B": b}, subject_ids, "hbo")
+    isc_mat, ch_names = compute_isc_pairs({"sub-A": a, "sub-B": b}, subject_ids, "hbo")[:2]
 
     assert "S1_D1" in ch_names                                 # sub-B lost it, the axis did not
     col = ch_names.index("S1_D1")
@@ -176,13 +176,13 @@ def test_isc_keeps_a_channel_only_one_member_has():
 
 
 def test_the_blanked_column_is_the_one_that_was_named():
-    from nirspipe.pipeline.hyper.isc import compute_isc
+    from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
     # rejections reach ISC on info["bads"], the way load_group_haemo leaves them and the
     # way the WTC path reads them
     subject_ids = ["sub-A", "sub-B"]
     raws = {"sub-A": _tagged("11"), "sub-B": _tagged("12", drop="S3_D3")}
-    isc_mat, ch_names = compute_isc(raws, subject_ids, "hbo")
+    isc_mat, ch_names = compute_isc_pairs(raws, subject_ids, "hbo")[:2]
     assert np.isnan(isc_mat[:, ch_names.index("S3_D3")]).all()
     assert not np.isnan(isc_mat[:, ch_names.index("S2_D2")]).any()
 
@@ -191,12 +191,12 @@ def test_the_blanked_column_is_the_one_that_was_named():
 
 def test_isc_refuses_two_sampling_rates():
     """WTC raises on this, and so does ISC rather than pairing sample i with sample i."""
-    from nirspipe.pipeline.hyper.isc import compute_isc
+    from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 
     a, b = _tagged("11"), _tagged("12")
     b.resample(b.info["sfreq"] / 2, verbose="error")
     with pytest.raises(ValueError, match="differ in sampling rate"):
-        compute_isc({"sub-A": a, "sub-B": b}, ["sub-A", "sub-B"], "hbo")
+        compute_isc_pairs({"sub-A": a, "sub-B": b}, ["sub-A", "sub-B"], "hbo")[:2]
 
 
 def test_an_unrecorded_bandpass_is_flagged():

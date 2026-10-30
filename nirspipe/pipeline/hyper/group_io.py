@@ -75,36 +75,6 @@ def load_group_haemo(
     return result
 
 
-def load_group_stage(
-    output_dir: Path, group: list[GroupEntry], desc: str,
-) -> dict[str, mne.io.Raw]:
-    """Each member's ``desc-<desc>`` derivative, for the members that have one.
-
-    ::
-
-        load_group_stage(out, group, "motcorrected")  ->  {"sub-01": Raw, ...}
-
-    Optional by design: the dyad raw report runs off BIDS and a member who has never been
-    through ``nirspipe`` simply contributes nothing here, which the caller draws as a
-    panel with no corrected side rather than as a failure. The task entity is matched, so a
-    subject with five tasks does not hand back another task's recording.
-    """
-    out: dict[str, mne.io.Raw] = {}
-    for entry in group:
-        paths = _for_task(
-            _member_sqm_files(output_dir, entry,
-                              f"{entry.subject_id}*_desc-{desc}_nirs.snirf"),
-            entry.task)
-        if not paths:
-            continue
-        try:
-            out[entry.subject_id] = read_snirf(paths[0], verbose=False)
-        except Exception:
-            logger.warning("%s: desc-%s could not be read", entry.subject_id, desc,
-                           exc_info=True)
-    return out
-
-
 def _raw_to_haemo(raw: mne.io.Raw, dpf: list, age: "float | None" = None) -> mne.io.Raw:
     from nirspipe.pipeline.dpf import as_ppf, resolve_dpf
 

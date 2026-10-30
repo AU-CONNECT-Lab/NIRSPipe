@@ -14,7 +14,7 @@ import pytest
 from nirspipe.io.groups import GroupEntry
 from nirspipe.pipeline.chromophores import with_hbt
 from nirspipe.pipeline.hyper._helpers import _long_by_label
-from nirspipe.pipeline.hyper.isc import compute_isc
+from nirspipe.pipeline.hyper.isc import compute_isc_pairs
 from nirspipe.pipeline.hyper.wtc import compute_wtc, wtc_band_mean
 from nirspipe.qc.metrics._helpers import long_channel_picks
 
@@ -102,7 +102,7 @@ def test_hbt_coherence_is_that_of_the_summed_pair(dyad):
 
 def test_hbt_isc_is_numpy_s_correlation_of_the_summed_pair(dyad):
     with_t = {sid: with_hbt(raw, ["hbt"]) for sid, raw in dyad.items()}
-    mat, names = compute_isc(with_t, ["sub-01", "sub-02"], "hbt")
+    mat, names = compute_isc_pairs(with_t, ["sub-01", "sub-02"], "hbt")[:2]
     for i, label in enumerate(names):
         a, b = (_summed_as_hbo(dyad[s]).get_data(picks=[f"{label} hbo"])[0]
                 for s in ("sub-01", "sub-02"))

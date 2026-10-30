@@ -20,9 +20,9 @@ import pandas as pd
 import pytest
 
 from nirspipe.pipeline.hyper.isc import (
-    _add_isc_null_columns, _isc_from_rows, _isc_matrix, compute_isc, compute_isc_pairs,
+    _add_isc_null_columns, _isc_from_rows, _isc_matrix, compute_isc_pairs,
 )
-from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed, whiten_raws
+from nirspipe.pipeline.hyper.whiten import ar_whiten_fixed
 from tests._synth import synth_raw
 
 N = 4000
@@ -159,18 +159,6 @@ def test_a_missing_draw_is_left_out_of_the_phase_null_rank():
     draws = np.array([0.1, np.nan, -0.2, 0.6]).reshape(4, 1, 1)
     _add_isc_null_columns(frame, np.array([[-0.5]]), ["S1_D1"], draws)
     assert frame["percentile"].iloc[0] == pytest.approx(200 / 3)
-
-
-def test_the_matrix_entry_point_agrees_with_the_table(dyad):
-    """`compute_isc` and `compute_isc_pairs` are two doors onto one computation; the report
-    draws one and writes the other, so a divergence would be invisible."""
-    ids = ["11", "12"]
-    white = whiten_raws(dyad, 2.0)
-    direct, names_a = compute_isc(white, ids, "hbo", skip_s=2.0)
-    via_table, names_b, _, _ = compute_isc_pairs(white, ids, "hbo", skip_s=2.0)
-
-    assert names_a == names_b
-    assert direct == pytest.approx(via_table, nan_ok=True)
 
 
 # ---- the lag search ----

@@ -329,7 +329,7 @@ def test_the_re_paired_isc_null_carries_a_level_for_the_size_of_r(tmp_path):
     def path_of(entities):
         return tmp_path / ("_".join(f"{k}-{v}" for k, v in sorted(entities.items())) + ".tsv")
 
-    _write_isc_null([], draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
+    _write_isc_null(draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
     table = pd.read_csv(path_of({"condition": "all", "nulldist": "pair", "statistic": "isc"}),
                         sep="\t")
     assert table["null_p95"].iloc[0] < 0.3
@@ -351,7 +351,7 @@ def test_the_re_paired_isc_percentile_ranks_the_size_of_r(tmp_path):
 
     pd.DataFrame({**keys, "r": [-0.95]}).to_csv(path_of({"statistic": "isc"}), sep="\t",
                                                 index=False)
-    _write_isc_null([], draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
+    _write_isc_null(draws, [], path_of, [], {}, [("talk", 0.0, 60.0)], 0, 0.0, None)
     table = pd.read_csv(path_of({"condition": "all", "nulldist": "pair", "statistic": "isc"}),
                         sep="\t")
     assert table["percentile"].iloc[0] == pytest.approx(100.0)

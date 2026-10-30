@@ -3,7 +3,7 @@
 Blanking rather than dropping is the whole point: every subject's matrix keeps the same
 shape and the same channel order, so a group analysis can stack subjects whose rejections
 differ. Dropping rows would make position mean something different in every file. It is the
-convention `compute_isc` follows too.
+convention `compute_isc_pairs` follows too.
 
 The failure these guard against is silent: a rejected channel that carried an ordinary
 looking correlation into `fc.tsv` would be drawn like any other, and a group analysis

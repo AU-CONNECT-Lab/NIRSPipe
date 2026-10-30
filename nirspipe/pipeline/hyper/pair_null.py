@@ -675,7 +675,6 @@ def run_pair_null(
     cond_frames, roi_cond_frames, cross_cond_frames = [], [], []
     draw_frames: list = []
     isc_draw_frames: list = []
-    isc_frames: list = []
     isc_cond_frames: list = []
     refused: dict[str, list[str]] = {}
 
@@ -868,7 +867,7 @@ def run_pair_null(
                        condition_windows_s=params["condition_windows_s"],
                        n_iter=len(used), pair_partners=sorted(used))
 
-    _write_isc_null(isc_frames, isc_cond_frames, isc_draw_frames, _path, sources,
+    _write_isc_null(isc_cond_frames, isc_draw_frames, _path, sources,
                     params, windows, isc_whiten_s, isc_max_lag_s, isc_band)
     return out_path
 
@@ -899,8 +898,8 @@ def _isc_settings_of(sidecar: Path, whiten_s: float, max_lag_s: float, band):
     return settings
 
 
-def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
-    """The true dyad's ISC in the shape the null summary ranks against, or None.
+def _isc_real(path: Path) -> "pd.DataFrame | None":
+    """The true dyad's per-condition ISC in the shape the null summary ranks against, or None.
 
     The real table carries `r`; the null's summary code is the coherence null's and keys on
     `coherence`, so the column is renamed rather than the code duplicated.
@@ -908,11 +907,10 @@ def _isc_real(path: Path, by_condition: bool) -> "pd.DataFrame | None":
     if not path.exists():
         return None
     real = pd.read_csv(path, sep="\t", dtype=LABEL_DTYPES).rename(columns={"r": "coherence"})
-    whole, by_cond = split_whole_run(real)
-    return by_cond if by_condition else whole
+    return split_whole_run(real)[1]
 
 
-def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
+def _write_isc_null(cond_frames, draw_frames, path_of, sources, params,
                     windows, isc_whiten_s, isc_max_lag_s, isc_band) -> None:
     """Summarise the re-paired correlations and write them beside the coherence tables.
 
@@ -921,24 +919,17 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
     """
     from nirspipe.pipeline.hyper.group_io import _hyper_sidecar
 
-    keys = ["chromophore", "sub1", "sub2", "label", "label2"]
+    group_keys = ["condition", "chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()
                   if k not in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi")}
     isc_params.update(isc_whiten_s=isc_whiten_s, isc_max_lag_s=isc_max_lag_s,
                       isc_band_hz=list(isc_band) if isc_band else None)
 
-    for bucket, entities, step, cond in (
-            (frames, {"nulldist": "pair", "statistic": "isc"},
-             "hyper_isc_pairnull", False),
-            (cond_frames, {"condition": "all", "nulldist": "pair", "statistic": "isc"},
-             "hyper_isc_bycondition_pairnull", True)):
-        if not bucket:
-            continue
-        real = _isc_real(path_of({"statistic": "isc"}), by_condition=cond)
-        group_keys = (["condition"] if cond else []) + keys
-        table = _average_iterations(bucket, group_keys, real=real)
+    if cond_frames:
+        real = _isc_real(path_of({"statistic": "isc"}))
+        table = _average_iterations(cond_frames, group_keys, real=real)
         # the level the connectogram compares |r| against, which null_p95 over signed r is not
-        stacked = pd.concat(bucket, ignore_index=True)
+        stacked = pd.concat(cond_frames, ignore_index=True)
         abs_p95 = (stacked["coherence"].abs().groupby([stacked[k] for k in group_keys],
                                                       sort=False, dropna=False)
                    .apply(lambda v: _p95(v.to_numpy(dtype=float)))
@@ -952,9 +943,10 @@ def _write_isc_null(frames, cond_frames, draw_frames, path_of, sources, params,
                          for k, v in stacked.groupby(group_keys, sort=False)["coherence"]}
             table["percentile"] = _null_percentile(
                 table, group_keys, magnitude, real.assign(coherence=real["coherence"].abs()))
-        path = write_tsv(table, path_of(entities))
-        _hyper_sidecar(path, step, sources,
-                       **({"conditions": [w[0] for w in windows]} if cond and windows else {}),
+        path = write_tsv(table, path_of({"condition": "all", "nulldist": "pair",
+                                         "statistic": "isc"}))
+        _hyper_sidecar(path, "hyper_isc_bycondition_pairnull", sources,
+                       **({"conditions": [w[0] for w in windows]} if windows else {}),
                        **isc_params)
         logger.info("re-paired ISC saved: %s", path)
 

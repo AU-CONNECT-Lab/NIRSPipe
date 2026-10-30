@@ -178,7 +178,7 @@ def write_isc_matrix(
     """Write the matrix the ISC panel is drawn from, so the numbers can leave the report.
 
     Both axes carry the montage's channel labels, which is how
-    :func:`~nirspipe.pipeline.hyper.isc.compute_isc` pairs the
+    :func:`~nirspipe.pipeline.hyper.isc.compute_isc_pairs` pairs the
     two brains: cell (i, j) is the first subject's channel i against the other's channel j.
     Rejected channels are blank rather than absent, so the file's shape is the montage's
     however many channels a given dyad lost.
@@ -820,7 +820,7 @@ def run_hyper_post(
 
     # ---- ISC, which is a cut and not a slice ----
     # The chromophores --wtc-chroma asks for, as the coherence. A window here is a real cut,
-    # unlike the coherence, which is sliced out of the whole-run transform; see `compute_isc`
+    # unlike the coherence, which is sliced out of the whole-run transform; see `compute_isc_pairs`
     # and `window_result`.
     isc_pair_frames: list = []
     isc_roi_frames: list = []
