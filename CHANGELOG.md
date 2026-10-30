@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
 
+### Fixed
+- The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it
+
 ## [0.80.0] - 2026-10-29
 
 ### Added

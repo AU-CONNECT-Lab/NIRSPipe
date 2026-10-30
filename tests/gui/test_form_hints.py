@@ -59,6 +59,13 @@ def test_the_mode_names_its_defaults_and_glm_opens_the_task_model():
     assert "--hrf-model" in rest.inactive and "--min-time" not in rest.inactive
 
 
+def test_the_noise_model_shows_in_every_mode_that_fits_a_regression():
+    assert "--noise-model" in _hints().inactive
+    for mode in ("glm", "rest", "denoise"):
+        assert "--noise-model" not in _hints(**{"--mode": mode}).inactive, mode
+    assert _hints(**{"--mode": "rest"}).placeholders["--noise-model"] == "ols (rest default)"
+
+
 def test_a_drift_setting_shows_only_beside_the_model_that_reads_it():
     assert "--drift-high-pass" not in _hints(**{"--mode": "glm"}).inactive
     poly = _hints(**{"--mode": "glm", "--drift-model": "polynomial"})

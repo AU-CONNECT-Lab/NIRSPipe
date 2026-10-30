@@ -21,9 +21,10 @@ class Hints:
         return asdict(self)
 
 
-_GLM_ONLY = ["--hrf-model", "--noise-model", "--stim-dur", "--events-path", "--contrast-file",
-             "--fir-delays"]
-_CONFOUNDS = ["--drift-model", "--drift-high-pass", "--drift-order", "--short-channel", "--fc"]
+_GLM_ONLY = ["--hrf-model", "--stim-dur", "--events-path", "--contrast-file", "--fir-delays"]
+# every mode's regression reads these, so only a run without a mode leaves them unread
+_CONFOUNDS = ["--drift-model", "--drift-high-pass", "--drift-order", "--short-channel",
+              "--noise-model", "--fc"]
 _CENSOR = ["--gvtd-censor-n-std", "--gvtd-min-epoch-s"]
 
 
