@@ -112,7 +112,7 @@ def _excluded_runs(times: np.ndarray, excluded) -> "list[tuple[float, float]]":
             for a, b in zip(edges[::2], edges[1::2])]
 
 
-def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHERENCE,
+def _arrow_mask(wtc_arr, sig, freqs, coi, arrow_min: float = ARROW_MIN_COHERENCE,
                 excluded=None):
     """Where a phase arrow is worth drawing: outside the cone, and above the noise.
 
@@ -120,13 +120,15 @@ def _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min: float = ARROW_MIN_COHE
 
       a 51 x 3962 map -> a boolean of the same shape, usually a few percent True
 
-    **Inside the cone**, because a coefficient built against the padding has a phase built
-    against the padding too. **Above the level**, the Monte Carlo one when
+    **Inside the cone**, by the rule the pipeline counts a cell by, because a coefficient
+    built against the padding has a phase built against the padding too. **Above the level**, the Monte Carlo one when
     ``--wtc-significance`` produced it and ``arrow_min`` otherwise, because the relative
     phase of two uncorrelated series is a uniformly random direction. **Outside the
     excluded columns**, the pairing's BAD_ time, which no average reads either.
     """
-    inside = freqs[:, None] >= freq_coi[None, :]
+    from nirspipe.pipeline.hyper.wtc import _outside_coi
+
+    inside = _outside_coi(freqs, coi)
     if sig is not None and len(np.asarray(sig)) == wtc_arr.shape[0]:
         above = wtc_arr >= np.asarray(sig, dtype=float)[:, None]
     else:
@@ -219,7 +221,7 @@ def build_wtc_channel(
     # thumbnails elsewhere do
     _phase_arrows(ax, times, freqs, wtc_data.get("phase"),
                   n_time=34, n_freq=13, scale=WTC_QUIVER_SCALE, width=0.0022,
-                  mask=_arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min, excluded))
+                  mask=_arrow_mask(wtc_arr, sig, freqs, coi, arrow_min, excluded))
 
     lead = (pair_label.split("×")[0].strip() or "the first member"
             if pair_label else "the first member")
@@ -310,8 +312,8 @@ def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
 
     fi = _grid(len(freqs), 13)
     ti = _grid(len(times), 34)
-    keep = _arrow_mask(wtc_arr, sig, freqs, freq_coi, arrow_min,
-                       wtc_data.get("excluded"))[np.ix_(fi, ti)]
+    keep = _arrow_mask(wtc_arr, sig, freqs, np.asarray(wtc_data["coi"], dtype=float),
+                       arrow_min, wtc_data.get("excluded"))[np.ix_(fi, ti)]
     if not keep.any():
         return []
 
@@ -383,12 +385,11 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
                "sig": wtc_data.get("sig"),
                "sig_source": wtc_data.get("sig_source"),
                "excluded": (None if wtc_data.get("excluded") is None
-                            else np.asarray(wtc_data["excluded"])[keep])}
-        coi = _freq_coi(np.asarray(wtc_data["coi"])[keep], freqs)
+                            else np.asarray(wtc_data["excluded"])[keep]),
+               "coi": np.asarray(wtc_data["coi"])[keep]}
         out[_pair_fname(label)] = {
             "x": [float(t0), float(t1)],
-            "annotations": fixed + _arrow_annotations(cut, freqs, times[keep], coi,
-                                                      arrow_min),
+            "annotations": fixed + _arrow_annotations(cut, freqs, times[keep], arrow_min),
         }
     return out or None
 
@@ -468,7 +469,7 @@ def build_wtc_map_interactive(
             line=dict(color="black", width=1.1 * _LIVE_LINE_SCALE),
         ))
 
-    arrows = _arrow_annotations(wtc_data, freqs, times, freq_coi, arrow_min)
+    arrows = _arrow_annotations(wtc_data, freqs, times, arrow_min)
 
     # ---- one span bar per block, one legend entry per condition ----
     shapes, seen = [], {}

@@ -203,7 +203,7 @@ def test_a_frequency_with_no_level_draws_no_arrow():
 
     wtc = np.array([[0.99, 0.99], [0.30, 0.60]])
     coi = np.full(2, 1e6)
-    mask = _arrow_mask(wtc, np.array([np.nan, 0.5]), FREQS[:2], 1.0 / coi)
+    mask = _arrow_mask(wtc, np.array([np.nan, 0.5]), FREQS[:2], coi)
 
     assert mask.tolist() == [[False, False], [False, True]]
 
@@ -217,8 +217,8 @@ def test_the_arrow_mask_prefers_the_level_over_the_flat_threshold():
 
     wtc = np.array([[0.30, 0.60], [0.30, 0.60]])
     coi = np.full(2, 1e6)
-    flat = _arrow_mask(wtc, None, FREQS[:2], 1.0 / coi, arrow_min=0.5)
-    against_null = _arrow_mask(wtc, np.array([0.2, 0.8]), FREQS[:2], 1.0 / coi, arrow_min=0.5)
+    flat = _arrow_mask(wtc, None, FREQS[:2], coi, arrow_min=0.5)
+    against_null = _arrow_mask(wtc, np.array([0.2, 0.8]), FREQS[:2], coi, arrow_min=0.5)
 
     assert flat.tolist() == [[False, True], [False, True]]
     # row 0's null is low, so both its cells clear it; row 1's is high and neither does
