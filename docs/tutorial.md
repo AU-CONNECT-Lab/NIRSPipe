@@ -4,13 +4,13 @@ title: Tutorial
 
 # Tutorial
 
-This page runs three dyads from a public hyperscanning dataset through every command, from download to the cohort null tests. It takes about 11 minutes on a desktop and 1.1 GB of disk. NIRSPipe must be [installed](installation.md) first.
+This page runs three dyads from a public hyperscanning dataset through every step of a dyadic study, from download to the cohort null tests. It takes about 11 minutes on a desktop and 1.6 GB of disk. NIRSPipe must be [installed](installation.md) first.
 
 The commands are written for a Mac or Linux terminal and Git Bash. In Windows PowerShell, end each continued line with a backtick (`` ` ``) instead of `\`.
 
 ## The data
 
-The InterGenSynchrony dataset (Moffat and Cross, OpenNeuro ds008192, CC0): adult pairs with caps over the left and right inferior frontal gyrus and temporo-parietal junction, drawing alone, drawing together twice, then a short collaborative task. The tutorial uses session 2 of dyads 1001, 1002 and 1003, 23 MB in all.
+The InterGenSynchrony dataset (Moffat and Cross, OpenNeuro ds008192, CC0): adult pairs with caps over the left and right inferior frontal gyrus and temporo-parietal junction, drawing alone, drawing together twice, then a short collaborative task. The tutorial uses session 2 of dyads 1001, 1002 and 1003, 23 MB in all. Its `channels.tsv` files mark some channels bad, and NIRSPipe keeps those marks: the reports list them as rejected with the reason `manual`, beside the channels the screening rejects ([Channel screening](workflows.md#channel-screening)).
 
 ## 1. Download
 
@@ -51,7 +51,6 @@ From here on the input dataset is `timed/marker_edited`.
 nirspipe timed/marker_edited derivatives participant \
     --participant-label 101 201 102 202 105 203 \
     --population adult --sci-threshold 0.8 \
-    --short-max-dist 12 \
     --mode denoise \
     --high-pass 0.01 --low-pass none \
     --resample-sfreq 5 \
@@ -59,11 +58,10 @@ nirspipe timed/marker_edited derivatives participant \
     --skip-bids-validation --nprocs 3
 ```
 
-About 2.5 minutes. `--population adult` sets the cardiac and respiration bands and the DPF for adults ([Population](usage.md#population)); short-channel regression runs by default, since the montage has short channels. Three settings are specific to this dataset:
+About 2.5 minutes. `--population adult` sets the cardiac and respiration bands and the DPF for adults ([Population](usage.md#population)); short-channel regression runs by default, since the montage has short channels. Two settings are specific to this dataset:
 
 | Option | Why |
 |---|---|
-| `--short-max-dist 12` | The short channels sit right at the 10 mm default edge, so they count as short only with it |
 | `--resample-sfreq 5` | The two caps of a pair recorded at slightly different rates, and the dyad analysis needs one rate |
 | `--by-condition` | Writes a report page per condition as well as per run |
 
@@ -95,7 +93,7 @@ Then the raw quality pages, in a tree of their own: each person's first, then ea
 nirspipe-qc timed/marker_edited qc participant \
     --participant-label 101 201 102 202 105 203 \
     --population adult --sci-threshold 0.8 \
-    --short-max-dist 12 --skip-bids-validation
+    --skip-bids-validation
 nirspipe-qc timed/marker_edited qc group \
     --pairs-csv pairs.csv --skip-bids-validation
 ```
