@@ -149,7 +149,7 @@ from nirspipe.qc.subject.trial_qc import (
 )
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import span_kind
+from nirspipe.utils.spans import mark_manual, mark_unselected, measured_from, span_kind
 from nirspipe.qc.metrics.windowed import (
     _in_scope, passing_mask_from_matrices, window_centers, windowed_key,
 )
@@ -1184,6 +1184,12 @@ def _section_trial_qc(
     """
     from nirspipe.qc.common.windows import markers_on_data_axis
 
+    # the user's stretches stay out of a trial's numbers, as they stay out of the run's
+    keep = getattr(config, "keep_spans", None) or []
+    if keep and getattr(config, "keep_spans_from", None):
+        keep = measured_from(raw_intensity, keep, config.keep_spans_from)
+    raw_intensity = mark_manual(mark_unselected(raw_intensity.copy(), keep),
+                                getattr(config, "bad_spans", None) or [])
     tmin = getattr(config, "epoch_tmin", None)
     tmax = getattr(config, "epoch_tmax", None)
     window = (f"{tmin:g} to {tmax:g} s from each onset" if tmin is not None and tmax is not None

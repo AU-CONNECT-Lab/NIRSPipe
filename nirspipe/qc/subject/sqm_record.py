@@ -68,7 +68,7 @@ from nirspipe.pipeline.chromophores import chroma_of, with_hbt
 from nirspipe.pipeline.glm import SHORT_CH_PREFIX
 from nirspipe.utils import is_optical_density, pair_of
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans, is_bad_span
+from nirspipe.utils.spans import bad_spans, is_bad_span, mark_manual, mark_unselected
 from nirspipe import __version__
 from nirspipe.qc.common.channel_table import channel_rows, heart_rate_note, save_channel_csv
 from nirspipe.qc.metrics.windowed import long_or_all, windowed_key
@@ -1229,9 +1229,14 @@ def compute_run_sections(
     windowed: dict[str, Any] = {}
 
     if raw_intensity is not None:
-        # the input carries no marks of its own; the run's rejections come from the sci file
-        bad_channels = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
+        # the input carries no marks of its own; the run's rejections and the user's stretches
+        # come from the sci file, the stretches left out here as screening left them out
+        sci_sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
+        bad_channels = list(sci_sidecar.get("bad_channels") or [])
         raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
+        params = sci_sidecar.get("parameters") or {}
+        mark_manual(mark_unselected(raw_intensity, params.get("keep_spans") or []),
+                    params.get("bad_spans") or [])
         _, all_short = long_short_channels(raw_intensity, sep_bands)
         if all_short and set(all_short) <= set(raw_intensity.info["bads"]):
             logger.info("every short channel was rejected, so the short-channel sections "

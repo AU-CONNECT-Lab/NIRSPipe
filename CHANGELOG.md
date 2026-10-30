@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - FC matrices, ROI means and seed maps keep long channels only, as ISC does. A channel between the short and long ranges had been kept
 - **Breaking**: `nirspipe-hyper-pairnull` refuses a real table written under `--bads-scope subject` that does not record the tasks it pooled: rerun `nirspipe-hyper`
 - Raw QC pages no longer embed copies of five figures the viewer loads from their own files, so each page is smaller
+- The pipeline's record and per-trial table leave `--keep-spans` and `--bad-spans` stretches out of heart rate, cardiac power and cardiac ratio, as raw QC and screening do
 
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
