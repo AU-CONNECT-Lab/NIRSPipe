@@ -43,7 +43,7 @@ pip install -e ".[gpu]"
 | `mne-bids` | ≥ 0.14 | BIDS read and write |
 | `pybids` | ≥ 0.16 | BIDS dataset querying |
 | `nilearn` | ≥ 0.10 | GLM design matrix and fitting |
-| `statsmodels` | ≥ 0.14 | The robust refit of `--noise-model ar_irls`, and the cohort tests' p corrections |
+| `statsmodels` | ≥ 0.14 | The robust refit of `--noise-model ar_irls`, and every `--p-correction` |
 | `nibabel` | ≥ 3.2 | Surface curvature for the brain renders |
 | `scipy` | ≥ 1.11 | Filters, spectra |
 | `numpy` | ≥ 1.24 | Numerics |
