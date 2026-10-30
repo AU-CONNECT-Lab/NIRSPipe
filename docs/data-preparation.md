@@ -23,10 +23,10 @@ The `_nirs.json` sidecar needs at least `SamplingFrequency`, `NIRSChannelCount`,
 
 | Optional file | Used for |
 |------|---------|
-| `participants.tsv` | Subject metadata; an `age` column is shown in the QC report. |
+| `participants.tsv` | Subject metadata. Its `age` column, in years, is what `--dpf age` and `--population infant` read to set each participant's DPF and head template. |
 | `*_events.tsv` | Not read: events come from the markers inside the SNIRF. `edit-markers` updates both, and `--events-path` gives the GLM a design table of its own. |
 | `*_channels.tsv` | A channel whose `status` is `bad` is marked bad in preprocessing ([Channel screening](workflows.md#channel-screening)). |
-| `*_optodes.tsv`, `*_coordsystem.json` | Optode positions, needed for the topographic maps and the 3D brain figures. |
+| `*_optodes.tsv`, `*_coordsystem.json` | Optode positions as BIDS records them. BIDS requires both, but `nirspipe` reads the positions from the SNIRF file itself ([Optode placement](workflows.md#optode-placement)). |
 
 ## Converting raw SNIRF
 
@@ -68,7 +68,7 @@ One operation per call; run it again on its own output to chain them. Dyad align
 ```bash
 nirspipe-prep edit-markers apply /data/bids /data/out --participant-label 01 02 \
     --rename "Stim1:tap_left" --rename "Stim2:tap_right"
-nirspipe-prep align /data/bids /data/out/marker_edited --group-csv pairs.csv
+nirspipe-prep align /data/out/marker_edited /data/out --group-csv pairs.csv
 ```
 
 ## Cropping
@@ -85,7 +85,8 @@ A cohort QC report over one window of time is a crop followed by the usual QC co
 nirspipe-prep crop /data/bids /data/deriv --participant-label 01 02 \
     --tmin 0 --tmax 30 --align trigger --trigger-name task_block_1
 nirspipe-qc /data/deriv/cropped /data/out participant --participant-label 01 02 \
-    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 --sci-threshold 0.8
+    --dpf 6.0 --cardiac-l-freq 0.7 --cardiac-h-freq 2.0 --resp-l-freq 0.1 --resp-h-freq 0.5 \
+    --sci-threshold 0.8
 nirspipe-qc /data/deriv/cropped /data/out group
 ```
 
