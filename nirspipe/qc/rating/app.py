@@ -1,7 +1,9 @@
 import json
 import math
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -22,19 +24,34 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def _read_json(path: Path) -> dict:
-    """A JSON object from disk, or an empty one when the file is missing or unreadable."""
+def _read_json(path: Path, strict: bool = False) -> dict:
+    """A JSON object from disk, or {} when it is missing, or unreadable unless ``strict``."""
     if not path.exists():
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except Exception as exc:
+        if strict:
+            raise ValueError(_unreadable(path, exc)) from exc
         return {}
+    if not isinstance(data, dict) and strict:
+        raise ValueError(_unreadable(path, "not a JSON object"))
     return data if isinstance(data, dict) else {}
 
 
+def _unreadable(path: Path, why) -> str:
+    return (f"{path} could not be read ({why}), so saving would drop every other page's "
+            "entries in it. Fix the file or move it aside, then save again")
+
+
 def _write_json(path: Path, data: dict) -> None:
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    # through a temporary file, so a save cut short leaves the old file whole
+    tmp = path.with_name(f".{path.name}.{uuid4().hex[:8]}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _read_rating_file(path: Path) -> dict:
@@ -225,7 +242,7 @@ class _ReportViewer:
 
 def _merge_into(path: Path, key: str, data: dict) -> None:
     """Write one page's entry into a file the task's other pages and its dyad page share."""
-    existing = _read_json(path)
+    existing = _read_json(path, strict=True)
     if key in data:
         existing[key] = data[key]
     _write_json(path, existing)
@@ -318,11 +335,11 @@ class HyperRatingApp(_ReportViewer):
                 for sid in self.subject_ids}
 
     def _save_decisions(self, data: dict) -> None:
+        # every member's file read before any is written, so one unreadable file saves none
+        files = {sid: _read_json(self._decisions_path(sid), strict=True) for sid in data}
         for sid, ch_states in data.items():
-            path = self._decisions_path(sid)
-            existing = _read_json(path)
-            existing[HYPER_KEY] = dict(ch_states)
-            _write_json(path, existing)
+            files[sid][HYPER_KEY] = dict(ch_states)
+            _write_json(self._decisions_path(sid), files[sid])
 
     def _setup_decision_routes(self, app: Flask) -> None:
         @app.route("/load_decisions", methods=["GET"])

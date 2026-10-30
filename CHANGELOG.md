@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - With `--fc`, no bandpass and corrupted spans, the matrix before the regression was named `desc-filled`, a stage with no file, and credited to `desc-errts`
 - A `--roi-mapping` or `--bids-filter-file` file holding non-ASCII text, or saved with a byte-order mark, failed to load on Windows machines whose locale is not UTF-8
 - The re-paired null ignored the real run's separation-band flags, `--no-align` and, under `--bads-scope subject`, its task selection, so it could be drawn on other channels than its real table
+- A rating viewer saving into a channel-decisions or span file it could not read, such as one cut short by an interrupted save, wiped every other page's entries in it
 
 ## [0.80.0] - 2026-10-29
 

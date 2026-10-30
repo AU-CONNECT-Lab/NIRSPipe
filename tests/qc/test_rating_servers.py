@@ -97,6 +97,56 @@ def test_two_runs_of_a_task_keep_each_other_s_decisions_and_the_dyad_s(tmp_path)
         "_hyper": {"S3_D3 hbo": "bad"}, run1: {"S1_D1 hbo": "bad"}, run2: {"S2_D2 hbo": "good"}}
 
 
+# ---- a shared decisions file is never written over unread ----
+
+_TRUNCATED = '{"sub-01_task-rest_run-02": {"S2_D2 hbo": "go'
+
+
+def test_a_raw_page_will_not_save_over_a_decisions_file_it_cannot_read(tmp_path):
+    """Read as empty, the save would write back this run's entry and drop every other one."""
+    run1 = "sub-01_task-rest_run-01"
+    page = RawRatingApp(_raw_page(tmp_path, run1), tmp_path).app.test_client()
+    path = channel_decisions_path(tmp_path, "01", task="rest")
+    path.write_text(_TRUNCATED, encoding="utf-8")
+
+    r = page.post("/save_channel_decisions", json={run1: {"S1_D1 hbo": "bad"}})
+    assert r.status_code == 500 and path.name in r.get_json()["message"]
+    assert path.read_text(encoding="utf-8") == _TRUNCATED
+
+
+def test_the_dyad_page_will_not_save_over_a_decisions_file_it_cannot_read(tmp_path):
+    html = tmp_path / "group-G1" / report_name("group-G1_task-rest", desc="raw")
+    app = HyperRatingApp(html, tmp_path, ["sub-01", "sub-02"])
+    path = app._decisions_path("sub-01")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_TRUNCATED, encoding="utf-8")
+
+    r = app.app.test_client().post("/save_hyper_decisions",
+                                   json={"sub-02": {"S1_D1 hbo": "bad"},
+                                         "sub-01": {"S2_D2 hbo": "bad"}})
+    assert r.status_code == 500 and path.name in r.get_json()["message"]
+    assert path.read_text(encoding="utf-8") == _TRUNCATED
+    # nor half of a save: the readable member's file is not written either
+    assert not app._decisions_path("sub-02").exists()
+
+
+def test_a_save_that_fails_midway_leaves_the_old_file_whole(tmp_path, monkeypatch):
+    run1 = "sub-01_task-rest_run-01"
+    page = RawRatingApp(_raw_page(tmp_path, run1), tmp_path).app.test_client()
+    path = channel_decisions_path(tmp_path, "01", task="rest")
+    before = json.dumps({"_hyper": {"S3_D3 hbo": "bad"}})
+    path.write_text(before, encoding="utf-8")
+
+    def _fail(*args, **kwargs):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr("os.replace", _fail)
+    r = page.post("/save_channel_decisions", json={run1: {"S1_D1 hbo": "bad"}})
+    assert r.status_code == 500
+    assert path.read_text(encoding="utf-8") == before
+    assert not [p for p in path.parent.iterdir() if p.name.endswith(".tmp")]
+
+
 def test_rate_raw_opens_every_report_the_selection_matches(tmp_path):
     from nirspipe.cli.rate import open_raw
 
