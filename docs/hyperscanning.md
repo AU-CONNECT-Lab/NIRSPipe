@@ -12,7 +12,7 @@ flowchart TD
     TREE(["nirspipe tree<br/><small>each member's desc-preproc</small>"])
 
     PAIRS --> HYP
-    TREE --> HYP["nirspipe-hyper<br/><small>align · channel set · WTC · ISC<br/>phase-scrambled null</small>"]
+    TREE --> HYP["nirspipe-hyper<br/><small>align · channel set · WTC · ISC<br/>phase-scrambled null, if asked for</small>"]
     HYP --> REAL(["per-dyad tables and reports<br/><small>group-&lt;id&gt;/</small>"])
 
     REAL --> PN["nirspipe-hyper-pairnull<br/><small>re-paired null, per condition</small>"]
@@ -21,6 +21,7 @@ flowchart TD
     DRAWS -.->|"next nirspipe-hyper run:<br/>condition arrow levels"| HYP
 
     DRAWS --> GN["nirspipe-hyper-groupnull<br/><small>channels averaged, per occasion and cohort</small>"]
+    REAL -.->|"phase-scrambled draws"| GN
     GN --> COH(["cohort tables and page<br/><small>tree root</small>"])
 
     REAL --> MERGE["nirspipe-hyper-merge"]
