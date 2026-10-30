@@ -13,7 +13,7 @@ A BIDS-compatible fNIRS preprocessing, postprocessing, hyperscanning, and QC pip
 | `participant` | Preprocessing in a fixed order: optical density, windowed channel screening, motion correction, Beer-Lambert. Then postprocessing when `--mode` is given: `denoise` (bandpass, resampling, optional confound regression), `glm` (first-level GLM) or `rest` (confound regression, ALFF, functional connectivity, which `--combine-runs` also computes over a task's runs joined). |
 | `group` | Cohort pages over the per-run quality records, and over the per-dyad ones where the tree holds dyads. |
 
-Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) specification, every file with a provenance sidecar. Each run gets an HTML QC report with a provenance graph and a generated Methods paragraph. Raw-recording, cohort and dyad QC reports, wavelet coherence and inter-subject correlation for dyads with two nulls, a rating viewer and a desktop GUI complete the package.
+Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/en/stable/derivatives/introduction.html) specification, every data file with a provenance sidecar. Each run gets an HTML QC report with a provenance graph and a generated Methods paragraph. Raw-recording, cohort and dyad QC reports, wavelet coherence and inter-subject correlation for dyads with two nulls, a rating viewer and a GUI that runs in your browser complete the package.
 
 ![NIRSPipe overview: inputs, preprocessing, postprocessing, hyperscanning, quality control, and outputs](assets/nirspipe_overview.jpg)
 
@@ -59,7 +59,7 @@ nirspipe /data/bids /data/derivatives participant \
 
 ### Hyperscanning
 
-Wavelet coherence (WTC) and inter-subject correlation (ISC) for every dyad, read from the tree `nirspipe` wrote. The dyads are listed in a pairs table (`group_id,subject_id,task`, one row per member) and the regions in a JSON file mapping each region label to its channel names. Each measure gets its own phase-scrambled null:
+Wavelet coherence (WTC) and inter-subject correlation (ISC) for every dyad, read from the tree `nirspipe` wrote. The dyads are listed in a pairs table (`group_id,subject_id,task`, one row per member) and the regions in a JSON file mapping each region label to its source-detector pairs. Each measure gets its own phase-scrambled null:
 
 ```bash
 nirspipe-hyper /data/derivatives /data/hyper group \
@@ -68,7 +68,7 @@ nirspipe-hyper /data/derivatives /data/hyper group \
   --wtc-phase-null 100 --isc-phase-null 100
 ```
 
-The re-paired null pairs each member with people from the other dyads who did the same task, for both measures; the cohort test then ranks each dyad's mean against both nulls:
+The re-paired null replaces each dyad's second member with people from the other dyads who did the same task, for both measures; the cohort test then ranks each dyad's mean against both nulls:
 
 ```bash
 nirspipe-hyper-pairnull /data/derivatives /data/hyper group \
@@ -91,7 +91,7 @@ nirspipe-hyper-groupnull /data/hyper group --task-label main \
 | `nirspipe-hyper` | Dyad wavelet coherence and inter-subject correlation, with a phase-scrambled null |
 | `nirspipe-hyper-pairnull`, `-groupnull`, `-band`, `-index`, `-merge` | The re-paired null, cohort tests, re-banding, the dyad index, merged tables |
 | `nirspipe-rate` | Rating viewers for the QC reports |
-| `nirspipe-gui` | Desktop interface |
+| `nirspipe-gui` | GUI, a local web app in your browser |
 
 Every flag is listed in [Usage](https://au-connect-lab.github.io/NIRSPipe/usage.html).
 
