@@ -224,24 +224,27 @@ def cmd_participant(
         raise SystemExit(1)
 
 
-def _corrected(raws: dict, params: dict) -> dict:
-    """Each member's recording through the motion correction its raw QC record names, as optical density."""
-    from nirspipe.pipeline.motion import correct_motion
-    from nirspipe.qc.metrics._helpers import as_optical_density
+def _member_stages(output_dir: Path, record_path: Path) -> dict:
+    """``{desc: path}`` of the stage files raw QC prepared a member's record from."""
+    from nirspipe.exceptions import StageError
+    from nirspipe.io.derivatives import RAW_QC_STAGES
+    from nirspipe.qc.subject.sqm_record import record_label, scan_runs
 
-    out = {}
-    for sid, raw in raws.items():
-        method = params[sid].get("motion_correction") or "none"
-        if method == "none":
-            continue
-        try:
-            out[sid] = correct_motion(as_optical_density(raw), method=method,
-                                      std_thresh=params[sid].get("motion_std_thresh"),
-                                      iqr_factor=params[sid].get("wavelet_iqr"))
-        except Exception:
-            logger.warning("%s: %s could not be run; the motion panel shows the recording "
-                           "before correction only", sid, method, exc_info=True)
-    return out
+    label = record_label(record_path)
+    nirs = Path(output_dir) / RAW_QC_STAGES / record_path.relative_to(output_dir).parent
+    stages = scan_runs(nirs).get(label) or {}
+    if "sci" not in stages:
+        raise StageError(f"{label}: no stage files under {nirs}; run `nirspipe-qc ... "
+                         f"participant` on {label.split('_')[0]} again")
+    if "preproc" not in stages:
+        raise StageError(f"{label}: its raw QC could not convert it to haemoglobin, so it has "
+                         f"no dyad page; its own raw page says why")
+    return stages
+
+
+def _unmarked(raw):
+    raw.info["bads"] = []
+    return raw
 
 
 def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
@@ -256,25 +259,28 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         normalize_raws,
         trim_to_shortest,
     )
-    from nirspipe.pipeline.hyper.group_io import _raw_to_haemo, load_group_raw_bids
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.pipeline.hyper.group_io import load_group_raw_bids
     from nirspipe.pipeline.dpf import dpf_caveat, wavelengths
     from nirspipe.pipeline.hyper.group_quality import load_group_sqm_raw, member_raw_record
     from nirspipe.qc.hyper.hyper_report import build_hyper_report
     from nirspipe.qc.metrics._helpers import bands_from_record
+    from nirspipe.qc.subject.sqm_record import _uncorrected_haemo
     from nirspipe.utils.lineage import path_from
-    from nirspipe.utils.spans import mark_manual, mark_unselected
 
     raws_cw = load_group_raw_bids(s.bids_dir, members)
     records = {e.subject_id: member_raw_record(s.output_dir, e, raws_cw[e.subject_id])
                for e in members}
     params = {sid: record["parameters"] for sid, (_path, record) in records.items()}
-    # each member on its own head and with its own reviewer stretches, as its record says
-    for sid, raw in raws_cw.items():
-        hold_placement(raw, place_optodes(path_from(raw), space_of(params[sid]["template"])))
-        mark_manual(mark_unselected(raw, params[sid].get("keep_spans") or []),
-                    params[sid].get("bad_spans") or [])
-    # the aux group rides only in the source file, on each member's own clock. A file
-    # that will not read costs the IMU rows and not the report
+    stages = {sid: _member_stages(s.output_dir, path) for sid, (path, _record) in records.items()}
+    # each member as its raw QC prepared it: screened, its stretches marked, then corrected.
+    # Unmarked, since the page marks each member's rejections from its record
+    before = {sid: _unmarked(read_snirf(st["sci"])) for sid, st in stages.items()}
+    full_after = {sid: _unmarked(read_snirf(st["motcorrected"])) for sid, st in stages.items()
+                  if params[sid].get("motion_correction", "none") != "none"
+                  and "motcorrected" in st}
+    # the aux group rides only in the source file, on each member's own clock, zero at its
+    # first sample as the stage files' are. A file that will not read costs the IMU rows
     try:
         member_imu = {sid: imu_traces(*read_aux_snirf(path_from(raw)))
                       for sid, raw in raws_cw.items() if path_from(raw)}
@@ -284,7 +290,12 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         member_imu = {}
     sqm_data = load_group_sqm_raw(s.output_dir, members, raws_cw, records, session=ses)
     # each member converted with the factors its own raw QC used
-    raws_haemo = {sid: _raw_to_haemo(r, params[sid]["dpf"]) for sid, r in raws_cw.items()}
+    raws_haemo = {sid: _unmarked(_uncorrected_haemo(st)) for sid, st in stages.items()}
+    # each member on its own head, as its record says
+    for sid, raw in raws_cw.items():
+        placement = place_optodes(path_from(raw), space_of(params[sid]["template"]))
+        hold_placement(before[sid], placement)
+        hold_placement(raws_haemo[sid], placement)
     # the dyad page says it the way it says a member screening could not judge
     for sid, raw in raws_cw.items():
         age = params[sid].get("dpf_age")
@@ -306,14 +317,13 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
     if s.normalize:
         aligned_raws = normalize_raws(aligned_raws)
     # the motion panel needs optical density, which the haemoglobin conversion above
-    # has already left behind, so the intensity copy is cut to the same window rather
+    # has already left behind, so the optical density is cut to the same window rather
     # than aligned a second time; its corrected side is each member's own correction
-    intensity_raws = align_like(raws_cw, aligned_raws)
-    full_after = _corrected(raws_cw, params)
+    intensity_raws = align_like(before, aligned_raws)
     after_raws = align_like(full_after, aligned_raws) if full_after else {}
-    # the panel's IMU, moved by the same shift the intensity copy was cut by
+    # the panel's IMU, moved by the same shift the optical density was cut by
     try:
-        imu = align_imu_like(member_imu, raws_cw, aligned_raws)
+        imu = align_imu_like(member_imu, before, aligned_raws)
     except Exception:
         logger.warning("%s: IMU could not be aligned; the motion panel has no IMU rows",
                        gid, exc_info=True)
@@ -330,7 +340,7 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         after_raws=after_raws,
         imu=imu,
         # the uncut recordings, so the motion panel filters before it cuts
-        full_raws=raws_cw,
+        full_raws=before,
         full_after=full_after,
         output_dir=s.output_dir,
         sep_bands=sep_bands,

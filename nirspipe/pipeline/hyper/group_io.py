@@ -16,7 +16,6 @@ from nirspipe.io.derivatives import write_sidecar_json
 from nirspipe.io.groups import GroupEntry, member_snirfs
 from nirspipe.io.snirf import read_snirf
 from nirspipe.qc.boilerplate.notes import section_note
-from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.utils import is_optical_density
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.lineage import stage_of
@@ -73,14 +72,6 @@ def load_group_haemo(
             )
         result[entry.subject_id] = raw
     return result
-
-
-def _raw_to_haemo(raw: mne.io.Raw, dpf: list, age: "float | None" = None) -> mne.io.Raw:
-    from nirspipe.pipeline.dpf import as_ppf, resolve_dpf
-
-    raw_od = as_optical_density(raw)
-    return mne.preprocessing.nirs.beer_lambert_law(raw_od,
-                                                   ppf=as_ppf(resolve_dpf(dpf, raw_od, age)))
 
 
 def _for_task(paths: list[Path], task: str) -> list[Path]:

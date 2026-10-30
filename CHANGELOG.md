@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- The raw QC dyad page draws each member's own prepared files from `stages/`, so its corrected side matches the member's page; a tree without them is refused
 - mALFF and zALFF are standardised against the run's good long channels only. Under `--short-channel none` or `mean`, a short channel's scalp amplitude had entered the reference
 - FC matrices, ROI means and seed maps keep long channels only, as ISC does. A channel between the short and long ranges had been kept
 - **Breaking**: `nirspipe-hyper-pairnull` refuses a real table written under `--bads-scope subject` that does not record the tasks it pooled: rerun `nirspipe-hyper`
