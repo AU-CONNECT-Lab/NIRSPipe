@@ -15,6 +15,7 @@ from nirspipe.qc.metrics.coupling import _heart_rate_metrics
 from nirspipe.qc.subject.sqm_record import raw_sections
 
 from tests._synth import CARDIAC_FREQ, _channel_layout, make_bids_dataset, synth_raw
+from tests.figure_accuracy._payload import one_figure
 
 # 3 beats per minute
 TOLERANCE_HZ = 0.05
@@ -170,4 +171,5 @@ def test_the_raw_report_says_when_the_band_misses_the_pulse(tmp_path):
     assert data["summary"]["heart_rate_outside"] is True
     assert any("outside the cardiac band (1.5 to 2.4 Hz)" in n for n in data["notes"])
     # the axis reaches past the band's top, so the band is drawn whole
-    assert data["psd"]["figure"]["layout"]["xaxis"]["range"] == [0, pytest.approx(2.6)]
+    psd = one_figure(page.parent / data["figure_paths"]["psd"]["src"])
+    assert psd["layout"]["xaxis"]["range"] == [0, pytest.approx(2.6)]

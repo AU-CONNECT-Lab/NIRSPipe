@@ -67,11 +67,9 @@ from nirspipe.io.optode_space import placement_of, recorded_regions
 from nirspipe.io.tables import read_table
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-import html as _html
 
 import mne
 import mne.io
@@ -259,18 +257,6 @@ def _no_epoch_reason(
 # ---------------------------------------------------------------------------
 # Serialisation helpers
 # ---------------------------------------------------------------------------
-
-def _save_mpl_fig(fig, path: Path) -> None:
-    import matplotlib.figure
-    if not isinstance(fig, matplotlib.figure.Figure):
-        if hasattr(fig, "canvas") and hasattr(fig.canvas, "figure"):
-            fig = fig.canvas.figure
-        elif hasattr(fig, "fig"):
-            fig = fig.fig
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
-
 
 def _save_plotly_html(fig, path: Path, div_id: str | None = None, extra_css: str = "",
                       views: "dict | None" = None, extra_js: str = "") -> tuple[str, int]:
@@ -1527,23 +1513,6 @@ def _section_excluded(record: dict, nirs_dir: Path, sqm_label: "str | None",
     }
 
 
-def _record_pair(record: dict, before: str, after: str, key: str) -> "tuple[dict, dict]":
-    """One per-channel metric at two sections of the record, as ``(before, after)``.
-
-    ``_split_scalars`` files every per-channel dict under ``per_channel``, so that is where
-    these live::
-
-        _record_pair(rec, "preproc", "errts", "cnr_per_channel")
-        -> (rec["per_channel"]["preproc"]["cnr_per_channel"], ... same for "errts")
-
-    Either half is ``{}`` when that section or that key is absent, which is what a run
-    without the second stage looks like; the caller draws nothing rather than half a figure.
-    """
-    per_channel = record.get("per_channel") or {}
-    return ((per_channel.get(before) or {}).get(key) or {},
-            (per_channel.get(after) or {}).get(key) or {})
-
-
 def _load_stage_raw(
     out_dir: Path | None,
     sqm_label: str | None,
@@ -2158,54 +2127,6 @@ def _section_rest(
             "rest_fc_roi_path": fc_roi_path, "rest_fc_roi_h": fc_roi_h,
             "rest_fc_seed_path": fc_seed_path,
             "rest_fc_seed_h": fc_seed_h}
-
-
-def _glm_betas_table(df: "Any", conditions: list[str]) -> str:
-    """Return an HTML table of per-channel GLM betas (theta)."""
-    df = df[df["Contrast"].isin(conditions)].copy()
-    if df.empty:
-        return None
-
-    df["pair"] = df["ch_name"].str.replace(r"\s+(hbo|hbr)$", "", regex=True)
-    df["chroma"] = df["ch_name"].str.extract(r"(hbo|hbr)$")[0]
-
-    val_col = "theta" if "theta" in df.columns else (
-              "Coef." if "Coef." in df.columns else None)
-    if val_col is None:
-        return None
-
-    try:
-        piv = df.pivot_table(index=["pair", "chroma"], columns="Contrast",
-                             values=val_col, aggfunc="mean")
-        piv = piv.reindex(columns=conditions)
-    except Exception:
-        return None
-
-    th_cells = "".join(f"<th>{_html.escape(c)}</th>" for c in conditions)
-    header = f"<tr><th>Channel</th><th>Type</th>{th_cells}</tr>"
-
-    rows = []
-    for (pair, chroma), row in piv.iterrows():
-        td_vals = []
-        for v in row:
-            if v != v:  # NaN
-                td_vals.append("<td>—</td>")
-            else:
-                cls = "pos" if v > 0 else "neg"
-                td_vals.append(f'<td class="{cls}">{v:.3e}</td>')
-        type_cls = "hbo" if chroma == "hbo" else "hbr"
-        rows.append(
-            f'<tr><td>{_html.escape(str(pair))}</td>'
-            f'<td class="chroma-{type_cls}">{chroma}</td>'
-            + "".join(td_vals) + "</tr>"
-        )
-
-    return (
-        '<table class="glm-beta-table">'
-        f"<thead>{header}</thead>"
-        "<tbody>" + "".join(rows) + "</tbody>"
-        "</table>"
-    )
 
 
 # ---------------------------------------------------------------------------

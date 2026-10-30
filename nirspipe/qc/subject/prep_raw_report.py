@@ -462,7 +462,6 @@ def _process_run(
     # ── file: carpet GVTD ──────────────────────────────────────────────────
     #   an iframe rather than inlined like the panels above: the carpet is a channels x 2000
     #   heatmap, and every run of the viewer would carry one in the page itself
-    carpet_inline: dict = {}
     # named out here because the per-channel motion figures below read them too: a channel's
     # GVTD row has to be its own separation class's, the same blocks the carpet drew
     gvtd_blocks: "list[tuple[str, list[str]]]" = []
@@ -505,10 +504,8 @@ def _process_run(
         if roi_map:
             # the set whose rows the ROI strip groups, named by the note under the heading
             figure_paths["carpet"]["roi_set"] = gvtd_set
-        carpet_inline = {"figure": fig.to_dict()}
 
     # ── file: SCI / PSP ────────────────────────────────────────────────────────
-    sci_psp_inline: dict = {}
     with guard("SCI / PSP", errors, label):
         # the CV row too, off the same windowed pass and the same grid, as the subject
         # report's copy of this panel draws it
@@ -523,7 +520,6 @@ def _process_run(
         fname = fig_name("scipsp")
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["sci_psp"] = {"src": f"figures/{fname}", "h": h}
-        sci_psp_inline = {"figure": fig.to_dict()}
 
     # ── file: head slider ──────────────────────────────────────────────────────
     # the subject report's own, off the same matrices as the panel above
@@ -534,7 +530,6 @@ def _process_run(
         figure_paths["head_slider"] = slider
 
     # ── file: PSD mean ─────────────────────────────────────────────────────────
-    psd_inline: dict = {}
     with guard("PSD", errors, label):
         fig = build_psd_mean_figure(raw, cardiac=(cardiac_l_freq, cardiac_h_freq),
                                     resp=(resp_l_freq, resp_h_freq), sep_bands=sep_bands,
@@ -543,20 +538,16 @@ def _process_run(
             fname = fig_name("psd")
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["psd"] = {"src": f"figures/{fname}", "h": h}
-            psd_inline = {"figure": fig.to_dict()}
 
     # ── file: trigger timeline ─────────────────────────────────────────────────
-    trigger_timeline_inline: dict = {}
     with guard("Trigger timeline", errors, label):
         fig = build_trigger_timeline_single(markers, cond_colors_)
         if fig:
             fname = fig_name("trigger")
             h     = _save_figure_html(fig, fig_dir / fname)
             figure_paths["trigger"] = {"src": f"figures/{fname}", "h": h}
-            trigger_timeline_inline = {"figure": fig.to_dict()}
 
     # ── file: channel quality summary ──────────────────────────────────────────
-    ch_summary_inline: dict = {}
     with guard("Channel quality summary", errors, label):
         # long block first with the divider between the two, from the same helper the
         # subject report uses, so the grid and the per-channel table below it read in one
@@ -567,7 +558,6 @@ def _process_run(
         fname = fig_name("chsummary", suffix="qc")
         h     = _save_figure_html(fig, fig_dir / fname)
         figure_paths["ch_summary"] = {"src": f"figures/{fname}", "h": h}
-        ch_summary_inline = {"figure": fig.to_dict()}
 
     # the epoch figures need concrete bounds; per-trial QC reads None as "use event duration"
     fig_tmin = _EPOCH_TMIN if epoch_tmin is None else epoch_tmin
@@ -740,7 +730,7 @@ def _process_run(
                 fname = fig_name("trialqc", suffix="qc")
                 h     = _save_figure_html(fig, fig_dir / fname)
                 figure_paths["trial_qc"] = {"src": f"figures/{fname}", "h": h}
-                trial_qc_inline = {"figure": fig.to_dict(), "n_trials": len(labels)}
+                trial_qc_inline = {"n_trials": len(labels)}
             elif not labels:
                 note(notes, label, "no event window fits inside the recording, so "
                                    "per-trial quality was skipped")
@@ -829,11 +819,6 @@ def _process_run(
                       else section_note("raw.screened_every")),
         },
         "ts":           ts_inline,
-        "carpet_gvtd":  carpet_inline,
-        "sci_psp":          sci_psp_inline,
-        "psd":              psd_inline,
-        "ch_summary":       ch_summary_inline,
-        "trigger_timeline": trigger_timeline_inline,
         "trial_qc":         trial_qc_inline,
         # already labelled, formatted and coloured by the metric registry, so the views
         # print these and carry no copy of the cutoffs. The panels read the record's own
@@ -876,9 +861,6 @@ def _process_run(
         # one entry per channel that had trials to draw, for this panel's own picker
         "trial_images":  trial_img_pairs,
         "figure_paths":  figure_paths,
-        # the GUI builds its per-channel figures on demand and needs the run's own band to
-        # shade the PSD the way the ones built here are shaded
-        "cardiac":       [cardiac_l_freq, cardiac_h_freq],
         # what this run failed at and what it left out, already collapsed and ready to
         # print; the viewer renders these itself, in JavaScript
         "errors": collapse_messages(errors),

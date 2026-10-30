@@ -9,6 +9,7 @@ import pytest
 from nirspipe.io.derivatives import write_dataset_description
 from nirspipe.qc.subject.prep_raw_report import _process_run, build_prep_raw_report
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
+from tests.figure_accuracy._payload import one_figure
 
 ROI_MAP = {"B": ["S1_D1 hbo"], "A": ["S3_D3 hbo"]}
 
@@ -46,7 +47,7 @@ def pages(tmp_path_factory):
 def test_the_run_page_s_carpet_draws_the_strip_and_names_the_rois(pages):
     page, _ = pages
     data = _page_data(page)
-    fig = data["carpet_gvtd"]["figure"]
+    fig = one_figure(page.parent / data["figure_paths"]["carpet"]["src"])
     assert _legend_squares(fig)[:2] == ["A", "B"]
     assert [sh for sh in fig["layout"]["shapes"] if sh["type"] == "rect" and sh["x1"] < -0.015]
     assert data["figure_paths"]["carpet"]["roi_set"] == "long"
@@ -64,7 +65,7 @@ def test_every_condition_page_names_the_set_the_strip_groups(pages):
 def test_without_a_map_the_carpet_has_no_strip_and_no_note(tmp_path):
     out, run = _run(tmp_path)
     payload, _ = _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0])
-    fig = payload["carpet_gvtd"]["figure"]
+    fig = one_figure(out / "sub-01" / payload["figure_paths"]["carpet"]["src"])
     assert not _legend_squares(fig)
     assert not [sh for sh in fig["layout"]["shapes"] if sh["type"] == "rect" and sh["x1"] < -0.015]
     assert "roi_set" not in payload["figure_paths"]["carpet"]

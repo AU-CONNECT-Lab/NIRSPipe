@@ -452,7 +452,7 @@ def condition_view_table(fig, spans: "list[tuple[str, float, float]]") -> "dict 
 
 # figures a condition page keeps whole, because they describe the run rather than any one
 # condition. The optode layout is the montage; the event timeline is the run's schedule.
-CONDITION_PAGE_FIGURES = ("layout", "trigger")
+CONDITION_PAGE_FIGURES = ("trigger",)
 
 
 def figure_leaks(figure_paths: dict, slug: str) -> "list[str]":
@@ -760,9 +760,6 @@ def condition_payloads(
             "notes":  (payload.get("channels") or {}).get("notes") or [],
         }
         d["ts"] = _narrowed_ts(payload.get("ts"), window)
-        # not read by the viewer and heavy to carry: it draws these from `figure_paths`
-        d["carpet_gvtd"] = {}
-        d["psd"] = {}
 
         # the run's, until this page writes its own; carried over it would be every
         # condition's trials under one condition's heading
@@ -870,12 +867,6 @@ def _condition_trial_figure(trial_rows, window, slug, save_figure):
 def _mean_or_none(values) -> "float | None":
     vals = [float(v) for v in values if v is not None and math.isfinite(v)]
     return sum(vals) / len(vals) if vals else None
-
-
-def _narrowed(inline: "dict | None", window) -> dict:
-    if not inline or not inline.get("figure"):
-        return {}
-    return {**inline, "figure": zoom_to_condition(inline["figure"], window[1], window[2])}
 
 
 def slice_time_traces(figure: dict, t0: float, t1: float) -> dict:

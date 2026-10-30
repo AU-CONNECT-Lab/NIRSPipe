@@ -36,9 +36,9 @@ def test_the_run_wide_figure_and_another_conditions_are_both_leaks():
 
 def test_a_window_fragment_and_the_whole_run_panels_pass():
     carpet = figure_namer("sub-01_task-rest", prefix="raw")("carpet")
-    layout = figure_namer("sub-01_task-rest", prefix="raw")("layout")
+    trigger = figure_namer("sub-01_task-rest", prefix="raw")("trigger")
     assert figure_leaks({"carpet": {"src": f"figures/{carpet}#game1"},
-                         "layout": _src(layout)}, "game1") == []
+                         "trigger": _src(trigger)}, "game1") == []
 
 
 # ---- what a view carries ----
