@@ -271,6 +271,22 @@ def _imu_slicer(imu: "dict | None"):
     return lambda t0, t1: imu_scalars(imu, t0, t1)
 
 
+def _uncorrected_haemo(stages: dict[str, Path]) -> "mne.io.Raw | None":
+    """Beer-Lambert of desc-sci with the run's own factors: the haemoglobin before the motion step.
+
+    No file holds it, since the pipeline converts once, after correcting.
+    """
+    from mne.preprocessing.nirs import beer_lambert_law
+
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.pipeline.dpf import as_ppf
+
+    if "sci" not in stages or "preproc" not in stages:
+        return None
+    factors = (_sidecar(stages["preproc"]).get("parameters") or {}).get("dpf")
+    return beer_lambert_law(read_snirf(stages["sci"]), ppf=as_ppf(factors))
+
+
 def _whitening_section(stages: dict[str, Path]) -> dict[str, float]:
     """Per chromophore, the median low-band power of the whitened residual over good long channels."""
     any_stage = next(iter(stages.values()), None)
@@ -787,6 +803,11 @@ def condition_sections(
     haemo, errts = _read("preproc"), _read("errts")
     # gcor's before side, the same stage the run's own page pairs against errts
     filtered = _read("filtered")
+    try:
+        uncorrected = _uncorrected_haemo(stages)
+    except Exception:
+        logger.warning("conditions get no correlation before the motion step", exc_info=True)
+        uncorrected = None
     bands = {"cardiac": (cardiac_l_freq, cardiac_h_freq),
              "resp": (resp_l_freq, resp_h_freq)}
     n_fft_floor = min(PSD_NFFT_CAP, len(haemo.times)) if haemo is not None else 0
@@ -794,7 +815,7 @@ def condition_sections(
     def haemo_of(t0, t1):
         return _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
                                 condition_haemo_scalars, long_short_channels,
-                                filtered=filtered)
+                                filtered=filtered, uncorrected=uncorrected)
 
     cutoffs = _cutoffs_from_sidecar(stages)
     # the input carries none of the run's own spans; desc-sci's sidecar lists every one
@@ -1115,7 +1136,8 @@ def _condition_cnr(haemo, t0, t1, picks=None) -> dict:
 
 
 def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
-                     condition_haemo_scalars, long_short_channels, filtered=None):
+                     condition_haemo_scalars, long_short_channels, filtered=None,
+                     uncorrected=None):
     """One condition's haemoglobin scalars per channel set, plus its per-channel dicts.
 
     Safe to crop because nothing here filters. The per-channel dicts are lifted out of the
@@ -1123,7 +1145,11 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
 
     ``filtered`` is gcor's before side. Without it that pair spans the bandpass as well as
     the regression, which is not what the run's own page reports under the same names.
+    ``uncorrected`` is the haemoglobin before the motion step, whose correlation goes under
+    ``hbo_hbr_corr_mean_uncorrected``.
     """
+    from nirspipe.qc.metrics import haemo_quality_metrics
+
     if haemo is None:
         return {}, {}
 
@@ -1174,6 +1200,17 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
                    if source.get(key)}
     for scalars in by_set.values():
         scalars.pop("hbo_hbr_corr_per_channel", None)
+
+    before_cut = _cut(uncorrected)
+    if before_cut is not None:
+        for set_name, names in (("all", None), ("long", long_names), ("short", short_names)):
+            if by_set.get(set_name):
+                quality = haemo_quality_metrics(
+                    before_cut if names is None else _pick(before_cut, names))
+                by_set[set_name]["hbo_hbr_corr_mean_uncorrected"] = quality["hbo_hbr_corr_mean"]
+                if names is None:
+                    per_channel["hbo_hbr_corr_uncorrected_per_channel"] = (
+                        quality["hbo_hbr_corr_per_channel"])
     return by_set, per_channel
 
 
@@ -1400,6 +1437,18 @@ def compute_run_sections(
         haemo_secs, haemo_pc = haemo_sections(desc, raw_haemo, compute, sep_bands)
         sections.update(haemo_secs)
         per_channel.update(haemo_pc)
+
+    # the pair before the motion step, which the correction moves and no file holds
+    try:
+        uncorrected = _uncorrected_haemo(stages)
+        if uncorrected is not None:
+            from nirspipe.qc.metrics import haemo_quality_metrics
+            haemo_secs, haemo_pc = haemo_sections("rawhaemo", uncorrected, haemo_quality_metrics,
+                                                  sep_bands)
+            sections.update(haemo_secs)
+            per_channel.update(haemo_pc)
+    except Exception:
+        logger.warning("no correlation before the motion step", exc_info=True)
 
     if windowed:
         sections["windowed"] = windowed

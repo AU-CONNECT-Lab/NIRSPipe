@@ -175,6 +175,7 @@ def _condition_column(family: str, key: str, row: dict) -> "tuple[str, str]":
       motion_by_set gvtd_filt_mean              -> motion_post, or raw without a correction
       haemo_by_set gcor_hbo_postreg (pipeline)  -> errts, gcor_hbo
       haemo_by_set hbo_hbr_corr_mean_post (raw) -> rawhaemo_post, hbo_hbr_corr_mean
+      haemo_by_set hbo_hbr_corr_mean_uncorrected -> rawhaemo, hbo_hbr_corr_mean
     """
     if family == "od_by_set":
         return "raw", key
@@ -186,7 +187,8 @@ def _condition_column(family: str, key: str, row: dict) -> "tuple[str, str]":
             return "raw", key
         return ("motion_post" if "motion_post" in row else "raw"), key
     base = "preproc" if "preproc" in row else "rawhaemo"
-    for suffix, stage in (*_HAEMO_STAGE_SUFFIXES, ("_post", f"{base}_post")):
+    for suffix, stage in (*_HAEMO_STAGE_SUFFIXES, ("_post", f"{base}_post"),
+                          ("_uncorrected", "rawhaemo")):
         if key.endswith(suffix):
             return stage, key[: -len(suffix)]
     return base, key

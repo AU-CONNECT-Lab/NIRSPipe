@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-hyper-pairnull` refuses a real table written under `--bads-scope subject` that does not record the tasks it pooled: rerun `nirspipe-hyper`
 - Raw QC pages no longer embed copies of five figures the viewer loads from their own files, so each page is smaller
 - The pipeline's record and per-trial table leave `--keep-spans` and `--bad-spans` stretches out of heart rate, cardiac power and cardiac ratio, as raw QC and screening do
+- The pipeline's record gains the HbO-HbR correlation before motion correction, `rawhaemo` at run level and `hbo_hbr_corr_mean_uncorrected` per condition, and the cohort tables their columns
 
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
