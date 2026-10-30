@@ -21,7 +21,7 @@ def _member(centers, mask_pair_row=None):
 def test_members_on_one_grid_pair_window_for_window():
     centers = 5.0 + 10.0 * np.arange(6)
     sqm = {"A": _member(centers), "B": _member(centers, mask_pair_row=3)}
-    grid = passing_grid(sqm, ["A", "B"], {})
+    grid = passing_grid(sqm, ["A", "B"])
     assert np.array_equal(grid["index"]["B"], np.arange(6))
     assert grid["ok"]["B"][0].tolist() == [True, True, True, False, True, True]
     assert np.array_equal(member_series(sqm, "B", grid)["sci"], np.arange(6.0))
@@ -31,7 +31,7 @@ def test_a_member_whose_windows_drift_is_matched_by_time():
     # 10.05 s windows, as 50 samples at 4.975 Hz, against 10 s ones: 0.05 s drift a window
     a = 5.0 + 10.0 * np.arange(120)
     b = 5.025 + 10.05 * np.arange(119)
-    grid = passing_grid({"A": _member(a), "B": _member(b)}, ["A", "B"], {})
+    grid = passing_grid({"A": _member(a), "B": _member(b)}, ["A", "B"])
     assert grid is not None
     idx = grid["index"]["B"]
     matched = idx >= 0
@@ -45,7 +45,7 @@ def test_a_member_whose_windows_drift_is_matched_by_time():
 
 def test_members_with_no_window_in_common_have_no_grid():
     sqm = {"A": _member(5.0 + 10.0 * np.arange(5)), "B": _member(500.0 + 10.0 * np.arange(5))}
-    assert passing_grid(sqm, ["A", "B"], {}) is None
+    assert passing_grid(sqm, ["A", "B"]) is None
 
 
 def test_a_saturated_channel_leaves_the_member_line_drawn():
@@ -54,7 +54,7 @@ def test_a_saturated_channel_leaves_the_member_line_drawn():
     b = _member(centers)
     b["screen_windows"]["sci"][:2, :] = np.nan
     sqm = {"A": _member(centers), "B": b}
-    grid = passing_grid(sqm, ["A", "B"], {})
+    grid = passing_grid(sqm, ["A", "B"])
     series = member_series(sqm, "B", grid)
     assert np.array_equal(series["sci"], np.arange(6.0))
     assert np.all(np.isnan(series["per_pair_sci"]["S1_D1"]))

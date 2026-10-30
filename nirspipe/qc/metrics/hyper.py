@@ -109,7 +109,6 @@ def _take_windows(matrix: "np.ndarray", idx: "np.ndarray", fill) -> "np.ndarray"
 def passing_grid(
     sqm_data: dict[str, dict],
     subject_ids: list[str],
-    offsets: dict[str, float],
     duration_s: "float | None" = None,
 ) -> "dict | None":
     """The screening verdict per long pair per window, for every member, on one clock.
@@ -127,16 +126,10 @@ def passing_grid(
     because the dyad measures run on long channels, but a head draws the whole montage, short
     markers included.
 
-    Two alignments are made here. The stored matrices are
-    on each member's **own** clock, so the window centres are shifted by that member's crop
-    offset, and a dyad with unequal offsets would otherwise compare window *k* of one against
-    window *k* of the other. And they cover the **whole** recording while the dyad exists only
-    on the aligned span, so windows outside it are dropped rather than drawn past the ends of
-    the shared clock.
-
-    The dyad raw pass hands over :func:`shared_screen_windows`, measured on the aligned
-    recordings, so the offsets are zero and every member's windows coincide; grids measured on
-    each member's own clock stop coinciding as soon as the members' offsets differ.
+    The grids are on the dyad's clock: the dyad raw pass hands over
+    :func:`shared_screen_windows`, measured on the aligned recordings, so every member's
+    windows coincide. Windows past ``duration_s`` are dropped rather than drawn past the end
+    of the shared clock.
 
     The first member's windows are the dyad's; every other member contributes its window
     nearest each of them in time (:func:`_nearest_windows`), and counts as not passing where
@@ -152,7 +145,7 @@ def passing_grid(
         if mask is None or centers is None or not len(centers):
             logger.warning("no screening grid for %s; the dyad grid is empty", sid)
             return None
-        grids[sid] = np.asarray(centers, dtype=float) - float(offsets.get(sid, 0.0))
+        grids[sid] = np.asarray(centers, dtype=float)
         masks[sid] = np.asarray(mask, dtype=bool)
 
     ref = grids[subject_ids[0]]

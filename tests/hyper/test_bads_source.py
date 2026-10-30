@@ -58,11 +58,6 @@ def test_a_no_report_tree_still_rejects_channels(nirs_dir):
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP
 
 
-def test_the_per_channel_sci_comes_from_the_sidecar_too(nirs_dir):
-    _sidecar(nirs_dir, "tap", BADS_TAP)
-    assert _load(nirs_dir)["sci_per_channel"]["S6_D5 760"] == 0.2
-
-
 def test_subject_scope_unions_over_runs_without_any_csv(nirs_dir):
     _sidecar(nirs_dir, "tap", BADS_TAP)
     _sidecar(nirs_dir, "rest", BADS_REST)
@@ -75,13 +70,6 @@ def test_the_csv_still_works_on_a_tree_that_has_no_sidecars(nirs_dir):
     """A tree with no sidecar record falls back to the CSV."""
     _csv(nirs_dir, "tap", BADS_TAP)
     assert _load(nirs_dir)["bad_channels"] == BADS_TAP
-
-
-def test_the_per_channel_sci_comes_from_the_table_when_there_is_no_sidecar(nirs_dir):
-    # the table is tab separated; read as a CSV it would come back as one column and the
-    # SCI would be silently absent while the rejected channels, read another way, were not
-    _csv(nirs_dir, "tap", BADS_TAP)
-    assert _load(nirs_dir)["sci_per_channel"]["S6_D5 760"] == 0.2
 
 
 def test_the_sidecar_wins_when_both_are_present(nirs_dir):
@@ -219,5 +207,3 @@ def test_the_dyad_pages_read_the_windowed_sci_from_the_record(nirs_dir):
                      "sci_win_per_channel": {"S1_D1 760": 0.6, "S1_D1 850": 0.6}}}})
     sqm = load_group_sqm(nirs_dir, [GroupEntry("G1", "sub-01", "tap")])
     assert sci_of(sqm, "sub-01")["S1_D1"] == 0.6
-    # the whole-run scores are still loaded, under their own name
-    assert sqm["sub-01"]["sci_per_channel"]["S1_D1 760"] == 0.9

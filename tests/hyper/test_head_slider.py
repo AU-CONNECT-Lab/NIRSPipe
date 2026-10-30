@@ -33,7 +33,7 @@ def _slider(cutoffs):
     order = list(raw.ch_names)
     pairs = list(dict.fromkeys(pair_of(ch) for ch in order))
     sqm = {sid: _screened(order, pairs[0]) for sid in SIDS}
-    grid = passing_grid(sqm, SIDS, {})
+    grid = passing_grid(sqm, SIDS)
     series = {sid: member_series(sqm, sid, grid) for sid in SIDS}
     geo = head_geometry(raw, pairs)
     fig = build_head_slider({sid: geo for sid in SIDS}, SIDS, grid, series, None, cutoffs,

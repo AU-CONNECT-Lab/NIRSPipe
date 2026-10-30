@@ -411,7 +411,7 @@ def _section_head_slider(
         sqm = {sid: {"screen_windows": {"mask": mask, "centers": window_centers(times),
                                         "sci": sci_matrix, "psp": psp_matrix,
                                         "channel_order": list(channels)}}}
-        grid = passing_grid(sqm, [sid], {})
+        grid = passing_grid(sqm, [sid])
         long_names, _ = long_short_channels(raw_intensity, sep_bands)
         geo = head_geometry(raw_intensity, list(dict.fromkeys(pair_of(n) for n in long_names))
                             or grid["pairs"]) if grid is not None else None

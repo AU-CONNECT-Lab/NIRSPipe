@@ -12,12 +12,10 @@ import json
 import re
 
 import mne
-import numpy as np
 import pandas as pd
 
 from nirspipe.utils import pair_of
 from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
-from nirspipe.qc.metrics.windowed import long_or_all
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
 from nirspipe.io.head_template import CORTEX_ATLASES
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
@@ -232,17 +230,13 @@ def load_group_sqm_raw(
 
         # which channel set the row above describes, so a table read on its own says so
         sqm["channel_set"] = "long" if record.get("raw_long") else "all"
-        sqm["sci_per_channel"] = {k: float(v) for ch, v in sci_cw.items()
-                                  for k in (f"{pair_of(ch)} hbo", pair_of(ch))}
         sqm["sci_win_per_channel"] = _pairwise(sci_win)
         sqm["bad_channels"]    = bad_channels
         sqm["channels_tsv_pairs"] = sorted({pair_of(c) for c in tsv_bads})
-        sqm["screen_windows"]  = _screen_windows(record, cutoffs)
         sqm["screen_cutoffs"]  = cutoffs
         sqm["screen_band"]     = (params["cardiac_l_freq"], params["cardiac_h_freq"])
         sqm["resp_band"]       = (params["resp_l_freq"], params["resp_h_freq"])
         sqm["screening_gap"]   = record.get("screening_gap")
-        sqm["parameters"]      = params
         sqm["per_channel"]     = per_channel
         sqm["per_channel_all"]  = per_all
         sqm["per_channel_long"] = per_channel.get("raw_long") or per_all
@@ -331,8 +325,8 @@ def load_group_sqm(
     prep.
 
     Returns {subject_id: sqm_dict}. Alongside the flattened scalars each dict carries
-    ``windowed`` (the record's channel-by-window matrices), ``channel_order`` (their row
-    order), ``per_channel`` (the whole per-channel section, which the dyad's channel table
+    ``windowed`` (the record's channel-by-window matrices, their row names beside them),
+    ``per_channel`` (the whole per-channel section, which the dyad's channel table
     prints), ``screen_cutoffs`` (the lines that run screened by) and ``by_condition`` (the
     record's per-condition entries), which is what a per-condition view of the dyad pages
     is built from.
@@ -369,7 +363,6 @@ def load_group_sqm(
             # the channel-by-window matrices a per-condition view selects columns from,
             # nested under one key so they cannot collide with a scalar name
             sqm["windowed"] = record.get("windowed") or {}
-            sqm["channel_order"] = list(sqm["windowed"].get("sci_channels") or [])
             # the record's whole per-channel section: the dyad's channel table prints the
             # same columns the subject report does, PSP, SNR, CV and the spike share among them
             per_ch = record.get("per_channel") or {}
@@ -382,10 +375,6 @@ def load_group_sqm(
                                                    .get("sci_win_per_channel") or {})
             # an all-long montage writes no `raw_long`, so the whole-file section stands in
             sqm["per_channel_long"] = per_ch.get("raw_long") or sqm["per_channel_all"]
-            # the screening grid rebuilt from the matrices the record stored, the same shape
-            # `load_group_sqm_raw` gives, so a dyad panel does not care which command
-            # produced the members' numbers
-            sqm["screen_windows"] = _screen_windows(record, sqm.get("screen_cutoffs"))
             # the per-condition numbers the record already holds, so the dyad pages read
             # them rather than cutting the matrices above a second time
             sqm["by_condition"] = record.get("by_condition") or {}
@@ -421,20 +410,6 @@ def load_group_sqm(
                 "Rerun nirspipe on this task.", entry.subject_id, kind, entry.task)
 
         for path in run_marks:
-            if sidecars:
-                scores = _sci_from_sidecar(path)
-                if scores:
-                    sqm["sci_per_channel"] = scores
-            else:
-                try:
-                    ch_df = pd.read_csv(path, sep="\t")
-                    if {"name", "sci_whole"}.issubset(ch_df.columns):
-                        sqm["sci_per_channel"] = dict(
-                            zip(ch_df["name"].astype(str),
-                                pd.to_numeric(ch_df["sci_whole"], errors="coerce"))
-                        )
-                except Exception:
-                    pass
             sqm["bad_channels"] = read_bads(path)
             if sidecars:
                 sqm["screen_cutoffs"] = _screen_cutoffs(path)
@@ -475,43 +450,6 @@ def load_group_sqm(
     return result
 
 
-def _screen_windows(record: dict, cutoffs: "dict | None") -> dict:
-    """``{mask, centers, channel_order}`` off a stored record, empty when it has no matrices.
-
-    The cutoffs are the run's own, since a record screened at a different SCI line has to be
-    re-masked at that line; a run that recorded no SCI line is not re-masked at a guessed one,
-    and one that recorded no PSP line is masked on SCI alone.
-    """
-    from nirspipe.qc.metrics.windowed import passing_mask_from_matrices, window_centers
-
-    windowed = record.get("windowed") or {}
-    lines = cutoffs or {}
-    if lines.get("sci") is None:
-        return {}
-    sci = windowed.get("sci_matrix")
-    psp = windowed.get("psp_matrix")
-    psp_line = lines.get("psp")
-    mask = passing_mask_from_matrices(sci, psp, float(lines["sci"]),
-                                      None if psp_line is None else float(psp_line))
-    times = windowed.get("sci_times")
-    if mask is None or not times:
-        return {}
-    out = {"mask": mask,
-           "centers": window_centers(np.asarray(times, dtype=float)),
-           "sci": np.asarray(sci, dtype=float),
-           **({"psp": np.asarray(psp, dtype=float)} if psp else {}),
-           **({"cv": np.asarray(windowed["cv_matrix"], dtype=float)}
-              if windowed.get("cv_matrix") else {}),
-           "channel_order": list(windowed.get("sci_channels") or [])}
-    # GVTD is an RMS across channels, so it has no matrix and rides along as one series.
-    # Only a stored record carries it; the dyad's own pass does not measure motion, and a
-    # panel that draws it has to cope with the row being absent rather than assume it.
-    gvtd = long_or_all(windowed, "gvtd_filt_per_window")
-    if gvtd:
-        out["gvtd"] = np.asarray(gvtd, dtype=float)
-    return out
-
-
 def _bad_from_sidecar(json_path: Path) -> list[str]:
     """The rejected channels prep recorded for a run, from its desc-sci sidecar.
 
@@ -522,12 +460,6 @@ def _bad_from_sidecar(json_path: Path) -> list[str]:
     asked for. The channel-metrics CSV carries the same set, but the report writes that one.
     """
     return list(read_json(json_path).get("bad_channels") or [])
-
-
-def _sci_from_sidecar(json_path: Path) -> dict[str, float]:
-    """The per-channel SCI prep recorded for a run, from the same sidecar."""
-    scores = read_json(json_path).get("sci_scores") or {}
-    return {str(k): float(v) for k, v in scores.items()}
 
 
 def _screen_cutoffs(json_path: Path) -> dict:

@@ -242,7 +242,7 @@ def _process_hyper_raw_group(
     with guard("Screening grid", errors, label):
         if intensity_raws:
             shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids)
-        grid = passing_grid(shared, subject_ids, {}, duration_s=duration_s) if shared else None
+        grid = passing_grid(shared, subject_ids, duration_s=duration_s) if shared else None
     if grid is None:
         note(notes, label, "no shared screening grid: a member's aligned recording could "
                            "not be screened. The usable-time and head panels are empty")

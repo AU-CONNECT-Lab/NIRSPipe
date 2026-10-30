@@ -1,8 +1,5 @@
 """A dyad page judges each member's SCI against the line that member was screened at."""
 
-import numpy as np
-
-from nirspipe.pipeline.hyper.group_quality import _screen_windows
 from nirspipe.qc.hyper.hyper_report import (
     _members_only, member_sci_lines, sci_lines_text, subject_metric_tables,
 )
@@ -43,17 +40,9 @@ def test_the_lines_are_read_off_each_member_s_screening():
     assert sci_lines_text(lines) == "A 0.70, B not recorded"
 
 
-def test_a_record_with_no_line_is_not_re_masked_at_a_guessed_one():
-    record = {"windowed": {"sci_matrix": np.full((2, 3), 0.9).tolist(),
-                           "psp_matrix": np.full((2, 3), 0.2).tolist(),
-                           "sci_times": [[0, 10], [10, 20], [20, 30]]}}
-    assert _screen_windows(record, {"psp": 0.1}) == {}
-    assert _screen_windows(record, {"sci": 0.8, "psp": 0.1})["mask"].all()
-
-
 def test_a_record_with_no_psp_line_is_masked_on_sci_alone():
-    record = {"windowed": {"sci_matrix": [[0.9, 0.9, 0.5]],
-                           "psp_matrix": [[0.01, 0.01, 0.01]],
-                           "sci_times": [[0, 10], [10, 20], [20, 30]]}}
-    assert _screen_windows(record, {"sci": 0.8})["mask"].tolist() == [[True, True, False]]
-    assert not _screen_windows(record, {"sci": 0.8, "psp": 0.1})["mask"].any()
+    from nirspipe.qc.metrics.windowed import passing_mask_from_matrices
+
+    sci, psp = [[0.9, 0.9, 0.5]], [[0.01, 0.01, 0.01]]
+    assert passing_mask_from_matrices(sci, psp, 0.8, None).tolist() == [[True, True, False]]
+    assert not passing_mask_from_matrices(sci, psp, 0.8, 0.1).any()
