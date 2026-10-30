@@ -8,12 +8,12 @@ title: Outputs
 
 ## Naming
 
-Every name is built from BIDS entities. `<run>` below stands for the input recording's own, `sub-<label>[_ses-<label>]_task-<label>[_run-<index>]`, and `<task>` for the same without the run.
+Every name is built from BIDS entities. `<run>` below stands for the input recording's own, `sub-<label>[_ses-<label>]_task-<label>[_acq-<label>][_run-<index>]`, and `<task>` for the same without the run.
 
 | Entity | Means |
 |--------|-------|
 | `desc-` | The processing stage, or which record a QC file is |
-| `stat-` | The measure in a table: `alff`, `pearson`, `fisherz`, `wtc`, `isc` |
+| `stat-` | The measure in a table, such as `alff`, `pearson`, `fisherz`, `wtc`, `isc`, or the quality record's `sci`, `psp`, `cv` |
 | `chromo-` | The chromophore, where a file holds one: `hbo`, `hbr`, or `hbt` when `--chromophores` or `--wtc-chroma` asks for it |
 | `seg-`, `agg-` | The ROI mapping a table was grouped by (the file's stem reduced to letters and digits) and how channels were aggregated: `roi`, `seed`, `homologous` |
 | `cond-` | A condition window |
@@ -21,6 +21,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 | `null-` | Which null a table holds: `phase` or `pair` |
 | `band-` | A re-averaged band from `nirspipe-hyper-band` |
 | `chan-`, `label-` | A channel or a region, in figure names |
+| `space-` | The head template a table's channel positions are on: `fsaverage`, or an infant template |
 | `rater-` | Who saved a rating file, with `nirspipe-rate --rater` |
 
 The suffix says what a file holds: `nirs` a signal, `relmat` a relation between channels or regions, `nirsmap` one value per channel or region, `qc` quality numbers, `report` a page. A run's outputs keep its input's `ses`, `task`, `acq` and `run`. Some of these entities and suffixes (`group-`, `chromo-`, `relmat`, `nirsmap` and others) are not yet part of BIDS, so a BIDS validator may flag them.
@@ -75,6 +76,7 @@ derivatives/nirspipe/
         ├── <run>_desc-glm_nirsmap.tsv              ← fit results, one row per channel and regressor
         ├── <run>_desc-contrast_nirsmap.tsv         ← glm + --contrast-file
         ├── <run>_desc-blockavg_timeseries.tsv      ← glm: each condition's trial average per channel
+        ├── <run>_desc-whitening_nirsmap.tsv, <run>_stat-psd_desc-whitening_timeseries.tsv  ← glm: how well the noise model whitened each channel
         ├── <run>_stat-alff_nirsmap.tsv             ← rest: alff, falff, malff, zalff per channel
         ├── <run>_seg-<map>_agg-roi_stat-alff_nirsmap.tsv                ← + --roi-mapping
         ├── <run>_chromo-<c>_stat-{pearson,fisherz}_relmat.tsv           ← rest or --fc, one per chromophore
@@ -83,12 +85,13 @@ derivatives/nirspipe/
         ├── <task>_desc-<stage>_nirs.snirf          ← --combine-runs: the task's runs joined, named without run-
         ├── <task>_chromo-<c>_..._relmat.tsv        ← --combine-runs: FC of the joined series, as above
         ├── <page>_desc-rating_qc.json, <page>_desc-rawrating_qc.json    ← section ratings
-        └── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
+        ├── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
+        └── sub-<label>[_ses-<label>]_task-<label>_desc-rawspans_qc.json     ← stretches marked bad
 ```
 
 With `nirspipe-rate --rater`, the rating files carry the rater before `desc-` (`..._rater-QY_desc-rawdecision_qc.json`), and the exported tables a `rater` column ([Rating](qc.md#rating)).
 
-A step that did not run writes nothing: `desc-motcorrected` is absent under `--motion-correction none`, `desc-filtered` when both cutoffs are off, and the quality record has no section for a stage that does not exist.
+A step that did not run writes nothing: `desc-filtered` is absent when both cutoffs are off, `desc-resampled` without `--resample-sfreq`, and the quality record has no section for a stage that does not exist.
 
 **Tables.** Every table is tab-separated and writes a missing value as `n/a`, as BIDS requires. pandas reads `n/a` as missing by default; in R, pass `na = c("", "NA", "n/a")` to `read.delim` or `readr::read_tsv`, or the column is read as text. A connectivity matrix keeps every long channel of the montage, a rejected channel as a blank row and column, so every subject's matrices have the same shape; short channels are left out, as in the dyad tables. Its diagonal is 1, and blank in the Fisher z matrix, where it would be infinite. Each table's sidecar describes its columns and, where a column has one, its unit (haemoglobin is in M, mol/L). In the GLM and contrast tables, `df` is each channel's own residual degrees of freedom and `p_value` is two-sided on it. The quality record is described in [QC](qc.md#the-quality-record).
 
@@ -100,10 +103,13 @@ A step that did not run writes nothing: `desc-motcorrected` is absent under `--m
 derivatives/nirspipe-qc/
 ├── dataset_description.json
 ├── .bidsignore
+├── plotly-<version>.min.js
 ├── desc-subjects_qc.tsv, desc-subjects_report.html    ← group level: the cohort of runs
 ├── desc-conditions_qc.tsv                             ← group level: the same per run and condition
+├── desc-subjects_nirsmap.tsv                          ← group level: every run's per-channel values
 ├── desc-groups_qc.tsv, desc-groups_report.html        ← group level + --pairs-csv: the cohort of dyads
 ├── desc-groupconditions_qc.tsv                        ← group level + --pairs-csv: the same per dyad and condition
+├── figures/                                           ← the cohort pages' figures
 ├── sub-<label>/
 │   ├── sub-<label>_desc-index_report.html
 │   ├── <run>_desc-raw_report.html                     ← participant level
@@ -117,7 +123,7 @@ derivatives/nirspipe-qc/
     ├── group-<id>_task-<t>_desc-raw_report.html      ← group level + --pairs-csv
     ├── figures/
     ├── logs/group-<id>_task-<t>_desc-raw.log         ← its live log
-    └── nirs/                                         ← every table has a .json sidecar
+    └── [ses-<s>/]nirs/                               ← every table has a .json sidecar
 ```
 
 Per group and task the group level writes:
@@ -141,6 +147,7 @@ derivatives/nirspipe-hyper/
 ├── stat-wtc_relmat.tsv, stat-isc_relmat.tsv, ...  ← nirspipe-hyper-merge, one per long-table kind
 ├── chromo-<c>_task-<t>_cond-all_null-<n>_stat-<s>_desc-{bycell,byoccasion,cohort}_relmat.tsv  ← nirspipe-hyper-groupnull
 ├── task-<t>_desc-groupnull_report.html            ← nirspipe-hyper-groupnull
+├── figures/                                       ← that page's figures
 ├── logs/                                          ← the cohort tests' Methods paragraphs
 └── group-<id>/
     ├── group-<id>_desc-index_report.html          ← one row per analysed window
@@ -157,24 +164,25 @@ derivatives/nirspipe-hyper/
 
 | File | Holds |
 |------|-------|
-| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing, chromophore and window: `chromophore`, `condition` (`whole_run` for the whole recording; a table with no conditions has no `condition` column), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `kept_s` |
+| `stat-wtc_relmat.tsv` | Band-mean coherence, one row per channel pairing, chromophore and window: `chromophore`, `condition` (`whole_run` for the whole recording; a table with no conditions has no `condition` column), `sub1`, `sub2`, `label` (and `label2` when crossed), `coherence`, `coherence_z`, `n_valid_frac`, `phase_angle`, `phase_sd`, `phase_n`, `kept_s` |
 | `seg-<map>_agg-roi_stat-wtc_relmat.tsv`, `seg-<map>_agg-homologous_stat-wtc_relmat.tsv` | The region tables, laid out the same way |
 | `stat-wtcphase_relmat.tsv` | Relative phase per frequency, with `lag_s`, laid out the same way |
-| `null-phase_stat-wtc_relmat.tsv` and its region twins | The phase-scrambled null, laid out the same way: the same columns plus `null_sd`, `null_p95`, `n_iter`, `percentile` (with `--wtc-phase-null`) |
+| `null-phase_stat-wtc_relmat.tsv` and its region twins | The phase-scrambled null (with `--wtc-phase-null`), one row per pairing as in the real table: `null_mean` and `null_mean_z` (the null's centre, where the real table has `coherence`), `null_sd`, `null_p95`, `percentile`, `n_iter`, `n_valid_frac` |
 | `cond-all_null-phase_stat-wtc_desc-draws_relmat.tsv` | Every iteration of that null, one row per pairing it measured: a pairing a rejected channel left blank has no row |
+| `chromo-<c>_null-phase_stat-wtc_desc-level_relmat.npz` and its region twin | That null's coherence level per frequency, which the maps draw phase arrows against |
 | `chromo-<c>_stat-wtc_relmat.npz` | The full time-frequency maps (with `--wtc-save-maps`) |
-| `stat-isc_relmat.tsv` | The correlations, one row per pairing and window: `chromophore`, `condition`, `sub1`, `sub2`, `label`, `label2`, `r`, `r_z`, and `lag_s` and the null columns where asked for |
+| `stat-isc_relmat.tsv` | The correlations, one row per pairing and window: `chromophore`, `condition`, `sub1`, `sub2`, `label`, `label2`, `r`, `r_z`, `kept_s`, and `lag_s` and the null columns where asked for |
 | `seg-<map>_agg-roi_stat-isc_relmat.tsv` | The region correlations, laid out as `stat-isc_relmat.tsv` |
 | `chromo-<c>[_cond-<c>]_stat-isc_relmat.tsv`, `..._seg-<map>_agg-roi_...` | The correlation matrices, per chromophore and window |
 | `cond-all_null-phase_stat-isc_desc-draws_relmat.tsv` | Every surrogate of the correlation (with `--isc-phase-null`), one row per pairing it measured |
 | `desc-bad_qc.tsv` | Each member's excluded channels and the runs that rejected them |
 | `space-<template>_channels.tsv` | Each member's channel positions and cortical regions |
 
-`nirspipe-hyper-pairnull` writes its tables beside them, named with `null-pair` (`cond-all_null-pair_stat-wtc_relmat.tsv`, `cond-all_null-pair_stat-isc_relmat.tsv` and their draws, whose correlation column is `r` as in the real table). `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map. Each table's sidecar records the settings it was computed with.
+`nirspipe-hyper-pairnull` writes its tables beside them, named with `null-pair` (`cond-all_null-pair_stat-wtc_relmat.tsv`, `cond-all_null-pair_stat-isc_relmat.tsv` and their draws, whose correlation column is `r` as in the real table), and `chromo-<c>_cond-all_null-pair_stat-wtc_desc-level_relmat.npz`, the level the next `nirspipe-hyper` run draws each condition's phase arrows against. `nirspipe-hyper-band` writes `..._chromo-<c>_band-<band>_stat-wtc_relmat.tsv` beside each saved map. Each table's sidecar records the settings it was computed with.
 
 ## Sidecars and provenance
 
-Every file has a JSON sidecar beside it, recording the step that made it, the settings it used, the files it was made from, its bad channels and its excluded time. You rarely need to read one: the report's provenance graph and Methods paragraph are built from them.
+Every data file has a JSON sidecar beside it, recording the step that made it, the settings it used and the files it was made from, and for a signal or an analysis table its bad channels and excluded time. You rarely need to read one: the report's provenance graph and Methods paragraph are built from them.
 
 :::{note}
 The processing stage is part of the file name (`desc-`). Do not rename files by hand: the sidecars of later files point at the original names, and the reports and dyad commands will not find them.
@@ -213,7 +221,7 @@ participant_label = [ "01" ]
 task_label = [ "tapping" ]
 
 [prep]
-dpf = [ 6.0, 6.0 ]
+dpf = [ 6.0 ]
 sci_threshold = 0.8
 motion_correction = "tddr"
 window_length = 10.0
