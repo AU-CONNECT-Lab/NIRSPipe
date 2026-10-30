@@ -20,7 +20,7 @@ NIRSPipe is a set of command-line entry points. What each step does is described
 | [`nirspipe-hyper-index`](#nirspipe-hyper-index) | Rebuild each dyad's landing page |
 | [`nirspipe-hyper-merge`](#nirspipe-hyper-merge) | Concatenate the per-dyad long tables into one table per kind |
 | [`nirspipe-rate`](#nirspipe-rate) | Rating viewers for the QC reports |
-| [`nirspipe-gui`](#nirspipe-gui) | The desktop interface |
+| [`nirspipe-gui`](#nirspipe-gui) | The GUI, a local web app in your browser |
 
 ## Examples
 
@@ -93,9 +93,9 @@ nirspipe /data/bids /data/derivatives group
 ## Conventions
 
 - **Entity flags** are spelled the same on every command: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. A label may be given with its `sub-` / `ses-` / `task-` prefix or without. List options take space-separated values or the flag repeated. The BIDS App options also answer to their underscore spellings (`--participant_label`, `--bids_filter_file`, ...).
-- **Every command** takes `--version` and `--verbose`.
+- **Every command** but `nirspipe-gui` takes `--version`, and `nirspipe` and the `nirspipe-hyper` commands also take `--verbose`.
 - **Tables** you supply are read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed ([Table files](data-preparation.md#table-files)).
-- **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep` and `nirspipe-qc` at both levels) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
+- **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep`, and `nirspipe-qc` at the participant level and, with `--pairs-csv`, at the group level) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
 - **Output directories.** A command that writes a tree stops when its output directory is its input directory; `nirspipe-prep crop --input-desc` is the exception.
 - **Parallelism.** `--nprocs N` (also `--n_cpus`) lets a command use N cores; without it, subjects run one at a time. `nirspipe ... participant`, `nirspipe-qc ... participant` and the `nirspipe-prep` subcommands `crop`, `edit-markers` and `keep-spans` take it. The dyad commands `nirspipe-hyper`, `nirspipe-hyper-pairnull` and `nirspipe-qc ... group` take it too and run N groups at once, so memory use grows with N.
 
@@ -308,7 +308,7 @@ Re-averages the maps `nirspipe-hyper --wtc-save-maps` saved over another band.
 
 ## `nirspipe-gui`
 
-Starts the desktop interface and prints the address to open ([GUI](gui.md)).
+Starts the GUI, a local web app, and opens it in your browser ([GUI](gui.md)).
 
 ```{argparse}
 :module: cli_parsers
