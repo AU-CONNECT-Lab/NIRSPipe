@@ -327,19 +327,12 @@ _GVTD_LABEL = f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"
 SMOOTH_S = 60.0
 
 
-def _set_rows(row: dict, per_channel_field: str) -> dict[str, list[int]]:
-    """Row indices of each channel set for a stored channel x window matrix.
-
-    The matrix carries no channel names; its rows follow the recording's channel order, which
-    is the key order of ``per_channel.raw.<field>``. Splitting the matrices this way
-    reproduces the stored per-set psp_mean and cv_mean exactly.
-    """
+def _set_rows(row: dict, names: "list[str]", per_channel_field: str) -> dict[str, list[int]]:
+    """Row indices of each channel set in a stored channel x window matrix whose rows are ``names``."""
+    # a set keeps the channels its per-channel section does, as the stored per-set means do
     per_channel = row.get("per_channel") or {}
-    names = list((per_channel.get("raw") or {}).get(per_channel_field) or {})
-    if not names:
-        return {}
-    sets = {"all": list(range(len(names)))}
-    for channel_set, section in (("long", "raw_long"), ("short", "raw_short")):
+    sets = {}
+    for channel_set, section in (("all", "raw"), ("long", "raw_long"), ("short", "raw_short")):
         members = set((per_channel.get(section) or {}).get(per_channel_field) or {})
         rows = [i for i, name in enumerate(names) if name in members]
         if rows:
@@ -368,10 +361,11 @@ def _window_series(row: dict, key: str) -> dict[str, tuple]:
     if matrix is None or not times.size:
         return {}
     matrix = np.asarray(matrix, dtype=float)
-    if matrix.ndim != 2 or matrix.shape[1] != times.size:
+    names = list(windowed.get(f"{key}_channels") or [])
+    if matrix.ndim != 2 or matrix.shape[1] != times.size or len(names) != matrix.shape[0]:
         return {}
     out = {}
-    for channel_set, rows in _set_rows(row, per_channel_field).items():
+    for channel_set, rows in _set_rows(row, names, per_channel_field).items():
         if rows:
             with np.errstate(invalid="ignore"):
                 out[channel_set] = (times, np.nanmean(matrix[rows], axis=0))

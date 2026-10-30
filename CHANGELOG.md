@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - The re-paired null ignored the real run's separation-band flags, `--no-align` and, under `--bads-scope subject`, its task selection, so it could be drawn on other channels than its real table
 - A rating viewer saving into a channel-decisions or span file it could not read, such as one cut short by an interrupted save, wiped every other page's entries in it
 - Epoch figures (grand mean, trial images, channel epochs, evoked topo) dropped out when two conditions shared an onset sample or `--epoch-tmin` was positive, and took a one-sample baseline at 0
+- The cohort page's windowed SCI, PSP and CV series and the subject index's condition timeline averaged the wrong channels on a run with a flat channel
 
 ## [0.80.0] - 2026-10-29
 

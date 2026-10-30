@@ -45,6 +45,22 @@ def test_the_over_time_grid_draws_the_motion_band_gvtd():
     assert f"{GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz" in fig.layout.yaxis.title.text
 
 
+def test_a_flat_channel_does_not_shift_the_later_rows_onto_other_channels():
+    """The matrix keeps a row for a flat channel, which the per-channel CV leaves out."""
+    from nirspipe.qc.figures.subject.group_figures import _window_series
+
+    names = ["S1_D1 760", "S2_D2 760", "S3_D3 760", "S4_D4 760"]
+    row = {"cv_matrix": [[1.0] * 3, [0.0] * 3, [3.0] * 3, [5.0] * 3], "cv_channels": names,
+           "cv_window_times_s": [5.0, 15.0, 25.0],
+           # S2_D2 is a long channel, flat, so it has no per-channel CV in any section
+           "per_channel": {"raw": {"cv_per_channel": dict.fromkeys(names[:1] + names[2:], 1.0)},
+                           "raw_long": {"cv_per_channel": dict.fromkeys(names[2:], 1.0)},
+                           "raw_short": {"cv_per_channel": dict.fromkeys(names[:1], 1.0)}}}
+    series = _window_series(row, "cv")
+    assert {k: v[1].tolist() for k, v in series.items()} == {
+        "all": [3.0] * 3, "long": [4.0] * 3, "short": [1.0] * 3}
+
+
 def test_runs_windowed_at_different_rates_share_every_column():
     # window centres follow the sampling rate, so no two runs share a sample time
     rows = [{"bids_name": f"sub-0{k}_task-rest", "qc_window_s": 10.0,
