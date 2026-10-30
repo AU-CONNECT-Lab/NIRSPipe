@@ -89,27 +89,16 @@ def compute_raw_sqm(
         record.update(_cardiac_ratio_metrics(raw_intensity, bad_channels, cardiac_l_freq,
                                              cardiac_h_freq))
     if is_optical_density(raw_intensity):
-        # intensity-value metrics are meaningless on already-OD data
-        logger.warning("input is already optical density; skipping intensity/motion SQM")
-        record.update({
-            "cv_mean": None, "cv_per_channel": {},
-            "snr_mean": None, "snr_per_channel": {}, "snr_pass_rate": None,
-            "mean_amp_mean": None, "mean_amp_per_channel": {},
-            "spike_count": None, "spike_pct": None,
-            "spike_num_frames": None, "spike_pct_frames": None,
-            "temporal_derivative_variance": {},
-            "gvtd_mean": None, "gvtd_p95": None,
-            "gvtd_filt_mean": None, "gvtd_filt_p95": None,
-            "gvtd_vstd_mean": None, "gvtd_vstd_p95": None,
-            "gvtd_thresh": None, "gvtd_num_above_thresh": None,
-            "gvtd_pct_above_thresh": None,
-            "saturated_pct": None, "n_saturated_channels": None, "saturated_per_channel": {},
-        })
+        # brightness and its ceiling are the intensity's, while spikes and GVTD read optical density
+        logger.warning("input is already optical density, so intensity and saturation metrics "
+                       "are left out")
+        record.update(dict.fromkeys((*_intensity_metrics.declared,
+                                     *_saturation_metrics.declared)))
     else:
         record.update(_intensity_metrics(raw_intensity))
         record.update(_saturation_metrics(raw_intensity, ceiling))
-        record.update(_spike_metrics(raw_intensity))
-        record.update(_motion_metrics(raw_intensity))
+    record.update(_spike_metrics(raw_intensity))
+    record.update(_motion_metrics(raw_intensity))
     return record
 
 

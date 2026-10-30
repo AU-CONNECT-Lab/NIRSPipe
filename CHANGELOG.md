@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- On optical-density input every channel set leaves CV, SNR, amplitude and saturation empty and measures spikes and GVTD, as only the short set did in part
 - The dyad pages colour only the Long set of each member's quality table, as the member's own page does
 - Every page heads a metric with its registry label and format: the subject index prints SCI to three decimals and retention to one, and the short motion-table forms are gone
 - `nirspipe` and `nirspipe-qc participant` warn once when the output directory already holds the other's records, and `nirspipe group` no longer suggests sharing one directory

@@ -429,11 +429,13 @@ def _short_section(
     record.update(_good_frac_metrics(short_frac))
     if resp_h_freq is not None:
         record.update(_heart_rate_metrics(raw_short, resp_h_freq))
-    intensity = _intensity_metrics(raw_short)
+    # brightness and its ceiling are the intensity's, as compute_raw_sqm leaves them
+    od_input = is_optical_density(raw_short)
+    intensity = (dict.fromkeys(_intensity_metrics.declared) if od_input
+                 else _intensity_metrics(raw_short))
     record.update({k: v for k, v in intensity.items()
                    if k.startswith(("snr_", "cv_", "mean_amp_"))})
-    # a ceiling is a detector's, so optical density input has none to be held at
-    if not is_optical_density(raw_short):
+    if not od_input:
         record.update(_saturation_metrics(raw_short, ceiling))
     record.update(_motion_metrics(raw_short))
     spike = _spike_metrics(raw_short)

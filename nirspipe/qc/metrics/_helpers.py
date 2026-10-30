@@ -364,6 +364,8 @@ def _safe_metrics(label: str, keys):
                                label, undeclared)
             base.update(computed)
             return base
+        # the schema, for a caller that has to say "not measured" without calling
+        wrap.declared = fixed
         return wrap
     return deco
 
