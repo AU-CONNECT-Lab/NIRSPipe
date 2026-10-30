@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
 - Figure builders no page drew: `design_matrix_figure`, `activation_brain_figure`, `activation_panel`, `per_channel_hrf_figure`, `glm_betas_figure`, `stage_slope_figure`, `binary_heatmap_figure` and two dyad builders
 - `compute_isc`, whose matrix `compute_isc_pairs` returns as its first value, and `load_group_stage`, which nothing called
+- `channel_snr`, a whole-run SNR the record does not use, and `iter_run_files`, `unwrap_enum` and `Recorder.last`, which nothing needed
 
 ### Fixed
 - The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it

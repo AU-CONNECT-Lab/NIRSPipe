@@ -194,7 +194,6 @@ def test_written_records_the_entry_and_last(make_raw, tmp_path):
     assert entry["stage"] == "od"
     assert entry["step"] == "od_conversion"
     assert entry["params"] == {"threshold": 0.8}
-    assert rec.last == path
 
 
 def test_writing_the_same_stage_twice_raises(make_raw, tmp_path):

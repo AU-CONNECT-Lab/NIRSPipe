@@ -9,8 +9,6 @@ The precedence rules matter because values supplied through TOML never appear in
 argv.
 """
 
-from enum import Enum
-
 import pytest
 
 from nirspipe.cli.run import _MODE_CHOICES, mode_defaults
@@ -21,11 +19,6 @@ from nirspipe.cli.workflows import (
     _refuse_glm_without_durations,
     _resolve_post_settings,
 )
-
-
-class _Model(Enum):
-    """Stand-in for the enum values the CLI layer may still hand over."""
-    spm = "spm"
 
 
 def _post(args=None, toml=None):
@@ -67,10 +60,6 @@ def test_a_false_cli_value_still_beats_the_toml():
 
 def test_a_zero_cli_value_still_beats_the_toml():
     assert _post({"high_pass": 0.0}, {"high_pass": 0.01}).high_pass == 0.0
-
-
-def test_enum_values_are_unwrapped_to_plain_strings():
-    assert _post({"hrf_model": _Model.spm}).hrf_model == "spm"
 
 
 # ---- the small parsers inside the builders ----
@@ -142,16 +131,8 @@ def test_qc_window_is_taken_from_window_length():
     assert _prep(window_length=5.0).qc_window_s == 5.0
 
 
-def test_ignore_values_are_unwrapped():
-    assert _prep(ignore=[_Model.spm, "bids-validation"]).ignore == ["spm", "bids-validation"]
-
-
 def test_ignore_absent_is_empty_list():
     assert _prep().ignore == []
-
-
-def test_motion_correction_enum_is_unwrapped():
-    assert _prep(motion_correction=_Model.spm).motion_correction == "spm"
 
 
 # ---- drift model needs its cutoff ----

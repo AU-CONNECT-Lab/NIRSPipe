@@ -38,7 +38,6 @@ from nirspipe.qc.metrics import (
     _spectral_metrics,
     _spike_mask,
     channel_cv,
-    channel_snr,
     gvtd_censor_spans,
     gvtd_channel_picks,
     gvtd_threshold,
@@ -89,34 +88,25 @@ def test_gcor_is_blind_to_channel_scale():
 
 # ---- SNR and CV ----
 
-def test_snr_and_cv_recover_mu_over_sigma():
+def test_cv_recovers_sigma_over_mu():
     # each row alternates mu - sigma and mu + sigma: its mean is mu and its population SD sigma
     data = np.array([[4.0, 6.0, 4.0, 6.0], [1.0, 3.0, 1.0, 3.0], [9.0, 11.0, 9.0, 11.0]])
-    assert_allclose(channel_snr(data), [5.0, 2.0, 10.0], rtol=1e-12)
     assert_allclose(channel_cv(data), [0.2, 0.5, 0.1], rtol=1e-12)
 
 
-def test_the_two_are_reciprocal():
-    rng = np.random.default_rng(6)
-    data = rng.normal(loc=3.0, scale=0.4, size=(4, 5000))
-    assert_allclose(channel_snr(data) * channel_cv(data), 1.0, rtol=1e-12)
-
-
-def test_a_flat_channel_has_no_snr_but_zero_cv():
+def test_a_flat_channel_has_zero_cv():
     flat = np.full((1, 100), 3.0)
-    assert np.isnan(channel_snr(flat)).all()      # sigma == 0, the division is undefined
-    assert_allclose(channel_cv(flat), 0.0)        # sigma == 0, the ratio is not
+    assert_allclose(channel_cv(flat), 0.0)
 
 
 def test_a_zero_mean_channel_has_no_cv():
     assert np.isnan(channel_cv(np.array([[-1.0, 1.0]]))).all()
 
 
-def test_cv_is_blind_to_scale_and_snr_with_it():
+def test_cv_is_blind_to_scale():
     rng = np.random.default_rng(7)
     data = rng.normal(loc=2.0, scale=0.3, size=(3, 4000))
     assert_allclose(channel_cv(data * 1000), channel_cv(data), rtol=1e-12)
-    assert_allclose(channel_snr(data * 1000), channel_snr(data), rtol=1e-12)
 
 
 # ---- mask to segments ----

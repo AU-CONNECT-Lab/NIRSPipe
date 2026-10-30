@@ -18,12 +18,6 @@ ROI_MIN_CHANNELS = 1
 TIME_TOL_S = 1e-6
 
 
-def unwrap_enum(val: Any, default: Any = None) -> Any:
-    if val is None:
-        return default
-    return val.value if hasattr(val, "value") else val
-
-
 def is_optical_density(raw: Any) -> bool:
     """True if the data is already optical density (OD conversion done upstream)."""
     types = set(raw.get_channel_types())

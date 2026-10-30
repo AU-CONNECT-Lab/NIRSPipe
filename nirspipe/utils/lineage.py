@@ -183,7 +183,3 @@ class Recorder:
         if lin:
             self._stage_paths[lin.stage] = Path(path).as_posix()
         return path
-
-    @property
-    def last(self) -> Path | None:
-        return Path(self.entries[-1]["path"]) if self.entries else None

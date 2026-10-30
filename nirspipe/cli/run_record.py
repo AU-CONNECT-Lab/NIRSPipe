@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from nirspipe.io.derivatives import group_label
-from nirspipe.utils import unwrap_enum as _unwrap
 from nirspipe import __version__
 
 
@@ -80,7 +79,6 @@ def _settings(keys: tuple[str, ...], args: dict[str, Any], config: Any) -> dict[
             value = getattr(config, field)
         else:
             value = args.get(key)
-        value = _unwrap(value)
         # a table is read where the record is read, so it needs a path that works from anywhere
         if isinstance(value, Path) or (key == "bad_channels" and value and Path(str(value)).exists()):
             value = Path(value).resolve().as_posix()
@@ -184,10 +182,10 @@ def write_run_record(
         "task_label": args.get("task_label"),
         "bids_filter_file": (Path(args["bids_filter_file"]).resolve().as_posix()
                              if args.get("bids_filter_file") else None),
-        "analysis_level": _unwrap(args.get("analysis_level"), "participant"),
+        "analysis_level": args.get("analysis_level") or "participant",
         "nprocs": args.get("nprocs"),
         "skip_bids_validation": args.get("skip_bids_validation", False),
-        "ignore": [_unwrap(ig) for ig in (args.get("ignore") or [])],
+        "ignore": list(args.get("ignore") or []),
         "allow_cropped_input": args.get("allow_cropped_input", False),
         "config": Path(args["config"]).resolve().as_posix() if args.get("config") else None,
         "dry_run": args.get("dry_run", False),
@@ -204,7 +202,7 @@ def write_run_record(
         sections += _settings_sections(_settings(keys["prep"], args, prep_config),
                                        args.get("from_population"), "prep")
 
-    mode = _unwrap(args.get("mode"))
+    mode = args.get("mode")
     if mode is not None and post_config is not None:
         post = _settings(keys["post"], args, post_config)
         # short_channel's code default is auto, so a run told none says it too

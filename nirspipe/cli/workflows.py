@@ -33,7 +33,7 @@ from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, in_order
 from nirspipe.pipeline.dpf import dpf_from_age
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from nirspipe.utils import pair_of, unwrap_enum as _v
+from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, error_line, record_stem,
                                      write_run_outcome, write_run_record)
@@ -49,11 +49,11 @@ def _roi_map_name(args: dict[str, Any]) -> str:
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
     from nirspipe.pipeline.post_pipeline import SHORT_CHANNEL_AUTO, PostConfig
 
-    # CLI takes priority over TOML; Typer Enum values are unwrapped to plain strings.
+    # CLI takes priority over TOML
     def pick(cli_key: str, toml_key: str | None = None, default: Any = None) -> Any:
         cli_val = args.get(cli_key)
         if cli_val is not None:
-            return _v(cli_val)
+            return cli_val
         toml_val = toml.get(toml_key or cli_key)
         if toml_val is not None:
             return toml_val
@@ -134,7 +134,7 @@ def _resolve_post_settings(args: dict[str, Any],
     e.g. ``--mode rest --low-pass 0.08`` with no --config gives low_pass "cli" (0.08),
     high_pass "mode" (the rest preset's 0.01) and resample_sfreq "default" (None).
     """
-    defaults = mode_defaults(_v(args.get("mode")))
+    defaults = mode_defaults(args.get("mode"))
     layered = {**defaults, **config_toml}
     setting_args = _post_setting_args()
 
@@ -164,9 +164,9 @@ def _resolve_post_settings(args: dict[str, Any],
 
 def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str]) -> None:
     """Stop before any subject runs, naming the layer that chose cosine."""
-    if _v(args.get("drift_model")) != "cosine" or args.get("drift_high_pass") is not None:
+    if args.get("drift_model") != "cosine" or args.get("drift_high_pass") is not None:
         return
-    chosen_by = {"mode": f"--mode {_v(args['mode'])} uses", "config": "--config sets"}.get(
+    chosen_by = {"mode": f"--mode {args['mode']} uses", "config": "--config sets"}.get(
         sources.get("drift_model"), "--drift-model asks for")
     raise SystemExit(
         f"[error] {chosen_by} a cosine drift model, which needs --drift-high-pass. The "
@@ -176,7 +176,7 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
 
 def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
     """Stop before any subject runs: only a task GLM has events for auto to read."""
-    mode = _v(args.get("mode"))
+    mode = args.get("mode")
     if args.get("drift_high_pass") != "auto" or mode == "glm":
         return
     raise SystemExit(f"[error] --drift-high-pass auto reads the task's events, which only "
@@ -185,7 +185,7 @@ def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
 
 def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     """Stop before any subject runs when a GLM has no way to set its event durations."""
-    if _v(args.get("mode")) != "glm":
+    if args.get("mode") != "glm":
         return
     stim_dur = args.get("stim_dur")
     if stim_dur is not None and stim_dur <= 0:
@@ -451,7 +451,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                     from nirspipe.qc.subject.subject_index import write_subject_index
                     try:
                         write_subject_index(subject, sub_dir, " ".join(sys.argv),
-                                            mode=_v(args["mode"]) if args.get("mode") else None,
+                                            mode=args["mode"] if args.get("mode") else None,
                                             roi_map=roi_map)
                     except Exception:
                         logger.warning("sub-%s | run index failed", subject, exc_info=True)
@@ -750,7 +750,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     marker = args.get("keep_spans_from")
     keep_spans = _spans_for(args.get("keep_spans"), subject, entities, relative=bool(marker))
     # resolved here so the run record writes the value the method ran with
-    motion = motion_settings(_v(args["motion_correction"]), args.get("motion_std_thresh"),
+    motion = motion_settings(args["motion_correction"], args.get("motion_std_thresh"),
                              args.get("wavelet_iqr"))
     from_population = tuple(args.get("from_population") or ())
     batch_age = _app_options.population_age(args.get("population"), from_population)
@@ -774,7 +774,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
            if args.get("min_good_frac") is not None else {}),
         **({"screen_scope": args["screen_scope"]}
            if args.get("screen_scope") is not None else {}),
-        motion_correction=_v(args["motion_correction"]),
+        motion_correction=args["motion_correction"],
         motion_std_thresh=motion.get("motion_std_thresh"),
         wavelet_iqr=motion.get("wavelet_iqr"),
         bad_channels=_bad_channels_for(args.get("bad_channels"), subject, entities),
@@ -796,7 +796,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
         gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
         **_app_options.separation_bands_from_args(args),
-        ignore=[_v(ig) for ig in (args.get("ignore") or [])],
+        ignore=list(args.get("ignore") or []),
     )
 
 
@@ -835,7 +835,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         glm_est=glm_est,
         l_freq=high_pass,
         h_freq=low_pass,
-        mode=_v(args.get("mode")) if args.get("mode") else None,
+        mode=args.get("mode") or None,
         # read straight off args like `mode`, deliberately not through either PrepConfig
         # splat: this is a report option and PrepConfig has no field for it
         by_condition=bool(args.get("by_condition")),
@@ -873,7 +873,7 @@ def _run_post_for_subject(
     """
     from nirspipe.pipeline.post_pipeline import resolve_short_channel, run_post, write_combined_runs
 
-    mode = _v(args["mode"])
+    mode = args["mode"]
     task_label = args.get("task_label")
     tasks: list[str | None] = task_label if task_label else [None]
 

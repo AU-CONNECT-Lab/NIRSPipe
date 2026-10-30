@@ -229,20 +229,6 @@ def channel_cv(data: np.ndarray) -> np.ndarray:
     return np.divide(sigma, mu, out=np.full_like(sigma, np.nan), where=mu != 0)
 
 
-def channel_snr(data: np.ndarray) -> np.ndarray:
-    r"""Signal-to-noise ratio per channel, the reciprocal of CV (higher = better).
-
-    .. math::
-
-        \mathrm{SNR} = \frac{\mu}{\sigma}
-
-    NaN for channels whose std is 0.
-    """
-    mu = data.mean(axis=1)
-    sigma = data.std(axis=1)
-    return np.divide(mu, sigma, out=np.full_like(mu, np.nan), where=sigma > 0)
-
-
 @_safe_metrics("CV/SNR", (
     "cv_mean", "cv_mean_*", "cv_per_channel",     # cv_mean_* is one key per wavelength
     "snr_mean", "snr_per_channel", "snr_pass_rate", "n_flat_channels",

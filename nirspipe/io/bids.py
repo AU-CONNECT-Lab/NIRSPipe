@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import threading
 from collections import defaultdict
-from collections.abc import Iterator
 from pathlib import Path
 
 from bids import BIDSLayout
@@ -242,17 +241,3 @@ def bids_label(subject: str, entities: dict) -> str:
         if val:
             parts.append(f"{prefix}-{val}")
     return "_".join(parts)
-
-
-def iter_run_files(
-    layout: BIDSLayout,
-    subjects: list[str],
-    sessions: list[str | None],
-    task: str | None,
-) -> Iterator[tuple[Path, str]]:
-    """Yield (snirf_path, bids_label) for each subject × session run matching task."""
-    for sub in subjects:
-        for ses in sessions:
-            for f in get_nirs_files(layout, subject=sub, session=ses, task=task):
-                entities = layout.parse_file_entities(str(f))
-                yield f, bids_label(sub, entities)
