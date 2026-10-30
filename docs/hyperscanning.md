@@ -114,7 +114,7 @@ By default the coherence is reported for each task condition as well as for the 
 - `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window.
 - `--wtc-cond-transform` analyses each condition separately instead of reading it out of the whole recording. It cannot be combined with `--wtc-phase-null`.
 
-File names keep only the letters and digits of a condition's name, so two conditions that would get the same name, or a condition named `all`, are refused.
+File names keep only the letters and digits of a condition's name, so two conditions that would get the same name, or a condition named `all` or `whole_run`, are refused.
 
 ## Regions
 
@@ -202,7 +202,7 @@ No correction for multiple comparisons is applied unless `--p-correction` names 
 
 ## Excluded time
 
-Each pairing leaves out the excluded time of both members ([Excluded time](workflows.md#excluded-time)), and both nulls do the same. Every dyad table records each pairing's kept seconds as `kept_s`.
+Each pairing leaves out the excluded time of both members ([Excluded time](workflows.md#excluded-time)), and both nulls do the same. Every coherence and correlation table records each pairing's kept seconds as `kept_s`.
 
 ## Running on a GPU
 
