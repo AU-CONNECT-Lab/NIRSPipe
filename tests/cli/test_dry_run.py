@@ -1,6 +1,7 @@
 """--dry-run has to stop before the pipeline, not merely be recorded as having been asked for."""
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -33,6 +34,15 @@ def dry_out(mini_bids, tmp_path_factory):
 
 def test_the_record_is_written(dry_out):
     assert list((dry_out / "sub-01" / "logs").glob("sub-01*.toml"))
+
+
+def test_the_record_names_the_folder_its_log_is_in(dry_out):
+    from nirspipe.utils import load_toml
+
+    record = next((dry_out / "sub-01" / "logs").glob("sub-01*.toml"))
+    log_dir = Path(load_toml(record)["execution"]["log_dir"])
+    assert log_dir.resolve() == record.parent.resolve()
+    assert list(log_dir.glob("sub-01*.log"))
 
 
 def test_nothing_is_processed(dry_out):

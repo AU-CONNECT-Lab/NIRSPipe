@@ -168,6 +168,8 @@ def write_run_record(
 
     env = _environment()
     keys = config_keys()
+    out = record_path(sub_dir if sub_dir is not None else output_dir, subject,
+                      args.get("session_label"), args.get("task_label"))
 
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
@@ -175,7 +177,8 @@ def write_run_record(
         "run_command": _command_line(),
         "bids_dir": _fwd(args["bids_dir"]),
         "output_dir": _fwd(output_dir),
-        "log_dir": _fwd(output_dir / "logs"),
+        # the folder the record and the live log share
+        "log_dir": _fwd(out.parent),
         "participant_label": [subject],
         "session_label": args.get("session_label"),
         "task_label": args.get("task_label"),
@@ -216,8 +219,6 @@ def write_run_record(
                 **{k: post_sources[_FIELD_OF.get(k, k)] for k, v in post.items()
                    if v is not None and _FIELD_OF.get(k, k) in post_sources}}))
 
-    out = record_path(sub_dir if sub_dir is not None else output_dir, subject,
-                      args.get("session_label"), args.get("task_label"))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(sections), encoding="utf-8")
     return out
