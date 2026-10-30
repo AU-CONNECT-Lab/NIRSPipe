@@ -920,32 +920,36 @@ def _section_haemo(
     hbo_hbr_h = psd_panel_h = 0
 
     def _cut(raw):
-        """The span `crop` names, or the recording unchanged when there is no crop."""
+        """The span `crop` names, the recording unchanged with no crop, None when it is empty."""
         if raw is None or crop is None:
             return raw
         t0, t1 = max(0.0, float(crop[0])), min(float(raw.times[-1]), float(crop[1]))
-        return raw if t1 <= t0 else raw.copy().crop(tmin=t0, tmax=t1)
+        return None if t1 <= t0 else raw.copy().crop(tmin=t0, tmax=t1)
 
     raw_haemo_cut, raw_errts_cut = _cut(raw_haemo), _cut(raw_errts)
-    psd_stages_cut = [(label, _cut(raw)) for label, raw in (psd_stages or [])] or None
+    psd_stages_cut = [(label, cut) for label, raw in (psd_stages or [])
+                      if (cut := _cut(raw)) is not None] or None
+    # a window past the recording's end measures nothing, rather than the whole run
+    empty = raw_haemo_cut is None
 
     # One figure for both stages rather than one each: they share a colour scale and a
     # channel order, which is what makes the pair subtract by eye. A run with no denoising
     # passes raw_after=None and the panel draws its one-stage form.
-    with _guard("HbO-HbR correlation panel", errors, subject):
-        fig = hbo_hbr_correlation_figure(
-            raw_haemo_cut,
-            title="HbO–HbR Signal Quality",
-            sep_bands=sep_bands,
-            raw_after=raw_errts_cut,
-            task_modelled=(mode == "glm"))
-        if fig is None:
-            raise RuntimeError("no haemoglobin channels to correlate")
-        # the panel sizes itself to the page: its matrix is square-constrained and only the
-        # browser knows how wide the column is. See `fit_js`.
-        hbo_hbr_path, hbo_hbr_h = _save_plotly_html(
-            fig, figures_dir / fig_name("hbohbrcorr"),
-            extra_js=hbo_hbr_fit_js(fig))
+    if not empty:
+        with _guard("HbO-HbR correlation panel", errors, subject):
+            fig = hbo_hbr_correlation_figure(
+                raw_haemo_cut,
+                title="HbO–HbR Signal Quality",
+                sep_bands=sep_bands,
+                raw_after=raw_errts_cut,
+                task_modelled=(mode == "glm"))
+            if fig is None:
+                raise RuntimeError("no haemoglobin channels to correlate")
+            # the panel sizes itself to the page: its matrix is square-constrained and only the
+            # browser knows how wide the column is. See `fit_js`.
+            hbo_hbr_path, hbo_hbr_h = _save_plotly_html(
+                fig, figures_dir / fig_name("hbohbrcorr"),
+                extra_js=hbo_hbr_fit_js(fig))
 
     # Recomputed rather than read from the record: the record measures each stage on the
     # signal as it stands there, which cannot be compared across the bandpass. See
@@ -975,7 +979,7 @@ def _section_haemo(
             return raw
         return raw.copy().pick(names)
 
-    if len(stages) > 1:
+    if len(stages) > 1 and not empty:
         from nirspipe.qc.metrics import comparable_stage_metrics
 
         with _guard("Denoising stage metrics", errors, subject):
@@ -991,8 +995,9 @@ def _section_haemo(
                     config.cardiac_l_freq, config.cardiac_h_freq,
                     config.resp_l_freq, config.resp_h_freq, limited=limited)
             else:
+                # nothing to band-limit, so a condition's stages are cut before they are measured
                 stage_metrics = comparable_stage_metrics(
-                    [(label, _long_only(raw)) for label, raw in stages], l_freq, h_freq,
+                    [(label, _cut(_long_only(raw))) for label, raw in stages], l_freq, h_freq,
                     config.cardiac_l_freq, config.cardiac_h_freq,
                     config.resp_l_freq, config.resp_h_freq, design=design)
             # the rows are band-limited either way; `banded` only reports whether that
@@ -1005,7 +1010,7 @@ def _section_haemo(
                 stage_metrics_path, stage_metrics_h = _save_plotly_html(
                     fig, figures_dir / fig_name("denoisestages"))
 
-    if psd:
+    if psd and not empty:
         with _guard("PSD figure", errors, subject):
             # the first stage and the last, which is what the analysis reads
             heart_rate = raw_verdict_view(record or {}).get("heart_rate")
