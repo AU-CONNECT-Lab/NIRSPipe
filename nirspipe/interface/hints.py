@@ -108,14 +108,11 @@ def analysis(form) -> Hints:
     else:
         hints.placeholders["--wavelet-iqr"] = f"{iqr:g} ({method} default)"
 
-    censored = bool(form.get("--gvtd-censor"))
-    if not censored:
+    if not form.get("--gvtd-censor"):
         hints.inactive += _CENSOR
-    # the fill reads every BAD_ span, the ones a table hands in as well as GVTD's
-    if not censored and not form.get("--bad-spans"):
-        hints.inactive.append("--censor-fill")
     if mode in (None, "none"):
-        hints.inactive += _CONFOUNDS + ["--export-mean-filled"]
+        # the fill runs in postprocessing on every BAD_ span, the file's own and dark edges too
+        hints.inactive += _CONFOUNDS + ["--export-mean-filled", "--censor-fill"]
     if mode != "glm":
         hints.inactive += _GLM_ONLY
     elif form.get("--hrf-model") != "fir":

@@ -81,11 +81,12 @@ def test_a_motion_setting_shows_only_for_a_method_that_reads_it():
     assert spline.placeholders["--motion-std-thresh"] == f"{STD_THRESH_DEFAULTS['spline']:g} (spline default)"
 
 
-def test_the_censor_settings_follow_what_marks_bad_spans():
+def test_the_gvtd_settings_follow_censoring_and_the_fill_follows_the_mode():
     assert {"--gvtd-censor-n-std", "--censor-fill"} <= set(_hints().inactive)
-    assert "--censor-fill" not in _hints(**{"--bad-spans": "spans.tsv"}).inactive
     censored = _hints(**{"--gvtd-censor": "long"})
-    assert not {"--gvtd-censor-n-std", "--gvtd-min-epoch-s", "--censor-fill"} & set(censored.inactive)
+    assert not {"--gvtd-censor-n-std", "--gvtd-min-epoch-s"} & set(censored.inactive)
+    # a file's own BAD_ spans and its dark edges are filled with no flag naming them
+    assert "--censor-fill" not in _hints(**{"--mode": "glm"}).inactive
 
 
 def test_the_band_note_says_when_high_pass_and_drift_disagree():
