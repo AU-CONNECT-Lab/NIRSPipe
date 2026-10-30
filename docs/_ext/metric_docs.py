@@ -96,6 +96,9 @@ PER_CHANNEL = {
 
 _SECTIONS = {"Parameters", "Returns", "Raises", "Notes", "References", "Examples", "See Also"}
 
+# a variant's hover text that says only that another chromophore reads the same way
+_SAME_CHROMOPHORE = re.compile(r"The same for (Hb[ORT])\.")
+
 
 def first_sentence(text):
     return re.split(r"(?<=[.!?])\s+(?=[A-Z])", text.strip(), maxsplit=1)[0]
@@ -153,10 +156,13 @@ def keys_of(item):
     return [item] if isinstance(item, str) else item[1]
 
 
+def codes(key):
+    return ", ".join(f"``{k}``" for k in (key, PER_CHANNEL.get(key)) if k)
+
+
 def name(key):
     label = metric_label(key)
-    codes = ", ".join(f"``{k}``" for k in (key, PER_CHANNEL.get(key)) if k)
-    return codes if label == key else f"**{_rst(label)}** ({codes})"
+    return codes(key) if label == key else f"**{_rst(label)}** ({codes(key)})"
 
 
 def formula_of(keys, bib_keys):
@@ -184,11 +190,18 @@ def entry(item, bib_keys):
         term, body = name(item), [_rst(sentence) + cite]
         tail = [" ".join(filter(None, (_rst(rest), colouring(item))))]
     else:
-        # each variant keeps its own hover text whole, so "the same at the 95th percentile" reads on from the line above
+        # each variant keeps its hover text whole ("the same at the 95th percentile"), but one naming only another chromophore joins the first line
+        same = [k for k in keys[1:] if _SAME_CHROMOPHORE.fullmatch(METRIC_SUMMARY[k])
+                and colouring(k) == colouring(keys[0])]
         term = f"**{_rst(item[0])}**"
         body = [f"- {name(k)}. " + " ".join(filter(None, (_rst(METRIC_SUMMARY[k]), colouring(k))))
-                for k in keys]
+                for k in keys if k not in same]
         body[0] += cite
+        if same:
+            chromophores = " and ".join(_SAME_CHROMOPHORE.fullmatch(METRIC_SUMMARY[k])[1] for k in same)
+            body[0] += f" {chromophores} the same: {', '.join(codes(k) for k in same)}."
+        if len(body) == 1:
+            body[0] = body[0].removeprefix("- ")
         tail = []
     for block in (formula, tail):
         if any(line.strip() for line in block):
