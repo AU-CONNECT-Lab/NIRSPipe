@@ -361,7 +361,7 @@ def run_prep(
         except Exception as exc:
             if not config.lenient:
                 raise
-            logger.exception("sub-%s | %s failed; going on without it", config.subject, name)
+            logger.exception("sub-%s | %s failed, going on without it", config.subject, name)
             skipped.append((name, str(exc)))
 
     entities_base = carry_entities(source_entities)

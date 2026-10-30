@@ -241,11 +241,11 @@ def _member_stages(output_dir: Path, record_path: Path) -> dict:
     nirs = Path(output_dir) / RAW_QC_STAGES / record_path.relative_to(output_dir).parent
     stages = scan_runs(nirs).get(label) or {}
     if "sci" not in stages:
-        raise StageError(f"{label}: no stage files under {nirs}; run `nirspipe-qc ... "
+        raise StageError(f"{label}: no stage files under {nirs}. Run `nirspipe-qc ... "
                          f"participant` on {label.split('_')[0]} again")
     if "preproc" not in stages:
         raise StageError(f"{label}: its raw QC could not convert it to haemoglobin, so it has "
-                         f"no dyad page; its own raw page says why")
+                         f"no dyad page. Its own raw page says why")
     return stages
 
 

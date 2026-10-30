@@ -1187,8 +1187,8 @@ def compute_run_sections(
     windowed: dict[str, Any] = {}
 
     if raw_intensity is not None:
-        # the input carries no marks of its own; the run's rejections and the user's stretches
-        # come from the sci file, the stretches left out here as screening left them out
+        # the input carries no marks of its own, so the run's rejections and the user's
+        # stretches come from the sci file, the stretches left out as screening left them out
         sci_sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
         bad_channels = list(sci_sidecar.get("bad_channels") or [])
         mark_bads(raw_intensity, bad_channels)

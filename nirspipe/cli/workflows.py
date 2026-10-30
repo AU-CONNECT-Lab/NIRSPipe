@@ -951,7 +951,7 @@ def _warn_on_split_tree(output_dir: Path) -> None:
         if sub.is_dir() and any(any(sub.glob(f"*/**/nirs/*{suffix}"))
                                 for suffix in RECORD_SUFFIXES.values()):
             logger.warning(
-                "quality records under %s are not part of this cohort page; aggregate that "
+                "quality records under %s are not part of this cohort page. Aggregate that "
                 "tree with its own `group` level", sub)
 
 

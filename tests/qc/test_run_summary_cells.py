@@ -4,7 +4,7 @@ from nirspipe.qc.common.channel_table import summary_cells
 
 
 def test_a_share_on_a_half_rounds_as_python_formats_it():
-    # 5 of 40 is 12.5%; JavaScript's Math.round printed 13% where the run report printed 12%
+    # 5 of 40 is 12.5%, which JavaScript's Math.round printed as 13% and the run report as 12%
     assert summary_cells(5, 40, None, None, None)["bad"] == "5/40 (12%)"
 
 

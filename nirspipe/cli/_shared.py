@@ -46,14 +46,14 @@ def refuse_output_in_input(bids_dir: Path, output_dir: Path, tool: str,
 
 
 def warn_on_mixed_tree(output_dir: Path, other: str) -> None:
-    """Say once that ``output_dir`` already holds the quality records ``other`` writes; both are kept."""
+    """Say once that ``output_dir`` already holds the quality records ``other`` writes, both kept."""
     from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
     from nirspipe.utils.logging import get_logger
 
     suffix = RECORD_SUFFIXES["sqmraw" if other == "nirspipe-qc" else "sqm"]
     if any(Path(output_dir).glob(f"sub-*/**/nirs/*{suffix}")):
         get_logger("cli.shared").warning(
-            "%s already holds `%s` records; both are kept, though raw QC and the analysis are "
+            "%s already holds `%s` records. Both are kept, though raw QC and the analysis are "
             "meant for trees of their own, as MRIQC's and fMRIPrep's are", output_dir, other)
 
 

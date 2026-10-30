@@ -25,7 +25,7 @@ RAW_KEYS = ("heart_rate", "cp_mean", "cardiac_ratio")
 
 
 def _recording(disturbed):
-    """A shared pulse at both wavelengths; ``disturbed`` adds a louder 1.7 Hz one inside STRETCH."""
+    """A shared pulse at both wavelengths, and with ``disturbed`` a louder 1.7 Hz one inside STRETCH."""
     names, locs, _ = _channel_layout(4, short=False)
     rng = np.random.default_rng(3)
     t = np.arange(int(SFREQ * DURATION)) / SFREQ

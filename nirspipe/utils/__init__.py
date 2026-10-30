@@ -22,7 +22,7 @@ def mark_bads(raw: Any, names) -> None:
     """``raw.info["bads"] = names``, left empty when that would mark every channel.
 
     MNE's fNIRS steps refuse a recording with no channel unmarked, which only raw QC's
-    lenient screening reaches; its rejections stay in the lists the record carries.
+    lenient screening reaches. Its rejections stay in the lists the record carries.
     """
     names = [ch for ch in names if ch in raw.ch_names]
     raw.info["bads"] = [] if len(names) == len(raw.ch_names) else names

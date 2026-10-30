@@ -283,8 +283,8 @@ def record_path(sub_dir: Path, subject: str, sessions: "list[str] | None" = None
 def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
     """The ``[post]`` settings of the newest pipeline run record under ``sub_dir/logs`` covering ``label``, or {}.
 
-    A record covers a run its ``[execution]`` task and session selection left in; with no
-    ``label`` any record covers. Raw QC's own records are not the pipeline's.
+    A record covers a run its ``[execution]`` task and session selection left in, and any
+    record covers when there is no ``label``. Raw QC's own records are not the pipeline's.
     """
     import tomllib
 
