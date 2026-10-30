@@ -299,6 +299,31 @@ def template_note(population: "str | None", template: "str | None") -> "str | No
     return None
 
 
+def bad_count(bad: "list[str]", n_total: int) -> "tuple[int, int, float, str]":
+    """The summary box's count, total, share in percent and badge colour."""
+    rate = 100 * len(bad) / n_total if n_total > 0 else 0.0
+    badge = "badge-green" if rate < 10 else "badge-yellow" if rate < 30 else "badge-red"
+    return len(bad), n_total, rate, badge
+
+
+def summary_cells(n_bad: int, n_total: int, good_frac: "float | None",
+                  heart_rate: "float | None", duration_s: "float | None") -> dict:
+    """The run summary's printed cells, formatted here once so both reports round a half alike.
+
+    ::
+
+      (5, 40, 0.85, 1.2, 391.4) -> {"bad": "5/40 (12%)", "frac": "85% of windows",
+                                    "heart_rate": "1.20 Hz (72 bpm)", "duration": "391 s"}
+    """
+    return {
+        "bad": f"{n_bad}/{n_total} ({100 * n_bad / n_total:.0f}%)" if n_total else None,
+        "frac": None if good_frac is None else f"{good_frac * 100:.0f}% of windows",
+        "heart_rate": (None if heart_rate is None
+                       else f"{heart_rate:.2f} Hz ({heart_rate * 60:.0f} bpm)"),
+        "duration": None if duration_s is None else f"{duration_s:.0f} s",
+    }
+
+
 def heart_rate_note(heart_rate: "float | None", cardiac: "tuple[float, float]") -> "str | None":
     """What to say when the heart rate lies outside the cardiac band, or None."""
     if heart_rate is None or cardiac[0] <= heart_rate <= cardiac[1]:

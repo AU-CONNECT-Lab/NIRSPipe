@@ -666,7 +666,7 @@ def condition_payloads(
     """
     from nirspipe.qc.boilerplate.vocabulary import metric_rows
     from nirspipe.qc.common.channel_table import (
-        uncorrected_view,
+        bad_count, summary_cells, uncorrected_view,
         CONDITION_OD_SPLIT_COLUMNS, HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS,
         WHOLE_RUN_ONLY_COLUMNS,
         channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
@@ -730,16 +730,18 @@ def condition_payloads(
         d["condition_label"] = label
         # the run's summary describes the run's verdict; this page screens on its own
         # stretch, so it carries its own count and says which window it is
-        n_total = len(rows)
-        bad_rate = 100 * len(cond_bad) / n_total if n_total else 0.0
+        run_summary = payload.get("summary") or {}
+        n_bad, n_total, bad_rate, badge_class = bad_count(sorted(cond_bad), len(rows))
         d["summary"] = {
-            **(payload.get("summary") or {}),
+            **run_summary,
             "run": label,
-            "n_bad": len(cond_bad),
+            "n_bad": n_bad,
             "n_total": n_total,
             "bad_rate": bad_rate,
-            "badge_class": ("badge-green" if bad_rate < 10
-                            else "badge-yellow" if bad_rate < 30 else "badge-red"),
+            "badge_class": badge_class,
+            # the window's own length, as the run report's condition pages print it
+            "cells": summary_cells(n_bad, n_total, run_summary.get("good_frac"),
+                                   run_summary.get("heart_rate"), float(t1) - float(t0)),
             "scope": section_note("raw.condition_scope", label=label, t0=t0, t1=t1),
         }
         # added only where they apply, so a run without spans carries the payload it did

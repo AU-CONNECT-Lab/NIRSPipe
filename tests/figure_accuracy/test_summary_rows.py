@@ -1,5 +1,6 @@
 """The run report's summary and Run summary carry what the raw viewer shows of the same recording."""
 
+import json
 import re
 
 import pytest
@@ -58,3 +59,21 @@ def test_a_condition_page_leaves_out_what_only_the_whole_run_measures(condition_
     html = _condition_page(condition_run, BLOCKS[0][0])
     assert _metric_row(html, "Mean CP (exp.)") is None
     assert _metric_row(html, "Flat channels") is None
+
+
+def _summary_cell(html: str, heading: str) -> str:
+    cell = re.search(rf"<th>{heading}</th>\s*<td>(.*?)</td>", html, flags=re.S).group(1)
+    return re.sub(r"<[^>]+>", "", cell).split(",")[0].strip()
+
+
+def test_the_raw_viewer_prints_the_run_report_s_summary_cells(denoise_run, raw_viewer_run):
+    report = denoise_run.report.read_text(encoding="utf-8")
+    page = raw_viewer_run.report.with_name(
+        raw_viewer_run.report.name.replace("_report.html", "_desc-raw_report.html"))
+    html = page.read_text(encoding="utf-8")
+    data = json.loads(re.search(r"var _STATIC_DATA = (\[.*?\]);\n", html, re.S).group(1))[0]
+    cells = data["summary"]["cells"]
+    for key, heading in (("bad", "Bad channels"), ("frac", "Passing windows"),
+                         ("heart_rate", "Heart rate"), ("duration", "Duration")):
+        assert cells[key] == _summary_cell(report, heading), key
+

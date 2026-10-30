@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 - `channel_snr`, a whole-run SNR the record does not use, and `iter_run_files`, `unwrap_enum` and `Recorder.last`, which nothing needed
 
 ### Fixed
+- The raw viewer printed a run's bad-channel share and heart rate rounded half up where the run report rounded half to even, 13% against 12%; both now print one formatting
 - Raw QC's corrections under `tpca` and the spline methods now leave rejected channels out, and its condition verdicts count hand-marked and `channels.tsv` channels, as the pipeline's do
 - The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it
 - The GUI's Analysis form hid `--censor-fill` unless `--gvtd-censor` or `--bad-spans` was set, though spans already in the file and dark edges are filled too

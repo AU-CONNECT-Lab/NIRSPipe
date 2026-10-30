@@ -41,7 +41,9 @@ from nirspipe.qc.common.channel_table import (
     separation_blocks,
     separation_notes,
     split_table,
+    summary_cells,
     uncorrected_view,
+    bad_count,
 )
 from nirspipe.qc.metrics import IMU_STAT_KEYS, long_short_channels, resolve_cutoffs
 from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, separation_orphans
@@ -674,8 +676,7 @@ def _process_run(
     save_channel_csv(ch_rows, label, sqm_dir, sci_threshold, psp_threshold=cutoffs["psp"],
                      suffix=RAW_CHANNEL_METRICS_SUFFIX, fields=RAW_CSV_FIELDS)
 
-    n_total = len(sci_scores)
-    bad_rate = 100 * len(bad_channels) / n_total if n_total else 0.0
+    n_bad, n_total, bad_rate, badge_class = bad_count(sorted(bad_channels), len(sci_scores))
     loose_rows = metric_rows({**view_scalars, **imu_sec},
                              _VIEW_MONTAGE_KEYS if sqm_split else _VIEW_SCALAR_KEYS,
                              skip_missing=True)
@@ -684,11 +685,13 @@ def _process_run(
         # between them and the rejected count is the first thing that differs.
         "summary": {
             "run": label,
-            "n_bad": len(bad_channels),
+            "n_bad": n_bad,
             "n_total": n_total,
             "bad_rate": bad_rate,
-            "badge_class": ("badge-green" if bad_rate < 10
-                            else "badge-yellow" if bad_rate < 30 else "badge-red"),
+            "badge_class": badge_class,
+            # printed as they come, formatted as the run report formats them
+            "cells": summary_cells(n_bad, n_total, cutoffs["good_frac"], heart_rate,
+                                   float(raw.times[-1] - raw.times[0])),
             "sci_threshold": cutoffs["sci"],
             "good_frac": cutoffs["good_frac"],
             "dpf": dpf_text(config.dpf, wavelengths(raw_od), config.age),

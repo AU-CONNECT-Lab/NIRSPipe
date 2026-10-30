@@ -65,7 +65,8 @@
       {% if condition_label %}
       <tr><th>Scope</th><td>condition &ldquo;{{ condition_label }}&rdquo;</td></tr>
       {% endif %}
-      {% if duration_s is not none %}<tr><th>Duration</th><td>{{ '%.0f'|format(duration_s) }} s</td></tr>{% endif %}
+      {% set cells = summary_cells(n_bad, n_total, good_frac_thresh, heart_rate, duration_s) %}
+      {% if cells.duration %}<tr><th>Duration</th><td>{{ cells.duration }}</td></tr>{% endif %}
       <tr><th>Date</th><td>{{ run_date }}</td></tr>
       <tr><th>nirspipe</th><td>v{{ versions.get('nirspipe', 'n/a') }}</td></tr>
       <tr><th>MNE</th><td>v{{ versions.get('mne', 'n/a') }}</td></tr>
@@ -75,15 +76,16 @@
       <tr>
         <th>{{ bad_heading | default('Bad channels') }}</th>
         {% if condition_unassessed %}<td>n/a</td>
-        {% else %}<td><span class="{{ badge_class }}">{{ n_bad }}/{{ n_total }} ({{ "%.0f"|format(bad_rate) }}%)</span></td>{% endif %}
+        {% elif cells.bad %}<td><span class="{{ badge_class }}">{{ cells.bad }}</span></td>
+        {% else %}<td>&mdash;</td>{% endif %}
       </tr>
       {% if condition_kept %}<tr><th>Kept</th><td>{{ condition_kept }}</td></tr>{% endif %}
       <tr><th>SCI threshold</th><td>{{ config.sci_threshold }}</td></tr>
-      {% if good_frac_thresh is not none %}<tr><th>Passing windows</th><td>{{ '%.0f'|format(good_frac_thresh * 100) }}% of windows</td></tr>{% endif %}
+      {% if cells.frac %}<tr><th>Passing windows</th><td>{{ cells.frac }}</td></tr>{% endif %}
       <tr><th>Motion corr.</th><td>{{ config.motion_correction }}</td></tr>
       <tr><th>DPF</th><td>{{ dpf_label }}</td></tr>
       <tr><th>Cardiac band</th><td>{{ '%g'|format(config.cardiac_l_freq) }}&ndash;{{ '%g'|format(config.cardiac_h_freq) }} Hz</td></tr>
-      <tr><th>Heart rate</th><td>{% if heart_rate is not none %}{{ '%.2f'|format(heart_rate) }} Hz ({{ (heart_rate * 60)|round|int }} bpm){% if heart_rate_outside %}, <span class="qm-bad">outside the cardiac band</span>{% endif %}{% else %}&mdash;{% endif %}</td></tr>
+      <tr><th>Heart rate</th><td>{% if cells.heart_rate %}{{ cells.heart_rate }}{% if heart_rate_outside %}, <span class="qm-bad">outside the cardiac band</span>{% endif %}{% else %}&mdash;{% endif %}</td></tr>
       <tr><th>Respiration band</th><td>{{ '%g'|format(config.resp_l_freq) }}&ndash;{{ '%g'|format(config.resp_h_freq) }} Hz</td></tr>
     </table>
   </div>

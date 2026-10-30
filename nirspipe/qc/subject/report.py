@@ -85,7 +85,7 @@ from nirspipe.qc.common.channel_table import (
     CONDITION_OD_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS, OD_SPLIT_COLUMNS, WHOLE_RUN_ONLY_COLUMNS, channel_columns,
     WAVELENGTH_COLUMNS, channel_rows, format_rows, heatmap_args, measured_columns, pair_rows, pair_wavelengths,
     heart_rate_note, placement_note, region_table, roi_overlap_note, separation_blocks,
-    separation_notes, template_note,
+    separation_notes, template_note, bad_count, summary_cells,
 )
 from nirspipe.qc.common.figure_io import (
     CENTER_FIGURE_CSS, FILL_FRAME_JS, TOPO_PICK_JS, _fig_href, _pair_fname, save_png,
@@ -1785,16 +1785,9 @@ def _section_channel_summary(
     return {"channel_summary_path": path, "channel_summary_h": h}
 
 
-def _bad_count(bad: "list[str]", n_total: int) -> "tuple[int, int, float, str]":
-    """The summary box's count, total, share in percent and badge colour."""
-    rate = 100 * len(bad) / n_total if n_total > 0 else 0.0
-    badge = "badge-green" if rate < 10 else "badge-yellow" if rate < 30 else "badge-red"
-    return len(bad), n_total, rate, badge
-
-
 def _failing_summary(failing: "list[str]", n_total: int) -> dict:
     """A condition page's summary box: the channels failing on its own stretch, so named."""
-    n_bad, n_total, bad_rate, badge_class = _bad_count(failing, n_total)
+    n_bad, n_total, bad_rate, badge_class = bad_count(failing, n_total)
     return {"n_bad": n_bad, "n_total": n_total, "bad_rate": bad_rate,
             "badge_class": badge_class, "bad_channels": failing,
             "bad_heading": section_note("summary.condition_failing")}
@@ -2447,7 +2440,7 @@ def build_subject_report(
                          if by_condition else
                          {"condition_summary_path": None, "condition_summary_h": 0})
 
-    n_bad, n_total, bad_rate, badge_class = _bad_count(bad_channels, len(sci_scores))
+    n_bad, n_total, bad_rate, badge_class = bad_count(bad_channels, len(sci_scores))
 
     run_label_text = sqm_label or f"sub-{subject}"
     report_vars = dict(
@@ -2469,6 +2462,7 @@ def build_subject_report(
         metric_summary=metric_summary,
         is_key_metric=is_key_metric,
         format_metric=format_metric,
+        summary_cells=summary_cells,
         metric_class=metric_class,
         metric_label=metric_label,
         with_unit=with_unit,

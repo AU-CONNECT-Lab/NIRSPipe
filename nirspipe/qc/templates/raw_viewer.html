@@ -847,23 +847,24 @@ function loadSummary() {
     var el = document.getElementById(id);
     if (el) el.innerHTML = html;
   }
+  // formatted in Python, as the run report formats them, so a half rounds one way on both
+  var cells = d.cells || {};
   put("sum-run", _esc(d.run || ""));
+  put("sum-duration", cells.duration || "&mdash;");
   // an unassessed condition counted no window, so a count of failing channels would be 0
-  put("sum-bad", d.unassessed ? "n/a" : d.n_total
-      ? "<span class='" + (d.badge_class || "") + "'>" + d.n_bad + "/" + d.n_total
-        + " (" + Math.round(d.bad_rate || 0) + "%)</span>"
+  put("sum-bad", d.unassessed ? "n/a" : cells.bad
+      ? "<span class='" + (d.badge_class || "") + "'>" + cells.bad + "</span>"
       : "&mdash;");
   put("sum-kept", _esc(d.kept || ""));
   var keptRow = document.getElementById("sum-kept-row");
   if (keptRow) keptRow.hidden = !d.kept;
   put("sum-sci", d.sci_threshold === undefined ? "&mdash;" : _esc(d.sci_threshold));
-  put("sum-frac", d.good_frac === undefined ? "&mdash;"
-                  : Math.round(d.good_frac * 100) + "% of windows");
+  put("sum-frac", cells.frac || "&mdash;");
   put("sum-dpf", _esc(d.dpf || ""));
   put("sum-cardiac", (d.cardiac || []).length
       ? _esc(d.cardiac[0]) + "&ndash;" + _esc(d.cardiac[1]) + " Hz" : "&mdash;");
-  put("sum-hr", d.heart_rate == null ? "&mdash;"
-      : d.heart_rate.toFixed(2) + " Hz (" + Math.round(d.heart_rate * 60) + " bpm)"
+  put("sum-hr", !cells.heart_rate ? "&mdash;"
+      : cells.heart_rate
         + (d.heart_rate_outside ? ", <span class='qm-bad'>outside the cardiac band</span>" : ""));
   put("sum-resp", (d.resp || []).length
       ? _esc(d.resp[0]) + "&ndash;" + _esc(d.resp[1]) + " Hz" : "&mdash;");
@@ -880,13 +881,6 @@ function loadSqm() {
 // subject report reads too, so the two views of one recording cannot disagree about whether
 // a channel set passed.
 function renderSqm(d) {
-  var tsDiv = document.getElementById("ts-plot");
-  var dur = document.getElementById("sum-duration");
-  if (dur) {
-    var range = tsDiv && tsDiv.layout && tsDiv.layout.xaxis && tsDiv.layout.xaxis.range;
-    dur.textContent = range ? (range[1] - range[0]).toFixed(0) + " s" : "—";
-  }
-
   // three cases, because "every channel" means two different things: a montage with no
   // short channels to separate, and a page whose separation is in the tables below. Saying
   // the first on the second printed a sentence the Short rows underneath contradicted.
