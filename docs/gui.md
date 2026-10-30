@@ -162,7 +162,7 @@ The Analysis page set up as the tutorial's preprocessing step, after the run: th
 
 ### Run record
 
-Give **Run record** a run's record (a `.toml` in `<output_dir>/sub-<id>/logs/`) or any `--config` file, and **Load into the form** fills every field it holds, read as `nirspipe --config` reads it: a file the command line would refuse shows its message. A record holds no folders, so the two folder fields keep the last ones used; check them.
+Give **Run record** a run's record (a `.toml` in `<output_dir>/sub-<id>/logs/`) or any `--config` file, and **Load into the form** fills every field it holds, read as `nirspipe --config` reads it: a file the command line would refuse shows its message. Loading takes no folders from it, so the two folder fields keep the last ones used. Check them.
 
 ### Stages
 
@@ -178,7 +178,7 @@ The form follows the choices that change what other flags mean:
 
 ### Choosing the drift cutoff
 
-A drift cutoff that is too high removes part of your task along with the drift. The usual choice is `1/(2T)`, with `T` the longest gap between two trials of the same condition, and never below `--high-pass`. The Edit events section of [Data Preparation](#edit-events) shows the value for a run's events, and typing `auto` in the field sets it from each run's own events (glm mode only). The form warns when the value is outside these limits. See [Choosing the drift cutoff](workflows.md#choosing-the-drift-cutoff).
+A drift cutoff that is too high removes part of your task along with the drift. The usual choice is `1/(2T)`, with `T` the longest gap between two trials of the same condition, and never below `--high-pass`. The Edit events section of [Data Preparation](#edit-events) shows the value for a run's events, and typing `auto` in the field sets it from each run's own events (glm mode only). The form warns when the cutoff is missing or below `--high-pass`, and the run warns when it is high enough to remove a condition. See [Choosing the drift cutoff](workflows.md#choosing-the-drift-cutoff).
 
 ## Hyper Analysis
 
