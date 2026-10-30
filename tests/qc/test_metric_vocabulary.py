@@ -77,14 +77,16 @@ def _scalar_metric_keys() -> set[str]:
 def _template_metric_keys() -> set[str]:
     """The keys the report's metrics panel asks the registry about.
 
-    Three call shapes, because the panel prints three kinds of row: `qm_li('x', …)` for a
-    list row, `ql('x', …)` for a bare label, and `('x', 'Label')` for a column in the
-    channel-set table. All three end in a registry lookup, so all three are drift risks.
+    Four call shapes, because the panel prints four kinds of row: `qm_li('x', …)` for a
+    list row, `ql('x', …)` for a bare label, `span_row('x', …)` for a row across the sets,
+    and `('x', metric_label('x'))` or `('x', 'Label')` for a column in the channel-set
+    table. All of them end in a registry lookup, so all of them are drift risks.
     """
     text = _SUBJECT_TEMPLATE.read_text(encoding="utf-8")
     return (set(re.findall(r"\bqm_li\('([^']+)'", text))
             | set(re.findall(r"\bql\('([^']+)'", text))
-            | set(re.findall(r"\('([a-z0-9_]+)',\s*'[A-Z]", text)))
+            | set(re.findall(r"\bspan_row\('([a-z0-9_]+)'", text))
+            | set(re.findall(r"\('([a-z0-9_]+)',\s*(?:'[A-Z]|metric_label\()", text)))
 
 
 def _view_metric_keys() -> set[str]:

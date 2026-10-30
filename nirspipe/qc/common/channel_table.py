@@ -24,11 +24,10 @@ from nirspipe.io.optode_space import placement_of
 from nirspipe.io.tables import column_entries, write_tsv
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.boilerplate.vocabulary import (
-    CHANNEL_QC_COLUMNS, MISSING_VALUE, condition_label,
+    CHANNEL_QC_COLUMNS, MISSING_VALUE, condition_label, metric_label,
 )
 from nirspipe.qc.metrics._helpers import bands_from_record, in_long_band, in_short_band
 from nirspipe.qc.metrics.coupling import CV_WINDOW_S, PSP_WINDOW_S, SCI_WINDOW_S
-from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
 from nirspipe.utils import bare_roi_map, pair_of, pair_order, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
@@ -484,22 +483,13 @@ RAW_CSV_FIELDS = tuple(f for f in CSV_FIELDS if not f.startswith("short_share_")
 # The optical-density metrics the "one file, three channel sets" table prints, in column
 # order. Shared because the subject report and the raw viewer both draw that table and a
 # column added to one and not the other is a difference a reader reads as a finding.
-OD_SPLIT_COLUMNS = (
-    ("channel_retention_rate", "Channel retention"),
-    ("sci_win_mean",           f"Mean SCI ({SCI_WINDOW_S:g} s)"),
-    ("sci_mean",               "Mean SCI (whole run)"),
-    ("good_frac_mean",         "Passing windows"),
-    ("psp_mean",               f"Mean PSP ({PSP_WINDOW_S:g} s)"),
-    ("heart_rate",             "Heart rate (Hz)"),
-    ("snr_mean",               f"Mean SNR μ/σ ({CV_WINDOW_S:g} s)"),
-    ("cv_mean",                f"Mean CV ({CV_WINDOW_S:g} s)"),
-    ("mean_amp_mean",          "Mean amplitude"),
-    ("n_saturated_channels",   "Saturated channels"),
-    ("spike_pct",              "Spike share"),
+OD_SPLIT_COLUMNS = tuple((key, metric_label(key)) for key in (
+    "channel_retention_rate", "sci_win_mean", "sci_mean", "good_frac_mean", "psp_mean",
+    "heart_rate", "snr_mean", "cv_mean", "mean_amp_mean", "n_saturated_channels", "spike_pct",
     # a sum over the set's channels, so it is read against the row's channel count rather
     # than against another row
-    ("spike_count",            "Spike count"),
-)
+    "spike_count",
+))
 
 # The motion table's columns, a separate table rather than more of the one above because
 # nearly all of these measure a *set* rather than group per-channel numbers: GVTD is an RMS
@@ -508,22 +498,14 @@ OD_SPLIT_COLUMNS = (
 # column. "Corrected per channel" is the exception, a mean over the set, and does compare
 # across rows. Here rather than in either template, so the raw viewer and the subject report
 # cannot end up listing different metrics for the same recording.
-MOTION_SPLIT_COLUMNS = (
-    ("gvtd_filt_mean",        f"GVTD mean {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
-    ("gvtd_filt_p95",         f"GVTD p95 {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
-    ("gvtd_pct_above_thresh", "GVTD % above threshold"),
-    ("gvtd_num_above_thresh", "GVTD frames above threshold"),
-    ("gvtd_thresh",           "GVTD threshold"),
-    ("spike_pct_frames",      "Spike % frames"),
-    ("spike_num_frames",      "Spike frames"),
-    # "per channel" is the average share of each channel the correction altered; "% frames"
-    # is the share of timepoints where it altered at least a tenth of the set. Different
-    # questions, which is why both are here under names that do not read as the same one
-    ("motion_corrected_frac_mean", "Corrected per channel"),
-    ("motion_corrected_pct",       "Corrected % frames"),
-    ("motion_corrected_num",       "Corrected frames"),
-    ("motion_corrected_n_segments", "Corrected segments"),
-)
+MOTION_SPLIT_COLUMNS = tuple((key, metric_label(key)) for key in (
+    "gvtd_filt_mean", "gvtd_filt_p95", "gvtd_pct_above_thresh", "gvtd_num_above_thresh",
+    "gvtd_thresh", "spike_pct_frames", "spike_num_frames",
+    # the average share of each channel the correction altered, then the share of timepoints
+    # where it altered at least a tenth of the set: two questions, two registry labels
+    "motion_corrected_frac_mean", "motion_corrected_pct", "motion_corrected_num",
+    "motion_corrected_n_segments",
+))
 
 # optical-density metrics no set table has a column for; templates read it as `od_loose_keys`
 OD_LOOSE_KEYS = ("cp_mean", "n_flat_channels")

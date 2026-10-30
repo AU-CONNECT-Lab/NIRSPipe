@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- Every page heads a metric with its registry label and format: the subject index prints SCI to three decimals and retention to one, and the short motion-table forms are gone
 - `nirspipe` and `nirspipe-qc participant` warn once when the output directory already holds the other's records, and `nirspipe group` no longer suggests sharing one directory
 - The raw QC dyad page draws each member's own prepared files from `stages/`, so its corrected side matches the member's page; a tree without them is refused
 - mALFF and zALFF are standardised against the run's good long channels only. Under `--short-channel none` or `mean`, a short channel's scalp amplitude had entered the reference

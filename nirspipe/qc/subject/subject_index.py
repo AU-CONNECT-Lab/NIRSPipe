@@ -26,8 +26,7 @@ from pathlib import Path
 from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.utils import pair_of
 from nirspipe.qc.boilerplate import collect_software_versions
-from nirspipe.qc.boilerplate.vocabulary import format_metric, with_unit
-from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND
+from nirspipe.qc.boilerplate.vocabulary import format_metric, metric_label
 from nirspipe.qc.metrics.windowed import long_or_all
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
@@ -52,16 +51,14 @@ logger = get_logger("qc.subject_index")
 # Long channels first, all channels as the fallback, which is the same preference the run's
 # own report and the hyperscanning tables use. `Motion corr.` has no long-channel form: the
 # correction footprint counts what the correction touched, over every channel.
-_COLUMNS = (
-    ("Channels kept", ("raw_long_channel_retention_rate", "raw_channel_retention_rate"), "{:.0%}"),
-    ("SCI mean",      ("raw_long_sci_mean", "raw_sci_mean"),                             "{:.2f}"),
-    (with_unit("gvtd_p95", "GVTD p95"), ("raw_long_gvtd_p95", "raw_gvtd_p95"),
-     partial(format_metric, "gvtd_p95")),
-    # a fraction of the recording, not a percentage: `motion_corrected_pct` is the mean of
-    # a per-sample boolean, so `{:.1f}%` would print it 100 times too small
-    ("Motion corr.",  ("motion_motion_corrected_pct",),                                  "{:.1%}"),
-    ("HbO-HbR corr",  ("preproc_long_hbo_hbr_corr_mean", "preproc_hbo_hbr_corr_mean"),   "{:+.2f}"),
-)
+_COLUMNS = tuple((metric_label(metric), keys, partial(format_metric, metric))
+                 for metric, keys in (
+    ("channel_retention_rate", ("raw_long_channel_retention_rate", "raw_channel_retention_rate")),
+    ("sci_mean",               ("raw_long_sci_mean", "raw_sci_mean")),
+    ("gvtd_p95",               ("raw_long_gvtd_p95", "raw_gvtd_p95")),
+    ("motion_corrected_pct",   ("motion_motion_corrected_pct",)),
+    ("hbo_hbr_corr_mean",      ("preproc_long_hbo_hbr_corr_mean", "preproc_hbo_hbr_corr_mean")),
+))
 
 
 # The report files a run can leave behind, best first, as (link text, path relative to
@@ -104,16 +101,10 @@ def _names(label: str) -> dict[str, str]:
 # figures above. `Spike frames` and `Motion corr.` have no per-set block and come off the
 # span lists, which are the long set and every channel respectively; each column is one
 # measurement down its length either way, which is what the whole-run row is built to keep.
-_COND_COLUMNS = (
-    ("SCI (10 s)",      "sci_win_mean",            "{:.3f}"),
-    ("SNR μ/σ",         "snr_mean",                "{:.0f}"),
-    (with_unit("gvtd_filt_mean", f"GVTD {GVTD_MOTION_BAND[0]:g}-{GVTD_MOTION_BAND[1]:g} Hz"),
-     "gvtd_filt_mean", partial(format_metric, "gvtd_filt_mean")),
-    ("GVTD above thr.", "gvtd_pct_above_thresh",   "{:.1%}"),
-    ("Spike frames",    "spike_pct_frames",        "{:.1%}"),
-    ("Motion corr.",    "motion_corrected_pct",    "{:.1%}"),
-    ("Retention",       "channel_retention_rate",  "{:.0%}"),
-)
+_COND_COLUMNS = tuple((metric_label(key), key, partial(format_metric, key)) for key in (
+    "sci_win_mean", "snr_mean", "gvtd_filt_mean", "gvtd_pct_above_thresh", "spike_pct_frames",
+    "motion_corrected_pct", "channel_retention_rate",
+))
 
 # The spans behind each share, read on the long set, and the key it fills. The whole-run row
 # counts these over the full recording rather than reading the record's own scalar of the

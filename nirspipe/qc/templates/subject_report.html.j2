@@ -579,10 +579,9 @@
 {% endif %}
 
 <!-- ================================================= quantitative metrics -->
-{#- Number formats, colour cutoffs and tooltips all come from the metric registry in
-    nirspipe.qc.boilerplate.vocabulary, which the raw viewer and the GUI read as well, so
-    a threshold moves in one place instead of once per renderer. Only the labels are
-    written here, where a header has room to say more than a registry default can. -#}
+{#- Labels, number formats, colour cutoffs and tooltips all come from the metric registry
+    in nirspipe.qc.boilerplate.vocabulary, which the raw viewer and the GUI read as well,
+    so a metric reads the same on every page and a threshold moves in one place. -#}
 {#- label + hover text from the metric registry; a marker on the ones that decide usability -#}
 {% macro ql(key, text) %}<span class="ql{% if is_key_metric(key) %} ql-key{% endif %}"
       title="{{ metric_summary(key, (condition_label|default('')) != '') }}">{{ with_unit(key, text) }}{% if is_key_metric(key) %}<span class="ql-dot" aria-hidden="true">&#9679;</span>{% endif %}</span>{% endmacro %}
@@ -667,12 +666,12 @@
     {%- else %}
     {%- for key, text in [
           ('channel_retention_rate', metric_label('channel_retention_rate', condition=(condition_label|default('')) != '')),
-          ('sci_win_mean', 'Mean SCI (%g s windows)'|format(sci_window_s)),
-          ('sci_mean', 'Mean SCI (whole run)'),
-          ('good_frac_mean', 'Passing windows'),
-          ('psp_mean', 'Mean PSP (%g s windows)'|format(psp_window_s)),
-          ('snr_mean', 'Mean SNR μ/σ (intensity, %g s)'|format(cv_window_s)),
-          ('cv_mean', 'Mean CV (intensity, %g s)'|format(cv_window_s))] %}
+          ('sci_win_mean', metric_label('sci_win_mean')),
+          ('sci_mean', metric_label('sci_mean')),
+          ('good_frac_mean', metric_label('good_frac_mean')),
+          ('psp_mean', metric_label('psp_mean')),
+          ('snr_mean', metric_label('snr_mean')),
+          ('cv_mean', metric_label('cv_mean'))] %}
     {{ span_row(key, text, mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
     {%- endfor %}
     {%- for key in od_loose_keys if sqm.get(key) is not none %}
@@ -688,14 +687,15 @@
                        or sqm.get('cnr_hbo_mean_errts') is not none) %}
     {%- set cnr_epochs = ', %d epochs'|format(sqm.get('cnr_n_epochs')) if sqm.get('cnr_n_epochs') else '' %}
     {%- set hb_rows = [('hbo_hbr_corr_mean', 'HbO&ndash;HbR corr'),
-                       ('gcor_hbo', 'Global corr HbO'),
-                       ('gcor_hbr', 'Global corr HbR')]
+                       ('gcor_hbo', metric_label('gcor_hbo')),
+                       ('gcor_hbr', metric_label('gcor_hbr'))]
                       + ([('cnr_hbo_mean', 'CNR HbO' ~ cnr_epochs), ('cnr_hbr_mean', 'CNR HbR' ~ cnr_epochs)]
                          if has_cnr else [])
-                      + [('cardiac_band_frac_hbo', 'Cardiac band (HbO)'),
-                         ('cardiac_band_power_hbo', 'Cardiac band power (HbO)')]
+                      + [('cardiac_band_frac_hbo', metric_label('cardiac_band_frac_hbo')),
+                         ('cardiac_band_power_hbo', metric_label('cardiac_band_power_hbo'))]
                       + ([] if condition_label
-                         else [('lowfreq_drift_amplitude_hbo', 'Low-freq drift (HbO)')]) %}
+                         else [('lowfreq_drift_amplitude_hbo',
+                                metric_label('lowfreq_drift_amplitude_hbo'))]) %}
     {#- a row with no value anywhere on the page is left out, e.g. spectra on a condition too short for them -#}
     {%- for key, text in hb_rows %}
     {%- set after = sqm.get(key ~ '_errts') if key in errts_pairs else none %}
@@ -722,7 +722,7 @@
     {%- endfor %}
     {#- a share of the recording's duration, which no channel set owns -#}
     {%- if sqm.get('pct_data_retained') is not none %}
-    {{ span_row('pct_data_retained', '% data retained', mv('pct_data_retained', sqm.get('pct_data_retained')),
+    {{ span_row('pct_data_retained', metric_label('pct_data_retained'), mv('pct_data_retained', sqm.get('pct_data_retained')),
                 metric_class('pct_data_retained', sqm.get('pct_data_retained'))) }}
     {%- endif %}
 
@@ -738,10 +738,10 @@
                              (motion_sets.get('short') or {}, false)] %}{{ motion_cell(d, key, is_long) }}{% endfor %}</tr>
     {%- endfor %}
     {%- else %}
-    {%- for key, text in [('gvtd_filt_mean', 'GVTD mean %g-%g Hz'|format(*gvtd_band)),
-                          ('gvtd_filt_p95', 'GVTD p95 %g-%g Hz'|format(*gvtd_band)),
-                          ('gvtd_pct_above_thresh', 'GVTD % above threshold'),
-                          ('gvtd_thresh', 'GVTD threshold')]
+    {%- for key, text in [('gvtd_filt_mean', metric_label('gvtd_filt_mean')),
+                          ('gvtd_filt_p95', metric_label('gvtd_filt_p95')),
+                          ('gvtd_pct_above_thresh', metric_label('gvtd_pct_above_thresh')),
+                          ('gvtd_thresh', metric_label('gvtd_thresh'))]
           if not (condition_label and key == 'gvtd_thresh') %}
     {%- set after = sqm.get(key ~ '_post') %}
     {{ span_row(key, text ~ after_note, pair_with_count(key, sqm),
@@ -761,21 +761,21 @@
     {{ span_row(key, metric_label(key), mv(key, sqm.get(key)), metric_class(key, sqm.get(key))) }}
     {%- endfor %}
     {%- if not split_motion %}
-    {%- for key, text in [('motion_corrected_pct', 'Motion corrected % (exp.)'),
-                          ('motion_corrected_n_segments', 'Motion corrected segments')]
+    {%- for key, text in [('motion_corrected_pct', metric_label('motion_corrected_pct')),
+                          ('motion_corrected_n_segments', metric_label('motion_corrected_n_segments'))]
           if sqm.get('motion_corrected_pct') is not none %}
     {{ span_row(key, text, with_count(key, sqm), metric_class(key, sqm.get(key))) }}
     {%- endfor %}
-    {{ span_row('spike_pct_frames', 'Spike % frames' ~ before_note, with_count('spike_pct_frames', sqm),
+    {{ span_row('spike_pct_frames', metric_label('spike_pct_frames') ~ before_note, with_count('spike_pct_frames', sqm),
                 metric_class('spike_pct_frames', sqm.get('spike_pct_frames'))) }}
     {%- endif %}
     {#- on a split montage the per-set spike counts are in the optical-density rows; a
         condition page has no count of its own, so its share prints alone -#}
     {%- set spike_src = {'spike_pct': sqm.get('spike_pct')} if condition_label else sqm %}
     {%- if not sqm_split and sqm.get('spike_pct') is not none %}
-    {{ span_row('spike_pct', 'Spike % (exp.)', with_count('spike_pct', spike_src), metric_class('spike_pct', sqm.get('spike_pct'))) }}
+    {{ span_row('spike_pct', metric_label('spike_pct'), with_count('spike_pct', spike_src), metric_class('spike_pct', sqm.get('spike_pct'))) }}
     {%- elif not sqm_split and not condition_label %}
-    {{ span_row('spike_count', 'Spike count', mv('spike_count', sqm.get('spike_count')), metric_class('spike_count', sqm.get('spike_count'))) }}
+    {{ span_row('spike_count', metric_label('spike_count'), mv('spike_count', sqm.get('spike_count')), metric_class('spike_count', sqm.get('spike_count'))) }}
     {%- endif %}
     {#- ---- what the GLM's noise model left behind, on a task run ---- -#}
     {%- if sqm.get('whitening_lowband_hbo') is not none or sqm.get('whitening_lowband_hbr') is not none %}
