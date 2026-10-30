@@ -43,6 +43,7 @@ pip install -e ".[gpu]"
 | `mne-bids` | ≥ 0.14 | BIDS read and write |
 | `pybids` | ≥ 0.16 | BIDS dataset querying |
 | `nilearn` | ≥ 0.10 | GLM design matrix and fitting |
+| `statsmodels` | ≥ 0.14 | The robust refit of `--noise-model ar_irls`, and the cohort tests' p corrections |
 | `nibabel` | ≥ 3.2 | Surface curvature for the brain renders |
 | `scipy` | ≥ 1.11 | Filters, spectra |
 | `numpy` | ≥ 1.24 | Numerics |
@@ -54,6 +55,7 @@ pip install -e ".[gpu]"
 | `pillow` | ≥ 10.0 | Stitches the rendered brain views side by side |
 | `jinja2` | ≥ 3.1 | HTML report templates |
 | `joblib` | ≥ 1.3 | Parallel `--nprocs` dispatch |
+| `threadpoolctl` | ≥ 3.2 | Numeric threads per subject under `--nprocs` |
 | `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
 | `pycwt` | ≥ 0.4 | Wavelet transform coherence for hyperscanning |
 | `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
