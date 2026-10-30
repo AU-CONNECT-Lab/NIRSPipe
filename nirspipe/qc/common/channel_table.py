@@ -60,6 +60,12 @@ def _long_per_channel(record: dict) -> dict:
     return merged
 
 
+def uncorrected_view(record: dict) -> dict:
+    """``record`` as raw QC reads it: :func:`channel_rows` takes the correlation before the correction."""
+    per_channel = record.get("per_channel") or {}
+    return {**record, "per_channel": {k: v for k, v in per_channel.items() if k != "preproc"}}
+
+
 def channel_rows(
     record: dict,
     sci_scores: dict[str, float],
@@ -78,8 +84,8 @@ def channel_rows(
     ``raw`` section, which measured it even though no split claimed it; its scores are the
     same per-channel numbers either way, and only the scalar means they feed differ.
     ``corr`` is the exception and comes from the whole-file ``preproc`` section, so it is
-    filled for short channels too. A raw-only record has no ``preproc`` and reads
-    ``rawhaemo`` instead, the uncorrected side. ``corr_post`` is the same correlation on
+    filled for short channels too. Raw QC's views leave ``preproc`` out, through
+    :func:`uncorrected_view`, and read ``rawhaemo``, the uncorrected side. ``corr_post`` is the same correlation on
     the regression residual (``errts``), None where the record has none.
     """
     per_channel = record.get("per_channel") or {}

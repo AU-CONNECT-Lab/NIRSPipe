@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-hyper-pairnull` refuses a real table written under `--bads-scope subject` that does not record the tasks it pooled: rerun `nirspipe-hyper`
 - Raw QC pages no longer embed copies of five figures the viewer loads from their own files, so each page is smaller
 - The pipeline's record and per-trial table leave `--keep-spans` and `--bad-spans` stretches out of heart rate, cardiac power and cardiac ratio, as raw QC and screening do
+- **Breaking**: `nirspipe-qc participant` prepares each recording with the pipeline's own steps, so its record and pages match `nirspipe`'s for the same settings: rerun raw QC trees
+- Raw QC trees keep the prepared recordings in `stages/`, a dataset of their own that `.bidsignore` lists
 - The pipeline's record gains the HbO-HbR correlation before motion correction, `rawhaemo` at run level and `hbo_hbr_corr_mean_uncorrected` per condition, and the cohort tables their columns
 
 ### Removed
@@ -21,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - `channel_snr`, a whole-run SNR the record does not use, and `iter_run_files`, `unwrap_enum` and `Recorder.last`, which nothing needed
 
 ### Fixed
+- Raw QC's corrections under `tpca` and the spline methods now leave rejected channels out, and its condition verdicts count hand-marked and `channels.tsv` channels, as the pipeline's do
 - The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it
 - The GUI's Analysis form hid `--censor-fill` unless `--gvtd-censor` or `--bad-spans` was set, though spans already in the file and dark edges are filled too
 - A rest run whose drift model removes no trend also logged that `--high-pass` and `--low-pass` were missing when ALFF was skipped, though both were set

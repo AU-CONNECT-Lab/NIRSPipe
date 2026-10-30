@@ -473,15 +473,19 @@ def read_dataset_description(root: Path) -> dict[str, Any]:
 # whose data file is missing. Named one by one, never `*.json`, so every real sidecar and
 # every table stays checked.
 JSON_ONLY_DESCS = ("sqm", "sqmraw", "rating", "rawrating", "rawdecision", "rawspans")
-_BIDSIGNORE = ("*.html", "logs", "figures", "plotly-*.min.js",
+# the dataset inside a raw QC tree that holds its preprocessing stages
+RAW_QC_STAGES = "stages"
+
+_BIDSIGNORE = ("*.html", "logs", "figures", "plotly-*.min.js", RAW_QC_STAGES,
                *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS))
 
 
 def write_bidsignore(output_dir: Path) -> None:
     """Register the paths BIDS has no say over, so a validator skips rather than flags them.
 
-    Reports, logs, the figures inside them, and the JSON-only records. Every table and every
-    file with a sidecar stays on the validator's books, dyad tables included.
+    Reports, logs, the figures inside them, the JSON-only records, and raw QC's stage files,
+    a dataset of their own. Every other table and file with a sidecar stays on the
+    validator's books, dyad tables included.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / ".bidsignore").write_text("\n".join(_BIDSIGNORE) + "\n", encoding="utf-8")

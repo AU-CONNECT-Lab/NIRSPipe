@@ -18,6 +18,16 @@ ROI_MIN_CHANNELS = 1
 TIME_TOL_S = 1e-6
 
 
+def mark_bads(raw: Any, names) -> None:
+    """``raw.info["bads"] = names``, left empty when that would mark every channel.
+
+    MNE's fNIRS steps refuse a recording with no channel unmarked, which only raw QC's
+    lenient screening reaches; its rejections stay in the lists the record carries.
+    """
+    names = [ch for ch in names if ch in raw.ch_names]
+    raw.info["bads"] = [] if len(names) == len(raw.ch_names) else names
+
+
 def is_optical_density(raw: Any) -> bool:
     """True if the data is already optical density (OD conversion done upstream)."""
     types = set(raw.get_channel_types())

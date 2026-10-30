@@ -11,6 +11,7 @@ import mne
 import numpy as np
 
 from nirspipe.io.derivatives import entity_of, read_json
+from nirspipe.utils import mark_bads
 from nirspipe.utils.lineage import stamp
 from nirspipe.utils.logging import get_logger
 
@@ -107,7 +108,7 @@ def _restore_bads(raw: mne.io.Raw, sidecar: dict) -> None:
     """
     bads = sidecar.get("bad_channels") or []
     if bads:
-        raw.info["bads"] = [ch for ch in bads if ch in raw.ch_names]
+        mark_bads(raw, bads)
 
 
 # restored onto the lineage stamp, so the filter can be read off the Raw rather than the file

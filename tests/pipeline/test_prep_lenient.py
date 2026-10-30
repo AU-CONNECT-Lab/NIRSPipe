@@ -57,7 +57,10 @@ def test_every_channel_failing_goes_on_with_all_marked(tmp_path):
     raw = synth_raw("01", "rest")
     result = _run(raw, tmp_path, lenient=True, sci_threshold=1.0, min_good_frac=1.0)
     assert sorted(result.bad_channels) == sorted(raw.ch_names)
-    assert "sci" in _stages(tmp_path)
+    assert sorted(_sci_sidecar(tmp_path)["bad_channels"]) == sorted(raw.ch_names)
+    # every step still runs, as raw QC draws the recording whatever its verdict
+    assert result.skipped == []
+    assert _stages(tmp_path) == ["motcorrected", "od", "preproc", "sci"]
 
 
 def test_every_channel_failing_is_refused_without_the_switch(tmp_path):

@@ -6,6 +6,7 @@ from nirspipe.cli import qc as qc_cli
 from nirspipe.io.derivatives import write_dataset_description
 from nirspipe.qc.subject.prep_raw_report import _process_run
 from nirspipe.qc.subject.record_io import read_record
+from tests._raw_qc import raw_run
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 
@@ -21,8 +22,7 @@ def test_the_record_reads_back_with_each_condition_share(tmp_path):
     bids, path = _bids(tmp_path)
     out = tmp_path / "out"
     write_dataset_description(out, source=bids)
-    _, ctx = _process_run({"label": "sub-01_task-tap", "snirf_path": path, "session": None},
-                          0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0])
+    _, ctx = _process_run(raw_run(bids, path, "tap"), out / "sub-01")
     record = read_record(ctx["sqm_path"])
     assert set(record["by_condition"]) == {"rest", "talk"}
     for entry in record["by_condition"].values():

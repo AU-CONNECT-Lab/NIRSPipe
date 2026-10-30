@@ -59,12 +59,13 @@ def _ignore_lines(tmp_path):
     return (tmp_path / ".bidsignore").read_text(encoding="utf-8").split()
 
 
-def test_only_reports_logs_figures_plotly_and_json_only_records_are_waved_through(tmp_path):
+def test_only_reports_logs_figures_plotly_json_only_records_and_stages_are_waved_through(
+        tmp_path):
     lines = _ignore_lines(tmp_path)
 
     # no trailing slash: bids-validator 3.0.2 matches nothing against `figures/`, so the
     # gitignore spelling for a directory leaves every figure on its books
-    assert set(lines) == {"*.html", "logs", "figures", "plotly-*.min.js",
+    assert set(lines) == {"*.html", "logs", "figures", "plotly-*.min.js", "stages",
                           *(f"*_desc-{desc}_qc.json" for desc in JSON_ONLY_DESCS)}
     assert not any(line.endswith("/") for line in lines)
     for line in lines:

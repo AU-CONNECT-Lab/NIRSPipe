@@ -144,6 +144,14 @@ def with_condition_corr(record: dict, corr_per_channel: "dict[str, float]",
     return {**record, "per_channel": per_channel}
 
 
+def _before_after(row: dict, corrected: bool) -> dict:
+    """A condition's haemoglobin row as the raw page's run row: before the correction, ``_post`` after."""
+    if not row:
+        return {}
+    before = {"hbo_hbr_corr_mean": row.get("hbo_hbr_corr_mean_uncorrected")}
+    return {**before, "hbo_hbr_corr_mean_post": row.get("hbo_hbr_corr_mean")} if corrected else before
+
+
 def condition_haemo_scalars(haemo, errts, n_fft_floor: int, bands: dict,
                             filtered=None) -> dict:
     """Scalars a condition can be given by recomputing on its own cut, not by slicing.
@@ -658,6 +666,7 @@ def condition_payloads(
     """
     from nirspipe.qc.boilerplate.vocabulary import metric_rows
     from nirspipe.qc.common.channel_table import (
+        uncorrected_view,
         CONDITION_OD_SPLIT_COLUMNS, HAEMO_SPLIT_COLUMNS, MOTION_SPLIT_COLUMNS,
         WHOLE_RUN_ONLY_COLUMNS,
         channel_rows, format_rows, heatmap_args, pair_rows, separation_blocks, split_table,
@@ -670,6 +679,7 @@ def condition_payloads(
                         if k not in WHOLE_RUN_ONLY_COLUMNS)
 
     out: list[tuple[str, dict]] = []
+    corrected = (payload.get("summary") or {}).get("motion_correction") != "none"
     for label, entry in by_condition.items():
         sliced = entry.get("per_channel") or {}
         cond_bad = set(entry.get("bad_channels") or ())
@@ -682,8 +692,9 @@ def condition_payloads(
 
         # Status is the run's rejection; the condition's own assessment is the header count
         rows = channel_rows(
-            with_condition_corr(slice_record(record, sliced),
-                                sliced.get("hbo_hbr_corr_per_channel"), section="rawhaemo"),
+            with_condition_corr(slice_record(uncorrected_view(record), sliced),
+                                sliced.get("hbo_hbr_corr_uncorrected_per_channel"),
+                                section="rawhaemo"),
             sci_scores, bad_channels)
         pair_cells = format_rows(pair_rows(rows, channel_pairs or None, by_wavelength=True),
                                  sci_threshold, name_key="pair", psp_threshold=cutoffs["psp"])
@@ -704,7 +715,8 @@ def condition_payloads(
 
         # the run page's rows: All alone on a montage with nothing to split, where Long would
         # repeat it
-        haemo_by_set = entry.get("haemo_by_set") or {}
+        haemo_by_set = {name: _before_after(row, corrected)
+                        for name, row in (entry.get("haemo_by_set") or {}).items()}
         haemo_sets = (("All", len(rows), "all", False),
                       ("Long", scalars.get("n_long_channels"), "long", True),
                       ("Short", scalars.get("n_short_channels"), "short", False))

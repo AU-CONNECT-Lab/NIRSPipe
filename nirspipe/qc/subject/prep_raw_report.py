@@ -11,16 +11,16 @@ import numpy as np
 from nirspipe.utils import pair_of
 from nirspipe.exceptions import StageError
 from nirspipe.io.auxiliary import imu_traces, read_aux_snirf
-from nirspipe.io.derivatives import bids_uris
-from nirspipe.io.head_template import FSAVERAGE, space_of
+from nirspipe.io.derivatives import (
+    LINK_RAW, RAW_QC_STAGES, bids_uris, write_dataset_description,
+)
+from nirspipe.io.head_template import space_of
 from nirspipe.io.naming import report_name
 from nirspipe.io.optode_space import hold_placement, place_optodes, placement_of
-from nirspipe.io.snirf import read_raw_snirf
-from nirspipe.pipeline.dpf import (
-    as_ppf, dpf_caveat, dpf_from_age, dpf_text, resolve_dpf, wavelengths,
-)
-from nirspipe.pipeline.motion import motion_settings
-from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs, join_marks
+from nirspipe.io.snirf import read_raw_snirf, read_snirf
+from nirspipe.pipeline.dpf import dpf_caveat, dpf_from_age, dpf_text, resolve_dpf, wavelengths
+from nirspipe.pipeline.motion import motion_settings, overmarked
+from nirspipe.pipeline.prep_pipeline import _expand_bad_pairs, run_prep
 from nirspipe.qc.subject.condition_views import (
     carpet_view_table as _carpet_views, condition_view_table, PSD_NFFT_CAP,
 )
@@ -41,12 +41,9 @@ from nirspipe.qc.common.channel_table import (
     separation_blocks,
     separation_notes,
     split_table,
+    uncorrected_view,
 )
-from nirspipe.qc.metrics import (
-    IMU_STAT_KEYS, attach_windowed_series, compute_raw_sqm, compute_sci_scores,
-    haemo_quality_metrics, imu_section, imu_windowed, long_short_channels, resolve_cutoffs,
-    screen_channels, screening_gap, screening_scores,
-)
+from nirspipe.qc.metrics import IMU_STAT_KEYS, long_short_channels, resolve_cutoffs
 from nirspipe.qc.metrics._helpers import EPOCH_TMAX as _EPOCH_TMAX, EPOCH_TMIN as _EPOCH_TMIN, separation_orphans
 from nirspipe.qc.metrics.windowed import _in_scope, window_centers, windowed_key
 from nirspipe.qc.common.report_shell import (
@@ -55,15 +52,13 @@ from nirspipe.qc.common.report_shell import (
 from nirspipe.qc.subject.trial_qc import (
     MIN_SCI_TRIAL_S, MIN_TRIAL_S, score_trials, short_trial_counts, trial_windows,
 )
-from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans, mark_manual, mark_unselected, measured_from
 from nirspipe.qc.boilerplate import collect_software_versions
 from nirspipe.qc.boilerplate.vocabulary import metric_rows
-from nirspipe.qc.common.screen_scope import resolve_screen_scope
 from nirspipe.qc.subject.record_io import read_record, write_record
 from nirspipe.qc.subject.sqm_record import (
-    RECORD_SUFFIXES, haemo_sections, motion_sections, raw_condition_sections, raw_sections,
+    RECORD_SUFFIXES, _sci_scores, _sidecar, _uncorrected_haemo, compute_run_sections, scan_runs,
     sqm_record_dict,
 )
 
@@ -132,83 +127,46 @@ _COND_CH_COLUMN_VARS = _column_vars(channel_columns(("separation", "sci_whole", 
                                                      "short_share")))
 
 
-def _store_matrices(windowed: dict, series: dict) -> None:
-    """The channel-by-window matrices into the record, under the pipeline's own key names."""
-    for key in ("sci_matrix", "psp_matrix", "cv_matrix",
-                "sci_times", "psp_times", "cv_times",
-                "sci_channels", "psp_channels", "cv_channels"):
-        if series.get(key) is not None:
-            windowed[key] = np.asarray(series[key]).tolist()
-
-
-def _store_spans(windowed: dict, raw, raw_after, sep_bands, errors: list, label: str) -> None:
-    """The flagged spans, kept as spans so a condition counts the run's own boolean.
-
-    ::
-
-      windowed["spike_spans_long_s"] -> [[412.0, 1.3], [880.5, 0.8]]
-
-    Two families, each on its own channel sets, because both tests are over a set rather
-    than over a channel: a spike span found on the short channels is not a claim about the
-    long ones, and GVTD is an RMS across whatever it is given, so each set has its own trace
-    and its own threshold. Every channel under the plain key, as the pipeline's record has it.
-
-    Spikes are found on the recording as delivered and GVTD on ``raw_after``, the corrected
-    copy where a correction ran, as the pipeline's record finds them, so a condition's GVTD
-    share reads the file its GVTD means were taken from.
-    """
-    from nirspipe.qc.metrics import (
-        gvtd_above_segments, gvtd_channel_picks, long_short_channels, spike_segments,
-    )
-
-    long_names, short_names = long_short_channels(raw, sep_bands)
-    with guard("Spike spans", errors, label):
-        for channel_set, names in (("all", list(raw.ch_names)), ("long", long_names),
-                                   ("short", short_names)):
-            if names:
-                windowed[windowed_key("spike_spans", channel_set, spans=True)] = [
-                    list(span) for span in spike_segments(raw.copy().pick(names))]
-    gvtd_raw = raw if raw_after is None else raw_after
-    with guard("GVTD above-threshold spans", errors, label):
-        # the long set is the canonical trace's, absent on a montage that never split
-        gvtd_long, canonical = gvtd_channel_picks(gvtd_raw, sep_bands)
-        for channel_set, picks in (("all", list(gvtd_raw.ch_names)),
-                                   ("long", gvtd_long if canonical == "long" else []),
-                                   ("short", short_names)):
-            if picks:
-                windowed[windowed_key("gvtd_above_spans", channel_set, spans=True)] = [
-                    list(span) for span in gvtd_above_segments(gvtd_raw, sep_bands, picks=picks)]
-
-
 def _span_sets(windowed: dict, stem: str, first: str) -> dict:
     """{channel set: spans} for the GVTD panel's first set and the short one, which it shades."""
     return {name: [tuple(sp) for sp in windowed.get(windowed_key(stem, name, spans=True)) or []]
             or None for name in (first, "short")}
 
 
+def _prepared(run: dict, sub_dir: Path, sep_bands) -> tuple:
+    """``run_prep`` into the tree's ``stages/`` dataset, and the record's sections measured on it.
+
+    ``stages/`` is a dataset of its own, so an analysis tree shared with this one never sees
+    these files, whose screening was lenient.
+    """
+    config = run["config"]
+    stage_root = sub_dir.parent / RAW_QC_STAGES
+    write_dataset_description(stage_root, name="nirspipe-qc stages", generated_by="nirspipe-qc",
+                              source=run["bids_dir"], link=LINK_RAW)
+    source = Path(run["snirf_path"])
+    result = run_prep(read_snirf(source), config, stage_root,
+                      source_entities=run.get("entities"), source_path=source,
+                      source_metadata=run.get("metadata"))
+    session = f"ses-{config.session}" if config.session else ""
+    stages = scan_runs(stage_root / f"sub-{config.subject}" / session / "nirs")[run["label"]]
+    sections = compute_run_sections(
+        stages, cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq,
+        resp_l_freq=config.resp_l_freq, resp_h_freq=config.resp_h_freq,
+        qc_window_s=config.qc_window_s, bids_root=run["bids_dir"], sep_bands=sep_bands)
+    return result, stages, sections
+
+
 def _process_run(
     run: dict,
-    sci_threshold: float,
     sub_dir: Path,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    resp_l_freq: float,
-    resp_h_freq: float,
-    dpf: list[float],
-    window_s: float = 10.0,
     epoch_qc: bool = False,
-    epoch_tmin: float | None = None,
-    epoch_tmax: float | None = None,
-    psp_threshold: float | None = None,
     sep_bands=None,
-    min_good_frac: float | None = None,
-    screen_scope: str = "run",
-    motion_correction: str | None = None,
     roi_map: "dict | None" = None,
-    motion_std_thresh: float | None = None,
-    wavelet_iqr: float | None = None,
 ) -> "tuple[dict, dict]":
-    """Compute all data, save figure HTMLs + SQM JSON. Returns (inline dict, context).
+    """Prepare one recording, save figure HTMLs + SQM JSON. Returns (inline dict, context).
+
+    ``run`` holds the recording's ``label``, ``snirf_path``, ``session``, ``bids_dir``,
+    ``entities``, ``metadata`` and its lenient ``config``.
 
     A panel that fails costs that panel and lands in the returned ``errors``, which the
     viewer prints for the selected run, so a viewer missing half its figures does not look
@@ -245,90 +203,64 @@ def _process_run(
     errors: list[str] = []
     notes: list[str] = []
 
+    config = run["config"]
+    sci_threshold, cardiac_l_freq, cardiac_h_freq = (config.sci_threshold, config.cardiac_l_freq,
+                                                     config.cardiac_h_freq)
+    resp_l_freq, resp_h_freq = config.resp_l_freq, config.resp_h_freq
+    window_s, epoch_tmin, epoch_tmax = config.qc_window_s, config.epoch_tmin, config.epoch_tmax
+    motion_correction = config.motion_correction
+
+    result, stages, raw_secs = _prepared(run, sub_dir, sep_bands)
+    errors.extend(f"{name}: {reason}" for name, reason in result.skipped)
+    raw_pc = raw_secs["per_channel"]
+    windowed = raw_secs.get("windowed") or {}
+
+    # the recording as delivered, which is what this page draws
     raw = read_raw_snirf(run["snirf_path"], preload=True, verbose=False)
     # on the run's head template, held so every figure below draws on the same one
-    hold_placement(raw, place_optodes(run["snirf_path"],
-                                      space_of(run.get("template") or FSAVERAGE)))
-    # the reviewer's stretches, marked before anything is measured, as the pipeline marks them
-    keep_spans = run.get("keep_spans") or []
-    if keep_spans and run.get("keep_spans_from"):
-        keep_spans = measured_from(raw, keep_spans, run["keep_spans_from"])
-    mark_manual(mark_unselected(raw, keep_spans), run.get("bad_spans") or [])
+    hold_placement(raw, place_optodes(run["snirf_path"], space_of(config.template)))
+    # the reviewer's stretches, marked as the pipeline marks them
+    keep_spans = config.keep_spans
+    if keep_spans and config.keep_spans_from:
+        keep_spans = measured_from(raw, keep_spans, config.keep_spans_from)
+    mark_manual(mark_unselected(raw, keep_spans), config.bad_spans)
 
-    sci_scores, raw_od = compute_sci_scores(raw, cardiac_l_freq, cardiac_h_freq)
-    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=psp_threshold,
-                              good_frac=min_good_frac)
-    scope = resolve_screen_scope(raw, screen_scope)
-    screen_scores = screening_scores(raw_od, cardiac_l_freq, cardiac_h_freq,
-                                     have={"sci": sci_scores}, cutoffs=cutoffs,
-                                     scope=scope)
+    sci_sidecar = _sidecar(stages["sci"])
+    sci_params = sci_sidecar.get("parameters") or {}
+    sci_scores = _sci_scores(stages)
+    cutoffs = resolve_cutoffs(sci=sci_threshold, psp=config.psp_threshold,
+                              good_frac=config.min_good_frac)
     # a recording screening cannot judge is still shown, said so above its channel table
-    gap = screening_gap(raw_od, screen_scores, scope)
-    if gap:
-        logger.warning("%s | channel screening could not judge this recording: %s", label, gap)
-    bad_list = [] if gap else screen_channels(screen_scores, cutoffs)[0]
-    tsv_names = run.get("channels_tsv_bads") or []
-    joined, kept = join_marks(raw, bad_list, keep=run.get("keep_channels") or [],
-                              manual=run.get("bad_channels") or [], listed=tsv_names,
-                              label=label)
-    bad_channels: set[str] = set(joined)
+    gap = sci_sidecar.get("screening_gap")
+    bad_channels: set[str] = set(result.bad_channels)
+    tsv_names = config.channels_tsv_bads
     tsv_bads = _expand_bad_pairs(raw, tsv_names)
 
-    # The one preprocessing step this report runs, for the motion panels' before and after.
-    # Nothing is written back; the corrected copy lives for the length of this function.
-    raw_motcorr = None
-    if motion_correction and motion_correction != "none":
-        with guard("Motion correction", errors, label):
-            from nirspipe.pipeline.motion import correct_motion, overmarked
-            raw_motcorr = correct_motion(raw_od.copy(), method=motion_correction,
-                                         std_thresh=motion_std_thresh, iqr_factor=wavelet_iqr)
-            summary = (lineage_of(raw_motcorr).params or {}).get(motion_correction)
-            if overmarked(motion_correction, summary):
-                note(notes, label, section_note(
-                    "caveat.motion_overmarked", method=motion_correction,
-                    share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
-                    thresh=motion_settings(motion_correction,
-                                           motion_std_thresh)["motion_std_thresh"]))
+    raw_od = read_snirf(stages["sci"])
+    raw_motcorr = (read_snirf(stages["motcorrected"])
+                   if motion_correction != "none" and "motcorrected" in stages else None)
+    if raw_motcorr is not None:
+        summary = _sidecar(stages["motcorrected"]).get(motion_correction)
+        if overmarked(motion_correction, summary):
+            note(notes, label, section_note(
+                "caveat.motion_overmarked", method=motion_correction,
+                share=summary["motion_share"], sfreq=raw_od.info["sfreq"],
+                thresh=motion_settings(motion_correction,
+                                       config.motion_std_thresh)["motion_std_thresh"]))
 
-    factors = resolve_dpf(dpf, raw_od, run.get("age"))
-    ppf = as_ppf(factors)
-    if dpf_from_age(dpf) and (caveat := dpf_caveat(run["age"], wavelengths(raw_od))):
+    factors = resolve_dpf(config.dpf, raw_od, config.age)
+    if dpf_from_age(config.dpf) and (caveat := dpf_caveat(config.age, wavelengths(raw_od))):
         note(notes, label, caveat)
-    # both conversions carry the run's rejections, as the pipeline's haemoglobin stages do
+    # the two conversions the correlation is read on: before the motion step and desc-preproc
     raw_haemo = None
     with guard("Beer-Lambert", errors, label):
-        raw_haemo = mne.preprocessing.nirs.beer_lambert_law(
-            _marked_copy(raw_od, bad_channels), ppf=ppf)
+        raw_haemo = _uncorrected_haemo(stages)
     if raw_haemo is None:
         note(notes, label, "no haemoglobin conversion, so the per-channel detail panel "
                            "is empty")
-    # the corrected copy converted too, only for the correlation's after side
-    raw_haemo_post = None
-    if raw_motcorr is not None:
-        with guard("Beer-Lambert after motion correction", errors, label):
-            raw_haemo_post = mne.preprocessing.nirs.beer_lambert_law(
-                _marked_copy(raw_motcorr, bad_channels), ppf=ppf)
+    raw_haemo_post = (read_snirf(stages["preproc"])
+                      if raw_motcorr is not None and "preproc" in stages else None)
 
-    sqm: dict = {}
-    with guard("Quality metrics", errors, label):
-        sqm = compute_raw_sqm(raw, sci_scores, list(bad_channels),
-                              cardiac_l_freq, cardiac_h_freq,
-                              screen_scores.get("good_frac"))
-
-    # `sqm` stays the flat all-channel view the per-window figures below read. The record
-    # written to disk is the sectioned one, built through the same function the pipeline
-    # uses, and the panels read it too, so short channels stay out of the long verdict.
-    raw_secs, raw_pc = raw_sections(
-        raw, sci_scores, list(bad_channels), cardiac_l_freq, cardiac_h_freq, sep_bands,
-        screen_scores.get("good_frac"), resp_h_freq=resp_h_freq)
-    # HbO-HbR correlation on both conversions above, split by separation as the pipeline's
-    # haemoglobin stages are
-    for name, haemo in (("rawhaemo", raw_haemo), ("rawhaemo_post", raw_haemo_post)):
-        if haemo is not None:
-            with guard("HbO-HbR correlation", errors, label):
-                secs, pc = haemo_sections(name, haemo, haemo_quality_metrics, sep_bands)
-                raw_secs.update(secs)
-                raw_pc.update(pc)
     # A window shorter than two screening windows has too few to count, so it is not offered
     # a condition at all. Each condition's passing-window share is in the record's
     # `by_condition`, sliced from the windowed pass. Bound before the guard: it swallows
@@ -348,7 +280,7 @@ def _process_run(
         logger.error("%s | %s", label, exc)
         view_windows = []
 
-    record_view = {**raw_secs, "per_channel": raw_pc}
+    record_view = uncorrected_view(raw_secs)
     ch_rows = channel_rows(record_view, sci_scores, bad_channels)
     # the verdict is read off the long channels wherever the montage was split, exactly as
     # the subject report reads it, so two views of one recording cannot disagree
@@ -360,29 +292,13 @@ def _process_run(
     raw_all = raw_secs.get("raw") or {}
     sqm_split = bool(raw_secs.get("raw_long") and raw_secs.get("raw_short"))
 
-    # Persist windowed series so group_raw can build time × subject heatmaps. Their own
-    # section, since `_split_scalars` would file every one of these lists under per_channel.
-    windowed: dict = {}
-    # GVTD off the corrected file where there is one, as the pipeline's own record does;
-    # SCI and PSP stay on the uncorrected file, being coupling.
-    series = attach_windowed_series(windowed, raw_od, cardiac_l_freq, cardiac_h_freq,
-                                    window_s, gvtd_od=raw_motcorr,
-                                    raw_intensity=raw, sep_bands=sep_bands)
+    # read back off the record, whose windowed pass is the pipeline's own
+    series = {key: None if windowed.get(key) is None else np.asarray(windowed[key])
+              for key in ("sci_matrix", "psp_matrix", "cv_matrix",
+                          "sci_times", "psp_times", "cv_times")}
+    series["qc_window_s"] = windowed.get("qc_window_s")
     sci_matrix, sci_win_times = series["sci_matrix"], series["sci_times"]
     psp_matrix, psp_win_times = series["psp_matrix"], series["psp_times"]
-    # the channel by window matrices too, not just the channel-averaged series: a
-    # per-condition number is a column selection out of these, and without them on disk it
-    # could only be recomputed. Same keys the pipeline's own record writes.
-    _store_matrices(windowed, series)
-    _store_spans(windowed, raw, raw_motcorr, sep_bands, errors, label)
-
-    if raw_motcorr is not None:
-        with guard("Motion sections", errors, label):
-            from nirspipe.qc.subject.sqm_record import _section_writer
-            motion_sections(
-                raw_od, raw_motcorr, _section_writer(raw_secs, raw_pc), windowed,
-                lambda name: (raw_secs.get(name) or {}).get("gvtd_thresh"),
-                cardiac_l_freq, cardiac_h_freq, sep_bands)
 
     set_rows = [
         ("All",   len(sci_scores),                raw_all,                         False),
@@ -397,7 +313,10 @@ def _process_run(
     # a correction ran. Each set against its own `raw*` cutoff, never another set's.
     # the correction footprint joins unsuffixed: measured across the step rather than either
     # side of it, so it has no before and after to pair
+    # no correction, no before and after: the record's motion sections then repeat `raw*`
     def _motion_row(raw_key: str, mc_key: str, post_key: str) -> dict:
+        if raw_motcorr is None:
+            return dict(raw_secs.get(raw_key) or {})
         return {**(raw_secs.get(raw_key) or {}), **(raw_secs.get(mc_key) or {}),
                 **{f"{k}_post": v for k, v in (raw_secs.get(post_key) or {}).items()}}
 
@@ -414,9 +333,11 @@ def _process_run(
 
     # one row per set the record carries, so an unsplit montage still gets its All row
     def _haemo_row(suffix: str) -> dict:
+        if raw_haemo_post is None:
+            return dict(raw_secs.get(f"rawhaemo{suffix}") or {})
         return {**(raw_secs.get(f"rawhaemo{suffix}") or {}),
                 **{f"{k}_post": v
-                   for k, v in (raw_secs.get(f"rawhaemo_post{suffix}") or {}).items()}}
+                   for k, v in (raw_secs.get(f"preproc{suffix}") or {}).items()}}
 
     haemo_rows = [
         (name, n, _haemo_row(suffix), colour)
@@ -441,7 +362,7 @@ def _process_run(
     # Derived from the recording it will be drawn against, never from the panel above.
     detail_markers = extract_markers(raw)
 
-    psp_per_ch    = sqm.get("psp_per_channel", {})
+    psp_per_ch    = (raw_pc.get("raw") or {}).get("psp_per_channel", {})
     figure_paths: dict = {}
 
     # ── inline: ts figure (kept in-memory for click interactivity) ─────────────
@@ -469,14 +390,7 @@ def _process_run(
     imu: dict = {}
     with guard("IMU", errors, label):
         imu = imu_traces(*read_aux_snirf(run["snirf_path"]))
-    imu_sec: dict = {}
-    if imu:
-        with guard("IMU summary", errors, label):
-            imu_sec = imu_section(imu, raw, sep_bands)
-            # on the grid the GVTD series above were binned on, from the file they came off
-            gvtd_od = raw_motcorr if raw_motcorr is not None else raw_od
-            windowed.update(imu_windowed(imu, gvtd_od.times, float(gvtd_od.info["sfreq"]),
-                                         window_s))
+    imu_sec: dict = raw_secs.get("imu") or {}
     with guard("GVTD carpet", errors, label):
         from nirspipe.qc.metrics import gvtd_channel_blocks
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
@@ -514,7 +428,7 @@ def _process_run(
             psp_threshold=cutoffs["psp"], window_s=window_s,
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
             psp_matrix=psp_matrix, psp_win_times=psp_win_times,
-            cv_matrix=series.get("cv_matrix"), cv_win_times=series.get("cv_times"),
+            cv_matrix=series["cv_matrix"], cv_win_times=series["cv_times"],
             warn=errors,
         )
         fname = fig_name("scipsp")
@@ -736,56 +650,24 @@ def _process_run(
                                    "per-trial quality was skipped")
 
     # ── file: SQM JSON ─────────────────────────────────────────────────────────
-    # desc-sqmraw, not desc-sqm: the pipeline writes a record at the latter path for the
-    # same run, and one silently overwriting the other loses whichever ran first. Same
-    # shape as that one, so the group table reads both through one path.
+    # desc-sqmraw, not desc-sqm: the file says which command wrote it, and a tree holding both
+    # keeps both. Same shape as the pipeline's, so the group table reads either through one path
     sqm_path = sqm_dir / (label + RECORD_SUFFIXES["sqmraw"])
-    sections = {**raw_secs, **({"imu": imu_sec} if imu_sec else {}),
-                "windowed": windowed, "per_channel": raw_pc}
-    # written whenever the recording carries conditions, independently of `by_condition`:
-    # the flag decides what a report shows, the record says what was measured. Deliberately
-    # not in `SECTIONS`, so the group table does not descend into it.
-    by_cond: dict = {}
-    if cond_windows:
-        with guard("Per-condition metrics", errors, label):
-            by_cond = raw_condition_sections(sections, raw, cond_windows, cutoffs, sep_bands,
-                                             imu=imu, haemo=raw_haemo,
-                                             haemo_post=raw_haemo_post)
-    record = sqm_record_dict(sections, bids_uris([run["snirf_path"]], sqm_path))
-    if by_cond:
-        record["by_condition"] = by_cond
+    record = sqm_record_dict(raw_secs, bids_uris([run["snirf_path"]], sqm_path))
     # what the dyad level reads this member by, so it never screens or converts it again
     record["bad_channels"] = sorted(bad_channels)
     record["screening_gap"] = gap
     record["parameters"] = {
+        **{key: value for key, value in sci_params.items() if key != "lenient"},
         "sci_threshold": cutoffs["sci"],
         "psp_threshold": cutoffs["psp"],
         "min_good_frac": cutoffs["good_frac"],
-        "screen_scope": screen_scope,
-        "screen_scope_counted": "task" if scope else "run",
-        "cardiac_l_freq": cardiac_l_freq,
-        "cardiac_h_freq": cardiac_h_freq,
-        "resp_l_freq": resp_l_freq,
-        "resp_h_freq": resp_h_freq,
-        "qc_window_s": window_s,
         "dpf": [float(f) for f in factors],
-        **({"dpf_age": run["age"]} if dpf_from_age(dpf) else {}),
-        **({"dpf_population": run["population"]}
-           if "dpf" in (run.get("from_population") or ()) else {}),
-        "template": run.get("template") or FSAVERAGE,
-        "motion_correction": motion_correction or "none",
-        **motion_settings(motion_correction, motion_std_thresh, wavelet_iqr),
-        "bad_channels": list(run.get("bad_channels") or []),
-        "keep_channels": list(run.get("keep_channels") or []),
-        "kept_channels": kept,
-        "channels_tsv_bads": list(tsv_names),
-        "ignore": list(run.get("ignore") or []),
-        "keep_spans": [list(span) for span in keep_spans],
-        "keep_spans_from": run.get("keep_spans_from"),
-        "bad_spans": [list(span) for span in run.get("bad_spans") or []],
-        **({"population": run["population"],
-            "from_population": list(run["from_population"])}
-           if run.get("from_population") else {}),
+        **({"dpf_age": config.age} if dpf_from_age(config.dpf) else {}),
+        **({"dpf_population": config.population} if "dpf" in config.from_population else {}),
+        "template": config.template,
+        "motion_correction": motion_correction,
+        **motion_settings(motion_correction, config.motion_std_thresh, config.wavelet_iqr),
     }
     write_record(sqm_path, record)
     logger.info("SQM JSON -> %s", sqm_path)
@@ -809,7 +691,7 @@ def _process_run(
                             else "badge-yellow" if bad_rate < 30 else "badge-red"),
             "sci_threshold": cutoffs["sci"],
             "good_frac": cutoffs["good_frac"],
-            "dpf": dpf_text(dpf, wavelengths(raw_od), run.get("age")),
+            "dpf": dpf_text(config.dpf, wavelengths(raw_od), config.age),
             "cardiac": [cardiac_l_freq, cardiac_h_freq],
             "heart_rate": heart_rate,
             "heart_rate_outside": hr_note is not None,
@@ -845,7 +727,7 @@ def _process_run(
             # sep_bands, or a run with non-default bands gets the default gap quoted at it
             "notes":  [n for n in (section_note("caveat.unscreened", reason=gap) if gap else "",
                                    placement_note(raw),
-                                   template_note(run.get("population"), run.get("template")),
+                                   template_note(config.population, config.template),
                                    *separation_notes(raw_all, ch_rows, sep_bands=sep_bands,
                                                      orphan_mm=separation_orphans(raw, sep_bands)),
                                    section_note(
@@ -902,12 +784,6 @@ def _regions_view(rows: list[dict], roi_map: "dict | None") -> dict:
     return {"rows": table["rows"],
             "note": (section_note("metrics.regions_not_counted", pairs=table["not_counted"])
                      if table["not_counted"] else "")}
-
-
-def _marked_copy(raw_od, bad_channels: "set[str]"):
-    marked = raw_od.copy()
-    marked.info["bads"] = [c for c in marked.ch_names if c in bad_channels]
-    return marked
 
 
 def _hbo_hbr_figure(haemo, haemo_post, sep_bands, method, bad_pairs):
@@ -1069,8 +945,10 @@ def _condition_summary(ctx: dict, payload: dict, run_label: str) -> None:
     by_condition = record.get("by_condition") or {}
     conditions = [
         (label, heatmap_args(channel_rows(
-            with_condition_corr(slice_record(record, entry.get("per_channel") or {}),
-                                (entry.get("per_channel") or {}).get("hbo_hbr_corr_per_channel"),
+            with_condition_corr(slice_record(uncorrected_view(record),
+                                             entry.get("per_channel") or {}),
+                                (entry.get("per_channel") or {}).get(
+                                    "hbo_hbr_corr_uncorrected_per_channel"),
                                 section="rawhaemo"),
             ctx["sci_scores"], set(entry.get("bad_channels") or ()))))
         for label, entry in by_condition.items() if entry.get("counted_windows") != 0]
@@ -1243,25 +1121,11 @@ def _shell_vars(runs: list[dict], output_path: Path, sci_threshold: float) -> di
 def build_prep_raw_report(
     runs: list[dict],
     output_path: Path,
-    cardiac_l_freq: float,
-    cardiac_h_freq: float,
-    resp_l_freq: float,
-    resp_h_freq: float,
-    dpf: list[float],
     sci_threshold: float,
-    psp_threshold: float | None = None,
-    min_good_frac: float | None = None,
-    screen_scope: str = "run",
-    window_s: float = 10.0,
     epoch_qc: bool = False,
-    epoch_tmin: float | None = None,
-    epoch_tmax: float | None = None,
     sep_bands=None,
     by_condition: bool = False,
-    motion_correction: str | None = None,
     roi_map: "dict | None" = None,
-    motion_std_thresh: float | None = None,
-    wavelet_iqr: float | None = None,
 ) -> None:
     """Generate raw QC report: lightweight HTML + per-run folders with figure HTMLs + SQM JSON.
 
@@ -1286,12 +1150,7 @@ def build_prep_raw_report(
         d: dict = {}
         ctx: dict = {}
         with guard("Processing this run", run_errors, label):
-            d, ctx = _process_run(run, sci_threshold, sub_dir, cardiac_l_freq, cardiac_h_freq,
-                                  resp_l_freq, resp_h_freq,
-                                  dpf, window_s, epoch_qc, epoch_tmin, epoch_tmax,
-                                  psp_threshold, sep_bands, min_good_frac, screen_scope,
-                                  motion_correction, roi_map=roi_map,
-                                  motion_std_thresh=motion_std_thresh, wavelet_iqr=wavelet_iqr)
+            d, ctx = _process_run(run, sub_dir, epoch_qc, sep_bands, roi_map)
         if run_errors:
             d = {"errors": run_errors, "notes": []}
         if ctx.get("remake_brain"):

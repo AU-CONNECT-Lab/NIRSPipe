@@ -38,7 +38,7 @@ from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
 from nirspipe.exceptions import StageError
 from nirspipe.qc.boilerplate.notes import section_note
 from nirspipe.qc.metrics._helpers import GOOD_FRAC_PASS, require_cardiac_below_nyquist
-from nirspipe.utils import is_optical_density, pair_of
+from nirspipe.utils import is_optical_density, mark_bads, pair_of
 from nirspipe.utils.lineage import Recorder, lineage_of, stage_of, stamp
 from nirspipe.utils.logging import get_logger
 from nirspipe.qc.metrics import (compute_sci_scores, require_screened, resolve_cutoffs,
@@ -188,7 +188,7 @@ def mark_what_can_be_judged(
     if gap:
         logger.warning("channel screening could not judge this recording: %s", gap)
     bad_chs = [] if gap else screen_channels(scores, cutoffs)[0]
-    raw_od.info["bads"] = bad_chs
+    mark_bads(raw_od, bad_chs)
     stamp(raw_od, stage="sci", step="sci_pruning", source=raw_od, threshold=threshold,
           psp_threshold=cutoffs["psp"], min_good_frac=cutoffs["good_frac"],
           screen_scope=screen_scope, screen_scope_windows=len(scope or []),
@@ -466,7 +466,7 @@ def run_prep(
             f"{' and '.join(why)} leave{'' if len(why) > 1 else 's'} no usable channel: "
             f"all {len(bad_chs)} are marked bad."
         )
-    raw_od.info["bads"] = bad_chs
+    mark_bads(raw_od, bad_chs)
     n_bad, n_total = len(bad_chs), len(sci_scores)
     logger.info(
         "sub-%s | bad channels: %d/%d%s",

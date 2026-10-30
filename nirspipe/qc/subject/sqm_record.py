@@ -66,9 +66,9 @@ from nirspipe.io.derivatives import bids_uris, entity_of, joined_runs, read_json
 from nirspipe.io.tables import read_table
 from nirspipe.pipeline.chromophores import chroma_of, with_hbt
 from nirspipe.pipeline.glm import SHORT_CH_PREFIX
-from nirspipe.utils import is_optical_density, pair_of
+from nirspipe.utils import is_optical_density, mark_bads, pair_of
 from nirspipe.utils.logging import get_logger
-from nirspipe.utils.spans import bad_spans, is_bad_span, mark_manual, mark_unselected
+from nirspipe.utils.spans import is_bad_span, mark_manual, mark_unselected
 from nirspipe import __version__
 from nirspipe.qc.common.channel_table import channel_rows, heart_rate_note, save_channel_csv
 from nirspipe.qc.metrics.windowed import long_or_all, windowed_key
@@ -114,10 +114,8 @@ SECTIONS = ("raw", "raw_long", "raw_short",
 SQM_DESCS = ("sqm", "sqmraw")
 
 OPTIONAL_SECTIONS = ("censor", "imu", "whitening", "short_regression",
-                     # raw QC only: its in-memory Beer-Lambert, before and after
-                     # the correction it may run
-                     "rawhaemo", "rawhaemo_long", "rawhaemo_short",
-                     "rawhaemo_post", "rawhaemo_post_long", "rawhaemo_post_short")
+                     # the haemoglobin before the motion step, which no file holds
+                     "rawhaemo", "rawhaemo_long", "rawhaemo_short")
 
 # `pct_data_retained` measures the recording's duration, not its channels, so it is one
 # number for every channel set. It stays on the whole-file section alone: repeating it
@@ -841,83 +839,6 @@ def _forced_bads(stages: dict[str, Path], cutoffs: dict[str, float]) -> "frozens
     return frozenset(set(sidecar.get("bad_channels") or ()) - set(screened))
 
 
-def raw_condition_sections(
-    sections: dict[str, Any],
-    raw_intensity: "mne.io.Raw",
-    windows: "list[tuple[str, float, float]]",
-    cutoffs: dict[str, float],
-    sep_bands=None,
-    imu: "dict | None" = None,
-    haemo: "mne.io.Raw | None" = None,
-    haemo_post: "mne.io.Raw | None" = None,
-) -> dict[str, Any]:
-    """:func:`condition_sections` for a record written before the pipeline ran.
-
-    Same section name, same entry shape, same assembler. What differs is forced by what a
-    raw-only pass holds: no haemoglobin stage on disk, so CNR and the band metrics have no
-    input and their keys are left out rather than written as nulls. A reader tests for
-    presence.
-
-    ``haemo`` and ``haemo_post`` are the caller's own Beer-Lambert before and after its
-    correction. Given them, ``haemo_by_set`` carries each condition's HbO-HbR correlation,
-    the after side under ``hbo_hbr_corr_mean_post``. See :func:`_raw_condition_haemo`.
-
-    The windows and the cutoffs are passed in rather than re-derived, because this caller
-    screened the recording itself and already holds both. Re-deriving a cutoff is how a
-    condition ends up measured against a line no channel was judged by.
-    """
-    haemo_of = None
-    if haemo is not None:
-        def haemo_of(t0, t1):
-            return _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands)
-    spans = [(a, b) for a, b, _ in bad_spans(raw_intensity)]
-    return _condition_entries(sections, raw_intensity, windows, cutoffs, sep_bands,
-                              haemo_of=haemo_of, imu_of=_imu_slicer(imu), excluded=spans)
-
-
-def _raw_condition_haemo(haemo, haemo_post, t0, t1, sep_bands):
-    """One condition's HbO-HbR correlation per channel set, on each conversion cut to it.
-
-    ::
-
-      haemo cut to 20-120 s, haemo_post cut the same
-      -> ({"all": {"hbo_hbr_corr_mean": 0.29, "hbo_hbr_corr_mean_post": -0.11}, "long": ...},
-          {"hbo_hbr_corr_per_channel": {"S1_D1": 0.41, ...}})
-
-    Measured on the cut rather than sliced, which is safe because a correlation reads only
-    the samples it is handed and nothing here filters. The per-channel dict is the before
-    side over every kept channel, the one the channel table prints.
-    """
-    from nirspipe.qc.metrics import haemo_quality_metrics, usable_split
-
-    def _cut(raw):
-        if raw is None:
-            return None
-        lo, hi = max(0.0, float(t0)), min(float(raw.times[-1]), float(t1))
-        return None if hi <= lo else raw.copy().crop(tmin=lo, tmax=hi)
-
-    before, after = _cut(haemo), _cut(haemo_post)
-    if before is None:
-        return {}, {}
-    long_names, short_names = usable_split(before, sep_bands)
-    by_set: dict[str, Any] = {}
-    per_channel: dict[str, Any] = {}
-    for set_name, names in (("all", None), ("long", long_names), ("short", short_names)):
-        if names is not None and not names:
-            by_set[set_name] = {}
-            continue
-        row: dict[str, Any] = {}
-        for raw, suffix in ((before, ""), (after, "_post")):
-            if raw is None:
-                continue
-            quality = haemo_quality_metrics(raw if names is None else raw.copy().pick(names))
-            row[f"hbo_hbr_corr_mean{suffix}"] = quality["hbo_hbr_corr_mean"]
-            if set_name == "all" and suffix == "":
-                per_channel["hbo_hbr_corr_per_channel"] = quality["hbo_hbr_corr_per_channel"]
-        by_set[set_name] = row
-    return by_set, per_channel
-
-
 # Screening criteria a condition can be judged on: those with a windowed series to cut.
 # One that starts screening without one is announced rather than silently skipped.
 _CONDITION_SCREENABLE = frozenset({"good_frac"})
@@ -1270,7 +1191,7 @@ def compute_run_sections(
         # come from the sci file, the stretches left out here as screening left them out
         sci_sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
         bad_channels = list(sci_sidecar.get("bad_channels") or [])
-        raw_intensity.info["bads"] = [c for c in bad_channels if c in raw_intensity.ch_names]
+        mark_bads(raw_intensity, bad_channels)
         params = sci_sidecar.get("parameters") or {}
         mark_manual(mark_unselected(raw_intensity, params.get("keep_spans") or []),
                     params.get("bad_spans") or [])

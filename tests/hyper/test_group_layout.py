@@ -71,8 +71,7 @@ def test_the_raw_qc_report_lands_in_the_subject_folder(tmp_path):
     from nirspipe.io.naming import report_name
 
     out = subject_report_dir(tmp_path, "01") / report_name("sub-01_task-hold", desc="raw")
-    build_prep_raw_report([], out, cardiac_l_freq=0.7, cardiac_h_freq=1.5, resp_l_freq=0.1,
-                          resp_h_freq=0.5, dpf=[6.0], sci_threshold=0.8)
+    build_prep_raw_report([], out, 0.8)
 
     from nirspipe.qc.common.figure_io import PLOTLY_LOCAL_NAME
 

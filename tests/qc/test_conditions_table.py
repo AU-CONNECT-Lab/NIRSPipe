@@ -58,14 +58,12 @@ def test_each_value_is_its_conditions_under_the_section_its_run_value_sits_in(tr
             assert row["motion_post_gvtd_filt_mean"] == pytest.approx(
                 entry["motion_by_set"]["all"]["gvtd_filt_mean"])
             haemo = entry["haemo_by_set"]["all"]
+            assert row["preproc_hbo_hbr_corr_mean"] == pytest.approx(haemo["hbo_hbr_corr_mean"])
+            assert row["rawhaemo_hbo_hbr_corr_mean"] == pytest.approx(
+                haemo["hbo_hbr_corr_mean_uncorrected"])
             if kind == "pipeline":
                 # the regression's after side is the run's errts stage
                 assert row["errts_gcor_hbo"] == pytest.approx(haemo["gcor_hbo_postreg"])
-                assert row["preproc_hbo_hbr_corr_mean"] == pytest.approx(
-                    haemo["hbo_hbr_corr_mean"])
-            else:
-                assert row["rawhaemo_post_hbo_hbr_corr_mean"] == pytest.approx(
-                    haemo["hbo_hbr_corr_mean_post"])
 
 
 @pytest.mark.parametrize("kind", ["pipeline", "raw"])

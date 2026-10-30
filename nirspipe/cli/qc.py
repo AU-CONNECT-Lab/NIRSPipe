@@ -72,8 +72,7 @@ def cmd_participant(
 ) -> None:
     """One raw QC report per recording, each subject on its own; ``record_settings`` goes in its run record."""
     from nirspipe.cli.workflows import (
-        _bad_channels_for, _keep_channels_for, _refuse_bad_span_rows,
-        _refuse_unmatched_bad_channel_rows, _spans_for,
+        _make_prep_config, _refuse_bad_span_rows, _refuse_unmatched_bad_channel_rows,
     )
 
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
@@ -118,8 +117,21 @@ def cmd_participant(
     sessions = session_label or [None]
     tasks    = task_label    or [None]
     ages = _app_options.participant_ages(dpf, from_population, bids_dir, participant_label)
-    templates = _app_options.templates_for(template, participant_label, ages)
-    batch_age = _app_options.population_age(population, from_population)
+    _app_options.templates_for(template, participant_label, ages)
+    # the settings as the pipeline resolves them, so one recording is prepared one way
+    settings = {
+        "bids_dir": bids_dir, "dpf": dpf, "template": template, "population": population,
+        "from_population": from_population, "sci_threshold": sci_threshold,
+        "psp_threshold": psp_threshold, "min_good_frac": min_good_frac,
+        "screen_scope": screen_scope, "motion_correction": motion_correction,
+        "motion_std_thresh": motion_std_thresh, "wavelet_iqr": wavelet_iqr,
+        "bad_channels": bad_channels, "keep_spans": keep_spans,
+        "keep_spans_from": keep_spans_from, "bad_spans": bad_spans,
+        "cardiac_l_freq": cardiac_l_freq, "cardiac_h_freq": cardiac_h_freq,
+        "resp_l_freq": resp_l_freq, "resp_h_freq": resp_h_freq, "window_length": window_length,
+        "epoch_tmin": epoch_tmin, "epoch_tmax": epoch_tmax, "short_max_dist": short_max_dist,
+        "long_min_dist": long_min_dist, "long_max_dist": long_max_dist, "ignore": ignore,
+    }
 
     def one_subject(subject: str) -> int:
         """Every report this subject's runs produce, plus the index over them."""
@@ -135,34 +147,20 @@ def cmd_participant(
                         continue
                     entities = layout.parse_file_entities(str(f))
                     actual_ses = entities.get("session")
-                    actual_task = entities.get("task")
-                    label = bids_label(subject, entities)
-                    keep = _spans_for(keep_spans, subject, entities,
-                                      relative=bool(keep_spans_from))
-
-                    snirf_p = Path(f)
-                    run_dict = {
-                        "label":       label,
-                        "subject_id":  subject,
-                        "snirf_path":  str(f),
-                        "session":     actual_ses,
-                        "task":        actual_task,
-                        "channels_tsv_bads": ([] if "channel-status" in (ignore or [])
-                                              else channel_status_bads(layout, snirf_p)),
-                        "ignore": list(ignore or []),
-                        "bad_channels": _bad_channels_for(bad_channels, subject, entities),
-                        "keep_channels": _keep_channels_for(bad_channels, subject, entities),
-                        "keep_spans": keep,
-                        # a recording no row names is used whole, so no marker applies to it
-                        "keep_spans_from": keep_spans_from if keep else None,
-                        "bad_spans": _spans_for(bad_spans, subject, entities,
-                                                flag="--bad-spans"),
-                        "age": batch_age if batch_age is not None else ages.get(subject),
-                        "template": templates[subject],
-                        "population": population,
-                        "from_population": list(from_population or []),
-                    }
-                    all_runs.append(run_dict)
+                    all_runs.append({
+                        "label":      bids_label(subject, entities),
+                        "subject_id": subject,
+                        "snirf_path": str(f),
+                        "session":    actual_ses,
+                        "bids_dir":   bids_dir,
+                        "entities":   entities,
+                        "metadata":   layout.get_metadata(str(f)),
+                        "config": replace(_make_prep_config(
+                            subject, actual_ses, settings, entities=entities,
+                            channels_tsv_bads=(
+                                [] if "channel-status" in (ignore or [])
+                                else channel_status_bads(layout, Path(f)))), lenient=True),
+                    })
 
         if not all_runs:
             print(f"Error: no SNIRF files found for sub-{subject}.", file=sys.stderr)
@@ -174,20 +172,9 @@ def cmd_participant(
                          / report_name(run_dict["label"], desc="raw"))
             print(f"Generating raw QC report: {html_path.name} ...")
             try:
-                build_prep_raw_report([run_dict], html_path, dpf=dpf,
-                                      sci_threshold=sci_threshold,
-                                      psp_threshold=psp_threshold,
-                                      min_good_frac=min_good_frac,
-                                      screen_scope=screen_scope,
-                                      cardiac_l_freq=cardiac_l_freq,
-                                      cardiac_h_freq=cardiac_h_freq,
-                                      resp_l_freq=resp_l_freq, resp_h_freq=resp_h_freq,
-                                      window_s=window_length, epoch_qc=epoch_qc,
-                                      epoch_tmin=epoch_tmin, epoch_tmax=epoch_tmax,
+                build_prep_raw_report([run_dict], html_path, sci_threshold, epoch_qc=epoch_qc,
                                       sep_bands=sep_bands, by_condition=by_condition,
-                                      motion_correction=motion_correction,
-                                      motion_std_thresh=motion_std_thresh,
-                                      wavelet_iqr=wavelet_iqr, roi_map=roi_map)
+                                      roi_map=roi_map)
                 print(f"  -> {html_path}")
             except Exception as exc:
                 logger.exception("Raw report generation failed for %s", html_path.name)

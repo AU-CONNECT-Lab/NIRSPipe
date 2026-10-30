@@ -13,6 +13,7 @@ from nirspipe.qc.metrics import haemo_quality_metrics
 from nirspipe.qc.subject.prep_raw_report import _process_run, build_prep_raw_report
 from nirspipe.qc.subject.record_io import read_record
 from nirspipe.qc.subject.sqm_record import OPTIONAL_SECTIONS
+from tests._raw_qc import raw_run
 from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 
@@ -24,9 +25,8 @@ def _process(tmp_path, motion_correction, conditions=False):
     if conditions:
         raw.set_annotations(mne.Annotations([20.0, 150.0], [100.0, 100.0], ["rest", "talk"]))
     path = _write_subject(bids, "01", "tap", raw)
-    run = {"label": "sub-01_task-tap", "snirf_path": path, "session": None}
-    return _process_run(run, 0.8, out / "sub-01", 0.7, 1.5, 0.1, 0.5, [6.0],
-                        motion_correction=motion_correction)
+    return _process_run(raw_run(bids, path, "tap", motion_correction=motion_correction),
+                        out / "sub-01")
 
 
 def _run(tmp_path, motion_correction):
@@ -36,7 +36,7 @@ def _run(tmp_path, motion_correction):
 
 @pytest.fixture(scope="module")
 def uncorrected(tmp_path_factory):
-    return _run(tmp_path_factory.mktemp("none"), None)
+    return _run(tmp_path_factory.mktemp("none"), "none")
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +49,6 @@ def test_the_record_carries_the_correlation_per_channel_set(uncorrected):
     for name in ("rawhaemo", "rawhaemo_long", "rawhaemo_short"):
         assert -1.0 <= record[name]["hbo_hbr_corr_mean"] <= 1.0
         assert name in record["data"]["sections"]
-    assert "rawhaemo_post" not in record
 
 
 def _table_rows(payload):
@@ -82,7 +81,7 @@ def test_the_panel_and_the_table_are_drawn(uncorrected):
 
 def test_a_correction_adds_the_after_side(corrected):
     payload, record = corrected
-    for name in ("rawhaemo_post", "rawhaemo_post_long", "rawhaemo_post_short"):
+    for name in ("preproc", "preproc_long", "preproc_short"):
         assert -1.0 <= record[name]["hbo_hbr_corr_mean"] <= 1.0
     cells = [c for r in payload["sqm"]["haemo_split"]["rows"] for c in r["cells"]]
     assert cells and all("post" in c for c in cells)
@@ -99,11 +98,9 @@ def conditioned(tmp_path_factory):
     raw = synth_raw("01", "tap", duration=300.0)
     raw.set_annotations(mne.Annotations([20.0, 150.0], [100.0, 100.0], ["rest", "talk"]))
     path = _write_subject(bids, "01", "tap", raw)
-    run = {"label": "sub-01_task-tap", "snirf_path": path, "session": None,
-           "subject_id": "01", "task": "tap"}
     page = out / "sub-01" / "sub-01_task-tap_desc-raw_report.html"
-    build_prep_raw_report([run], page, 0.7, 1.5, 0.1, 0.5, [6.0], 0.8, by_condition=True,
-                          motion_correction="tddr")
+    build_prep_raw_report([raw_run(bids, path, "tap", motion_correction="tddr")], page, 0.8,
+                          by_condition=True)
     record = read_record(next(out.rglob("*_desc-sqmraw_qc.json")))
     return path, record, page.parent
 
@@ -128,13 +125,13 @@ def test_each_condition_is_measured_on_its_own_cut(conditioned):
     for label, entry in record["by_condition"].items():
         t0, t1 = entry["window_s"]
         expected = haemo_quality_metrics(haemo.copy().crop(t0, t1))
-        assert entry["haemo_by_set"]["all"]["hbo_hbr_corr_mean"] == pytest.approx(
+        assert entry["haemo_by_set"]["all"]["hbo_hbr_corr_mean_uncorrected"] == pytest.approx(
             expected["hbo_hbr_corr_mean"], abs=1e-12)
-        assert entry["per_channel"]["hbo_hbr_corr_per_channel"] == pytest.approx(
+        assert entry["per_channel"]["hbo_hbr_corr_uncorrected_per_channel"] == pytest.approx(
             expected["hbo_hbr_corr_per_channel"], abs=1e-12)
         for set_name in ("all", "long", "short"):
-            assert "hbo_hbr_corr_mean_post" in entry["haemo_by_set"][set_name]
-        assert entry["haemo_by_set"]["all"]["hbo_hbr_corr_mean"] != pytest.approx(
+            assert "hbo_hbr_corr_mean" in entry["haemo_by_set"][set_name]
+        assert entry["haemo_by_set"]["all"]["hbo_hbr_corr_mean_uncorrected"] != pytest.approx(
             record["rawhaemo"]["hbo_hbr_corr_mean"])
 
 
@@ -147,7 +144,7 @@ def test_a_condition_page_prints_its_own_correlation(conditioned):
     assert all("post" in c for r in rows for c in r["cells"])
     assert "cond-rest" in data["figure_paths"]["hbo_hbr_corr"]["src"]
     assert (folder / data["figure_paths"]["hbo_hbr_corr"]["src"]).exists()
-    own = record["by_condition"]["rest"]["per_channel"]["hbo_hbr_corr_per_channel"]
+    own = record["by_condition"]["rest"]["per_channel"]["hbo_hbr_corr_uncorrected_per_channel"]
     cells = {r["name"]: r["corr"] for _, block in data["channels"]["blocks"] for r in block}
     rejected = {name.rsplit(" ", 1)[0] for name in _rejected(folder)}
     assert cells == {**{pair: f"{value:.3f}" for pair, value in own.items()},
@@ -155,8 +152,7 @@ def test_a_condition_page_prints_its_own_correlation(conditioned):
 
 
 def test_the_new_sections_are_registered():
-    assert {"rawhaemo", "rawhaemo_long", "rawhaemo_short", "rawhaemo_post",
-            "rawhaemo_post_long", "rawhaemo_post_short"} <= set(OPTIONAL_SECTIONS)
+    assert {"rawhaemo", "rawhaemo_long", "rawhaemo_short"} <= set(OPTIONAL_SECTIONS)
 
 
 def test_the_panel_takes_the_stage_names_it_is_given():

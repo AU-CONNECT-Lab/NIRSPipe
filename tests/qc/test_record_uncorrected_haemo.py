@@ -72,7 +72,8 @@ def test_under_a_correction_each_condition_before_is_what_raw_qc_measured(record
         for name, row in entry["haemo_by_set"].items():
             if row:
                 assert row["hbo_hbr_corr_mean_uncorrected"] == pytest.approx(
-                    raw[label]["haemo_by_set"][name]["hbo_hbr_corr_mean"], abs=1e-9)
+                    raw[label]["haemo_by_set"][name]["hbo_hbr_corr_mean_uncorrected"],
+                    abs=1e-9)
 
 
 def test_the_cohort_names_a_condition_before_as_its_run_before(records):

@@ -961,7 +961,6 @@ _RECORD_STAGES = {
     "motion": "The motion-correction step, measured on the optical density either side of it, bad channels included.",
     "motion_post": "The motion-corrected optical density, bad channels included.",
     "rawhaemo": "Haemoglobin converted from the recording as it arrived, before motion correction and filtering, bad channels included.",
-    "rawhaemo_post": "Haemoglobin converted from the motion-corrected optical density, before filtering, bad channels included.",
     "preproc": "Haemoglobin after Beer-Lambert and before filtering, bad channels excluded.",
     "filtered": "Haemoglobin after the bandpass, bad channels excluded.",
     "resampled": "Haemoglobin after the resample, bad channels excluded.",

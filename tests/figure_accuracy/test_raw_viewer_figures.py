@@ -127,7 +127,7 @@ def _corr(raw, pair):
 def test_the_correlation_record_leaves_the_rejected_pair_out(raw_viewer_run, denoise_run):
     record = read_record(raw_viewer_run.nirs / "sub-01_task-tapping_desc-sqmraw_qc.json")
     kept = [p.name for p in raw_viewer_run.truth.long_pairs if not p.bad]
-    for section, desc in (("rawhaemo_long", "uncorrected"), ("rawhaemo_post_long", "preproc")):
+    for section, desc in (("rawhaemo_long", "uncorrected"), ("preproc_long", "preproc")):
         expected = np.mean([_corr(denoise_run.read(desc), p) for p in kept])
         assert record[section]["hbo_hbr_corr_mean"] == pytest.approx(expected, abs=1e-6), section
 

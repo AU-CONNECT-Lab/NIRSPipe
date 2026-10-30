@@ -15,7 +15,7 @@ import mne
 import pandas as pd
 
 from nirspipe.utils import pair_of
-from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX
+from nirspipe.qc.common.channel_table import CHANNEL_METRICS_SUFFIX, uncorrected_view
 from nirspipe.io.derivatives import find_preproc_snirf, group_output_path, read_json
 from nirspipe.io.head_template import CORTEX_ATLASES
 from nirspipe.io.optode_space import read_placement, recorded_coords_path, write_coords_sidecar
@@ -221,7 +221,7 @@ def load_group_sqm_raw(
         sqm = raw_verdict_view(record)
         imu_sec = record.get("imu") or {}
         sqm.update(imu_sec)
-        per_channel = record.get("per_channel") or {}
+        per_channel = uncorrected_view(record)["per_channel"]
         per_all = per_channel.get("raw") or {}
         sci_cw = per_all.get("sci_per_channel") or {}
         sci_win = per_all.get("sci_win_per_channel") or {}
