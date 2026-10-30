@@ -206,7 +206,7 @@ def get_nirs_files(
         kwargs["task"] = task
 
     if filter_file is not None:
-        extra = json.loads(filter_file.read_text())
+        extra = json.loads(filter_file.read_text(encoding="utf-8-sig"))
         kwargs.update(extra)
 
     return [Path(f.path) for f in layout.get(**kwargs)]

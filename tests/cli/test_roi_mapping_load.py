@@ -19,6 +19,14 @@ def test_a_mapping_is_read_as_json(tmp_path):
     assert load_roi_mapping(path) == {"L": ["S1_D1"]}
 
 
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig"])
+def test_a_utf8_mapping_loads_whatever_the_locale(tmp_path, encoding):
+    """A region named outside ASCII, or a file saved with a byte-order mark, is read as UTF-8."""
+    path = tmp_path / "roi.json"
+    path.write_text(json.dumps({"Région €": ["S1_D1"]}, ensure_ascii=False), encoding=encoding)
+    assert load_roi_mapping(path) == {"Région €": ["S1_D1"]}
+
+
 @pytest.mark.parametrize("content", [None, "{not json"])
 def test_a_mapping_that_cannot_be_read_exits_rather_than_dropping_the_roi_output(tmp_path, content):
     path = tmp_path / "roi.json"

@@ -23,7 +23,7 @@ def load_roi_mapping(path: "Path | None") -> "dict[str, list[str]] | None":
     if not path:
         return None
     try:
-        roi_map = bare_roi_map(json.loads(Path(path).read_text()))
+        roi_map = bare_roi_map(json.loads(Path(path).read_text(encoding="utf-8-sig")))
     except Exception as exc:
         print(f"Error: failed to load ROI mapping {path}: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - A rest run whose drift model removes no trend also logged that `--high-pass` and `--low-pass` were missing when ALFF was skipped, though both were set
 - The run record's `log_dir` named a `logs/` folder at the tree root, where nothing is written, instead of the subject's, which holds the log and the record
 - With `--fc`, no bandpass and corrupted spans, the matrix before the regression was named `desc-filled`, a stage with no file, and credited to `desc-errts`
+- A `--roi-mapping` or `--bids-filter-file` file holding non-ASCII text, or saved with a byte-order mark, failed to load on Windows machines whose locale is not UTF-8
 
 ## [0.80.0] - 2026-10-29
 
