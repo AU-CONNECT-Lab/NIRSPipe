@@ -52,10 +52,16 @@ def bids_label(text: str, fallback: str = "custom") -> str:
     ``"left PFC (dorsal)"`` -> ``"leftPFCdorsal"``;  ``"__"`` -> ``"custom"``
 
     A label is alphanumeric by definition, so a name carrying a space, a hyphen or an
-    underscore would either be rejected or, worse, read as a second entity.
+    underscore would either be rejected or, worse, read as a second entity. ASCII only, the
+    rule ``entity_of`` reads a label back by.
     """
-    kept = "".join(ch for ch in str(text) if ch.isalnum())
+    kept = "".join(ch for ch in str(text) if is_bids_label(ch))
     return kept or fallback
+
+
+def is_bids_label(text: str) -> bool:
+    """Letters and digits only, ASCII ones: what a file name's entity can carry and be read back by."""
+    return text.isascii() and text.isalnum()
 
 
 def roi_map_name(mapping) -> str:

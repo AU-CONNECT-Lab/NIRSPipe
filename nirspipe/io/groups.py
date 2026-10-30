@@ -7,6 +7,7 @@ from pathlib import Path
 
 from nirspipe.exceptions import GroupCSVError
 from nirspipe.io.derivatives import select_one_run
+from nirspipe.io.naming import is_bids_label
 from nirspipe.io.tables import read_table
 
 
@@ -63,7 +64,7 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
         session = optional(row, "session")
         occasion = optional(row, "occasion")
         # it becomes the dyad's ses- entity, so it has to be a label a filename can carry
-        if occasion is not None and not occasion.isalnum():
+        if occasion is not None and not is_bids_label(occasion):
             raise GroupCSVError(
                 f"occasion {occasion!r} is not a BIDS label: letters and digits only, "
                 "without a 'ses-' prefix")
@@ -75,7 +76,7 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
                 f"row for {row['subject_id']} in group {key[0]} has no role. The role "
                 "column names every member's part or none: fill it in, or drop the column")
         # it becomes part of a level's name, so it has to read as one word there
-        if role is not None and not role.isalnum():
+        if role is not None and not is_bids_label(role):
             raise GroupCSVError(f"role {role!r} is not a label: letters and digits only")
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),

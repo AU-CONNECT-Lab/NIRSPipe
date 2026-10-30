@@ -22,7 +22,7 @@ from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               get_participant_age, validate_bids)
 from nirspipe.io.head_template import resolve_template
-from nirspipe.io.naming import report_name, roi_map_name
+from nirspipe.io.naming import is_bids_label, report_name, roi_map_name
 from nirspipe.io.derivatives import (
     LINK_RAW, entity_of, write_bidsignore, write_dataset_description,
 )
@@ -545,7 +545,7 @@ def _label_table_rows(path: Path, flag: str, data_columns: tuple[str, ...],
                                **{c: record.get(c, "") for c in optional}, "line": line}
         for column, (_, prefix) in _BAD_CHANNEL_KEYS.items():
             label = str(record.get(column, "")).strip().removeprefix(prefix)
-            if label and not (label.isdigit() if column == "run" else label.isalnum()):
+            if label and not (label.isdigit() if column == "run" else is_bids_label(label)):
                 kind = "a run number" if column == "run" else "a BIDS label (letters and digits)"
                 raise ValueError(
                     f"{flag} table {path} line {line}: {column} "

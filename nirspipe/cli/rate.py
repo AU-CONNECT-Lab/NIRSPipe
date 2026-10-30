@@ -10,14 +10,14 @@ from nirspipe import __version__
 from nirspipe.exceptions import StageError
 
 from nirspipe.io.derivatives import entity_of, group_label, subject_labels
-from nirspipe.io.naming import report_name
+from nirspipe.io.naming import is_bids_label, report_name
 from nirspipe.cli import _shared
 
 
 def rater_name(value: str) -> str:
     """A rater's name as it goes into file names: letters and digits only."""
     text = str(value).strip()
-    if not text.isalnum() or not text.isascii():
+    if not is_bids_label(text):
         raise argparse.ArgumentTypeError(
             f"{value!r}: a rater's name goes into file names, so letters and digits only, "
             "e.g. 'QY' or 'rater2'")
