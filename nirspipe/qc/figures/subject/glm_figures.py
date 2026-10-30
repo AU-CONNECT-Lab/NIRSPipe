@@ -1,8 +1,6 @@
 """GLM visualisation figures.
 
-design_matrix_figure():   regressor time series + censoring + BC/AC bars.
-activation_brain_figure(): brain surface projection, rendered off-screen.
-activation_panel():        per-condition rows of brain projections.
+activation_condition_figures(): per-condition brain surface projections, rendered off-screen.
 activation_flat_figure():  the betas on the optode flat map, for optodes no reading placed.
 """
 
@@ -17,7 +15,6 @@ import mne
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from PIL import Image as _PILImage
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
@@ -30,7 +27,7 @@ from nirspipe.utils.logging import get_logger
 from nirspipe.qc.figures.common._brain_utils import RENDER_LOCK
 from nirspipe.qc.figures.common._cortex import project_to_cortex, render_cortex
 from nirspipe.qc.figures.common._surface_overlay import activation_rgba
-from nirspipe.qc.figures.common._utils import CHROMA_STYLE, HBO_COLOR, HBR_COLOR
+from nirspipe.qc.figures.common._utils import CHROMA_STYLE
 from nirspipe.qc.figures.common._utils import SPAN_KIND_COLOR, SPAN_KIND_LABEL
 from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 from nirspipe.qc.figures.subject.rest_figures import flat_value_maps
@@ -42,126 +39,6 @@ if TYPE_CHECKING:
 logger = get_logger("qc.figures.glm")
 
 _DPI = 300
-
-_COND_COLORS = [
-    "#2980b9", "#c0392b", "#27ae60", "#8e44ad",
-    "#d35400", "#16a085", "#2c3e50", "#f39c12",
-]
-
-
-def _censored_mask(times: np.ndarray,
-                   segments: dict[str, list[tuple[float, float]]] | None) -> np.ndarray:
-    """Boolean mask: True = timepoint is NOT censored."""
-    mask = np.ones(len(times), dtype=bool)
-    if not segments:
-        return mask
-    for spans in segments.values():
-        for onset, duration in spans:
-            mask &= ~((times >= onset) & (times < onset + duration))
-    return mask
-
-
-def design_matrix_figure(
-    regressors: np.ndarray,
-    times: np.ndarray,
-    condition_names: list[str],
-    segments: dict[str, list[tuple[float, float]]] | None = None,
-    title: str = "Regressors of interest and combined censoring (gray)",
-) -> go.Figure:
-    """Design matrix figure.
-
-    Layout: (n_conditions + 1) rows × 2 columns::
-
-      Col 1 (85%): regressor time series; top row = sum of all regressors.
-      Col 2 (15%): BC / AC bar chart per row.
-
-    Censored spans are shaded gray; individual annotation types can be
-    distinguished by passing them in `segments`.
-
-    Args:
-        regressors:       (n_times, n_conditions) array, values in [0, 1].
-        times:            (n_times,) time axis in seconds.
-        condition_names:  Names for each column of `regressors`.
-        segments:         {label: [(onset, duration), ...]} for censoring overlay.
-                          Build from raw.annotations (see motion_panel.py).
-        title:            Figure title.
-    """
-    n_cond  = len(condition_names)
-    n_rows  = n_cond + 1
-    good_mask = _censored_mask(times, segments)
-
-    row_heights = [1.0 / n_rows] * n_rows
-
-    fig = make_subplots(
-        rows=n_rows, cols=2,
-        column_widths=[0.85, 0.15],
-        shared_xaxes=True,
-        vertical_spacing=0.04,
-        horizontal_spacing=0.03,
-        row_heights=row_heights,
-    )
-
-    regressor_sum = regressors.sum(axis=1)
-    regressor_sum_norm = regressor_sum / max(regressor_sum.max(), 1e-9)
-
-    def _add_row(row: int, y: np.ndarray, name: str, color: str) -> None:
-        # time series trace
-        fig.add_trace(go.Scatter(
-            x=times.tolist(), y=y.tolist(),
-            mode="lines", name=name,
-            line=dict(width=1.2, color=color),
-            showlegend=False,
-        ), row=row, col=1)
-
-        # gray shading for all censored spans
-        if segments:
-            for spans in segments.values():
-                for onset, duration in spans:
-                    fig.add_vrect(
-                        x0=onset, x1=onset + duration,
-                        fillcolor="rgba(150,150,150,0.25)", line_width=0,
-                        layer="below", row=row, col=1,
-                    )
-
-        # BC / AC bars
-        bc_val = float(y.mean())
-        ac_val = float(y[good_mask].mean()) if good_mask.any() else bc_val
-        fig.add_trace(go.Bar(
-            x=["BC", "AC"], y=[bc_val, ac_val],
-            marker_color=[color, color],
-            marker_opacity=[0.45, 1.0],
-            showlegend=False,
-            hovertemplate="%{x}: %{y:.3f}<extra>" + name + "</extra>",
-        ), row=row, col=2)
-
-        fig.update_yaxes(
-            title_text=name, title_font=dict(size=9),
-            tickfont=dict(size=8), range=[-0.05, 1.1],
-            row=row, col=1,
-        )
-        fig.update_yaxes(tickfont=dict(size=8), row=row, col=2)
-
-    # row 1: sum of regressors
-    _add_row(1, regressor_sum_norm, "regressor sum", "#333333")
-
-    # rows 2..n+1: individual conditions
-    for k, (name, color) in enumerate(zip(condition_names, _COND_COLORS)):
-        col_data = regressors[:, k]
-        col_norm = col_data / max(col_data.max(), 1e-9)
-        _add_row(k + 2, col_norm, name, color)
-
-    fig.update_xaxes(title_text="Time (s)", row=n_rows, col=1)
-    fig.update_layout(
-        title=title,
-        height=max(300, n_rows * 130 + 80),
-        margin=dict(l=90, r=20, t=60, b=50),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        barmode="group",
-        bargap=0.3,
-    )
-    return fig
-
 
 # --- activation brain --------------------------------------------------------
 
@@ -208,7 +85,6 @@ def _save_glm_brain(
     raw_haemo: mne.io.Raw,
     results_df: "pd.DataFrame",
     clim: dict,
-    view: str = "lat",
     size: tuple[int, int] = (800, 700),
     title: str = "",
     chroma: str = "hbo",
@@ -261,40 +137,6 @@ def _save_glm_brain(
     plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode()
-
-
-def _b64_to_figure(b64: str | None, title: str, img_height: int) -> go.Figure:
-    fig = go.Figure()
-    fig.update_xaxes(visible=False)
-    fig.update_yaxes(visible=False)
-    fig.update_layout(title=title, paper_bgcolor="#ffffff", height=img_height + 60,
-                      margin=dict(l=0, r=0, t=50, b=10))
-    if b64 is None:
-        fig.add_annotation(text="Brain render unavailable; see the run log.",
-                           showarrow=False, font=dict(size=13))
-        return fig
-    fig.add_layout_image(dict(
-        source=f"data:image/png;base64,{b64}",
-        xref="paper", yref="paper",
-        x=0, y=1, sizex=1, sizey=1,
-        sizing="contain", layer="above",
-    ))
-    return fig
-
-
-def activation_brain_figure(
-    raw_haemo: mne.io.Raw,
-    results_df: "pd.DataFrame",
-    title: str = "Activation",
-    clim: dict | None = None,
-    view: str = "dorsal",
-    size: tuple[int, int] = (800, 700),
-) -> go.Figure:
-    if clim is None:
-        clim = _shared_clim({title: results_df}, raw_haemo)
-
-    b64 = _save_glm_brain(raw_haemo, results_df, clim, view, size, title)
-    return _b64_to_figure(b64, title, size[1])
 
 
 def _coef_col(df) -> str:
@@ -353,7 +195,6 @@ def activation_condition_figures(
     raw_haemo: mne.io.Raw,
     results_dict: "dict[str, pd.DataFrame]",
     clim: dict | None = None,
-    view: str = "dorsal",
     size: tuple[int, int] = (800, 700),
     failed: "list[tuple[str, str]] | None" = None,
     quantity: str = "beta",
@@ -378,7 +219,7 @@ def activation_condition_figures(
     rendered: list[tuple[str, str]] = []
     for cond, df in results_dict.items():
         try:
-            rows = [_save_glm_brain(raw_haemo, df, clims[c], view, size,
+            rows = [_save_glm_brain(raw_haemo, df, clims[c], size,
                                     f"{cond} - {CHROMA_STYLE[c][0]}", chroma=c,
                                     quantity=quantity)
                     for c in chromas]
@@ -412,196 +253,6 @@ def activation_flat_figure(
                      "bar": f"{CHROMA_STYLE[chroma][0]} {quantity} (µM)"})
     return flat_value_maps(raw_haemo, rows, f"{quantity.capitalize()}s on the optode flat map",
                            CORRELATION_SCALE, sep_bands)
-
-
-def activation_panel(
-    raw_haemo: mne.io.Raw,
-    results_dict: "dict[str, pd.DataFrame]",
-    title: str = "Activation by condition",
-    clim: dict | None = None,
-    view: str = "dorsal",
-    size: tuple[int, int] = (800, 700),
-) -> str | None:
-    """Every condition's render stacked into one image, for a caller that wants one file.
-
-    The subject report does not use this. It renders each condition through
-    :func:`activation_condition_figures` and shows each file in turn.
-    """
-    rendered = activation_condition_figures(raw_haemo, results_dict, clim, view, size)
-    if not rendered:
-        return None
-
-    row_labels = [label for label, _ in rendered]
-    row_imgs = [np.array(_PILImage.open(io.BytesIO(base64.b64decode(b64))))
-                for _, b64 in rendered]
-
-    dpi = _DPI
-    label_px = 30 * dpi // 100
-    row_h = row_imgs[0].shape[0] + label_px
-    combined_w = row_imgs[0].shape[1]
-
-    fig_mpl, axes = plt.subplots(
-        len(row_imgs), 1,
-        figsize=(combined_w / dpi, row_h * len(row_imgs) / dpi),
-        dpi=dpi,
-    )
-    if len(row_imgs) == 1:
-        axes = [axes]
-    for ax, arr, label in zip(axes, row_imgs, row_labels):
-        ax.imshow(arr)
-        ax.axis("off")
-        ax.set_title(label, fontsize=13, pad=4)
-    fig_mpl.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0.05)
-
-    buf = io.BytesIO()
-    fig_mpl.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.05, dpi=dpi)
-    plt.close(fig_mpl)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode()
-
-
-def per_channel_hrf_figure(
-    times: np.ndarray,
-    hrfs_hbo: np.ndarray,
-    hrfs_hbr: np.ndarray,
-    std_hbo: np.ndarray,
-    std_hbr: np.ndarray,
-    ch_names: list[str],
-    q_hbo: "np.ndarray | None" = None,
-    q_hbr: "np.ndarray | None" = None,
-    hrfs_ctrl_hbo: "np.ndarray | None" = None,
-    hrfs_ctrl_hbr: "np.ndarray | None" = None,
-    title: str = "Per-channel HRF",
-    n_cols: int = 9,
-) -> go.Figure:
-    """Grid of per-channel HRF timecourses with HbO/HbR uncertainty bands.
-
-    Args:
-        times:          Time axis (seconds) for the HRF window.
-        hrfs_hbo:       (n_ch, n_times) mean HbO HRF per channel.
-        hrfs_hbr:       (n_ch, n_times) mean HbR HRF per channel.
-        std_hbo:        (n_ch, n_times) standard deviation for HbO.
-        std_hbr:        (n_ch, n_times) standard deviation for HbR.
-        ch_names:       Channel base names (without hbo/hbr suffix).
-        q_hbo:          (n_ch,) FDR-corrected q-values for HbO.
-        q_hbr:          (n_ch,) FDR-corrected q-values for HbR.
-        hrfs_ctrl_hbo:  Optional (n_ch, n_times) control-condition HbO.
-        hrfs_ctrl_hbr:  Optional (n_ch, n_times) control-condition HbR.
-        title:          Figure title.
-        n_cols:         Number of columns in the grid (default 9).
-    """
-    n_ch = len(ch_names)
-    n_rows = max(1, int(np.ceil(n_ch / n_cols)))
-    t = times.tolist()
-
-    subplot_titles = []
-    for i, name in enumerate(ch_names):
-        parts = [name]
-        if q_hbo is not None and i < len(q_hbo) and q_hbo[i] > 0:
-            parts.append(f"q={np.log10(q_hbo[i]):.1f}")
-        subplot_titles.append("  ".join(parts))
-    # pad to n_rows * n_cols
-    subplot_titles += [""] * (n_rows * n_cols - n_ch)
-
-    fig = make_subplots(
-        rows=n_rows, cols=n_cols,
-        shared_xaxes=True,
-        shared_yaxes=True,
-        vertical_spacing=0.06,
-        horizontal_spacing=0.02,
-        subplot_titles=subplot_titles,
-    )
-
-    # suppress subplot title font from make_subplots default (too large)
-    for ann in fig.layout.annotations:
-        ann.font = dict(size=7)
-
-    hbo_color = HBO_COLOR
-    hbr_color = HBR_COLOR
-    ctrl_hbo_color = "#e8a0a0"
-    ctrl_hbr_color = "#a0c4e8"
-
-    for i in range(n_ch):
-        row = i // n_cols + 1
-        col = i % n_cols + 1
-        show_legend = i == 0
-
-        # HbO uncertainty band
-        y_hi = (hrfs_hbo[i] + std_hbo[i]).tolist()
-        y_lo = (hrfs_hbo[i] - std_hbo[i]).tolist()
-        fig.add_trace(go.Scatter(
-            x=t, y=y_hi, mode="lines",
-            line=dict(width=0), showlegend=False, hoverinfo="skip",
-        ), row=row, col=col)
-        fig.add_trace(go.Scatter(
-            x=t, y=y_lo, mode="lines",
-            line=dict(width=0), fill="tonexty",
-            fillcolor="rgba(192,57,43,0.15)",
-            showlegend=False, hoverinfo="skip",
-        ), row=row, col=col)
-        fig.add_trace(go.Scatter(
-            x=t, y=hrfs_hbo[i].tolist(), mode="lines",
-            line=dict(width=1.2, color=hbo_color),
-            name="HbO", showlegend=show_legend,
-            legendgroup="hbo",
-            hovertemplate=f"{ch_names[i]} HbO<extra></extra>",
-        ), row=row, col=col)
-
-        # HbR uncertainty band
-        y_hi_r = (hrfs_hbr[i] + std_hbr[i]).tolist()
-        y_lo_r = (hrfs_hbr[i] - std_hbr[i]).tolist()
-        fig.add_trace(go.Scatter(
-            x=t, y=y_hi_r, mode="lines",
-            line=dict(width=0), showlegend=False, hoverinfo="skip",
-        ), row=row, col=col)
-        fig.add_trace(go.Scatter(
-            x=t, y=y_lo_r, mode="lines",
-            line=dict(width=0), fill="tonexty",
-            fillcolor="rgba(41,128,185,0.15)",
-            showlegend=False, hoverinfo="skip",
-        ), row=row, col=col)
-        fig.add_trace(go.Scatter(
-            x=t, y=hrfs_hbr[i].tolist(), mode="lines",
-            line=dict(width=1.2, color=hbr_color),
-            name="HbR", showlegend=show_legend,
-            legendgroup="hbr",
-            hovertemplate=f"{ch_names[i]} HbR<extra></extra>",
-        ), row=row, col=col)
-
-        # optional control condition
-        if hrfs_ctrl_hbo is not None and i < len(hrfs_ctrl_hbo):
-            fig.add_trace(go.Scatter(
-                x=t, y=hrfs_ctrl_hbo[i].tolist(), mode="lines",
-                line=dict(width=0.8, color=ctrl_hbo_color, dash="dot"),
-                name="HbO ctrl", showlegend=show_legend,
-                legendgroup="hbo_ctrl",
-                hovertemplate=f"{ch_names[i]} HbO ctrl<extra></extra>",
-            ), row=row, col=col)
-        if hrfs_ctrl_hbr is not None and i < len(hrfs_ctrl_hbr):
-            fig.add_trace(go.Scatter(
-                x=t, y=hrfs_ctrl_hbr[i].tolist(), mode="lines",
-                line=dict(width=0.8, color=ctrl_hbr_color, dash="dot"),
-                name="HbR ctrl", showlegend=show_legend,
-                legendgroup="hbr_ctrl",
-                hovertemplate=f"{ch_names[i]} HbR ctrl<extra></extra>",
-            ), row=row, col=col)
-
-        # zero line
-        fig.add_hline(y=0, line_width=0.5, line_color="#cccccc",
-                      row=row, col=col)
-
-    fig.update_xaxes(tickfont=dict(size=7), title_font=dict(size=8))
-    fig.update_yaxes(tickfont=dict(size=7))
-    fig.update_xaxes(title_text="Time (s)", row=n_rows)
-    fig.update_layout(
-        title=title,
-        height=max(300, n_rows * 130 + 80),
-        margin=dict(l=50, r=30, t=80, b=50),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        legend=dict(font=dict(size=9)),
-    )
-    return fig
 
 
 def design_matrix_static_figure(
@@ -683,79 +334,6 @@ def design_matrix_heatmap(design_matrix: "pd.DataFrame") -> str:
     _plot_dm(design_matrix, axes=ax)
     ax.tick_params(axis="x", labelsize=5)
     ax.tick_params(axis="y", labelsize=7)
-    return fig_png_b64(fig)
-
-
-def glm_betas_figure(
-    glm_df: "pd.DataFrame",
-    conditions: "list[str]",
-    title: str = "GLM: per-channel beta (theta)",
-) -> str:
-    """Per-channel HbO / HbR beta values as a heatmap (channels × conditions).
-
-    `glm_df` is the output of `glm_est.to_dataframe()`.
-    Only the listed `conditions` are shown (drift/constant excluded).
-    """
-    glm_df = glm_df.reset_index()
-    if "Contrast" not in glm_df.columns:
-        for alt in ("contrast", "Regressor", "regressor", "condition", "Condition"):
-            if alt in glm_df.columns:
-                glm_df = glm_df.rename(columns={alt: "Contrast"})
-                break
-    if "Contrast" not in glm_df.columns:
-        return None
-
-    glm_df["Contrast"] = glm_df["Contrast"].astype(str)
-    df = glm_df[glm_df["Contrast"].isin(conditions)].copy()
-    if df.empty:
-        return None
-
-    df["pair"] = df["ch_name"].str.replace(r"\s+(hbo|hbr)$", "", regex=True)
-    df["chroma"] = df["ch_name"].str.extract(r"(hbo|hbr)$")[0]
-
-    def _pivot(chroma):
-        sub = df[df["chroma"] == chroma]
-        if sub.empty:
-            return None
-        return sub.pivot_table(index="pair", columns="Contrast",
-                               values="theta", aggfunc="mean")[conditions]
-
-    hbo_pv = _pivot("hbo")
-    hbr_pv = _pivot("hbr")
-    if hbo_pv is None and hbr_pv is None:
-        return None
-
-    panels = [(hbo_pv, "HbO", HBO_COLOR), (hbr_pv, "HbR", HBR_COLOR)]
-    panels = [(p, lbl, c) for p, lbl, c in panels if p is not None]
-    n_panels = len(panels)
-
-    pair_names = panels[0][0].index.tolist()
-    n_ch = len(pair_names)
-    n_cond = len(conditions)
-    fig_h = max(4, n_ch * 0.22 + 1.5)
-
-    fig, axes = plt.subplots(1, n_panels,
-                             figsize=(max(6, n_cond * n_panels * 0.9 + 2), fig_h),
-                             sharey=True)
-    if n_panels == 1:
-        axes = [axes]
-
-    for ax, (pv, lbl, color) in zip(axes, panels):
-        mat = pv.reindex(pair_names).values.astype(float)
-        vmax = np.nanpercentile(np.abs(mat), 95)
-        vmax = max(vmax, 1e-6)
-        im = ax.imshow(mat, aspect="auto", cmap="RdBu_r",
-                       vmin=-vmax, vmax=vmax, interpolation="nearest")
-        ax.set_xticks(range(n_cond))
-        ax.set_xticklabels(conditions, fontsize=8, rotation=30, ha="right")
-        ax.set_yticks(range(n_ch))
-        if ax is axes[0]:
-            ax.set_yticklabels(pair_names, fontsize=7)
-        ax.set_title(lbl, fontsize=10, color=color)
-        fig.colorbar(im, ax=ax, shrink=0.7, label="β (theta)", pad=0.02)
-
-    fig.suptitle(title, fontsize=11, y=1.01)
-    fig.tight_layout()
     return fig_png_b64(fig)
 
 

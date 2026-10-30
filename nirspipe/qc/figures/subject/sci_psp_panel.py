@@ -26,42 +26,6 @@ _SPACING    = 3
 # '#D3D3D3',  # NA - light gray
 # '#FFD966',  # other - yellow
 
-def binary_heatmap_figure(
-    ch_names: list[str],
-    good_mask: np.ndarray,
-    metric_label: str = "Pass/Fail",
-) -> go.Figure:
-    n_ch = len(ch_names)
-    colors = [_GOOD_COLOR if g else _BAD_COLOR for g in good_mask]
-
-    fig = go.Figure(go.Scatter(
-        x=[0] * n_ch,
-        y=[i * _SPACING for i in range(n_ch)],
-        mode="markers",
-        marker=dict(
-            symbol="square",
-            size=12,
-            color=colors,
-            line=dict(width=0.5, color="#aaa"),
-        ),
-        text=[f"{n}: {'PASS' if g else 'FAIL'}" for n, g in zip(ch_names, good_mask)],
-        hovertemplate="%{text}<extra></extra>",
-        showlegend=False,
-    ))
-    fig.update_layout(
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-0.5, 0.5]),
-        yaxis=dict(
-            tickvals=[i * _SPACING for i in range(n_ch)],
-            ticktext=ch_names,
-            autorange="reversed",
-            tickfont=dict(size=9),
-        ),
-        plot_bgcolor="white", paper_bgcolor="white",
-        margin=dict(l=0, r=0, t=30, b=40),
-    )
-    return fig
-
-
 _MISSING_COLOR = "#D3D3D3"
 
 
@@ -592,7 +556,6 @@ def build_sci_psp_figure(
     sci_win_times: np.ndarray | None = None,
     psp_matrix: np.ndarray | None = None,
     psp_win_times: np.ndarray | None = None,
-    cv_per_channel: dict[str, float] | None = None,
     cv_matrix: np.ndarray | None = None,
     cv_win_times: np.ndarray | None = None,
     cv_threshold: float = CV_PASS,

@@ -43,9 +43,6 @@ from nirspipe.qc.figures.common.motion_panel import _roi_order, roi_colours
 
 logger = get_logger("qc.figures.rest")
 
-_MEAN_LINE_COLOR = "#555555"
-
-
 # The blocks a rest panel's channels are laid out in, and what each is called. Same split and
 # same order as the per-channel table, so a reader moving between them finds the same groups.
 _SEP_BLOCKS = (("long", "long"), ("mid", "neither range"), ("short", "short"))

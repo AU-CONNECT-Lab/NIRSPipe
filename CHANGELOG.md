@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - **Breaking**: `nirspipe --ignore events`, which skipped nothing, since the pipeline never reads `events.tsv`
+- Figure builders no page drew: `design_matrix_figure`, `activation_brain_figure`, `activation_panel`, `per_channel_hrf_figure`, `glm_betas_figure`, `stage_slope_figure`, `binary_heatmap_figure` and two dyad builders
 
 ### Fixed
 - The GUI's Analysis form hid `--noise-model` in rest and denoise mode, whose confound regression reads it

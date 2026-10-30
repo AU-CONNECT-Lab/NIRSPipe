@@ -15,7 +15,6 @@ from nirspipe.qc.figures.subject.raw_figures import (
 )
 from nirspipe.qc.figures.subject.sci_psp_panel import (
     build_sci_psp_figure,
-    binary_heatmap_figure,
     lollipop_scores_figure,
     channel_quality_heatmap,
     condition_quality_heatmap,
@@ -28,14 +27,11 @@ from nirspipe.qc.figures.common.motion_panel import (
 from nirspipe.qc.figures.subject.carpet_compare import carpet_compare_figure
 from nirspipe.qc.figures.subject.psd_plot import psd_figure
 from nirspipe.qc.figures.subject.denoise_compare import (
-    denoise_stage_panels, stage_metrics_figure, stage_slope_figure,
+    denoise_stage_panels, stage_metrics_figure,
 )
 from nirspipe.qc.figures.subject.glm_figures import (
-    design_matrix_figure, design_matrix_static_figure,
-    activation_brain_figure, activation_condition_figures, activation_flat_figure,
-    activation_panel,
-    per_channel_hrf_figure, design_matrix_heatmap, glm_betas_figure,
-    design_peak_frequencies, whitening_figure,
+    design_matrix_static_figure, activation_condition_figures, activation_flat_figure,
+    design_matrix_heatmap, design_peak_frequencies, whitening_figure,
 )
 from nirspipe.qc.figures.subject.correlation_panel import fit_js as hbo_hbr_fit_js
 from nirspipe.qc.figures.subject.correlation_panel import hbo_hbr_correlation_figure
@@ -65,7 +61,6 @@ __all__ = [
     "condition_colors",
     "sci_color",
     "psd_layout",
-    "binary_heatmap_figure",
     "lollipop_scores_figure",
     "channel_quality_heatmap",
     "condition_quality_heatmap",
@@ -78,16 +73,10 @@ __all__ = [
     "psd_figure",
     "denoise_stage_panels",
     "stage_metrics_figure",
-    "stage_slope_figure",
-    "design_matrix_figure",
     "design_matrix_static_figure",
-    "activation_brain_figure",
     "activation_condition_figures",
     "activation_flat_figure",
-    "activation_panel",
-    "per_channel_hrf_figure",
     "design_matrix_heatmap",
-    "glm_betas_figure",
     "design_peak_frequencies",
     "whitening_figure",
     "hbo_hbr_correlation_figure",

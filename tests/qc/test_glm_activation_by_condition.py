@@ -17,7 +17,7 @@ import pytest
 
 from nirspipe.qc.figures.subject import glm_figures
 from nirspipe.qc.figures.subject.glm_figures import (
-    _shared_clim, activation_condition_figures, activation_panel,
+    _shared_clim, activation_condition_figures,
 )
 
 
@@ -91,7 +91,7 @@ def test_an_hbt_row_leaves_the_scale_where_either_half_is_bad():
 def test_each_chromophore_is_a_row_on_its_own_scale(monkeypatch):
     seen = []
 
-    def fake(raw_haemo, results_df, clim, view, size, title, chroma, quantity="beta"):
+    def fake(raw_haemo, results_df, clim, size, title, chroma, quantity="beta"):
         seen.append((title, clim["pos_lims"][-1]))
         return _tiny_png(12, 8)
 
@@ -111,7 +111,7 @@ def test_each_chromophore_is_a_row_on_its_own_scale(monkeypatch):
 def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
     seen = []
 
-    def fake(raw_haemo, results_df, clim, view, size, title, chroma, quantity="beta"):
+    def fake(raw_haemo, results_df, clim, size, title, chroma, quantity="beta"):
         seen.append((title, clim["pos_lims"][-1]))
         return _tiny_png()
 
@@ -126,7 +126,7 @@ def test_every_condition_is_rendered_against_the_same_scale(monkeypatch):
 
 def _fails_for(*labels):
     def render(*a, **k):
-        cond = a[5].split(" - ")[0]
+        cond = a[4].split(" - ")[0]
         if cond in labels:
             raise RuntimeError(f"no surface for {cond}")
         return _tiny_png()
@@ -146,16 +146,6 @@ def test_a_condition_that_failed_to_render_is_left_out_and_reported(monkeypatch)
 def test_no_condition_rendering_gives_nothing_rather_than_raising(monkeypatch):
     monkeypatch.setattr(glm_figures, "_save_glm_brain", _fails_for("game"))
     assert activation_condition_figures(None, _results(game=[1.0])) == []
-    assert activation_panel(None, _results(game=[1.0])) is None
-
-
-# ---- the stacked image still works for a caller that wants one file ----
-
-def test_the_stacked_panel_still_stacks(monkeypatch):
-    monkeypatch.setattr(glm_figures, "_save_glm_brain", lambda *a, **k: _tiny_png(12, 8))
-    one = activation_panel(None, _results(a=[1.0]))
-    three = activation_panel(None, _results(a=[1.0], b=[1.0], c=[1.0]))
-    assert _png_height(three) > _png_height(one)
 
 
 def _png_height(b64: str) -> int:

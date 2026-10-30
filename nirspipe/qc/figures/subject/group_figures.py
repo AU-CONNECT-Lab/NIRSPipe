@@ -824,12 +824,6 @@ def build_channel_condition_matrix(by_condition: dict,
     return _condition_heatmap(panels, conditions, labels, "channel")
 
 
-_PALETTE = [
-    "#3498db", "#e67e22", "#2ecc71", "#9b59b6",
-    "#e74c3c", "#1abc9c", "#f1c40f", "#34495e",
-]
-
-
 def _group_box(title: str, keys: list[str], df: pd.DataFrame, rows: list[str]) -> go.Figure | None:
     """One chart: real-value box + jittered strip, x = metric, colour = channel set.
 

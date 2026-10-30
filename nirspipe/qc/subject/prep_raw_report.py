@@ -517,7 +517,6 @@ def _process_run(
             psp_threshold=cutoffs["psp"], window_s=window_s,
             sci_matrix=sci_matrix, sci_win_times=sci_win_times,
             psp_matrix=psp_matrix, psp_win_times=psp_win_times,
-            cv_per_channel=(raw_pc.get("raw") or {}).get("cv_per_channel") or {},
             cv_matrix=series.get("cv_matrix"), cv_win_times=series.get("cv_times"),
             warn=errors,
         )

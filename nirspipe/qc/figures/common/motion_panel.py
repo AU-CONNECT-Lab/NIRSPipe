@@ -30,8 +30,6 @@ from nirspipe.utils.spans import span_kind
 
 logger = get_logger("qc.figures.motion_panel")
 
-_MAX_PTS = 4000
-
 _MOTION_BAND_LABEL = f"{GVTD_MOTION_BAND[0]:g}–{GVTD_MOTION_BAND[1]:g} Hz"
 # GVTD is drawn in the unit the metrics table prints it in, so the two read off one scale
 _GVTD_SCALE = display_value("gvtd_filt_mean", 1.0)

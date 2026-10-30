@@ -781,7 +781,7 @@ def condition_payloads(
         if save_figure is not None:
             sci_fig = _condition_sci_psp(
                 build_sci_psp_figure, sliced.get("sci_win_per_channel") or {},
-                sliced.get("psp_per_channel") or {}, sliced.get("cv_per_channel") or {},
+                sliced.get("psp_per_channel") or {},
                 bad_channels, sci_threshold, cutoffs["psp"], series, window)
             for key, fig in (("sci_psp", sci_fig),
                              ("ch_summary", channel_quality_heatmap(
@@ -941,7 +941,7 @@ def _narrowed_ts(inline: "dict | None", window) -> dict:
             "markers": markers}
 
 
-def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold,
+def _condition_sci_psp(build, sci_pc, psp_pc, bad_channels, sci_threshold,
                        psp_threshold, series, window):
     """The SCI/PSP panel over one condition's columns, a real slice of both matrices.
 
@@ -974,7 +974,7 @@ def _condition_sci_psp(build, sci_pc, psp_pc, cv_pc, bad_channels, sci_threshold
         window_s=series.get("qc_window_s"),
         sci_matrix=sci_matrix, sci_win_times=sci_times,
         psp_matrix=psp_matrix, psp_win_times=psp_times,
-        cv_per_channel=cv_pc, cv_matrix=cv_matrix, cv_win_times=cv_times,
+        cv_matrix=cv_matrix, cv_win_times=cv_times,
     )
 
 

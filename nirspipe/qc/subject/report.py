@@ -365,7 +365,6 @@ def _section_sci(
             sci_win_times=sci_win_times,
             psp_matrix=psp_scores_matrix,
             psp_win_times=psp_win_times,
-            cv_per_channel=cv_per_ch,
             cv_matrix=cv_scores_matrix,
             cv_win_times=cv_win_times,
             window_s=(windowed or {}).get("qc_window_s"),

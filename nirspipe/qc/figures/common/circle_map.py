@@ -81,11 +81,3 @@ def radial_label(fig, theta: float, radius: float, text: str, row: int, col: int
         xanchor="right" if flip else "left", yanchor="middle",
         xref=f"x{col}" if col > 1 else "x", yref=f"y{col}" if col > 1 else "y",
     )
-
-
-def circle_axes(fig, row: int, col: int, span: float = 1.16) -> None:
-    """A square, invisible frame around the unit circle, with room for the radial labels."""
-    n = col if col > 1 else ""
-    fig.update_xaxes(visible=False, range=[-span, span], row=row, col=col)
-    fig.update_yaxes(visible=False, range=[-span, span], scaleanchor=f"x{n}", scaleratio=1,
-                     row=row, col=col)

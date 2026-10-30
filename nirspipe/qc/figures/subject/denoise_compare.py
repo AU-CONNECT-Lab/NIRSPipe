@@ -14,7 +14,6 @@ below turns the haemoglobin chain's numbers into panels.
 
 from typing import NamedTuple
 
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -134,58 +133,4 @@ def stage_metrics_figure(
     fig.update_layout(
         height=190 * n_rows + 30, plot_bgcolor="white", paper_bgcolor="white",
         margin=dict(l=30, r=30, t=40, b=25))
-    return fig
-
-
-def stage_slope_figure(
-    per_stage: "list[dict[str, float]]",
-    labels: list[str],
-    *,
-    title: str,
-    y_title: str,
-    higher_is_better: bool = True,
-    flat_tol: float = 0.05,
-) -> "go.Figure | None":
-    """One line per channel across the stages, with the mean drawn over the top.
-
-    ``per_stage`` is one ``{channel: value}`` per stage, aligned with ``labels``; only
-    channels present at every stage are drawn. Channels the chain left worse are drawn
-    heavy so they can be picked out of the bundle.
-    """
-    if len(per_stage) < 2 or not per_stage[0]:
-        return None
-    chans = [ch for ch in per_stage[0] if all(ch in d for d in per_stage)]
-    if not chans:
-        return None
-    values = np.array([[d[ch] for d in per_stage] for ch in chans], dtype=float)
-    net = values[:, -1] - values[:, 0]
-
-    fig = go.Figure()
-    for ch, row, delta in zip(chans, values, net):
-        improved = delta > 0 if higher_is_better else delta < 0
-        worse = abs(delta) > flat_tol and not improved
-        fig.add_trace(go.Scatter(
-            x=labels, y=row, mode="lines+markers", name=ch,
-            line=dict(color=WORSE if worse else (BETTER if abs(delta) > flat_tol else FLAT),
-                      width=2.4 if worse else 1.4),
-            marker=dict(size=5), showlegend=False,
-            hovertemplate=f"{ch}<br>%{{x}}: %{{y:.3f}}<extra></extra>"))
-    means = values.mean(axis=0)
-    fig.add_trace(go.Scatter(
-        x=labels, y=means, mode="lines+markers+text",
-        text=[f"{v:.3f}" for v in means], textposition="bottom center",
-        textfont=dict(size=10, color=INK),
-        line=dict(color=INK, width=3), marker=dict(size=8),
-        showlegend=False, hovertemplate="mean %{x}: %{y:.3f}<extra></extra>"))
-
-    n_worse = int(sum(abs(d) > flat_tol and not (d > 0 if higher_is_better else d < 0)
-                      for d in net))
-    fig.update_layout(
-        title=dict(text=f"{title}<br><span style='font-size:11px;color:#666'>{n_worse} of "
-                        f"{len(chans)} channels ended worse than they started, drawn "
-                        "heavy</span>", font=dict(size=15, color=INK)),
-        xaxis=dict(range=[-0.2, len(labels) - 0.8], showgrid=False, linecolor=RULE),
-        yaxis=dict(title=y_title, gridcolor="#f2f4f7", zeroline=False),
-        height=420, margin=dict(l=70, r=40, t=70, b=40),
-        plot_bgcolor="white", paper_bgcolor="white")
     return fig

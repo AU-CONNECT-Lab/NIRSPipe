@@ -11,7 +11,6 @@ from plotly.subplots import make_subplots
 
 from nirspipe.utils import is_marker, pair_of
 from nirspipe.utils.lineage import lineage_of
-from nirspipe.qc.common.figure_io import extract_markers as _extract_markers
 from nirspipe.qc.metrics.coupling import SCI_WINDOW_S
 from nirspipe.qc.metrics.windowed import SCREEN_WINDOW_S
 from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the panels)
@@ -20,8 +19,7 @@ from nirspipe.qc.metrics.hyper import (  # noqa: F401  (re-exported for the pane
 from nirspipe.qc.figures.common._utils import (BAND_COLORS, CONDITION_PALETTE, MEMBER_COLORS,
                                           _hex_to_rgba,
                                           TIMELINE_ROW_PX,
-                                          minmax_xy, physio_bands, spectrum_fmax, timeline_axes,
-                                          timeline_row_bands, timeline_row_traces)
+                                          minmax_xy, physio_bands, spectrum_fmax)
 # imported rather than restated, so the dyad and subject reports draw the same heads
 from nirspipe.qc.figures.common.head_map import (
     BLANK_COLOR, HEAD_SCALE, head_axes as _head_axes,
@@ -44,7 +42,6 @@ logger = get_logger("qc.figures.hyper")
 _MAX_TS_PTS = 4000
 
 _COND_PALETTE = CONDITION_PALETTE
-_COND_DASHES  = ["solid", "dash", "dot", "dashdot", "longdash"]
 
 _GOOD_COLOR = "#C5E0B3"
 _MIX_COLOR  = "#FFD966"
@@ -913,61 +910,6 @@ def build_head_by_condition(
 
 
 # ---------------------------------------------------------------------------
-# Figure: trigger timeline
-# ---------------------------------------------------------------------------
-
-def build_trigger_timeline(
-    aligned_raws: dict[str, mne.io.Raw],
-    subject_ids: list[str],
-    xlabel: str = "Time (s) [aligned]",
-) -> go.Figure | None:
-    per_sub: dict[str, list[dict]] = {}
-    all_descs: list[str] = []
-    for sid in subject_ids:
-        raw = aligned_raws.get(sid)
-        mkrs = _extract_markers(raw) if raw else []
-        per_sub[sid] = mkrs
-        for m in mkrs:
-            if m["description"] not in all_descs:
-                all_descs.append(m["description"])
-
-    if not any(per_sub.values()):
-        return None
-
-    colors = _cond_colors(all_descs)
-    traces: list[go.BaseTraceType] = []
-    seen: set[str] = set()
-
-    for sub_idx, sid in enumerate(subject_ids):
-        by_desc: dict[str, list[dict]] = {}
-        for m in per_sub[sid]:
-            by_desc.setdefault(m["description"], []).append(m)
-        for desc, events in by_desc.items():
-            traces += timeline_row_traces(events, sub_idx, colors.get(desc, "#999"),
-                                          desc, desc not in seen, f"<br>{sid}")
-            seen.add(desc)
-
-    # the legend stays here, unlike the single-recording timeline: a row is a member and
-    # the conditions sharing it are told apart by colour alone
-    xaxis, yaxis = timeline_axes([f"sub-{s}" for s in subject_ids])
-    xaxis["title"] = xlabel
-    return go.Figure(
-        data=traces,
-        layout=go.Layout(
-            xaxis=xaxis, yaxis=yaxis,
-            shapes=timeline_row_bands(len(subject_ids)),
-            plot_bgcolor="white", paper_bgcolor="white",
-            # overlay, or plotly groups each subject's bars and shifts them off their row
-            barmode="overlay",
-            height=max(110, len(subject_ids) * TIMELINE_ROW_PX + 88),
-            margin=dict(l=80, r=20, t=10, b=44),
-            legend=dict(font=dict(size=9), orientation="h", y=-0.35),
-            hovermode="closest",
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
 # Figure: HbO + HbR signal overlay (2-row subplot, channel switching via select)
 # ---------------------------------------------------------------------------
 
@@ -982,88 +924,6 @@ def _trace_scale(raws) -> "tuple[float, str]":
            for r in raws if r is not None):
         return 1.0, "z"
     return 1e6, "µmol/L"
-
-
-def build_signal_overlay(
-    aligned_raws: dict[str, mne.io.Raw],
-    subject_ids: list[str],
-    markers_list: list[dict],
-    cond_colors_: dict[str, str],
-) -> go.Figure | None:
-    if not aligned_raws:
-        return None
-    ref_raw = aligned_raws.get(subject_ids[0])
-    if ref_raw is None:
-        return None
-    hbo_picks = mne.pick_types(ref_raw.info, fnirs="hbo")
-    if not len(hbo_picks):
-        return None
-
-    ch_pairs = [pair_of(ref_raw.ch_names[p]) for p in hbo_picks]
-    scale, unit = _trace_scale(aligned_raws.values())
-
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.5, 0.5], vertical_spacing=0.06,
-        subplot_titles=["HbO", "HbR"],
-    )
-
-    # HbO traces (row 1) then HbR traces (row 2): n_ch * n_subs each
-    for row_idx, hb_type in enumerate(["hbo", "hbr"], start=1):
-        for ch_idx, pair in enumerate(ch_pairs):
-            ch_name = f"{pair} {hb_type}"
-            for sub_idx, sid in enumerate(subject_ids):
-                raw = aligned_raws.get(sid)
-                if raw is None or ch_name not in raw.ch_names:
-                    t_vals, y_vals = [], []
-                else:
-                    pick = raw.ch_names.index(ch_name)
-                    times, arr = minmax_xy(raw.times, raw.get_data(picks=[pick])[0] * scale,
-                                           _MAX_TS_PTS)
-                    t_vals = times.tolist()
-                    y_vals = arr.tolist()
-                fig.add_trace(go.Scatter(
-                    x=t_vals, y=y_vals,
-                    name=sid, mode="lines",
-                    line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.3),
-                    visible=(ch_idx == 0),
-                    showlegend=False,
-                    legendgroup=sid,
-                ), row=row_idx, col=1)
-
-    # Ghost traces for stable subject legend
-    for sub_idx, sid in enumerate(subject_ids):
-        fig.add_trace(go.Scatter(
-            x=[None], y=[None], mode="lines",
-            name=sid,
-            line=dict(color=MEMBER_COLORS[sub_idx % len(MEMBER_COLORS)], width=1.5),
-            showlegend=True, visible=True,
-            legendgroup=sid,
-        ), row=1, col=1)
-
-    mkr_shapes = []
-    for m in markers_list:
-        color = cond_colors_.get(m["description"], "#f39c12")
-        if m["duration"] > 0.1:
-            mkr_shapes.append(dict(
-                type="rect", xref="x", yref="paper",
-                x0=m["onset"], x1=m["onset"] + m["duration"], y0=0, y1=1,
-                fillcolor=_hex_to_rgba(color, 0.08),
-                line=dict(width=0), layer="below",
-            ))
-
-    fig.update_layout(
-        shapes=mkr_shapes,
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=400, margin=dict(l=60, r=15, t=30, b=40),
-        legend=dict(font=dict(size=9)),
-        hovermode="x unified",
-    )
-    fig.update_xaxes(gridcolor="#eeeeee")
-    fig.update_xaxes(title_text="Time (s) [aligned]", row=2, col=1)
-    fig.update_yaxes(title_text=unit, gridcolor="#eeeeee")
-
-    return fig
 
 
 def build_signal_overlay_pair(
