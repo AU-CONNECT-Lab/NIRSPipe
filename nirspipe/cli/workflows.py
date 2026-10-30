@@ -259,6 +259,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     setup_logging(verbose=verbose)
     logger.info("nirspipe starting - output: %s", output_dir)
+    _shared.warn_on_mixed_tree(output_dir, "nirspipe-qc")
 
     _refuse_cropped_input(bids_dir, allow=bool(args.get("allow_cropped_input")))
 
@@ -941,20 +942,15 @@ def _run_post_for_subject(
 
 
 def _warn_on_split_tree(output_dir: Path) -> None:
-    """Say so when quality records sit in a subtree this aggregation does not reach.
-
-    Two output directories means two records for one run, and the rule preferring the
-    pipeline record over the raw QC one can only choose between records one glob found.
-    """
+    """Say so when quality records sit in a subtree this aggregation does not reach."""
     from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
 
     for sub in (output_dir / "qc", output_dir / "derivatives"):
         if sub.is_dir() and any(any(sub.glob(f"*/**/nirs/*{suffix}"))
                                 for suffix in RECORD_SUFFIXES.values()):
             logger.warning(
-                "quality records under %s are not part of this cohort page; point both "
-                "`nirspipe` and `nirspipe-qc ... participant` at one output directory, or "
-                "aggregate that one separately with `nirspipe-qc <bids> %s group`", sub, sub)
+                "quality records under %s are not part of this cohort page; aggregate that "
+                "tree with its own `group` level", sub)
 
 
 def run_group_level(args: dict[str, Any]) -> None:

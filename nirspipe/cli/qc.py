@@ -78,6 +78,7 @@ def cmd_participant(
     _app_options.check_motion_settings(motion_correction, motion_std_thresh, wavelet_iqr)
     _app_options.check_keep_spans_from(keep_spans, keep_spans_from)
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
+    _shared.warn_on_mixed_tree(output_dir, "nirspipe")
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
