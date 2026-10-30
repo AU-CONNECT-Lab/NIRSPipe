@@ -153,6 +153,14 @@ class Recorder:
         src = src or self._nearest()
         return [src] if src else []
 
+    def persisted(self, raw: mne.io.Raw) -> "tuple[str, str] | None":
+        """``(stage, path)`` of the file raw was written to, or of its source's when raw never reached disk."""
+        lin = lineage_of(raw)
+        for stage in ((lin.stage, lin.source) if lin else ()):
+            if stage in self._stage_paths:
+                return stage, self._stage_paths[stage]
+        return None
+
     def path_of(self, raw: mne.io.Raw) -> str | None:
         """File raw itself was written to, or its nearest persisted ancestor."""
         st = stage_of(raw)

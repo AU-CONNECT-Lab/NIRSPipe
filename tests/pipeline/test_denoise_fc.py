@@ -178,6 +178,26 @@ def test_after_a_regression_the_matrix_before_it_is_written_beside_the_residual_
         assert sidecar["Sources"][0].endswith("_desc-filtered_nirs.snirf")
 
 
+def test_a_censor_filled_series_is_named_after_the_file_it_was_filled_from(tmp_path):
+    # no bandpass, so the regression starts from the fill, which writes no file of its own
+    from nirspipe.io.snirf import read_snirf
+
+    prep = PrepConfig(subject="01", dpf=[6.0, 6.0], sci_threshold=0.8,
+                      motion_correction="tddr", **_BANDS)
+    run_prep(synth_raw("01", "rest"), prep, output_dir=tmp_path, source_entities={"task": "rest"})
+    preproc_file = next(tmp_path.rglob("*_desc-preproc_nirs.snirf"))
+    raw = read_snirf(preproc_file)
+    raw.annotations.append(30.0, 5.0, "BAD_manual")
+    config = PostConfig(subject="01", short_channel="mean", fc=True, **_BANDS)
+    run_post(raw, config, output_dir=tmp_path, mode="denoise",
+             source_entities={"task": "rest"}, source_path=preproc_file)
+    assert _names(tmp_path, "*_desc-*_relmat.tsv") == [
+        "sub-01_task-rest_chromo-hbo_stat-pearson_desc-preproc_relmat.tsv",
+        "sub-01_task-rest_chromo-hbr_stat-pearson_desc-preproc_relmat.tsv"]
+    sidecar = json.loads(next(tmp_path.rglob("*_chromo-hbo_*_desc-preproc_relmat.json")).read_text())
+    assert sidecar["Sources"][0].endswith("_desc-preproc_nirs.snirf")
+
+
 def test_without_a_regression_there_is_no_before(haemo, tmp_path):
     _denoise(haemo, tmp_path, fc=True)
     assert _names(tmp_path, "*_desc-*_relmat.tsv") == []

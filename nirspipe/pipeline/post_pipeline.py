@@ -785,7 +785,10 @@ def _write_fc_derivatives(
                                     separation_bands(config))
     empty += hbt_names(empty) if "hbt" in config.chromophores else []
     src_bp = rec.path_of(raw_resid)
-    before_stage = stage_of(raw_before) if raw_before is not None else None
+    # the censor fill writes no file and alters only BAD_ frames, which no correlation reads,
+    # so a filled series is named after the file it was filled from
+    before_stage, before_src = (rec.persisted(raw_before) if raw_before is not None
+                                else None) or (None, None)
     before = with_hbt(raw_before, config.chromophores) if before_stage else None
 
     def _path(extra: dict, statistic: str) -> Path:
@@ -831,7 +834,7 @@ def _write_fc_derivatives(
             fc_before = compute_fc(before, chromo).reindex_like(fc_df).where(fc_df.notna())
             before_path = _path({**chromo_entities, "desc": before_stage}, "pearson")
             write_tsv(fc_before, before_path, index=True, index_label="channel")
-            write_step_sidecar(before_path, "fc", rec.path_of(raw_before), bads,
+            write_step_sidecar(before_path, "fc", before_src, bads,
                                excluded_spans=excluded_spans(raw_before, known=known_spans or ()),
                                description=FC_DESCRIPTIONS["fc_before"],
                                chromophores=list(config.chromophores), chromophore=chromo,
