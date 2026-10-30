@@ -363,9 +363,10 @@ def compute_wtc_phase_null(
 
     Each pairing keeps its earlier member real and has its later member replaced by
     surrogates, and the whole pairwise WTC is rerun, once per iteration; the band means are
-    averaged across iterations. The result has the columns ``wtc_band_mean`` returns, so a
-    true-dyad table and this one subtract or test cell by cell, plus ``null_sd``, ``null_p95``
-    and ``n_iter``.
+    averaged across iterations. The summary keys its rows as ``wtc_band_mean`` does, so a
+    true-dyad table and this one line up cell by cell, and holds the null's centre as
+    ``null_mean`` and ``null_mean_z`` (not ``coherence``) with ``null_sd``, ``null_p95``,
+    ``n_iter`` and ``n_valid_frac``, plus ``percentile`` once ranked against the real table.
 
     In a group of more than two, every member after the first is scrambled once per
     iteration and that one surrogate serves every pairing it closes, so each pairing's draw
