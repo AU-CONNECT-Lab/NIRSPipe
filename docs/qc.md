@@ -45,7 +45,7 @@ flowchart TD
     REC -.- M1["<b>raw</b><br/>SCI · PSP · CV · SNR · saturation<br/>GVTD · spikes"]
     SCR --> BAD(["bad channels<br/><small>passing in fewer than --min-good-frac of windows</small>"])
     TAB[/"--bad-channels table · channels.tsv<br/><small>the table nirspipe-rate export writes</small>"/] --> BAD
-    SPIN[/"--keep-spans · --bad-spans · --gvtd-censor<br/><small>--bad-spans also as nirspipe-rate export writes it</small>"/] --> SPANS(["BAD_ spans<br/><small>left out of screening and every estimate</small>"])
+    SPIN[/"--keep-spans · --bad-spans · --gvtd-censor<br/><small>--bad-spans also as nirspipe-rate export writes it</small>"/] --> SPANS(["BAD_ spans<br/><small>left out of every estimate, and of screening<br/>except --gvtd-censor's, marked after it</small>"])
     MC -.- M2["<b>motion · motion_post</b><br/>correction footprint<br/>SCI · PSP · GVTD · spikes again"]
     BL -.- M3["<b>preproc</b><br/>HbO-HbR corr · GCOR · CNR<br/>band power · drift"]
     POST -.- M4["<b>filtered · resampled · errts</b><br/>HbO-HbR corr · GCOR · CNR"]
