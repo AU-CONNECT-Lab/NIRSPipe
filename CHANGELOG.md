@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 - `channel_snr`, a whole-run SNR the record does not use, and `iter_run_files`, `unwrap_enum` and `Recorder.last`, which nothing needed
 
 ### Fixed
+- The Data Preparation drift hint offered a cutoff above the 0.01 Hz that `--drift-high-pass auto` never exceeds, it now gives the cutoff auto runs with
 - An ROI map name, occasion, role or table label with a letter outside ASCII is dropped or refused where file names are written, so it reads back whole
 - Pages a second command rebuilds keep what the first wrote: the provenance graph's mode, the dyad index's members, a shared tree's subject index mode and ROI grouping
 - The dyad coherence still could draw a phase arrow in the two top corners, where the cone leaves the pipeline no cell to count

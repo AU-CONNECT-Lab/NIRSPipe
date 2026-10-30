@@ -327,6 +327,27 @@ def _warn_drift_absorbs_task(
     )
 
 
+def auto_drift_cutoff(intervals: "dict[str, float]",
+                      high_pass: "float | None" = None) -> "tuple[float, str, str | None]":
+    """``--drift-high-pass auto``'s cutoff from each condition's longest repeat: (Hz, condition, bound).
+
+    1/(2 x the slowest condition's gap), capped at DRIFT_AUTO_CAP and raised to the data's
+    high-pass, ``bound`` naming which of the two moved it. e.g. ``{"a": 100.0}`` -> 0.005 Hz.
+    A gap of zero, a doubled annotation, repeats nothing.
+    """
+    intervals = {name: gap for name, gap in intervals.items() if gap > 0}
+    if not intervals:
+        raise ValueError("--drift-high-pass auto: no condition occurs twice in this run, so "
+                         "there is no interval to set the cutoff from. Type a cutoff in Hz.")
+    condition = max(intervals, key=intervals.get)
+    cutoff, bound = 1.0 / (2.0 * intervals[condition]), None
+    if cutoff > DRIFT_AUTO_CAP:
+        cutoff, bound = DRIFT_AUTO_CAP, "cap"
+    if high_pass is not None and cutoff < high_pass:
+        cutoff, bound = high_pass, "high_pass"
+    return cutoff, condition, bound
+
+
 def resolve_drift_high_pass(
     config: PostConfig, raw: mne.io.Raw, events: "pd.DataFrame | None" = None,
 ) -> PostConfig:
@@ -339,18 +360,9 @@ def resolve_drift_high_pass(
     if config.drift_high_pass != DRIFT_HIGH_PASS_AUTO:
         return config
     onsets = {name: set(times) for name, times in _design_onsets(raw, events).items()}
-    # a doubled annotation repeats nothing, so a gap of zero is no interval
     intervals = {name: gap for name, gap in _repeat_intervals(raw, events).items() if gap > 0}
-    if not intervals:
-        raise ValueError("--drift-high-pass auto: no condition occurs twice in this run, so "
-                         "there is no interval to set the cutoff from. Type a cutoff in Hz.")
-    condition = max(intervals, key=intervals.get)
+    cutoff, condition, bound = auto_drift_cutoff(intervals, config.high_pass)
     gap = intervals[condition]
-    cutoff, bound = 1.0 / (2.0 * gap), None
-    if cutoff > DRIFT_AUTO_CAP:
-        cutoff, bound = DRIFT_AUTO_CAP, "cap"
-    if config.high_pass is not None and cutoff < config.high_pass:
-        cutoff, bound = config.high_pass, "high_pass"
     once = sorted(name for name in onsets if name not in intervals)
     auto = {"condition": condition, "interval_s": gap, "trials": len(onsets[condition]),
             "bound": bound, "seen_once": once}

@@ -106,6 +106,11 @@ def test_a_doubled_marker_is_no_repeat_for_the_drift_hint():
     assert drift_hint([[5, 1, "a"], [5, 1, "a"], [0, 1, "b"], [50, 1, "b"]])["by"] == "b"
 
 
+def test_the_drift_hint_is_the_cutoff_auto_runs_with():
+    # every 30 s gives 1/(2 x 30) = 0.0167 Hz, above the 0.01 Hz auto never exceeds
+    assert drift_hint([[0, 1, "a"], [30, 1, "a"], [60, 1, "a"]])["cutoff"] == "0.01 Hz"
+
+
 def test_the_save_command_is_the_form_plus_the_run_and_the_table(tmp_path):
     from werkzeug.datastructures import MultiDict
 

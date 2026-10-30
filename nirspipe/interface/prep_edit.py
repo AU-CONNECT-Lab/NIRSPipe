@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
 
-import numpy as np
 import pandas as pd
 from flask import Response, abort, jsonify, request, send_from_directory
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -24,7 +23,7 @@ from nirspipe.io.tables import read_table, write_tsv
 from nirspipe.pipeline.crop import _DERIV_NAME as CROPPED
 from nirspipe.pipeline.edit_markers import _DERIV_NAME as MARKER_EDITED
 from nirspipe.qc.rating.app import RawRatingApp
-from nirspipe.utils import NOT_MARKERS, is_marker
+from nirspipe.utils import NOT_MARKERS
 
 _HERE = Path(__file__).resolve().parent
 _JINJA = Environment(loader=FileSystemLoader(_HERE / "templates"), autoescape=select_autoescape())
@@ -118,18 +117,18 @@ def parse_rows(raw) -> "tuple[list[list], str | None]":
 
 
 def drift_hint(rows: list[list]) -> "dict | None":
-    """The drift high-pass a GLM on this run allows, set by the condition that repeats slowest."""
-    onsets: dict[str, list[float]] = {}
-    for onset, _duration, name in rows:
-        if is_marker(name):
-            onsets.setdefault(name, []).append(onset)
-    gaps = {name: float(np.max(np.diff(sorted(on)))) for name, on in onsets.items() if len(on) >= 2}
-    # a doubled annotation repeats nothing, as --drift-high-pass auto reads it
-    gaps = {name: gap for name, gap in gaps.items() if gap > 0}
+    """The cutoff ``--drift-high-pass auto`` would take from these events, by the pipeline's own rule.
+
+    The analysis' high-pass, which can raise it, is not known on this page.
+    """
+    from nirspipe.pipeline.post_pipeline import _repeat_intervals, auto_drift_cutoff
+
+    events = pd.DataFrame(rows, columns=["onset", "duration", "trial_type"])
+    gaps = {name: gap for name, gap in _repeat_intervals(None, events).items() if gap > 0}
     if not gaps:
         return None
-    slowest = max(gaps, key=gaps.get)
-    return {"cutoff": f"{1.0 / (2.0 * gaps[slowest]):.4g} Hz", "by": slowest,
+    cutoff, slowest, _bound = auto_drift_cutoff(gaps)
+    return {"cutoff": f"{cutoff:.4g} Hz", "by": slowest,
             "per": " · ".join(f"{name} {gap:.0f} s"
                               for name, gap in sorted(gaps.items(), key=lambda kv: -kv[1]))}
 
