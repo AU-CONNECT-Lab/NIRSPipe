@@ -76,7 +76,7 @@ def _noise_model(value: str) -> str:
 
 
 _SHORT_CHANNEL_CHOICES = ["auto", "none", "mean", "pca"]
-_IGNORE_CHOICES        = ["events", "bids-validation", "channel-status"]
+_IGNORE_CHOICES        = ["bids-validation", "channel-status"]
 # analysis levels and the flags each one cannot run without. One table, so a level added
 # here cannot reach the parser without also declaring what it needs
 _LEVEL_REQUIRES = {

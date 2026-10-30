@@ -68,6 +68,15 @@ def test_the_input_is_validated_unless_skipped(mini_bids, tmp_path, monkeypatch)
     assert seen == [mini_bids]
 
 
+def test_ignore_offers_only_what_a_run_reads(mini_bids, tmp_path, capsys):
+    # events.tsv is never read, so there is nothing for --ignore events to skip
+    with pytest.raises(SystemExit) as exit_:
+        main([str(mini_bids), str(tmp_path / "out"), "participant", *REQUIRED,
+              "--ignore", "events"])
+    assert exit_.value.code == 2
+    assert "invalid choice: 'events'" in capsys.readouterr().err
+
+
 def test_the_output_names_the_dataset_it_was_computed_from(mini_bids, tmp_path, monkeypatch):
     monkeypatch.setattr(workflows, "validate_bids", lambda bids_dir: None)
     _dry_run(mini_bids, tmp_path / "out")
