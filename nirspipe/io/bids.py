@@ -238,6 +238,7 @@ def bids_label(subject: str, entities: dict) -> str:
     for key, prefix in (("session", "ses"), ("task", "task"), ("acquisition", "acq"),
                         ("run", "run")):
         val = entities.get(key)
-        if val:
+        # run-00 reads as a false value
+        if val not in (None, ""):
             parts.append(f"{prefix}-{val}")
     return "_".join(parts)
