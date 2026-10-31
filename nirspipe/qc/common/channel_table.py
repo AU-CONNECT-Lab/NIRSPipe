@@ -495,7 +495,7 @@ OD_SPLIT_COLUMNS = tuple((key, metric_label(key)) for key in (
 # nearly all of these measure a *set* rather than group per-channel numbers: GVTD is an RMS
 # across channels, and the frame counts ask how many of *these* channels were flagged at
 # once, so each set carries its own trace, its own cutoff and its own bar. Read those down a
-# column. "Corrected per channel" is the exception, a mean over the set, and does compare
+# column. The motion corrected fraction is the exception, a mean over the set, and does compare
 # across rows. Here rather than in either template, so the raw viewer and the subject report
 # cannot end up listing different metrics for the same recording.
 MOTION_SPLIT_COLUMNS = tuple((key, metric_label(key)) for key in (

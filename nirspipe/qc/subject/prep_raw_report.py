@@ -977,7 +977,7 @@ def _write_condition_views(ctx: dict, payload: dict, output_path: Path, run_labe
     """One report file per condition, beside the run's own, read out of the quality record.
 
     Every number on these pages comes from the record's ``by_condition`` section, which
-    :func:`~nirspipe.qc.subject.sqm_record.raw_condition_sections` wrote a moment earlier; nothing
+    :func:`~nirspipe.qc.subject.sqm_record.condition_sections` wrote a moment earlier; nothing
     is measured here. A record carrying no such section gets no pages rather than a second
     copy of the numbers free to disagree with the first.
 

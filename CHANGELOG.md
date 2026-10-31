@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - A pairs table's `role` column accepts non-ASCII letters again: 0.81.0 refused them, though a role never enters a file name
 - The subject index's Conditions table headed SCI and SNR with 10 s windows whatever `--window-length` the run was sliced on
 - On optical-density input the windowed CV series and each condition's CV and SNR are left empty too, as the whole run's already were
+- `nirspipe-qc participant --motion-correction`'s help said the correction was written nowhere, and the motion table's note named a row by its old heading
 
 ## [0.81.0] - 2026-10-30
 

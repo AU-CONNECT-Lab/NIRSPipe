@@ -282,8 +282,8 @@ NOTES = {
         "page has the before&nbsp;&rarr;&nbsp;after pair.",
     "metrics.gvtd_sets_columns":
         "Each channel set is measured on its own, with its own GVTD cutoff and its own share of "
-        "flagged channels, so <b>the three values in a row do not compare.</b> Corrected per "
-        "channel is an average over the set.",
+        "flagged channels, so <b>the three values in a row do not compare.</b> Motion corrected "
+        "fraction (exp.) is the exception, an average over the set's channels.",
     "metrics.motion_arrow":
         "Two values are before and after motion correction.",
     "metrics.gvtd_set_help":

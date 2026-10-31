@@ -580,12 +580,12 @@ def _build_parser() -> argparse.ArgumentParser:
                            "condition's; the run's own page carries the run's.")
     part.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES,
                       default="tddr",
-                      help="Run this correction on a copy of the optical density and report the "
-                           "recording before and after it. Nothing is written back and nothing "
-                           "else runs, so screening and coupling still describe the recording "
-                           "as delivered. Default tddr, as nirspipe; none reports it "
-                           "uncorrected only. The group level's motion panel shows each "
-                           "member's.")
+                      help="The correction each recording is prepared with, written into "
+                           "the tree's stages/ as nirspipe writes it, and the page shows the "
+                           "recording before and after it. Screening and coupling are measured "
+                           "before it, on the recording as delivered. Default tddr, as "
+                           "nirspipe. With none the recording is reported uncorrected only. "
+                           "The group level's motion panel shows each member's.")
     _app_options.add_motion_settings(part)
     _app_options.add_reviewer_marks(part)
     part.add_argument("--ignore", nargs="+", action="extend", choices=["channel-status"],

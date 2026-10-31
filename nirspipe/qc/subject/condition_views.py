@@ -621,7 +621,7 @@ def condition_payloads(
     """One viewer payload per condition, read out of the quality record.
 
     Every number here comes from ``by_condition``, which
-    :func:`~nirspipe.qc.subject.sqm_record.raw_condition_sections` wrote; nothing is measured. A
+    :func:`~nirspipe.qc.subject.sqm_record.condition_sections` wrote; nothing is measured. A
     record with no such section gets no pages rather than a second copy of the numbers free
     to disagree with the first.
 
