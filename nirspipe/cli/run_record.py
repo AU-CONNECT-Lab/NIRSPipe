@@ -281,10 +281,11 @@ def record_path(sub_dir: Path, subject: str, sessions: "list[str] | None" = None
 
 
 def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
-    """The ``[post]`` settings of the newest pipeline run record under ``sub_dir/logs`` covering ``label``, or {}.
+    """The ``[post]`` settings of the newest finished pipeline run under ``sub_dir/logs`` covering ``label``, or {}.
 
     A record covers a run its ``[execution]`` task and session selection left in, and any
-    record covers when there is no ``label``. Raw QC's own records are not the pipeline's.
+    record covers when there is no ``label``. Raw QC's own records are not the pipeline's, and
+    a run that did not end in success, a dry run among them, may have written nothing here.
     """
     import tomllib
 
@@ -297,6 +298,8 @@ def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
         try:
             record = tomllib.loads(path.read_text(encoding="utf-8"))
         except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if (record.get("outcome") or {}).get("status") != "success":
             continue
         execution = record.get("execution") or {}
         if label is not None and any(

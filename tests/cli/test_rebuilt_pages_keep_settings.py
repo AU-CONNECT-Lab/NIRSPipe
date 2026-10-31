@@ -3,6 +3,7 @@
 import json
 
 import pandas as pd
+import pytest
 
 from nirspipe.cli import qc as qc_cli
 from nirspipe.cli.run_record import recorded_post
@@ -15,13 +16,15 @@ from tests._synth import make_bids_dataset
 from tests.hyper._names import name
 
 
-def _record(sub_dir, stem, mode, stamp, post="", **execution):
+def _record(sub_dir, stem, mode, stamp, post="", status="success", **execution):
     logs = sub_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     lines = ["[execution]", f'run_timestamp = "{stamp}"']
     lines += [f"{key} = [ " + ", ".join(f'"{v}"' for v in values) + " ]"
               for key, values in execution.items()]
     lines += ["[post]", f'mode = "{mode}"', post]
+    if status:
+        lines += ["[outcome]", f'status = "{status}"']
     (logs / f"{stem}.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -31,6 +34,15 @@ def test_the_newest_record_covering_the_run_gives_its_settings(tmp_path):
     assert recorded_post(tmp_path, "sub-01_task-rest")["mode"] == "rest"
     assert recorded_post(tmp_path, "sub-01_task-tap")["mode"] == "denoise"
     assert recorded_post(tmp_path)["mode"] == "rest"
+
+
+# a dry run and a killed run leave no outcome at all
+@pytest.mark.parametrize("status", ["failed", None])
+def test_a_run_that_stopped_short_does_not_speak_for_the_files(tmp_path, status):
+    _record(tmp_path, "sub-01", "glm", "2026-10-01T10:00:00")
+    _record(tmp_path, "sub-01_task-rest", "rest", "2026-10-02T10:00:00", status=status,
+            task_label=["rest"])
+    assert recorded_post(tmp_path, "sub-01_task-rest")["mode"] == "glm"
 
 
 def test_raw_qc_records_are_not_the_pipeline_s(tmp_path):

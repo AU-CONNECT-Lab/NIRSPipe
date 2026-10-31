@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - When raw QC's motion correction failed, its condition pages still printed the uncorrected correlation as the corrected one
 - A recording numbered `run-00` lost its run from the run label, so raw QC wrote no page for it
 - `nirspipe-qc participant` stopped the whole batch when a tree's run record named an ROI map that had since moved
+- `nirspipe-provenance` and raw QC's subject index took their mode from a dry run or failed run newer than the run that wrote the files
 
 ## [0.81.0] - 2026-10-30
 
