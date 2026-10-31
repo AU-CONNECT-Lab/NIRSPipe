@@ -48,6 +48,10 @@ def _toml_scalar(v: Any) -> str:
 
 
 def _toml_value(v: Any) -> str:
+    # a JSON null has no TOML spelling, so a filter's null entry is left out
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f"{k} = {_toml_value(x)}" for k, x in v.items()
+                                if x is not None) + " }"
     if isinstance(v, (list, tuple)):
         if not v:
             return "[]"
@@ -166,8 +170,9 @@ def write_run_record(
 
     env = _environment()
     keys = config_keys()
+    bids_filter = _bids_filter(args)
     out = record_path(sub_dir if sub_dir is not None else output_dir, subject,
-                      args.get("session_label"), args.get("task_label"))
+                      args.get("session_label"), args.get("task_label"), bids_filter)
 
     execution: dict[str, Any] = {
         "run_uuid": timestamp,
@@ -182,6 +187,8 @@ def write_run_record(
         "task_label": args.get("task_label"),
         "bids_filter_file": (Path(args["bids_filter_file"]).resolve().as_posix()
                              if args.get("bids_filter_file") else None),
+        # what the filter chose, which the file's path alone stops saying once it moves
+        "bids_filter": bids_filter,
         "analysis_level": args.get("analysis_level") or "participant",
         "nprocs": args.get("nprocs"),
         "skip_bids_validation": args.get("skip_bids_validation", False),
@@ -231,6 +238,7 @@ def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: st
     never replaced.
     """
     timestamp = datetime.now()
+    bids_filter = _bids_filter(args)
     execution = {
         "run_timestamp": timestamp.isoformat(timespec="seconds"),
         "run_command": _command_line(),
@@ -240,12 +248,16 @@ def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: st
         "participant_label": [subject],
         "session_label": args.get("session_label"),
         "task_label": args.get("task_label"),
+        "bids_filter_file": (Path(args["bids_filter_file"]).resolve().as_posix()
+                             if args.get("bids_filter_file") else None),
+        "bids_filter": bids_filter,
         "nprocs": args.get("nprocs"),
         "skip_bids_validation": args.get("skip_bids_validation", False),
     }
     sub_dir = output_dir / f"sub-{subject}"
     out = sub_dir / "logs" / (record_stem(subject, args.get("session_label"),
-                                          args.get("task_label")) + "_desc-raw.toml")
+                                          args.get("task_label"), bids_filter)
+                              + "_desc-raw.toml")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join([_section("environment", _environment()),
                               _section("execution", execution),
@@ -255,8 +267,33 @@ def write_raw_qc_record(args: dict[str, Any], keys: tuple[str, ...], subject: st
     return out
 
 
+def _bids_filter(args: dict[str, Any]) -> "dict | None":
+    from nirspipe.io.bids import read_bids_filter
+
+    return read_bids_filter(args["bids_filter_file"]) if args.get("bids_filter_file") else None
+
+
+# the run label's entities a filter file can choose by, in BIDS order, with pybids' names
+_FILTER_ENTITIES = (("session", "ses"), ("task", "task"), ("acquisition", "acq"), ("run", "run"))
+
+
+def _chosen(sessions, tasks, bids_filter: "dict | None") -> "list[tuple[str, list[str]]]":
+    """``(entity, labels)`` a run was selected by: the filter's where it names one, as the query takes it."""
+    from nirspipe.io.naming import bids_label
+
+    flags = {"session": sessions, "task": tasks}
+    out = []
+    for key, entity in _FILTER_ENTITIES:
+        values = (bids_filter or {}).get(key, flags.get(key))
+        values = values if isinstance(values, list) else [values]
+        labels = sorted({bids_label(str(v)) for v in values if v is not None})
+        if labels:
+            out.append((entity, labels))
+    return out
+
+
 def record_stem(subject: str, sessions: "list[str] | None" = None,
-                tasks: "list[str] | None" = None) -> str:
+                tasks: "list[str] | None" = None, bids_filter: "dict | None" = None) -> str:
     """The name a subject's run record and log share: the subject and the run's selection.
 
     ::
@@ -264,32 +301,44 @@ def record_stem(subject: str, sessions: "list[str] | None" = None,
       sub 01                                        ->  sub-01
       sub 01, --session-label 2 1                   ->  sub-01_ses-1+2
       sub 01, --session-label 1, --task-label rest  ->  sub-01_ses-1_task-rest
+      sub 01, a filter file {"run": 1, "acquisition": "hi"}  ->  sub-01_acq-hi_run-1
 
     Runs of one subject started in parallel on different sessions or tasks each keep their
     own record, and rerunning a selection replaces its record.
     """
-    stem = f"sub-{subject}"
-    for entity, labels in (("ses", sessions), ("task", tasks)):
-        if labels:
-            stem += f"_{entity}-" + "+".join(sorted(set(labels)))
-    return stem
+    return "_".join([f"sub-{subject}", *(f"{entity}-" + "+".join(labels)
+                                         for entity, labels in _chosen(sessions, tasks,
+                                                                       bids_filter))])
 
 
 def record_path(sub_dir: Path, subject: str, sessions: "list[str] | None" = None,
-                tasks: "list[str] | None" = None) -> Path:
-    return sub_dir / "logs" / f"{record_stem(subject, sessions, tasks)}.toml"
+                tasks: "list[str] | None" = None, bids_filter: "dict | None" = None) -> Path:
+    return sub_dir / "logs" / f"{record_stem(subject, sessions, tasks, bids_filter)}.toml"
+
+
+def _covers(label: str, execution: dict) -> bool:
+    """Whether a run record's selection took the run ``label``, a run numbered 01 matching 1."""
+    from nirspipe.io.derivatives import entity_of
+
+    def same(a: str, b: str) -> bool:
+        return int(a) == int(b) if a.isdigit() and b.isdigit() else a == b
+
+    for entity, labels in _chosen(execution.get("session_label"), execution.get("task_label"),
+                                  execution.get("bids_filter")):
+        value = entity_of(label, entity)
+        if value is None or not any(same(value, chosen) for chosen in labels):
+            return False
+    return True
 
 
 def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
     """The ``[post]`` settings of the newest finished pipeline run under ``sub_dir/logs`` covering ``label``, or {}.
 
-    A record covers a run its ``[execution]`` task and session selection left in, and any
+    A record covers a run its ``[execution]`` selection and filter file left in, and any
     record covers when there is no ``label``. Raw QC's own records are not the pipeline's, and
     a run that did not end in success, a dry run among them, may have written nothing here.
     """
     import tomllib
-
-    from nirspipe.io.derivatives import entity_of
 
     newest = ("", {})
     for path in sorted(Path(sub_dir, "logs").glob("*.toml")):
@@ -302,9 +351,10 @@ def recorded_post(sub_dir: Path, label: "str | None" = None) -> dict:
         if (record.get("outcome") or {}).get("status") != "success":
             continue
         execution = record.get("execution") or {}
-        if label is not None and any(
-                execution.get(key) and entity_of(label, entity) not in execution[key]
-                for key, entity in (("task_label", "task"), ("session_label", "ses"))):
+        # a filtered run whose record kept only the file's path cannot say what it chose
+        if execution.get("bids_filter_file") and "bids_filter" not in execution:
+            continue
+        if label is not None and not _covers(label, execution):
             continue
         stamp = str(execution.get("run_timestamp") or "")
         if stamp >= newest[0]:

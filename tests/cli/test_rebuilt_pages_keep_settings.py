@@ -45,6 +45,30 @@ def test_a_run_that_stopped_short_does_not_speak_for_the_files(tmp_path, status)
     assert recorded_post(tmp_path, "sub-01_task-rest")["mode"] == "glm"
 
 
+def _filtered(sub_dir, stem, mode, stamp, bids_filter=""):
+    """A record of a --bids-filter-file run, ``bids_filter`` its content as a TOML inline table."""
+    lines = ["[execution]", f'run_timestamp = "{stamp}"',
+             'bids_filter_file = "C:/studies/filter.json"']
+    lines += [f"bids_filter = {bids_filter}"] if bids_filter else []
+    lines += ["[post]", f'mode = "{mode}"', "[outcome]", 'status = "success"']
+    (sub_dir / "logs" / f"{stem}.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_filtered_run_speaks_only_for_the_runs_its_filter_chose(tmp_path):
+    _record(tmp_path, "sub-01", "glm", "2026-10-01T10:00:00")
+    _filtered(tmp_path, "sub-01_acq-hi_run-2", "rest", "2026-10-02T10:00:00",
+              '{ acquisition = "hi", run = 2 }')
+    assert recorded_post(tmp_path, "sub-01_task-tap_acq-hi_run-02")["mode"] == "rest"
+    assert recorded_post(tmp_path, "sub-01_task-tap_acq-hi_run-01")["mode"] == "glm"
+    assert recorded_post(tmp_path, "sub-01_task-tap_run-02")["mode"] == "glm"
+
+
+def test_a_filtered_record_that_kept_only_the_file_s_path_is_not_read(tmp_path):
+    _record(tmp_path, "sub-01", "glm", "2026-10-01T10:00:00")
+    _filtered(tmp_path, "sub-01_old", "rest", "2026-10-02T10:00:00")
+    assert recorded_post(tmp_path, "sub-01_task-tap_run-02")["mode"] == "glm"
+
+
 def test_raw_qc_records_are_not_the_pipeline_s(tmp_path):
     _record(tmp_path, "sub-01_desc-raw", "denoise", "2026-10-01T10:00:00")
     assert recorded_post(tmp_path, "sub-01_task-rest") == {}

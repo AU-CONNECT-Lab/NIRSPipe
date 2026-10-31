@@ -20,7 +20,7 @@ from nirspipe.cli import _app_options, _shared
 from nirspipe.cli.run import mode_defaults, read_config
 from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
-                              get_participant_age, validate_bids)
+                              get_participant_age, read_bids_filter, validate_bids)
 from nirspipe.io.head_template import resolve_template
 from nirspipe.io.naming import is_bids_label, report_name, roi_map_name
 from nirspipe.io.derivatives import (
@@ -314,6 +314,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     roi_map = _app_options.load_roi_mapping(args.get("roi_mapping"))
 
     tasks: list[str | None] = task_label if task_label else [None]
+    bids_filter = read_bids_filter(bids_filter_file) if bids_filter_file else None
 
     run_notes: list[tuple[str, str]] = []
     failed: list[str] = []
@@ -321,7 +322,8 @@ def run_participant_level(args: dict[str, Any]) -> None:
     def _one(subject: str) -> None:
         sub_timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
         sub_dir = output_dir / f"sub-{subject}"
-        log_file = sub_dir / "logs" / f"{record_stem(subject, session_label, task_label)}.log"
+        log_file = (sub_dir / "logs"
+                    / f"{record_stem(subject, session_label, task_label, bids_filter)}.log")
         with thread_log_file(log_file), _isolate(subject, failed):
             logger.info("sub-%s | starting", subject)
             # built here purely to record what will be used; the loops below build their own

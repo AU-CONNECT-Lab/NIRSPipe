@@ -205,10 +205,14 @@ def get_nirs_files(
         kwargs["task"] = task
 
     if filter_file is not None:
-        extra = json.loads(filter_file.read_text(encoding="utf-8-sig"))
-        kwargs.update(extra)
+        kwargs.update(read_bids_filter(filter_file))
 
     return [Path(f.path) for f in layout.get(**kwargs)]
+
+
+def read_bids_filter(path: Path) -> dict:
+    """A ``--bids-filter-file``: the pybids query keywords it adds, ``{"run": 1}``."""
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))
 
 
 def channel_status_bads(layout: BIDSLayout, nirs_path: Path) -> list[str]:

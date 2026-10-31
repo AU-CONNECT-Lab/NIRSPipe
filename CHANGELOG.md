@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-qc participant --motion-correction`'s help said the correction was written nowhere, and the motion table's note named a row by its old heading
 - When raw QC could not convert a recording to haemoglobin it also lost the recording's motion-sensor table, and a correction it could not save was still carried into the conversion
 - When raw QC rejected every channel, the stage files after screening recorded none as rejected
+- A `--bids-filter-file` run replaced the whole run's record and spoke for every run: its record and log are now named by what the filter chose, and store the filter
 
 ## [0.81.0] - 2026-10-30
 

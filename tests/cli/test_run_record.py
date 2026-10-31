@@ -156,6 +156,57 @@ def test_the_record_is_named_by_the_selection():
     assert record_stem("01", ["1"], ["rest"]) == "sub-01_ses-1_task-rest"
 
 
+def test_a_filter_s_entities_name_the_record_as_a_selection_does():
+    from nirspipe.cli.run_record import record_stem
+
+    assert record_stem("01", None, None, {"run": 1, "acquisition": "hi"}) == "sub-01_acq-hi_run-1"
+    assert record_stem("01", None, ["rest"], {"run": ["2", "1"]}) == "sub-01_task-rest_run-1+2"
+    # the query takes the filter's session over --session-label, so the name does too
+    assert record_stem("01", ["1"], None, {"session": "2"}) == "sub-01_ses-2"
+    assert record_stem("01", None, None, {"extension": ".snirf"}) == "sub-01"
+
+
+@pytest.fixture
+def filtered_logs(mini_bids, tmp_path, monkeypatch):
+    """sub-01 run whole, then through a filter file naming one task, prep failing at once."""
+    def _boom(raw, config, *args, **kwargs):
+        raise RuntimeError("synthetic prep failure")
+
+    monkeypatch.setattr("nirspipe.cli.workflows.run_prep", _boom)
+    out = tmp_path / "out"
+    filter_file = tmp_path / "filter.json"
+    filter_file.write_text('{"task": "rest"}', encoding="utf-8")
+    original = sys.argv
+    try:
+        for chosen in (None, filter_file):
+            sys.argv = ["nirspipe", str(mini_bids), str(out), "participant"]
+            with pytest.raises(SystemExit):
+                run_participant_level({**_BASE_ARGS, "bids_dir": mini_bids, "output_dir": out,
+                                       "participant_label": ["01"], "task_label": None,
+                                       "bids_filter_file": chosen})
+    finally:
+        sys.argv = original
+    return out / "sub-01" / "logs"
+
+
+def test_a_filtered_run_keeps_the_whole_run_s_record_and_says_what_it_chose(filtered_logs):
+    assert sorted(p.name for p in filtered_logs.iterdir()) == [
+        "sub-01.log", "sub-01.toml", "sub-01_task-rest.log", "sub-01_task-rest.toml"]
+    record = tomllib.loads((filtered_logs / "sub-01_task-rest.toml").read_text(encoding="utf-8"))
+    assert record["execution"]["bids_filter"] == {"task": "rest"}
+
+
+def test_raw_qc_s_record_is_named_by_its_filter_too(tmp_path):
+    from nirspipe.cli.run_record import write_raw_qc_record
+
+    filter_file = tmp_path / "filter.json"
+    filter_file.write_text('{"run": 2}', encoding="utf-8")
+    out = write_raw_qc_record({"bids_dir": tmp_path, "bids_filter_file": filter_file}, (), "01",
+                              tmp_path / "qc")
+    assert out.name == "sub-01_run-2_desc-raw.toml"
+    assert tomllib.loads(out.read_text(encoding="utf-8"))["execution"]["bids_filter"] == {"run": 2}
+
+
 @pytest.fixture
 def per_task_logs(mini_bids, tmp_path, monkeypatch):
     """sub-01 run once per task and tapping again, prep failing at once; returns its logs folder."""
