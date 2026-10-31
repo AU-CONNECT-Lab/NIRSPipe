@@ -146,11 +146,15 @@ def _prepared(run: dict, sub_dir: Path, sep_bands) -> tuple:
     write_dataset_description(stage_root, name="nirspipe-qc stages", generated_by="nirspipe-qc",
                               source=run["bids_dir"], link=LINK_RAW)
     source = Path(run["snirf_path"])
+    session = f"ses-{config.session}" if config.session else ""
+    nirs_dir = stage_root / f"sub-{config.subject}" / session / "nirs"
+    # a step that fails writes nothing, so the last run's file must not stand in for this one's
+    for stale in nirs_dir.glob(f"{run['label']}_desc-*"):
+        stale.unlink()
     result = run_prep(read_snirf(source), config, stage_root,
                       source_entities=run.get("entities"), source_path=source,
                       source_metadata=run.get("metadata"))
-    session = f"ses-{config.session}" if config.session else ""
-    stages = scan_runs(stage_root / f"sub-{config.subject}" / session / "nirs")[run["label"]]
+    stages = scan_runs(nirs_dir)[run["label"]]
     sections = compute_run_sections(
         stages, cardiac_l_freq=config.cardiac_l_freq, cardiac_h_freq=config.cardiac_h_freq,
         resp_l_freq=config.resp_l_freq, resp_h_freq=config.resp_h_freq,
