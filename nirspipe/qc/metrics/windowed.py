@@ -19,7 +19,7 @@ from nirspipe.qc.metrics.gvtd import (
     compute_windowed_filtered_gvtd,
     compute_windowed_gvtd,
 )
-from nirspipe.utils import is_marker
+from nirspipe.utils import is_marker, is_optical_density
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import bad_spans
 
@@ -176,9 +176,10 @@ def attach_windowed_series(
     except Exception as exc:
         logger.warning("windowed SCI/PSP failed: %s", exc)
 
-    # a third try block: CV is the only one measured on intensity, so it fails on its own
+    # a third try block: CV is the only one measured on intensity, so it fails on its own.
+    # Optical-density input has no brightness to measure, as in every channel set
     cv_matrix = cv_times = None
-    if raw_intensity is not None:
+    if raw_intensity is not None and not is_optical_density(raw_intensity):
         try:
             cv_matrix, cv_times = compute_windowed_cv(raw_intensity, window_s)
         except Exception as exc:

@@ -27,3 +27,13 @@ def test_brightness_and_its_ceiling_are_left_out_of_every_set(sections, name):
 @pytest.mark.parametrize("name", _SETS)
 def test_spikes_and_gvtd_are_measured_in_every_set(sections, name):
     assert all(isinstance(sections[name].get(key), (int, float)) for key in _MEASURED)
+
+
+def test_no_window_of_brightness_is_measured_either():
+    from nirspipe.qc.metrics.windowed import attach_windowed_series
+
+    od = intensity_to_od(synth_raw("01", "rest", duration=120.0))
+    windowed = {}
+    series = attach_windowed_series(windowed, od, 0.7, 1.5, raw_intensity=od)
+    assert series["cv_matrix"] is None
+    assert "cv_per_window" not in windowed

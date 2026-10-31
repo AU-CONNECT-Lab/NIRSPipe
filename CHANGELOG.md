@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-provenance` and raw QC's subject index took their mode from a dry run or failed run newer than the run that wrote the files
 - A pairs table's `role` column accepts non-ASCII letters again: 0.81.0 refused them, though a role never enters a file name
 - The subject index's Conditions table headed SCI and SNR with 10 s windows whatever `--window-length` the run was sliced on
+- On optical-density input the windowed CV series and each condition's CV and SNR are left empty too, as the whole run's already were
 
 ## [0.81.0] - 2026-10-30
 
