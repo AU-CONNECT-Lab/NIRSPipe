@@ -82,9 +82,9 @@ def test_the_run_report_viewer_keeps_each_rater_apart_and_logs_who_saved(tmp_pat
 
 def test_the_dyad_viewer_writes_each_member_s_decisions_under_the_rater(tmp_path):
     html = tmp_path / "qc" / "group-G1" / report_name("group-G1_task-rest", desc="raw")
-    tree = tmp_path / "nirspipe"
-    client = HyperRatingApp(html, tmp_path / "qc", ["sub-01", "sub-02"],
-                            decisions_dir=tree, rater="QY").app.test_client()
+    # the members' raw pages sit in the tree the dyad page was written into
+    tree = tmp_path / "qc"
+    client = HyperRatingApp(html, tree, ["sub-01", "sub-02"], rater="QY").app.test_client()
 
     client.post("/save_hyper_decisions", json={"sub-01": {"S2_D2 hbo": "bad"}})
     client.post("/save_hyper_ratings", json={"ratings": {"Final": "good"}})
@@ -96,6 +96,15 @@ def test_the_dyad_viewer_writes_each_member_s_decisions_under_the_rater(tmp_path
         "Final": "good"}
     assert client.get("/load_decisions").get_json() == {"sub-01": {"S2_D2 hbo": "bad"},
                                                          "sub-02": {}}
+
+
+def test_the_dyad_viewer_takes_no_second_tree_for_the_decisions(capsys):
+    with pytest.raises(SystemExit) as stop:
+        rate._build_parser().parse_args(["hyper", "out", "--group-id", "G1", "--task-label",
+                                         "rest", "--pairs-csv", "p.csv",
+                                         "--derivatives-dir", "nirspipe"])
+    assert stop.value.code == 2
+    assert "--derivatives-dir" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("name", ["Q Y", "Q-Y", "Q_Y", "Qiu.Yu", "", "秋雨"])

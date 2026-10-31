@@ -24,12 +24,3 @@ def test_a_tree_without_sessions_reads_none(tmp_path):
     app = HyperRatingApp(html, tmp_path, ["01", "02"])
 
     assert (app.group_id, app.session, app.task) == ("G1", None, "rest")
-
-
-def test_decisions_go_to_the_nirspipe_tree_and_ratings_stay_with_the_report(tmp_path):
-    pipe, hyper = tmp_path / "nirspipe", tmp_path / "nirspipe-hyper"
-    html = hyper / "group-G1" / report_name("group-G1_task-rest", desc="raw")
-    app = HyperRatingApp(html, hyper, ["01", "02"], decisions_dir=pipe)
-
-    assert app._decisions_path("01") == channel_decisions_path(pipe, "01", task="rest")
-    assert hyper in app.ratings_path.parents

@@ -298,7 +298,7 @@ Re-averages the maps `nirspipe-hyper --wtc-save-maps` saved over another band.
 
 ## `nirspipe-rate`
 
-`hyper` takes the raw QC tree `nirspipe-qc ... group` wrote the dyad's page into as `OUTPUT_DIR`, and `--derivatives-dir` names the `nirspipe` tree its channel decisions are written to. See [Rating](qc.md#rating).
+`hyper` takes the raw QC tree `nirspipe-qc ... group` wrote the dyad's page into as `OUTPUT_DIR`, and writes each member's channel decisions there, beside the member's raw report. See [Rating](qc.md#rating).
 
 ```{argparse}
 :module: cli_parsers

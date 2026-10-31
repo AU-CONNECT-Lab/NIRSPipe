@@ -313,11 +313,8 @@ class HyperRatingApp(_ReportViewer):
         output_dir: Path,
         subject_ids: list[str],
         sci_threshold: "float | None" = None,
-        decisions_dir: "Path | None" = None,
         rater: "str | None" = None,
     ):
-        # the members' decisions live beside their raw pages in the nirspipe tree
-        self.decisions_dir = decisions_dir or output_dir
         self.subject_ids   = list(subject_ids)
         stem = html_path.stem  # "group-A[_ses-01]_task-tapping_desc-raw_report"
         self.group_id  = entity_of(stem, "group") or "unknown"
@@ -326,7 +323,8 @@ class HyperRatingApp(_ReportViewer):
         super().__init__(html_path, output_dir, sci_threshold, rater)
 
     def _decisions_path(self, sid: str) -> Path:
-        return channel_decisions_path(self.decisions_dir, sid,
+        # the members' decisions live beside their raw pages, in the tree the dyad page is in
+        return channel_decisions_path(self.output_dir, sid,
                                       task=self.task, session=self.session, rater=self.rater)
 
     # the dyad page's verdicts sit under their own key, apart from each run's own

@@ -103,8 +103,7 @@ def cmd_raw(
 
 def open_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
-    session_label: str | None, sci_threshold: float,
-    derivatives_dir: Path | None = None, rater: str | None = None,
+    session_label: str | None, sci_threshold: float, rater: str | None = None,
 ) -> tuple:
     """(viewer, label, entry pages) for one dyad's raw report; exits when it or the group is missing."""
     from nirspipe.io.groups import parse_group_csv
@@ -124,23 +123,20 @@ def open_hyper(
         print(f"Error: group_id '{group_id}' + task '{task_label}' not found in {pairs_csv}", file=sys.stderr)
         raise SystemExit(1)
     subject_ids = [e.subject_id for e in members]
-    return [(HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold,
-                            decisions_dir=derivatives_dir, rater=rater), html_path.stem, ("",))]
+    return [(HyperRatingApp(html_path, output_dir, subject_ids, sci_threshold, rater=rater),
+             html_path.stem, ("",))]
 
 
 def cmd_hyper(
     output_dir: Path, group_id: str, task_label: str, pairs_csv: Path,
     session_label: str | None, sci_threshold: float, port: int | None,
-    derivatives_dir: Path | None = None, rater: str | None = None,
+    rater: str | None = None,
 ) -> None:
     """Launch interactive hyperscanning QC viewer with section ratings and channel decisions."""
     from nirspipe.qc.rating.app import HYPER_PORT
 
     opened = open_hyper(output_dir, group_id, task_label, pairs_csv, session_label,
-                        sci_threshold, derivatives_dir, rater)
-    if derivatives_dir is None:
-        print("[info] no --derivatives-dir: channel decisions go to OUTPUT_DIR, where the "
-              "members' raw pages in the nirspipe tree do not read them.", file=sys.stderr)
+                        sci_threshold, rater)
     print(f"Launching hyper viewer: {opened[0][0].html_path.name} ...")
     _say_rater(rater)
     _serve(opened, port, HYPER_PORT, "nirspipe-rate hyper")
@@ -242,16 +238,12 @@ def _build_parser() -> argparse.ArgumentParser:
                          "The red cells stay each member's own line. Off when not given.")
     ph.add_argument("--port", type=int, default=None,
                     help="Local server port. Default: 5053, or the next free port above it.")
-    ph.add_argument("--derivatives-dir", "--derivatives_dir", type=Path, default=None,
-                    help="The nirspipe tree. Each member's channel decisions are kept there, "
-                         "in the file their raw page reads; without it they go to OUTPUT_DIR.")
     _add_rater(ph, "ratings and channel decisions")
     ph.set_defaults(func=cmd_hyper)
 
     pe = sub.add_parser("export", help="Export channel decisions for nirspipe --bad-channels.")
     pe.add_argument("trees", type=Path, nargs="+",
-                    help="Trees holding the decision files: the raw QC tree, and for dyads "
-                         "the tree given to hyper as --derivatives-dir.")
+                    help="The raw QC trees holding the decision files.")
     pe.add_argument("--out-dir", "--out_dir", type=Path, default=None,
                     help="Folder for the two tables. Default: the first tree.")
     pe.add_argument("--rater", type=rater_name, default=None,

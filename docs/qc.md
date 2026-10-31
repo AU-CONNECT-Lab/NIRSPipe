@@ -325,7 +325,7 @@ Click a section's cell to cycle unrated, good, bad and other; ctrl-click adds a 
 
 On a raw run page, **Mark bad stretches** under the Events table lets you drag across the Raw Signal plot to mark a stretch as bad. Each stretch is listed with editable start and end, and is saved as you go.
 
-**Using the ratings.** `nirspipe-rate export TREE [TREE ...]` collects the channel decisions into `desc-ratedchannels_qc.tsv`: per rated run, the pairs rated bad in `bad_channels` and the pairs rated good in `keep_channels`. Pass it to `nirspipe --bad-channels`; a pair you rated good is kept even when screening rejected it ([Tables that name recordings](data-preparation.md#tables-that-name-recordings)). Marked stretches go to `desc-ratedspans_qc.tsv`, for `nirspipe --bad-spans` ([Choosing stretches of a recording](data-preparation.md#choosing-stretches-of-a-recording)). Each page's final verdict is listed in `desc-ratedpages_qc.tsv`, for reading only. For dyads, also pass the `nirspipe` tree given to `hyper` as `--derivatives-dir`, since the members' decisions are kept there.
+**Using the ratings.** `nirspipe-rate export TREE [TREE ...]` collects the channel decisions into `desc-ratedchannels_qc.tsv`: per rated run, the pairs rated bad in `bad_channels` and the pairs rated good in `keep_channels`. Pass it to `nirspipe --bad-channels`; a pair you rated good is kept even when screening rejected it ([Tables that name recordings](data-preparation.md#tables-that-name-recordings)). Marked stretches go to `desc-ratedspans_qc.tsv`, for `nirspipe --bad-spans` ([Choosing stretches of a recording](data-preparation.md#choosing-stretches-of-a-recording)). Each page's final verdict is listed in `desc-ratedpages_qc.tsv`, for reading only. The dyad viewer keeps the members' decisions in the raw QC tree too, so one export covers both.
 
 With several raters, the exported tables carry a `rater` column, but `nirspipe` applies one rater's decisions and refuses a table that holds several. Export the rater you want with `nirspipe-rate export TREE --rater QY`, or settle the raters' tables into one yourself and blank its `rater` column.
 
@@ -337,7 +337,7 @@ The ratings are saved beside the reports:
 |--------|-----------------|-------------------|
 | `rate` | `sub-<id>/[ses-<s>/]nirs/<page>_desc-rating_qc.json`, every save also in `logs/group_ratings.jsonl` | none |
 | `raw` | `sub-<id>/[ses-<s>/]nirs/<page>_desc-rawrating_qc.json`, every save also in `logs/group_raw_ratings.jsonl` | `sub-<id>/[ses-<s>/]nirs/sub-<id>[_ses-<s>]_task-<t>_desc-rawdecision_qc.json`, and marked stretches in `..._desc-rawspans_qc.json` |
-| `hyper` | `group-<id>/[ses-<s>/]nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, in the `nirspipe` tree given by `--derivatives-dir` |
+| `hyper` | `group-<id>/[ses-<s>/]nirs/<group run>_desc-rawrating_qc.json` | each member's `desc-rawdecision_qc.json`, beside the member's raw report in the same tree |
 
 With `--rater QY`, each of these files carries `rater-QY` before its `desc-`, for example `sub-01_task-rest_rater-QY_desc-rawdecision_qc.json`; the `.jsonl` logs keep their names and record the rater with every save.
 
