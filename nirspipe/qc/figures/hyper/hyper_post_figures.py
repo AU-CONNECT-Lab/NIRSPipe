@@ -285,7 +285,6 @@ WTC_QUIVER_SCALE = 52.0
 _LIVE_LINE_SCALE = 2.2
 
 def _arrow_annotations(wtc_data: dict, freqs: np.ndarray, times: np.ndarray,
-                       freq_coi: np.ndarray,
                        arrow_min: float = ARROW_MIN_COHERENCE) -> list[dict]:
     """The phase field of one map as Plotly annotations, thinned onto the same grid.
 
