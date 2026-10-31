@@ -326,8 +326,10 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         aligned_raws = normalize_raws(aligned_raws)
     # the motion panel needs optical density, which the haemoglobin conversion above
     # has already left behind, so the optical density is cut to the same window rather
-    # than aligned a second time; its corrected side is each member's own correction
-    intensity_raws = align_like(before, aligned_raws)
+    # than aligned a second time. Its corrected side is each member's own correction
+    od_raws = align_like(before, aligned_raws)
+    # the grid's CV reads brightness, which optical density no longer holds
+    intensity_raws = align_like(raws_cw, aligned_raws)
     after_raws = align_like(full_after, aligned_raws) if full_after else {}
     # the panel's IMU, moved by the same shift the optical density was cut by
     try:
@@ -344,6 +346,7 @@ def _raw_one_group(s: SimpleNamespace, gid, task, ses, members):
         aligned_raws=aligned_raws,
         offsets=offsets,
         raw_raws=raws_haemo,
+        od_raws=od_raws,
         intensity_raws=intensity_raws,
         after_raws=after_raws,
         imu=imu,

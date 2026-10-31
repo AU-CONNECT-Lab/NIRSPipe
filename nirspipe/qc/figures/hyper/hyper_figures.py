@@ -385,7 +385,7 @@ def _mask_to_spans(mask: np.ndarray, t: np.ndarray):
 
 
 def motion_series(
-    intensity_raws: dict[str, "mne.io.Raw"],
+    od_raws: dict[str, "mne.io.Raw"],
     after_raws: "dict[str, mne.io.Raw] | None",
     subject_ids: list[str],
     sep_bands=None,
@@ -434,7 +434,7 @@ def motion_series(
 
     Returns ``{}`` when no member carries usable optical density.
     """
-    have = [sid for sid in subject_ids if sid in intensity_raws]
+    have = [sid for sid in subject_ids if sid in od_raws]
     if not have:
         return {}
 
@@ -448,7 +448,7 @@ def motion_series(
     t = None
 
     for sid in have:
-        raw = intensity_raws[sid]
+        raw = od_raws[sid]
         try:
             od = as_optical_density(raw)
         except Exception:

@@ -97,6 +97,7 @@ def _process_hyper_raw_group(
     offsets: dict[str, float],
     output_dir: Path,
     raw_raws: dict[str, mne.io.Raw] | None = None,
+    od_raws: dict[str, mne.io.Raw] | None = None,
     intensity_raws: dict[str, mne.io.Raw] | None = None,
     after_raws: dict[str, mne.io.Raw] | None = None,
     imu: "dict[str, dict[str, tuple]] | None" = None,
@@ -213,7 +214,7 @@ def _process_hyper_raw_group(
     # of the page is drawn on, so it is its own pass rather than a row on the screening grid
     motion, motion_scalars = {}, {}
     with guard("Motion panel", errors, label):
-        motion = motion_series(intensity_raws or {}, after_raws, subject_ids, sep_bands,
+        motion = motion_series(od_raws or {}, after_raws, subject_ids, sep_bands,
                                imu=imu, full_raws=full_raws, full_after=full_after,
                                roi_map=roi_map)
     if not motion:
@@ -240,8 +241,8 @@ def _process_hyper_raw_group(
     # by time on the shared clock; each member's verdict stays its own screening's
     shared = {}
     with guard("Screening grid", errors, label):
-        if intensity_raws:
-            shared = shared_screen_windows(intensity_raws, sqm_data, subject_ids)
+        if od_raws:
+            shared = shared_screen_windows(od_raws, intensity_raws, sqm_data, subject_ids)
         grid = passing_grid(shared, subject_ids, duration_s=duration_s) if shared else None
     if grid is None:
         note(notes, label, "no shared screening grid: a member's aligned recording could "

@@ -12,6 +12,7 @@ from nirspipe.cli.hyper import _select_groups
 from nirspipe.exceptions import StageError
 from nirspipe.io.snirf import read_snirf
 from nirspipe.qc.hyper import hyper_report
+from nirspipe.qc.metrics.hyper import shared_screen_windows
 
 from tests._raw_qc import SCREENING
 from tests._synth import BAD_PAIR, _write_dataset_root, _write_subject, synth_raw
@@ -87,6 +88,19 @@ def test_the_uncorrected_side_is_each_member_s_screened_recording(trees, monkeyp
     for sid, before in drawn["full_raws"].items():
         expected = _stage(root, sid, "sci")
         assert np.array_equal(before.get_data(), expected.get_data())
+
+
+def test_the_grid_s_cv_row_reads_each_member_s_brightness(trees, monkeypatch):
+    bids, pairs, root = trees
+    drawn = _draw(bids, root / "qc", pairs, monkeypatch)
+    intensity = drawn["intensity_raws"]
+    assert {kind for raw in intensity.values()
+            for kind in raw.get_channel_types()} == {"fnirs_cw_amplitude"}
+    shared = shared_screen_windows(drawn["od_raws"], intensity, drawn["sqm_data"], list(intensity))
+    for sid, raw in intensity.items():
+        first = raw.get_data()[:, :round(10 * raw.info["sfreq"])]
+        cv = shared[sid]["screen_windows"]["cv"]
+        assert np.allclose(cv[:, 0], first.std(axis=1) / first.mean(axis=1))
 
 
 def test_a_tree_without_its_stage_files_is_refused_with_the_rerun(trees, monkeypatch):

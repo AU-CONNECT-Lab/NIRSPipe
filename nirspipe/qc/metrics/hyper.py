@@ -196,6 +196,7 @@ def passing_grid(
 
 
 def shared_screen_windows(
+    od_raws: dict[str, mne.io.Raw],
     intensity_raws: dict[str, mne.io.Raw],
     sqm_data: dict[str, dict],
     subject_ids: list[str],
@@ -221,7 +222,7 @@ def shared_screen_windows(
     out = {}
     for sid in subject_ids:
         member = dict(sqm_data.get(sid) or {})
-        raw = intensity_raws.get(sid)
+        raw = od_raws.get(sid)
         cutoffs = member.get("screen_cutoffs") or {}
         band = member.get("screen_band")
         if raw is None or cutoffs.get("sci") is None or band is None:
@@ -237,7 +238,7 @@ def shared_screen_windows(
         # the CV and motion rows are extras on the grid; losing one costs that row alone
         n = len(counted["centers"])
         try:
-            cv_m, cv_t = compute_windowed_cv(raw)
+            cv_m, cv_t = compute_windowed_cv(intensity_raws[sid])
             if cv_m is not None and len(cv_t) == n:
                 windows["cv"] = cv_m
             gvtd, _p95, gvtd_t = compute_windowed_filtered_gvtd(od)

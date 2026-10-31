@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - `--wtc-arrow-min` was ignored by the live coherence maps and their condition views, which drew arrows at 0.5 whatever the caption said
+- The raw QC dyad page's CV row was computed on optical density since 0.81.0, so its values meant nothing
 
 ## [0.81.0] - 2026-10-30
 
