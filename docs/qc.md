@@ -21,9 +21,9 @@ The metrics work on any recording, whatever its design. The one exception is CNR
 
 ## The quality record
 
-`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, once preprocessing and postprocessing have both finished. `nirspipe-qc ... participant` writes the raw part of the same record to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` writes a dyad record under `group-<id>/[ses-<s>/]nirs/`. The cohort pages are built from these records.
+`nirspipe` writes one record per run, `<run>_desc-sqm_qc.json`, once preprocessing and postprocessing have both finished. `nirspipe-qc ... participant` writes the same record up to the end of preprocessing to `<run>_desc-sqmraw_qc.json`, and `nirspipe-qc ... group --pairs-csv` writes a dyad record under `group-<id>/[ses-<s>/]nirs/`. The cohort pages are built from these records.
 
-The record is split into sections named after the stage they were measured on (`raw`, `motion`, `preproc`, `errts` and so on), and each is measured on all channels, the long channels and the short channels separately: `raw` is every channel, `raw_long` and `raw_short` the two sets. The per-window series and the flagged stretches (GVTD above its threshold, spikes, corrected samples) are named the same way: `gvtd_filt_per_window` is every channel, `gvtd_filt_per_window_long` and `_short` the sets. Measures taken on the raw signal include rejected channels; measures taken on haemoglobin leave them out. `<run>_desc-channel_qc.tsv` beside the record holds one row per channel, with its metrics and its verdict, and the `.json` beside it says what each column holds. An older record, which named the long set's series plainly and every channel's `_all`, is refused rather than read the wrong way round; rerun the command that wrote it.
+The record is split into sections named after the stage they were measured on (`raw`, `rawhaemo` for the haemoglobin before motion correction, `motion`, `preproc`, `errts` and so on), and each is measured on all channels, the long channels and the short channels separately: `raw` is every channel, `raw_long` and `raw_short` the two sets. The per-window series and the flagged stretches (GVTD above its threshold, spikes, corrected samples) are named the same way: `gvtd_filt_per_window` is every channel, `gvtd_filt_per_window_long` and `_short` the sets. Measures taken on the raw signal include rejected channels; measures taken on haemoglobin leave them out. `<run>_desc-channel_qc.tsv` beside the record holds one row per channel, with its metrics and its verdict, and the `.json` beside it says what each column holds. An older record, which named the long set's series plainly and every channel's `_all`, is refused rather than read the wrong way round; rerun the command that wrote it.
 
 ## Metrics
 
@@ -211,15 +211,15 @@ A condition page is a view of the run, not a separate analysis: every rejection 
 
 ## Raw report
 
-`nirspipe-qc bids_dir output_dir participant` reports on raw recordings without running the pipeline: it screens the channels with the same rules and draws each recording on a page of its own, named like its run report. Each subject runs on its own, so one failure does not stop the rest. It takes the same screening, separation, `--population`, `--bad-channels`, `--keep-spans`, `--bad-spans` and `--bids-filter-file` flags as `nirspipe`.
+`nirspipe-qc bids_dir output_dir participant` reports on raw recordings before any analysis: it prepares each one with the same steps and settings as `nirspipe` (screening, motion correction, haemoglobin) and draws the recording as delivered on a page of its own, named like its run report. Each subject runs on its own, so one failure does not stop the rest. It takes the same screening, separation, `--population`, `--bad-channels`, `--keep-spans`, `--bad-spans` and `--bids-filter-file` flags as `nirspipe`.
 
 :::{note}
 Give `nirspipe-qc` the same screening settings you give `nirspipe`, or the raw report and the run report will describe different channel sets.
 :::
 
-A recording that screening cannot judge (for example one that is too short) stops preprocessing, but the raw report still draws it and says why above its channel table. `--motion-correction` (default `tddr`) shows the recording before and after a correction, without changing anything. `--epoch-qc` adds the per-trial section and `--by-condition` one page per condition. Raw reports have no Methods paragraph, since they describe a recording rather than an analysis. The record it writes, `sub-<label>/logs/<stem>_desc-raw.toml`, reruns the same report with `nirspipe-qc --config`.
+A recording that screening cannot judge (for example one that is too short) would stop `nirspipe`, but the raw report still draws it, rejects nothing and says why above its channel table. A recording whose every channel fails is drawn too, with every channel marked. `--motion-correction` (default `tddr`) shows the recording before and after a correction, without changing anything. `--epoch-qc` adds the per-trial section and `--by-condition` one page per condition. Raw reports have no Methods paragraph, since they describe a recording rather than an analysis. The record it writes, `sub-<label>/logs/<stem>_desc-raw.toml`, reruns the same report with `nirspipe-qc --config`.
 
-The page has the same order as the run report. The raw signal is unfiltered, so its averages and trial images are smoothed for display only.
+The page has the same order as the run report, and its summary and metric names read the same. The raw signal is unfiltered, so its averages and trial images are smoothed for display only.
 
 ## Cohort reports
 
@@ -272,7 +272,7 @@ With `--pairs-csv`, `nirspipe-qc ... group` also gathers each dyad's raw record 
 
 ### Raw dyad report
 
-`nirspipe-qc bids_dir output_dir group --pairs-csv pairs.csv` writes one page per group, task and session. Run the participant level on every member into the same `output_dir` first: each member is read with the settings and verdict of its own raw report, so the two pages agree. A member without one fails its dyad with a message naming the command to run, and the cohort page is still written. It measures no synchrony; that is the analysis, run on the preprocessed signal.
+`nirspipe-qc bids_dir output_dir group --pairs-csv pairs.csv` writes one page per group, task and session. Run the participant level on every member into the same `output_dir` first: each member is read with the settings, verdict and prepared recordings (`stages/`) of its own raw report, so the two pages agree. A member without one fails its dyad with a message naming the command to run, and the cohort page is still written. A tree written by an older `nirspipe-qc`, without `stages/`, is refused the same way: rerun the participant level. It measures no synchrony; that is the analysis, run on the preprocessed signal.
 
 | Section | Content |
 |---------|---------|

@@ -33,7 +33,7 @@ derivatives/nirspipe/
 ├── dataset_description.json             ← links the input as raw under DatasetLinks and SourceDatasets
 ├── .bidsignore
 ├── plotly-<version>.min.js             ← the reports' Plotly.js when the CDN does not load
-├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group / nirspipe-qc group)
+├── desc-subjects_qc.tsv                 ← cohort table (nirspipe group)
 ├── desc-subjects_qc.json                ← what each of its columns holds
 ├── desc-conditions_qc.tsv               ← the same per run and condition, with its .json
 ├── desc-subjects_report.html            ← cohort page
@@ -48,7 +48,6 @@ derivatives/nirspipe/
     ├── sub-<label>_desc-index_report.html          ← index over the subject's runs
     ├── <run>_report.html                           ← run report
     ├── <run>_cond-<condition>_report.html          ← + --by-condition
-    ├── <run>_desc-raw_report.html                  ← nirspipe-qc participant, pointed at this tree
     ├── <run>_desc-mne_report.html                  ← MNE's own report of the run
     ├── figures/                                    ← every figure of every run, one flat folder
     ├── logs/
@@ -71,7 +70,6 @@ derivatives/nirspipe/
         ├── <run>_stat-summary_desc-sqm_timeseries.tsv        ← its per-window series
         ├── <run>_desc-sqm_nirsmap.tsv              ← its per-channel values
         ├── <run>_desc-channel_qc.tsv               ← per-channel metrics and verdicts
-        ├── <run>_desc-sqmraw_qc.json, <run>_desc-rawchannel_qc.tsv   ← the same from nirspipe-qc participant
         ├── <run>_design.tsv                        ← design matrix, whenever a regression ran
         ├── <run>_desc-glm_nirsmap.tsv              ← fit results, one row per channel and regressor
         ├── <run>_desc-contrast_nirsmap.tsv         ← glm + --contrast-file
@@ -97,7 +95,7 @@ A step that did not run writes nothing: `desc-filtered` is absent when both cuto
 
 ## The raw QC tree
 
-`nirspipe-qc` writes one tree for both levels: each subject under `sub-<label>/`, each dyad under `group-<id>/`, and the cohort pages at the root. It can be the `nirspipe` tree itself, so a subject's raw report and run report sit side by side.
+`nirspipe-qc` writes one tree for both levels: each subject under `sub-<label>/`, each dyad under `group-<id>/`, and the cohort pages at the root. Give it a folder of its own, apart from the `nirspipe` tree, as in the examples. Pointing both commands at one folder works but is not recommended, and each command says so once when it finds the other's records there.
 
 ```
 derivatives/nirspipe-qc/
@@ -110,6 +108,8 @@ derivatives/nirspipe-qc/
 ├── desc-groups_qc.tsv, desc-groups_report.html        ← group level + --pairs-csv: the cohort of dyads
 ├── desc-groupconditions_qc.tsv                        ← group level + --pairs-csv: the same per dyad and condition
 ├── figures/                                           ← the cohort pages' figures
+├── stages/                                            ← participant level: each recording as prepared, a dataset of its own
+│   └── sub-<label>/[ses-<label>/]nirs/                ← desc-od, desc-sci, desc-motcorrected, desc-preproc, as in the nirspipe tree
 ├── sub-<label>/
 │   ├── sub-<label>_desc-index_report.html
 │   ├── <run>_desc-raw_report.html                     ← participant level
@@ -117,7 +117,7 @@ derivatives/nirspipe-qc/
 │   ├── figures/
 │   ├── logs/<stem>_desc-raw.toml                      ← its run record, which --config reruns
 │   └── [ses-<label>/]nirs/
-│       ├── <run>_desc-sqmraw_qc.json                  ← the raw quality record and the settings it screened with
+│       ├── <run>_desc-sqmraw_qc.json                  ← the raw quality record and the settings it prepared with
 │       └── <run>_desc-rawchannel_qc.tsv               ← per-channel metrics and verdicts
 └── group-<id>/
     ├── group-<id>_task-<t>_desc-raw_report.html      ← group level + --pairs-csv
@@ -125,6 +125,8 @@ derivatives/nirspipe-qc/
     ├── logs/group-<id>_task-<t>_desc-raw.log         ← its live log
     └── [ses-<s>/]nirs/                               ← every table has a .json sidecar
 ```
+
+`stages/` holds each recording as the participant level prepared it, with the same steps and file names as the `nirspipe` tree's preprocessing files. The dyad reports read their members from there, so keep it with the tree.
 
 Per group and task the group level writes:
 
