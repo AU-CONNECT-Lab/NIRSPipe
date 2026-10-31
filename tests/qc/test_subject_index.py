@@ -288,3 +288,18 @@ def test_both_commands_in_one_tree_keep_a_channel_table_each(tmp_path):
 
     assert pipeline_table.read_text(encoding="utf-8") == before
     assert (pipeline_table.parent / ("sub-01_task-tap" + RAW_CHANNEL_METRICS_SUFFIX)).exists()
+
+
+def test_the_conditions_table_names_the_grid_its_run_was_sliced_on(tmp_path):
+    from nirspipe.qc.subject.record_io import read_record
+    from nirspipe.qc.subject.subject_index import collect_conditions
+
+    label = _run(tmp_path, "tap")
+    path = tmp_path / "nirs" / f"{label}_desc-sqm_qc.json"
+    record = read_record(path)
+    window = {"window_s": [0.0, 120.0], "scalars": {}}
+    write_record(path, {**record, "windowed": {"qc_window_s": 12.0},
+                        "by_condition": {"rest": window, "talk": window}})
+    (group,) = collect_conditions(tmp_path)
+    assert "Mean SCI (12 s)" in group["columns"]
+    assert "Mean SNR μ/σ (12 s)" in group["columns"]

@@ -26,7 +26,7 @@ from pathlib import Path
 from nirspipe.pipeline.chromophores import CHROMOPHORES
 from nirspipe.utils import pair_of
 from nirspipe.qc.boilerplate import collect_software_versions
-from nirspipe.qc.boilerplate.vocabulary import format_metric, metric_label
+from nirspipe.qc.boilerplate.vocabulary import format_metric, grid_window_label, metric_label
 from nirspipe.qc.metrics.windowed import long_or_all
 from nirspipe.qc.common.report_shell import (
     OUTLIER_Z, footer_vars, guard, outlier_flags, page_vars, render)
@@ -369,7 +369,7 @@ def _whole_run_values(record: dict, duration_s: "float | None") -> dict:
 def collect_conditions(sub_dir: Path) -> list[dict]:
     """One group per run carrying per-condition views, each a whole-run row and its windows.
 
-    A group is ``{"label", "task", "windows", "by_condition", "record", "rows"}``; ``rows``
+    A group is ``{"label", "task", "windows", "by_condition", "record", "rows", "columns"}``, ``rows``
     open with the run itself so a condition is read against the whole it was cut from. Runs
     without a ``by_condition`` block contribute nothing, which is what a tree produced
     without ``--by-condition``, or cropped per condition first, looks like.
@@ -420,7 +420,11 @@ def collect_conditions(sub_dir: Path) -> list[dict]:
             for row, flagged in zip(rows, flags):
                 row["metrics"][column]["flagged"] = flagged
 
+        # a condition's windowed values are columns of the run's own --window-length grid
+        grid = (record.get("windowed") or {}).get("qc_window_s")
         groups.append({"label": label, "record": record, "rows": rows,
+                       "columns": [grid_window_label(head, key, grid)
+                                   for head, key, _ in _COND_COLUMNS],
                        "windows": windows, "by_condition": by_condition,
                        "task": entities_of(label).get("task") or label})
     return groups
@@ -602,7 +606,6 @@ def write_subject_index(
         channels=collect_bad_channels(sub_dir, [r["label"] for r in rows]),
         columns=[head for head, _, _ in _COLUMNS],
         condition_groups=condition_groups,
-        condition_columns=[head for head, _, _ in _COND_COLUMNS],
         condition_figures=figures,
         outlier_z=OUTLIER_Z,
         run_command=run_command,
