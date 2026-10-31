@@ -71,9 +71,6 @@ derivatives/nirspipe/
 ├── desc-subjects_report.html            ← cohort page
 ├── desc-subjects_nirsmap.tsv            ← every run's per-channel values, one long table
 ├── desc-fcmovement_qc.tsv               ← per task, each connection's r between movement and FC across runs
-├── desc-ratedchannels_qc.tsv            ← nirspipe-rate export: the --bad-channels table
-├── desc-ratedspans_qc.tsv               ← nirspipe-rate export: the --bad-spans table
-├── desc-ratedpages_qc.tsv               ← nirspipe-rate export: every FINAL verdict, for reading
 ├── figures/                             ← the cohort page's figures
 ├── logs/                                ← the rating viewers' saved verdicts
 └── sub-<label>/
@@ -114,9 +111,7 @@ derivatives/nirspipe/
         ├── <run>_chromo-<c>_seg-<map>_agg-{roi,seed}_stat-{pearson,fisherz}_relmat.tsv  ← + --roi-mapping
         ├── <task>_desc-<stage>_nirs.snirf          ← --combine-runs: the task's runs joined, named without run-
         ├── <task>_chromo-<c>_..._relmat.tsv        ← --combine-runs: FC of the joined series, as above
-        ├── <page>_desc-rating_qc.json, <page>_desc-rawrating_qc.json    ← section ratings
-        ├── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
-        └── sub-<label>[_ses-<label>]_task-<label>_desc-rawspans_qc.json     ← stretches marked bad
+        └── <page>_desc-rating_qc.json              ← nirspipe-rate rate: section ratings
 ```
 
 With `nirspipe-rate --rater`, the rating files carry the rater before `desc-` (`..._rater-QY_desc-rawdecision_qc.json`), and the exported tables a `rater` column ([Rating](qc.md#rating)).
@@ -139,7 +134,11 @@ derivatives/nirspipe-qc/
 ├── desc-subjects_nirsmap.tsv                          ← group level: every run's per-channel values
 ├── desc-groups_qc.tsv, desc-groups_report.html        ← group level + --pairs-csv: the cohort of dyads
 ├── desc-groupconditions_qc.tsv                        ← group level + --pairs-csv: the same per dyad and condition
+├── desc-ratedchannels_qc.tsv                          ← nirspipe-rate export: the --bad-channels table
+├── desc-ratedspans_qc.tsv                             ← nirspipe-rate export: the --bad-spans table
+├── desc-ratedpages_qc.tsv                             ← nirspipe-rate export: every FINAL verdict, for reading
 ├── figures/                                           ← the cohort pages' figures
+├── logs/                                              ← the rating viewers' saved verdicts
 ├── stages/                                            ← participant level: each recording as prepared, a dataset of its own
 │   └── sub-<label>/[ses-<label>/]nirs/                ← desc-od, desc-sci, desc-motcorrected, desc-preproc, as in the nirspipe tree
 ├── sub-<label>/
@@ -150,7 +149,10 @@ derivatives/nirspipe-qc/
 │   ├── logs/<stem>_desc-raw.toml                      ← its run record, which --config reruns
 │   └── [ses-<label>/]nirs/
 │       ├── <run>_desc-sqmraw_qc.json                  ← the raw quality record and the settings it prepared with
-│       └── <run>_desc-rawchannel_qc.tsv               ← per-channel metrics and verdicts
+│       ├── <run>_desc-rawchannel_qc.tsv               ← per-channel metrics and verdicts
+│       ├── <page>_desc-rawrating_qc.json              ← nirspipe-rate raw: section ratings
+│       ├── sub-<label>[_ses-<label>]_task-<label>_desc-rawdecision_qc.json  ← channel decisions
+│       └── sub-<label>[_ses-<label>]_task-<label>_desc-rawspans_qc.json     ← stretches marked bad
 └── group-<id>/
     ├── group-<id>_task-<t>_desc-raw_report.html      ← group level + --pairs-csv
     ├── figures/
