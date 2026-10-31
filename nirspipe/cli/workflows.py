@@ -259,7 +259,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
     setup_logging(verbose=verbose)
     logger.info("nirspipe starting - output: %s", output_dir)
-    _shared.warn_on_mixed_tree(output_dir, "nirspipe-qc")
+    warn_on_mixed_tree(output_dir, "nirspipe-qc")
 
     _refuse_cropped_input(bids_dir, allow=bool(args.get("allow_cropped_input")))
 
@@ -941,6 +941,17 @@ def _run_post_for_subject(
                                    subject, runs[0].get("task"), exc)
 
     return post_runs
+
+
+def warn_on_mixed_tree(output_dir: Path, other: str) -> None:
+    """Say once that ``output_dir`` already holds the quality records ``other`` writes, both kept."""
+    from nirspipe.qc.subject.sqm_record import RECORD_SUFFIXES
+
+    suffix = RECORD_SUFFIXES["sqmraw" if other == "nirspipe-qc" else "sqm"]
+    if any(Path(output_dir).glob(f"sub-*/**/nirs/*{suffix}")):
+        logger.warning(
+            "%s already holds `%s` records. Both are kept, though raw QC and the analysis are "
+            "meant for trees of their own, as MRIQC's and fMRIPrep's are", output_dir, other)
 
 
 def _warn_on_split_tree(output_dir: Path) -> None:
