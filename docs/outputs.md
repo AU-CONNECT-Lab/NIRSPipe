@@ -4,7 +4,39 @@ title: Outputs
 
 # Outputs
 
-`nirspipe` writes a BIDS derivatives tree, and the dyad commands write a second tree of their own beside it. This page lists what each tree holds, how the files are named, and the logs and run records every run leaves.
+`nirspipe` writes a BIDS derivatives tree, `nirspipe-qc` a raw QC tree, and the dyad commands a third, each in a folder of its own. The figure shows what each command reads and where it writes. This page lists what each tree holds, how the files are named, and the logs and run records every run leaves.
+
+```mermaid
+flowchart TD
+    BIDS[/"BIDS dataset<br/><small>.snirf · events.tsv · channels.tsv</small>"/]
+    PAIRS[/"pairs file"/]
+    PREP["nirspipe-prep<br/><small>edit-markers · crop, optional</small>"]
+    BIDS -.-> PREP
+
+    BIDS --> RUN["nirspipe<br/><small>participant · group</small>"]
+    BIDS --> QC["nirspipe-qc<br/><small>participant · group</small>"]
+    PREP -.-> RUN
+    PREP -.-> QC
+    PAIRS -.->|"group --pairs-csv"| QC
+    RUN --> ANA(["derivatives/nirspipe/<br/><small>each run's stages, analysis and report · cohort</small>"])
+    QC --> RAW(["derivatives/nirspipe-qc/<br/><small>raw reports · stages/ · dyad raw reports · cohort</small>"])
+
+    ANA -->|"desc-preproc, or the stage --desc names"| HYP["nirspipe-hyper · nirspipe-hyper-pairnull"]
+    PAIRS --> HYP
+    HYP --> DYAD(["derivatives/nirspipe-hyper/<br/><small>dyad tables, nulls and reports</small>"])
+    DYAD -.-> MORE["nirspipe-hyper-groupnull · nirspipe-hyper-merge<br/>nirspipe-hyper-band · nirspipe-hyper-index<br/><small>read and write this tree only</small>"]
+
+    RAW --> RATE["nirspipe-rate raw · hyper<br/><small>channel decisions · marked stretches</small>"]
+    RATE -.->|"nirspipe-rate export:<br/>--bad-channels · --bad-spans tables"| RUN
+    RATE -.-> QC
+
+    classDef derivative fill:#d6eaf8,stroke:#2874a6
+    classDef side fill:#eaeded,stroke:#7f8c8d
+    class ANA,RAW,DYAD derivative
+    class PREP,MORE side
+```
+
+`nirspipe` and `nirspipe-qc` read the same input and never each other's tree, so each prepares the recordings on its own. The dyad commands read only the `nirspipe` tree.
 
 ## Naming
 
