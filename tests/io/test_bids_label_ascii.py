@@ -17,19 +17,31 @@ def test_a_written_label_reads_back_whole():
     assert entity_of(f"sub-01_seg-{label}_desc-fc_relmat.tsv", "seg") == label
 
 
-# a table each reader accepts as it stands, but for the one label
-_TABLES = {
-    "occasion": ["group_id,subject_id,task,session,occasion",
-                 "G1,sub-01,rest,01,{v}", "G1,sub-02,rest,02,{v}"],
-    "role": ["group_id,subject_id,task,role", "G1,sub-01,rest,{v}", "G1,sub-02,rest,child"],
-}
-
-
-@pytest.mark.parametrize("column, value", [("occasion", "visité"), ("role", "mère")])
-def test_a_groups_table_refuses_a_label_a_file_name_could_not_carry(tmp_path, column, value):
+def _groups_table(tmp_path, lines):
     path = tmp_path / "pairs.csv"
-    path.write_text("\n".join(_TABLES[column]).format(v=value) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_groups_table_refuses_an_occasion_a_file_name_could_not_carry(tmp_path):
+    path = _groups_table(tmp_path, ["group_id,subject_id,task,session,occasion",
+                                    "G1,sub-01,rest,01,visité", "G1,sub-02,rest,02,visité"])
     with pytest.raises(GroupCSVError, match="not a"):
+        parse_group_csv(path)
+
+
+def test_a_role_names_a_table_level_and_no_file_so_it_may_be_any_word(tmp_path):
+    path = _groups_table(tmp_path, ["group_id,subject_id,task,role",
+                                    "G1,sub-01,rest,mère", "G1,sub-02,rest,enfant"])
+    (members,) = parse_group_csv(path).values()
+    assert [m.role for m in members] == ["mère", "enfant"]
+
+
+@pytest.mark.parametrize("role", ["the mother", "mère-1"])
+def test_a_role_is_still_one_word(tmp_path, role):
+    path = _groups_table(tmp_path, ["group_id,subject_id,task,role",
+                                    f"G1,sub-01,rest,{role}", "G1,sub-02,rest,child"])
+    with pytest.raises(GroupCSVError, match="not a label"):
         parse_group_csv(path)
 
 

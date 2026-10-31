@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - A recording numbered `run-00` lost its run from the run label, so raw QC wrote no page for it
 - `nirspipe-qc participant` stopped the whole batch when a tree's run record named an ROI map that had since moved
 - `nirspipe-provenance` and raw QC's subject index took their mode from a dry run or failed run newer than the run that wrote the files
+- A pairs table's `role` column accepts non-ASCII letters again: 0.81.0 refused them, though a role never enters a file name
 
 ## [0.81.0] - 2026-10-30
 

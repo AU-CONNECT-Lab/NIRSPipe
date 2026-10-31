@@ -75,8 +75,8 @@ def parse_group_csv(csv_path: Path) -> "dict[tuple[str, str, str | None], list[G
             raise GroupCSVError(
                 f"row for {row['subject_id']} in group {key[0]} has no role. The role "
                 "column names every member's part or none: fill it in, or drop the column")
-        # it becomes part of a level's name, so it has to read as one word there
-        if role is not None and not is_bids_label(role):
+        # it becomes part of a table level's name and of no file's, so any alphabet is fine
+        if role is not None and not role.isalnum():
             raise GroupCSVError(f"role {role!r} is not a label: letters and digits only")
         entry = GroupEntry(
             group_id=str(row["group_id"]).strip(),
