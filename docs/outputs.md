@@ -242,7 +242,7 @@ The provenance graph of a GLM run: one box per file, labelled with the step that
 | Run record | TOML | `sub-<label>/logs/sub-<label>[_ses-<s>][_task-<t>].toml` | What a subject was run with, and rerunning it |
 | Provenance | JSON sidecars and a graph | `nirs/*.json`, `figures/*_desc-provenance_nirs.png` | How one file was made |
 
-The log and the run record are named after what the run selected, for example `sub-01_ses-1+2` for `--session-label 1 2`. Rerunning the same selection replaces them.
+The log and the run record are named after what the run selected, for example `sub-01_ses-1+2` for `--session-label 1 2`, and `sub-01_acq-hi_run-1` for a `--bids-filter-file` holding `{"acquisition": "hi", "run": 1}`, whose content the record also stores. Rerunning the same selection replaces them.
 
 ### Run record
 
