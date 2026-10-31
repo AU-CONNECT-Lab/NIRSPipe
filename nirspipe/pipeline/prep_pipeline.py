@@ -396,19 +396,17 @@ def run_prep(
     if source_path is not None:
         rec.register_input(source_path, raw)
 
+    def _stage_path(desc: str) -> Path:
+        return build_output_path(output_dir=output_dir, subject=config.subject,
+                                 entities={**entities_base, "desc": desc}, suffix="nirs",
+                                 extension=".snirf", session=ses)
+
     def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None,
               extra_parameters: dict | None = None) -> Path:
         lin = lineage_of(raw_step)
         if lin is None or lin.stage != desc:
             raise StageError(f"_save({desc!r}) got an object stamped {stage_of(raw_step)!r}")
-        path = build_output_path(
-            output_dir=output_dir,
-            subject=config.subject,
-            entities={**entities_base, "desc": desc},
-            suffix="nirs",
-            extension=".snirf",
-            session=ses,
-        )
+        path = _stage_path(desc)
         write_snirf(raw_step, path)
         write_sidecar_json(path, {
             **nirs_required_fields(raw_step, source_metadata or {}),
@@ -528,14 +526,14 @@ def run_prep(
     # no copy kept: desc-sci on disk is this same object, and the report and the record
     # both read the correction's two sides from there
     with step("Motion correction"):
-        raw_od = correct_motion(raw_od, method=config.motion_correction,
-                                std_thresh=config.motion_std_thresh,
-                                iqr_factor=config.wavelet_iqr)
-        tpca = (lineage_of(raw_od).params or {}).get("tpca")
-        spline = (lineage_of(raw_od).params or {}).get("spline")
-        spline_sg = (lineage_of(raw_od).params or {}).get("spline_sg")
-        spline_wavelet = (lineage_of(raw_od).params or {}).get("spline_wavelet")
-        _save(raw_od, "motcorrected",
+        corrected = correct_motion(raw_od, method=config.motion_correction,
+                                   std_thresh=config.motion_std_thresh,
+                                   iqr_factor=config.wavelet_iqr)
+        tpca = (lineage_of(corrected).params or {}).get("tpca")
+        spline = (lineage_of(corrected).params or {}).get("spline")
+        spline_sg = (lineage_of(corrected).params or {}).get("spline_sg")
+        spline_wavelet = (lineage_of(corrected).params or {}).get("spline_wavelet")
+        _save(corrected, "motcorrected",
               extra_provenance={k: v for k, v in (("tpca", tpca), ("spline", spline),
                                                   ("spline_sg", spline_sg),
                                                   ("spline_wavelet", spline_wavelet))
@@ -544,6 +542,8 @@ def run_prep(
                                 **motion_settings(config.motion_correction,
                                                   config.motion_std_thresh,
                                                   config.wavelet_iqr)})
+        # carried on only once its file is on disk, so a skipped step leaves nothing behind
+        raw_od = corrected
         summary = (lineage_of(raw_od).params or {}).get(config.motion_correction)
         if overmarked(config.motion_correction, summary):
             logger.warning("sub-%s | %s", config.subject, section_note(
@@ -559,21 +559,25 @@ def run_prep(
     aged = config.age if dpf_from_age(config.dpf) else None
     raw_haemo = None
     with step("Beer-Lambert"):
-        raw_haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
-        preproc_path = _save(raw_haemo, "preproc", extra_parameters={
+        haemo = od_to_haemo(raw_od, dpf=factors, age=aged)
+        _save(haemo, "preproc", extra_parameters={
             "dpf": factors, **({"dpf_age": aged} if aged is not None else {}),
             **({"dpf_population": config.population} if "dpf" in config.from_population else {})})
-        # named by the haemoglobin channels, as every analysis table after this one is
-        write_channel_coords(raw_haemo, placement,
-                             build_output_path(output_dir, config.subject,
-                                               {**entities_base, "space": space}, "channels",
-                                               ".tsv", session=ses),
-                             sources=[source_path] if source_path is not None else [],
-                             population=config.population)
+        raw_haemo = haemo
+    if raw_haemo is not None:
+        with step("Channel positions"):
+            # named by the haemoglobin channels, as every analysis table after this one is
+            write_channel_coords(raw_haemo, placement,
+                                 build_output_path(output_dir, config.subject,
+                                                   {**entities_base, "space": space}, "channels",
+                                                   ".tsv", session=ses),
+                                 sources=[source_path] if source_path is not None else [],
+                                 population=config.population)
 
-        # step 5: the aux channels, if the recording has any. They never enter an mne object,
-        # so this is the only chance to carry them forward: the derivative snirfs do not hold them.
-        _save_aux_table(source_path, preproc_path, config)
+    # step 5: the aux channels, if the recording has any. They never enter an mne object,
+    # so this is the only chance to carry them forward: the derivative snirfs do not hold them.
+    # Named off the run, so a conversion that failed does not take them with it
+    _save_aux_table(source_path, _stage_path("preproc"), config)
 
     # SQM is not computed here. It is assembled per run from the files this pipeline left
     # on disk, once post-processing has also finished; see qc/sqm_record.py.

@@ -1,14 +1,20 @@
 """Preprocessing's lenient switch: what screening cannot judge rejects nothing, and a step that fails is skipped and named."""
 
 import json
+from pathlib import Path
 
+import h5py
+import numpy as np
 import pytest
 
 from nirspipe.exceptions import StageError
+from nirspipe.io.auxiliary import read_aux_table
+from nirspipe.io.derivatives import write_dataset_description
+from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.pipeline import prep_pipeline
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 
-from tests._synth import synth_raw
+from tests._synth import _write_dataset_root, _write_subject, synth_raw
 
 GAP = "it has 1 window(s) of 10 s to count and needs 2"
 
@@ -100,3 +106,54 @@ def test_a_failed_step_stops_the_run_without_the_switch(tmp_path, monkeypatch, s
     monkeypatch.setattr(prep_pipeline, step, _boom)
     with pytest.raises(ValueError, match="planted failure"):
         _run(synth_raw("01", "rest"), tmp_path)
+
+
+def _fail_on(desc, real):
+    def write(raw, path, *args, **kwargs):
+        if f"_desc-{desc}_" in Path(path).name:
+            raise OSError("planted write failure")
+        return real(raw, path, *args, **kwargs)
+    return write
+
+
+def _preproc(out):
+    (path,) = out.rglob("*_desc-preproc_nirs.snirf")
+    return read_snirf(path).get_data()
+
+
+def test_a_correction_that_could_not_be_saved_is_not_carried_into_the_conversion(tmp_path, monkeypatch):
+    raw = synth_raw("01", "rest")
+    _run(raw.copy(), tmp_path / "none", lenient=True, motion_correction="none")
+    _run(raw.copy(), tmp_path / "tddr", lenient=True)
+    monkeypatch.setattr(prep_pipeline, "write_snirf", _fail_on("motcorrected", write_snirf))
+    result = _run(raw.copy(), tmp_path / "unsaved", lenient=True)
+    assert [name for name, _ in result.skipped] == ["Motion correction"]
+    assert not np.allclose(_preproc(tmp_path / "tddr"), _preproc(tmp_path / "none"))
+    assert np.array_equal(_preproc(tmp_path / "unsaved"), _preproc(tmp_path / "none"))
+
+
+def test_a_failed_positions_table_is_named_as_itself(tmp_path, monkeypatch):
+    monkeypatch.setattr(prep_pipeline, "write_channel_coords", _boom)
+    result = _run(synth_raw("01", "rest"), tmp_path, lenient=True)
+    assert [name for name, _ in result.skipped] == ["Channel positions"]
+    assert result.raw_haemo is not None
+    assert "preproc" in _stages(tmp_path)
+
+
+def test_the_aux_table_is_written_when_the_conversion_fails(tmp_path, monkeypatch):
+    bids = tmp_path / "bids"
+    _write_dataset_root(bids, ["01"])
+    source = _write_subject(bids, "01", "rest", synth_raw("01", "rest"))
+    with h5py.File(source, "a") as handle:
+        aux = handle["nirs"].create_group("aux1")
+        aux.create_dataset("name", data=b"ACC_X")
+        aux.create_dataset("dataTimeSeries", data=np.linspace(0.0, 1.0, 600))
+        aux.create_dataset("time", data=np.arange(600) / 20.0)
+        aux.create_dataset("dataUnit", data=b"m/s^2")
+    monkeypatch.setattr(prep_pipeline, "od_to_haemo", _boom)
+    out = tmp_path / "out"
+    write_dataset_description(out, source=bids)
+    run_prep(read_snirf(source), _config(lenient=True), out, source_entities={"task": "rest"},
+             source_path=source)
+    (table,) = out.rglob("*_desc-aux_timeseries.tsv.gz")
+    assert "ACC_X" in read_aux_table(table).columns
