@@ -71,7 +71,7 @@ DEFINED_IN = {
     "sci_mean": "coupling.compute_sci_scores",
     "cp_mean": "coupling._cardiac_power_metrics",
     "cv_mean": "coupling.channel_cv",
-    "snr_mean": "coupling.channel_snr",
+    "snr_mean": "coupling._intensity_metrics",
     "gvtd_filt_mean": "gvtd.gvtd_timetrace",
     "gvtd_thresh": "gvtd.gvtd_threshold",
     "hbo_hbr_corr_mean": "haemo.haemo_quality_metrics",

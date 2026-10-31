@@ -236,10 +236,18 @@ def channel_cv(data: np.ndarray) -> np.ndarray:
 ))
 def _intensity_metrics(raw_intensity: mne.io.Raw,
                        snr_threshold: float = SNR_PASS) -> dict[str, Any]:
-    """Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
+    r"""Per-channel CV, SNR and mean amplitude from raw intensity (with means; CV also per wavelength).
+
+    .. math::
+
+        \mathrm{SNR} = \frac{1}{\overline{\mathrm{CV}}}, \qquad
+        \overline{\mathrm{CV}} = \frac{1}{W} \sum_{w=1}^{W} \frac{\sigma_w}{\mu_w}
+
+    where :math:`\sigma_w` and :math:`\mu_w` are the std and mean of the raw intensity in
+    window :math:`w` of :math:`W` non-overlapping windows.
 
     snr_pass_rate is the fraction of channels with SNR > snr_threshold (SNR_PASS, the same
-    line the per-channel figures draw; SNR = mean/std, higher is better). Its denominator is
+    line the per-channel figures draw; higher is better). Its denominator is
     every channel, not every channel with a finite SNR: a flat or saturated channel has
     std 0 and no finite SNR at all, and letting it drop out of the denominator would mean a
     recording whose channels are dying reads as a recording whose channels are passing.
