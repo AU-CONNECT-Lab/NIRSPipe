@@ -703,7 +703,8 @@ def _process_run(
             "heart_rate": heart_rate,
             "heart_rate_outside": hr_note is not None,
             "resp": [resp_l_freq, resp_h_freq],
-            "motion_correction": motion_correction or "none",
+            # what ran, not what was asked for: a step that failed has no corrected side
+            "motion_correction": motion_correction if raw_motcorr is not None else "none",
             "scope": (section_note("raw.screened_long") if sqm_split
                       else section_note("raw.screened_every")),
         },
