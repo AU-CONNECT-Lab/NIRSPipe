@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.82.0] - 2026-10-30
+
 ### Removed
 - **Breaking**: `nirspipe-rate hyper --derivatives-dir`, which sent the members' channel decisions to a tree whose pages do not read them. They stay beside the members' raw reports
 
