@@ -15,13 +15,13 @@ from tests._synth import make_bids_dataset
 from tests.hyper._names import name
 
 
-def _record(sub_dir, stem, mode, stamp, **execution):
+def _record(sub_dir, stem, mode, stamp, post="", **execution):
     logs = sub_dir / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     lines = ["[execution]", f'run_timestamp = "{stamp}"']
     lines += [f"{key} = [ " + ", ".join(f'"{v}"' for v in values) + " ]"
               for key, values in execution.items()]
-    lines += ["[post]", f'mode = "{mode}"']
+    lines += ["[post]", f'mode = "{mode}"', post]
     (logs / f"{stem}.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -62,6 +62,17 @@ def test_raw_qc_rebuilding_an_analysis_tree_s_index_keeps_its_mode(tmp_path, mon
                         lambda *a, **k: seen.append(k.get("mode")) or real(*a, **k))
     qc_cli.main([str(bids), str(out), "participant", *SCREENING, "--skip-bids-validation"])
     assert seen == ["rest"]
+
+
+def test_a_recorded_roi_map_that_moved_costs_the_index_its_grouping_alone(tmp_path):
+    bids = make_bids_dataset(tmp_path, subjects=("01", "02"), tasks=("rest",), duration=60.0)
+    out = tmp_path / "out"
+    gone = (tmp_path / "gone" / "rois.json").as_posix()
+    _record(out / "sub-01", "sub-01", "rest", "2026-10-01T10:00:00",
+            post=f'roi_mapping = "{gone}"')
+    qc_cli.main([str(bids), str(out), "participant", *SCREENING, "--skip-bids-validation"])
+    for sub in ("sub-01", "sub-02"):
+        assert (out / sub / f"{sub}_desc-index_report.html").exists()
 
 
 def test_a_rebuilt_dyad_index_names_the_members_its_tables_hold(tmp_path):

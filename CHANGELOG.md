@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - A raw QC rerun whose correction or conversion failed reported the previous run's stage files as its own, in the record, the page and the dyad page
 - When raw QC's motion correction failed, its condition pages still printed the uncorrected correlation as the corrected one
 - A recording numbered `run-00` lost its run from the run label, so raw QC wrote no page for it
+- `nirspipe-qc participant` stopped the whole batch when a tree's run record named an ROI map that had since moved
 
 ## [0.81.0] - 2026-10-30
 

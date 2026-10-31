@@ -193,8 +193,7 @@ def cmd_participant(
         try:
             index = subject_index.write_subject_index(
                 subject, sub_dir, " ".join(sys.argv), mode=post.get("mode"),
-                roi_map=(_app_options.load_roi_mapping(Path(post["roi_mapping"]))
-                         if post.get("roi_mapping") else None))
+                roi_map=_recorded_roi_map(post.get("roi_mapping")))
             if index:
                 print(f"  -> {index}")
         except Exception:
@@ -230,6 +229,18 @@ def cmd_participant(
         print(f"  {len(failed)} subject(s) produced nothing: {', '.join(failed)}",
               file=sys.stderr)
         raise SystemExit(1)
+
+
+def _recorded_roi_map(path: "str | None") -> "dict | None":
+    """The ROI map a recorded run used, or None once it has moved: an index only loses its grouping."""
+    if not path:
+        return None
+    try:
+        return _app_options.load_roi_mapping(Path(path))
+    except SystemExit:
+        logger.warning("the run record's ROI map %s cannot be read, so the subject index is "
+                       "not grouped by ROI", path)
+        return None
 
 
 def _member_stages(output_dir: Path, record_path: Path) -> dict:
