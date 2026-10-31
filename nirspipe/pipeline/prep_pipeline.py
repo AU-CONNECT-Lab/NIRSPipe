@@ -401,6 +401,9 @@ def run_prep(
                                  entities={**entities_base, "desc": desc}, suffix="nirs",
                                  extension=".snirf", session=ses)
 
+    # set once screening has rejected every channel, a mark mark_bads cannot put in info
+    every_rejected = False
+
     def _save(raw_step: mne.io.Raw, desc: str, extra_provenance: dict | None = None,
               extra_parameters: dict | None = None) -> Path:
         lin = lineage_of(raw_step)
@@ -408,6 +411,7 @@ def run_prep(
             raise StageError(f"_save({desc!r}) got an object stamped {stage_of(raw_step)!r}")
         path = _stage_path(desc)
         write_snirf(raw_step, path)
+        bads = list(raw_step.ch_names) if every_rejected else list(raw_step.info["bads"])
         write_sidecar_json(path, {
             **nirs_required_fields(raw_step, source_metadata or {}),
             "pipeline_version": __version__,
@@ -415,9 +419,9 @@ def run_prep(
             "Sources": rec.sources_of(raw_step),
             # the settings this step used; the run record holds the whole configuration
             "parameters": extra_parameters or {},
-            "data": data_state(raw_step),
+            "data": {**data_state(raw_step), "n_bad": len(bads)},
             # read back by read_snirf: SNIRF itself cannot carry the marks
-            "bad_channels": list(raw_step.info["bads"]),
+            "bad_channels": bads,
             "excluded_spans": excluded_spans(raw_step, input_spans),
             **(extra_provenance or {}),
         })
@@ -465,6 +469,7 @@ def run_prep(
             f"all {len(bad_chs)} are marked bad."
         )
     mark_bads(raw_od, bad_chs)
+    every_rejected = set(raw_od.ch_names) <= set(bad_chs)
     n_bad, n_total = len(bad_chs), len(sci_scores)
     logger.info(
         "sub-%s | bad channels: %d/%d%s",

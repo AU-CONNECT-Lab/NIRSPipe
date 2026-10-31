@@ -157,3 +157,13 @@ def test_the_aux_table_is_written_when_the_conversion_fails(tmp_path, monkeypatc
              source_path=source)
     (table,) = out.rglob("*_desc-aux_timeseries.tsv.gz")
     assert "ACC_X" in read_aux_table(table).columns
+
+
+def test_every_channel_failing_is_said_by_every_stage_after_screening(tmp_path):
+    _run(synth_raw("01", "rest"), tmp_path, lenient=True, sci_threshold=1.0, min_good_frac=1.0)
+    for desc in ("sci", "motcorrected", "preproc"):
+        (path,) = tmp_path.rglob(f"*_desc-{desc}_nirs.snirf")
+        sidecar = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        names = read_snirf(path).ch_names
+        assert sorted(sidecar["bad_channels"]) == sorted(names), desc
+        assert sidecar["data"]["n_bad"] == len(names), desc
