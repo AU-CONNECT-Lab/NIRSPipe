@@ -84,7 +84,7 @@ ISC_TESTS = ("signed", "magnitude")
 
 
 def magnitude_against_unwhitened_phase(isc_test, null_kind, isc_whiten_s) -> bool:
-    """|r| ranked against the phase null on correlations that were not whitened, whose p runs small."""
+    """``|r|`` ranked against the phase null on correlations that were not whitened, whose p runs small."""
     return isc_test == "magnitude" and null_kind == "phase" and not isc_whiten_s
 
 

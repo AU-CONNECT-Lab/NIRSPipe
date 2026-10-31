@@ -69,9 +69,9 @@ def _tint(hex_colour: str, white: float) -> str:
 
 def nuisance_correlation_figure(frame: pd.DataFrame, max_series: int = MAX_SERIES
                                 ) -> "go.Figure | None":
-    """Left the correlations among the series, right each one's |r| with each global signal, as fMRIPrep draws them.
+    """Left the correlations among the series, right each one's ``|r|`` with each global signal, as fMRIPrep draws them.
 
-    The series kept are those with the largest |r| with either global signal, the global
+    The series kept are those with the largest ``|r|`` with either global signal, the global
     signals among them, up to ``max_series``. The heatmap keeps them in ``frame``'s order,
     one family beside the next; the bars run strongest first. None without a global signal
     and one series.

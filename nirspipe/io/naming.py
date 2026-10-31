@@ -3,7 +3,7 @@
 The table is ``nirspipe/data/nirspipe_bids_config.json``: the entities this package adds
 to the ones pybids already knows, and the path patterns each kind of output follows.
 
-Two functions, and they are inverses:
+Two functions, and they are inverses::
 
     derivative_path(out, "relmat", ".tsv", group="G1", task="rest", statistic="wtc")
         -> out/group-G1/nirs/group-G1_task-rest_stat-wtc_relmat.tsv
@@ -198,9 +198,11 @@ def channel_decisions_path(output_dir, subject: str, task: "str | None" = None,
                            session: "str | None" = None, rater: "str | None" = None):
     """Where the raw QC page keeps a run's per-channel keep/drop decisions.
 
-    ``(out, "01", task="rest")`` -> ``out/sub-01/nirs/sub-01_task-rest_desc-rawdecision_qc.json``
-    ``(out, "01", task="rest", rater="qy")``
-        -> ``out/sub-01/nirs/sub-01_task-rest_rater-qy_desc-rawdecision_qc.json``
+    ::
+
+        (out, "01", task="rest") -> out/sub-01/nirs/sub-01_task-rest_desc-rawdecision_qc.json
+        (out, "01", task="rest", rater="qy")
+            -> out/sub-01/nirs/sub-01_task-rest_rater-qy_desc-rawdecision_qc.json
 
     One function for the run's rating server and the dyad's, which write the same file.
     """

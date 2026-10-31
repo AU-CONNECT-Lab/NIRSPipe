@@ -116,9 +116,11 @@ def verdict_rows(trees: list[Path], rater: "str | None" = None) -> list[dict]:
 def span_rows(trees: list[Path], rater: "str | None" = None) -> tuple[list[dict], bool]:
     """One ``--bad-spans`` row per marked stretch, and whether any span file was found.
 
-    ``{"sub-01_task-rest_run-01": [[12.0, 15.5]]}`` in ``sub-01_task-rest_desc-rawspans_qc.json``
-        -> ``{"participant_id": "sub-01", "session": "", "task": "rest", "acq": "", "run": "01",
-              "rater": "", "onset": 12.0, "duration": 3.5}``
+    ::
+
+        {"sub-01_task-rest_run-01": [[12.0, 15.5]]} in sub-01_task-rest_desc-rawspans_qc.json
+            -> {"participant_id": "sub-01", "session": "", "task": "rest", "acq": "", "run": "01",
+                "rater": "", "onset": 12.0, "duration": 3.5}
     """
     rows, found = [], False
     for path in _files(trees, ("*_desc-rawspans_qc.json",), rater):

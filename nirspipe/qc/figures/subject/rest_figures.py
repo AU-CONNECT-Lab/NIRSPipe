@@ -229,7 +229,7 @@ def rest_channel_panel(
     rather than a correlation.
 
     The matrices are drawn whole, diagonal blank, on a scale symmetric about 0 that reaches
-    the largest |r| any of them holds, so a run whose correlations are all positive still
+    the largest ``|r|`` any of them holds, so a run whose correlations are all positive still
     spans the red half.
 
     **The rows share one channel order and one set of blocks**, so a channel is in the same
@@ -348,7 +348,7 @@ def fc_roi_matrix_figure(
 
     ``fc_roi`` is {chromophore: ROI x ROI frame}, as :func:`compute_fc_roi` returns it. The
     channel matrices' rule in :func:`rest_channel_panel`: symmetric about 0, out to the
-    largest |r| either panel holds. A handful of ROIs means every label fits, so
+    largest ``|r|`` either panel holds. A handful of ROIs means every label fits, so
     unlike those this one labels and prints every cell. The diagonal is blanked: an ROI's
     correlation with itself is 1 by construction and says nothing. An ROI with no value is
     left off both axes (:func:`kept_axes`).
