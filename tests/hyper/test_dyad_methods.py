@@ -83,3 +83,19 @@ def test_an_unreadable_chain_is_named_rather_than_guessed(tree, tmp_path):
                           {"nirspipe": "9.9"}, notes, LABEL)["plain"]
     assert "desc-errts files" in plain and "Beer-Lambert" not in plain
     assert notes and "could not be read" in notes[0]
+
+
+def test_the_wavelet_sentence_states_the_recorded_grid(tree):
+    paths, group = tree
+    sidecar = group / f"{LABEL}_stat-wtc_relmat.json"
+    record = json.loads(sidecar.read_text())
+    record["parameters"].update(wtc_w0=6.0, wtc_dj=1 / 12, wtc_scale_smooth_dj0=0.6)
+    sidecar.write_text(json.dumps(record))
+    plain = _plain(paths, group, "errts", {"aligned": True})
+    assert "complex Morlet wavelet with a nondimensional frequency of 6, at 12 scales per octave" in plain
+    assert "across scales by a boxcar 0.6 octaves wide" in plain
+
+
+def test_no_grid_record_makes_no_wavelet_claim(tree):
+    plain = _plain(*tree, "errts", {"aligned": True})
+    assert "Morlet" not in plain and "wavelet transform coherence" in plain

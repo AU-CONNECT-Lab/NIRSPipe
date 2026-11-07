@@ -418,6 +418,17 @@ def _condition_route(params: dict[str, Any]) -> str:
             f"with up to {_num(round(float(pad), 1))} s of recording on either side and averaged "
             "over the condition's span only.")
 
+def _wavelet_phrase(params: dict[str, Any]) -> str:
+    """The mother wavelet, its scale grid and the smoothing the coherence takes, as recorded."""
+    w0, dj, dj0 = (params.get(k) for k in ("wtc_w0", "wtc_dj", "wtc_scale_smooth_dj0"))
+    if None in (w0, dj, dj0):
+        return ""
+    return (f" The transform used a complex Morlet wavelet with a nondimensional frequency of "
+            f"{_num(w0)}, at {_num(round(1 / float(dj)))} scales per octave, and the "
+            "cross-spectrum and each member's power were smoothed before their ratio was "
+            "taken: in time by a Gaussian as wide as the wavelet at each scale, and across "
+            f"scales by a boxcar {_num(dj0)} octaves wide.")
+
 def _monte_carlo(params: dict[str, Any]) -> str:
     """pycwt's red-noise level, as --wtc-significance drew it, or nothing."""
     if not params.get("wtc_mc_count"):
@@ -447,6 +458,7 @@ def _wtc_slots(params: dict[str, Any]) -> dict[str, str]:
         "band_fmin": _num(params.get("band_fmin", wtc_lo)),
         "band_fmax": _num(params.get("band_fmax", wtc_hi)),
         "coi": ", excluding the cone of influence" if params.get("mask_coi") else "",
+        "wavelet": _wavelet_phrase(params),
         "whiten": (" Before the transform, each long channel was prewhitened with an "
                    f"autoregressive model of order {params.get('wtc_whiten_order')} "
                    f"({_num(whiten_s)} s)"

@@ -56,8 +56,11 @@ class WTCResult:
     excluded: dict = field(default_factory=dict)
 
 
-# Morlet (w0 = 6) Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
-_FLAMBDA = 4 * np.pi / (6 + np.sqrt(2 + 6 ** 2))
+# The Morlet's nondimensional frequency; reported in every WTC sidecar.
+WTC_W0 = 6.0
+
+# Morlet Fourier factor: period = _FLAMBDA * scale, so frequency = 1 / period.
+_FLAMBDA = 4 * np.pi / (WTC_W0 + np.sqrt(2 + WTC_W0 ** 2))
 
 # Sub-octaves per octave, pycwt's default. Fixed because _SCALE_MARGIN is sized for it;
 # reported in every WTC sidecar.
@@ -135,7 +138,7 @@ def _morlet():
 
     class _Morlet(pycwt.Morlet):
         def __init__(self):
-            super().__init__()
+            super().__init__(f0=WTC_W0)
             self.name = "Morlet-dj0"
             # set by _wavelet_grid so the transform and its smoothing share one length; left
             # None when pycwt drives, where it is read off the scales instead
@@ -192,14 +195,15 @@ def wtc_grid_params(raws: dict) -> dict:
     """The wavelet grid the maps sit on, for a sidecar: fixed, but reportable.
 
     wtc_grid_params(raws_at_10_Hz)
-      -> {"wtc_dj": 0.0833, "wtc_time_step_s": 1.0, "wtc_scale_smooth_dj0": 0.6}
+      -> {"wtc_w0": 6.0, "wtc_dj": 0.0833, "wtc_time_step_s": 1.0,
+          "wtc_scale_smooth_dj0": 0.6}
 
-    None is configurable, and all three change what a band mean is an average over, so a
+    None is configurable, and all of them change what a band mean is an average over, so a
     reader comparing two studies' coherences needs them on the file. Read off the
     recordings rather than passed in, so they cannot disagree with what ran.
     """
     sfreq = _shared_sfreq(raws)
-    return {"wtc_dj": round(WTC_DJ, 6),
+    return {"wtc_w0": WTC_W0, "wtc_dj": round(WTC_DJ, 6),
             "wtc_time_step_s": round(_decim_step(sfreq) / sfreq, 6),
             "wtc_scale_smooth_dj0": _SCALE_SMOOTH_DJ0}
 

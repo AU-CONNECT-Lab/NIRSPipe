@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - A GLM condition whose events last 0 s is fitted as an instantaneous response whose beta is its peak, where it was refused; `--stim-dur 0` is accepted
+- The dyad Methods name the Morlet's nondimensional frequency, its scales per octave and the coherence's smoothing in time and across scales, read from each WTC sidecar
 
 ### Fixed
 - Recordings whose time stamps read a hair off a round rate cut windows one sample long, and some lost their quality record and its report sections

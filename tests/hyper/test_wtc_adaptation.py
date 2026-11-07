@@ -198,3 +198,16 @@ def test_the_stock_mother_would_give_a_different_coherence(short_pair):
 
     assert np.nanmean(stock) < np.nanmean(ours)
     assert np.nanmax(np.abs(ours - stock)) > 0.01
+
+
+def test_the_recorded_w0_is_the_mother_the_transform_uses():
+    import mne
+
+    from nirspipe.pipeline.hyper.wtc import _FLAMBDA, _morlet, wtc_grid_params
+
+    mother = _morlet()
+    info = mne.create_info(["S1_D1 hbo"], 10.0, ch_types=["hbo"])
+    raw = mne.io.RawArray(np.zeros((1, 100)), info, verbose=False)
+    assert mother.f0 == 6
+    assert mother.flambda() == pytest.approx(_FLAMBDA)
+    assert wtc_grid_params({"a": raw, "b": raw})["wtc_w0"] == 6
