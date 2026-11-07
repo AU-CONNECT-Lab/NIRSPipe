@@ -306,7 +306,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
     """One dyad of `nirspipe-hyper`: align, null, report, run record. ``s`` is the run's settings."""
     from nirspipe.cli.run_record import write_group_run_record
     from nirspipe.pipeline.hyper.wtc_null import run_wtc_null
-    from nirspipe.qc.common.windows import condition_windows, split_windows
+    from nirspipe.qc.common.windows import condition_margins, condition_windows, split_windows
     from nirspipe.qc.hyper.hyper_report import build_hyper_post_report
 
     aligned_raws, offsets, group_sqm = _load_aligned_group(
@@ -337,10 +337,13 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
             print(f"     [info] {len(dropped)} condition(s) outside "
                   f"--tstart/--tend: {', '.join(dropped)}")
         cond_windows = inside
+    cond_margins = None
     if s.wtc_window_s and cond_windows:
         # equal-length windows replace the conditions as the unit of analysis; the null
         # resolves the same grid off the same reference
-        cond_windows, _ = split_windows(cond_windows, s.wtc_window_s)
+        conditions = cond_windows
+        cond_windows, sources = split_windows(cond_windows, s.wtc_window_s)
+        cond_margins = condition_margins(conditions, cond_windows, sources)
         if not cond_windows:
             print(f"     [warn] --wtc-window-s {s.wtc_window_s}: no condition is long "
                   "enough for one window, so there is nothing per condition to report",
@@ -400,7 +403,9 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_channel_cross=s.wtc_channel_cross,
         wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window_s,
         wtc_cond_pad_s=s.cond_pad,
+        wtc_cond_cone=s.wtc_cond_cone,
         cond_windows=cond_windows,
+        cond_margins=cond_margins,
         wtc_limit_scales=s.wtc_limit_scales,
         wtc_save_maps=s.wtc_save_maps,
         wtc_mask_coi=s.wtc_mask_coi,
@@ -457,7 +462,7 @@ def cmd_run(
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
     wtc_by_condition: bool, wtc_chroma: "list[str]", wtc_window_s: "float | None",
-    wtc_cond_transform: bool, wtc_cond_pad_s: "float | None",
+    wtc_cond_transform: bool, wtc_cond_pad_s: "float | None", wtc_cond_cone: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
     bads_scope: str, isc_threshold: "float | None", isc_whiten_s: float,
@@ -992,6 +997,11 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "off), as rows of stat-wtc_relmat.tsv with a condition column. A "
                           "trigger without a duration runs to the next; windows shorter than "
                           "one cycle of --wtc-fmin are skipped.")
+    run.add_argument("--wtc-cond-cone", action=argparse.BooleanOptionalAction, default=True,
+                     help="Leave out each condition's own cone of influence at its start and "
+                          "end, where the coherence carries the neighbouring condition (default "
+                          "on). A window keeps its condition's edges. --no-wtc-cond-cone keeps "
+                          "those cells.")
     run.add_argument("--wtc-cond-transform", action="store_true",
                      help="Transform each condition on its own instead of reading it out of "
                           "the whole-run transform, over a cut padded by --wtc-cond-pad-s. "

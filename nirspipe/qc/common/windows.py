@@ -208,3 +208,27 @@ def split_windows(
     logger.info("equal-length windows: %d of %.1fs from %d condition(s)",
                 len(out), length_s, len({s[0] for s in sources.values()}))
     return out, sources
+
+
+def condition_margins(
+    conditions: "list[tuple[str, float, float]]",
+    windows: "list[tuple[str, float, float]]",
+    sources: "dict[str, tuple[str, float]]",
+) -> "dict[str, tuple[float, float]]":
+    """Seconds from each window back to its condition's start and on to its condition's end.
+
+    ::
+
+      conditions [("task", 200.0, 500.0)], windows of 100 s
+        -> {"task-w1": (0.0, 200.0), "task-w2": (100.0, 100.0), "task-w3": (200.0, 0.0)}
+
+    Relative rather than on a clock, so a null that cuts each window out of a stand-in
+    places the condition's edges where the real run has them. A window that is a condition
+    itself, absent from ``sources``, is ``(0.0, 0.0)``.
+    """
+    spans = {label: (float(a), float(b)) for label, a, b in conditions}
+    out = {}
+    for label, tstart, tstop in windows:
+        c0, c1 = spans.get(sources.get(label, (label, 0.0))[0], (tstart, tstop))
+        out[label] = (float(tstart) - c0, c1 - float(tstop))
+    return out

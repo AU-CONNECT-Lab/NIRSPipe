@@ -7,6 +7,8 @@
                        Backed by pycwt.
   window_result        Cuts a finished map to a stretch of it, which is not the same number
                        as transforming that stretch on its own.
+  condition_cone       Marks a condition's own edges as cone, where its cells carry the
+                       neighbouring condition.
   wtc_band_mean        Collapses a map to one value per channel pair, the form a group
                        analysis wants.
   wtc_phase_by_scale   The same collapse kept per scale, for the phase.
@@ -721,7 +723,8 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
     This is how a condition is read out of a whole-record transform, and it is not the same
     number as transforming that condition on its own: a cut window has two edges of its own,
     so more of its band cells fall outside the cone. Windowing carries the whole record's
-    cone instead, which only reaches into the ends of the recording.
+    cone instead, which only reaches into the ends of the recording. :func:`condition_cone`
+    adds the condition's own.
 
     ``sig`` is carried through unchanged: a Monte Carlo level is per frequency and constant
     over time, so a window of it is itself.
@@ -753,6 +756,44 @@ def window_result(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
     }
     return WTCResult(pairs=pairs, freqs=result.freqs, times=times[keep],
                      excluded={key: mask[keep] for key, mask in result.excluded.items()})
+
+
+def condition_cone(result: WTCResult, tstart: float, tstop: float) -> WTCResult:
+    r"""The same WTC with the cone a cut at ``[tstart, tstop]`` would have laid over its own.
+
+    ::
+
+      a window of 300 s read out of a whole-run transform + (3580, 3880)
+        -> at 0.02 Hz, the first and last 68 s of it marked as cone
+
+    A cell of a whole-run transform is built from the signal on either side of it, so near a
+    condition's start or end it carries the neighbouring condition. Those cells are marked
+    as the cone of the condition itself, where :math:`d(t)` is the distance to the nearer of
+    ``tstart`` and ``tstop``:
+
+    .. math::
+
+        \mathrm{coi}(t) = \min\left(\mathrm{coi}_\mathrm{run}(t),\;
+        \frac{\lambda}{\sqrt{2}}\, d(t)\right)
+
+    with :math:`\lambda` the Morlet's Fourier factor, the reach pycwt gives the cone of a
+    series of its own. ``tstart`` and ``tstop`` are the condition's, which for a window cut
+    out of a condition are the condition's edges rather than the window's.
+    """
+    times = np.asarray(result.times, dtype=float)
+    if not times.size:
+        return result
+    edge = np.clip(np.minimum(times - float(tstart), float(tstop) - times), 0.0, None)
+    cut_coi = _FLAMBDA / np.sqrt(2) * edge
+    pairs = {
+        pair_key: {label: (None if data is None else
+                           {**data, "coi": np.minimum(np.asarray(data["coi"], dtype=float),
+                                                      cut_coi)})
+                   for label, data in labels.items()}
+        for pair_key, labels in result.pairs.items()
+    }
+    return WTCResult(pairs=pairs, freqs=result.freqs, times=result.times,
+                     excluded=result.excluded)
 
 
 def kept_columns(result: WTCResult, pair_key, n_times: int) -> np.ndarray:

@@ -1119,6 +1119,8 @@ def build_hyper_post_report(
     wtc_by_condition: bool = False,
     wtc_window_s: "float | None" = None,
     wtc_cond_pad_s: "float | None" = None,
+    wtc_cond_cone: bool = True,
+    cond_margins: "dict | None" = None,
     wtc_limit_scales: bool = True,
     wtc_save_maps: bool = False,
     wtc_mask_coi: bool = True,
@@ -1191,6 +1193,10 @@ def build_hyper_post_report(
     :func:`_transform_condition`: with adequate padding the two give the same number, so this
     exists for a caller who wants per-condition transforms, and 0 gives the unpadded cut.
     Costs one transform per condition per chromophore.
+
+    ``wtc_cond_cone`` adds each condition's own cone at its start and end, read off
+    ``cond_margins`` for windows cut out of a condition; see
+    :func:`~nirspipe.pipeline.hyper.wtc.condition_cone`.
 
     ``wtc_mask_coi`` leaves the cone of influence out of each band mean. On by default; the
     share outside the cone is reported either way as ``n_valid_frac``.
@@ -1568,7 +1574,7 @@ def build_hyper_post_report(
                 wtc_significance=wtc_significance, wtc_seed=wtc_seed,
                 wtc_mc_count=wtc_mc_count, wtc_channel_cross=wtc_channel_cross,
                 wtc_by_condition=wtc_by_condition, wtc_window_s=wtc_window_s,
-                wtc_cond_pad_s=wtc_cond_pad_s,
+                wtc_cond_pad_s=wtc_cond_pad_s, wtc_cond_cone=wtc_cond_cone,
                 wtc_limit_scales=wtc_limit_scales, wtc_save_maps=wtc_save_maps,
                 wtc_mask_coi=wtc_mask_coi, wtc_roi_min_channels=wtc_roi_min_channels,
                 wtc_chroma=wtc_chroma, wtc_whiten_s=wtc_whiten_s, isc_whiten_s=isc_whiten_s,
@@ -1581,7 +1587,8 @@ def build_hyper_post_report(
                               if any(e.role for e in group) else None),
             ),
             subject_ids=subject_ids, pairings=pairings, align_info=align_info,
-            cond_windows=cond_windows, errors=errors, notes=notes, scope=scope,
+            cond_windows=cond_windows, cond_margins=cond_margins, errors=errors,
+            notes=notes, scope=scope,
             session=session,
         )
     if wtc_nulls:

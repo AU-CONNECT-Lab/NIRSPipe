@@ -64,6 +64,7 @@ HYPER = {
     "wtc_window_s": Case({"--wtc-window-s": ["40"]}, BOTH),
     "wtc_by_condition": Case({"--no-by-condition": []}, BOTH),
     "wtc_cond_transform": Case(COND_TRANSFORM, ("wtc",)),
+    "wtc_cond_cone": Case({"--no-wtc-cond-cone": []}, ("wtc",)),
     "wtc_cond_pad_s": Case({"--wtc-cond-pad-s": ["10"]}, ("wtc",), COND_TRANSFORM),
     "wtc_limit_scales": Case({"--no-wtc-limit-scales": []}),
     "wtc_save_maps": Case({"--wtc-save-maps": []}),

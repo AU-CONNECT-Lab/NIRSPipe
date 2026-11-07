@@ -53,6 +53,7 @@ class HyperPostConfig:
     wtc_by_condition: bool = False
     wtc_window_s: "float | None" = None
     wtc_cond_pad_s: float | None = None
+    wtc_cond_cone: bool = True
     wtc_limit_scales: bool = True
     wtc_save_maps: bool = False
     wtc_mask_coi: bool = True
@@ -216,6 +217,7 @@ def run_hyper_post(
     pairings: list,
     align_info: dict,
     cond_windows: "list[tuple[str, float, float]] | None" = None,
+    cond_margins: "dict[str, tuple[float, float]] | None" = None,
     errors: list | None = None,
     notes: list | None = None,
     scope: str = "",
@@ -227,6 +229,10 @@ def run_hyper_post(
     caller passes the same list to the phase-scrambled null, and the two tables are only
     subtractable row by row if they describe the same windows.
 
+    ``cond_margins`` is, per window cut out of a condition, the seconds from it back to its
+    condition's start and on to its end, so ``wtc_cond_cone`` lays the cone at the
+    condition's edges and not the window's. A window absent from it is a condition itself.
+
     ``errors`` and ``notes`` are the report's own lists, so a guard that fails here reaches
     the footer of the page this result is drawn on and not only the run log.
     """
@@ -236,6 +242,7 @@ def run_hyper_post(
     from nirspipe.pipeline.hyper.wtc import (
         WTCResult,
         compute_wtc,
+        condition_cone,
         window_result,
         wtc_band_mean,
         wtc_grid_params,
@@ -355,6 +362,7 @@ def run_hyper_post(
             wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, chroma=list(chroma),
             # None: conditions windowed out of the whole-run transform
             wtc_cond_pad_s=None if cond_pad_s is None else round(cond_pad_s, 3),
+            wtc_cond_cone=bool(config.wtc_cond_cone),
             # the Monte Carlo level, only when one was drawn
             **({"wtc_mc_count": int(wtc_mc_count), "wtc_seed": wtc_seed}
                if wtc_significance else {}),
@@ -716,6 +724,9 @@ def run_hyper_post(
                     cond_wtc = window_result(wtc_result, tstart, tstop)
                 else:
                     cond_wtc = _transform_condition(tstart, tstop, ch_type)
+                if config.wtc_cond_cone:
+                    lead, tail = (cond_margins or {}).get(label, (0.0, 0.0))
+                    cond_wtc = condition_cone(cond_wtc, tstart - lead, tstop + tail)
                 _apply_pair_level(cond_wtc, label, tstart, tstop, ch_type)
                 cond_chan = wtc_band_mean(cond_wtc, band_fmin, band_fmax,
                                           mask_coi=wtc_mask_coi)
