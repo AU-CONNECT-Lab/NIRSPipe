@@ -19,6 +19,9 @@ logger = get_logger("io.snirf")
 
 # the spec's other time unit; mne scales the time vector by it but not the stims
 _TO_SECONDS = {"ms": 1e-3}
+# a rate within _RATE_RTOL of a 9-digit decimal is that decimal plus float noise
+_RATE_DIGITS = 9
+_RATE_RTOL = 1e-12
 
 
 def _zero_first_time(raw: mne.io.Raw) -> mne.io.Raw:
@@ -151,20 +154,38 @@ def _stims_on_data_axis(handle, t0: float, scale: float) -> mne.Annotations:
     return mne.Annotations(onset, duration, description)
 
 
+def clean_rate(times, scale: float = 1.0) -> "float | None":
+    """The short decimal mne's rate estimate from this time vector stands for, when the two differ by float noise only."""
+    times = np.ravel(np.asarray(times, dtype=float))
+    if len(times) < 2:
+        return None
+    # mne's own estimate: (onset, period) for two values, else the mean of 1/period
+    periods = times[1:2] if len(times) == 2 else np.diff(times)
+    rate = float(np.mean((1.0 / scale) / periods))
+    clean = float(f"{rate:.{_RATE_DIGITS}g}")
+    if clean != rate and abs(clean - rate) <= _RATE_RTOL * rate:
+        return clean
+    return None
+
+
 def read_raw_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     """mne's SNIRF reader, with the events kept on the data when the file's clock does not start at 0.
 
     mne starts the data at 0 but keeps the stims on the file's clock, in its unit, and drops
-    those that then fall past the end.
+    those that then fall past the end. Its rate estimate is also freed of float noise, so a
+    recording and the stages written from it read at the same rate (see :func:`clean_rate`).
     """
     import h5py
 
-    raw = mne.io.read_raw_snirf(str(path), **kwargs)
     with h5py.File(str(path), "r") as handle:
         t0, scale = time_frame(handle)
-        if t0 == 0 and scale == 1:
-            return raw
-        stims = _stims_on_data_axis(handle, t0, scale)
+        rate = clean_rate(handle["nirs/data1/time"][()], scale)
+        stims = None if t0 == 0 and scale == 1 else _stims_on_data_axis(handle, t0, scale)
+    if rate is not None:
+        kwargs.setdefault("sfreq", rate)
+    raw = mne.io.read_raw_snirf(str(path), **kwargs)
+    if stims is None:
+        return raw
     raw.set_annotations(stims, emit_warning=False)
     if t0:
         logger.warning("%s: the file's clock starts at %g s, so its events were moved back by "

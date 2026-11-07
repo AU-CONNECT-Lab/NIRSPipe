@@ -224,3 +224,47 @@ def test_conversion_to_bids_writes_the_events_on_the_data(raw, tmp_path):
     events = read_table(next((tmp_path / "bids").rglob("*_events.tsv")))
     assert events["onset"].tolist() == [10.0, 55.0]
     assert events["trial_type"].tolist() == ["a", "b"]
+
+
+# ---- a time vector whose rate mne reads with float noise ----
+
+def test_a_rate_off_by_float_noise_reads_as_its_decimal(raw, tmp_path):
+    path = tmp_path / "sub-01_task-tapping_nirs.snirf"
+    write_snirf(raw, path)
+
+    assert mne.io.read_raw_snirf(path, verbose="error").info["sfreq"] != 10.0
+    assert read_raw_snirf(path, verbose="error").info["sfreq"] == 10.0
+
+
+def test_a_stage_written_from_it_reads_at_the_same_rate(raw, tmp_path):
+    path = tmp_path / "sub-01_task-tapping_nirs.snirf"
+    write_snirf(raw, path)
+    od = mne.preprocessing.nirs.optical_density(read_raw_snirf(path, preload=True, verbose="error"))
+    stage = tmp_path / "sub-01_task-tapping_desc-od_nirs.snirf"
+    write_snirf(od, stage)
+
+    assert read_snirf(stage).info["sfreq"] == 10.0
+
+
+def test_a_rate_with_more_digits_is_left_as_mne_reads_it(raw, tmp_path):
+    path = tmp_path / "sub-01_task-tapping_nirs.snirf"
+    write_snirf(raw, path)
+    with h5py.File(path, "r+") as f:
+        f["nirs/data1/time"][...] = np.arange(raw.n_times) * 0.192
+
+    assert read_raw_snirf(path, verbose="error").info["sfreq"] == mne.io.read_raw_snirf(
+        path, verbose="error").info["sfreq"]
+
+
+def test_input_and_stage_cut_the_same_windows(raw, tmp_path):
+    from nirspipe.qc.metrics.windowed import compute_windowed_cv, compute_windowed_sci
+
+    path = tmp_path / "sub-01_task-tapping_nirs.snirf"
+    write_snirf(raw, path)
+    intensity = read_raw_snirf(path, preload=True, verbose="error")
+    stage = tmp_path / "sub-01_task-tapping_desc-od_nirs.snirf"
+    write_snirf(mne.preprocessing.nirs.optical_density(intensity), stage)
+
+    # 600 frames at 10 Hz in 10 s windows of 100 frames
+    assert compute_windowed_cv(intensity, 10.0)[0].shape[1] == 6
+    assert compute_windowed_sci(read_snirf(stage), 0.7, 2.0, 10.0)[0].shape[1] == 6

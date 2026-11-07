@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Recordings whose time stamps read a hair off a round rate cut windows one sample long, and some lost their quality record and its report sections
+
 ## [0.82.0] - 2026-10-30
 
 ### Removed
