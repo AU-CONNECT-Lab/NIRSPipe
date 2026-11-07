@@ -1451,8 +1451,8 @@ def _sidecar_of(nirs_dir: Path, sqm_label: "str | None", subject: str, suffix: s
         return {}
 
 
-def _drift_auto_notes(nirs_dir: Path, sqm_label: "str | None", subject: str) -> list[str]:
-    """What the log warned about a --drift-high-pass auto cutoff: a deciding condition seen twice, any seen once."""
+def _design_notes(nirs_dir: Path, sqm_label: "str | None", subject: str) -> list[str]:
+    """What the log said about the design: a --drift-high-pass auto cutoff's thin evidence, and 0 s conditions."""
     glm = _sidecar_of(nirs_dir, sqm_label, subject, "desc-glm_nirsmap").get("parameters") or {}
     auto = glm.get("drift_high_pass_auto") or {}
     notes = []
@@ -1463,6 +1463,9 @@ def _drift_auto_notes(nirs_dir: Path, sqm_label: "str | None", subject: str) -> 
     if auto.get("seen_once"):
         notes.append(section_note("caveat.drift_auto_once",
                                   conditions=", ".join(auto["seen_once"])))
+    if glm.get("instant_conditions"):
+        notes.append(section_note("caveat.instant_conditions",
+                                  conditions=", ".join(glm["instant_conditions"])))
     return notes
 
 
@@ -2400,7 +2403,7 @@ def build_subject_report(
     excluded_vars     = _section_excluded(record, nirs_dir, sqm_label, subject)
     for line in excluded_vars["excluded_skipped"]:
         _note(notes, subject, line)
-    for line in _drift_auto_notes(nirs_dir, sqm_label, subject):
+    for line in _design_notes(nirs_dir, sqm_label, subject):
         _note(notes, subject, line)
     sqm_vars          = _section_sqm(sci_scores, bad_channels, subject, errors,
                                      out_dir=nirs_dir,

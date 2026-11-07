@@ -564,6 +564,20 @@ def test_a_dyad_reads_coherence_then_correlation_then_regions(tmp_path):
     ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3], "event_table": True},
      "with a finite impulse response (FIR) basis (boxcars of each event's own duration at "
      "delays of 0 to 3 scans)"),
+    # 0 s events have no boxcar to name
+    ({"hrf_model": "spm", "stim_dur": 0.0, "conditions": ["a", "b"],
+      "instant_conditions": ["a", "b"]},
+     "as instantaneous events convolved with the SPM canonical haemodynamic response function "
+     "(each regressor scaled to a peak of 1)"),
+    ({"hrf_model": "fir", "fir_delays": [0, 1, 2, 3], "stim_dur": 0.0, "conditions": ["a"],
+      "instant_conditions": ["a"]},
+     "with a finite impulse response (FIR) basis at delays of 0 to 3 scans from each event's "
+     "onset (each column scaled to a peak of 1)"),
+    ({"hrf_model": "spm", "event_table": True, "conditions": ["a", "b"],
+      "instant_conditions": ["b"]},
+     "as boxcars of each event's own duration convolved with the SPM canonical haemodynamic "
+     "response function (b, whose events last 0 s, as instantaneous responses scaled to a "
+     "peak of 1)"),
 ])
 def test_the_glm_sentence_says_how_the_task_regressors_were_built(params, expected):
     assert template_slots("glm", params)["conditions"] == expected

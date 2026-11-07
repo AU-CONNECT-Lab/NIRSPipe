@@ -232,20 +232,39 @@ def _hrf_phrase(value: Any) -> str:
     value = str(value or "").strip().lower()
     return _HRF_PHRASE.get(value, f"the '{value}' haemodynamic response model")
 
+def _fir_span(params: dict[str, Any]) -> str:
+    delays = [int(d) for d in params.get("fir_delays") or []]
+    whole = delays == list(range(delays[0], delays[-1] + 1))
+    return (f"{delays[0]} to {delays[-1]}" if whole and len(delays) > 1
+            else _series([str(d) for d in delays]))
+
+
 def _conditions_phrase(params: dict[str, Any]) -> str:
-    """How the task regressors were built: boxcars and the HRF, or an FIR basis.
+    """How the task regressors were built: boxcars and the HRF, an FIR basis, or instants.
 
     {"hrf_model": "glover", "stim_dur": 20.0}
       -> "as 20 s boxcars convolved with the Glover haemodynamic response function"
     """
     hrf = str(params.get("hrf_model") or "").strip().lower()
+    instant = [str(c) for c in params.get("instant_conditions") or []]
+    if instant and set(instant) >= set(params.get("conditions") or instant):
+        if hrf == "fir" and params.get("fir_delays"):
+            return (f"with {_hrf_phrase(hrf)} at delays of {_fir_span(params)} scans from each "
+                    "event's onset (each column scaled to a peak of 1)")
+        return (f"as instantaneous events convolved with {_hrf_phrase(hrf)} (each regressor "
+                "scaled to a peak of 1)")
+    phrase = _duration_phrase(hrf, params)
+    if instant:
+        phrase += (f" ({_series(instant)}, whose events last 0 s, as instantaneous responses "
+                   "scaled to a peak of 1)")
+    return phrase
+
+
+def _duration_phrase(hrf: str, params: dict[str, Any]) -> str:
     if hrf == "fir":
-        delays = [int(d) for d in params.get("fir_delays") or []]
-        if not delays:
+        if not params.get("fir_delays"):
             return f"with {_hrf_phrase(hrf)}"
-        whole = delays == list(range(delays[0], delays[-1] + 1))
-        span = (f"{delays[0]} to {delays[-1]}" if whole and len(delays) > 1
-                else _series([str(d) for d in delays]))
+        span = _fir_span(params)
         # each delay's column is the event's boxcar shifted, so the duration is part of it
         if params.get("stim_dur") is not None:
             return (f"with {_hrf_phrase(hrf)} ({_num(params['stim_dur'])} s boxcars at "

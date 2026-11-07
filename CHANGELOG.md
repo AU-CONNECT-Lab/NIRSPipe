@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- A GLM condition whose events last 0 s is fitted as an instantaneous response whose beta is its peak, where it was refused; `--stim-dur 0` is accepted
+
 ### Fixed
 - Recordings whose time stamps read a hair off a round rate cut windows one sample long, and some lost their quality record and its report sections
 

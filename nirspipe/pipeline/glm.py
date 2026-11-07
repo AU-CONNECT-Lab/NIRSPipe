@@ -1,5 +1,6 @@
 from __future__ import annotations
 import gc
+import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -292,18 +293,42 @@ def _aux_regressors(
     return out
 
 
-IMPULSE_REASON = ("a zero-duration event is modelled as a single sample, so its beta scales with "
-                  "the sampling rate and is not in concentration units. Give each event its real "
-                  "duration (a button press can take 0.1 s).")
+def instant_conditions(events: pd.DataFrame) -> list[str]:
+    """Conditions whose every event lasts 0 s, which the design fits as an instantaneous response.
+
+    Stops on a negative duration, and on a condition mixing 0 s events with longer ones,
+    whose one column could not say what its beta measures.
+    """
+    names = events["trial_type"].astype(str)
+    negative = sorted(set(names[events["duration"] < 0]))
+    if negative:
+        raise ValueError(f"event(s) of {', '.join(negative)} have a negative duration")
+    zero = (events["duration"] == 0).groupby(names)
+    mixed = sorted(c for c, z in zero if z.any() and not z.all())
+    if mixed:
+        raise ValueError(f"{', '.join(mixed)} mix 0 s events with longer ones; give each "
+                         "condition one kind (nirspipe-prep edit-markers or --events-path)")
+    return sorted(c for c, z in zero if z.all())
 
 
-def refuse_impulse_events(events: pd.DataFrame) -> None:
-    """Stop on any task event lasting 0 s or less, naming its conditions."""
-    zero = events[events["duration"] <= 0]
-    if zero.empty:
-        return
-    names = ", ".join(sorted({str(t) for t in zero["trial_type"]}))
-    raise ValueError(f"{len(zero)} event(s) of {names} last 0 s: {IMPULSE_REASON}")
+def _nilearn_design(frame_times: np.ndarray, events: pd.DataFrame, **kwargs) -> pd.DataFrame:
+    from nilearn.glm.first_level import make_first_level_design_matrix
+
+    # its warning on 0 s events: build_design_matrix rescales them and the log says so
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="The following conditions contain events "
+                                                  "with null duration")
+        return make_first_level_design_matrix(frame_times, events, **kwargs)
+
+
+def _instant_peak(frame_times: np.ndarray, hrf_model: HRFModel, fir_delays: tuple[int, ...],
+                  min_onset: float, oversampling: int) -> float:
+    """The peak of the first column one isolated 0 s event gives on this time axis."""
+    # one event, so overlapping events of a condition still add up rather than set the scale
+    one = pd.DataFrame({"trial_type": ["one"], "onset": [frame_times[0]], "duration": [0.0]})
+    dm = _nilearn_design(frame_times, one, hrf_model=hrf_model, drift_model=None,
+                         fir_delays=fir_delays, min_onset=min_onset, oversampling=oversampling)
+    return float(dm[condition_columns(dm, "one")[0]].abs().max())
 
 
 def _annotation_events(raw: mne.io.Raw, stim_dur: float | None) -> pd.DataFrame:
@@ -346,12 +371,11 @@ def build_design_matrix(
                    annotations, skipping the BAD_/EDGE_ spans
     """
 
-    from nilearn.glm.first_level import make_first_level_design_matrix
-
     frame_times = raw.times
 
     if events is None:
         events = _annotation_events(raw, stim_dur)
+    instant = instant_conditions(events)
 
     # nilearn reads these four and warns about every other column a BIDS events.tsv carries
     events = events[[c for c in ("trial_type", "onset", "duration", "modulation")
@@ -364,7 +388,7 @@ def build_design_matrix(
                        int(duplicated.sum()))
         events = events[~duplicated]
 
-    return make_first_level_design_matrix(
+    dm = _nilearn_design(
         frame_times,
         events,
         hrf_model=hrf_model,
@@ -377,6 +401,14 @@ def build_design_matrix(
         min_onset=min_onset,
         oversampling=oversampling,
     )
+    if instant:
+        # nilearn's kernel sums to 1, so a 0 s event's column scales with the rate; at a peak
+        # of 1 its beta is the response's peak in concentration units
+        peak = _instant_peak(frame_times, hrf_model, fir_delays, min_onset, oversampling)
+        for condition in instant if peak > 0 else []:
+            columns = condition_columns(dm, condition)
+            dm[columns] = dm[columns] / peak
+    return dm
 
 
 def fit_glm(
@@ -577,7 +609,7 @@ def run_glm_pipeline(
         events = events[events["trial_type"].map(is_marker)]
     if events is None:
         events = _annotation_events(haemo, stim_dur)
-    refuse_impulse_events(events)
+    instant = instant_conditions(events)
     # recorded so a reader of the residual can tell a task GLM from a confound regression
     conditions = sorted({str(t) for t in events["trial_type"]})
     # and, where there is a task model, what shaped its regressors
@@ -589,6 +621,10 @@ def run_glm_pipeline(
             design_params["event_table"] = True
         if hrf_model == "fir":
             design_params["fir_delays"] = [int(d) for d in (fir_delays or (0,))]
+    if instant:
+        design_params["instant_conditions"] = instant
+        logger.info("%s last 0 s: fitted as an instantaneous response peaking at 1, so each "
+                    "beta is the response's peak", ", ".join(instant))
 
     # short-channel confounds come from `haemo` itself, so they have been through whatever
     # filter it has and cannot re-inject variance the filter removed. External confounds

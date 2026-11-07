@@ -17,7 +17,7 @@ from nirspipe.interface.hints import band_note
 from nirspipe.io.tables import read_table
 from nirspipe.pipeline.post_pipeline import PostConfig, resolve_drift_high_pass, run_post
 from nirspipe.qc.boilerplate.vocabulary import _drift_phrase
-from nirspipe.qc.subject.report import _drift_auto_notes
+from nirspipe.qc.subject.report import _design_notes
 
 from tests._fingerprint import CLI_ARGS, DURATION, EVENT_DURATION, make_fingerprint_dataset
 
@@ -228,5 +228,5 @@ def test_the_rerun_is_auto_again_and_lands_on_the_same_cutoff(runs):
 def test_the_report_notes_the_conditions_seen_once(runs):
     first, _, _ = runs
     sidecar = next(first.rglob("*desc-glm_nirsmap.json"))
-    notes = _drift_auto_notes(sidecar.parent, sidecar.name.split("_desc-")[0], "01")
+    notes = _design_notes(sidecar.parent, sidecar.name.split("_desc-")[0], "01")
     assert notes == ["Seen once, so no interval for --drift-high-pass auto to read: ca, cb."]

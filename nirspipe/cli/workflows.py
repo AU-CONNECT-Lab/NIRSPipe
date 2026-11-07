@@ -188,9 +188,8 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     if args.get("mode") != "glm":
         return
     stim_dur = args.get("stim_dur")
-    if stim_dur is not None and stim_dur <= 0:
-        from nirspipe.pipeline.glm import IMPULSE_REASON
-        raise SystemExit(f"[error] --stim-dur {stim_dur:g}: {IMPULSE_REASON}")
+    if stim_dur is not None and stim_dur < 0:
+        raise SystemExit(f"[error] --stim-dur {stim_dur:g}: a duration cannot be negative.")
     if stim_dur is not None or args.get("events_path"):
         return
     raise SystemExit(

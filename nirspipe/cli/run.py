@@ -232,7 +232,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", type=float,
-                     help="Stimulus duration (s) for annotation-based events, above 0. Mutually "
+                     help="Stimulus duration (s) for annotation-based events. 0 fits each event "
+                          "as an instantaneous response whose beta is its peak. Mutually "
                           "exclusive with --events-path.")
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")

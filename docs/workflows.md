@@ -213,7 +213,7 @@ Cleans the data for analyses done outside the package. It applies the bandpass (
 
 A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual (`desc-errts`), the design matrix (`design.tsv`), the fit per channel (`desc-glm_nirsmap.tsv`), each condition's block average (`desc-blockavg_timeseries.tsv`) and a check of how well the noise model whitened the residual (`desc-whitening_nirsmap.tsv`).
 
-**Events.** The design comes from the SNIRF annotations, each given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path`. Use one or the other. Every event needs a duration above 0; give each event its real length (a button press can be 0.1 s).
+**Events.** The design comes from the SNIRF annotations, each given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path`. Use one or the other. Give each event its real length (a button press can be 0.1 s). A condition whose events all last 0 s is fitted as an instantaneous response scaled to peak at 1, so its beta is the height of the response's peak, whatever the sampling rate. A condition cannot mix 0 s events with longer ones.
 
 **Design.** `--hrf-model` sets the response shape (`spm` by default). `--drift-model` sets the slow-drift model (`cosine` by default), with its cutoff set by `--drift-high-pass`. The cutoff has no default, because it depends on your design: give it in Hz, or `auto` ([Choosing the drift cutoff](#choosing-the-drift-cutoff)).
 

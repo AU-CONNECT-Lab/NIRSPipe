@@ -100,6 +100,9 @@ NOTES = {
         "out with --events-path or nirspipe-prep edit-markers, or type a cutoff.",
     "caveat.drift_auto_once":
         "Seen once, so no interval for --drift-high-pass auto to read: {conditions}.",
+    "caveat.instant_conditions":
+        "Events lasting 0 s, fitted as an instantaneous response scaled to a peak of 1, so "
+        "each beta is the height of the response's peak: {conditions}.",
 
     # ---- Dyads ----
     "caveat.never_aligned":
