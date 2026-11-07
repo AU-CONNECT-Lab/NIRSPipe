@@ -408,15 +408,19 @@ def _condition_route(params: dict[str, Any]) -> str:
     """How the per-condition values were taken, or nothing for a run without conditions."""
     if not params.get("condition_windows_s"):
         return ""
+    cone = (" Cells inside the cone of influence of a condition's own start and end, where "
+            "the coherence carries the neighbouring condition, were left out of its values."
+            if params.get("wtc_cond_cone") and params.get("mask_coi") else "")
     pad = params.get("wtc_cond_pad_s")
     if pad is None:
-        return " Per-condition values averaged the same maps over each condition's span only."
+        return (" Per-condition values averaged the same maps over each condition's span only."
+                + cone)
     if pad == 0:
         return (" Per-condition values came from a separate transform of each condition, cut "
-                "at its own boundaries.")
+                "at its own boundaries." + cone)
     return (" Per-condition values came from a separate transform of each condition, cut "
             f"with up to {_num(round(float(pad), 1))} s of recording on either side and averaged "
-            "over the condition's span only.")
+            "over the condition's span only." + cone)
 
 def _wavelet_phrase(params: dict[str, Any]) -> str:
     """The mother wavelet, its scale grid and the smoothing the coherence takes, as recorded."""

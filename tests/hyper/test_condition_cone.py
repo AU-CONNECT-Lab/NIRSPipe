@@ -7,6 +7,7 @@ from nirspipe.pipeline.hyper.wtc import (WTCResult, _pair_from_prepared, _prepar
                                          _wavelet_grid, condition_cone, window_result,
                                          wtc_band_mean)
 from nirspipe.qc.common.windows import condition_margins, split_windows
+from nirspipe.qc.boilerplate.vocabulary import _condition_route
 
 
 def _result(times, coi, n_freqs=3):
@@ -96,6 +97,14 @@ def test_the_coupled_condition_beside_an_uncoupled_one_regains_its_level():
 
 def _band_mean(result):
     return float(wtc_band_mean(result, 0.02, 0.10)["coherence"].iloc[0])
+
+
+@pytest.mark.parametrize("cone, mask, said", [(True, True, True), (False, True, False),
+                                              (True, False, False)])
+def test_the_methods_name_the_condition_cone_only_where_it_was_applied(cone, mask, said):
+    text = _condition_route({"condition_windows_s": {"task": [0, 300]}, "wtc_cond_cone": cone,
+                             "mask_coi": mask})
+    assert ("own start and end" in text) is said
 
 
 def _map(result):
