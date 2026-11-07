@@ -37,6 +37,19 @@ def test_a_condition_transformed_on_its_own_is_drawn_on_the_aligned_clock(dyad_v
     assert seen
 
 
+# ---- --no-wtc-cond-cone ----
+
+def test_without_the_condition_cone_each_roi_map_opens_every_condition_on_its_block(dyad_variants):
+    g = dyad_variants["nocondcone"]
+    paths = _roi_maps(g)
+    assert paths
+    for path in paths:
+        views = js_var(path.read_text(encoding="utf-8"), "__COND_VIEWS__")
+        assert set(views) == {"ca", "cb"}
+        for name, view in views.items():
+            assert view["x"] == pytest.approx(list(g.truth.block(name)), abs=0.1), name
+
+
 # ---- the phase-scrambled null, crossed and not ----
 
 def test_a_crossed_phase_null_reaches_every_whole_run_channel_map(dyad_variants):

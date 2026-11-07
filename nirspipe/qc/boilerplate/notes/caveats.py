@@ -146,7 +146,8 @@ NOTES = {
         "arrows: right = in phase, left = antiphase, up = {lead} leads by a quarter cycle, "
         "drawn only where coherence clears {clears}",
     "figure.coi_band":
-        "washed-out band: the cone of influence, where the record's edges reach",
+        "washed-out band: the cone of influence, where an edge of the record or of the "
+        "condition reaches",
     "figure.excluded_band":
         "washed-out columns: BAD_ time of either member, left out of every average",
 

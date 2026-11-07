@@ -263,6 +263,7 @@ def dyad_variants(groups):
         out[name] = Groups(groups.root, groups.bids, groups.deriv, tree, groups.truth, qc=tree)
 
     _post("condtransform", "--wtc-cond-transform")
+    _post("nocondcone", "--no-wtc-cond-cone")
     _post("phasenull", "--wtc-phase-null", "10", "--wtc-seed", "0")
     _post("phasenull_homologous", "--wtc-phase-null", "10", "--wtc-seed", "0",
           "--no-wtc-phase-null-cross")

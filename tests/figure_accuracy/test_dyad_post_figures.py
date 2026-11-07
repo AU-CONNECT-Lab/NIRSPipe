@@ -164,14 +164,15 @@ def test_each_roi_map_is_the_mean_of_its_channel_pairs_maps(groups, group):
 
 
 @pytest.mark.parametrize("group", GROUPS)
-def test_each_roi_map_opens_every_condition_on_its_block(groups, group):
+def test_each_condition_draws_its_own_roi_map_on_its_block(groups, group):
+    """With its own cone a condition is not a slice of the run's map, so it has a file of its own."""
     for a, b in _pairings(groups, group):
-        path = groups.figure(group, f"{_slug(groups, group, (a, b))}chromo-hbo_label-L_agg-roi_"
-                                    "desc-wtcmap_nirs.html")
-        views = js_var(path.read_text(encoding="utf-8"), "__COND_VIEWS__")
-        assert set(views) == {"ca", "cb"}
-        for name, view in views.items():
-            assert view["x"] == pytest.approx(list(groups.truth.block(name)), abs=0.1), name
+        for cond in ("ca", "cb"):
+            path = groups.figure(group, f"{_slug(groups, group, (a, b))}chromo-hbo_label-L_agg-roi_"
+                                        f"cond-{cond}_desc-wtcmap_nirs.html")
+            times = np.asarray(one_figure(path)["data"][0]["x"], float)
+            t0, t1 = groups.truth.block(cond)
+            assert times.min() >= t0 - 1 and times.max() <= t1 + 1, path.name
 
 
 # ---- the channel and ROI matrices ----

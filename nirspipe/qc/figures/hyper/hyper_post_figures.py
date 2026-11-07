@@ -356,10 +356,10 @@ def wtc_condition_views(fig, spans, wtc_data: dict, freqs: np.ndarray, times: np
 
     What the file then serves is the run at its own URL and each condition at
     ``…/map.html#video``, which is the arrangement the subject report's time-axis figures
-    use. A condition is read out of the whole-run transform and never cut from it, so its
-    map *is* a slice of this one, down to the cone. A run transformed per condition is a
-    different figure and gets its own file; the caller decides, since it is the one that
-    knows which route ran.
+    use. A condition read out of the whole-run transform and never cut from it is a slice
+    of this one, down to the cone. A run transformed per condition, or one that marks each
+    condition's own cone, is a different figure and gets its own file. The caller decides,
+    since it is the one that knows which route ran.
 
     Only the arrows are rebuilt. They sit on a grid spread over whatever span they were
     drawn for, so a narrowed view of the run's set would show a handful of columns; each

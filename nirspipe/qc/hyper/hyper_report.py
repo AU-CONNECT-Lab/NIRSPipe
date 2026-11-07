@@ -1626,8 +1626,9 @@ def build_hyper_post_report(
     # One ROI map file per pairing, carrying the run and a view per window, rather than one
     # file per window. Only where a window really is a slice of the run's own transform:
     # --wtc-cond-transform gives each window a figure of its own and each then writes its
-    # own file. See `wtc_condition_views`.
-    roi_view_spans = (cond_windows if (cond_windows and cond_pad_s is None) else None)
+    # own file, and so does a window with its condition's own cone. See `wtc_condition_views`.
+    roi_view_spans = (cond_windows if (cond_windows and cond_pad_s is None
+                                       and not wtc_cond_cone) else None)
 
     # ---- the ISC panels, drawn from the matrices the run computed ----
     # {label or None: {chromophore: href}}, one entry per page below, and the same keys over
