@@ -379,6 +379,8 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         device=device,
         reuse=s.redraw,
         shared=s.phase_null_shared,
+        cond_cone=s.wtc_cond_cone,
+        margins=cond_margins,
     ) if s.wtc_phase_null else None
 
     report_path = build_hyper_post_report(

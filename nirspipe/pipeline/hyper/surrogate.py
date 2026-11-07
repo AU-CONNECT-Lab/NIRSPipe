@@ -31,6 +31,7 @@ from nirspipe.pipeline.hyper.wtc import (
     _ChannelWavelet,
     _outside_coi,
     _wtc_over_pairs,
+    condition_cone,
     kept_columns,
     wtc_band_mean,
     window_result,
@@ -309,6 +310,8 @@ def _collect_draw(
     windows: "list[tuple[str, float, float]] | None",
     analysis_window: "tuple[float, float] | None",
     roi: "tuple[dict, dict, int] | None" = None,
+    cond_cone: bool = False,
+    margins: "dict[str, tuple[float, float]] | None" = None,
 ) -> None:
     """Fold one surrogate WTC run into the draws the null is summarised from.
 
@@ -316,6 +319,7 @@ def _collect_draw(
     it is subtracted from. ``roi`` is ``(roi_hists, roi_map, min_channels)``: the surrogate's
     channel maps are averaged into ROI maps exactly as the real ones are, and counted into
     histograms of their own, so an ROI map's level is its own null and not its channels'.
+    ``cond_cone`` and ``margins`` lay each window's condition cone as the real table did.
     """
     # --tstart/--tend, read off this draw's transform the way the real table reads it off
     # its own
@@ -333,8 +337,11 @@ def _collect_draw(
     # windowed off this draw's own transform, never recomputed on the cut: the real table
     # is windowed the same way
     for label, tstart, tstop in (windows or []):
-        part = wtc_band_mean(window_result(result, tstart, tstop),
-                             band_fmin, band_fmax, mask_coi=mask_coi)
+        part = window_result(result, tstart, tstop)
+        if cond_cone:
+            lead, tail = (margins or {}).get(label, (0.0, 0.0))
+            part = condition_cone(part, tstart - lead, tstop + tail)
+        part = wtc_band_mean(part, band_fmin, band_fmax, mask_coi=mask_coi)
         part.insert(0, "condition", label)
         cond_frames.append(part)
 
@@ -358,6 +365,8 @@ def compute_wtc_phase_null(
     roi_min_channels: int = ROI_MIN_CHANNELS,
     device=None,
     shared: bool = False,
+    cond_cone: bool = False,
+    margins: "dict[str, tuple[float, float]] | None" = None,
 ) -> "NullDraws":
     """Phase-scrambled band means: WTC against a phase-scrambled partner, averaged over ``n_iter``.
 
@@ -394,7 +403,8 @@ def compute_wtc_phase_null(
     per-condition null with a ``condition`` column. Each window is read off the same
     whole-run transform the whole-run table is averaged from, by :func:`window_result`, so
     one pass of ``n_iter`` transforms produces both tables and the null is windowed exactly
-    the way the real table it is compared against was.
+    the way the real table it is compared against was, down to each condition's own cone
+    when ``cond_cone`` is on (``margins`` as in the real run).
 
     ``analysis_window`` is ``--tstart``/``--tend``, and does the same job for the whole-run
     row that ``windows`` does for the per-condition ones: the real whole-run table describes
@@ -452,7 +462,8 @@ def compute_wtc_phase_null(
         _collect_draw(result, frames, cond_frames, hists,
                       band_fmin=band_fmin, band_fmax=band_fmax,
                       mask_coi=mask_coi, windows=windows,
-                      analysis_window=analysis_window, roi=roi)
+                      analysis_window=analysis_window, roi=roi,
+                      cond_cone=cond_cone, margins=margins)
         cond_draw_ids.extend([f"iter-{i:04d}"] * (len(cond_frames) - before))
         if (i + 1) % 10 == 0:
             logger.info("phase-scrambled WTC: %d/%d iterations", i + 1, n_iter)

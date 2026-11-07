@@ -1599,7 +1599,8 @@ def build_hyper_post_report(
             seed=wtc_seed, cross=wtc_phase_null_cross, mask_coi=wtc_mask_coi,
             windows=cond_windows, analysis_window=analysis_window, roi_map=roi_map,
             roi_map_name=roi_map_name, roi_min_channels=wtc_roi_min_channels,
-            whiten_s=wtc_whiten_s, session=session, shared=phase_null_shared)
+            whiten_s=wtc_whiten_s, session=session, shared=phase_null_shared,
+            cond_cone=wtc_cond_cone)
     # Everything above is the analysis and has already written its tables; everything below
     # draws them.
     if no_report:

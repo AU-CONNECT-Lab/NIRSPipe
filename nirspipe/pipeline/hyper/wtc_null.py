@@ -55,6 +55,8 @@ def run_wtc_null(
     device=None,
     reuse: bool = False,
     shared: bool = False,
+    cond_cone: bool = False,
+    margins: "dict[str, tuple[float, float]] | None" = None,
 ) -> dict:
     """Draw the null for one group and write the level its phase arrows are read against.
 
@@ -73,6 +75,7 @@ def run_wtc_null(
 
     ``windows`` is what ``--wtc-by-condition`` read its conditions out of, and carries through
     to the second table. Both tables come out of this one pass of ``n_iter`` transforms.
+    ``cond_cone`` and ``margins`` mark each window's condition cone as the real run did.
 
     ``roi_map`` adds the ROI maps' own level, :func:`roi_level_path`, from the same pass.
 
@@ -136,7 +139,8 @@ def run_wtc_null(
             fmin=wtc_fmin, fmax=wtc_fmax, seed=seed, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            roi_map=roi_map, roi_min_channels=roi_min_channels, device=device, shared=shared)
+            roi_map=roi_map, roi_min_channels=roi_min_channels, device=device, shared=shared,
+            cond_cone=cond_cone, margins=margins)
         nulls[ch_type] = null
         if getattr(null, "levels", None):
             path = save_null_levels(null.levels, _level_path(ch_type))
@@ -194,6 +198,7 @@ def write_wtc_null(
     whiten_s: float = 0.0,
     session: "str | None" = None,
     shared: bool = False,
+    cond_cone: bool = False,
 ) -> Path:
     """Rank what :func:`run_wtc_null` drew against the real band means, and write it.
 
@@ -294,7 +299,7 @@ def write_wtc_null(
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=n_iter, cross=cross, seed=seed,
-        phase_null_shared=bool(shared),
+        phase_null_shared=bool(shared), wtc_cond_cone=bool(cond_cone),
         **({"wtc_whiten_s": float(whiten_s)} if whiten_s else {}),
         **({"roi_min_channels": int(roi_min_channels)} if roi_map else {}),
         chroma=list(chroma), **wtc_grid_params(aligned_raws),

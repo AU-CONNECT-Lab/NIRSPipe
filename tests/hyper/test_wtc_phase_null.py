@@ -311,6 +311,32 @@ def test_the_windowed_null_carries_the_same_columns_as_the_whole_run_one(stub_nu
     assert list(by_cond.columns) == ["condition"] + list(whole.columns)
 
 
+@pytest.mark.parametrize("margins", [(0.0, 0.0), (0.0, 100.0), (100.0, 0.0)])
+def test_a_window_keeps_the_cells_the_real_table_keeps_under_the_condition_cone(
+        monkeypatch, margins):
+    """A map rising over time, so which edge the cone sits on moves the mean."""
+    from nirspipe.pipeline.hyper import surrogate
+    from nirspipe.pipeline.hyper.wtc import condition_cone, window_result
+
+    wtc = np.tile(TIMES / TIMES[-1], (len(FREQS), 1))
+    result = _result({"S1_D1": {"wtc": wtc, "coi": np.full(len(TIMES), 1e6),
+                                "phase": np.zeros_like(wtc), "sig": None}})
+    monkeypatch.setattr(surrogate, "_long_signals",
+                        lambda raw, ch_type, sep_bands: {"S1_D1": np.arange(8.0)})
+    monkeypatch.setattr(surrogate, "long_axis_over", lambda *a, **k: ["S1_D1"])
+    monkeypatch.setattr(surrogate, "_wtc_over_pairs", lambda *a, **k: result)
+    t0, t1 = float(TIMES[0]), float(TIMES[-1])
+    _, by_cond = surrogate.compute_wtc_phase_null(
+        {"s1": None, "s2": None}, 0.10, 0.30, n_iter=1, windows=[("w", t0, t1)],
+        cond_cone=True, margins={"w": margins}).summarise()
+    lead, tail = margins
+    real = wtc_band_mean(condition_cone(window_result(result, t0, t1), t0 - lead, t1 + tail),
+                         0.10, 0.30)["coherence"].iloc[0]
+    plain = wtc_band_mean(result, 0.10, 0.30)["coherence"].iloc[0]
+    assert by_cond["null_mean"].iloc[0] == pytest.approx(real)
+    assert bool(real == pytest.approx(plain)) is (margins == (0.0, 0.0))
+
+
 # ---- --tstart/--tend reaches the whole-run row too ----
 #
 # With `--tstart`/`--tend` the real whole-run table describes the window, so the null's
@@ -377,8 +403,10 @@ def test_the_writer_passes_the_window_down(monkeypatch, tmp_path):
     monkeypatch.setattr("nirspipe.pipeline.hyper.wtc_store.level_params", lambda raws, **k: {})
     wtc_null.run_wtc_null(
         group_id="G1", task="tap", aligned_raws={"s1": None, "s2": None},
-        output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0))
+        output_dir=tmp_path, n_iter=1, chroma=("hbo",), analysis_window=(60.0, 300.0),
+        cond_cone=True, margins={"w": (0.0, 100.0)})
     assert seen["analysis_window"] == (60.0, 300.0)
+    assert seen["cond_cone"] is True and seen["margins"] == {"w": (0.0, 100.0)}
 
 
 # ---- the ROI null ----
