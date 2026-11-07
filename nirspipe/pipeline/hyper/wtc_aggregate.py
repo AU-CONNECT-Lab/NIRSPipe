@@ -37,8 +37,8 @@ logger = get_logger("pipeline.wtc_aggregate")
 # them guards the null merges without touching the real tables.
 # n_iter is not here: it is a column of the table, not a property of one, so mixing it
 # leaves every row readable and separable. `_warn_mixed_iterations` says what it costs
-_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "null_kind", "pair_pool", "wtc_whiten_s",
-               "desc", "bads_scope", "roi_min_channels")
+_MUST_AGREE = ("band_fmin", "band_fmax", "mask_coi", "wtc_cond_cone", "null_kind", "pair_pool",
+               "wtc_whiten_s", "desc", "bads_scope", "roi_min_channels")
 # an unwhitened table carries no wtc_whiten_s, and that absence is an opinion: it was not
 # whitened, so it must not merge with one that was
 _ABSENT_MEANS = {"wtc_whiten_s": 0.0}

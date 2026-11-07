@@ -33,7 +33,7 @@ ROI = {"segmentation": "custom", "aggregation": "roi", "statistic": "wtc"}
 
 
 def _table(root, group_id, task, entities=None, band=(0.01, 0.1), mask_coi=True,
-           crossed=False, sidecar=True, chroma=None):
+           crossed=False, sidecar=True, chroma=None, cond_cone=True):
     """One dyad's band-mean table, laid out the way the WTC pass lays it out."""
     path = group_output_path(root, group_id, {"task": task, **(entities or WTC)},
                              "relmat", ".tsv")
@@ -55,7 +55,8 @@ def _table(root, group_id, task, entities=None, band=(0.01, 0.1), mask_coi=True,
 
     if sidecar:
         path.with_suffix(".json").write_text(json.dumps({"parameters": {
-            "band_fmin": band[0], "band_fmax": band[1], "mask_coi": mask_coi}}))
+            "band_fmin": band[0], "band_fmax": band[1], "mask_coi": mask_coi,
+            "wtc_cond_cone": cond_cone}}))
     return path
 
 
@@ -126,6 +127,7 @@ def test_a_second_run_does_not_swallow_its_own_output(tmp_path):
     ({"band": (0.01, 0.2)}, "band_fmax"),
     ({"band": (0.02, 0.1)}, "band_fmin"),
     ({"mask_coi": False},   "mask_coi"),
+    ({"cond_cone": False},  "wtc_cond_cone"),
 ])
 def test_a_disagreement_about_the_band_is_a_stop(tmp_path, odd_one_out, key):
     """Warning and merging anyway would put the mistake somewhere nothing can find it."""
