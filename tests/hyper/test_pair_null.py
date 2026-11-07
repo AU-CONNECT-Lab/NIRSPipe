@@ -220,6 +220,21 @@ def test_each_condition_gets_its_own_draw(stub):
     assert set(by_cond["n_iter"]) == {2}
 
 
+@pytest.mark.parametrize("margins", [(0.0, 0.0), (0.0, 100.0)])
+def test_a_draw_keeps_the_cells_the_real_table_keeps_under_the_condition_cone(stub, margins):
+    from nirspipe.pipeline.hyper.wtc import condition_cone, window_result, wtc_band_mean
+
+    null = _run(["sub-02G02"], cond_cone=True, margins={"early": margins})
+    real = WTCResult(pairs={TRUE: {"S1_D1": _map(0.5)}}, freqs=FREQS, times=TIMES)
+    lead, tail = margins
+    want = wtc_band_mean(condition_cone(window_result(real, 0.0, 39.0), -lead, 39.0 + tail),
+                         0.02, 0.30)["n_valid_frac"].iloc[0]
+    got = null.cond_draws[0].set_index("label").loc["S1_D1", "n_valid_frac"]
+    assert got == pytest.approx(want) and want < 1.0
+    plain = _run(["sub-02G02"]).cond_draws[0].set_index("label").loc["S1_D1", "n_valid_frac"]
+    assert plain == pytest.approx(1.0)
+
+
 def test_no_whole_run_draw_is_collected(stub):
     """There is no stretch standing in for the whole session, so that half stays empty."""
     null = _run(["sub-02G02"], labels=("early", "late"))

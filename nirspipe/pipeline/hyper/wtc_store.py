@@ -195,8 +195,8 @@ def level_mismatch(path: Path, expected: dict, raws: dict) -> "str | None":
 
 
 # every key level_params can write, so a key the writer recorded and this run lacks counts
-_LEVEL_KEYS = {"wtc_fmin", "wtc_fmax", "mask_coi", "wtc_whiten_s", "excluded_spans_s",
-               "wtc_w0", "wtc_dj",
+_LEVEL_KEYS = {"wtc_fmin", "wtc_fmax", "mask_coi", "wtc_cond_cone", "wtc_whiten_s",
+               "excluded_spans_s", "wtc_w0", "wtc_dj",
                "wtc_time_step_s", "wtc_scale_smooth_dj0", "aligned", "align_step",
                "align_trigger", "align_offset_s", "aligned_duration_s"}
 

@@ -501,6 +501,8 @@ def compute_wtc_pair_null(
     analysis_window: "tuple[float, float] | None" = None,
     on_draw: "Callable[[str, dict], None] | None" = None,
     device=None,
+    cond_cone: bool = False,
+    margins: "dict[str, tuple[float, float]] | None" = None,
 ) -> "NullDraws":
     """Re-paired band means: WTC of one member against people they never interacted with.
 
@@ -525,6 +527,9 @@ def compute_wtc_pair_null(
 
     The pool is finite, unlike phase randomisation's, so the number of draws is a property of
     the cohort rather than a setting. That is what limits the resolution of ``percentile``.
+
+    ``cond_cone`` marks each condition's own cone on the draw as the real table marked it,
+    at the condition's edges ``margins`` places either side of a window.
 
     ``device`` is the card the transforms run on, None for the CPU.
     """
@@ -573,6 +578,10 @@ def compute_wtc_pair_null(
         # here: the transform used it, the band mean must not. There is no whole-run draw to
         # collect, the two recordings being alignable one condition at a time or not at all.
         result = window_result(result, *inner)
+        if cond_cone:
+            # before the histogram as well as the band mean, so the level counts the same cells
+            lead, tail = (margins or {}).get(label, (0.0, 0.0))
+            result = condition_cone(result, inner[0] - lead, inner[1] + tail)
         before = len(cond_frames)
         _collect_draw(result, [], cond_frames, cond_hists.setdefault(label, {}),
                       band_fmin=band_fmin, band_fmax=band_fmax,

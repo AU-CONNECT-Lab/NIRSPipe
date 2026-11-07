@@ -544,7 +544,8 @@ def run_hyper_post(
         if ch_type not in pair_levels:
             path = _level_path(ch_type, "pair")
             pair_levels[ch_type] = None
-            if _usable_level(path, f"{ch_type} condition arrows"):
+            if _usable_level(path, f"{ch_type} condition arrows",
+                             wtc_cond_cone=bool(config.wtc_cond_cone)):
                 side = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
                 pair_levels[ch_type] = (load_cond_null_levels(path),
                                         side["parameters"].get("condition_windows_s") or {})

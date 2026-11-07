@@ -101,7 +101,7 @@ def _pair_level(dyad, out, n, condition="talk"):
     path = save_cond_null_levels({condition: {(*SUBS, label): np.full(n, 2.0)
                                               for label in LABELS}},
                                  _level_file(out, "pair", condition="all"))
-    _stamp(path, dyad, condition_windows_s=_spans(dyad), n_iter=5)
+    _stamp(path, dyad, condition_windows_s=_spans(dyad), n_iter=5, wtc_cond_cone=True)
 
 
 def test_a_fitting_phase_level_thresholds_every_page(dyad, n_freqs, tmp_path):
@@ -173,9 +173,20 @@ def test_a_re_paired_level_for_another_span_is_not_used(dyad, n_freqs, tmp_path)
                                            for label in LABELS}},
                                  _level_file(tmp_path, "pair", condition="all"))
     spans = {k: [a + 5.0, b] for k, (a, b) in _spans(dyad).items()}
-    _stamp(path, dyad, condition_windows_s=spans, n_iter=5)
+    _stamp(path, dyad, condition_windows_s=spans, n_iter=5, wtc_cond_cone=True)
     _build(dyad, tmp_path)
     assert _phase_n(tmp_path, {"statistic": "wtc"}, "talk") > 0
+
+
+def test_a_re_paired_level_drawn_without_the_condition_cone_is_not_used(dyad, n_freqs,
+                                                                         tmp_path):
+    """Its histogram counted cells the run's own condition values leave out."""
+    path = save_cond_null_levels({"talk": {(*SUBS, label): np.full(n_freqs, 2.0)
+                                           for label in LABELS}},
+                                 _level_file(tmp_path, "pair", condition="all"))
+    _stamp(path, dyad, condition_windows_s=_spans(dyad), n_iter=5, wtc_cond_cone=False)
+    _build(dyad, tmp_path)
+    assert _cell(_page(tmp_path, "talk"), "Arrow threshold") != "the re-paired null"
 
 
 def test_the_chords_name_the_re_paired_null_where_it_drew_them(dyad, tmp_path):

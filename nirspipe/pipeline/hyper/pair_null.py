@@ -31,7 +31,7 @@ from nirspipe.io.tables import LABEL_DTYPES, measured_draws, split_whole_run, wr
 from nirspipe.pipeline.hyper.wtc_null import _for_chroma, _real_table
 from nirspipe.pipeline.hyper.whiten import whiten_raws
 from nirspipe.pipeline.hyper.wtc_store import level_params, save_cond_null_levels
-from nirspipe.qc.common.windows import condition_windows, split_windows
+from nirspipe.qc.common.windows import condition_margins, condition_windows, split_windows
 from nirspipe.qc.metrics._helpers import bands_from_record
 from nirspipe.utils.spans import bad_spans, frames_under, span_kind
 
@@ -211,8 +211,8 @@ def real_table_params(real_tsv: Path) -> dict:
 
     # `conditions` marks a table holding the whole run and the conditions as one
     missing = [k for k in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi",
-                           "channel_cross", "roi_min_channels", "desc", "bads_scope",
-                           "conditions")
+                           "wtc_cond_cone", "channel_cross", "roi_min_channels", "desc",
+                           "bads_scope", "conditions")
                if params.get(k) is None]
     # recorded as null is a bound switched off or every task pooled, so presence is the test
     missing += [k for k in ("sep_short_max_mm", "sep_long_min_mm", "sep_long_max_mm")
@@ -581,6 +581,7 @@ def run_pair_null(
     band_fmin, band_fmax = real_params["band_fmin"], real_params["band_fmax"]
     wtc_fmin, wtc_fmax = real_params["wtc_fmin"], real_params["wtc_fmax"]
     mask_coi = bool(real_params["mask_coi"])
+    cond_cone = bool(real_params["wtc_cond_cone"])
     window_s = real_params.get("analysis_window_s")
     analysis_window = tuple(window_s) if window_s else None
     # absent means the real table was never whitened
@@ -650,6 +651,8 @@ def run_pair_null(
     # table was written on a window grid. A draw cuts each side at its own marker, so for a
     # window it needs the condition it belongs to and how far into it the window starts
     window_sources: dict = {}
+    # where each window's condition begins and ends around it, for the condition cone
+    margins = None
     if real_params["conditions"]:
         windows = condition_windows(aligned_real[ids[0]], min_duration=1.0 / wtc_fmin)
         if analysis_window is not None:
@@ -657,8 +660,10 @@ def run_pair_null(
             windows = [w for w in windows if w[1] >= lo and w[2] <= hi]
         # taken off the sidecar rather than the command line, like the band and the mask
         if real_params.get("wtc_window_s"):
+            conditions = windows
             windows, window_sources = split_windows(
                 windows, float(real_params["wtc_window_s"]))
+            margins = condition_margins(conditions, windows, window_sources)
             logger.info("null on the real table's window grid: %d window(s) of %.1f s",
                         len(windows), float(real_params["wtc_window_s"]))
 
@@ -747,7 +752,8 @@ def run_pair_null(
             band_fmin, band_fmax, fmin=wtc_fmin, fmax=wtc_fmax, cross=cross,
             limit_scales=limit_scales, mask_coi=mask_coi, ch_type=ch_type,
             sep_bands=sep_bands, windows=windows, analysis_window=analysis_window,
-            on_draw=_isc_collector(ch_type, fixed_id, true_pair), device=device)
+            on_draw=_isc_collector(ch_type, fixed_id, true_pair), device=device,
+            cond_cone=cond_cone, margins=margins)
         partners.setdefault(true_pair, {}).update(dict.fromkeys(null.partners or []))
         # keyed by pairing within a condition, so the pairings' levels sit side by side
         for label, levels in (null.cond_levels or {}).items():
@@ -795,6 +801,7 @@ def run_pair_null(
     sources = paths_from(aligned_real.values())
     params = dict(
         band_fmin=band_fmin, band_fmax=band_fmax, mask_coi=mask_coi,
+        wtc_cond_cone=cond_cone,
         **({"analysis_window_s": [round(t, 3) for t in analysis_window]}
            if analysis_window is not None else {}),
         wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax, n_iter=len(used), cross=cross,
@@ -864,6 +871,7 @@ def run_pair_null(
         _hyper_sidecar(path, "hyper_wtc_bycondition_pairnull_level", sources,
                        **level_params(aligned_real, wtc_fmin=wtc_fmin, wtc_fmax=wtc_fmax,
                                       mask_coi=mask_coi, whiten_s=whiten_s),
+                       wtc_cond_cone=cond_cone,
                        condition_windows_s=params["condition_windows_s"],
                        n_iter=len(used), pair_partners=sorted(used))
 
@@ -921,7 +929,8 @@ def _write_isc_null(cond_frames, draw_frames, path_of, sources, params,
 
     group_keys = ["condition", "chromophore", "sub1", "sub2", "label", "label2"]
     isc_params = {k: v for k, v in params.items()
-                  if k not in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi")}
+                  if k not in ("band_fmin", "band_fmax", "wtc_fmin", "wtc_fmax", "mask_coi",
+                               "wtc_cond_cone")}
     isc_params.update(isc_whiten_s=isc_whiten_s, isc_max_lag_s=isc_max_lag_s,
                       isc_band_hz=list(isc_band) if isc_band else None)
 
