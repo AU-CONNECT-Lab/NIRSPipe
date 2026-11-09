@@ -47,6 +47,7 @@ def _roi_map_name(args: dict[str, Any]) -> str:
 
 
 def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
+    from nirspipe.pipeline.glm import stim_durations
     from nirspipe.pipeline.post_pipeline import SHORT_CHANNEL_AUTO, PostConfig
 
     # CLI takes priority over TOML
@@ -83,7 +84,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         filter_order=pick("filter_order", default=DEFAULT_FILTER_ORDER),
         censor_fill=pick("censor_fill", default=DEFAULT_CENSOR_FILL),
         resample_sfreq=pick("resample_sfreq"),
-        stim_dur=pick("stim_dur"),
+        stim_dur=stim_durations(pick("stim_dur")),
         hrf_model=pick("hrf_model"),
         noise_model=pick("noise_model", default="auto"),
         drift_model=pick("drift_model"),
@@ -185,16 +186,19 @@ def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
 
 def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     """Stop before any subject runs when a GLM has no way to set its event durations."""
+    from nirspipe.pipeline.glm import stim_durations
+
+    try:
+        stim_dur = stim_durations(args.get("stim_dur"))
+    except ValueError as exc:
+        raise SystemExit(f"[error] {exc}.") from None
     if args.get("mode") != "glm":
         return
-    stim_dur = args.get("stim_dur")
-    if stim_dur is not None and stim_dur < 0:
-        raise SystemExit(f"[error] --stim-dur {stim_dur:g}: a duration cannot be negative.")
     if stim_dur is not None or args.get("events_path"):
         return
     raise SystemExit(
-        "[error] --mode glm needs --stim-dur (one duration for every annotation) or "
-        "--events-path (a table of onsets and durations).")
+        "[error] --mode glm needs --stim-dur (one duration for every annotation, or one per "
+        "condition as NAME=SEC) or --events-path (a table of onsets and durations).")
 
 
 def _refuse_bad_contrast_file(args: dict[str, Any]) -> None:

@@ -231,10 +231,12 @@ def _build_parser() -> argparse.ArgumentParser:
                            f"is HbO + HbR of each channel; the stage files keep HbO and HbR.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
-    glm.add_argument("--stim-dur", type=float,
-                     help="Stimulus duration (s) for annotation-based events. 0 fits each event "
-                          "as an instantaneous response whose beta is its peak. Mutually "
-                          "exclusive with --events-path.")
+    glm.add_argument("--stim-dur", nargs="+", metavar="SEC|NAME=SEC",
+                     help="Stimulus duration (s) for annotation-based events: one number for "
+                          "every condition, or NAME=SEC per condition (a plain number then "
+                          "covers the rest), e.g. Tapping=20 Control=15. 0 fits an "
+                          "instantaneous response whose beta is its peak. Mutually exclusive "
+                          "with --events-path.")
     glm.add_argument("--hrf-model",   choices=_HRF_CHOICES,
                      help="HRF basis. 'spm + derivative' adds temporal derivative column.")
     glm.add_argument("--noise-model", type=_noise_model, metavar="MODEL",

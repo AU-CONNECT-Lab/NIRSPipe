@@ -260,6 +260,22 @@ def _conditions_phrase(params: dict[str, Any]) -> str:
     return phrase
 
 
+def _boxcars(params: dict[str, Any]) -> str:
+    """``{"Tap": 20, "Rest": 15}`` -> ``"boxcars of 20 s (Tap) and 15 s (Rest)"``; one length -> ``"20 s boxcars"``."""
+    stim_dur = params["stim_dur"]
+    if not isinstance(stim_dur, dict):
+        return f"{_num(stim_dur)} s boxcars"
+    instant = set(params.get("instant_conditions") or [])
+    by_length: dict[float, list[str]] = {}
+    for name, seconds in stim_dur.items():
+        if name not in instant:
+            by_length.setdefault(float(seconds), []).append(str(name))
+    if len(by_length) == 1:
+        return f"{_num(next(iter(by_length)))} s boxcars"
+    return "boxcars of " + _series([f"{_num(s)} s ({_series(sorted(names))})"
+                                    for s, names in sorted(by_length.items(), reverse=True)])
+
+
 def _duration_phrase(hrf: str, params: dict[str, Any]) -> str:
     if hrf == "fir":
         if not params.get("fir_delays"):
@@ -267,14 +283,13 @@ def _duration_phrase(hrf: str, params: dict[str, Any]) -> str:
         span = _fir_span(params)
         # each delay's column is the event's boxcar shifted, so the duration is part of it
         if params.get("stim_dur") is not None:
-            return (f"with {_hrf_phrase(hrf)} ({_num(params['stim_dur'])} s boxcars at "
-                    f"delays of {span} scans)")
+            return f"with {_hrf_phrase(hrf)} ({_boxcars(params)} at delays of {span} scans)"
         if params.get("event_table"):
             return (f"with {_hrf_phrase(hrf)} (boxcars of each event's own duration at "
                     f"delays of {span} scans)")
         return f"with {_hrf_phrase(hrf)} at delays of {span} scans"
     if params.get("stim_dur") is not None:
-        return f"as {_num(params['stim_dur'])} s boxcars convolved with {_hrf_phrase(hrf)}"
+        return f"as {_boxcars(params)} convolved with {_hrf_phrase(hrf)}"
     if params.get("event_table"):
         return f"as boxcars of each event's own duration convolved with {_hrf_phrase(hrf)}"
     return f"with {_hrf_phrase(hrf)}"

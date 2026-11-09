@@ -1,7 +1,9 @@
 """Write a per-subject TOML run record to output_dir/logs/."""
 
+import json
 import os
 import platform
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -47,10 +49,15 @@ def _toml_scalar(v: Any) -> str:
         return f'"{escaped}"'
 
 
+def _toml_key(k: Any) -> str:
+    # a condition name may hold spaces, and the --stim-dur map's catch-all is "*"
+    return str(k) if re.fullmatch(r"[A-Za-z0-9_-]+", str(k)) else json.dumps(str(k))
+
+
 def _toml_value(v: Any) -> str:
     # a JSON null has no TOML spelling, so a filter's null entry is left out
     if isinstance(v, dict):
-        return "{ " + ", ".join(f"{k} = {_toml_value(x)}" for k, x in v.items()
+        return "{ " + ", ".join(f"{_toml_key(k)} = {_toml_value(x)}" for k, x in v.items()
                                 if x is not None) + " }"
     if isinstance(v, (list, tuple)):
         if not v:

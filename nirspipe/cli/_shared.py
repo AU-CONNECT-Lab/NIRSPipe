@@ -126,6 +126,9 @@ def coerce_setting(action: argparse.Action, key: str, value, path: Path):
             fail("expected true or false")
         return value
     many = action.nargs in ("+", "*")
+    # a table is the NAME=VALUE form typed out, as --stim-dur Tapping=20 Control=15
+    if many and isinstance(value, dict):
+        value = [f"{name}={item}" for name, item in value.items()]
     items = value if isinstance(value, list) else [value]
     if isinstance(value, list) and not many:
         fail("expected one value, not a list")

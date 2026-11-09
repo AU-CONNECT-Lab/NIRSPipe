@@ -82,7 +82,8 @@ class PostConfig:
     resample_sfreq: float | None = None
 
     # GLM (glm mode)
-    stim_dur:        float | None          = None
+    # one duration, or a condition map whose "*" covers every condition not named
+    stim_dur:        "float | dict[str, float] | None" = None
     hrf_model:       str | None            = None
     # every mode fits it, so the library carries the default too rather than leaving a
     # direct caller to pass None into nilearn. "auto" is an AR order of 4x the sampling rate

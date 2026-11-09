@@ -331,21 +331,71 @@ def _instant_peak(frame_times: np.ndarray, hrf_model: HRFModel, fir_delays: tupl
     return float(dm[condition_columns(dm, "one")[0]].abs().max())
 
 
-def _annotation_events(raw: mne.io.Raw, stim_dur: float | None) -> pd.DataFrame:
-    """The recording's own annotations as design events, each lasting ``stim_dur`` seconds."""
+# the key of a --stim-dur map that holds the plain number, for every condition not named
+EVERY_OTHER = "*"
+
+
+def stim_durations(value) -> "float | dict[str, float] | None":
+    """``--stim-dur`` as one duration, or a condition map: ``["20", "Press=0"]`` -> ``{"*": 20.0, "Press": 0.0}``."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        items = [(str(name), seconds) for name, seconds in value.items()]
+    else:
+        items = []
+        for token in (value if isinstance(value, (list, tuple)) else [value]):
+            name, sep, number = str(token).rpartition("=")
+            if sep and not name.strip():
+                raise ValueError(f"--stim-dur {token}: a condition name goes before the =")
+            items.append((name.strip() if sep else EVERY_OTHER, number))
+    durations: dict[str, float] = {}
+    for name, number in items:
+        if name in durations:
+            raise ValueError("--stim-dur gives more than one plain number" if name == EVERY_OTHER
+                             else f"--stim-dur gives condition {name} twice")
+        try:
+            seconds = float(number)
+        except (TypeError, ValueError):
+            raise ValueError(f"--stim-dur {number}: not a number of seconds") from None
+        if not np.isfinite(seconds) or seconds < 0:
+            raise ValueError(f"--stim-dur {seconds:g}: a duration cannot be negative")
+        durations[name] = seconds
+    if not durations:
+        return None
+    return durations[EVERY_OTHER] if list(durations) == [EVERY_OTHER] else durations
+
+
+def _condition_durations(conditions, stim_dur: "float | dict[str, float]") -> np.ndarray:
+    """Each event's duration from ``--stim-dur``; ValueError naming a condition it leaves without one."""
+    if not isinstance(stim_dur, dict):
+        return float(stim_dur) * np.ones(len(conditions))
+    present = {str(c) for c in conditions}
+    missing = sorted(present - set(stim_dur)) if EVERY_OTHER not in stim_dur else []
+    if missing:
+        raise ValueError(f"--stim-dur gives no duration for {', '.join(missing)}: name each, "
+                         "or add one plain number for every other condition")
+    unused = sorted(set(stim_dur) - present - {EVERY_OTHER})
+    if unused:
+        logger.warning("--stim-dur names %s, which this recording does not have",
+                       ", ".join(unused))
+    return np.array([stim_dur.get(str(c), stim_dur.get(EVERY_OTHER)) for c in conditions], float)
+
+
+def _annotation_events(raw: mne.io.Raw, stim_dur: "float | dict[str, float] | None") -> pd.DataFrame:
+    """The recording's own annotations as design events, each lasting its condition's ``stim_dur``."""
     if stim_dur is None:
         raise ValueError("stim_dur required when no events DataFrame provided")
     # BAD_/EDGE_ spans mark unusable frames, not conditions
     keep = [i for i, d in enumerate(raw.annotations.description) if is_marker(d)]
     conditions = raw.annotations.description[keep]
     onsets = raw.annotations.onset[keep] - raw.first_time
-    duration = stim_dur * np.ones(len(conditions))
+    duration = _condition_durations(conditions, stim_dur)
     return pd.DataFrame({"trial_type": conditions, "onset": onsets, "duration": duration})
 
 
 def build_design_matrix(
     raw: mne.io.Raw,
-    stim_dur: float | None,
+    stim_dur: "float | dict[str, float] | None",
     hrf_model: HRFModel,
     drift_model: DriftModel,
     high_pass: float | None,
@@ -566,7 +616,7 @@ def compute_contrasts(
 
 def run_glm_pipeline(
     haemo: mne.io.Raw,
-    stim_dur: float | None,
+    stim_dur: "float | dict[str, float] | None",
     hrf_model: HRFModel,
     noise_model: NoiseModel,
     drift_model: DriftModel,
@@ -616,7 +666,10 @@ def run_glm_pipeline(
     design_params: dict = {}
     if conditions:
         if from_annotations:
-            design_params["stim_dur"] = stim_dur
+            # a map is recorded as this run's conditions resolved, so the Methods can list them
+            design_params["stim_dur"] = (
+                stim_dur if not isinstance(stim_dur, dict) else
+                {str(c): float(d) for c, d in zip(events["trial_type"], events["duration"])})
         elif events_path:
             design_params["event_table"] = True
         if hrf_model == "fir":
