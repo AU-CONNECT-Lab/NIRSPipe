@@ -388,6 +388,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 # one SQM record per run, written once both passes have finished so the
                 # post-Beer-Lambert sections can measure the files post actually produced.
                 from nirspipe.qc.subject.sqm_record import build_sqm_records
+                sqm_failures: dict[str, str] = {}
                 try:
                     # one nirs/ per session the runs came from
                     sqm_paths = []
@@ -399,7 +400,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                             # nothing on disk records them, so the record would otherwise
                             # be split on the package defaults whatever this run was told
                             sep_bands=_app_options.resolved_separation_bands(args),
-                            labels=set(prep_runs))
+                            labels=set(prep_runs), failures=sqm_failures)
                 except Exception:
                     logger.error("sub-%s | SQM records failed", subject, exc_info=True)
                     sqm_paths = []
@@ -446,6 +447,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         high_pass=cfg_high_pass, low_pass=cfg_low_pass,
                         after_haemo=post.get("denoised"),
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
+                        sqm_failure=sqm_failures.get(label),
                         roi_map_name=_roi_map_name(args),
                         filled_settings=filled_settings,
                         short_channel=post.get("short_channel"),
@@ -804,7 +806,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None, sqm_failure=None):
     from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -851,6 +853,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         roi_map=roi_map,
         provenance_path=provenance_path,
         sqm_label=sqm_label,
+        sqm_failure=sqm_failure,
         roi_map_name=roi_map_name,
         filled_settings=filled_settings,
         chromophores=in_order(args.get("chromophores") or DEFAULT_CHROMOPHORES),

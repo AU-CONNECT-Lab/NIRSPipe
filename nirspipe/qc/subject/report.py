@@ -1579,6 +1579,7 @@ def _section_sqm(
     sqm_label: str | None = None,
     sci_threshold: float,
     psp_threshold: float | None = None,
+    sqm_failure: str | None = None,
 ) -> dict:
     """Read this run's SQM record; the report displays, it does not compute.
 
@@ -1616,6 +1617,8 @@ def _section_sqm(
     motion_sets: dict = {}
     record_read: dict = {}
     with _guard("SQM record", errors, subject):
+        if sqm_failure:
+            raise RuntimeError(f"not written: {sqm_failure}")
         if out_dir is None or sqm_label is None:
             raise FileNotFoundError("no SQM record location for this run")
         record_file = _sqm_record_path(out_dir, sqm_label)
@@ -2186,6 +2189,7 @@ def build_subject_report(
     filled_settings: list[tuple[str, Any, str]] | None = None,
     chromophores: "tuple[str, ...]" = DEFAULT_CHROMOPHORES,
     short_channel_requested: bool = False,
+    sqm_failure: str | None = None,
 ) -> list[str]:
     """Render the QC report for one run and save as HTML. Returns its run-level notes.
 
@@ -2222,7 +2226,9 @@ def build_subject_report(
     # the run's own nirs/, session level included; the report itself sits above sessions
     ses = entity_of(sqm_label, "ses") if sqm_label else None
     nirs_dir = out_path.parent / (f"ses-{ses}" if ses else "") / "nirs"
-    record            = _load_record(nirs_dir, sqm_label, subject, errors)
+    # a record that was never written is reported once, with its reason, by _section_sqm
+    record            = ({} if sqm_failure else
+                         _load_record(nirs_dir, sqm_label, subject, errors))
     windowed_section  = record.get("windowed") or None
     raw_before_motion = _load_stage_raw(nirs_dir, sqm_label, "sci", subject, errors)
     raw_after_motion  = _load_stage_raw(nirs_dir, sqm_label, "motcorrected", subject, errors)
@@ -2409,7 +2415,8 @@ def build_subject_report(
                                      out_dir=nirs_dir,
                                      sqm_label=sqm_label,
                                      sci_threshold=config.sci_threshold,
-                                     psp_threshold=getattr(config, "psp_threshold", None))
+                                     psp_threshold=getattr(config, "psp_threshold", None),
+                                     sqm_failure=sqm_failure)
     region_vars       = _section_regions(sqm_vars["channel_rows"], roi_map)
     # a property of the high-pass, so stated on every run it filtered rather than measured
     if l_freq and any(lab == "desc-filtered" for lab, _ in (psd_stages or [])):

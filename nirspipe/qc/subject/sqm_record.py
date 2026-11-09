@@ -1469,9 +1469,13 @@ def build_sqm_records(
     bids_root: Path | None = None,
     labels: "set[str] | None" = None,
     sep_bands=None,
+    failures: "dict[str, str] | None" = None,
 ) -> list[Path]:
     """Write one SQM record per run found under nirs_dir. Band edges default to the
     values the run's own sidecars recorded, so a past tree needs no arguments.
+
+    ``failures``, when given, receives each run whose record could not be written, keyed by
+    its stem, with the first line of the reason, so the run's report can say why.
 
     ``labels`` restricts the work to those BIDS run stems, which is what a `--task-label`
     run wants: the tasks it did not touch keep the records they already had, computed with
@@ -1509,8 +1513,10 @@ def build_sqm_records(
                 sep_bands=sep_bands)
             written.append(
                 write_run_sqm(Path(nirs_dir), label, stages, sections, bids_root))
-        except Exception:
+        except Exception as exc:
             logger.error("%s: SQM record could not be written", label, exc_info=True)
+            if failures is not None:
+                failures[label] = (str(exc).strip().splitlines() or [type(exc).__name__])[0]
             continue
         try:
             write_channel_table(Path(nirs_dir), label, stages, sections)

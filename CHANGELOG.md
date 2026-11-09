@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Per-condition WTC values, maps and both nulls leave out each condition's own cone of influence, where the coherence carries the neighbouring condition, unless `--no-wtc-cond-cone`
 
 ### Fixed
+- A run report whose quality record could not be written now gives the reason, where it said only that the record file was missing
 - Recordings whose time stamps read a hair off a round rate cut windows one sample long, and some lost their quality record and its report sections
 
 ## [0.82.0] - 2026-10-30
