@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.83.0] - 2026-11-09
+
 ### Added
 - Every file a run's flags name is copied into the subject's `logs/inputs/` with its sha256 in the run record, and `--config` reruns read the copies
 - `--events-path` fills `{sub}`, `{ses}`, `{task}`, `{acq}` and `{run}` from each run, so every run of a batch reads its own events table
