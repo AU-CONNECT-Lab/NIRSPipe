@@ -283,7 +283,10 @@ def _build_parser() -> argparse.ArgumentParser:
                           "computed; default 0, off. A run under it gets no FC or ALFF file, "
                           "and its residual's sidecar says why. The GLM fit is not affected.")
     glm.add_argument("--events-path", type=Path,
-                     help="Path to *_events.tsv. If omitted, extracted from snirf annotations.")
+                     help="Path to *_events.tsv. {sub}, {ses}, {task}, {acq} and {run} in it "
+                          "are filled from each run, e.g. events/sub-{sub}_task-{task}_events.tsv; "
+                          "without them one file serves every run. If omitted, extracted from "
+                          "snirf annotations.")
     glm.add_argument("--contrast-file", type=Path,
                      help="GLM contrasts: a TSV or CSV with one row per contrast, its name in a "
                           "contrast column and a weight under each condition's column (an "

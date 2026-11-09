@@ -6,6 +6,7 @@ Does no signal processing itself.
 """
 
 import json
+import string
 import sys
 import time
 from contextlib import contextmanager
@@ -46,7 +47,31 @@ def _roi_map_name(args: dict[str, Any]) -> str:
     return roi_map_name(args.get("roi_mapping"))
 
 
-def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None) -> Any:
+# the entities an --events-path template may name, filled from each run's file name
+EVENTS_PATH_KEYS = ("sub", "ses", "task", "acq", "run")
+
+
+def _template_keys(template: str) -> set[str]:
+    return {field for _, field, _, _ in string.Formatter().parse(template) if field is not None}
+
+
+def events_path_for(template: str, run_name: str) -> str:
+    """``--events-path`` for one run: ``"ev/sub-{sub}_events.tsv"``, ``"sub-01_task-tap_..."`` -> ``"ev/sub-01_events.tsv"``."""
+    keys = _template_keys(template)
+    if not keys:
+        return template
+    values = {key: entity_of(run_name, key) for key in keys}
+    missing = sorted(key for key, value in values.items() if value is None)
+    if missing:
+        raise ValueError(f"--events-path {template}: {run_name} has no {', '.join(missing)}")
+    path = template.format(**values)
+    if not Path(path).is_file():
+        raise FileNotFoundError(f"--events-path {template}: {path}, the file for {run_name}, "
+                                "does not exist")
+    return path
+
+
+def _build_post_config(subject: str, session: str | None, args: dict[str, Any], toml: dict[str, Any], roi_map: dict | None = None, run_name: str | None = None) -> Any:
     from nirspipe.pipeline.glm import stim_durations
     from nirspipe.pipeline.post_pipeline import SHORT_CHANNEL_AUTO, PostConfig
 
@@ -94,7 +119,9 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         short_channel=sc if (sc and sc != "none") else None,
         aux=bool(pick("aux_regressors", default=False)),
         aux_channels=pick("aux_channels"),
-        events_path=str(ep) if ep else None,
+        # left as typed where no run is named, which is what the record keeps
+        events_path=(None if not ep else events_path_for(str(ep), run_name) if run_name
+                     else str(ep)),
         contrast_def=contrast_def,
         fc=bool(pick("fc", default=False)),
         min_time=float(pick("min_time", default=0.0)),
@@ -199,6 +226,15 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     raise SystemExit(
         "[error] --mode glm needs --stim-dur (one duration for every annotation, or one per "
         "condition as NAME=SEC) or --events-path (a table of onsets and durations).")
+
+
+def _refuse_bad_events_path(args: dict[str, Any]) -> None:
+    """Stop before any subject runs on an ``--events-path`` placeholder no run can fill."""
+    template = args.get("events_path")
+    unknown = sorted(_template_keys(str(template)) - set(EVENTS_PATH_KEYS)) if template else []
+    if unknown:
+        raise SystemExit(f"[error] --events-path {template}: {{{unknown[0]}}} is not one of "
+                         + ", ".join(f"{{{k}}}" for k in EVENTS_PATH_KEYS) + ".")
 
 
 def _refuse_bad_contrast_file(args: dict[str, Any]) -> None:
@@ -306,6 +342,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
         _refuse_cosine_without_cutoff(args, post_sources)
         _refuse_drift_auto_outside_glm(args)
         _refuse_glm_without_durations(args)
+        _refuse_bad_events_path(args)
         _refuse_bad_contrast_file(args)
         # a cutoff a file switched off was popped from the layers, so it is absent there
         filled_settings = [(arg, toml.get(arg, "none"), post_sources[field])
@@ -913,7 +950,8 @@ def _run_post_for_subject(
                 src_entities = post_layout.parse_file_entities(str(snirf_path))
                 # per file, for the session the file sits in; see the prep loop
                 post_config = _build_post_config(subject, src_entities.get("session") or session,
-                                                 args, toml, roi_map=roi_map)
+                                                 args, toml, roi_map=roi_map,
+                                                 run_name=snirf_path.name)
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)
