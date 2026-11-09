@@ -141,6 +141,27 @@ def coerce_setting(action: argparse.Action, key: str, value, path: Path):
     return items if many else items[0]
 
 
+def read_input_copies(raw: dict, keys: "dict[str, tuple[str, ...]]", actions: dict,
+                      path: Path, out: dict) -> dict[str, str]:
+    """Point each setting a record's [inputs] copied at its copy, in ``out``; returns each one's path as first given."""
+    given: dict[str, str] = {}
+    for key, entry in (raw.get("inputs") or {}).items():
+        section = next((s for s, allowed in keys.items() if key in allowed), None)
+        if section is None or not isinstance(entry, dict) or "copy" not in entry:
+            continue
+        copy = Path(path).parent / entry["copy"]
+        # an --events-path template's copies are listed one per run under sha256
+        names = entry.get("sha256")
+        files = [copy.parent / n for n in names] if isinstance(names, dict) else [copy]
+        if not all(f.is_file() for f in files):
+            print(f"Warning: {path}: the copy of {key} ({entry['copy']}) is not beside it, so "
+                  "the path its settings name is read instead.", file=sys.stderr)
+            continue
+        out[section][key] = coerce_setting(actions[key], key, copy.as_posix(), path)
+        given[key] = entry.get("given")
+    return given
+
+
 def typed_flags(parser: argparse.ArgumentParser, argv: "list[str] | None") -> set[str]:
     """The dests of the flags actually typed, which argparse's own defaults would otherwise hide."""
     for action in parser._actions:

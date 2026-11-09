@@ -347,7 +347,7 @@ _CONFIG_EXTRA = {"prep": (), "post": ("roi_mapping",)}
 _EXECUTION_KEYS = ("participant_label", "session_label", "task_label", "bids_filter_file",
                    "ignore", "allow_cropped_input")
 # describe the run that wrote the record rather than set the next one
-_RECORD_ONLY = ("environment", "prep_sources", "post_sources", "outcome")
+_RECORD_ONLY = ("environment", "prep_sources", "post_sources", "outcome", "inputs")
 
 
 def config_keys() -> dict[str, tuple[str, ...]]:
@@ -393,6 +393,7 @@ def read_config(path: Path) -> dict:
                 raise SystemExit(1)
         out[section] = {k: _shared.coerce_setting(actions[k], k, v, path)
                         for k, v in settings.items() if k in allowed}
+    out["inputs_given"] = _shared.read_input_copies(raw, keys, actions, path, out)
     return out
 
 
@@ -411,6 +412,8 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
             setattr(args, key, value)
     # the record's post_sources reads this to tell a mode from the file from a typed one
     args.config_applied = sorted(k for k in taken if k not in given)
+    # where a copied input was first given, unless the command line names the file anew
+    args.inputs_given = {k: v for k, v in config["inputs_given"].items() if k not in given}
 
 
 def _require(args: argparse.Namespace, *flags: str) -> None:

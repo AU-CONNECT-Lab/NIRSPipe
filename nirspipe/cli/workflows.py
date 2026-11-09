@@ -6,7 +6,6 @@ Does no signal processing itself.
 """
 
 import json
-import string
 import sys
 import time
 from contextlib import contextmanager
@@ -36,8 +35,10 @@ from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
 from nirspipe.utils import pair_of
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
-from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, error_line, record_stem,
-                                     write_run_outcome, write_run_record)
+from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, copy_inputs, copy_run_events,
+                                     error_line, record_stem, template_keys,
+                                     write_run_inputs, write_run_outcome,
+                                     write_run_record)
 from nirspipe.utils.spans import bad_spans, marker_onset
 
 logger = get_logger("cli.workflows")
@@ -51,13 +52,9 @@ def _roi_map_name(args: dict[str, Any]) -> str:
 EVENTS_PATH_KEYS = ("sub", "ses", "task", "acq", "run")
 
 
-def _template_keys(template: str) -> set[str]:
-    return {field for _, field, _, _ in string.Formatter().parse(template) if field is not None}
-
-
 def events_path_for(template: str, run_name: str) -> str:
     """``--events-path`` for one run: ``"ev/sub-{sub}_events.tsv"``, ``"sub-01_task-tap_..."`` -> ``"ev/sub-01_events.tsv"``."""
-    keys = _template_keys(template)
+    keys = template_keys(template)
     if not keys:
         return template
     values = {key: entity_of(run_name, key) for key in keys}
@@ -231,7 +228,7 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
 def _refuse_bad_events_path(args: dict[str, Any]) -> None:
     """Stop before any subject runs on an ``--events-path`` placeholder no run can fill."""
     template = args.get("events_path")
-    unknown = sorted(_template_keys(str(template)) - set(EVENTS_PATH_KEYS)) if template else []
+    unknown = sorted(template_keys(str(template)) - set(EVENTS_PATH_KEYS)) if template else []
     if unknown:
         raise SystemExit(f"[error] --events-path {template}: {{{unknown[0]}}} is not one of "
                          + ", ".join(f"{{{k}}}" for k in EVENTS_PATH_KEYS) + ".")
@@ -375,9 +372,12 @@ def run_participant_level(args: dict[str, Any]) -> None:
                              if args.get("mode") else None),
                 post_sources=post_sources,
             )
+            # the files the flags name, copied beside the record so a rerun reads the same ones
+            inputs = copy_inputs(args, record)
 
             # The record is the whole point of a dry run, and it is on disk by here.
             if args.get("dry_run"):
+                write_run_inputs(record, inputs)
                 logger.info("sub-%s | dry run: wrote the record, processed nothing", subject)
                 return
 
@@ -424,7 +424,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
 
                 post_runs: dict[str, dict] = {}
                 if args.get("mode") is not None:
-                    post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir, roi_map=roi_map)
+                    post_runs = _run_post_for_subject(subject, sessions, args, toml, output_dir,
+                                                      roi_map=roi_map, record=record,
+                                                      inputs=inputs)
 
                 # one SQM record per run, written once both passes have finished so the
                 # post-Beer-Lambert sections can measure the files post actually produced.
@@ -510,6 +512,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                 print(f"  [error] sub-{subject}: {exc}", file=sys.stderr)
                 failed.append(subject)
             finally:
+                write_run_inputs(record, inputs)
                 write_run_outcome(record, status, time.monotonic() - t0, error)
 
     nprocs = args.get("nprocs")
@@ -913,11 +916,14 @@ def _run_post_for_subject(
     toml: dict[str, Any],
     output_dir: Path,
     roi_map: dict | None = None,
+    record: Path | None = None,
+    inputs: dict[str, dict] | None = None,
 ) -> dict[str, dict]:
     """Run post-processing for all sessions/tasks. Returns ``{bids_label: outputs}``.
 
     One entry per run, keyed the same way as the prep results, so the report loop can pair
-    them up. A run whose post failed simply has no entry.
+    them up. A run whose post failed simply has no entry. Each run's own ``--events-path``
+    table is copied beside ``record`` into ``inputs``.
     """
     from nirspipe.pipeline.post_pipeline import resolve_short_channel, run_post, write_combined_runs
 
@@ -952,6 +958,10 @@ def _run_post_for_subject(
                 post_config = _build_post_config(subject, src_entities.get("session") or session,
                                                  args, toml, roi_map=roi_map,
                                                  run_name=snirf_path.name)
+                template = str(args.get("events_path") or "")
+                if record is not None and inputs is not None and template_keys(template):
+                    copy_run_events(record, template, post_config.events_path, snirf_path.name,
+                                    inputs, (args.get("inputs_given") or {}).get("events_path"))
                 logger.info("post (%s): %s", mode, snirf_path.name)
                 try:
                     raw_haemo = read_snirf(snirf_path)

@@ -87,7 +87,8 @@ def cmd_participant(
         print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
         raise SystemExit(1)
 
-    from nirspipe.cli.run_record import error_line, write_raw_qc_record, write_run_outcome
+    from nirspipe.cli.run_record import (copy_inputs, error_line, write_raw_qc_record,
+                                         write_run_inputs, write_run_outcome)
     from nirspipe.io.bids import bids_label, channel_status_bads, get_layout, get_nirs_files
     from nirspipe.io.derivatives import (
         LINK_RAW, entity_of, subject_report_dir, write_bidsignore, write_dataset_description,
@@ -204,6 +205,8 @@ def cmd_participant(
     def isolated(subject: str) -> int:
         record = (write_raw_qc_record(record_settings["args"], record_settings["keys"], subject,
                                       output_dir) if record_settings is not None else None)
+        # the files the flags name, copied beside the record so a rerun reads the same ones
+        inputs = copy_inputs(record_settings["args"], record) if record is not None else {}
         t0, n, error = time.monotonic(), 0, None
         try:
             n = one_subject(subject)
@@ -216,6 +219,7 @@ def cmd_participant(
         finally:
             # the cohort page lists a subject whose record carries no success
             if record is not None:
+                write_run_inputs(record, inputs)
                 write_run_outcome(record, "failed" if error else "success",
                                   time.monotonic() - t0, error)
         return n
@@ -638,7 +642,8 @@ def read_config(path: Path) -> dict:
         print(f"Error: {path}: {stray[0]} sits outside any section; --config takes a [qc] "
               "section keyed by flag name, as a raw QC run record does.", file=sys.stderr)
         raise SystemExit(1)
-    unknown = sorted(set(raw) - {"qc", "qc_sources", "execution", "environment", "outcome"})
+    unknown = sorted(set(raw) - {"qc", "qc_sources", "execution", "environment", "outcome",
+                                 "inputs"})
     if unknown:
         print(f"Error: {path}: no section [{unknown[0]}]; expected [qc] or [execution].",
               file=sys.stderr)
@@ -652,10 +657,13 @@ def read_config(path: Path) -> dict:
         print(f"Error: {path}: [qc] has no setting {bad[0]!r}.", file=sys.stderr)
         raise SystemExit(1)
     execution = {k: v for k, v in raw.get("execution", {}).items() if k in _EXECUTION_KEYS}
-    return {"version": raw.get("environment", {}).get("nirspipe_version"),
-            "qc": {k: _shared.coerce_setting(actions[k], k, v, path) for k, v in settings.items()},
-            "execution": {k: _shared.coerce_setting(actions[k], k, v, path)
-                          for k, v in execution.items()}}
+    out = {"version": raw.get("environment", {}).get("nirspipe_version"),
+           "qc": {k: _shared.coerce_setting(actions[k], k, v, path) for k, v in settings.items()},
+           "execution": {k: _shared.coerce_setting(actions[k], k, v, path)
+                         for k, v in execution.items()}}
+    out["inputs_given"] = _shared.read_input_copies(
+        raw, {"qc": tuple(allowed), "execution": _EXECUTION_KEYS}, actions, path, out)
+    return out
 
 
 def _apply_config(args: argparse.Namespace, argv: "list[str] | None") -> None:
@@ -669,6 +677,8 @@ def _apply_config(args: argparse.Namespace, argv: "list[str] | None") -> None:
     for key, value in {**config["qc"], **config["execution"]}.items():
         if key not in given:
             setattr(args, key, value)
+    # where a copied input was first given, unless the command line names the file anew
+    args.inputs_given = {k: v for k, v in config["inputs_given"].items() if k not in given}
 
 
 def _refuse_other_level(args: argparse.Namespace, argv: "list[str] | None") -> None:

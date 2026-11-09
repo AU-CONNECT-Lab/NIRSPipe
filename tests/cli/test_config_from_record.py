@@ -55,8 +55,11 @@ def rerun(dataset, first):
 # ---- the rerun is the same run ----
 
 def test_the_rerun_records_the_same_settings(first, rerun):
-    assert rerun[1]["prep"] == first[1]["prep"]
+    # the one difference: the rerun read the table from the copy beside the first record
+    copy = (first[0] / "sub-01" / "logs" / "inputs" / "sub-01_keep-spans.tsv").as_posix()
+    assert rerun[1]["prep"] == {**first[1]["prep"], "keep_spans": copy}
     assert rerun[1]["post"] == first[1]["post"]
+    assert rerun[1]["inputs"]["keep_spans"] == first[1]["inputs"]["keep_spans"]
 
 
 def test_the_rerun_writes_the_same_data(first, rerun):
@@ -118,8 +121,12 @@ def test_another_version_warns_and_still_runs(dataset, first, tmp_path, capsys):
     old.write_text(text.replace(f'nirspipe_version = "{__version__}"', 'nirspipe_version = "0.1.0"'),
                    encoding="utf-8")
     got = _run(bids, tmp_path / "out", "--config", str(old), "--dry-run")
-    assert "written by nirspipe 0.1.0" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "written by nirspipe 0.1.0" in err
     assert got["prep"]["motion_correction"] == "wavelet"
+    # moved without its inputs/, the record falls back to the table where it was given
+    assert "the copy of keep_spans" in err
+    assert got["prep"]["keep_spans"] == dataset[2].as_posix()
 
 
 # ---- what the file cannot say ----

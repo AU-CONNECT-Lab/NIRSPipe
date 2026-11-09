@@ -1,16 +1,24 @@
 """Write a per-subject TOML run record to output_dir/logs/."""
 
+import hashlib
 import json
 import os
 import platform
 import re
+import shutil
+import string
 import sys
+import tomllib
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from nirspipe.io.derivatives import group_label
+from nirspipe.io.derivatives import entity_of, group_label
 from nirspipe import __version__
+
+# flags whose value names a file the run reads; each is copied into inputs/ beside the record
+INPUT_FILES = ("events_path", "contrast_file", "roi_mapping", "bad_channels", "bad_spans",
+               "keep_spans", "bids_filter_file", "config")
 
 
 # a run's id, made when it starts and read back wherever its time is printed
@@ -161,6 +169,8 @@ def write_run_record(
       [prep_sources]: the [prep] values --population filled, each named "population"
       [post]:        postprocessing flags as resolved (only with --mode)
       [post_sources]: which layer set each [post] value: cli, config, mode or default
+      [inputs]:      each input file copied into inputs/, appended by write_run_inputs;
+                     --config reads the copies
       [outcome]:     success or failed, appended by write_run_outcome when the subject ends
 
     [execution] answers "what was run"; [prep]/[post] answer "what was used" and are what
@@ -373,6 +383,71 @@ def error_line(exc: BaseException) -> str:
     """An exception as one line: its type and the first line of its message."""
     lines = str(exc).strip().splitlines()
     return f"{type(exc).__name__}: {lines[0]}" if lines else type(exc).__name__
+
+
+def template_keys(template: str) -> set[str]:
+    """The ``{name}`` placeholders of a path template."""
+    return {field for _, field, _, _ in string.Formatter().parse(template) if field is not None}
+
+
+def copy_input(record: Path, source: Path, name: str) -> tuple[str, str]:
+    """Copy ``source`` to ``inputs/<name>`` beside ``record``, returning that path as the record names it and its sha256."""
+    dest = record.parent / "inputs" / name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    # a rerun from this tree's own record reads the very copy it would write
+    if source.resolve() != dest.resolve():
+        shutil.copyfile(source, dest)
+    return f"inputs/{name}", hashlib.sha256(dest.read_bytes()).hexdigest()
+
+
+def _is_run_record(path: Path) -> bool:
+    try:
+        return "environment" in tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return False
+
+
+def copy_inputs(args: dict[str, Any], record: Path) -> dict[str, dict]:
+    """Copy each file the flags name beside the record, as ``{flag: {given, copy, sha256}}``; templates and run records are left to the caller."""
+    given = args.get("inputs_given") or {}
+    out: dict[str, dict] = {}
+    for key in INPUT_FILES:
+        value = args.get(key)
+        if isinstance(value, (list, tuple)):
+            value = value[0] if len(value) == 1 else None
+        # channel names, an --events-path template and a missing file are not copied
+        if not value or not Path(value).is_file():
+            continue
+        path = Path(value)
+        # the new record already carries every setting a record given as --config held
+        if key == "config" and _is_run_record(path):
+            continue
+        copy, digest = copy_input(record, path,
+                                  f"{record.stem}_{key.replace('_', '-')}{path.suffix}")
+        out[key] = {"given": given.get(key) or _fwd(path.resolve()), "copy": copy,
+                    "sha256": digest}
+    return out
+
+
+def copy_run_events(record: Path, template: str, path: str, run_name: str,
+                    inputs: dict[str, dict], given: str | None = None) -> None:
+    """Copy one run's ``--events-path`` table beside the record, under a name the template's placeholders still pick out."""
+    keys = sorted(template_keys(template))
+    stem, suffix = f"{record.stem}_events-path", Path(template).suffix
+    copy, digest = copy_input(
+        record, Path(path), stem + "".join(f"_{k}-{entity_of(run_name, k)}" for k in keys) + suffix)
+    entry = inputs.setdefault("events_path", {
+        "given": given or _fwd(template),
+        "copy": "inputs/" + stem + "".join(f"_{k}-{{{k}}}" for k in keys) + suffix,
+        "sha256": {}})
+    entry["sha256"][Path(copy).name] = digest
+
+
+def write_run_inputs(record: Path, inputs: dict[str, dict]) -> None:
+    """Append [inputs] to a run record: each copied file's flag, the path given, its copy and sha256."""
+    if inputs:
+        with record.open("a", encoding="utf-8") as f:
+            f.write("\n" + _section("inputs", inputs))
 
 
 def write_run_outcome(record: Path, status: str, duration_s: float,

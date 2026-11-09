@@ -75,7 +75,9 @@ def prep_only_record(mini_bids, tmp_path_factory):
 
 
 def test_record_has_the_expected_sections(record):
-    assert set(record) == {"environment", "execution", "prep", "post", "post_sources", "outcome"}
+    # inputs: the --config settings file, copied beside the record
+    assert set(record) == {"environment", "execution", "prep", "post", "post_sources", "inputs",
+                           "outcome"}
 
 
 @pytest.mark.parametrize("field, expected", [
@@ -191,9 +193,11 @@ def filtered_logs(mini_bids, tmp_path, monkeypatch):
 
 def test_a_filtered_run_keeps_the_whole_run_s_record_and_says_what_it_chose(filtered_logs):
     assert sorted(p.name for p in filtered_logs.iterdir()) == [
-        "sub-01.log", "sub-01.toml", "sub-01_task-rest.log", "sub-01_task-rest.toml"]
+        "inputs", "sub-01.log", "sub-01.toml", "sub-01_task-rest.log", "sub-01_task-rest.toml"]
     record = tomllib.loads((filtered_logs / "sub-01_task-rest.toml").read_text(encoding="utf-8"))
     assert record["execution"]["bids_filter"] == {"task": "rest"}
+    assert record["inputs"]["bids_filter_file"]["copy"] == (
+        "inputs/sub-01_task-rest_bids-filter-file.json")
 
 
 def test_raw_qc_s_record_is_named_by_its_filter_too(tmp_path):
