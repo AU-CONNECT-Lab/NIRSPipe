@@ -115,7 +115,7 @@ By default the coherence is reported for each task condition as well as for the 
 - `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window. A window keeps its condition's edges.
 - `--wtc-cond-transform` analyses each condition separately instead of reading it out of the whole recording. It cannot be combined with `--wtc-phase-null`.
 
-How much each edge takes depends on the frequency. The table gives, for the Morlet wavelet the coherence uses (nondimensional frequency 6), its spread in time and in frequency, the stretch the cone takes at each edge of a condition, and the shortest condition that keeps any cells at that frequency. A condition shorter than that at the band's lowest frequency has its band mean from the higher frequencies only.
+How much each edge takes depends on the frequency. The table, after Table 1 of Lodrant et al. (2026), gives for the Morlet wavelet the coherence uses (nondimensional frequency 6) its spread in time and in frequency, the stretch the cone takes at each edge of a condition, and the shortest condition that keeps any cells at that frequency. A condition shorter than that at the band's lowest frequency has its band mean from the higher frequencies only.
 
 | Frequency (Hz) | Period (s) | Time spread, FWHM (s) | Left out at each edge (s) | Shortest condition with cells left (s) | Frequency spread, FWHM (Hz) |
 |---|---|---|---|---|---|
