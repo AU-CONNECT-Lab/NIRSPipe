@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- A recording whose SNIRF carries no landmarks is placed by those of its BIDS `_coordsystem.json`, and a json disagreeing with the SNIRF's is named
 - `--population adolescent` for 12 to 18 years, with that age row's bands and the DPF at 15 years, and `adult` now starting at 18 with its values unchanged
 
 ### Changed

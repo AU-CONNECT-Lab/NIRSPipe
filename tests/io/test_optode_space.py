@@ -148,6 +148,51 @@ def test_coordinates_far_from_any_head_are_not_placed(tmp_path):
     assert "no reading" in placement.note
 
 
+def _coordsystem(nirs_dir, frame, shift_mm=None, **extra):
+    """The subject's _coordsystem.json with _LANDMARKS put through ``frame``, in mm."""
+    ref, shift = reference_points(FSAVERAGE), shift_mm or {}
+    coords = {k: (mne.transforms.apply_trans(
+        frame, (ref["nasion" if k == "Nz" else k.lower()] + shift.get(k, 0.0)) / 1000) * 1000
+                  ).tolist() for k in _LANDMARKS}
+    meta = {"NIRSCoordinateSystem": "Other", "NIRSCoordinateUnits": "mm",
+            "AnatomicalLandmarkCoordinates": coords, **extra}
+    (nirs_dir / "sub-01_coordsystem.json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def test_landmarks_only_in_the_coordsystem_json_place_the_cap(tmp_path):
+    path = _write(tmp_path / "sub-01_task-rest_nirs.snirf", _move())
+    _coordsystem(tmp_path, _move())
+    placement = place_optodes(path)
+    assert placement.method == "landmarks" and placement.landmarks == len(_LANDMARKS)
+    assert "sub-01_coordsystem.json" in placement.note
+    raw = mne.io.read_raw_snirf(str(path), verbose="error")
+    np.testing.assert_allclose(_sources_mm(raw, placement), _planted_sources(), atol=1e-6)
+
+
+def test_coordsystem_landmarks_in_another_frame_are_not_used(tmp_path):
+    path = _write(tmp_path / "sub-01_task-rest_nirs.snirf", _move())
+    _coordsystem(tmp_path, _move(), AnatomicalLandmarkCoordinateSystem="CapTrak")
+    assert place_optodes(path).method == "none"
+
+
+def test_the_probes_landmarks_win_and_a_disagreeing_json_is_named(tmp_path):
+    path = _write(tmp_path / "sub-01_task-rest_nirs.snirf", _move(), landmarks=_LANDMARKS)
+    _coordsystem(tmp_path, _move(), shift_mm={"Cz": np.array([0.0, 0.0, 12.0])})
+    placement = place_optodes(path)
+    assert placement.method == "landmarks"
+    # _move() scales by 1.08, so the 12 mm shift is 12.96 mm in the file's frame
+    assert "probe's landmarks were used" in placement.note and "13.0 mm" in placement.note
+    raw = mne.io.read_raw_snirf(str(path), verbose="error")
+    np.testing.assert_allclose(_sources_mm(raw, placement), _planted_sources(), atol=1e-6)
+
+
+def test_an_agreeing_coordsystem_json_changes_nothing(tmp_path):
+    path = _write(tmp_path / "sub-01_task-rest_nirs.snirf", _move(), landmarks=_LANDMARKS)
+    _coordsystem(tmp_path, _move())
+    placement = place_optodes(path)
+    assert placement.method == "landmarks" and placement.note is None
+
+
 def test_a_probe_with_only_2d_positions_is_not_placed(tmp_path):
     path = _write(tmp_path / "sub-01_task-rest_nirs.snirf", np.eye(4))
     with h5py.File(path, "r+") as f:

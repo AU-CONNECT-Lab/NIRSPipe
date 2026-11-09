@@ -1,8 +1,9 @@
 """Where a recording's optodes sit on its head template, decided once per run and recorded beside it.
 
 SNIRF does not say which space its optode coordinates are in, and a dataset's
-``_coordsystem.json`` is often wrong about it. So the placement is decided from the file:
-its labelled landmarks registered onto the same points on the template, or, when that leaves
+``_coordsystem.json`` is often wrong about it. So the placement is decided from the coordinates:
+the labelled landmarks (the probe's, else the ``_coordsystem.json``'s) registered onto the
+same points on the template, or, when that leaves
 the cap off the scalp, the reading of the coordinates (a head frame, or already on fsaverage)
 that puts the optodes on the template's scalp. Prep writes the result as the run's channel
 table, and every later reader takes the placement from that record instead of deciding again.
@@ -10,7 +11,7 @@ table, and every later reader takes the placement from that record instead of de
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import h5py
@@ -36,7 +37,9 @@ SCALP_FIT_MAX_MM = 5.0
 _MIN_LANDMARKS = 3
 _UNIT_TO_M = {"m": 1.0, "cm": 1e-2, "mm": 1e-3}
 # spellings of the three fiducials that standard_1005 does not use itself
-_LANDMARK_ALIASES = {"nz": "nasion", "al": "lpa", "ar": "rpa"}
+_LANDMARK_ALIASES = {"nz": "nasion", "nas": "nasion", "al": "lpa", "ar": "rpa"}
+# a probe landmark this far from the same label in _coordsystem.json means the files disagree
+LANDMARK_AGREE_MM = 5.0
 _HELD_KEY = "nirspipe_placement"
 _M_TO_MM = np.diag([1000.0, 1000.0, 1000.0, 1.0])
 _READ_AS = {"head": "head frame", "fsaverage_head": "fsaverage head frame", "mni": "fsaverage"}
@@ -121,6 +124,39 @@ def _read_probe(snirf_path) -> tuple[np.ndarray | None, dict[str, np.ndarray]]:
     return (optodes if len(optodes) else None), landmarks
 
 
+def _coordsystem_of(snirf_path: Path) -> Path | None:
+    """The one ``_coordsystem.json`` beside a recording whose entities do not contradict its own."""
+    entities = {key: entity_of(snirf_path.name, key) for key in ("sub", "ses", "acq")}
+    found = [p for p in snirf_path.parent.glob("*_coordsystem.json")
+             if all(entity_of(p.name, key) in (None, value) for key, value in entities.items())]
+    return found[0] if len(found) == 1 else None
+
+
+def _sidecar_landmarks(snirf_path) -> tuple[dict[str, np.ndarray], str | None]:
+    """The recording's ``_coordsystem.json`` landmarks in metres and its name, unless it puts them in another frame than the optodes'."""
+    path = _coordsystem_of(Path(snirf_path))
+    if path is None:
+        return {}, None
+    meta = read_json(path)
+    coords = meta.get("AnatomicalLandmarkCoordinates") or {}
+    frame = meta.get("AnatomicalLandmarkCoordinateSystem")
+    if not coords or (frame and frame != meta.get("NIRSCoordinateSystem")):
+        return {}, None
+    unit = meta.get("AnatomicalLandmarkCoordinateUnits") or meta.get("NIRSCoordinateUnits")
+    scale = _UNIT_TO_M.get(str(unit).strip())
+    if scale is None:
+        return {}, None
+    return ({label.strip().lower(): np.asarray(pos, float)[:3] * scale
+             for label, pos in coords.items()}, path.name)
+
+
+def _disagreement(probe: dict[str, np.ndarray], sidecar: dict[str, np.ndarray]) -> float:
+    """The largest distance in mm between a label's two positions, 0 with none shared."""
+    shared = probe.keys() & sidecar.keys()
+    return max((float(np.linalg.norm(probe[k] - sidecar[k])) * 1000 for k in shared),
+               default=0.0)
+
+
 def copy_landmarks(source_path, dest_path) -> None:
     """Give a SNIRF rewritten through MNE its source's probe landmarks, labels and all.
 
@@ -164,7 +200,10 @@ def _similarity(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
 
 
 def place_optodes(snirf_path, space: str = FSAVERAGE) -> Placement:
-    """Decide where a recording's optodes sit on the template ``space``, from the SNIRF file alone.
+    """Decide where a recording's optodes sit on the template ``space``, from the SNIRF file.
+
+    The probe's own landmarks are used; a probe without any takes those of the recording's
+    BIDS ``_coordsystem.json``, when that file has them in the optodes' frame.
 
     Landmarks first: every landmark label the file shares with the template's 10-10
     positions (10-5 on fsaverage), the three fiducials included, is registered onto its
@@ -186,10 +225,26 @@ def place_optodes(snirf_path, space: str = FSAVERAGE) -> Placement:
     if optodes is None:
         return Placement("none", note="the file has no 3-D optode positions", space=space)
     try:
-        return _place(optodes, landmarks, space)
+        sidecar, sidecar_name = _sidecar_landmarks(snirf_path)
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning("%s: its _coordsystem.json could not be read (%s)",
+                       Path(snirf_path).name, exc)
+        sidecar, sidecar_name = {}, None
+    source_note = None
+    if not landmarks and sidecar:
+        landmarks, source_note = sidecar, f"landmarks from {sidecar_name}"
+    elif landmarks and sidecar and (gap := _disagreement(landmarks, sidecar)) > LANDMARK_AGREE_MM:
+        source_note = (f"the probe's landmarks were used; {sidecar_name} puts the same labels "
+                       f"up to {gap:.1f} mm away")
+        logger.warning("%s: %s", Path(snirf_path).name, source_note)
+    try:
+        placement = _place(optodes, landmarks, space)
     except RuntimeError as exc:
         # the template could not be loaded; the run goes on without a placement
         return Placement("none", note=str(exc), space=space)
+    if source_note is None:
+        return placement
+    return replace(placement, note="; ".join(n for n in (source_note, placement.note) if n))
 
 
 def _readings(space: str) -> dict[str, np.ndarray]:
