@@ -83,7 +83,7 @@ Before the slow part starts, every dyad prints how many channels it keeps:
 
 ## Wavelet transform coherence
 
-Coherence is computed for each channel pairing over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number in the tables is the **band mean**: the coherence averaged over the band you choose (`--band-fmin` / `--band-fmax`) and over time, with its Fisher z.
+Coherence is computed for each channel pairing over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number in the tables is the **band mean**: the coherence averaged over the band you choose (`--band-fmin` / `--band-fmax`) and over time, with its Fisher z. The band mean draws on a little more than the band itself, since the wavelet and the smoothing across frequencies spread each frequency: 0.02 to 0.10 Hz reads from about 0.013 to 0.15 Hz.
 
 - **Cone of influence.** By default the band mean leaves out the cone of influence, the cells near the start and end of the recording that the edges distort. `--no-wtc-mask-coi` keeps them.
 - **Chromophores.** `--wtc-chroma` picks `hbo`, `hbr` and/or `hbt` (default `hbo hbr`). HbO is only ever paired with HbO, and so on. Each chromophore costs a full run.
@@ -111,8 +111,19 @@ The channel-by-channel matrix of band means a crossed run adds to the report, on
 
 By default the coherence is reported for each task condition as well as for the whole recording, and each condition gets its own report page. A marker with a duration uses it; one without runs to the next marker. A condition shorter than one cycle of `--wtc-fmin` is skipped. `--no-by-condition` turns this off.
 
-- `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window.
+- **Each condition's own cone.** By default a condition's values leave out the cells within the cone of influence of the condition's own start and end, where the coherence still carries the neighbouring condition. `--no-wtc-cond-cone` keeps them.
+- `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window. A window keeps its condition's edges.
 - `--wtc-cond-transform` analyses each condition separately instead of reading it out of the whole recording. It cannot be combined with `--wtc-phase-null`.
+
+How much each edge takes depends on the frequency. The table gives, for the Morlet wavelet the coherence uses (nondimensional frequency 6), its spread in time and in frequency, the stretch the cone takes at each edge of a condition, and the shortest condition that keeps any cells at that frequency. A condition shorter than that at the band's lowest frequency has its band mean from the higher frequencies only.
+
+| Frequency (Hz) | Period (s) | Time spread, FWHM (s) | Left out at each edge (s) | Shortest condition with cells left (s) | Frequency spread, FWHM (Hz) |
+|---|---|---|---|---|---|
+| 0.20 | 5 | 11 | 7 | 14 | 0.077 |
+| 0.10 | 10 | 23 | 14 | 27 | 0.039 |
+| 0.05 | 20 | 46 | 27 | 55 | 0.019 |
+| 0.02 | 50 | 114 | 68 | 137 | 0.008 |
+| 0.01 | 100 | 228 | 137 | 274 | 0.004 |
 
 File names keep only the letters and digits of a condition's name, so two conditions that would get the same name, or a condition named `all` or `whole_run`, are refused.
 
