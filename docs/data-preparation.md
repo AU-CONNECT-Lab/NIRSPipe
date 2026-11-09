@@ -26,7 +26,7 @@ The `_nirs.json` sidecar needs at least `SamplingFrequency`, `NIRSChannelCount`,
 | `participants.tsv` | Subject metadata. Its `age` column, in years, is what `--dpf age` and `--population infant` read to set each participant's DPF and head template. |
 | `*_events.tsv` | Not read: events come from the markers inside the SNIRF. `edit-markers` updates both, and `--events-path` gives the GLM a design table of its own. |
 | `*_channels.tsv` | A channel whose `status` is `bad` is marked bad in preprocessing ([Channel screening](workflows.md#channel-screening)). |
-| `*_optodes.tsv`, `*_coordsystem.json` | Optode positions as BIDS records them. BIDS requires both, but `nirspipe` reads the positions from the SNIRF file itself ([Optode placement](workflows.md#optode-placement)). |
+| `*_optodes.tsv`, `*_coordsystem.json` | Optode positions as BIDS records them. BIDS requires both, but `nirspipe` reads the positions from the SNIRF file itself, and the landmarks from `_coordsystem.json` only when the SNIRF file has none ([Optode placement](workflows.md#optode-placement)). |
 
 ## Converting raw SNIRF
 

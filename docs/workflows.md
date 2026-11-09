@@ -162,7 +162,7 @@ Preprocessing places the optodes on a head template and writes `space-<template>
 
 The template is fsaverage, an adult head, unless `--template` names one of MNE's infant templates (`2wk` to `2yr`; O'Reilly et al. 2021). With `--dpf age` or `--population infant`, each participant gets the template nearest their age. No template fits ages 2 to 18, so such a participant needs `--template`. An infant template is downloaded the first time it is needed (about 630 MB).
 
-Placement uses the landmarks in the file (nasion, preauricular points) when there are at least three; otherwise it finds the reading of the coordinates that puts the optodes on the scalp. A recording it cannot place, such as one with a flat 2-D layout, gets `n/a` positions and a warning on its report.
+Placement uses the landmarks in the file (nasion, preauricular points) when there are at least three; a file without landmarks takes those of the recording's `_coordsystem.json`. Otherwise it finds the reading of the coordinates that puts the optodes on the scalp. A recording it cannot place, such as one with a flat 2-D layout, gets `n/a` positions and a warning on its report.
 
 ## Postprocessing
 
@@ -213,7 +213,7 @@ Cleans the data for analyses done outside the package. It applies the bandpass (
 
 A first-level GLM, built with nilearn through MNE-NIRS. It writes the residual (`desc-errts`), the design matrix (`design.tsv`), the fit per channel (`desc-glm_nirsmap.tsv`), each condition's block average (`desc-blockavg_timeseries.tsv`) and a check of how well the noise model whitened the residual (`desc-whitening_nirsmap.tsv`).
 
-**Events.** The design comes from the SNIRF annotations, each given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path`. Use one or the other. Give each event its real length (a button press can be 0.1 s). A condition whose events all last 0 s is fitted as an instantaneous response scaled to peak at 1, so its beta is the height of the response's peak, whatever the sampling rate. A condition cannot mix 0 s events with longer ones.
+**Events.** The design comes from the SNIRF annotations, each given the duration `--stim-dur`, or from a BIDS `_events.tsv` named by `--events-path`. Use one or the other. `--stim-dur` takes one number for every condition, or one per condition as `NAME=SEC`: `--stim-dur Tapping=20 Control=15`, or `--stim-dur 20 Press=0` for 20 s everywhere but `Press`. In `--events-path`, `{sub}`, `{ses}`, `{task}`, `{acq}` and `{run}` are filled from each run, so `events/sub-{sub}_task-{task}_events.tsv` gives every run its own table. Give each event its real length (a button press can be 0.1 s). A condition whose events all last 0 s is fitted as an instantaneous response scaled to peak at 1, so its beta is the height of the response's peak, whatever the sampling rate. A condition cannot mix 0 s events with longer ones.
 
 **Design.** `--hrf-model` sets the response shape (`spm` by default). `--drift-model` sets the slow-drift model (`cosine` by default), with its cutoff set by `--drift-high-pass`. The cutoff has no default, because it depends on your design: give it in Hz, or `auto` ([Choosing the drift cutoff](#choosing-the-drift-cutoff)).
 

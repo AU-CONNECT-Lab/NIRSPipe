@@ -81,7 +81,8 @@ derivatives/nirspipe/
     ├── figures/                                    ← every figure of every run, one flat folder
     ├── logs/
     │   ├── sub-<label>[_ses-<s>][_task-<t>].log    ← text log, named by the run's selection
-    │   └── sub-<label>[_ses-<s>][_task-<t>].toml   ← run record
+    │   ├── sub-<label>[_ses-<s>][_task-<t>].toml   ← run record
+    │   └── inputs/                                 ← copies of the files the flags named
     └── [ses-<label>/]nirs/                         ← every data file has a .json sidecar
         ├── <run>_desc-od_nirs.snirf                ← prep: optical density
         ├── <run>_desc-sci_nirs.snirf               ← prep: channel screening
@@ -249,6 +250,8 @@ The log and the run record are named after what the run selected, for example `s
 ### Run record
 
 Each subject's run record holds the software versions, the exact command, every setting the run used, and, for each postprocessing setting, where it came from: the command line (`cli`), `--config`, the `mode` or the `default`. When the run ends, an `[outcome]` section says whether it succeeded and, if not, the first line of the error; the full error is in the log. A record without `[outcome]` belongs to a run that was stopped. The cohort page lists every subject whose last run did not succeed.
+
+Every file the flags name (the events tables, `--contrast-file`, `--roi-mapping`, the channel and span tables, `--bids-filter-file` and a `--config` settings file) is copied into `logs/inputs/` beside the record. Its `[inputs]` section gives each copy, the path the file was given at and its sha256, and `--config` on the record reads the copies. Raw QC records do the same.
 
 ```toml
 [execution]

@@ -101,7 +101,7 @@ nirspipe /data/bids /data/derivatives group
 
 ## Configuration file
 
-`--config` takes a TOML file of settings, so a run can be kept under version control and run again. Every run writes one: its run record, `sub-<label>/logs/sub-<label>.toml` (with `_ses-` and `_task-` added when `--session-label` or `--task-label` chose part of the subject), is in this format, so `--config` on a record reruns the run it records.
+`--config` takes a TOML file of settings, so a run can be kept under version control and run again. Every run writes one: its run record, `sub-<label>/logs/sub-<label>.toml` (with `_ses-` and `_task-` added when `--session-label` or `--task-label` chose part of the subject), is in this format, so `--config` on a record reruns the run it records. The files the run read are copied beside the record ([Run record](outputs.md#run-record)), and the rerun reads those copies, so it uses the same tables even after the originals change or move. A record moved without its `inputs/` folder reads the paths in its settings instead, with a warning.
 
 ```toml
 [prep]
