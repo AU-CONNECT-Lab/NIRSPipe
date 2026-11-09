@@ -12,6 +12,9 @@ NOTES = {
     "caveat.child_template":
         "--population child places the optodes on fsaverage, an adult head: MNE ships no "
         "template for 2 to 18 years. Pass --template to put the youngest on an infant one.",
+    "caveat.adolescent_template":
+        "--population adolescent places the optodes on fsaverage, an adult head: MNE ships "
+        "no template for 2 to 18 years.",
     "caveat.no_separation":
         "No channel fell in either separation range: the recording has no optode positions "
         "(every separation reads as zero) or the ranges exclude every channel. Metrics "

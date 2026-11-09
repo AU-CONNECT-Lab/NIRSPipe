@@ -21,8 +21,17 @@ resp_h_freq = 0.9
 dpf_age = 8.0
 template_by_age = false
 
+[adolescent]
+ages = [12.0, 18.0]
+cardiac_l_freq = 0.7
+cardiac_h_freq = 1.8
+resp_l_freq = 0.1
+resp_h_freq = 0.4
+dpf_age = 15.0
+template_by_age = false
+
 [adult]
-ages = [12.0, 65.0]
+ages = [18.0, 65.0]
 cardiac_l_freq = 0.7
 cardiac_h_freq = 1.8
 resp_l_freq = 0.1

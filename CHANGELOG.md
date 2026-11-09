@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `--population adolescent` for 12 to 18 years, with that age row's bands and the DPF at 15 years, and `adult` now starting at 18 with its values unchanged
+
 ### Changed
 - A GLM condition whose events last 0 s is fitted as an instantaneous response whose beta is its peak, where it was refused; `--stim-dur 0` is accepted
 - The dyad Methods name the Morlet's nondimensional frequency, its scales per octave and the coherence's smoothing in time and across scales, read from each WTC sidecar

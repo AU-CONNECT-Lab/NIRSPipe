@@ -24,7 +24,8 @@ DOCS = Path(__file__).resolve().parents[2] / "docs" / "workflows.md"
 SPANS = {
     "infant": ("birth to 3 months", "3 to 12 months"),
     "child": ("1 to 2 years", "2 to 4 years", "4 to 8 years", "8 to 12 years"),
-    "adult": ("12 to 18 years", "adults"),
+    "adolescent": ("12 to 18 years",),
+    "adult": ("adults",),
     "older": ("adults",),
 }
 SELECT = ("--participant-label", "01", "--skip-bids-validation")
@@ -133,16 +134,21 @@ def test_a_rerun_from_the_record_is_the_same_run(bids, tmp_path):
     assert rerun["prep_sources"]["dpf"] == "population"
 
 
-def test_the_preprocessed_run_carries_the_batch_dpf_and_the_bands(bids, tmp_path):
+@pytest.mark.parametrize("name, age, bands", [
+    ("adult", 30.0, ADULT_BANDS),
+    ("adolescent", 15.0, {**ADULT_BANDS, "resp_h_freq": 0.4}),
+])
+def test_the_preprocessed_run_carries_the_batch_dpf_and_the_bands(bids, tmp_path, name, age,
+                                                                   bands):
     run_cli.main([str(bids), str(tmp_path), "participant", "--sci-threshold", "0.75",
-                  "--population", "adult", *SELECT, "--no-report"])
+                  "--population", name, *SELECT, "--no-report"])
     preproc = json.loads(next(tmp_path.rglob("*desc-preproc_nirs.json")).read_text())
     params = preproc["parameters"]
-    assert params["dpf"] == pytest.approx([_scholkmann_wolf(w, 30.0) for w in WAVELENGTHS])
-    assert (params["dpf_age"], params["dpf_population"]) == (30.0, "adult")
+    assert params["dpf"] == pytest.approx([_scholkmann_wolf(w, age) for w in WAVELENGTHS])
+    assert (params["dpf_age"], params["dpf_population"]) == (age, name)
     sci = json.loads(next(tmp_path.rglob("*desc-sci_nirs.json")).read_text())["parameters"]
-    assert {k: sci[k] for k in ADULT_BANDS} == ADULT_BANDS
-    assert sci["population"] == "adult"
+    assert {k: sci[k] for k in bands} == bands
+    assert sci["population"] == name
 
 
 # ---- the infant template, by each participant's own age ----
@@ -211,7 +217,7 @@ def test_raw_qc_refuses_the_population_at_group_level(bids, tmp_path, capsys):
 def test_the_methods_name_the_population_values():
     assert _dpf_phrase([5.98, 5.23], 30.0, "adult") == (
         "differential pathlength factors (DPF) of 5.98 and 5.23, in ascending order of "
-        "wavelength, at 30 years, the package's age for 12 to 65 years, by the general "
+        "wavelength, at 30 years, the package's age for 18 to 65 years, by the general "
         "equation of Scholkmann and Wolf (2013)")
     both = {"population": "infant", "from_population": ["cardiac_l_freq", "cardiac_h_freq"]}
     assert _band_population(both) == ", the package's value for under 1 year"
@@ -226,3 +232,10 @@ def test_a_child_run_on_fsaverage_says_so():
     assert template_slots("optode_landmarks", {"space": "fsaverage"})["template_note"] == ""
     assert template_note("child", None) and template_note("child", "fsaverage")
     assert template_note("child", "2yr") is None and template_note("adult", None) is None
+
+
+def test_an_adolescent_run_on_fsaverage_says_so_without_the_infant_advice():
+    slots = template_slots("optode_landmarks", {"space": "fsaverage", "population": "adolescent"})
+    assert "so the adolescents' optodes were placed on fsaverage" in slots["template_note"]
+    note = template_note("adolescent", None)
+    assert "--population adolescent" in note and "infant" not in note

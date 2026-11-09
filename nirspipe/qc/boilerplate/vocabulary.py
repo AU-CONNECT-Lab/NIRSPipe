@@ -607,6 +607,10 @@ def _isc_slots(params: dict[str, Any]) -> dict[str, str]:
                     "correlation.")
     return {"chroma": chroma, "options": options}
 
+
+_YOUNG_POSSESSIVE = {"child": "children's", "adolescent": "adolescents'"}
+
+
 def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
     """Fill a section's {slots} from a sidecar's parameters.
 
@@ -617,12 +621,12 @@ def template_slots(key: str, params: dict[str, Any]) -> dict[str, str]:
         return _screening_slots(params)
     if key in ("optode_landmarks", "optode_frame"):
         space = str(params.get("space") or "fsaverage")
+        # MNE ships no template between its oldest infant one and fsaverage
+        whose = _YOUNG_POSSESSIVE.get(params.get("population"))
         return {"space": space,
-                # MNE ships no template between its oldest infant one and fsaverage
                 "template_note": (" MNE-Python provides no template for 2 to 18 years, so the "
-                                  "children's optodes were placed on fsaverage, an adult head."
-                                  if params.get("population") == "child"
-                                  and space == "fsaverage" else ""),
+                                  f"{whose} optodes were placed on fsaverage, an adult head."
+                                  if whose and space == "fsaverage" else ""),
                 "landmarks": str(params.get("landmarks_used") or 0),
                 "fit": f"{float(params.get('scalp_fit_mm') or 0):.1f}",
                 "frame": _OPTODE_FRAMES.get(params.get("method"), "")}

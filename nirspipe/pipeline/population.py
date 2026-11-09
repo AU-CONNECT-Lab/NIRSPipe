@@ -21,7 +21,7 @@ def population_values(name: str) -> dict:
 
 
 def age_span(name: str) -> str:
-    """``"12 to 65 years"``, ``"under 1 year"`` or ``"65 years and over"``."""
+    """``"18 to 65 years"``, ``"under 1 year"`` or ``"65 years and over"``."""
     low, high = population_values(name)["ages"]
     if low == 0:
         return f"under {high:g} year{'s' if high != 1 else ''}"
