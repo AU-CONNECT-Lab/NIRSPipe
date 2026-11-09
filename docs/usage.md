@@ -161,10 +161,11 @@ No mode fills a value that depends on the design, the montage or the population:
 |---|---|---|---|---|---|
 | `infant` | under 1 year | 1.5 to 3.1 | 0.3 to 1.1 | the age equation at 0.5 years | each participant's nearest infant template, by their age in `participants.tsv` |
 | `child` | 1 to 12 years | 0.8 to 2.6 | 0.2 to 0.9 | at 8 years | fsaverage, as MNE ships no template for 2 to 18 years |
-| `adult` | 12 to 65 years | 0.7 to 1.8 | 0.1 to 0.5 | at 30 years | fsaverage |
+| `adolescent` | 12 to 18 years | 0.7 to 1.8 | 0.1 to 0.4 | at 15 years | fsaverage, as MNE ships no template for 2 to 18 years |
+| `adult` | 18 to 65 years | 0.7 to 1.8 | 0.1 to 0.5 | at 30 years | fsaverage |
 | `older` | 65 years and over | 0.7 to 1.8 | 0.1 to 0.5 | at 70 years | fsaverage |
 
-The bands cover the ages of the group, from the [Channel screening](workflows.md#channel-screening) table. The DPF is computed at one age for the whole batch ([Beer-Lambert law](workflows.md#beer-lambert-law)); for a cohort that spans more than one group, use `--dpf age`, which takes each participant's own age. `older` differs from `adult` only in its DPF: an older cohort run as `adult` reads response amplitudes about 20% too high. Under `infant`, every participant needs an age in `participants.tsv`, or pass `--template`. `nirspipe-qc ... participant` takes `--population` the same way. The run report and the Methods say which values the population filled.
+The bands cover the ages of the group, from the [Channel screening](workflows.md#channel-screening) table. The DPF is computed at one age for the whole batch ([Beer-Lambert law](workflows.md#beer-lambert-law)); for a cohort that spans more than one group, use `--dpf age`, which takes each participant's own age. `older` differs from `adult` only in its DPF: an older cohort run as `adult` reads response amplitudes about 20% too high. `adolescent` differs from `adult` mainly in its DPF: an adolescent cohort run as `adult` reads them about 8 to 9% too low. Under `infant`, every participant needs an age in `participants.tsv`, or pass `--template`. `nirspipe-qc ... participant` takes `--population` the same way. The run report and the Methods say which values the population filled.
 
 ### Contrast file
 
