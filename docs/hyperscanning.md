@@ -225,7 +225,7 @@ Each pairing leaves out the excluded time of both members ([Excluded time](workf
 
 **`nirspipe-hyper-index`** rebuilds each dyad's landing page, `group-<id>_desc-index_report.html`, from the tables. `nirspipe-hyper` already writes it; use this for a tree written earlier.
 
-**`nirspipe-hyper-merge`** stacks every dyad's tables into one table per kind at the root of the tree, adding `group_id`, `task` and `session`, so a cohort analysis reads one file. It refuses tables computed with different settings (band, mask, whitening, stage, crossing, null), since they cannot be compared. `nirspipe-hyper` prints the merge command when the merged tables are missing or out of date.
+**`nirspipe-hyper-merge`** stacks every dyad's tables into one table per kind at the root of the tree, adding `group_id`, `task` and `session`, so a cohort analysis reads one file. It refuses tables computed with different settings (band, mask, each condition's own cone, whitening, stage, crossing, null), since they cannot be compared. `nirspipe-hyper` prints the merge command when the merged tables are missing or out of date.
 
 ## Resting-state dyads
 
