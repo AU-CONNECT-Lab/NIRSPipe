@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- CNR no longer comes back empty when two conditions start on one sample: the shared onset counts as one epoch
+
 ## [0.83.0] - 2026-11-09
 
 ### Added

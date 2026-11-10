@@ -20,7 +20,7 @@ from nirspipe.qc.figures.subject.raw_figures import _topo_layers, build_channel_
 from nirspipe.qc.metrics import gvtd_censor_spans
 from nirspipe.qc.metrics._helpers import epochable_events, long_short_channels
 from nirspipe.qc.metrics.aggregate import comparable_stage_metrics
-from nirspipe.qc.metrics.haemo import _band_mean
+from nirspipe.qc.metrics.haemo import _band_mean, _cnr_metrics
 from nirspipe.qc.metrics.windowed import task_scope_windows
 from nirspipe.qc.subject.sqm_record import _condition_cnr
 from nirspipe.utils.lineage import lineage_of
@@ -71,6 +71,16 @@ def test_a_bad_span_reaching_into_a_condition_still_rejects_its_epochs():
                      [50.0, 65.0, 85.0, 105.0, 125.0], [45.0, 0.0, 0.0, 0.0, 0.0],
                      ["BAD_gvtd", "tap", "tap", "tap", "tap"])
     assert _condition_cnr(haemo, 65.0, 125.0)["cnr_n_epochs"] == 2
+
+
+def test_two_conditions_on_one_onset_give_one_epoch():
+    rng = np.random.default_rng(0)
+    data = rng.standard_normal((2, int(SFREQ * 200))) * 1e-6
+    alone = _cnr_metrics(_hbo_raw(data, [40.0, 100.0], [60.0, 60.0], ["game", "game"]))
+    both = _cnr_metrics(_hbo_raw(data, [40.0, 40.0, 100.0], [60.0, 30.0, 60.0],
+                                 ["game", "gamefirst", "game"]))
+    assert both["cnr_n_epochs"] == 2
+    assert both["cnr_hbo_mean"] == alone["cnr_hbo_mean"]
 
 
 # ---- ALFF ----

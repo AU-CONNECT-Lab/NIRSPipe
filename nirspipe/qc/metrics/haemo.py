@@ -120,6 +120,10 @@ def _cnr_metrics(
     events, event_id = epochable_events(raw_haemo, baseline[0], response[1])
     if len(events) == 0:
         return {}
+    # conditions starting on one sample cut the same epoch, and mne refuses a repeated sample
+    _, once = np.unique(events[:, 0], return_index=True)
+    events = events[np.sort(once)]
+    event_id = {k: v for k, v in event_id.items() if v in set(events[:, 2].tolist())}
     picks = mne.pick_types(raw_haemo.info, fnirs=True)
     epochs = mne.Epochs(
         raw_haemo, events, event_id, tmin=baseline[0], tmax=response[1],
