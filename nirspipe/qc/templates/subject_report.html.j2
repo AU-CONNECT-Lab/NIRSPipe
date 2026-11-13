@@ -119,6 +119,13 @@
     {% endfor -%}
   </p>
   {% endif %}
+  {% if unread_flags %}
+  <p class="step-desc">Typed but not applied:
+    {% for flag, why in unread_flags -%}
+    <code>{{ flag }}</code> ({{ why }}){{ '; ' if not loop.last else '.' }}
+    {% endfor -%}
+  </p>
+  {% endif %}
 </div>
 
 <!-- ======================================================= preprocessing -->

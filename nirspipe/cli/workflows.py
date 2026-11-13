@@ -17,7 +17,7 @@ import mne
 import numpy as np
 
 from nirspipe.cli import _app_options, _shared
-from nirspipe.cli.run import mode_defaults, read_config
+from nirspipe.cli.run import _build_parser, mode_defaults, read_config, unread_settings
 from nirspipe.exceptions import StageError
 from nirspipe.io.bids import (bids_label, channel_status_bads, get_layout, get_nirs_files,
                               get_participant_age, read_bids_filter, validate_bids)
@@ -258,6 +258,20 @@ def _refuse_bad_contrast_file(args: dict[str, Any]) -> None:
         raise SystemExit(f"[error] {exc}") from None
 
 
+def _unread_typed(args: dict[str, Any]) -> list[tuple[str, str]]:
+    """``(flag, why)`` for each flag typed on the command line that this run, as resolved, does not apply."""
+    typed = args.get("typed") or ()
+    why = unread_settings(args)
+    flags = {a.dest: a.option_strings[0] for a in _build_parser()._actions if a.option_strings}
+    unread = [(flags[dest], why[dest]) for dest in typed if dest in why]
+    if not args.get("mode"):
+        # read, for the report's preview, yet the likeliest to be taken for a filter that ran
+        unread += [(flags[dest], "nothing is filtered without --mode; the report's spectrum "
+                                 "previews the filter")
+                   for dest in ("high_pass", "low_pass") if dest in typed]
+    return unread
+
+
 def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     """Stop a run whose input was cut into one file per condition before preprocessing.
 
@@ -361,6 +375,9 @@ def run_participant_level(args: dict[str, Any]) -> None:
                            if post_sources[field] in ("config", "mode")]
     filled_settings += [(key, _population_shown(args, key), "population")
                         for key in args.get("from_population") or ()]
+    unread = _unread_typed(args)
+    for flag, why in unread:
+        logger.warning("%s is typed but not applied: %s", flag, why)
 
     roi_map = _app_options.load_roi_mapping(args.get("roi_mapping"))
 
@@ -506,7 +523,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
                         roi_map=roi_map, provenance_path=provenance_path, sqm_label=label,
                         sqm_failure=sqm_failures.get(label),
                         roi_map_name=_roi_map_name(args),
-                        filled_settings=filled_settings,
+                        filled_settings=filled_settings, unread_flags=unread,
                         short_channel=post.get("short_channel"),
                     ) or []])
 
@@ -873,7 +890,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
     )
 
 
-def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None, sqm_failure=None):
+def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, args, glm_est, dm, alff_df=None, fc=None, fc_seed=None, fc_roi=None, high_pass=None, low_pass=None, after_haemo=None, roi_map=None, provenance_path=None, sqm_label=None, roi_map_name=None, filled_settings=None, short_channel=None, sqm_failure=None, unread_flags=None):
     from nirspipe.qc.subject.report import build_subject_report
 
     # rejected channels included, so the brain figures can draw them as rejected
@@ -923,6 +940,7 @@ def _emit_subject_report(subject, sub_dir, last_raw, last_result, prep_config, a
         sqm_failure=sqm_failure,
         roi_map_name=roi_map_name,
         filled_settings=filled_settings,
+        unread_flags=unread_flags,
         chromophores=in_order(args.get("chromophores") or DEFAULT_CHROMOPHORES),
         short_channel_requested=bool(short_channel),
     )

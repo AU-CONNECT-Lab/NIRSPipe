@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe ... group` refuses a participant-level flag, as `nirspipe-qc ... group` does, where it ran and ignored it
 - A command line missing several required flags names all of them at once, and which of them `--population` sets, where it named one per attempt
 - A value outside its flag's domain, such as an SCI line above 1 or a window of 0 s, is refused when parsed, in `--config` files too
+- A typed flag the run's mode or method does not read is named in a warning and in the run report, where it was dropped silently
 
 ### Fixed
 - CNR no longer comes back empty when two conditions start on one sample: the shared onset counts as one epoch

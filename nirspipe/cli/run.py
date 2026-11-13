@@ -416,6 +416,47 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
     args.inputs_given = {k: v for k, v in config["inputs_given"].items() if k not in given}
 
 
+# ---- settings a run does not read ----
+
+_GLM_ONLY = ("stim_dur", "hrf_model", "events_path", "contrast_file", "fir_delays")
+# read without a mode too: the report previews the filter and picks its chromophores
+_READ_WITHOUT_MODE = ("mode", "config", "high_pass", "low_pass", "chromophores")
+
+
+def unread_settings(settings: dict) -> dict[str, str]:
+    """``{dest: why}`` for each setting a run with these values, as resolved, does not read, typed or not."""
+    from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
+
+    unread: dict[str, str] = {}
+    mode = settings.get("mode")
+    if mode in (None, "", "none"):
+        post = set(config_keys()["post"]) - {"roi_mapping", *_READ_WITHOUT_MODE}
+        unread.update(dict.fromkeys(sorted(post), "nothing is postprocessed without --mode"))
+    else:
+        if mode != "glm":
+            unread.update(dict.fromkeys(_GLM_ONLY, "only --mode glm reads it"))
+        elif settings.get("hrf_model") != "fir":
+            unread["fir_delays"] = "only --hrf-model fir reads it"
+        drift = settings.get("drift_model")
+        if drift != "cosine":
+            unread["drift_high_pass"] = "only a cosine --drift-model reads it"
+        if drift != "polynomial":
+            unread["drift_order"] = "only a polynomial --drift-model reads it"
+        if mode != "rest" and not settings.get("fc"):
+            unread["min_time"] = "it gates FC and ALFF, which this run does not compute"
+        if settings.get("filter_method") == "fir":
+            unread["filter_order"] = "a fir --filter-method has no order"
+    if not settings.get("gvtd_censor"):
+        unread.update(dict.fromkeys(("gvtd_censor_n_std", "gvtd_min_epoch_s"),
+                                    "only --gvtd-censor reads it"))
+    method = settings.get("motion_correction")
+    for dest, readers in (("motion_std_thresh", STD_THRESH_DEFAULTS),
+                          ("wavelet_iqr", IQR_FACTOR_DEFAULTS)):
+        if method not in readers:
+            unread[dest] = f"--motion-correction {method} does not read it"
+    return unread
+
+
 def _refuse_participant_flags(argv: list[str] | None) -> None:
     """At group level, exit non-zero on a typed flag only the participant level reads."""
     parser = _build_parser()
@@ -435,6 +476,8 @@ def _refuse_participant_flags(argv: list[str] | None) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
+    # what was typed, which argparse's defaults hide: a typed flag the run will not read is named
+    args.typed = sorted(_shared.typed_flags(_build_parser(), argv))
     if args.analysis_level == "group":
         _refuse_participant_flags(argv)
     if args.config is not None:
