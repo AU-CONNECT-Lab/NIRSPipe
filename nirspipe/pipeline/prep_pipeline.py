@@ -28,7 +28,7 @@ from nirspipe.io.derivatives import (build_output_path, carry_entities, data_sta
 from nirspipe.io.head_template import FSAVERAGE, space_of
 from nirspipe.io.optode_space import Placement, hold_placement, place_optodes, write_channel_coords
 from nirspipe.io.snirf import write_snirf
-from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf
+from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf, wavelengths
 from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
     MotionMethod,
     correct_motion,
@@ -257,6 +257,10 @@ def od_to_haemo(raw_od: mne.io.Raw, dpf: list[float],
                 age: "float | None" = None) -> mne.io.Raw:
     """Convert OD to haemoglobin concentration via Beer-Lambert law; ``age`` is what an age DPF came from."""
     from mne.preprocessing.nirs import beer_lambert_law
+    n_wavelengths = len(wavelengths(raw_od))
+    if len(dpf) not in (1, n_wavelengths):
+        raise ValueError(f"--dpf has {len(dpf)} factors and the recording {n_wavelengths} "
+                         "wavelengths; give one factor, or one per wavelength")
     haemo = beer_lambert_law(raw_od, ppf=as_ppf(dpf))
     return stamp(haemo, stage="preproc", step="beer_lambert", source=raw_od, dpf=dpf,
                  **({"dpf_age": age} if age is not None else {}))

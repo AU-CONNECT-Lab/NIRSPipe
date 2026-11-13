@@ -228,6 +228,28 @@ def test_either_duration_source_lets_a_glm_through(given):
     _refuse_glm_without_durations(args)
 
 
+def test_both_duration_sources_stop_before_any_subject_runs(capsys):
+    args, _, _ = _resolved({"mode": "glm", **_BANDS, "stim_dur": 10.0,
+                            "events_path": "events.tsv"})
+    with pytest.raises(SystemExit):
+        _refuse_glm_without_durations(args)
+    assert "--stim-dur and --events-path are mutually exclusive" in capsys.readouterr().err
+
+
+def test_a_typed_events_table_against_a_config_files_duration_stops_too(capsys):
+    args, _, _ = _resolved({"mode": "glm", **_BANDS, "events_path": "events.tsv"},
+                           {"stim_dur": 10.0})
+    with pytest.raises(SystemExit):
+        _refuse_glm_without_durations(args)
+    assert "mutually exclusive" in capsys.readouterr().err
+
+
+def test_another_mode_reads_neither_so_both_pass():
+    args, _, _ = _resolved({"mode": "rest", **_BANDS, "stim_dur": 10.0,
+                            "events_path": "events.tsv"})
+    _refuse_glm_without_durations(args)
+
+
 def test_a_negative_stim_dur_stops_before_any_subject_runs():
     args, _, _ = _resolved({"mode": "glm", **_BANDS, "stim_dur": -1.0})
     with pytest.raises(SystemExit, match="--stim-dur -1: a duration cannot be negative"):

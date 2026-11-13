@@ -75,6 +75,15 @@ def test_the_conversion_records_the_factors_and_the_age():
     assert params["dpf"] == factors and params["dpf_age"] == 30.0
 
 
+def test_a_factor_count_the_recording_cannot_take_names_the_flag():
+    od = intensity_to_od(synth_raw("01", "rest"))
+    assert len(wavelengths(od)) == 2
+    with pytest.raises(ValueError, match="--dpf has 3 factors and the recording 2 wavelengths"):
+        od_to_haemo(od, [6.0, 6.0, 6.0])
+    # one factor serves every wavelength
+    assert lineage_of(od_to_haemo(od, [6.0])).params["dpf"] == [6.0]
+
+
 def test_the_methods_name_the_age_and_the_equation():
     sentence = step_sentence("beer_lambert", {"dpf": [6.2966, 5.2343], "dpf_age": 30.0})
     assert "6.30 and 5.23" in sentence and "age of 30 years" in sentence

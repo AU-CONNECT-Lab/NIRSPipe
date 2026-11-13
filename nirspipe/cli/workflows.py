@@ -219,7 +219,7 @@ def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
 
 
 def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
-    """Stop before any subject runs when a GLM has no way to set its event durations."""
+    """Stop before any subject runs when a GLM has no way, or two, to set its event durations."""
     from nirspipe.pipeline.glm import stim_durations
 
     try:
@@ -228,6 +228,9 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
         raise SystemExit(f"[error] {exc}.") from None
     if args.get("mode") != "glm":
         return
+    if stim_dur is not None and args.get("events_path"):
+        _shared.fail("--stim-dur and --events-path are mutually exclusive: the table gives "
+                     "each event its own duration. Drop one of the two.")
     if stim_dur is not None or args.get("events_path"):
         return
     raise SystemExit(

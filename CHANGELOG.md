@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - CNR no longer comes back empty when two conditions start on one sample: the shared onset counts as one epoch
 - The re-paired null's refusals named `--wtc-pair-null-pool` and `nirspipe-prep`'s named `--ses` and `--run`, flags that do not exist
 - A `--high-pass` above the `--low-pass` filtered as a band-stop the sidecar called a bandpass; every range typed backwards is now refused before anything runs
+- `--stim-dur` given with `--events-path` is refused before any subject, where every subject was preprocessed first and then failed
 
 ## [0.83.0] - 2026-11-09
 
