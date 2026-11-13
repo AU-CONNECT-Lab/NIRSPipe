@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from werkzeug.datastructures import MultiDict
 
-from nirspipe.cli._shared import BidsLabel
+from nirspipe.cli._shared import BidsLabel, non_negative_int, positive_int
 from nirspipe.interface.commands import COMMANDS, parser_for, subcommands
 from nirspipe.interface.forms import _SKIPPED, check, fields, required_first, to_argv
 
@@ -48,7 +48,8 @@ def _sample(field):
             return "sub-01 02", ["01", "02"] if action.type else ["sub-01", "02"]
         return None
     if field.kind == "number":
-        return ("3", 3) if action.type is int else ("0.25", 0.25)
+        whole = action.type in (int, positive_int, non_negative_int)
+        return ("3", 3) if whole else ("0.25", 0.25)
     if action.type is Path:
         return "C:/a b/c", Path("C:/a b/c")
     if action.type is BidsLabel:

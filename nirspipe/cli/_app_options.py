@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from nirspipe.cli._shared import BidsLabel, fail
+from nirspipe.cli._shared import BidsLabel, correlation, fail, non_negative, positive, share
 from nirspipe.io.head_template import CHOICES, FSAVERAGE, resolve_template, space_of, template_dir
 from nirspipe.pipeline.population import (BAND_KEYS, CHOICES as POPULATIONS, age_span,
                                           population_values)
@@ -46,19 +46,19 @@ def add_separation_bands(container, note: str = "") -> None:
     from nirspipe.qc.metrics._helpers import LONG_MIN_DIST, SHORT_MAX_DIST
 
     container.add_argument(
-        "--short-max-dist", type=float, default=None, metavar="MM",
+        "--short-max-dist", type=positive, default=None, metavar="MM",
         help=f"Separation at or below which a channel is short-distance, in mm "
              f"(default {SHORT_MAX_DIST * 1e3:.0f}). Short channels see scalp only and are "
              f"measured, and regressed, separately from the long ones."
              + (f" {note}" if note else ""))
     container.add_argument(
-        "--long-min-dist", type=float, default=None, metavar="MM",
+        "--long-min-dist", type=positive, default=None, metavar="MM",
         help=f"Separation at or above which a channel is long, in mm (default "
              f"{LONG_MIN_DIST * 1e3:.0f}). A channel in the gap above --short-max-dist "
              f"counts as neither short nor long."
              + (f" {note}" if note else ""))
     container.add_argument(
-        "--long-max-dist", type=float, default=None, metavar="MM",
+        "--long-max-dist", type=positive, default=None, metavar="MM",
         help="Separation above which a channel is too far to be long, in mm. Off by "
              "default, so any separation past --long-min-dist counts as long."
              + (f" {note}" if note else ""))
@@ -104,11 +104,11 @@ def resolved_separation_bands(args):
 
 
 def dpf_value(text: str) -> "float | str":
-    """One ``--dpf`` token: a number, or the word ``age``."""
+    """One ``--dpf`` token: a factor above zero, or the word ``age``."""
     if text.strip().lower() == "age":
         return "age"
     try:
-        return float(text)
+        return positive(text)
     except ValueError:
         raise argparse.ArgumentTypeError(f"{text!r} is neither a number nor 'age'") from None
 
@@ -235,7 +235,7 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
     """``--sci-threshold``: the coupling line channel screening rejects on. It has no default
     anywhere; ``required=False`` is for a parser that enforces it per analysis level."""
     container.add_argument(
-        "--sci-threshold", type=float, required=required,
+        "--sci-threshold", type=correlation, required=required,
         help="Scalp coupling index a window must reach, e.g. 0.8. Required: no default."
              + (f" {note}" if note else ""))
 
@@ -243,7 +243,7 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
 def add_psp_threshold(container, note: str = "") -> None:
     """``--psp-threshold``: an optional second line; without it SCI alone decides a window."""
     container.add_argument(
-        "--psp-threshold", type=float, default=None,
+        "--psp-threshold", type=non_negative, default=None,
         help="Peak spectral power (QT-NIRS scale) a window must also reach. No default: SCI "
              "alone decides and PSP is only shown. 0.1 is a line for fitting the headgear; "
              "0.075 has been used after recording."
@@ -255,7 +255,7 @@ def add_min_good_frac(container, note: str = "") -> None:
     from nirspipe.qc.metrics import GOOD_FRAC_PASS
 
     container.add_argument(
-        "--min-good-frac", type=float, default=None,
+        "--min-good-frac", type=share, default=None,
         help=f"Share of windows a channel must pass in to be kept, 0 to 1 (default "
              f"{GOOD_FRAC_PASS}). A window passes when it clears --sci-threshold, and "
              f"--psp-threshold if given. This is the criterion that rejects."
@@ -284,14 +284,14 @@ def add_motion_settings(container) -> None:
         return ", ".join(f"{method} {value:g}" for method, value in table.items())
 
     container.add_argument(
-        "--motion-std-thresh", type=float, default=None,
+        "--motion-std-thresh", type=positive, default=None,
         help="Motion detection threshold of the spline methods, in standard deviations of "
              "each channel's first difference: a source-detector pair's samples are marked "
              "where either wavelength changes by more than this within the detection window. "
              f"Read by {', '.join(STD_THRESH_DEFAULTS)}; default per method "
              f"({defaults(STD_THRESH_DEFAULTS)}). Refused with any other method.")
     container.add_argument(
-        "--wavelet-iqr", type=float, default=None,
+        "--wavelet-iqr", type=positive, default=None,
         help="Wavelet outlier fence, in interquartile ranges beyond the quartiles: detail "
              "coefficients past it are zeroed, so a smaller value removes more of the signal. "
              f"Read by {', '.join(IQR_FACTOR_DEFAULTS)}; default per method "

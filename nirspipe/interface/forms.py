@@ -8,6 +8,8 @@ import io
 from dataclasses import dataclass
 from pathlib import Path
 
+from nirspipe.cli._shared import NUMBER_TYPES
+
 # what --help itself leaves out of a form, and the subcommand switch, which has a page of its own
 _SKIPPED = (argparse._HelpAction, argparse._VersionAction, argparse._SubParsersAction)
 
@@ -51,7 +53,7 @@ def _kind(action: argparse.Action) -> str:
         return "choices" if many else "choice"
     if many:
         return "list"
-    if action.type in (int, float):
+    if action.type in (int, float, *NUMBER_TYPES):
         return "number"
     return "text"
 

@@ -552,19 +552,19 @@ def _build_parser() -> argparse.ArgumentParser:
     _app_options.add_psp_threshold(part)
     _app_options.add_min_good_frac(part)
     _app_options.add_screen_scope(part)
-    part.add_argument("--cardiac-l-freq", type=float,
+    part.add_argument("--cardiac-l-freq", type=_shared.positive,
                       help="Lower bound of cardiac band in Hz (required at participant level "
                            "unless --population sets it).")
-    part.add_argument("--cardiac-h-freq", type=float,
+    part.add_argument("--cardiac-h-freq", type=_shared.positive,
                       help="Upper bound of cardiac band in Hz (required at participant level "
                            "unless --population sets it).")
-    part.add_argument("--resp-l-freq", type=float,
+    part.add_argument("--resp-l-freq", type=_shared.positive,
                       help="Lower bound of respiration band in Hz (required at participant "
                            "level unless --population sets it).")
-    part.add_argument("--resp-h-freq", type=float,
+    part.add_argument("--resp-h-freq", type=_shared.positive,
                       help="Upper bound of respiration band in Hz (required at participant "
                            "level unless --population sets it).")
-    part.add_argument("--window-length", type=float, default=10.0,
+    part.add_argument("--window-length", type=_shared.positive, default=10.0,
                       help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
     part.add_argument("--epoch-qc", action="store_true",
                       help="Add a per-trial section: score each event window on its own and "

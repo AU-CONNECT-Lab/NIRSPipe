@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import secrets
 import sys
 from pathlib import Path
@@ -70,17 +71,51 @@ def add_skip_bids_validation(container) -> None:
         help="Do not check the input with bids-validator.")
 
 
-def _positive_int(text: str) -> int:
+def _bounded(low: float, high: float, said: str, above: bool = False):
+    """An argparse type for a finite number from ``low`` to ``high``, or above ``low`` alone."""
+    def number(text: str) -> float:
+        value = float(text)
+        inside = (low < value if above else low <= value) and value <= high
+        if not (math.isfinite(value) and inside):
+            raise argparse.ArgumentTypeError(f"must be {said}, got {text}")
+        return value
+    return number
+
+
+# what a flag's value can be by definition, checked as it is parsed, from a --config file too
+positive = _bounded(0.0, math.inf, "greater than 0", above=True)
+non_negative = _bounded(0.0, math.inf, "0 or more")
+share = _bounded(0.0, 1.0, "between 0 and 1")
+correlation = _bounded(-1.0, 1.0, "between -1 and 1")
+
+
+def positive_int(text: str) -> int:
     value = int(text)
     if value < 1:
         raise argparse.ArgumentTypeError(f"must be 1 or more, got {value}")
     return value
 
 
+def non_negative_int(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError(f"must be 0 or more, got {value}")
+    return value
+
+
+def seconds_or_auto(text: str) -> "float | str":
+    """A length in seconds, or ``auto`` where the command works one out."""
+    return "auto" if text.strip().lower() == "auto" else non_negative(text)
+
+
+# the types above that take a plain number, which a form shows as a number field
+NUMBER_TYPES = (positive, non_negative, share, correlation, positive_int, non_negative_int)
+
+
 def add_nprocs(container, unit: str = "subject", note: str = "") -> None:
     """``--nprocs``, the cores a command may use in all, spelled as the BIDS Apps interface spells it."""
     container.add_argument(
-        "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=_positive_int, default=None,
+        "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=positive_int, default=None,
         help=f"CPU cores to use in all. Up to this many {unit}s run at once and spare cores go "
              f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core."
              + (f" {note}" if note else ""))

@@ -83,7 +83,7 @@ def cmd_crop(
     # "auto" is the width the lowest analysed frequency needs, so it can only be resolved
     # once that frequency is known; a crop made for a band nobody has chosen yet keeps none
     margin = 0.0
-    if margin_s not in (None, "", "0"):
+    if margin_s not in (None, "", "0", 0):
         if str(margin_s).lower() == "auto":
             if not band_fmin:
                 print("[error] --margin auto requires --band-fmin (the lowest frequency the "
@@ -237,9 +237,6 @@ def cmd_keep_spans(
     conditions: list[str], duration: float | None, nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
     """Write a --keep-spans table holding every occurrence of the named conditions."""
-    if duration is not None and duration <= 0:
-        print("[error] --duration must be a positive number of seconds.", file=sys.stderr)
-        raise SystemExit(1)
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
@@ -311,11 +308,12 @@ def _build_parser() -> argparse.ArgumentParser:
                            "A recording without it falls back to the recording start.")
     crop.add_argument("--combine", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multi-segment output into one file.")
-    crop.add_argument("--margin", dest="margin_s", default=None, metavar="SEC|auto",
+    crop.add_argument("--margin", dest="margin_s", type=_shared.seconds_or_auto, default=None,
+                      metavar="SEC|auto",
                       help="Keep this many extra seconds on each side of every segment, and "
                            "record the span that was asked for in the sidecar. 'auto' takes "
                            "the width from --band-fmin. Off by default.")
-    crop.add_argument("--band-fmin", type=float, default=None, metavar="HZ",
+    crop.add_argument("--band-fmin", type=_shared.positive, default=None, metavar="HZ",
                       help="Lowest frequency the later analysis will average over, used only "
                            "to resolve --margin auto. Give the same value as "
                            "nirspipe-hyper --wtc-band-fmin.")
@@ -356,7 +354,7 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Edited events TSV to apply (same file applied to all subjects).")
     app.add_argument("--shift", type=float, default=None,
                      help="Shift all onsets by this many seconds (negative = earlier). Clipped to 0.")
-    app.add_argument("--set-duration", type=float, default=None,
+    app.add_argument("--set-duration", type=_shared.non_negative, default=None,
                      help="Set all marker durations to this value (seconds).")
     app.add_argument("--rename", nargs="+", action="extend", default=None,
                      help="Rename marker: 'old:new'. Repeatable.")
@@ -375,7 +373,7 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Annotation names whose occurrences to keep, as the recording's "
                            "markers name them. A selected recording holding none of them "
                            "stops the command.")
-    keep.add_argument("--duration", type=float, default=None, metavar="SEC",
+    keep.add_argument("--duration", type=_shared.positive, default=None, metavar="SEC",
                       help="Give every occurrence this length instead of its own, as "
                            "edit-markers --set-duration does. Without it a zero-length "
                            "occurrence stops the command.")

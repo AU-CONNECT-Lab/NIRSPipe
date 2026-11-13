@@ -213,7 +213,7 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Task label.")
     pw.add_argument("--run-label", "--run_label", default=None, type=_shared.BidsLabel,
                     help="Run label.")
-    pw.add_argument("--sci-threshold", type=float, default=None,
+    pw.add_argument("--sci-threshold", type=_shared.correlation, default=None,
                     help="A second SCI line: outline each SCI (10 s) cell below it. The red "
                          "cells stay the run's own line. Off when not given.")
     pw.add_argument("--port", type=int, default=None,
@@ -235,7 +235,7 @@ def _build_parser() -> argparse.ArgumentParser:
                          "Used to look up subject IDs in this group.")
     ph.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
-    ph.add_argument("--sci-threshold", type=float, default=None,
+    ph.add_argument("--sci-threshold", type=_shared.correlation, default=None,
                     help="A second SCI line: outline each member's SCI (10 s) cell below it. "
                          "The red cells stay each member's own line. Off when not given.")
     ph.add_argument("--port", type=int, default=None,
