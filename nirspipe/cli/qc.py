@@ -550,27 +550,28 @@ def _build_parser() -> argparse.ArgumentParser:
     _app_options.add_psp_threshold(part)
     _app_options.add_min_good_frac(part)
     _app_options.add_screen_scope(part)
-    part.add_argument("--cardiac-l-freq", type=_shared.positive,
+    part.add_argument("--cardiac-l-freq", metavar="HZ", type=_shared.positive,
                       help="Lower bound of cardiac band in Hz (required at participant level "
                            "unless --population sets it).")
-    part.add_argument("--cardiac-h-freq", type=_shared.positive,
+    part.add_argument("--cardiac-h-freq", metavar="HZ", type=_shared.positive,
                       help="Upper bound of cardiac band in Hz (required at participant level "
                            "unless --population sets it).")
-    part.add_argument("--resp-l-freq", type=_shared.positive,
+    part.add_argument("--resp-l-freq", metavar="HZ", type=_shared.positive,
                       help="Lower bound of respiration band in Hz (required at participant "
                            "level unless --population sets it).")
-    part.add_argument("--resp-h-freq", type=_shared.positive,
+    part.add_argument("--resp-h-freq", metavar="HZ", type=_shared.positive,
                       help="Upper bound of respiration band in Hz (required at participant "
                            "level unless --population sets it).")
-    part.add_argument("--window-length", type=_shared.positive, default=10.0,
-                      help="Sliding-window length (s) for windowed SCI/PSP/GVTD series.")
+    part.add_argument("--window-length", metavar="SECONDS", type=_shared.positive, default=10.0,
+                      help="Sliding-window length for the windowed SCI, PSP and GVTD series "
+                           "(default 10).")
     part.add_argument("--epoch-qc", action="store_true",
                       help="Add a per-trial section: score each event window on its own and "
                            "show them as a trial x metric heatmap.")
-    part.add_argument("--epoch-tmin", type=float, default=None,
+    part.add_argument("--epoch-tmin", metavar="SECONDS", type=float, default=None,
                       help="Trial window start relative to event onset in s; negative pulls in "
                            "a baseline. Omit to use each event's own duration.")
-    part.add_argument("--epoch-tmax", type=float, default=None,
+    part.add_argument("--epoch-tmax", metavar="SECONDS", type=float, default=None,
                       help="Trial window end relative to event onset in s. Given together with "
                            "--epoch-tmin, or neither.")
     _app_options.add_separation_bands(part)

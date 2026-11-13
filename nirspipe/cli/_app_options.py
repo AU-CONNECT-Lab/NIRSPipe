@@ -236,7 +236,7 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
     """``--sci-threshold``: the coupling line channel screening rejects on. It has no default
     anywhere; ``required=False`` is for a parser that enforces it per analysis level."""
     container.add_argument(
-        "--sci-threshold", type=correlation, required=required,
+        "--sci-threshold", metavar="R", type=correlation, required=required,
         help="Scalp coupling index a window must reach, e.g. 0.8. Required: no default."
              + (f" {note}" if note else ""))
 
@@ -244,7 +244,7 @@ def add_sci_threshold(container, required: bool = False, note: str = "") -> None
 def add_psp_threshold(container, note: str = "") -> None:
     """``--psp-threshold``: an optional second line; without it SCI alone decides a window."""
     container.add_argument(
-        "--psp-threshold", type=non_negative, default=None,
+        "--psp-threshold", metavar="POWER", type=non_negative, default=None,
         help="Peak spectral power (QT-NIRS scale) a window must also reach. No default: SCI "
              "alone decides and PSP is only shown. 0.1 is a line for fitting the headgear; "
              "0.075 has been used after recording."
@@ -256,7 +256,7 @@ def add_min_good_frac(container, note: str = "") -> None:
     from nirspipe.qc.metrics import GOOD_FRAC_PASS
 
     container.add_argument(
-        "--min-good-frac", type=share, default=None,
+        "--min-good-frac", metavar="SHARE", type=share, default=None,
         help=f"Share of windows a channel must pass in to be kept, 0 to 1 (default "
              f"{GOOD_FRAC_PASS}). A window passes when it clears --sci-threshold, and "
              f"--psp-threshold if given. This is the criterion that rejects."
@@ -285,14 +285,14 @@ def add_motion_settings(container) -> None:
         return ", ".join(f"{method} {value:g}" for method, value in table.items())
 
     container.add_argument(
-        "--motion-std-thresh", type=positive, default=None,
+        "--motion-std-thresh", metavar="SD", type=positive, default=None,
         help="Motion detection threshold of the spline methods, in standard deviations of "
              "each channel's first difference: a source-detector pair's samples are marked "
              "where either wavelength changes by more than this within the detection window. "
              f"Read by {', '.join(STD_THRESH_DEFAULTS)}; default per method "
              f"({defaults(STD_THRESH_DEFAULTS)}). Refused with any other method.")
     container.add_argument(
-        "--wavelet-iqr", type=positive, default=None,
+        "--wavelet-iqr", metavar="IQR", type=positive, default=None,
         help="Wavelet outlier fence, in interquartile ranges beyond the quartiles: detail "
              "coefficients past it are zeroed, so a smaller value removes more of the signal. "
              f"Read by {', '.join(IQR_FACTOR_DEFAULTS)}; default per method "
@@ -394,10 +394,10 @@ def add_alignment_window(container) -> None:
     container.add_argument("--no-align", action="store_true",
                            help="Skip trigger-based alignment; trim all recordings to the "
                                 "shortest duration.")
-    container.add_argument("--tstart", type=float, default=None,
+    container.add_argument("--tstart", metavar="SECONDS", type=float, default=None,
                            help="Report on this time (s) onward, on the aligned clock, where 0 "
                                 "is the shared trigger. Omit to start at the alignment point.")
-    container.add_argument("--tend", type=float, default=None,
+    container.add_argument("--tend", metavar="SECONDS", type=float, default=None,
                            help="Report up to this time (s) on the aligned clock; omit to run to "
                                 "the end. Narrows the synchrony metrics only, not the "
                                 "per-subject quality record. In `nirspipe-hyper` the window is "

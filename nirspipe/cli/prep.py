@@ -298,14 +298,17 @@ def _build_parser() -> argparse.ArgumentParser:
     crop.add_argument("output_dir", type=Path,
                   help="Where the derived tree goes. A `cropped/` subtree is created under it, so point this at a derivatives root rather than at one dataset.")
     _add_selection(crop)
-    crop.add_argument("--tmin", type=float, default=None, help="Start time in seconds (single segment).")
-    crop.add_argument("--tmax", type=float, default=None, help="End time in seconds (single segment).")
+    crop.add_argument("--tmin", metavar="SECONDS", type=float, default=None,
+                      help="Start time in seconds (single segment).")
+    crop.add_argument("--tmax", metavar="SECONDS", type=float, default=None,
+                      help="End time in seconds (single segment).")
     crop.add_argument("--segments-path", type=Path, default=None,
                       help="TSV with onset/duration columns defining segments to keep. Each "
                            "segment written to its own file is named by a `task` column, "
                            "which more than one segment needs unless --combine is given.")
     crop.add_argument("--align", choices=["none", "trigger"], default="none",
-                      help="t=0 for --tmin/--tmax and segment onsets: 'none' = recording start, "
+                      help="t=0 for --tmin/--tmax and segment onsets: 'none' (default) = recording "
+                           "start, "
                            "'trigger' = first annotation named --trigger-name.")
     crop.add_argument("--trigger-name", default=None,
                       help="Annotation description marking t=0 when --align trigger. "
@@ -357,9 +360,9 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_selection(app)
     app.add_argument("--tsv", type=Path, default=None,
                      help="Edited events TSV to apply (same file applied to all subjects).")
-    app.add_argument("--shift", type=float, default=None,
+    app.add_argument("--shift", metavar="SECONDS", type=float, default=None,
                      help="Shift all onsets by this many seconds (negative = earlier). Clipped to 0.")
-    app.add_argument("--set-duration", type=_shared.non_negative, default=None,
+    app.add_argument("--set-duration", metavar="SECONDS", type=_shared.non_negative, default=None,
                      help="Set all marker durations to this value (seconds).")
     app.add_argument("--rename", nargs="+", action="extend", default=None,
                      help="Rename marker: 'old:new'. Repeatable.")

@@ -123,24 +123,24 @@ def _build_parser() -> argparse.ArgumentParser:
     prep_opt = p.add_argument_group("preprocessing (optional)")
     prep_opt.add_argument("--motion-correction", choices=_app_options.MOTION_CHOICES,
                           default="tddr",
-                          help="Motion correction method.")
+                          help="Motion correction method (default tddr).")
     _app_options.add_template(prep_opt)
     _app_options.add_population(prep_opt, "the four cardiac and respiration band edges")
     _app_options.add_motion_settings(prep_opt)
     _app_options.add_reviewer_marks(
         prep_opt, bad_spans_note=" Filled by --censor-fill before any filter.")
-    prep_opt.add_argument("--cardiac-l-freq", type=_shared.positive,
+    prep_opt.add_argument("--cardiac-l-freq", metavar="HZ", type=_shared.positive,
                           help="Lower bound of cardiac band in Hz (required at participant level "
                                "unless --population sets it). Adult resting ~0.7; children and "
                                "infants higher (e.g. 1.0-1.7).")
-    prep_opt.add_argument("--cardiac-h-freq", type=_shared.positive,
+    prep_opt.add_argument("--cardiac-h-freq", metavar="HZ", type=_shared.positive,
                           help="Upper bound of cardiac band in Hz (required at participant level "
                                "unless --population sets it). Adult resting ~1.5; children and "
                                "infants higher (e.g. 2.5-3.0).")
-    prep_opt.add_argument("--resp-l-freq", type=_shared.positive,
+    prep_opt.add_argument("--resp-l-freq", metavar="HZ", type=_shared.positive,
                           help="Lower bound of respiration band in Hz (required at participant "
                                "level unless --population sets it). Adult ~0.1; infants higher.")
-    prep_opt.add_argument("--resp-h-freq", type=_shared.positive,
+    prep_opt.add_argument("--resp-h-freq", metavar="HZ", type=_shared.positive,
                           help="Upper bound of respiration band in Hz (required at participant "
                                "level unless --population sets it). Adult ~0.5; infants higher.")
     # the other screening line, optional unlike --sci-threshold
@@ -148,14 +148,15 @@ def _build_parser() -> argparse.ArgumentParser:
     _app_options.add_min_good_frac(prep_opt)
     _app_options.add_screen_scope(prep_opt)
     _app_options.add_separation_bands(prep_opt)
-    prep_opt.add_argument("--window-length", type=_shared.positive, default=10.0,
-                          help="Sliding-window length (s) for windowed SCI/PSP/GVTD QC series.")
-    prep_opt.add_argument("--epoch-tmin", type=float, default=None,
+    prep_opt.add_argument("--window-length", metavar="SECONDS", type=_shared.positive, default=10.0,
+                          help="Sliding-window length for the windowed SCI, PSP and GVTD series "
+                               "(default 10).")
+    prep_opt.add_argument("--epoch-tmin", metavar="SECONDS", type=float, default=None,
                           help="Trial window start relative to event onset in s, for the epoch "
                                "figures, the glm block average and per-trial scoring; negative "
                                "pulls in a baseline. Omitted, the figures and the block average "
                                "use -5 to 25 s and each trial is scored over its own duration.")
-    prep_opt.add_argument("--epoch-tmax", type=float, default=None,
+    prep_opt.add_argument("--epoch-tmax", metavar="SECONDS", type=float, default=None,
                           help="Trial window end relative to event onset in s. Given together "
                                "with --epoch-tmin, or neither.")
     prep_opt.add_argument("--epoch-chunk-duration", type=_shared.positive, default=None,
@@ -176,13 +177,14 @@ def _build_parser() -> argparse.ArgumentParser:
                                "seen only on short channels. Annotated, never cut, so epoching "
                                "drops the trials they overlap. Off by default: on a high-motion "
                                "recording it can flag everything.")
-    prep_opt.add_argument("--gvtd-censor-n-std", type=float, default=10.0,
+    prep_opt.add_argument("--gvtd-censor-n-std", metavar="SD", type=float, default=10.0,
                           help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
-                               "mode. 10 is the lenient value used for censoring, and the "
+                               "mode (default 10, a lenient value for censoring). The "
                                "reports score at the same 10.")
-    prep_opt.add_argument("--gvtd-min-epoch", type=_shared.non_negative, default=30.0,
-                          help="Shortest surviving stretch --gvtd-censor keeps (s). Anything "
-                               "shorter is censored with the artifacts around it.")
+    prep_opt.add_argument("--gvtd-min-epoch", metavar="SECONDS", type=_shared.non_negative,
+                          default=30.0,
+                          help="Shortest surviving stretch --gvtd-censor keeps (default 30). "
+                               "Anything shorter is censored with the artifacts around it.")
 
     post = p.add_argument_group("postprocessing (requires --mode)")
     post.add_argument("--mode", choices=_MODE_CHOICES,
@@ -192,10 +194,10 @@ def _build_parser() -> argparse.ArgumentParser:
                            "Each mode fills in its own defaults for the post settings, which "
                            "--config and then the command line override. The run record "
                            "names where each setting came from.")
-    post.add_argument("--high-pass", type=_cutoff,
+    post.add_argument("--high-pass", metavar="HZ|none", type=_cutoff,
                       help="High-pass filter cutoff in Hz, e.g. 0.01, or none to switch off the "
                            "mode's default.")
-    post.add_argument("--low-pass",  type=_cutoff,
+    post.add_argument("--low-pass", metavar="HZ|none",  type=_cutoff,
                       help="Low-pass filter cutoff in Hz, e.g. 0.5, or none to switch off the "
                            "mode's default.")
     post.add_argument("--filter-method", choices=FILTER_METHODS,
@@ -203,7 +205,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            "Butterworth. 'fir' is a hamming-windowed "
                            "linear-phase filter, which needs 3.3 * sfreq / transition samples and "
                            "is refused when that is longer than the recording.")
-    post.add_argument("--filter-order", type=_shared.positive_int,
+    post.add_argument("--filter-order", metavar="N", type=_shared.positive_int,
                       help=f"Butterworth order, default {DEFAULT_FILTER_ORDER}, ignored by "
                            "--filter-method fir. Applied with filtfilt, so the effective rolloff "
                            "is twice this and the cutoff sits at -6 dB.")
@@ -218,7 +220,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            f"joins the kept samples either side, 'spline' fits one cubic spline "
                            f"through them, 'lomb' rebuilds the span from a Lomb-Scargle fit up "
                            f"to {LOMB_FMAX_HZ:g} Hz. The spans stay marked.")
-    post.add_argument("--resample-sfreq", type=_shared.positive,
+    post.add_argument("--resample-sfreq", metavar="HZ", type=_shared.positive,
                       help="Target sampling rate in Hz after filtering, e.g. 2.0.")
     # None rather than False, here and on --drift-order, so a --config or mode value can show
     post.add_argument("--combine-runs", action=argparse.BooleanOptionalAction, default=None,
@@ -236,7 +238,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            "residual this mode leaves: the task residual in glm, the confound "
                            "residual in denoise. Ignored by --mode rest, which writes them "
                            "anyway.")
-    post.add_argument("--min-time", type=_shared.non_negative,
+    post.add_argument("--min-time", metavar="SECONDS", type=_shared.non_negative,
                       help="Seconds outside every BAD_ span a run needs before FC and ALFF are "
                            "computed; default 0, off. A run under it gets no FC or ALFF file, "
                            "and its residual's sidecar says why. The GLM fit is not affected.")
@@ -267,7 +269,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "since it depends on the design: at most 1/(2 x the slowest "
                           "condition repeat). 'auto' (glm only) computes that per run from its "
                           "events, capped at 0.01 Hz and never below --high-pass.")
-    glm.add_argument("--drift-order", type=_shared.non_negative_int,
+    glm.add_argument("--drift-order", metavar="N", type=_shared.non_negative_int,
                      help="Polynomial drift order (polynomial drift model only), default 1.")
     glm.add_argument("--fir-delays", nargs="+", action="extend", type=int, metavar="SCAN",
                      help="FIR delay bins in scans, e.g. 0 1 2 3 4 5 (only used when "

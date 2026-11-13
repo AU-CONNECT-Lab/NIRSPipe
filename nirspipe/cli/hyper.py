@@ -872,7 +872,8 @@ _LEVELS = ["group"]
 def _add_device(container) -> None:
     container.add_argument(
         "--device", choices=["cpu", "cuda"], default="cpu",
-        help="Where the wavelet transforms run. cuda uses an NVIDIA card in double precision, "
+        help="Where the wavelet transforms run (default cpu). cuda uses an NVIDIA card in "
+             "double precision, "
              f"checked against the CPU on each group's first pairing; install with {INSTALL_HINT}.")
 
 
@@ -913,12 +914,12 @@ def _command_parser(prog: str, description: str, *, reads_subjects: bool,
 
 def _add_band_options(container) -> None:
     """The band a band mean reads, which means the same to `run` and to `band`."""
-    container.add_argument("--wtc-band-fmin", type=_shared.positive, default=None,
+    container.add_argument("--wtc-band-fmin", metavar="HZ", type=_shared.positive, default=None,
                            help="Lower bound (Hz) of the band the per-channel WTC TSV "
                                 "averages over. For nirspipe-hyper it defaults to --band-fmin, "
                                 "else --wtc-fmin, i.e. the whole computed axis; for "
                                 "nirspipe-hyper-band it is the new band and is required.")
-    container.add_argument("--wtc-band-fmax", type=_shared.positive, default=None,
+    container.add_argument("--wtc-band-fmax", metavar="HZ", type=_shared.positive, default=None,
                            help="Upper bound (Hz) of that band. Defaults to --band-fmax, "
                                 "else --wtc-fmax, for nirspipe-hyper; required for "
                                 "nirspipe-hyper-band.")
@@ -960,23 +961,24 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     _add_band_options(bands)
     execution.add_argument("--verbose", action="store_true", help=_shared.VERBOSE_HELP)
     source.add_argument("--desc", default="preproc",
-                        help="desc entity of the per-subject stage the inter-brain metrics read, "
+                        help="desc entity of the per-subject stage the inter-brain metrics read "
+                           "(default preproc), "
                              "e.g. 'preproc' (Beer-Lambert output) or 'errts' (confound-regression "
                              "residual, which is what short-channel regression leaves behind). "
                              "Must be a haemoglobin stage, not an optical-density one.")
     pairing.add_argument("--roi-mapping", type=Path, default=None,
                          help="JSON file mapping ROI labels to lists of channel names, for "
                               "ROI-level WTC. Optional.")
-    wtc.add_argument("--wtc-fmin", type=_shared.positive, default=0.004,
-                     help="Lower bound (Hz) for the WTC frequency axis.")
-    wtc.add_argument("--wtc-fmax", type=_shared.positive, default=0.20,
-                     help="Upper bound (Hz) for the WTC frequency axis.")
+    wtc.add_argument("--wtc-fmin", metavar="HZ", type=_shared.positive, default=0.004,
+                     help="Lower bound of the WTC frequency axis (default 0.004).")
+    wtc.add_argument("--wtc-fmax", metavar="HZ", type=_shared.positive, default=0.20,
+                     help="Upper bound of the WTC frequency axis (default 0.20).")
     wtc.add_argument("--wtc-significance", action="store_true",
                      help="Overlay a Monte Carlo significance contour on WTC "
                           "(slow: see --wtc-mc-count for how slow). This asks whether a "
                           "time-frequency cell beats red noise, which is a different question "
                           "from the phase-scrambled null of --wtc-phase-null.")
-    wtc.add_argument("--wtc-mc-count", type=_shared.positive_int, default=300,
+    wtc.add_argument("--wtc-mc-count", metavar="N", type=_shared.positive_int, default=300,
                      help="Surrogate series behind each --wtc-significance contour "
                           "(default 300). This is what the runtime is spent on and it "
                           "scales linearly; lower it to preview a run, raise it to settle "
@@ -1071,7 +1073,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                              "own, 'subject' the union over the subject's runs in the pairs table, "
                              "so all conditions share one channel set. They differ only when "
                              "conditions were cropped to separate tasks before preprocessing.")
-    isc.add_argument("--isc-threshold", type=_shared.share, default=None,
+    isc.add_argument("--isc-threshold", metavar="R", type=_shared.share, default=None,
                      help="Absolute |ISC| a pairing must clear for a chord in the connectivity "
                           "circle. By default chords mark pairings above their own null (with "
                           "--isc-phase-null) or the strongest tenth (without). Its scale moves "
@@ -1182,7 +1184,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                                  "homologous pairings averaged), and with a crossed null so is "
                                  "every ordered region pair. A region needs the real tables' "
                                  "--wtc-roi-min-channels channels per member.")
-    group_null.add_argument("--n-resample", type=_shared.positive_int, default=20000,
+    group_null.add_argument("--n-resample", metavar="N", type=_shared.positive_int, default=20000,
                             help="Resamples behind the cohort null (default 20000). Each "
                                  "picks one stand-in per occasion, so the finest p it can "
                                  "express is 1/(n+1).")

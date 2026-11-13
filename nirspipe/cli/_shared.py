@@ -123,7 +123,7 @@ NUMBER_TYPES = (positive, non_negative, share, correlation, positive_int, non_ne
 def add_nprocs(container, unit: str = "subject", note: str = "") -> None:
     """``--nprocs``, the cores a command may use in all, spelled as the BIDS Apps interface spells it."""
     container.add_argument(
-        "--nprocs", "--n_cpus", "--n-cpus", dest="nprocs", type=positive_int, default=None,
+        "--nprocs", "--n_cpus", "--n-cpus", type=positive_int, default=None, metavar="N",
         help=f"CPU cores to use in all. Up to this many {unit}s run at once and spare cores go "
              f"to each {unit}'s numerics. Omit to run one {unit} at a time on every core."
              + (f" {note}" if note else ""))
