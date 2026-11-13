@@ -335,6 +335,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           "correction and the bandpass each see one segment, which moves "
                           "both. Preprocess the uncut recording and crop the result instead "
                           "(`nirspipe-prep crop --input-desc`).")
+    _shared.short_usage(p)
     return p
 
 

@@ -13,6 +13,18 @@ from typing import NoReturn
 VERBOSE_HELP = ("Print debug messages on the console too, each step's timing and paths among them.")
 
 
+def short_usage(parser: argparse.ArgumentParser) -> None:
+    """One usage line, the positionals and required flags then [options], for errors to print."""
+    positionals, required = [], []
+    for action in parser._actions:
+        if not action.option_strings:
+            positionals.append("{" + ",".join(action.choices) + "}" if action.choices
+                               else action.metavar or action.dest)
+        elif action.required:
+            required.append(f"{action.option_strings[0]} {action.metavar or action.dest.upper()}")
+    parser.usage = " ".join(["%(prog)s", *positionals, *required, "[options]"])
+
+
 def fail(message: str) -> NoReturn:
     """Print one refusal to stderr and exit non-zero."""
     print(f"Error: {message}", file=sys.stderr)

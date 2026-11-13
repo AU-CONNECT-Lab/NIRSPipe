@@ -38,6 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--overwrite", action="store_true",
                    help="Replace a recording the dataset already holds under the same "
                         "entities. Without it the conversion stops there.")
+    _shared.short_usage(p)
     return p
 
 

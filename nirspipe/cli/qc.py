@@ -606,6 +606,7 @@ def _build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--group-id", default=None, type=_shared.BidsLabel,
                      help="Process only this group_id of --pairs-csv.")
     _app_options.add_alignment_window(grp)
+    _shared.short_usage(p)
     return p
 
 

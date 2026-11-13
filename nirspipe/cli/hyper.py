@@ -1287,6 +1287,8 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "channels. A differing null iteration count only warns: n_iter is kept "
                     "per row.")
 
+    for parser in (run, band, group_null, index, pair, merge):
+        _shared.short_usage(parser)
     return {p.prog: p for p in (run, band, group_null, index, pair, merge)}
 
 
