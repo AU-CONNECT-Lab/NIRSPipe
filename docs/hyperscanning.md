@@ -86,7 +86,7 @@ Before the slow part starts, every dyad prints how many channels it keeps:
 Coherence is computed for each channel pairing over `--wtc-fmin` to `--wtc-fmax` (0.004 to 0.20 Hz by default). The number in the tables is the **band mean**: the coherence averaged over the band you choose (`--band-fmin` / `--band-fmax`) and over time, with its Fisher z. The band mean draws on a little more than the band itself, since the wavelet and the smoothing across frequencies spread each frequency: 0.02 to 0.10 Hz reads from about 0.013 to 0.15 Hz.
 
 - **Cone of influence.** By default the band mean leaves out the cone of influence, the cells near the start and end of the recording that the edges distort. `--no-wtc-mask-coi` keeps them.
-- **Chromophores.** `--wtc-chroma` picks `hbo`, `hbr` and/or `hbt` (default `hbo hbr`). HbO is only ever paired with HbO, and so on. Each chromophore costs a full run.
+- **Chromophores.** `--chromophores` picks `hbo`, `hbr` and/or `hbt` (default `hbo hbr`). HbO is only ever paired with HbO, and so on. Each chromophore costs a full run.
 - **Crossing.** By default every channel of one member is paired with every channel of the other, not only the same channel, and the report adds a channel-by-channel matrix. `--no-channel-cross` keeps the same-channel pairings only, and is much faster.
 - **Prewhitening.** `--wtc-whiten SECONDS` removes each channel's own slow autocorrelation before the coherence. Off by default; both nulls follow it.
 - **Significance contour.** `--wtc-significance` draws a significance contour against red noise on the maps. This answers a different question from the nulls below, and it is slow.
@@ -199,7 +199,7 @@ With few stand-ins, no single channel can reach a small p value. `nirspipe-hyper
 | by occasion | the channels averaged, compared with that occasion's own draws |
 | cohort | the channels averaged, then the occasions averaged |
 
-The cohort level is tested two ways, named in the `test` column: `resample` (`--n-resample`, 20000 by default) and `paired`, which tests the real values against each occasion's average null, paired over occasions. With the phase-scrambled null, read `paired` only. `--null` picks which null (`repaired`, `phase` or both), and `--chroma` which chromophores.
+The cohort level is tested two ways, named in the `test` column: `resample` (`--n-resample`, 20000 by default) and `paired`, which tests the real values against each occasion's average null, paired over occasions. With the phase-scrambled null, read `paired` only. `--null` picks which null (`repaired`, `phase` or both), and `--chromophores` which chromophores.
 
 With `--roi-mapping`, each region is tested beside the whole-brain mean. A group of three or more counts as one occasion. When the pairs file has a `role` column, each pair of roles (`student-teacher`, `student-student`) is also tested on its own.
 

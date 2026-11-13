@@ -138,7 +138,7 @@ def test_raw_qc_and_the_pair_null_write_the_same_on_two_processes(cohort):
                         "--wtc-band-fmax", "0.10", "--no-report", "--nprocs", nprocs])
         # by row order nobody stands in for the triad G02's third member, so any member may
         hyper_cli.main_pair_null([str(deriv), str(out / "hyper"), "group", "--pairs-csv", str(pairs),
-                                  "--chroma", "hbo", "--nprocs", nprocs,
+                                  "--chromophores", "hbo", "--nprocs", nprocs,
                                   "--wtc-pair-pool", "any"])
         trees[nprocs] = out
 

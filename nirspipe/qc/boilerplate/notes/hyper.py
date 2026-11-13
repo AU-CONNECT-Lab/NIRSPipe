@@ -121,8 +121,8 @@ NOTES = {
         "chromophore is a separate pass, never mixed with another.</b> Coupling in HbO but not "
         "HbR is a caution flag.",
     "hyper_post.chromophore_one":
-        "Only {chroma} was run (<code>--wtc-chroma {flag}</code>), for coherence and "
-        "correlation alike; HbO and HbR together (<code>--wtc-chroma hbo hbr</code>) check "
+        "Only {chroma} was run (<code>--chromophores {flag}</code>), for coherence and "
+        "correlation alike; HbO and HbR together (<code>--chromophores hbo hbr</code>) check "
         "each other.",
     "hyper_post.wtc_channel":
         "Morlet wavelet. Arrows are relative phase: right is in phase, up is {lead} leading. "

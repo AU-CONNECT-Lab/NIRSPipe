@@ -103,7 +103,7 @@ def test_the_pair_null_on_the_card_writes_the_cpus_null_and_its_check(cohort):
         # two processes, so each opens the card in its own worker; by row order the dyad
         # G01 has nobody to stand in for the triad G02's third member, so any member may
         hyper_cli.main_pair_null([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
-                                  "--chroma", "hbo", "--device", device, "--nprocs", "2",
+                                  "--chromophores", "hbo", "--device", device, "--nprocs", "2",
                                   "--wtc-pair-pool", "any"])
         trees[device] = out
     _same_tables(trees["cpu"], trees["cuda"])

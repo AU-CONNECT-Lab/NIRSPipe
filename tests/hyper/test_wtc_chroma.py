@@ -269,7 +269,7 @@ def test_the_flag_defaults_to_hbo_and_hbr():
 
     args = _parsers()["nirspipe-hyper"].parse_args(
         ["deriv", "out", "group", "--pairs-csv", "pairs.csv"])
-    assert args.wtc_chroma == ["hbo", "hbr"]
+    assert args.chromophores == ["hbo", "hbr"]
 
 
 @pytest.mark.parametrize("value", [["hbo"], ["hbr"], ["hbt"], ["hbo", "hbr", "hbt"]])
@@ -277,8 +277,8 @@ def test_the_flag_takes_any_of_the_three_chromophores(value):
     from nirspipe.cli.hyper import _parsers
 
     args = _parsers()["nirspipe-hyper"].parse_args(
-        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", *value])
-    assert args.wtc_chroma == value
+        ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--chromophores", *value])
+    assert args.chromophores == value
 
 
 def test_the_flag_refuses_anything_else():
@@ -287,7 +287,7 @@ def test_the_flag_refuses_anything_else():
 
     with pytest.raises(SystemExit):
         _parsers()["nirspipe-hyper"].parse_args(
-            ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--wtc-chroma", "both"])
+            ["deriv", "out", "group", "--pairs-csv", "pairs.csv", "--chromophores", "both"])
 
 
 # ---- the traps the structure exists to avoid ----
@@ -486,7 +486,7 @@ def test_the_page_carries_every_chromophore_that_ran(dyad, tmp_path):
 
 
 def test_one_chromophore_embeds_only_that_one(dyad, tmp_path):
-    """`--wtc-chroma hbo` names no second chromophore anywhere on the page, so nothing
+    """`--chromophores hbo` names no second chromophore anywhere on the page, so nothing
     points at a set of maps that was never drawn."""
     html = _page(dyad, tmp_path, ("hbo",))
     assert sorted(_js_var(html, "_PER_CH")) == ["hbo"]

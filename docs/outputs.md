@@ -46,7 +46,7 @@ Every name is built from BIDS entities. `<run>` below stands for the input recor
 |--------|-------|
 | `desc-` | The processing stage, or which record a QC file is |
 | `stat-` | The measure in a table, such as `alff`, `pearson`, `fisherz`, `wtc`, `isc`, or the quality record's `sci`, `psp`, `cv` |
-| `chromo-` | The chromophore, where a file holds one: `hbo`, `hbr`, or `hbt` when `--chromophores` or `--wtc-chroma` asks for it |
+| `chromo-` | The chromophore, where a file holds one: `hbo`, `hbr`, or `hbt` when `--chromophores` asks for it |
 | `seg-`, `agg-` | The ROI mapping a table was grouped by (the file's stem reduced to letters and digits) and how channels were aggregated: `roi`, `seed`, `homologous` |
 | `cond-` | A condition window |
 | `group-`, `pair-` | A dyad, and a member pairing inside a group of three or more |

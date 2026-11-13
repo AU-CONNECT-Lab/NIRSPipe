@@ -479,7 +479,7 @@ def cmd_run(
     wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
-    wtc_by_condition: bool, wtc_chroma: "list[str]", wtc_window_s: "float | None",
+    wtc_by_condition: bool, chromophores: "list[str]", wtc_window_s: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad_s: "float | None", wtc_cond_cone: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
@@ -552,9 +552,9 @@ def cmd_run(
         print("[warn] --channel-cross without --roi-mapping: the crossed channel table "
               "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
 
-    chroma = in_order(wtc_chroma)
+    chroma = in_order(chromophores)
     if len(chroma) > 1:
-        print(f"[info] --wtc-chroma {' '.join(chroma)}: {len(chroma)} full WTC passes per "
+        print(f"[info] --chromophores {' '.join(chroma)}: {len(chroma)} full WTC passes per "
               f"dyad, so roughly {len(chroma)} times the runtime of one.", file=sys.stderr)
     if wtc_phase_null and wtc_phase_null_cross:
         print("[info] the phase-scrambled null is crossed: every iteration covers every "
@@ -670,7 +670,7 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, chroma: "list[str] | None", null: "list[str] | None",
+    output_dir: Path, task: str, chromophores: "list[str] | None", null: "list[str] | None",
     roi_mapping: "Path | None", n_resample: int, seed: int | None, verbose: bool,
     p_correction: str = "none", isc_test: str = "signed",
 ) -> None:
@@ -690,7 +690,7 @@ def cmd_group_null(
         raise SystemExit(1)
     # each combination seeded alike, so it matches a run that asked for it alone
     for one_null in nulls:
-        for one_chroma in chroma or chromas_on_disk(output_dir, task, one_null):
+        for one_chroma in chromophores or chromas_on_disk(output_dir, task, one_null):
             written = write_group_null(output_dir, task=task, chroma=one_chroma,
                                        null=one_null, roi_map=roi_map,
                                        n_resample=n_resample, seed=seed,
@@ -771,7 +771,7 @@ def cmd_pair_null(
     desc: str | None,
     roi_mapping: str | None,
     bads_scope: str | None,
-    chroma: "list[str]",
+    chromophores: "list[str]",
     wtc_pair_pool: str,
     wtc_pair_max: int | None,
     wtc_pair_cross: bool | None,
@@ -798,7 +798,7 @@ def cmd_pair_null(
 
     roi_map = _app_options.load_roi_mapping(roi_mapping)
 
-    chroma = in_order(chroma)
+    chroma = in_order(chromophores)
 
     settings = SimpleNamespace(
         all_groups=all_groups, derivatives_dir=derivatives_dir, output_dir=output_dir,
@@ -982,7 +982,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Seed the --wtc-significance surrogates and the --wtc-phase-null and "
                           "--isc-phase-null draws. Omitted with any of them on, one is drawn "
                           "and written to the run record, so a --config rerun repeats them.")
-    run.add_argument("--wtc-chroma", nargs="+", choices=CHROMOPHORES,
+    run.add_argument("--chromophores", nargs="+", choices=CHROMOPHORES,
                      default=list(DEFAULT_CHROMOPHORES),
                      help=f"Chromophores the coherence and the correlation run on, default "
                           f"{' '.join(DEFAULT_CHROMOPHORES)}. Each is a separate pass, never "
@@ -1155,7 +1155,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
     group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
                             required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
-    group_null.add_argument("--chroma", nargs="+", choices=CHROMOPHORES, default=None,
+    group_null.add_argument("--chromophores", nargs="+", choices=CHROMOPHORES, default=None,
                             help="Chromophores to read, each into its own tables (default "
                                  "every chromophore the null's draws hold). One the draws do "
                                  "not hold is refused.")
@@ -1227,7 +1227,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                            "it is the scope the real tables recorded; a different one is "
                            "refused. A stand-in with no quality record is refused rather than "
                            "kept whole.")
-    pair.add_argument("--chroma", nargs="+", choices=CHROMOPHORES,
+    pair.add_argument("--chromophores", nargs="+", choices=CHROMOPHORES,
                       default=list(DEFAULT_CHROMOPHORES),
                       help=f"Chromophores to draw the null on, coherence and correlation alike "
                            f"(default {' '.join(DEFAULT_CHROMOPHORES)}).")

@@ -658,7 +658,7 @@ def run_hyper_post(
 
         HbO and HbR are two parallel runs of the same code. A member's HbO pairs only with
         the other member's HbO, the two are never mixed and never averaged, and nothing
-        about the statistic changes, so this is a loop over ``--wtc-chroma`` rather than a
+        about the statistic changes, so this is a loop over ``--chromophores`` rather than a
         branch anywhere inside it. Cost is one full multiple per chromophore.
 
         Returns the rows each table wants, untagged, and the transforms they came off.
@@ -772,7 +772,7 @@ def run_hyper_post(
         logger.warning("WTC channel crossing on: every long channel against every other, "
                        "so the pair count is squared and so is the runtime.")
     if len(chroma) > 1:
-        logger.info("--wtc-chroma %s: %d full WTC passes, one per chromophore",
+        logger.info("--chromophores %s: %d full WTC passes, one per chromophore",
                     "+".join(chroma), len(chroma))
 
     passes = {ch_type: _wtc_pass(ch_type) for ch_type in chroma}
@@ -831,7 +831,7 @@ def run_hyper_post(
                         _write_df_tsv(table, entities, step, **by_condition))
 
     # ---- ISC, which is a cut and not a slice ----
-    # The chromophores --wtc-chroma asks for, as the coherence. A window here is a real cut,
+    # The chromophores asked for, as the coherence. A window here is a real cut,
     # unlike the coherence, which is sliced out of the whole-run transform; see `compute_isc_pairs`
     # and `window_result`.
     isc_pair_frames: list = []

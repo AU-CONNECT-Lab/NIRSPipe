@@ -241,8 +241,8 @@ def test_the_cohort_test_reads_hbt():
     from nirspipe.cli.hyper import _parsers
 
     args = _parsers()["nirspipe-hyper-groupnull"].parse_args(
-        ["out", "group", "--task", "tap", "--chroma", "hbo", "hbt"])
-    assert args.chroma == ["hbo", "hbt"]
+        ["out", "group", "--task", "tap", "--chromophores", "hbo", "hbt"])
+    assert args.chromophores == ["hbo", "hbt"]
 
 
 # ---- the command, end to end ----
@@ -264,7 +264,7 @@ def runs(tmp_path_factory):
         out = root / name
         hyper_cli.main([str(deriv), str(out), "group", "--pairs-csv", str(pairs),
                         "--wtc-fmin", "0.02", "--band-fmin", "0.03", "--band-fmax", "0.12",
-                        "--no-channel-cross", "--wtc-chroma", *chroma])
+                        "--no-channel-cross", "--chromophores", *chroma])
         return out
 
     return {"hbo": run("hbo", "hbo"), "hbt": run("hbt", "hbt", "hbo")}

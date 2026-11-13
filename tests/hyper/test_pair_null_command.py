@@ -106,10 +106,10 @@ def test_what_the_real_table_recorded_is_left_unset_to_be_read_off_it(dest):
 
 
 def test_the_chromophores_default_to_hbo_and_hbr_and_take_hbt():
-    assert _parse().chroma == ["hbo", "hbr"]
-    assert _parse("--chroma", "hbt").chroma == ["hbt"]
+    assert _parse().chromophores == ["hbo", "hbr"]
+    assert _parse("--chromophores", "hbt").chromophores == ["hbt"]
     with pytest.raises(SystemExit):
-        _parse("--chroma", "both")
+        _parse("--chromophores", "both")
 
 
 def test_the_crossing_can_still_be_set_either_way():
@@ -204,7 +204,7 @@ def test_an_roi_mapping_is_read_rather_than_crashing(tmp_path, monkeypatch):
         derivatives_dir=tmp_path, output_dir=tmp_path,
         pairs_csv=tmp_path / "pairs.csv", group_id="G01",
         task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
-        bads_scope="run", chroma=["hbo", "hbr"], wtc_pair_pool="position",
+        bads_scope="run", chromophores=["hbo", "hbr"], wtc_pair_pool="position",
         wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
         wtc_limit_scales=True, verbose=False)
 
@@ -222,7 +222,7 @@ def test_an_unreadable_roi_mapping_exits_rather_than_tracebacks(tmp_path):
             derivatives_dir=tmp_path, output_dir=tmp_path,
             pairs_csv=tmp_path / "pairs.csv", group_id=None,
             task_label=None, desc="errts", roi_mapping=str(tmp_path / "roi.json"),
-            bads_scope="run", chroma=["hbo", "hbr"], wtc_pair_pool="position",
+            bads_scope="run", chromophores=["hbo", "hbr"], wtc_pair_pool="position",
             wtc_pair_max=None, wtc_pair_cross=False, wtc_roi_min_channels=2,
             wtc_limit_scales=True, verbose=False)
 

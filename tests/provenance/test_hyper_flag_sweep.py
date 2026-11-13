@@ -57,7 +57,7 @@ HYPER = {
     "wtc_significance": Case(SIGNIFICANCE, report=True, context={"--wtc-mc-count": ["10"]}),
     "wtc_mc_count": Case({"--wtc-mc-count": ["20"]}, context=SIGNIFICANCE, report=True),
     "wtc_seed": Case({"--wtc-seed": ["1"]}, ("level",), PHASE_NULL),
-    "wtc_chroma": Case({"--wtc-chroma": ["hbo"]}, ("wtc",)),
+    "chromophores": Case({"--chromophores": ["hbo"]}, ("wtc",)),
     "wtc_roi_min_channels": Case({"--wtc-roi-min-channels": ["2"]}, ("wtc",), ROI),
     "wtc_arrow_min": Case({"--wtc-arrow-min": ["0.8"]}, report=True),
     "wtc_channel_cross": Case({"--no-channel-cross": []}, BOTH),
@@ -91,7 +91,7 @@ PAIRNULL = {
     "desc": Case({"--desc": ["filtered"]}, refused=True),
     "roi_mapping": Case(ROI, BOTH),
     "bads_scope": Case({"--bads-scope": ["subject"]}, refused=True),
-    "chroma": Case({"--chroma": ["hbo"]}, BOTH),
+    "chromophores": Case({"--chromophores": ["hbo"]}, BOTH),
     "wtc_pair_pool": Case({"--wtc-pair-pool": ["any"]}, BOTH),
     # two dyads leave one stand-in per member by position; any gives two to cap
     "wtc_pair_max": Case({"--wtc-pair-max": ["1"]}, BOTH, {"--wtc-pair-pool": ["any"]}),
@@ -101,7 +101,7 @@ PAIRNULL = {
 }
 
 GROUPNULL = {
-    "chroma": Case({"--chroma": ["hbo"]}, ("cohort",)),
+    "chromophores": Case({"--chromophores": ["hbo"]}, ("cohort",)),
     "null": Case({"--null": ["phase"]}, ("cohort",)),
     "roi_mapping": Case(ROI, ("cohort",)),
     "n_resample": Case({"--n-resample": ["60"]}, ("cohort",)),

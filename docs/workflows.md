@@ -312,7 +312,7 @@ The rest-mode panel of the report: HbO and HbR channel correlation matrices on o
 
 ### Chromophores
 
-`--chromophores` picks what the analysis tables carry: `hbo`, `hbr` and `hbt` (total haemoglobin, HbO plus HbR). The default is `hbo hbr`. The dyad commands use `--wtc-chroma` for the same choice ([Hyperscanning](hyperscanning.md)).
+`--chromophores` picks what the analysis tables carry: `hbo`, `hbr` and `hbt` (total haemoglobin, HbO plus HbR). The default is `hbo hbr`. The dyad commands take the same flag ([Hyperscanning](hyperscanning.md)).
 
 ## Excluded time
 
