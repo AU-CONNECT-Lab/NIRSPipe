@@ -68,7 +68,7 @@ One operation per call; run it again on its own output to chain them. Dyad align
 ```bash
 nirspipe-prep edit-markers apply /data/bids /data/out --participant-label 01 02 \
     --rename "Stim1:tap_left" --rename "Stim2:tap_right"
-nirspipe-prep align /data/out/marker_edited /data/out --group-csv pairs.csv
+nirspipe-prep align /data/out/marker_edited /data/out --pairs-csv pairs.csv
 ```
 
 ## Cropping
@@ -140,7 +140,7 @@ Its columns are `participant_id`, whichever of `session`, `task`, `acq` and `run
 
 ## Pairs file
 
-The dyad commands take a table assigning subjects to groups, passed as `--pairs-csv` (`--group-csv` on `nirspipe-prep align`). Each row puts one subject's recording of one task in one group:
+The dyad commands take a table assigning subjects to groups, passed as `--pairs-csv`. Each row puts one subject's recording of one task in one group:
 
 ```text
 group_id,subject_id,task

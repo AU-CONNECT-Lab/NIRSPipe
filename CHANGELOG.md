@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `nirspipe-hyper` takes `--seed`, as `nirspipe-hyper-groupnull` does, in place of `--wtc-seed`, and its run record keys it `seed`
 - **Breaking**: `--isc-whiten`, `--wtc-window`, `--wtc-cond-pad` and `--gvtd-min-epoch` drop the `-s` suffix, as `--wtc-whiten` and `--window-length` have none, and run records key them the same
 - **Breaking**: `nirspipe-hyper` no longer takes `--wtc-by-condition` (use `--by-condition`) and `nirspipe-hyper-groupnull` no longer takes `--task` (use `--task-label`). Every run record and `--config` key is its flag's name: `by_condition`, `channel_cross`, groupnull's `task_label`
+- **Breaking**: `nirspipe-prep align` takes `--pairs-csv`, the table's name on every dyad command, in place of `--group-csv`
 - A command line missing several required flags names all of them at once, and which of them `--population` sets, where it named one per attempt
 - A value outside its flag's domain, such as an SCI line above 1 or a window of 0 s, is refused when parsed, in `--config` files too
 - A typed flag the run's mode or method does not read is named in a warning and in the run report, where it was dropped silently

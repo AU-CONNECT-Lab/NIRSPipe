@@ -141,7 +141,7 @@ PHYS = ["--dpf", "6", "--cardiac-l-freq", "0.7", "--cardiac-h-freq", "1.5", "--s
         "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"]
 SAME_DIR_COMMANDS = {
     "crop":           ("prep", ["crop", "{b}", "{b}", "--participant-label", "01", "--tmin", "0"]),
-    "align":          ("prep", ["align", "{b}", "{b}", "--group-csv", "{b}/pairs.csv"]),
+    "align":          ("prep", ["align", "{b}", "{b}", "--pairs-csv", "{b}/pairs.csv"]),
     "markers export": ("prep", ["edit-markers", "export", "{b}", "{b}",
                                 "--participant-label", "01"]),
     "markers apply":  ("prep", ["edit-markers", "apply", "{b}", "{b}", "--participant-label", "01",
@@ -183,7 +183,7 @@ def test_cropping_a_pipeline_output_back_into_its_own_tree_is_allowed(tmp_path, 
 WRITES_INTO = {
     "crop":          ("cropped", ["crop", "{i}", "{o}", "--participant-label", "01",
                                   "--tmin", "0"]),
-    "align":         ("aligned", ["align", "{i}", "{o}", "--group-csv", "{i}/pairs.csv"]),
+    "align":         ("aligned", ["align", "{i}", "{o}", "--pairs-csv", "{i}/pairs.csv"]),
     "markers apply": ("marker_edited", ["edit-markers", "apply", "{i}", "{o}",
                                         "--participant-label", "01", "--shift", "1"]),
 }

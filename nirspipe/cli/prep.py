@@ -113,7 +113,7 @@ def cmd_crop(
 
 
 def cmd_align(
-    bids_dir: Path, output_dir: Path, group_csv: Path, skip_bids_validation: bool,
+    bids_dir: Path, output_dir: Path, pairs_csv: Path, skip_bids_validation: bool,
 ) -> None:
     """Align multi-subject recordings by shared trigger and write SNIRF files."""
     _DERIV_NAME = "aligned"
@@ -131,7 +131,7 @@ def cmd_align(
     )
 
     try:
-        groups = parse_group_csv(group_csv)
+        groups = parse_group_csv(pairs_csv)
     except Exception as exc:
         print(f"[error] {exc}", file=sys.stderr)
         raise SystemExit(1)
@@ -329,8 +329,9 @@ def _build_parser() -> argparse.ArgumentParser:
     align.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
     align.add_argument("output_dir", type=Path,
                    help="Where the derived tree goes. An `aligned/` subtree is created under it.")
-    align.add_argument("--group-csv", type=Path, required=True,
-                       help="CSV with group_id, subject_id, task columns.")
+    align.add_argument("--pairs-csv", type=Path, required=True,
+                       help="CSV with columns: group_id, subject_id, task, and optionally "
+                            "session, run and occasion, the table the dyad commands take.")
     _shared.add_skip_bids_validation(align)
     align.set_defaults(func=cmd_align)
 
