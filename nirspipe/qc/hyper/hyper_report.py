@@ -1147,6 +1147,7 @@ def build_hyper_post_report(
     bads_scope_tasks: "list[str] | None" = None,
     session: str | None = None,
     wtc_device=None,
+    unread_flags: "list[tuple[str, str]] | None" = None,
 ) -> "Path | None":
     """Build hyperscanning post-QC report.
 
@@ -1902,6 +1903,7 @@ def build_hyper_post_report(
             mask_coi=wtc_mask_coi,
             sci_lines_text=sci_lines_text({sid: sci_lines.get(sid) for sid in pair_ids}),
             run_command=" ".join(sys.argv),
+            unread_flags=unread_flags or [],
             # the summary states the pair in one line; the table below it is per member
             align_duration_s=next((r["duration_s"] for r in page_alignment
                                    if r["duration_s"] is not None), None),

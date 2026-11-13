@@ -426,6 +426,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         bads_scope=s.bads_scope,
         bads_scope_tasks=s.scope_tasks,
         wtc_device=device,
+        unread_flags=s.unread_flags,
     )
     if s.redraw:
         # the record still describes the run that wrote these tables, which a redraw repeats
@@ -465,6 +466,35 @@ def _refuse_bad_ranges(band_fmin, band_fmax, wtc_fmin, wtc_fmax, wtc_band_fmin, 
                      f"axis, --wtc-fmin {wtc_fmin:g} to --wtc-fmax {wtc_fmax:g}.")
 
 
+def unread_settings(settings: dict) -> dict[str, str]:
+    """``{dest: why}`` for each setting a dyad run with these values does not read, typed or not."""
+    drawn = settings.get("wtc_phase_null") or settings.get("isc_phase_null")
+    unread: dict[str, str] = {}
+    if not settings.get("wtc_significance"):
+        unread["wtc_mc_count"] = "only --wtc-significance reads it"
+    if not settings.get("wtc_phase_null"):
+        unread["wtc_phase_null_cross"] = "only --wtc-phase-null reads it"
+    if not drawn:
+        unread["phase_null_shared"] = "no phase null is drawn"
+    if not (drawn or settings.get("wtc_significance")):
+        unread["seed"] = "nothing is drawn at random"
+    if not settings.get("wtc_cond_transform"):
+        unread["wtc_cond_pad"] = "only --wtc-cond-transform reads it"
+    if not settings.get("by_condition"):
+        unread["wtc_cond_cone"] = "only --by-condition reads it"
+    if settings.get("roi_mapping") is None:
+        unread["wtc_roi_min_channels"] = "no region is averaged without --roi-mapping"
+    if settings.get("no_report"):
+        unread.update(dict.fromkeys(("wtc_arrow_min", "isc_threshold"),
+                                    "it only draws the report, which --no-report skips"))
+    for edge, own in (("band_fmin", ("wtc_band_fmin", "isc_fmin")),
+                      ("band_fmax", ("wtc_band_fmax", "isc_fmax"))):
+        if all(settings.get(key) is not None for key in own):
+            named = " and ".join(f"--{key.replace('_', '-')}" for key in own)
+            unread[edge] = f"{named} override it"
+    return unread
+
+
 def cmd_run(
     derivatives_dir: Path, output_dir: Path,
     pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
@@ -489,7 +519,7 @@ def cmd_run(
     participant_label: list[str] | None = None,
     band_fmin: "float | None" = None, band_fmax: "float | None" = None,
     config: "Path | None" = None, nprocs: "int | None" = None, device: str = "cpu",
-    redraw_groups: "set | None" = None,
+    redraw_groups: "set | None" = None, typed: "set[str] | None" = None,
 ) -> None:
     """Dyad WTC + ISC report per group, plus the phase-scrambled null when --wtc-phase-null is given.
 
@@ -498,7 +528,10 @@ def cmd_run(
 
     ``redraw_groups`` (no flag) runs those group keys only, as a repeat of the run in their
     record: a phase null on disk is read rather than drawn, and the record is left as it is.
+    ``typed`` (no flag) is the dests typed on the command line, for the unread-flag warning.
     """
+    # read off the settings as given, before the shared band fills the per-metric ones
+    unread = unread_settings(dict(locals()))
     # unset, the null is crossed exactly when the real table is
     if wtc_phase_null_cross is None:
         wtc_phase_null_cross = channel_cross
@@ -515,7 +548,13 @@ def cmd_run(
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
-    run_args.pop("redraw_groups")
+    for not_a_setting in ("redraw_groups", "typed", "unread"):
+        run_args.pop(not_a_setting)
+    flags = {a.dest: a.option_strings[0] for a in _parsers()["nirspipe-hyper"]._actions
+             if a.option_strings}
+    unread_flags = [(flags[dest], why) for dest, why in unread.items() if dest in (typed or ())]
+    for flag, why in unread_flags:
+        logger.warning("%s is typed but not applied: %s", flag, why)
 
     # each metric gets the band it was given, never the other's; a mismatch is only warned about
     isc_band = (isc_fmin, isc_fmax) if (isc_fmin is not None or isc_fmax is not None) else None
@@ -595,20 +634,15 @@ def cmd_run(
                     "per side%s", cond_pad,
                     "" if cond_pad else " (none: cut to its own boundaries, which inflates "
                                         "a short condition)")
-    elif str(wtc_cond_pad).lower() != "auto":
-        logger.warning("--wtc-cond-pad is ignored without --wtc-cond-transform")
 
     if wtc_phase_null:
         logger.info("phase-scrambled null requested: %d full WTC runs per dyad, on top of the real one",
                     wtc_phase_null)
-    if phase_null_shared and not (wtc_phase_null or isc_phase_null):
-        logger.warning("--phase-null-shared is ignored without --wtc-phase-null or "
-                       "--isc-phase-null")
     settings = SimpleNamespace(
         **run_args, run_args=run_args, chroma=chroma, cond_pad=cond_pad,
         bands_override=bands_override, roi_map=roi_map, roi_name=roi_name,
         scope_tasks=scope_tasks, isc_band=isc_band, timestamp=timestamp,
-        redraw=redraw_groups is not None)
+        redraw=redraw_groups is not None, unread_flags=unread_flags)
     # a redraw logs beside the run it repeats rather than over that run's log
     log_tail = "_redraw.log" if redraw_groups is not None else ".log"
     _run_groups(groups, partial(_run_one_group, settings), nprocs, verbose,
@@ -1390,7 +1424,9 @@ def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None
 
 
 def main(argv: list[str] | None = None) -> None:
-    _dispatch("nirspipe-hyper", COMMANDS["nirspipe-hyper"], argv)
+    # what was typed, which argparse's defaults hide; a --config value is never called typed
+    typed = _shared.typed_flags(_parsers()["nirspipe-hyper"], argv)
+    _dispatch("nirspipe-hyper", partial(COMMANDS["nirspipe-hyper"], typed=typed), argv)
 
 
 def main_pair_null(argv: list[str] | None = None) -> None:

@@ -82,6 +82,7 @@ def pages(dyad, tmp_path_factory) -> "list[Path]":
         wtc_fmin=0.02, wtc_fmax=0.2, wtc_band_fmin=0.03, wtc_band_fmax=0.10,
         wtc_chroma=("hbo", "hbr"), wtc_channel_cross=True, wtc_by_condition=True,
         roi_map={"L": ["S1_D1", "S2_D2"], "R": ["S3_D3"]}, wtc_roi_min_channels=1,
+        unread_flags=[("--seed", "nothing is drawn at random")],
     )
     return [p for p in sorted(path.parent.glob("*.html")) if "index" not in p.name]
 
@@ -123,6 +124,13 @@ def _urls(per_ch, per_roi, axis, rois) -> set:
 
 def test_a_page_is_written_for_the_run_and_for_each_condition(pages):
     assert {_window_of(p) for p in pages} == {"", *CONDITIONS}
+
+
+def test_a_flag_typed_but_not_applied_is_named_under_the_command_on_every_page(pages):
+    for page in pages:
+        html = page.read_text(encoding="utf-8")
+        assert "Typed but not applied:" in html, page.name
+        assert "<code>--seed</code> (nothing is drawn at random)." in html, page.name
 
 
 def test_every_pairing_of_the_axis_is_present_at_both_levels(pages):

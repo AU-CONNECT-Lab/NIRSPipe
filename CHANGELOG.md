@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- `nirspipe-hyper` names each typed flag the run does not read, such as `--seed` with nothing drawn, in a warning and on the dyad page
+
 ## [0.84.0] - 2026-11-13
 
 ### Changed
