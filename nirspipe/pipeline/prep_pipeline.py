@@ -228,9 +228,11 @@ def join_marks(raw_od: mne.io.Raw, screened: list[str], *, keep=(), manual=(), l
     marks = _expand_bad_pairs(raw_od, list(forced))
     if manual:
         named = _expand_bad_pairs(raw_od, list(manual))
-        if not named:
-            logger.warning("%s | --bad-channels matched no channels: %s", label, list(manual))
-        else:
+        absent = sorted({pair_of(c) for c in manual} - {pair_of(c) for c in named})
+        if absent:
+            logger.warning("%s | --bad-channels names channels the recording does not "
+                           "have: %s", label, absent)
+        if named:
             logger.info("%s | manual bad channels: %s", label, named)
         marks += named
     if listed:

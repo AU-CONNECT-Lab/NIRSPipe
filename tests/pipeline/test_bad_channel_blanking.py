@@ -312,6 +312,17 @@ def test_one_odd_item_among_labels_is_named(mini_bids, capsys):
     assert "'channel3' is not a source-detector label" in capsys.readouterr().err
 
 
+def test_a_label_the_recording_lacks_is_named_beside_the_ones_it_has(caplog):
+    from nirspipe.pipeline.prep_pipeline import intensity_to_od, join_marks
+    from tests._synth import synth_raw
+
+    od = intensity_to_od(synth_raw("01", "rest"))
+    with caplog.at_level("WARNING"):
+        bad, _kept = join_marks(od, [], manual=["S1_D1", "S9_D9 760"], label="sub-01")
+    assert bad == ["S1_D1 760", "S1_D1 850"]
+    assert "--bad-channels names channels the recording does not have: ['S9_D9']" in caplog.text
+
+
 # ---- exclude: blanked for a reason that is not rejection ----
 
 def test_an_excluded_channel_is_blanked_like_a_rejected_one(haemo):
