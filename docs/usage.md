@@ -250,6 +250,8 @@ Redraws the provenance graph of every subject and dyad in a tree from the sideca
 
 `DERIVATIVES_DIR` is the `nirspipe` tree and `OUTPUT_DIR` the dyad tree; they must differ. What each step does is in [Hyperscanning](hyperscanning.md).
 
+As in `nirspipe`, a flag you type that the run, as set, does not read is named in a warning before the first dyad and under the dyad page's command: `--wtc-mc-count` without `--wtc-significance`, `--seed` when nothing is drawn at random, `--wtc-cond-pad` without `--wtc-cond-transform`, `--wtc-roi-min-channels` without `--roi-mapping`, `--wtc-arrow-min` and `--isc-threshold` under `--no-report`.
+
 ```{argparse}
 :module: cli_parsers
 :func: nirspipe_hyper
