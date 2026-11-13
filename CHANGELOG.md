@@ -7,24 +7,24 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **Breaking**: every command takes a flag only when typed in full. A shortened flag, such as `--pop` for `--population`, was accepted as long as no other flag began the same way
+- **Breaking**: every command takes a flag only when typed in full, where a shortened one, such as `--pop` for `--population`, was accepted
 - **Breaking**: `--fir-delays` takes whole numbers separated by spaces, like every other list flag, and a run record holds them as a list
 - **Breaking**: `nirspipe ... group` refuses a participant-level flag, as `nirspipe-qc ... group` does, where it ran and ignored it
 - **Breaking**: the dyad commands take `--chromophores`, as `nirspipe` does, in place of `--wtc-chroma` and `--chroma`, and a dyad run record keys it the same
 - **Breaking**: `nirspipe-hyper` takes `--seed`, as `nirspipe-hyper-groupnull` does, in place of `--wtc-seed`, and its run record keys it `seed`
 - **Breaking**: `--isc-whiten`, `--wtc-window`, `--wtc-cond-pad` and `--gvtd-min-epoch` drop the `-s` suffix, as `--wtc-whiten` and `--window-length` have none, and run records key them the same
-- **Breaking**: `nirspipe-hyper` no longer takes `--wtc-by-condition` (use `--by-condition`) and `nirspipe-hyper-groupnull` no longer takes `--task` (use `--task-label`). Every run record and `--config` key is its flag's name: `by_condition`, `channel_cross`, groupnull's `task_label`
+- **Breaking**: the aliases `--wtc-by-condition` and groupnull's `--task` are gone, and every run record key is its flag's name, such as `channel_cross`
 - **Breaking**: `nirspipe-prep align` takes `--pairs-csv`, the table's name on every dyad command, in place of `--group-csv`
 - **Breaking**: `nirspipe-qc` and `nirspipe-prep` take `--skip-bids-validation` as a plain switch, as `nirspipe` does, without a `--no-` form
 - **Breaking**: `nirspipe-snirf2bids --overwrite` is a plain switch, without the `--no-overwrite` form that restated the default
 - `nirspipe-prep` runs every subject of its input when `--participant-label` is left out, where it required the flag
-- The help names a number's unit (`HZ`, `SECONDS`, `N`, `SD`, `R`, `SHARE`) where it showed the setting's name, states the defaults it left out (`--motion-correction`, `--window-length`, `--gvtd-min-epoch`, `--wtc-fmin`, `--wtc-fmax`, `--desc`, `--device`, `--optode-frame`, `--align`), and says what `--verbose` and `--overwrite` do
+- The help shows units such as `HZ` and `SECONDS` in place of capitalised names, states every default, and explains `--verbose` and `--overwrite`
 - A command line missing several required flags names all of them at once, and which of them `--population` sets, where it named one per attempt
-- A value outside its flag's domain, such as an SCI line above 1 or a window of 0 s, is refused when parsed, in `--config` files too
-- A typed flag the run's mode or method does not read is named in a warning and in the run report, where it was dropped silently
-- A message that stops a command starts with `Error:` on every command, where some started `[error]` or `ERROR:`. A batch's per-subject and per-group lines keep their `[error]` and `[skip]` tags
-- `nirspipe-hyper --help` and its form list the 51 flags in ten sections (dyad selection, input, alignment, pairings, bands, coherence, conditions, correlation, nulls, execution), where they were one list
-- `nirspipe --help` and the Analysis form put `--config`, `--nprocs`, `--dry-run` and `--verbose` in an execution section, and `--fc` and `--min-time` beside the other postprocessing settings rather than among the GLM ones
+- A value outside its flag's domain, such as an SCI line above 1, is refused when parsed, in `--config` files too
+- A typed flag the run does not read is named in a warning and the run report, where it was dropped silently
+- A message that stops a command starts with `Error:` everywhere, where some said `[error]` or `ERROR:`. Per-subject lines keep their tags
+- `nirspipe-hyper --help` and its form show the 51 flags in ten sections, where they were one list
+- `nirspipe --help` and the Analysis form put `--config`, `--nprocs`, `--dry-run`, `--verbose` under execution, and `--fc`, `--min-time` under postprocessing
 - A command line that argparse refuses prints a one-line usage (positionals, required flags, `[options]`) above the error, where `nirspipe` printed 39 lines of every flag
 - The Analysis form also hides the filter design, resampling, run joining and p correction until a mode is chosen, and a fir filter's order
 
