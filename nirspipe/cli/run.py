@@ -85,6 +85,11 @@ _LEVEL_REQUIRES = {
     "group":       (),
 }
 _LEVEL_CHOICES         = list(_LEVEL_REQUIRES)
+# at group level: what is read, and the BIDS App flags a runner passes at either level
+_GROUP_READS           = ("roi_mapping", "verbose")
+_GROUP_SELECTION       = ("participant_label", "session_label", "task_label",
+                          "bids_filter_file")
+_GROUP_ACCEPTS         = (*_GROUP_SELECTION, "skip_bids_validation", "nprocs")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -411,8 +416,27 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
     args.inputs_given = {k: v for k, v in config["inputs_given"].items() if k not in given}
 
 
+def _refuse_participant_flags(argv: list[str] | None) -> None:
+    """At group level, exit non-zero on a typed flag only the participant level reads."""
+    parser = _build_parser()
+    positionals = {a.dest for a in parser._actions if not a.option_strings}
+    typed = _shared.typed_flags(_build_parser(), argv) - positionals - set(_GROUP_READS)
+    stray = [a.option_strings[0] for a in parser._actions
+             if a.dest in typed - set(_GROUP_ACCEPTS)]
+    if stray:
+        _shared.fail(f"{stray[0]} is a participant-level setting, and this is the group level, "
+                     "which only reads the quality records under the output directory.")
+    unused = [a.option_strings[0] for a in parser._actions
+              if a.dest in typed & set(_GROUP_SELECTION)]
+    if unused:
+        print(f"Warning: {', '.join(unused)} not applied: the group level covers every record "
+              "under the output directory.", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
+    if args.analysis_level == "group":
+        _refuse_participant_flags(argv)
     if args.config is not None:
         _apply_config(args, argv)
     level = args.analysis_level

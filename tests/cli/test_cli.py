@@ -174,6 +174,41 @@ def test_dispatch_group(monkeypatch):
     assert "group" in called
 
 
+@pytest.mark.parametrize("flags, named", [
+    (["--sci-threshold", "0.8"], "--sci-threshold"),
+    (["--mode", "glm", "--high-pass", "0.01"], "--mode"),
+    (["--population", "adult"], "--population"),
+    (["--config", "settings.toml"], "--config"),
+    (["--dry-run"], "--dry-run"),
+    (["--no-report"], "--no-report"),
+])
+def test_the_group_level_refuses_a_participant_level_flag(flags, named, monkeypatch, capsys):
+    called = _fake_workflows(monkeypatch, {})
+    with pytest.raises(SystemExit) as e:
+        run_cli.main(["bids", "out", "group", *flags])
+    assert e.value.code == 1 and not called
+    assert capsys.readouterr().err.strip() == (
+        f"Error: {named} is a participant-level setting, and this is the group level, which "
+        "only reads the quality records under the output directory.")
+
+
+def test_the_group_level_takes_what_it_reads_and_what_a_runner_passes(monkeypatch, capsys):
+    called = _fake_workflows(monkeypatch, {})
+    run_cli.main(["bids", "out", "group", "--roi-mapping", "rois.json", "--verbose",
+                  "--skip_bids_validator", "--n_cpus", "4"])
+    assert called["group"]["roi_mapping"] == Path("rois.json")
+    assert capsys.readouterr().err == ""
+
+
+def test_the_group_level_says_a_selection_is_not_applied(monkeypatch, capsys):
+    called = _fake_workflows(monkeypatch, {})
+    run_cli.main(["bids", "out", "group", "--participant_label", "01", "--task-label", "rest"])
+    assert "group" in called
+    assert capsys.readouterr().err.strip() == (
+        "Warning: --participant-label, --task-label not applied: the group level covers every "
+        "record under the output directory.")
+
+
 def test_the_dyad_analysis_is_not_a_pipeline_level():
     """It is nirspipe-hyper. nirspipe stays on the BIDS App levels, and its three
     positionals stay the app signature every container entry point has to accept."""
