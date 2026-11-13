@@ -419,7 +419,7 @@ def _draw_condition_pairs(
     the correlation's place in them, each side's excluded samples)``.
 
     The segments are ``{fixed, partner}`` cuts of the two recordings as the correlation reads
-    them, cut from whole-record ``--isc-whiten-s`` copies where that is on, and the whitened
+    them, cut from whole-record ``--isc-whiten`` copies where that is on, and the whitened
     ones the same cuts of the whole-record ``--wtc-whiten`` copies, which is what the
     coherence reads; with whitening off they are plain cuts. The correlation's place is the
     condition's, started past either copy's zeroed transient.

@@ -409,7 +409,7 @@ def gvtd_censor_spans(
         logger.error("GVTD censoring leaves nothing: every sample is either above the "
                      "threshold (n_std=%s) or in a stretch shorter than %.0fs. The data is "
                      "marked, not deleted, so a larger --gvtd-censor-n-std or a smaller "
-                     "--gvtd-min-epoch-s recovers it.", n_std, min_epoch_s)
+                     "--gvtd-min-epoch recovers it.", n_std, min_epoch_s)
     return spans, metrics
 
 

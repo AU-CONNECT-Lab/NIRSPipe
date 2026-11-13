@@ -753,7 +753,7 @@ def _write_isc(output_dir: Path, task: str, chroma: str, null: str, roi_map, n_r
     if magnitude_against_unwhitened_phase(isc_test, null, whiten_s):
         logger.warning("ISC %s, phase null: |r| on unwhitened correlations tends to sit above "
                        "its phase-scrambled null, so these p run small; whiten in "
-                       "nirspipe-hyper (--isc-whiten-s) or use --isc-test signed", chroma)
+                       "nirspipe-hyper (--isc-whiten) or use --isc-test signed", chroma)
     two_sided = isc_test == "signed"
     min_channels = _roi_min_of(set(real.source)) if roi_map else ROI_MIN_CHANNELS
     cells = by_cell_from_draws(draws, real, two_sided=two_sided, method=p_correction,

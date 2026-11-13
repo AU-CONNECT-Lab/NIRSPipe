@@ -884,7 +884,7 @@ def _make_prep_config(subject: str, session: str | None, args: dict[str, Any],
         epoch_chunk_duration=args.get("epoch_chunk_duration"),
         gvtd_censor=args.get("gvtd_censor"),
         gvtd_censor_n_std=args.get("gvtd_censor_n_std", 10.0),
-        gvtd_min_epoch_s=args.get("gvtd_min_epoch_s", 30.0),
+        gvtd_min_epoch_s=args.get("gvtd_min_epoch", 30.0),
         **_app_options.separation_bands_from_args(args),
         ignore=list(args.get("ignore") or []),
     )

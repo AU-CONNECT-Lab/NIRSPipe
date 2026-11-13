@@ -86,7 +86,7 @@ def test_a_motion_setting_shows_only_for_a_method_that_reads_it():
 def test_the_gvtd_settings_follow_censoring_and_the_fill_follows_the_mode():
     assert {"--gvtd-censor-n-std", "--censor-fill"} <= set(_hints().inactive)
     censored = _hints(**{"--gvtd-censor": "long"})
-    assert not {"--gvtd-censor-n-std", "--gvtd-min-epoch-s"} & set(censored.inactive)
+    assert not {"--gvtd-censor-n-std", "--gvtd-min-epoch"} & set(censored.inactive)
     # a file's own BAD_ spans and its dark edges are filled with no flag naming them
     assert "--censor-fill" not in _hints(**{"--mode": "glm"}).inactive
 

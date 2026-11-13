@@ -49,10 +49,10 @@ REFUSED = [
      "argument --wtc-fmin: must be greater than 0, got 0"),
     ("a coherence above 1", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-arrow-min", "2"],
      "argument --wtc-arrow-min: must be between 0 and 1, got 2"),
-    ("a negative padding", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-cond-pad-s", "-5"],
-     "argument --wtc-cond-pad-s: must be 0 or more, got -5"),
-    ("a window of no length, dyad", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-window-s", "0"],
-     "argument --wtc-window-s: must be greater than 0, got 0"),
+    ("a negative padding", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-cond-pad", "-5"],
+     "argument --wtc-cond-pad: must be 0 or more, got -5"),
+    ("a window of no length, dyad", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-window", "0"],
+     "argument --wtc-window: must be greater than 0, got 0"),
     ("a negative seed", _hyper("nirspipe-hyper"), [*HYPER, "--seed", "-1"],
      "argument --seed: must be 0 or more, got -1"),
     ("a negative lag", _hyper("nirspipe-hyper"), [*HYPER, "--isc-max-lag", "-1"],
@@ -90,29 +90,29 @@ def test_the_edges_of_each_domain_are_values():
     args = run_cli._build_parser().parse_args(
         [*RUN, "--sci-threshold", "1", "--min-good-frac", "0", "--psp-threshold", "0",
          "--min-time", "0", "--drift-order", "0", "--stim-dur", "0", "--dpf", "6.5", "age",
-         "--drift-high-pass", "auto", "--gvtd-min-epoch-s", "0"])
+         "--drift-high-pass", "auto", "--gvtd-min-epoch", "0"])
     assert (args.sci_threshold, args.min_good_frac, args.psp_threshold, args.min_time,
-            args.drift_order, args.dpf, args.drift_high_pass, args.gvtd_min_epoch_s) == (
+            args.drift_order, args.dpf, args.drift_high_pass, args.gvtd_min_epoch) == (
         1.0, 0.0, 0.0, 0.0, 0, [6.5, "age"], "auto", 0.0)
     assert run_cli._build_parser().parse_args([*RUN, "--min-good-frac", "1"]).min_good_frac == 1.0
     hyper = hyper_cli._parsers()["nirspipe-hyper"].parse_args(
-        [*HYPER, "--wtc-cond-pad-s", "0", "--isc-phase-null", "0", "--wtc-phase-null", "0",
+        [*HYPER, "--wtc-cond-pad", "0", "--isc-phase-null", "0", "--wtc-phase-null", "0",
          "--wtc-whiten", "0", "--wtc-arrow-min", "1", "--seed", "0"])
-    assert (hyper.wtc_cond_pad_s, hyper.isc_phase_null, hyper.wtc_phase_null, hyper.wtc_whiten,
+    assert (hyper.wtc_cond_pad, hyper.isc_phase_null, hyper.wtc_phase_null, hyper.wtc_whiten,
             hyper.wtc_arrow_min, hyper.seed) == (0.0, 0, 0, 0.0, 1.0, 0)
 
 
 @pytest.mark.parametrize("typed, read", [("auto", "auto"), ("AUTO", "auto"), ("47.1", 47.1)])
 def test_a_length_that_may_be_worked_out_takes_seconds_or_auto(typed, read):
-    hyper = hyper_cli._parsers()["nirspipe-hyper"].parse_args([*HYPER, "--wtc-cond-pad-s", typed])
+    hyper = hyper_cli._parsers()["nirspipe-hyper"].parse_args([*HYPER, "--wtc-cond-pad", typed])
     crop = prep_cli._build_parser().parse_args([*CROP, "--tmin", "0", "--margin", typed])
-    assert (hyper.wtc_cond_pad_s, crop.margin_s) == (read, read)
+    assert (hyper.wtc_cond_pad, crop.margin_s) == (read, read)
 
 
 def test_a_length_that_is_neither_is_refused(capsys):
     with pytest.raises(SystemExit):
-        hyper_cli._parsers()["nirspipe-hyper"].parse_args([*HYPER, "--wtc-cond-pad-s", "soon"])
-    assert "argument --wtc-cond-pad-s: invalid seconds_or_auto value: 'soon'" in capsys.readouterr().err
+        hyper_cli._parsers()["nirspipe-hyper"].parse_args([*HYPER, "--wtc-cond-pad", "soon"])
+    assert "argument --wtc-cond-pad: invalid seconds_or_auto value: 'soon'" in capsys.readouterr().err
 
 
 # ---- the same domains through --config ----
@@ -158,6 +158,6 @@ def test_a_flag_with_a_domain_is_still_a_number_field():
 
 
 def test_a_flag_that_also_takes_a_word_stays_a_text_field():
-    assert _kinds("nirspipe-hyper")["--wtc-cond-pad-s"] == "text"
+    assert _kinds("nirspipe-hyper")["--wtc-cond-pad"] == "text"
     assert _kinds("nirspipe-prep", "crop")["--margin"] == "text"
     assert _kinds("nirspipe")["--drift-high-pass"] == "text"

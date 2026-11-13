@@ -90,7 +90,7 @@ CASES = {
     "by_condition": Case("denoise", {"--by-condition": []}, (), report=True),
     "gvtd_censor": Case("denoise", GVTD, ("sci",), {"--gvtd-censor-n-std": ["3"]}),
     "gvtd_censor_n_std": Case("denoise", {"--gvtd-censor-n-std": ["5"]}, ("sci",), GVTD),
-    "gvtd_min_epoch_s": Case("denoise", {"--gvtd-min-epoch-s": ["5"]}, ("sci",), GVTD),
+    "gvtd_min_epoch": Case("denoise", {"--gvtd-min-epoch": ["5"]}, ("sci",), GVTD),
     "mode": Case("denoise", {"--mode": ["rest"]}, ("filtered",)),
     "high_pass": Case("denoise", {"--high-pass": ["0.02"]}, ("filtered",)),
     "low_pass": Case("denoise", {"--low-pass": ["0.3"]}, ("filtered",)),

@@ -201,7 +201,7 @@ NOTES = {
         "every coherence used; condition rows reject nothing.",
     "hyper_post.member_metrics_missing":
         'No member&rsquo;s record holds this window (no <code>by_condition</code> section, a '
-        '<code>--wtc-window-s</code> split, or mismatched bounds), so it has no '
+        '<code>--wtc-window</code> split, or mismatched bounds), so it has no '
         'per-condition numbers. See the <a href="{href}">whole-run page</a>.',
     "hyper_post.member_metrics_refused":
         "{sid}&rsquo;s record puts this condition at {record}&nbsp;s on the aligned clock and "

@@ -1110,7 +1110,7 @@ RECORD_EXTRA_KEYS = {
     "sep_long_max_mm": "The longest source-detector separation, in mm, counted as a long channel on this run; n/a when no upper bound was set.",
     "qc_window_s": "The window length the per-window series asked for, in seconds; each window used is a whole number of samples long.",
     "gvtd_censor_n_std": "The multiplier the censoring cutoff was set with (--gvtd-censor-n-std).",
-    "gvtd_censor_min_epoch_s": "Stretches left between censored spans that are shorter than this, in seconds, are censored too (--gvtd-min-epoch-s).",
+    "gvtd_censor_min_epoch_s": "Stretches left between censored spans that are shorter than this, in seconds, are censored too (--gvtd-min-epoch).",
     "gvtd_censor_thresh": "The cutoff on the band-passed GVTD that censoring used.",
     "gvtd_censor_n_spans": "How many separate spans were censored.",
     "gvtd_censor_n_epochs": "How many continuous stretches survived censoring.",

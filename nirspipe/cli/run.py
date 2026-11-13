@@ -180,7 +180,7 @@ def _build_parser() -> argparse.ArgumentParser:
                           help="Threshold for --gvtd-censor, in left-tail SDs above the GVTD "
                                "mode. 10 is the lenient value used for censoring, and the "
                                "reports score at the same 10.")
-    prep_opt.add_argument("--gvtd-min-epoch-s", type=_shared.non_negative, default=30.0,
+    prep_opt.add_argument("--gvtd-min-epoch", type=_shared.non_negative, default=30.0,
                           help="Shortest surviving stretch --gvtd-censor keeps (s). Anything "
                                "shorter is censored with the artifacts around it.")
 
@@ -447,7 +447,7 @@ def unread_settings(settings: dict) -> dict[str, str]:
         if settings.get("filter_method") == "fir":
             unread["filter_order"] = "a fir --filter-method has no order"
     if not settings.get("gvtd_censor"):
-        unread.update(dict.fromkeys(("gvtd_censor_n_std", "gvtd_min_epoch_s"),
+        unread.update(dict.fromkeys(("gvtd_censor_n_std", "gvtd_min_epoch"),
                                     "only --gvtd-censor reads it"))
     method = settings.get("motion_correction")
     for dest, readers in (("motion_std_thresh", STD_THRESH_DEFAULTS),

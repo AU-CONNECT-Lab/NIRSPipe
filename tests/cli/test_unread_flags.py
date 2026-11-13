@@ -72,8 +72,8 @@ def test_a_fir_filter_has_no_order_to_read():
 
 
 def test_the_censoring_settings_are_read_only_when_censoring():
-    assert {"gvtd_censor_n_std", "gvtd_min_epoch_s"} <= set(run_cli.unread_settings(REST))
-    assert not {"gvtd_censor_n_std", "gvtd_min_epoch_s"} & set(
+    assert {"gvtd_censor_n_std", "gvtd_min_epoch"} <= set(run_cli.unread_settings(REST))
+    assert not {"gvtd_censor_n_std", "gvtd_min_epoch"} & set(
         run_cli.unread_settings({**REST, "gvtd_censor": "long"}))
 
 

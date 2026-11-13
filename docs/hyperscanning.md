@@ -112,7 +112,7 @@ The channel-by-channel matrix of band means a crossed run adds to the report, on
 By default the coherence is reported for each task condition as well as for the whole recording, and each condition gets its own report page. A marker with a duration uses it; one without runs to the next marker. A condition shorter than one cycle of `--wtc-fmin` is skipped. `--no-by-condition` turns this off.
 
 - **Each condition's own cone.** By default a condition's values leave out the cells within the cone of influence of the condition's own start and end, where the coherence still carries the neighbouring condition. `--no-wtc-cond-cone` keeps them.
-- `--wtc-window-s SECONDS` cuts every condition into windows of that length and reports each window. A window keeps its condition's edges.
+- `--wtc-window SECONDS` cuts every condition into windows of that length and reports each window. A window keeps its condition's edges.
 - `--wtc-cond-transform` analyses each condition separately instead of reading it out of the whole recording. It cannot be combined with `--wtc-phase-null`.
 
 How much each edge takes depends on the frequency. The table, after Table 1 of Lodrant et al. (2026), gives for the Morlet wavelet the coherence uses (nondimensional frequency 6) its spread in time and in frequency, the stretch the cone takes at each edge of a condition, and the shortest condition that keeps any cells at that frequency. A condition shorter than that at the band's lowest frequency has its band mean from the higher frequencies only.
@@ -140,7 +140,7 @@ ISC is the Pearson correlation between the two members' channels, per chromophor
 With no option given, ISC is the plain correlation of the signals at zero lag. The options:
 
 - `--isc-fmin` / `--isc-fmax` filter each member to a band first; `--band-fmin` / `--band-fmax` set this band and the coherence band together. Without them, ISC reads whatever band preprocessing left, and the run warns when it differs from the coherence band.
-- `--isc-whiten-s SECONDS` removes each channel's slow autocorrelation first. Whitening makes r smaller, so do not compare whitened and unwhitened values.
+- `--isc-whiten SECONDS` removes each channel's slow autocorrelation first. Whitening makes r smaller, so do not compare whitened and unwhitened values.
 - `--isc-max-lag SECONDS` keeps the strongest correlation over all shifts within that many seconds, and writes the shift as `lag_s`. The best of many shifts is larger than one shift even with no real coupling, so always pair it with `--isc-phase-null`.
 - `--isc-phase-null N` compares each correlation with N phase-scrambled surrogates and adds its `percentile`.
 
@@ -206,7 +206,7 @@ With `--roi-mapping`, each region is tested beside the whole-brain mean. A group
 The coherence is tested for being above its null. For ISC, `--isc-test signed` (the default) tests in both directions; `magnitude` tests the size of the correlation regardless of sign.
 
 :::{warning}
-With `magnitude` against the phase-scrambled null and without whitening, the correlation tends to sit above the null even with no coupling. The run warns and the page says so; whiten with `--isc-whiten-s`, or keep `signed`.
+With `magnitude` against the phase-scrambled null and without whitening, the correlation tends to sit above the null even with no coupling. The run warns and the page says so; whiten with `--isc-whiten`, or keep `signed`.
 :::
 
 No correction for multiple comparisons is applied unless `--p-correction` names one (`fdr_bh`, `fdr_by`, `holm`, `bonferroni`); the uncorrected `p` is always written. Each run writes a Methods paragraph, `logs/<cohort table>_methods.md`, and the task's page, `task-<task>_desc-groupnull_report.html`.

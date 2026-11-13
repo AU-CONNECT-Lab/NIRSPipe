@@ -338,14 +338,14 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
                   f"--tstart/--tend: {', '.join(dropped)}")
         cond_windows = inside
     cond_margins = None
-    if s.wtc_window_s and cond_windows:
+    if s.wtc_window and cond_windows:
         # equal-length windows replace the conditions as the unit of analysis; the null
         # resolves the same grid off the same reference
         conditions = cond_windows
-        cond_windows, sources = split_windows(cond_windows, s.wtc_window_s)
+        cond_windows, sources = split_windows(cond_windows, s.wtc_window)
         cond_margins = condition_margins(conditions, cond_windows, sources)
         if not cond_windows:
-            print(f"     [warn] --wtc-window-s {s.wtc_window_s}: no condition is long "
+            print(f"     [warn] --wtc-window {s.wtc_window}: no condition is long "
                   "enough for one window, so there is nothing per condition to report",
                   file=sys.stderr)
     # Before the report, not after: the level the phase arrows are drawn against comes
@@ -403,7 +403,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_seed=s.seed,
         wtc_mc_count=s.wtc_mc_count,
         wtc_channel_cross=s.wtc_channel_cross,
-        wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window_s,
+        wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window,
         wtc_cond_pad_s=s.cond_pad,
         wtc_cond_cone=s.wtc_cond_cone,
         cond_windows=cond_windows,
@@ -419,7 +419,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_phase_null=s.wtc_phase_null,
         wtc_phase_null_cross=s.wtc_phase_null_cross,
         isc_threshold=s.isc_threshold,
-        isc_whiten_s=s.isc_whiten_s,
+        isc_whiten_s=s.isc_whiten,
         isc_max_lag_s=s.isc_max_lag,
         isc_phase_null=s.isc_phase_null,
         phase_null_shared=s.phase_null_shared,
@@ -479,11 +479,11 @@ def cmd_run(
     wtc_significance: bool, wtc_mc_count: int, seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
-    wtc_by_condition: bool, chromophores: "list[str]", wtc_window_s: "float | None",
-    wtc_cond_transform: bool, wtc_cond_pad_s: "float | None", wtc_cond_cone: bool,
+    wtc_by_condition: bool, chromophores: "list[str]", wtc_window: "float | None",
+    wtc_cond_transform: bool, wtc_cond_pad: "float | None", wtc_cond_cone: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
-    bads_scope: str, isc_threshold: "float | None", isc_whiten_s: float,
+    bads_scope: str, isc_threshold: "float | None", isc_whiten: float,
     isc_max_lag: float, isc_phase_null: int, phase_null_shared: bool,
     isc_fmin: "float | None", isc_fmax: "float | None",
     no_report: bool,
@@ -542,9 +542,9 @@ def cmd_run(
     write_bidsignore(output_dir)
     timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
 
-    if wtc_window_s is not None:
+    if wtc_window is not None:
         if not wtc_by_condition:
-            print("[error] --wtc-window-s needs --by-condition; there are no conditions to "
+            print("[error] --wtc-window needs --by-condition; there are no conditions to "
                   "cut into windows without it.", file=sys.stderr)
             raise SystemExit(1)
 
@@ -592,19 +592,19 @@ def cmd_run(
             print("[error] --wtc-cond-transform needs --wtc-by-condition; there are no "
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
-        if str(wtc_cond_pad_s).lower() == "auto":
+        if str(wtc_cond_pad).lower() == "auto":
             from nirspipe.utils import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
             # --wtc-band-fmin falls back to --wtc-fmin exactly as the report resolves it
             cond_pad = cone_margin_s(wtc_band_fmin or wtc_fmin)
         else:
-            cond_pad = float(wtc_cond_pad_s)
+            cond_pad = float(wtc_cond_pad)
         logger.info("each condition transformed on its own over a cut padded by %.1f s "
                     "per side%s", cond_pad,
                     "" if cond_pad else " (none: cut to its own boundaries, which inflates "
                                         "a short condition)")
-    elif str(wtc_cond_pad_s).lower() != "auto":
-        logger.warning("--wtc-cond-pad-s is ignored without --wtc-cond-transform")
+    elif str(wtc_cond_pad).lower() != "auto":
+        logger.warning("--wtc-cond-pad is ignored without --wtc-cond-transform")
 
     if wtc_phase_null:
         logger.info("phase-scrambled null requested: %d full WTC runs per dyad, on top of the real one",
@@ -1005,7 +1005,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "(default on), so n channels give n^2 values; the channel TSV gains a "
                           "label2 column. --no-channel-cross pairs each channel with its "
                           "counterpart only, for the ISC as for the coherence.")
-    run.add_argument("--wtc-window-s", type=_shared.positive, default=None, metavar="SECONDS",
+    run.add_argument("--wtc-window", type=_shared.positive, default=None, metavar="SECONDS",
                      help="Cut every condition into non-overlapping windows of this length and "
                           "make the window the unit. Needs --by-condition; the remainder, and "
                           "any condition shorter than one window, is dropped.")
@@ -1023,10 +1023,10 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "those cells.")
     run.add_argument("--wtc-cond-transform", action="store_true",
                      help="Transform each condition on its own instead of reading it out of "
-                          "the whole-run transform, over a cut padded by --wtc-cond-pad-s. "
+                          "the whole-run transform, over a cut padded by --wtc-cond-pad. "
                           "Costs one extra transform per condition per chromophore. Requires "
                           "--wtc-by-condition; refused with --wtc-phase-null.")
-    run.add_argument("--wtc-cond-pad-s", type=_shared.seconds_or_auto, default="auto",
+    run.add_argument("--wtc-cond-pad", type=_shared.seconds_or_auto, default="auto",
                      metavar="SEC|auto",
                      help="Seconds kept on each side of a condition under "
                           "--wtc-cond-transform, then windowed back off. 'auto' (default) is "
@@ -1091,7 +1091,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "whole aligned record; 0, the default, transforms the signals "
                           "themselves. Phase and lag then describe the whitened signals, and "
                           "the nulls follow it.")
-    run.add_argument("--isc-whiten-s", type=_shared.non_negative, default=0.0,
+    run.add_argument("--isc-whiten", type=_shared.non_negative, default=0.0,
                      metavar="SECONDS",
                      help="Prewhiten each long channel with an autoregressive model of this "
                           "many seconds of order before the correlation, fitted on the whole "

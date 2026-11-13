@@ -12,7 +12,7 @@ def censored(tmp_path_factory):
     """A prep run that censors on GVTD, with the bad-segment zoom's arguments captured."""
     root = tmp_path_factory.mktemp("fingerprint_censored")
     done = run_capturing(root, ["--gvtd-censor", "long", "--gvtd-censor-n-std", "3",
-                                "--gvtd-min-epoch-s", "5"], ("bad_segment_zoom_figure",))
+                                "--gvtd-min-epoch", "5"], ("bad_segment_zoom_figure",))
     return Run(root / "out", done["truth"], captured=done["captured"])
 
 

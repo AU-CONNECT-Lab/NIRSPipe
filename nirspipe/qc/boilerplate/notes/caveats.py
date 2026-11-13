@@ -132,7 +132,7 @@ NOTES = {
     "caveat.isc_magnitude_phase":
         "|r| was tested against the phase-scrambled null on correlations that were not "
         "whitened, where |r| tends to sit above that null, so these p values run small. "
-        "Whiten the correlation in nirspipe-hyper (--isc-whiten-s) or test it signed.",
+        "Whiten the correlation in nirspipe-hyper (--isc-whiten) or test it signed.",
 
     # ---- Cohorts ----
     "caveat.bandpass_pairs":
