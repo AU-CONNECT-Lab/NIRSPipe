@@ -280,6 +280,38 @@ def test_a_row_without_a_participant_matching_no_recording_stops_the_run(mini_bi
         _refuse_unmatched_bad_channel_rows(str(table), get_layout(mini_bids))
 
 
+def test_a_table_that_is_not_there_stops_the_run_where_it_was_read_as_a_channel(
+        mini_bids, tmp_path, capsys):
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
+
+    missing = tmp_path / "bad_chans_typo.tsv"
+    with pytest.raises(SystemExit) as exit_:
+        _refuse_unmatched_bad_channel_rows(str(missing), get_layout(mini_bids))
+    assert exit_.value.code == 1
+    assert capsys.readouterr().err.strip() == (
+        f"Error: --bad-channels {missing}: no such table, and {str(missing)!r} is not a "
+        "source-detector label such as S1_D1.")
+
+
+@pytest.mark.parametrize("labels", ["S1_D1", "S1_D1,S2_D3", "S1_D1 760, S12_D3 hbo",
+                                    "S9_D9"])
+def test_channel_labels_still_pass_whether_or_not_the_montage_has_them(labels, mini_bids):
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
+
+    _refuse_unmatched_bad_channel_rows(labels, get_layout(mini_bids))
+
+
+def test_one_odd_item_among_labels_is_named(mini_bids, capsys):
+    from nirspipe.cli.workflows import _refuse_unmatched_bad_channel_rows
+    from nirspipe.io.bids import get_layout
+
+    with pytest.raises(SystemExit):
+        _refuse_unmatched_bad_channel_rows("S1_D1,channel3", get_layout(mini_bids))
+    assert "'channel3' is not a source-detector label" in capsys.readouterr().err
+
+
 # ---- exclude: blanked for a reason that is not rejection ----
 
 def test_an_excluded_channel_is_blanked_like_a_rejected_one(haemo):

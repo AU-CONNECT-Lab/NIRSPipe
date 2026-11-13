@@ -33,7 +33,7 @@ from nirspipe.pipeline.chromophores import DEFAULT_CHROMOPHORES, in_order
 from nirspipe.pipeline.dpf import dpf_from_age
 from nirspipe.pipeline.motion import motion_settings
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
-from nirspipe.utils import pair_of
+from nirspipe.utils import pair_of, pair_order
 from nirspipe.utils.logging import get_logger, setup_logging, thread_log_file
 from nirspipe.cli.run_record import (RUN_TIMESTAMP_FORMAT, copy_inputs, copy_run_events,
                                      error_line, record_stem, template_keys,
@@ -750,8 +750,17 @@ def _refuse_unmatched_rows(rows: list[dict], flag: str, spec: str, recordings: l
 
 
 def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
-    """Stop before any subject runs when a --bad-channels table row names no recording."""
-    if not spec or not Path(str(spec)).exists():
+    """Stop before any subject runs when --bad-channels is neither a table nor channel labels,
+    or a row of its table names no recording."""
+    if not spec:
+        return
+    if not Path(str(spec)).exists():
+        # read as labels, so a mistyped table path would run without its rejections
+        items = [c.strip() for c in str(spec).split(",") if c.strip()]
+        odd = [c for c in items if pair_order(c)[0]]
+        if odd:
+            _shared.fail(f"--bad-channels {spec}: no such table, and {odd[0]!r} is not a "
+                         "source-detector label such as S1_D1.")
         return
     try:
         rows = _bad_channel_rows(Path(str(spec)))

@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - The re-paired null's refusals named `--wtc-pair-null-pool` and `nirspipe-prep`'s named `--ses` and `--run`, flags that do not exist
 - A `--high-pass` above the `--low-pass` filtered as a band-stop the sidecar called a bandpass; every range typed backwards is now refused before anything runs
 - `--stim-dur` given with `--events-path` is refused before any subject, where every subject was preprocessed first and then failed
+- A `--bad-channels` table whose path was mistyped ran the whole batch without its rejections; it is now refused before any subject
 
 ## [0.83.0] - 2026-11-09
 
