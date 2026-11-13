@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 - A value outside its flag's domain, such as an SCI line above 1 or a window of 0 s, is refused when parsed, in `--config` files too
 - A typed flag the run's mode or method does not read is named in a warning and in the run report, where it was dropped silently
 - A message that stops a command starts with `Error:` on every command, where some started `[error]` or `ERROR:`. A batch's per-subject and per-group lines keep their `[error]` and `[skip]` tags
+- `nirspipe-hyper --help` and its form list the 51 flags in ten sections (dyad selection, input, alignment, pairings, bands, coherence, conditions, correlation, nulls, execution), where they were one list
 - The Analysis form also hides the filter design, resampling, run joining and p correction until a mode is chosen, and a fir filter's order
 
 ### Fixed

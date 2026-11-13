@@ -364,8 +364,14 @@ def add_bids_filter_file(container) -> None:
 
 
 def pairs_selection() -> argparse.ArgumentParser:
-    """``--pairs-csv`` / ``--group-id`` / ``--participant-label`` / ``--task-label``: which dyads to process."""
+    """:func:`add_pairs_selection` as a parent parser."""
     p = argparse.ArgumentParser(add_help=False)
+    add_pairs_selection(p)
+    return p
+
+
+def add_pairs_selection(p) -> None:
+    """``--pairs-csv`` / ``--group-id`` / ``--participant-label`` / ``--task-label``: which dyads to process."""
     p.add_argument("--pairs-csv", type=Path, required=True,
                    help="CSV with columns: group_id, subject_id, task, and optionally "
                         "session, run and occasion. Each unique (group_id, task, session) is "
@@ -379,7 +385,6 @@ def pairs_selection() -> argparse.ArgumentParser:
                         "member. The whole group still runs, partner included.")
     p.add_argument("--task-label", "--task_label", nargs="+", action="extend", type=BidsLabel,
                    help="Task label(s) to include, filtering the pairs table.")
-    return p
 
 
 def add_alignment_window(container) -> None:
@@ -398,10 +403,3 @@ def add_alignment_window(container) -> None:
                                 "per-subject quality record. In `nirspipe-hyper` the window is "
                                 "read out of the whole-recording transform, and conditions "
                                 "outside it are dropped.")
-
-
-def alignment_window() -> argparse.ArgumentParser:
-    """:func:`add_alignment_window` as a parent parser."""
-    p = argparse.ArgumentParser(add_help=False)
-    add_alignment_window(p)
-    return p

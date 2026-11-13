@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import NoReturn
 
 
+VERBOSE_HELP = ("Print debug messages on the console too, each step's timing and paths among them.")
+
+
 def fail(message: str) -> NoReturn:
     """Print one refusal to stderr and exit non-zero."""
     print(f"Error: {message}", file=sys.stderr)
