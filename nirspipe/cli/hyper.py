@@ -59,20 +59,17 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
     try:
         groups = parse_group_csv(pairs_csv)
     except GroupCSVError as exc:
-        print(f"[error] {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail(str(exc))
 
     if group_id is not None:
         groups = {k: v for k, v in groups.items() if k[0] == group_id}
         if not groups:
-            print(f"[error] group_id '{group_id}' not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"group_id '{group_id}' not found in CSV")
 
     if task_label is not None:
         groups = {k: v for k, v in groups.items() if k[1] in task_label}
         if not groups:
-            print(f"[error] task_label {task_label} not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"task_label {task_label} not found in CSV")
 
     if participant_label is not None:
         # the CSV may spell a subject with or without sub-, the flag never carries it
@@ -80,9 +77,7 @@ def _select_groups(pairs_csv: Path, group_id: str | None, task_label: list[str] 
         groups = {k: v for k, v in groups.items()
                   if any(_shared.BidsLabel(e.subject_id) in wanted for e in v)}
         if not groups:
-            print(f"[error] no group in the CSV has participant(s) {participant_label}",
-                  file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"no group in the CSV has participant(s) {participant_label}")
 
     return groups
 
@@ -544,9 +539,8 @@ def cmd_run(
 
     if wtc_window is not None:
         if not by_condition:
-            print("[error] --wtc-window needs --by-condition; there are no conditions to "
-                  "cut into windows without it.", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail("--wtc-window needs --by-condition; there are no conditions to "
+                         "cut into windows without it.")
 
     if channel_cross and roi_mapping is None:
         print("[warn] --channel-cross without --roi-mapping: the crossed channel table "
@@ -580,18 +574,16 @@ def cmd_run(
     cond_pad = None
     if wtc_cond_transform:
         if wtc_phase_null:
-            print("[error] --wtc-cond-transform cannot be used with --wtc-phase-null. The "
-                  "flag puts the real per-condition tables on the cut-then-transform route "
-                  "and the null has no way to follow: it reads its conditions out of one "
-                  "whole-run transform per iteration, and matching that would cost a "
-                  "transform per condition per iteration. A null read off a different route "
-                  "than the table it is subtracted from measures the difference between the "
-                  "routes. Drop one of the two.", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail("--wtc-cond-transform cannot be used with --wtc-phase-null. The "
+                         "flag puts the real per-condition tables on the cut-then-transform route "
+                         "and the null has no way to follow: it reads its conditions out of one "
+                         "whole-run transform per iteration, and matching that would cost a "
+                         "transform per condition per iteration. A null read off a different route "
+                         "than the table it is subtracted from measures the difference between the "
+                         "routes. Drop one of the two.")
         if not by_condition:
-            print("[error] --wtc-cond-transform needs --by-condition; there are no "
-                  "conditions to transform without it.", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail("--wtc-cond-transform needs --by-condition; there are no "
+                         "conditions to transform without it.")
         if str(wtc_cond_pad).lower() == "auto":
             from nirspipe.utils import cone_margin_s
             # the band the means are taken over, which is what the cone has to clear;
@@ -733,9 +725,7 @@ def cmd_index(output_dir: Path, group_id: str | None, verbose: bool) -> None:
     if group_id is not None:
         folders = [d for d in folders if d.name == f"group-{group_id}"]
         if not folders:
-            print(f"[error] no group-{group_id} directory under {output_dir}",
-                  file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"no group-{group_id} directory under {output_dir}")
 
     wrote = 0
     for folder in folders:
@@ -893,8 +883,7 @@ def _check_device(device: str, nprocs: "int | None", n_groups: int) -> None:
     try:
         name = check_card(_shared.split_cpus(nprocs, n_groups)[0])
     except DeviceError as exc:
-        print(f"[error] {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail(str(exc))
     print(f"[info] wavelet transforms on {name}", file=sys.stderr)
 
 

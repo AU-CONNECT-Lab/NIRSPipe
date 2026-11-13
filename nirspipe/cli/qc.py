@@ -389,8 +389,7 @@ def _dyads(bids_dir: Path, output_dir: Path, pairs_csv: Path, group_id: str | No
                   for (gid, task, ses), members in groups.items()
                   for s in ([ses] if ses else session_label) if s in session_label}
         if not groups:
-            print(f"[error] session_label {session_label} not found in CSV", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"session_label {session_label} not found in CSV")
     settings = SimpleNamespace(
         bids_dir=bids_dir, output_dir=output_dir, no_align=no_align, normalize=normalize,
         tstart=tstart, tend=tend, roi_map=roi_map)

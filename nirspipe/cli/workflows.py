@@ -194,7 +194,7 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
     chosen_by = {"mode": f"--mode {args['mode']} uses", "config": "--config sets"}.get(
         sources.get("drift_model"), "--drift-model asks for")
     raise SystemExit(
-        f"[error] {chosen_by} a cosine drift model, which needs --drift-high-pass. The "
+        f"Error: {chosen_by} a cosine drift model, which needs --drift-high-pass. The "
         "cutoff depends on the design: use 1/(2 x the slowest repeat of any condition), "
         "auto to have each run's events set it, or pick another --drift-model.")
 
@@ -214,7 +214,7 @@ def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
     mode = args.get("mode")
     if args.get("drift_high_pass") != "auto" or mode == "glm":
         return
-    raise SystemExit(f"[error] --drift-high-pass auto reads the task's events, which only "
+    raise SystemExit(f"Error: --drift-high-pass auto reads the task's events, which only "
                      f"--mode glm models; --mode {mode} needs a cutoff in Hz.")
 
 
@@ -225,7 +225,7 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     try:
         stim_dur = stim_durations(args.get("stim_dur"))
     except ValueError as exc:
-        raise SystemExit(f"[error] {exc}.") from None
+        raise SystemExit(f"Error: {exc}.") from None
     if args.get("mode") != "glm":
         return
     if stim_dur is not None and args.get("events_path"):
@@ -234,7 +234,7 @@ def _refuse_glm_without_durations(args: dict[str, Any]) -> None:
     if stim_dur is not None or args.get("events_path"):
         return
     raise SystemExit(
-        "[error] --mode glm needs --stim-dur (one duration for every annotation, or one per "
+        "Error: --mode glm needs --stim-dur (one duration for every annotation, or one per "
         "condition as NAME=SEC) or --events-path (a table of onsets and durations).")
 
 
@@ -243,7 +243,7 @@ def _refuse_bad_events_path(args: dict[str, Any]) -> None:
     template = args.get("events_path")
     unknown = sorted(template_keys(str(template)) - set(EVENTS_PATH_KEYS)) if template else []
     if unknown:
-        raise SystemExit(f"[error] --events-path {template}: {{{unknown[0]}}} is not one of "
+        raise SystemExit(f"Error: --events-path {template}: {{{unknown[0]}}} is not one of "
                          + ", ".join(f"{{{k}}}" for k in EVENTS_PATH_KEYS) + ".")
 
 
@@ -255,7 +255,7 @@ def _refuse_bad_contrast_file(args: dict[str, Any]) -> None:
     try:
         read_contrasts(args["contrast_file"])
     except (ValueError, OSError) as exc:
-        raise SystemExit(f"[error] {exc}") from None
+        raise SystemExit(f"Error: {exc}") from None
 
 
 def _unread_typed(args: dict[str, Any]) -> list[tuple[str, str]]:
@@ -292,7 +292,7 @@ def _refuse_cropped_input(bids_dir: Path, allow: bool) -> None:
     if "nirspipe-prep crop" not in names:
         return
     raise SystemExit(
-        f"[error] {bids_dir} was written by `nirspipe-prep crop`, so every condition would be "
+        f"Error: {bids_dir} was written by `nirspipe-prep crop`, so every condition would be "
         "preprocessed on its own. Motion correction and the bandpass both read whatever "
         "series they are handed, so a short condition moves both.\n"
         "        Run this on the uncut recording instead, then cut what you need out of the "
@@ -762,7 +762,7 @@ def _refuse_unmatched_rows(rows: list[dict], flag: str, spec: str, recordings: l
             named = " ".join(f"{_BAD_CHANNEL_KEYS[c][1]}{row[c]}" for c in _BAD_CHANNEL_KEYS
                              if row[c])
             raise SystemExit(
-                f"[error] {flag} table {spec} line {row['line']} ({named}) matches no "
+                f"Error: {flag} table {spec} line {row['line']} ({named}) matches no "
                 f"recording in the dataset.")
 
 
@@ -782,7 +782,7 @@ def _refuse_unmatched_bad_channel_rows(spec: str | None, layout: Any) -> None:
     try:
         rows = _bad_channel_rows(Path(str(spec)))
     except ValueError as err:
-        raise SystemExit(f"[error] {err}") from None
+        raise SystemExit(f"Error: {err}") from None
     _refuse_unmatched_rows(rows, "--bad-channels", str(spec),
                            [f.get_entities() for f in layout.get(extension=".snirf")])
 
@@ -795,11 +795,11 @@ def _refuse_bad_span_rows(spec: str | None, layout: Any,
         return
     path = Path(str(spec))
     if not path.exists():
-        raise SystemExit(f"[error] {flag} table {spec} not found.")
+        raise SystemExit(f"Error: {flag} table {spec} not found.")
     try:
         rows = _span_rows(path, flag, relative=marker is not None)
     except ValueError as err:
-        raise SystemExit(f"[error] {err}") from None
+        raise SystemExit(f"Error: {err}") from None
     files = layout.get(extension=".snirf")
     _refuse_unmatched_rows(rows, flag, str(spec), [f.get_entities() for f in files])
     # file -> (length, the marker's onset or 0), both in seconds on its data axis
@@ -815,7 +815,7 @@ def _refuse_bad_span_rows(spec: str | None, layout: Any,
                     origin = marker_onset(raw, marker) if marker else 0.0
                 except ValueError:
                     raise SystemExit(
-                        f"[error] --keep-spans-from marker {marker!r} is not among the "
+                        f"Error: --keep-spans-from marker {marker!r} is not among the "
                         f"annotations of {Path(f.path).name}, which {flag} table {spec} "
                         f"line {row['line']} names.") from None
                 headers[f.path] = (raw.n_times / float(raw.info["sfreq"]), origin)
@@ -824,12 +824,12 @@ def _refuse_bad_span_rows(spec: str | None, layout: Any,
             measured = f" (from {marker!r} at {origin:g} s)" if marker else ""
             if onset >= length:
                 raise SystemExit(
-                    f"[error] {flag} table {spec} line {row['line']}: onset "
+                    f"Error: {flag} table {spec} line {row['line']}: onset "
                     f"{row['onset']:g} s{measured} lies past the end of {Path(f.path).name} "
                     f"({length:g} s).")
             if onset < 0:
                 raise SystemExit(
-                    f"[error] {flag} table {spec} line {row['line']}: onset "
+                    f"Error: {flag} table {spec} line {row['line']}: onset "
                     f"{row['onset']:g} s{measured} lies before the start of "
                     f"{Path(f.path).name}.")
 

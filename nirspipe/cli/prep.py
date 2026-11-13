@@ -33,8 +33,7 @@ def _subjects(bids_dir: Path, participant_label: "list[str] | None") -> list[str
     from nirspipe.io.bids import get_layout
     subjects = get_layout(bids_dir, validate=False).get_subjects()
     if not subjects:
-        print(f"[error] no subject found in {bids_dir}", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail(f"no subject found in {bids_dir}")
     return subjects
 
 
@@ -67,18 +66,14 @@ def cmd_crop(
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
     if segments_path is not None and (tmin is not None or tmax is not None):
-        print("[error] --segments-path and --tmin/--tmax are mutually exclusive.", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("--segments-path and --tmin/--tmax are mutually exclusive.")
     _shared.refuse_inverted(tmin, tmax, "--tmin", "--tmax")
     if segments_path is None and tmin is None and tmax is None:
-        print("[error] Specify --segments-path or at least one of --tmin / --tmax.", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("Specify --segments-path or at least one of --tmin / --tmax.")
     if combine and segments_path is None:
-        print("[error] --combine requires --segments-path.", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("--combine requires --segments-path.")
     if align == "trigger" and not trigger_name:
-        print("[error] --align trigger requires --trigger-name.", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("--align trigger requires --trigger-name.")
 
     from nirspipe.pipeline.crop import _segment_stems, crop_snirf
 
@@ -90,8 +85,7 @@ def cmd_crop(
         try:
             _segment_stems(read_table(segments_path), stem="")
         except ValueError as exc:
-            print(f"[error] {segments_path}: {exc}", file=sys.stderr)
-            raise SystemExit(1)
+            _shared.fail(f"{segments_path}: {exc}")
 
     # "auto" is the width the lowest analysed frequency needs, so it can only be resolved
     # once that frequency is known; a crop made for a band nobody has chosen yet keeps none
@@ -99,9 +93,8 @@ def cmd_crop(
     if margin not in (None, "", "0", 0):
         if str(margin).lower() == "auto":
             if not band_fmin:
-                print("[error] --margin auto requires --band-fmin (the lowest frequency the "
-                      "analysis will average over).", file=sys.stderr)
-                raise SystemExit(1)
+                _shared.fail("--margin auto requires --band-fmin (the lowest frequency the "
+                             "analysis will average over).")
             from nirspipe.utils import cone_margin_s
             margin_s = cone_margin_s(band_fmin)
         else:
@@ -145,8 +138,7 @@ def cmd_align(
     try:
         groups = parse_group_csv(pairs_csv)
     except Exception as exc:
-        print(f"[error] {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail(str(exc))
 
     n_fail = 0
     for (group_id, task, ses), group in groups.items():
@@ -226,11 +218,9 @@ def cmd_markers_apply(
         validate_bids(bids_dir)
     ops = [x for x in (tsv, shift, set_duration, rename) if x is not None]
     if not ops:
-        print("[error] Specify one of: --tsv, --shift, --set-duration, --rename", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("Specify one of: --tsv, --shift, --set-duration, --rename")
     if len(ops) > 1:
-        print("[error] Only one of --tsv, --shift, --set-duration, --rename can be used at a time.", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail("Only one of --tsv, --shift, --set-duration, --rename can be used at a time.")
     from nirspipe.pipeline.edit_markers import apply_markers
 
     def _apply_one(sub):

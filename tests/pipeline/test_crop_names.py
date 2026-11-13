@@ -93,7 +93,7 @@ def test_the_command_checks_the_table_once_before_any_subject(tmp_path, monkeypa
                        "--participant-label", "01", "02", "03", "--segments-path", str(table)])
     assert exc.value.code == 1
     assert called == []
-    assert capsys.readouterr().err.count("[error]") == 1
+    assert capsys.readouterr().err.count("Error:") == 1
 
 
 # ---- a segment cut from a recording says what it is ----

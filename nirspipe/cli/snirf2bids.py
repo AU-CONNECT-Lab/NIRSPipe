@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from nirspipe import __version__
@@ -45,8 +44,7 @@ def main(argv: list[str] | None = None) -> None:
     from nirspipe.io.bids import write_bids_from_snirf
 
     if not args.input_file.exists():
-        print(f"ERROR: input file not found: {args.input_file}", file=sys.stderr)
-        raise SystemExit(1)
+        _shared.fail(f"input file not found: {args.input_file}")
 
     write_bids_from_snirf(
         args.input_file, args.bids_dir, subject=args.participant_label,
