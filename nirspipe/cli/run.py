@@ -192,11 +192,6 @@ def _build_parser() -> argparse.ArgumentParser:
                            "Each mode fills in its own defaults for the post settings, which "
                            "--config and then the command line override. The run record "
                            "names where each setting came from.")
-    post.add_argument("--config", type=Path,
-                      help="A run record (sub-<label>/logs/sub-<label>*.toml) or a TOML of the same shape: "
-                           "[prep] and [post] keyed by flag name. Reruns with its settings; "
-                           "flags given here override it, and its post settings override the "
-                           "mode's defaults.")
     post.add_argument("--high-pass", type=_cutoff,
                       help="High-pass filter cutoff in Hz, e.g. 0.01, or none to switch off the "
                            "mode's default.")
@@ -235,6 +230,16 @@ def _build_parser() -> argparse.ArgumentParser:
                       help=f"Chromophores the GLM tables, block average, FC and ALFF carry, "
                            f"default {' '.join(DEFAULT_CHROMOPHORES)}. hbt, total haemoglobin, "
                            f"is HbO + HbR of each channel; the stage files keep HbO and HbR.")
+
+    post.add_argument("--fc", action="store_true", default=None,
+                      help="Also write the connectivity products rest mode writes, from the "
+                           "residual this mode leaves: the task residual in glm, the confound "
+                           "residual in denoise. Ignored by --mode rest, which writes them "
+                           "anyway.")
+    post.add_argument("--min-time", type=_shared.non_negative,
+                      help="Seconds outside every BAD_ span a run needs before FC and ALFF are "
+                           "computed; default 0, off. A run under it gets no FC or ALFF file, "
+                           "and its residual's sidecar says why. The GLM fit is not affected.")
 
     glm = p.add_argument_group("postprocessing: GLM and confound regression")
     glm.add_argument("--stim-dur", nargs="+", metavar="SEC|NAME=SEC",
@@ -280,15 +285,6 @@ def _build_parser() -> argparse.ArgumentParser:
                      help=argparse.SUPPRESS)
     glm.add_argument("--aux-channels", nargs="+", action="extend",
                      help=argparse.SUPPRESS)
-    glm.add_argument("--fc", action="store_true", default=None,
-                     help="Also write the connectivity products rest mode writes, from the "
-                          "residual this mode leaves: the task residual in glm, the confound "
-                          "residual in denoise. Ignored by --mode rest, which writes them "
-                          "anyway.")
-    glm.add_argument("--min-time", type=_shared.non_negative,
-                     help="Seconds outside every BAD_ span a run needs before FC and ALFF are "
-                          "computed; default 0, off. A run under it gets no FC or ALFF file, "
-                          "and its residual's sidecar says why. The GLM fit is not affected.")
     glm.add_argument("--events-path", type=Path,
                      help="Path to *_events.tsv. {sub}, {ses}, {task}, {acq} and {run} in it "
                           "are filled from each run, e.g. events/sub-{sub}_task-{task}_events.tsv; "
@@ -310,7 +306,17 @@ def _build_parser() -> argparse.ArgumentParser:
     out.add_argument("--no-report", action="store_true", help="Skip the QC HTML report.")
     out.add_argument("--roi-mapping", type=Path, default=None,
                      help="JSON file mapping ROI labels to lists of channel names. Groups the report denoising carpet and lists each region's long channels kept, and in rest mode adds the ROI correlation matrix and one seed topography per ROI; at group level the cohort page counts the runs per region that kept none. Optional.")
-    _shared.add_nprocs(out)
+
+    execution = p.add_argument_group("execution")
+    execution.add_argument("--config", type=Path,
+                           help="A run record (sub-<label>/logs/sub-<label>*.toml) or a TOML of "
+                                "the same shape: [prep] and [post] keyed by flag name. Reruns "
+                                "with its settings; flags given here override it, and its post "
+                                "settings override the mode's defaults.")
+    _shared.add_nprocs(execution)
+    execution.add_argument("--dry-run", action="store_true",
+                           help="Write each subject's run record, then stop without processing.")
+    execution.add_argument("--verbose", action="store_true", help=_shared.VERBOSE_HELP)
 
     esc = p.add_argument_group("escape hatches")
     esc.add_argument("--ignore", nargs="+", action="extend", choices=_IGNORE_CHOICES,
@@ -327,9 +333,6 @@ def _build_parser() -> argparse.ArgumentParser:
                           "correction and the bandpass each see one segment, which moves "
                           "both. Preprocess the uncut recording and crop the result instead "
                           "(`nirspipe-prep crop --input-desc`).")
-    esc.add_argument("--dry-run", action="store_true",
-                     help="Write each subject's run record, then stop without processing.")
-    esc.add_argument("--verbose", action="store_true")
     return p
 
 
