@@ -1,3 +1,3 @@
 """nirspipe: BIDS-compatible fNIRS preprocessing and postprocessing pipeline."""
 
-__version__ = "0.83.0"
+__version__ = "0.84.0"

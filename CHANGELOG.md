@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.84.0] - 2026-11-13
+
 ### Changed
 - **Breaking**: every command takes a flag only when typed in full, where a shortened one, such as `--pop` for `--population`, was accepted
 - **Breaking**: `--fir-delays` takes whole numbers separated by spaces, like every other list flag, and a run record holds them as a list
