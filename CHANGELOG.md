@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
-- **Breaking**: every command takes a flag only in full, where a prefix no other flag shared, such as `--pop`, was accepted
+- **Breaking**: every command takes a flag only when typed in full. A shortened flag, such as `--pop` for `--population`, was accepted as long as no other flag began the same way
 - **Breaking**: `--fir-delays` takes whole numbers separated by spaces, like every other list flag, and a run record holds them as a list
 - **Breaking**: `nirspipe ... group` refuses a participant-level flag, as `nirspipe-qc ... group` does, where it ran and ignored it
 - **Breaking**: the dyad commands take `--chromophores`, as `nirspipe` does, in place of `--wtc-chroma` and `--chroma`, and a dyad run record keys it the same
