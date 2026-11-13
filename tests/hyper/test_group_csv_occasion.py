@@ -67,7 +67,7 @@ def tree(tmp_path_factory):
     run_cli.main([str(bids), str(deriv), "participant", *CLI_ARGS, "--skip-bids-validation"])
     raw_qc(bids, qc, pairs, participant=PHYS, group=("--session-label", OCCASION))
     hyper_cli.main([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs),
-                    "--wtc-fmin", "0.02", "--wtc-phase-null", "2", "--wtc-seed", "0"])
+                    "--wtc-fmin", "0.02", "--wtc-phase-null", "2", "--seed", "0"])
     hyper_cli.main_pair_null([str(deriv), str(hyper), "group", "--pairs-csv", str(pairs)])
     hyper_cli.main_group_null([str(hyper), "group", "--task-label", TASK, "--n-resample", "50",
                                "--seed", "0"])

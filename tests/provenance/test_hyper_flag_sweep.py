@@ -56,7 +56,7 @@ HYPER = {
     "wtc_fmax": Case({"--wtc-fmax": ["0.15"]}, ("wtc",)),
     "wtc_significance": Case(SIGNIFICANCE, report=True, context={"--wtc-mc-count": ["10"]}),
     "wtc_mc_count": Case({"--wtc-mc-count": ["20"]}, context=SIGNIFICANCE, report=True),
-    "wtc_seed": Case({"--wtc-seed": ["1"]}, ("level",), PHASE_NULL),
+    "seed": Case({"--seed": ["1"]}, ("level",), PHASE_NULL),
     "chromophores": Case({"--chromophores": ["hbo"]}, ("wtc",)),
     "wtc_roi_min_channels": Case({"--wtc-roi-min-channels": ["2"]}, ("wtc",), ROI),
     "wtc_arrow_min": Case({"--wtc-arrow-min": ["0.8"]}, report=True),
@@ -135,7 +135,7 @@ ALLOWED_SAME = {
 BASE = {
     "nirspipe-hyper": {"--pairs-csv": ["{pairs}"], "--group-id": ["G01"], "--wtc-fmin": ["0.02"],
                        "--wtc-band-fmin": ["0.03"], "--wtc-band-fmax": ["0.10"],
-                       "--wtc-seed": ["0"]},
+                       "--seed": ["0"]},
     "nirspipe-hyper-pairnull": {"--pairs-csv": ["{pairs}"]},
     "nirspipe-hyper-groupnull": {"--task-label": [TASK], "--n-resample": ["50"], "--seed": ["0"]},
     "nirspipe-hyper-band": {"--wtc-band-fmin": ["0.04"], "--wtc-band-fmax": ["0.08"]},
@@ -160,7 +160,7 @@ def dyads(tmp_path_factory):
     hyper_cli.main([str(deriv), str(full), "group", "--pairs-csv", str(pairs),
                     "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10",
                     "--wtc-save-maps", "--wtc-phase-null", "5", "--isc-phase-null", "5",
-                    "--wtc-seed", "0", "--no-report"])
+                    "--seed", "0", "--no-report"])
     with_draws = root / "with_draws"
     shutil.copytree(full, with_draws)
     hyper_cli.main_pair_null([str(deriv), str(with_draws), "group", "--pairs-csv", str(pairs)])

@@ -82,7 +82,7 @@ nirspipe-hyper derivatives hyper group \
     --pairs-csv pairs.csv --desc errts --roi-mapping roi.json \
     --band-fmin 0.02 --band-fmax 0.10 \
     --chromophores hbo \
-    --wtc-phase-null 5 --isc-phase-null 100 --wtc-seed 1
+    --wtc-phase-null 5 --isc-phase-null 100 --seed 1
 ```
 
 About 6 minutes. Two settings only save time here. Five coherence scrambles is far too few; a study uses about 100, as the correlation does. `--chromophores hbo` limits both measures to HbO; without it HbO and HbR are both computed, which doubles the time. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.

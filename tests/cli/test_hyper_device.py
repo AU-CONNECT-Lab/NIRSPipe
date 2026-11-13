@@ -69,7 +69,7 @@ def test_nirspipe_hyper_on_the_card_writes_the_cpus_tables(cohort):
                         "--roi-mapping", str(write_roi_map(root)),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--wtc-phase-null", "3",
-                        "--wtc-seed", "7", "--wtc-save-maps", "--no-report",
+                        "--seed", "7", "--wtc-save-maps", "--no-report",
                         "--device", device])
         trees[device] = out
     _same_tables(trees["cpu"], trees["cuda"])

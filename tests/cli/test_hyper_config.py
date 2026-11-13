@@ -73,7 +73,7 @@ def runs(tmp_path_factory):
 
     first = run("first", "--wtc-fmin", "0.02", "--band-fmin", "0.03", "--band-fmax", "0.12",
                 "--no-channel-cross", "--chromophores", "hbo", "--wtc-phase-null", "2",
-                "--isc-phase-null", "3", "--wtc-seed", "0")
+                "--isc-phase-null", "3", "--seed", "0")
     record = next(first.rglob("logs/group-*.toml"))
     # the same run with no seed given, then rerun from its record
     drawn = run("drawn", "--wtc-fmin", "0.02", "--band-fmin", "0.03", "--band-fmax", "0.12",
@@ -116,9 +116,9 @@ def test_a_shorthand_typed_over_the_record_reaches_both_measures(runs):
 # ---- an unseeded run ----
 
 def test_an_unseeded_run_records_the_seed_it_drew(runs):
-    seed = _hyper(runs["drawn"])["hyper"]["wtc_seed"]
+    seed = _hyper(runs["drawn"])["hyper"]["seed"]
     assert isinstance(seed, int) and seed >= 0
-    assert _hyper(runs["drawn_again"])["hyper"]["wtc_seed"] == seed
+    assert _hyper(runs["drawn_again"])["hyper"]["seed"] == seed
 
 
 def test_an_unseeded_run_s_rerun_repeats_its_null_draws(runs):

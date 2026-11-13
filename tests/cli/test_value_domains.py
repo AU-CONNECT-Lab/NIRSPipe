@@ -53,8 +53,8 @@ REFUSED = [
      "argument --wtc-cond-pad-s: must be 0 or more, got -5"),
     ("a window of no length, dyad", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-window-s", "0"],
      "argument --wtc-window-s: must be greater than 0, got 0"),
-    ("a negative seed", _hyper("nirspipe-hyper"), [*HYPER, "--wtc-seed", "-1"],
-     "argument --wtc-seed: must be 0 or more, got -1"),
+    ("a negative seed", _hyper("nirspipe-hyper"), [*HYPER, "--seed", "-1"],
+     "argument --seed: must be 0 or more, got -1"),
     ("a negative lag", _hyper("nirspipe-hyper"), [*HYPER, "--isc-max-lag", "-1"],
      "argument --isc-max-lag: must be 0 or more, got -1"),
     ("no resamples", _hyper("nirspipe-hyper-groupnull"),
@@ -97,9 +97,9 @@ def test_the_edges_of_each_domain_are_values():
     assert run_cli._build_parser().parse_args([*RUN, "--min-good-frac", "1"]).min_good_frac == 1.0
     hyper = hyper_cli._parsers()["nirspipe-hyper"].parse_args(
         [*HYPER, "--wtc-cond-pad-s", "0", "--isc-phase-null", "0", "--wtc-phase-null", "0",
-         "--wtc-whiten", "0", "--wtc-arrow-min", "1", "--wtc-seed", "0"])
+         "--wtc-whiten", "0", "--wtc-arrow-min", "1", "--seed", "0"])
     assert (hyper.wtc_cond_pad_s, hyper.isc_phase_null, hyper.wtc_phase_null, hyper.wtc_whiten,
-            hyper.wtc_arrow_min, hyper.wtc_seed) == (0.0, 0, 0, 0.0, 1.0, 0)
+            hyper.wtc_arrow_min, hyper.seed) == (0.0, 0, 0, 0.0, 1.0, 0)
 
 
 @pytest.mark.parametrize("typed, read", [("auto", "auto"), ("AUTO", "auto"), ("47.1", 47.1)])
@@ -154,7 +154,7 @@ def test_a_flag_with_a_domain_is_still_a_number_field():
     assert {run[name] for name in ("--sci-threshold", "--min-good-frac", "--window-length",
                                    "--cardiac-l-freq", "--filter-order", "--nprocs")} == {"number"}
     hyper = _kinds("nirspipe-hyper")
-    assert (hyper["--wtc-fmin"], hyper["--wtc-seed"]) == ("number", "number")
+    assert (hyper["--wtc-fmin"], hyper["--seed"]) == ("number", "number")
 
 
 def test_a_flag_that_also_takes_a_word_stays_a_text_field():

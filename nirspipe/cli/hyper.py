@@ -361,7 +361,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_fmax=s.wtc_fmax,
         band_fmin=s.wtc_band_fmin,
         band_fmax=s.wtc_band_fmax,
-        seed=s.wtc_seed,
+        seed=s.seed,
         cross=s.wtc_phase_null_cross,
         limit_scales=s.wtc_limit_scales,
         mask_coi=s.wtc_mask_coi,
@@ -400,7 +400,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_band_fmin=s.wtc_band_fmin,
         wtc_band_fmax=s.wtc_band_fmax,
         wtc_significance=s.wtc_significance,
-        wtc_seed=s.wtc_seed,
+        wtc_seed=s.seed,
         wtc_mc_count=s.wtc_mc_count,
         wtc_channel_cross=s.wtc_channel_cross,
         wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window_s,
@@ -476,7 +476,7 @@ def cmd_run(
     desc: str, roi_mapping: Path | None,
     wtc_fmin: float, wtc_fmax: float,
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
-    wtc_significance: bool, wtc_mc_count: int, wtc_seed: int | None,
+    wtc_significance: bool, wtc_mc_count: int, seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
     wtc_channel_cross: bool,
     wtc_by_condition: bool, chromophores: "list[str]", wtc_window_s: "float | None",
@@ -516,7 +516,7 @@ def cmd_run(
                        isc_fmin, isc_fmax, tstart, tend)
     # drawn when unset, so the record holds the seed and a --config rerun repeats the draws
     if wtc_significance or wtc_phase_null or isc_phase_null:
-        wtc_seed = _shared.seed_or_drawn(wtc_seed, "--wtc-seed")
+        seed = _shared.seed_or_drawn(seed, "--seed")
     # every parameter as resolved, for the run record. Read off locals() before anything
     # else runs, so a new option lands in the record without being listed here as well.
     run_args = dict(locals())
@@ -978,7 +978,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                           "(default 300). This is what the runtime is spent on and it "
                           "scales linearly; lower it to preview a run, raise it to settle "
                           "a contour. Ignored without --wtc-significance.")
-    run.add_argument("--wtc-seed", type=_shared.non_negative_int, default=None,
+    run.add_argument("--seed", type=_shared.non_negative_int, default=None,
                      help="Seed the --wtc-significance surrogates and the --wtc-phase-null and "
                           "--isc-phase-null draws. Omitted with any of them on, one is drawn "
                           "and written to the run record, so a --config rerun repeats them.")

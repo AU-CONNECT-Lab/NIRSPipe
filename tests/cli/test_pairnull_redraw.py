@@ -16,7 +16,7 @@ from tests._dyad_fingerprint import TASK, make_group_dataset
 from tests._fingerprint import CLI_ARGS
 
 HYPER = ["--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03", "--wtc-band-fmax", "0.10",
-         "--wtc-phase-null", "2", "--isc-phase-null", "2", "--wtc-seed", "0"]
+         "--wtc-phase-null", "2", "--isc-phase-null", "2", "--seed", "0"]
 
 
 def _chords(group_dir) -> "dict[str, str]":

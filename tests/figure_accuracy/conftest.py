@@ -264,8 +264,8 @@ def dyad_variants(groups):
 
     _post("condtransform", "--wtc-cond-transform")
     _post("nocondcone", "--no-wtc-cond-cone")
-    _post("phasenull", "--wtc-phase-null", "10", "--wtc-seed", "0")
-    _post("phasenull_homologous", "--wtc-phase-null", "10", "--wtc-seed", "0",
+    _post("phasenull", "--wtc-phase-null", "10", "--seed", "0")
+    _post("phasenull_homologous", "--wtc-phase-null", "10", "--seed", "0",
           "--no-wtc-phase-null-cross")
     _post("uncrossed", "--no-channel-cross")
     _raw("tstart", "--tstart", "20", "--tend", "380")

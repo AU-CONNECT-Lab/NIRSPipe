@@ -108,7 +108,7 @@ def test_nirspipe_hyper_writes_the_same_tree_on_two_processes(cohort):
                         "--roi-mapping", str(write_roi_map(root)),
                         "--wtc-fmin", "0.02", "--wtc-band-fmin", "0.03",
                         "--wtc-band-fmax", "0.10", "--no-channel-cross",
-                        "--wtc-significance", "--wtc-mc-count", "10", "--wtc-seed", "7",
+                        "--wtc-significance", "--wtc-mc-count", "10", "--seed", "7",
                         "--nprocs", nprocs])
         trees[nprocs] = out
 

@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - **Breaking**: `--fir-delays` takes whole numbers separated by spaces, like every other list flag, and a run record holds them as a list
 - **Breaking**: `nirspipe ... group` refuses a participant-level flag, as `nirspipe-qc ... group` does, where it ran and ignored it
 - **Breaking**: the dyad commands take `--chromophores`, as `nirspipe` does, in place of `--wtc-chroma` and `--chroma`, and a dyad run record keys it the same
+- **Breaking**: `nirspipe-hyper` takes `--seed`, as `nirspipe-hyper-groupnull` does, in place of `--wtc-seed`, and its run record keys it `seed`
 - A command line missing several required flags names all of them at once, and which of them `--population` sets, where it named one per attempt
 - A value outside its flag's domain, such as an SCI line above 1 or a window of 0 s, is refused when parsed, in `--config` files too
 - A typed flag the run's mode or method does not read is named in a warning and in the run report, where it was dropped silently
