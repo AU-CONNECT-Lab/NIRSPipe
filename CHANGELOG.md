@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - CNR no longer comes back empty when two conditions start on one sample: the shared onset counts as one epoch
+- The re-paired null's refusals named `--wtc-pair-null-pool` and `nirspipe-prep`'s named `--ses` and `--run`, flags that do not exist
 
 ## [0.83.0] - 2026-11-09
 

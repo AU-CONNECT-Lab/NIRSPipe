@@ -102,7 +102,7 @@ def _sci_win_metrics(
 
     The windowed twin of ``sci_mean``, measured on the same optical density and pinned to the
     same 10 s as ``psp_mean`` and ``cv_mean`` rather than following the QC window, so the
-    four scalars describe the same stretch of recording whatever ``--qc-window`` is set to.
+    four scalars describe the same stretch of recording whatever ``--window-length`` is set to.
     """
     from nirspipe.qc.metrics.windowed import compute_windowed_sci
 

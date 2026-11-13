@@ -1,4 +1,4 @@
-"""The analysis behind ``nirspipe-hyper post``: the WTC and ISC runs, and the tables they write.
+"""The analysis behind ``nirspipe-hyper``: the WTC and ISC runs, and the tables they write.
 
 Nothing here draws. The transform covers every pairing at once and a figure is of one
 pairing, so the two are separated; :mod:`nirspipe.qc.hyper.hyper_report` draws the
@@ -35,7 +35,7 @@ logger = get_logger("pipeline.hyper_post")
 
 @dataclass
 class HyperPostConfig:
-    """Every ``--wtc-*`` option of ``nirspipe-hyper post``, with the derived values resolved once.
+    """Every ``--wtc-*`` option of ``nirspipe-hyper``, with the derived values resolved once.
 
     Field names are the CLI's. ``band_fmin``, ``band_fmax``, ``chroma`` and ``cond_pad_s``
     are the resolved forms, in one place so the tables and the figures cannot fall back

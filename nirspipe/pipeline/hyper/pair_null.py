@@ -150,7 +150,7 @@ def _refuse_repeated_subjects(same_task: dict, task: str) -> None:
         if len(set(seen)) != len(seen):
             raise StageError(
                 f"group {gid!r} lists the same subject twice for task {task!r}, so "
-                "'--wtc-pair-null-pool any' cannot tell a stand-in from the member it "
+                "'--wtc-pair-pool any' cannot tell a stand-in from the member it "
                 "replaces. Use the default 'position' pool.")
 
     groups_by_subject: dict[str, list[str]] = {}
@@ -161,7 +161,7 @@ def _refuse_repeated_subjects(same_task: dict, task: str) -> None:
     if repeated:
         shown = ", ".join(f"{sub} in {sorted(gids)}" for sub, gids in sorted(repeated.items()))
         raise StageError(
-            f"'--wtc-pair-null-pool any' would pair somebody with themselves: {shown}. "
+            f"'--wtc-pair-pool any' would pair somebody with themselves: {shown}. "
             "A cohort of the same people recorded repeatedly has to use the default "
             "'position' pool, where a member is only ever replaced by another group's "
             "member at the same index.")
@@ -183,7 +183,7 @@ def _warn_unverifiable_pool(same_task: dict) -> None:
     if len(set(ids)) != len(ids):
         return          # the refusal above already had something to test
     logger.warning(
-        "'--wtc-pair-null-pool any' assumes the members of a group are interchangeable and "
+        "'--wtc-pair-pool any' assumes the members of a group are interchangeable and "
         "that no person appears in more than one group. Every subject id here is unique, so "
         "that could not be checked: a cohort of the same people recorded repeatedly looks "
         "the same as a cohort of strangers when the visit is baked into the subject id. If "

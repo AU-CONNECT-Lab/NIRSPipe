@@ -44,7 +44,7 @@ def find_snirf(
         )
     if len(files) > 1:
         paths = "\n".join(f"  {f}" for f in files)
-        hint = "--ses/--task/--run" if desc else "--ses/--task/--run/--input-desc"
+        hint = "--session-label/--task-label/--run-label" + ("" if desc else "/--input-desc")
         raise ValueError(
             f"Multiple SNIRFs found; narrow down with {hint}:\n{paths}"
         )
