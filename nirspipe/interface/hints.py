@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from nirspipe.cli.run import _NOISE_CHOICES, mode_defaults
+from nirspipe.cli.run import _NOISE_CHOICES, mode_defaults, unread_settings
 from nirspipe.pipeline.motion import IQR_FACTOR_DEFAULTS, STD_THRESH_DEFAULTS
 
 
@@ -19,13 +19,6 @@ class Hints:
 
     def as_json(self) -> dict:
         return asdict(self)
-
-
-_GLM_ONLY = ["--hrf-model", "--stim-dur", "--events-path", "--contrast-file", "--fir-delays"]
-# every mode's regression reads these, so only a run without a mode leaves them unread
-_CONFOUNDS = ["--drift-model", "--drift-high-pass", "--drift-order", "--short-channel",
-              "--noise-model", "--fc"]
-_CENSOR = ["--gvtd-censor-n-std", "--gvtd-min-epoch-s"]
 
 
 def _float(text: "str | None") -> "float | None":
@@ -80,7 +73,7 @@ def band_note(mode: "str | None", high_pass: "str | None", drift_model: "str | N
 
 
 def analysis(form) -> Hints:
-    """``nirspipe``: the mode's defaults as placeholders, and the flags the mode or method does not read."""
+    """``nirspipe``: the mode's defaults as placeholders, and the flags the run as filled would not read."""
     mode = form.get("--mode") or None
     defaults = mode_defaults(mode)
     hints = Hints(suggestions={"--noise-model": list(_NOISE_CHOICES)})
@@ -99,39 +92,23 @@ def analysis(form) -> Hints:
 
     method = form.get("--motion-correction") or None
     std, iqr = STD_THRESH_DEFAULTS.get(method), IQR_FACTOR_DEFAULTS.get(method)
-    if std is None:
-        hints.inactive.append("--motion-std-thresh")
-    else:
+    if std is not None:
         hints.placeholders["--motion-std-thresh"] = f"{std:g} ({method} default)"
-    if iqr is None:
-        hints.inactive.append("--wavelet-iqr")
-    else:
+    if iqr is not None:
         hints.placeholders["--wavelet-iqr"] = f"{iqr:g} ({method} default)"
 
-    if not form.get("--gvtd-censor"):
-        hints.inactive += _CENSOR
-    if mode in (None, "none"):
-        # the fill runs in postprocessing on every BAD_ span, the file's own and dark edges too
-        hints.inactive += _CONFOUNDS + ["--export-mean-filled", "--censor-fill"]
-    if mode != "glm":
-        hints.inactive += _GLM_ONLY
-    elif form.get("--hrf-model") != "fir":
-        hints.inactive.append("--fir-delays")
-    # FC and ALFF are what it gates
-    if mode != "rest" and not form.get("--fc"):
-        hints.inactive.append("--min-time")
-    # the drift model that will run, typed or the mode's, decides which companion it reads
-    drift = form.get("--drift-model") or defaults.get("drift_model")
-    if drift != "cosine":
-        hints.inactive.append("--drift-high-pass")
-    if drift != "polynomial":
-        hints.inactive.append("--drift-order")
+    # the command's own table of what a run reads, asked with the mode's defaults filled in
+    unread = unread_settings({
+        "mode": mode, "hrf_model": form.get("--hrf-model"),
+        "drift_model": form.get("--drift-model") or defaults.get("drift_model"),
+        "fc": form.get("--fc"), "filter_method": form.get("--filter-method"),
+        "gvtd_censor": form.get("--gvtd-censor"), "motion_correction": method})
+    hints.inactive = sorted("--" + dest.replace("_", "-") for dest in unread)
 
     note = band_note(mode, form.get("--high-pass"), form.get("--drift-model"),
                      form.get("--drift-high-pass"))
     if note:
         hints.notes.append((note, "warn"))
-    hints.inactive = sorted(set(hints.inactive))
     return hints
 
 

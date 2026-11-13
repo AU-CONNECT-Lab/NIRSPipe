@@ -1,5 +1,7 @@
 """What the generated forms carry for the page's helpers: field kinds for the folded summaries, and Detect's subjects."""
 
+import pytest
+
 from nirspipe.interface.server import WebApp
 from tests._synth import make_bids_dataset
 
@@ -110,3 +112,46 @@ def test_the_preview_leaves_out_what_the_form_hides():
     assert "--hrf-model" in shown["hints"]["inactive"]
     assert "--hrf-model" not in shown["preview"] and "--high-pass" in shown["preview"]
     assert client.post("/preview/nirspipe-qc/", data={}).get_json()["hints"] is None
+
+
+# ---- the form hides what the command's own table says a run would not read ----
+
+def test_without_a_mode_the_settings_only_postprocessing_reads_are_hidden_too():
+    hidden = set(_hints().inactive)
+    assert {"--filter-method", "--filter-order", "--resample-sfreq", "--combine-runs",
+            "--p-correction"} <= hidden
+    # the report previews the filter on a prep-only run, so the cutoffs stay
+    assert not {"--high-pass", "--low-pass", "--chromophores", "--mode"} & hidden
+    assert not {"--filter-method", "--resample-sfreq"} & set(_hints(**{"--mode": "denoise"}).inactive)
+
+
+def test_a_fir_filter_hides_the_order_it_does_not_have():
+    assert "--filter-order" not in _hints(**{"--mode": "rest"}).inactive
+    assert "--filter-order" in _hints(**{"--mode": "rest", "--filter-method": "fir"}).inactive
+
+
+@pytest.mark.parametrize("form", [
+    {}, {"--mode": "glm"}, {"--mode": "rest"}, {"--mode": "denoise", "--fc": "on"},
+    {"--mode": "glm", "--hrf-model": "fir", "--drift-model": "polynomial"},
+    {"--mode": "rest", "--filter-method": "fir", "--gvtd-censor": "long",
+     "--motion-correction": "spline_wavelet"},
+])
+def test_the_form_hides_exactly_the_shown_flags_the_table_names(form):
+    from werkzeug.datastructures import MultiDict
+
+    from nirspipe.cli import run as run_cli
+    from nirspipe.interface.forms import fields
+    from nirspipe.interface.hints import analysis
+
+    parser = run_cli._build_parser()
+    shown = {field.name for _title, group in fields(parser) for field in group}
+    settings = {name.lstrip("-").replace("-", "_"): value for name, value in form.items()}
+    # the form resolves what the mode fills before asking, as a run does
+    settings.setdefault("motion_correction", "tddr")
+    for dest in ("drift_model", "hrf_model"):
+        settings.setdefault(dest, run_cli.mode_defaults(settings.get("mode")).get(dest))
+    expected = {"--" + dest.replace("_", "-") for dest in run_cli.unread_settings(settings)}
+    hidden = set(analysis(MultiDict(form)).inactive)
+    assert hidden & shown == expected & shown
+    # every name it hides is a flag of the command, one withheld from the form included
+    assert hidden <= set(parser._option_string_actions)
