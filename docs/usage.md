@@ -94,6 +94,9 @@ nirspipe /data/bids /data/derivatives group
 
 - **Entity flags** are spelled the same on every command: `--participant-label`, `--session-label`, `--task-label`, `--run-label`, `--group-id`. A label may be given with its `sub-` / `ses-` / `task-` prefix or without. List options take space-separated values or the flag repeated. The BIDS App options also answer to their underscore spellings (`--participant_label`, `--bids_filter_file`, ...).
 - **Every command** but `nirspipe-gui` takes `--version`, and `nirspipe` and the `nirspipe-hyper` commands also take `--verbose`.
+- **Flags are typed in full.** A shortened spelling, such as the first three letters of `--population`, is refused, so a script keeps working when a flag sharing its start is added later.
+- **Values are checked as they are read.** A value outside what its flag can mean (an SCI line above 1, a share outside 0 to 1, a window of 0 s, a negative seed) or a range typed backwards (a `--high-pass` above the `--low-pass`, a `--tmin` after the `--tmax`) stops the command before anything runs. A `--config` file's values go through the same checks.
+- **Errors.** A message that stops a command starts with `Error:`, and the command exits non-zero. In a batch, a line naming one subject or group with `[error]` or `[skip]` reports that unit only, and the others still run.
 - **Tables** you supply are read by extension: `.tsv` tab-separated, `.csv` comma-separated, anything else sniffed ([Table files](data-preparation.md#table-files)).
 - **BIDS validation.** Commands that read a BIDS dataset (`nirspipe`, `nirspipe-prep`, and `nirspipe-qc` at the participant level and, with `--pairs-csv`, at the group level) check it with bids-validator when it is installed; `--skip-bids-validation` skips the check. Commands that read only a derivatives tree never validate.
 - **Output directories.** A command that writes a tree stops when its output directory is its input directory; `nirspipe-prep crop --input-desc` is the exception.
@@ -188,7 +191,9 @@ A cell that is not a number, a contrast named twice or one that weights nothing 
 
 ## `nirspipe`
 
-`participant` preprocesses each selected subject, and postprocesses it when `--mode` is given. `group` reads the quality records under `OUTPUT_DIR` and writes the cohort pages; it reads nothing from `BIDS_DIR` and needs no preprocessing flag. The run stops before writing anything when the output directory is the input, or when `--participant-label` names a subject the dataset does not have. What each step does is in [Processing workflow](workflows.md).
+`participant` preprocesses each selected subject, and postprocesses it when `--mode` is given. `group` reads the quality records under `OUTPUT_DIR` and writes the cohort pages; it reads nothing from `BIDS_DIR` and needs no preprocessing flag. A participant-level setting typed at the group level is refused, as in `nirspipe-qc`, and a selection flag there is ignored with a warning. The run stops before writing anything when the output directory is the input, or when `--participant-label` names a subject the dataset does not have. What each step does is in [Processing workflow](workflows.md).
+
+A flag you type that the run, as set, does not read is named in a warning before the first subject and again under the run report's command: a postprocessing flag without `--mode`, a GLM flag such as `--stim-dur` under `--mode rest`, `--fir-delays` without `--hrf-model fir`, a drift setting another `--drift-model` ignores, a censoring setting without `--gvtd-censor`. A value that came from `--config` is never called typed.
 
 ```{argparse}
 :module: cli_parsers
@@ -208,7 +213,7 @@ Converts one raw SNIRF file per call ([Converting raw SNIRF](data-preparation.md
 
 ## `nirspipe-prep`
 
-`crop`, `align` and `edit-markers apply` each write a new tree under `OUTPUT_DIR` (`cropped/`, `aligned/`, `marker_edited/`); `edit-markers export` writes event tables for editing and `keep-spans` one table. What each does is in [Data preparation](data-preparation.md).
+`crop`, `align` and `edit-markers apply` each write a new tree under `OUTPUT_DIR` (`cropped/`, `aligned/`, `marker_edited/`); `edit-markers export` writes event tables for editing and `keep-spans` one table. Without `--participant-label` a subcommand reads every subject of its input. What each does is in [Data preparation](data-preparation.md).
 
 ```{argparse}
 :module: cli_parsers
