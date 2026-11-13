@@ -16,6 +16,13 @@ def fail(message: str) -> NoReturn:
     raise SystemExit(1)
 
 
+def refuse_inverted(low, high, low_flag: str, high_flag: str) -> None:
+    """Exit non-zero when both edges are numbers and the lower is not below the upper."""
+    if (isinstance(low, (int, float)) and isinstance(high, (int, float))
+            and not low < high):
+        fail(f"{low_flag} {low:g} has to be below {high_flag} {high:g}.")
+
+
 class BidsLabel(str):
     """A BIDS entity label with its ``sub-``/``ses-``/``task-`` prefix taken off.
 

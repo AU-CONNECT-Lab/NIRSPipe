@@ -83,9 +83,7 @@ def cmd_participant(
     if not skip_bids_validation:
         from nirspipe.io.bids import validate_bids
         validate_bids(bids_dir)
-    if (epoch_tmin is None) != (epoch_tmax is None):
-        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
-        raise SystemExit(1)
+    _app_options.check_epoch_window(epoch_tmin, epoch_tmax)
 
     from nirspipe.cli.run_record import (copy_inputs, error_line, write_raw_qc_record,
                                          write_run_inputs, write_run_outcome)
@@ -414,6 +412,7 @@ def cmd_group(
     from nirspipe.qc.subject.group_writer import build_group_raw_report
 
     _shared.refuse_output_in_input(bids_dir, output_dir, "nirspipe-qc")
+    _shared.refuse_inverted(tstart, tend, "--tstart", "--tend")
     if group_id is not None and pairs_csv is None:
         print("Error: --group-id selects from --pairs-csv, which was not given.", file=sys.stderr)
         raise SystemExit(1)
@@ -706,6 +705,8 @@ def main(argv: list[str] | None = None) -> None:
         # below the command line and --config, so either overrides any value it fills
         filled = _app_options.fill_population(args, BAND_KEYS)
     _app_options.require_flags(args, _LEVEL_REQUIRES[args.analysis_level], args.analysis_level)
+    if args.analysis_level == "participant":
+        _app_options.check_band_edges(args)
     kw = vars(args)
     taken = {k: kw[k] for k in dispatched(parser, args.analysis_level)}
     if args.analysis_level == "participant":

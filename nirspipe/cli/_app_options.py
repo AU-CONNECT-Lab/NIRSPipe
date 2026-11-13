@@ -7,7 +7,8 @@ import json
 import sys
 from pathlib import Path
 
-from nirspipe.cli._shared import BidsLabel, correlation, fail, non_negative, positive, share
+from nirspipe.cli._shared import (BidsLabel, correlation, fail, non_negative, positive,
+                                  refuse_inverted, share)
 from nirspipe.io.head_template import CHOICES, FSAVERAGE, resolve_template, space_of, template_dir
 from nirspipe.pipeline.population import (BAND_KEYS, CHOICES as POPULATIONS, age_span,
                                           population_values)
@@ -335,6 +336,20 @@ def add_reviewer_marks(container, bad_spans_note: str = "") -> None:
                                 "--keep-spans format. Each is marked BAD_manual: left out of "
                                 "screening and of every estimate. One rater's, as for "
                                 "--bad-channels." + bad_spans_note)
+
+
+def check_band_edges(args) -> None:
+    """Exit non-zero when the cardiac or the respiration band, as resolved, runs backwards."""
+    refuse_inverted(args.cardiac_l_freq, args.cardiac_h_freq,
+                    "--cardiac-l-freq", "--cardiac-h-freq")
+    refuse_inverted(args.resp_l_freq, args.resp_h_freq, "--resp-l-freq", "--resp-h-freq")
+
+
+def check_epoch_window(tmin: "float | None", tmax: "float | None") -> None:
+    """Both edges or neither, and the start before the end."""
+    if (tmin is None) != (tmax is None):
+        fail("--epoch-tmin and --epoch-tmax must be given together.")
+    refuse_inverted(tmin, tmax, "--epoch-tmin", "--epoch-tmax")
 
 
 def check_keep_spans_from(keep_spans: "Path | None", keep_spans_from: "str | None") -> None:

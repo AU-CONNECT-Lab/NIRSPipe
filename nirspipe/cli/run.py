@@ -327,13 +327,6 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _check_epoch_window(args: argparse.Namespace) -> None:
-    """Both edges or neither: one alone has no window to describe."""
-    if (args.epoch_tmin is None) != (args.epoch_tmax is None):
-        print("Error: --epoch-tmin and --epoch-tmax must be given together.", file=sys.stderr)
-        raise SystemExit(1)
-
-
 def _check_dirs(args: argparse.Namespace) -> None:
     """Refuse to write into the input dataset: the run would stamp it as a derivative."""
     _shared.refuse_output_in_input(args.bids_dir, args.output_dir, "nirspipe")
@@ -427,7 +420,8 @@ def main(argv: list[str] | None = None) -> None:
 
     # checked before the workflow import: a bad command line should not first pay for mne
     _app_options.require_flags(args, _LEVEL_REQUIRES[level], level)
-    _check_epoch_window(args)
+    _app_options.check_band_edges(args)
+    _app_options.check_epoch_window(args.epoch_tmin, args.epoch_tmax)
     _app_options.check_keep_spans_from(args.keep_spans, args.keep_spans_from)
     _app_options.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)
     _check_dirs(args)

@@ -57,6 +57,7 @@ def cmd_crop(
     if segments_path is not None and (tmin is not None or tmax is not None):
         print("[error] --segments-path and --tmin/--tmax are mutually exclusive.", file=sys.stderr)
         raise SystemExit(1)
+    _shared.refuse_inverted(tmin, tmax, "--tmin", "--tmax")
     if segments_path is None and tmin is None and tmax is None:
         print("[error] Specify --segments-path or at least one of --tmin / --tmax.", file=sys.stderr)
         raise SystemExit(1)

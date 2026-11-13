@@ -454,6 +454,22 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
     return report_path
 
 
+def _refuse_bad_ranges(band_fmin, band_fmax, wtc_fmin, wtc_fmax, wtc_band_fmin, wtc_band_fmax,
+                       isc_fmin, isc_fmax, tstart, tend) -> None:
+    """Exit non-zero on a range that runs backwards, or a coherence band off the computed axis."""
+    # the shared band first, so the message names the flags as typed
+    _shared.refuse_inverted(band_fmin, band_fmax, "--band-fmin", "--band-fmax")
+    _shared.refuse_inverted(wtc_fmin, wtc_fmax, "--wtc-fmin", "--wtc-fmax")
+    _shared.refuse_inverted(wtc_band_fmin, wtc_band_fmax, "--wtc-band-fmin", "--wtc-band-fmax")
+    _shared.refuse_inverted(isc_fmin, isc_fmax, "--isc-fmin", "--isc-fmax")
+    _shared.refuse_inverted(tstart, tend, "--tstart", "--tend")
+    low = wtc_fmin if wtc_band_fmin is None else wtc_band_fmin
+    high = wtc_fmax if wtc_band_fmax is None else wtc_band_fmax
+    if low >= wtc_fmax or high <= wtc_fmin:
+        _shared.fail(f"the coherence band {low:g} to {high:g} Hz lies outside the computed "
+                     f"axis, --wtc-fmin {wtc_fmin:g} to --wtc-fmax {wtc_fmax:g}.")
+
+
 def cmd_run(
     derivatives_dir: Path, output_dir: Path,
     pairs_csv: Path, group_id: str | None, task_label: list[str] | None,
@@ -496,6 +512,8 @@ def cmd_run(
     wtc_band_fmax = band_fmax if wtc_band_fmax is None else wtc_band_fmax
     isc_fmin = band_fmin if isc_fmin is None else isc_fmin
     isc_fmax = band_fmax if isc_fmax is None else isc_fmax
+    _refuse_bad_ranges(band_fmin, band_fmax, wtc_fmin, wtc_fmax, wtc_band_fmin, wtc_band_fmax,
+                       isc_fmin, isc_fmax, tstart, tend)
     # drawn when unset, so the record holds the seed and a --config rerun repeats the draws
     if wtc_significance or wtc_phase_null or isc_phase_null:
         wtc_seed = _shared.seed_or_drawn(wtc_seed, "--wtc-seed")
@@ -639,6 +657,7 @@ def cmd_band(
     """Re-average every saved WTC map over a new band, without recomputing the transform."""
     from nirspipe.pipeline.hyper.wtc_store import reband_tree
 
+    _shared.refuse_inverted(wtc_band_fmin, wtc_band_fmax, "--wtc-band-fmin", "--wtc-band-fmax")
     setup_logging(verbose=verbose)
 
     written = reband_tree(output_dir, wtc_band_fmin, wtc_band_fmax,

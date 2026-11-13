@@ -199,6 +199,16 @@ def _refuse_cosine_without_cutoff(args: dict[str, Any], sources: dict[str, str])
         "auto to have each run's events set it, or pick another --drift-model.")
 
 
+def _refuse_inverted_passband(args: dict[str, Any], sources: dict[str, str]) -> None:
+    """Stop before any subject runs: a high-pass above the low-pass filters as a band-stop."""
+    low, high = args.get("high_pass"), args.get("low_pass")
+    if not (isinstance(low, (int, float)) and isinstance(high, (int, float)) and low >= high):
+        return
+    origin = {"mode": f" (the {args.get('mode')} mode's default)", "config": " (from --config)"}
+    _shared.fail(f"--high-pass {low:g}{origin.get(sources.get('high_pass'), '')} has to be "
+                 f"below --low-pass {high:g}{origin.get(sources.get('low_pass'), '')}.")
+
+
 def _refuse_drift_auto_outside_glm(args: dict[str, Any]) -> None:
     """Stop before any subject runs: only a task GLM has events for auto to read."""
     mode = args.get("mode")
@@ -336,6 +346,7 @@ def run_participant_level(args: dict[str, Any]) -> None:
     # (argument, value, layer) for what the report lists as not typed
     filled_settings: list[tuple[str, Any, str]] = []
     if args.get("mode"):
+        _refuse_inverted_passband(args, post_sources)
         _refuse_cosine_without_cutoff(args, post_sources)
         _refuse_drift_auto_outside_glm(args)
         _refuse_glm_without_durations(args)
