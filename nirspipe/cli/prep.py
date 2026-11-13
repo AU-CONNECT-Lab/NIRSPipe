@@ -26,6 +26,18 @@ def _run_parallel(fn, subjects: list[str], nprocs: int | None) -> list[tuple]:
     return _shared.map_subjects(_one, subjects, nprocs)
 
 
+def _subjects(bids_dir: Path, participant_label: "list[str] | None") -> list[str]:
+    """The named subjects, or every subject of the input when none is named."""
+    if participant_label:
+        return participant_label
+    from nirspipe.io.bids import get_layout
+    subjects = get_layout(bids_dir, validate=False).get_subjects()
+    if not subjects:
+        print(f"[error] no subject found in {bids_dir}", file=sys.stderr)
+        raise SystemExit(1)
+    return subjects
+
+
 def _report(results: list[tuple]) -> None:
     n_fail = 0
     for sub, ok, msg in results:
@@ -39,7 +51,7 @@ def _report(results: list[tuple]) -> None:
 
 
 def cmd_crop(
-    bids_dir: Path, output_dir: Path, participant_label: list[str],
+    bids_dir: Path, output_dir: Path, participant_label: "list[str] | None",
     session_label: str | None, task_label: str | None, run_label: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
@@ -109,7 +121,7 @@ def cmd_crop(
             margin_s=margin_s,
         )
 
-    _report(_run_parallel(_crop_one, participant_label, nprocs))
+    _report(_run_parallel(_crop_one, _subjects(bids_dir, participant_label), nprocs))
 
 
 def cmd_align(
@@ -179,7 +191,7 @@ def cmd_align(
 
 
 def cmd_markers_export(
-    bids_dir: Path, out_dir: Path, participant_label: list[str],
+    bids_dir: Path, out_dir: Path, participant_label: "list[str] | None",
     session_label: str | None, task_label: str | None, run_label: str | None,
     nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
@@ -197,11 +209,11 @@ def cmd_markers_export(
             validate=True,
         )
 
-    _report(_run_parallel(_export_one, participant_label, nprocs))
+    _report(_run_parallel(_export_one, _subjects(bids_dir, participant_label), nprocs))
 
 
 def cmd_markers_apply(
-    bids_dir: Path, output_dir: Path, participant_label: list[str],
+    bids_dir: Path, output_dir: Path, participant_label: "list[str] | None",
     session_label: str | None, task_label: str | None, run_label: str | None,
     tsv: Path | None, shift: float | None, set_duration: float | None,
     rename: list[str] | None, nprocs: int | None, skip_bids_validation: bool,
@@ -229,11 +241,11 @@ def cmd_markers_apply(
             validate=True,
         )
 
-    _report(_run_parallel(_apply_one, participant_label, nprocs))
+    _report(_run_parallel(_apply_one, _subjects(bids_dir, participant_label), nprocs))
 
 
 def cmd_keep_spans(
-    bids_dir: Path, out_tsv: Path, participant_label: list[str],
+    bids_dir: Path, out_tsv: Path, participant_label: "list[str] | None",
     session_label: str | None, task_label: str | None, run_label: str | None,
     conditions: list[str], duration: float | None, nprocs: int | None, skip_bids_validation: bool,
 ) -> None:
@@ -246,6 +258,7 @@ def cmd_keep_spans(
     from nirspipe.io.tables import write_tsv
     from nirspipe.pipeline.keep_spans import condition_spans
 
+    participant_label = _subjects(bids_dir, participant_label)
     rows: dict[str, list[dict]] = {}
 
     def _spans_one(sub):
@@ -267,8 +280,8 @@ def cmd_keep_spans(
 
 def _add_selection(sp) -> None:
     sp.add_argument("--participant-label", "--participant_label", nargs="+",
-                    action="extend", required=True, type=_shared.BidsLabel,
-                    help="Subject ID(s) to process.")
+                    action="extend", default=None, type=_shared.BidsLabel,
+                    help="Subject ID(s) to process (default every subject of the input).")
     sp.add_argument("--session-label", "--session_label", default=None, type=_shared.BidsLabel,
                     help="Session label.")
     sp.add_argument("--task-label", "--task_label", default=None, type=_shared.BidsLabel,

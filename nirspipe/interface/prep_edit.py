@@ -241,7 +241,7 @@ class EditViewer(RawRatingApp):
             if action not in ACTIONS:
                 abort(404)
             # read just now from this tree, so validating it again only costs the run time
-            return form_html(action, {"--skip-bids-validation": ["yes"]})
+            return form_html(action, {"--skip-bids-validation": ["on"]})
 
         @app.get("/prep/events")
         def prep_events():

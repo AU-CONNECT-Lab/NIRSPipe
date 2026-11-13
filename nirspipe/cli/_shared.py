@@ -70,12 +70,10 @@ def refuse_output_is_source(derivatives_dir: Path, output_dir: Path) -> None:
 
 
 def add_skip_bids_validation(container) -> None:
-    """``--skip-bids-validation`` for a command that reads a BIDS dataset, with a ``--no-`` form."""
+    """``--skip-bids-validation`` for a command that reads a BIDS dataset."""
     container.add_argument(
-        "--skip-bids-validation", "--skip_bids_validation",
-        "--skip_bids_validator", dest="skip_bids_validation",
-        action=argparse.BooleanOptionalAction, default=False,
-        help="Do not check the input with bids-validator.")
+        "--skip-bids-validation", "--skip_bids_validation", "--skip_bids_validator",
+        action="store_true", help="Do not check the input with bids-validator.")
 
 
 def _bounded(low: float, high: float, said: str, above: bool = False):

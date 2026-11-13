@@ -70,13 +70,13 @@ def test_the_editor_files_are_served_beside_the_page_and_nothing_else(tmp_path):
 
 
 def test_the_form_leaves_out_what_the_page_fills():
-    html = form_html("markers", {"--skip-bids-validation": ["yes"]})
+    html = form_html("markers", {"--skip-bids-validation": ["on"]})
 
     assert 'name="output_dir"' in html
     for filled in ("bids_dir", "--participant-label", "--run-label", "--tsv", "--shift",
                    "--set-duration", "--rename"):
         assert f'name="{filled}"' not in html
-    assert '<option value="yes" selected>--skip-bids-validation</option>' in html
+    assert 'name="--skip-bids-validation" value="on" checked' in html
 
 
 def test_a_run_label_selects_its_own_run():

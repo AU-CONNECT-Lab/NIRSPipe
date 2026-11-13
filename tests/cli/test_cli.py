@@ -277,9 +277,9 @@ def test_prep_subcommands_dispatch():
     ).func is prep_cli.cmd_markers_export
 
 
-def test_prep_participant_label_required():
-    with pytest.raises(SystemExit):
-        prep_cli._build_parser().parse_args(["crop", "/b", "/d", "--tmin", "5"])
+def test_prep_participant_label_is_optional():
+    args = prep_cli._build_parser().parse_args(["crop", "/b", "/d", "--tmin", "5"])
+    assert (args.participant_label, args.skip_bids_validation) == (None, False)
 
 
 def test_qc_takes_the_two_bids_app_levels():

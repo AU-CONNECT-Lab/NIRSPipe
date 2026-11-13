@@ -64,6 +64,13 @@ def test_the_helper_writes_one_row_per_occurrence_and_the_table_reads_back(block
         (20.0, 150.0), (190.0, 150.0)]
 
 
+def test_without_a_participant_label_every_subject_is_read(blocked, tmp_path):
+    out = tmp_path / "keep.tsv"
+    prep_cli.main(["keep-spans", str(blocked), str(out), "--skip-bids-validation",
+                   "--task-label", "mixed", "--conditions", "talk"])
+    assert [r["participant_id"] for r in _span_rows(out)] == ["01", "02"]
+
+
 def test_duration_sets_every_occurrence(blocked, tmp_path):
     out = tmp_path / "keep.tsv"
     _helper(blocked, out, "--task-label", "mixed", "--conditions", "talk", "--duration", "60")
