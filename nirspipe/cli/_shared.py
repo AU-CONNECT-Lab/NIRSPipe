@@ -6,6 +6,13 @@ import argparse
 import secrets
 import sys
 from pathlib import Path
+from typing import NoReturn
+
+
+def fail(message: str) -> NoReturn:
+    """Print one refusal to stderr and exit non-zero."""
+    print(f"Error: {message}", file=sys.stderr)
+    raise SystemExit(1)
 
 
 class BidsLabel(str):

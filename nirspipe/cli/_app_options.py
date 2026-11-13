@@ -7,9 +7,10 @@ import json
 import sys
 from pathlib import Path
 
-from nirspipe.cli._shared import BidsLabel
+from nirspipe.cli._shared import BidsLabel, fail
 from nirspipe.io.head_template import CHOICES, FSAVERAGE, resolve_template, space_of, template_dir
-from nirspipe.pipeline.population import CHOICES as POPULATIONS, age_span, population_values
+from nirspipe.pipeline.population import (BAND_KEYS, CHOICES as POPULATIONS, age_span,
+                                          population_values)
 from nirspipe.utils import bare_roi_map, roi_overlaps
 from nirspipe.utils.logging import get_logger
 
@@ -160,6 +161,23 @@ def fill_population(args, bands: "tuple[str, ...]") -> "list[str]":
     if values["template_by_age"] and args.template is None:
         filled.append("template")
     return filled
+
+
+def require_flags(args, flags: "tuple[str, ...]", level: str = "") -> None:
+    """Exit non-zero naming every flag of ``flags`` still unset, and which of them ``--population`` sets."""
+    dest = {flag: flag.lstrip("-").replace("-", "_") for flag in flags}
+    missing = [flag for flag in flags if getattr(args, dest[flag]) is None]
+    if not missing:
+        return
+    filled = [flag for flag in missing if dest[flag] in (*BAND_KEYS, "dpf")]
+    rest = [flag for flag in missing if flag not in filled]
+    hint = ""
+    if filled:
+        which = ("all of these but " + ", ".join(rest) if rest
+                 else "it" if len(filled) == 1 else "these")
+        hint = f" --population sets {which}."
+    where = f" required at {level} level" if level else ""
+    fail(f"Missing option(s){where}: {', '.join(missing)}.{hint}")
 
 
 def population_age(population: "str | None", from_population) -> "float | None":

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Breaking**: every command takes a flag only in full, where a prefix no other flag shared, such as `--pop`, was accepted
+- A command line missing several required flags names all of them at once, and which of them `--population` sets, where it named one per attempt
 
 ### Fixed
 - CNR no longer comes back empty when two conditions start on one sample: the shared onset counts as one epoch

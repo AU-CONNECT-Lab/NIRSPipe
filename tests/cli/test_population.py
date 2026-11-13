@@ -116,14 +116,17 @@ def test_without_population_the_bands_are_still_required(bids, tmp_path, capsys)
     with pytest.raises(SystemExit):
         run_cli.main([str(bids), str(tmp_path), "participant", "--sci-threshold", "0.8",
                       "--dpf", "6", *SELECT, "--dry-run"])
-    assert "--cardiac-l-freq' (or --population)" in capsys.readouterr().err
+    assert ("--cardiac-l-freq, --cardiac-h-freq, --resp-l-freq, --resp-h-freq. "
+            "--population sets these.") in capsys.readouterr().err
 
 
 def test_the_population_never_sets_the_sci_line(bids, tmp_path, capsys):
     with pytest.raises(SystemExit):
         run_cli.main([str(bids), str(tmp_path), "participant", "--population", "adult",
                       *SELECT, "--dry-run"])
-    assert "Missing option '--sci-threshold'." in capsys.readouterr().err
+    # no hint: the population is given and the one flag left is not its to set
+    assert capsys.readouterr().err.strip() == (
+        "Error: Missing option(s) required at participant level: --sci-threshold.")
 
 
 def test_a_rerun_from_the_record_is_the_same_run(bids, tmp_path):

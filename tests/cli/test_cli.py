@@ -305,7 +305,25 @@ def test_the_band_flags_are_shared_between_run_and_band():
 def test_band_needs_a_band(capsys):
     with pytest.raises(SystemExit):
         hyper_cli.main_band(["/o", "group"])
-    assert "--wtc-band-fmin" in capsys.readouterr().err
+    assert "Missing option(s): --wtc-band-fmin, --wtc-band-fmax." in capsys.readouterr().err
+
+
+def test_every_missing_flag_is_named_in_one_message(capsys):
+    with pytest.raises(SystemExit) as e:
+        run_cli.main(["bids", "out", "participant"])
+    assert e.value.code == 1
+    assert capsys.readouterr().err.strip() == (
+        "Error: Missing option(s) required at participant level: --dpf, --sci-threshold, "
+        "--cardiac-l-freq, --cardiac-h-freq, --resp-l-freq, --resp-h-freq. "
+        "--population sets all of these but --sci-threshold.")
+
+
+def test_raw_qc_names_every_missing_flag_too(capsys):
+    with pytest.raises(SystemExit):
+        qc_cli.main(["/b", "/o", "participant", "--dpf", "6", "--sci-threshold", "0.8",
+                     "--resp-l-freq", "0.1", "--resp-h-freq", "0.5"])
+    assert ("Missing option(s) required at participant level: --cardiac-l-freq, "
+            "--cardiac-h-freq. --population sets these.") in capsys.readouterr().err
 
 
 def test_qc_has_no_subcommands():
@@ -377,7 +395,7 @@ def test_raw_qc_requires_the_respiration_band_as_the_pipeline_does(flag, capsys)
         qc_cli.main(["/b", "/o", "participant", "--participant-label", "01", "--dpf", "6.0",
                      "--sci-threshold", "0.8", *(a for kv in bands.items() for a in kv)])
     err = capsys.readouterr().err
-    assert f"Missing option '{flag}'" in err and "--population sets it" in err
+    assert f"Missing option(s) required at participant level: {flag}. --population sets it." in err
 
 
 @pytest.mark.parametrize("raw, expected", [("none", "none"), ("None", "none"), ("0.5", 0.5)])

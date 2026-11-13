@@ -18,7 +18,7 @@ def test_the_participant_level_refuses_to_run_without_a_line(capsys):
     positionals = ["/bids", "/out", "participant", "--participant-label", "01"]
     with pytest.raises(SystemExit):
         qc_cli.main([*positionals, *SCREEN])
-    assert "Missing option '--sci-threshold'" in capsys.readouterr().err
+    assert "Missing option(s) required at participant level: --sci-threshold." in capsys.readouterr().err
     args = qc_cli._build_parser().parse_args([*positionals, *SCREEN, "--sci-threshold", "0.7"])
     assert args.sci_threshold == 0.7
 

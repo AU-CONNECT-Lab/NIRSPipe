@@ -1344,10 +1344,7 @@ def _dispatch(prog: str, func, argv, *, require: "tuple[str, ...]" = ()) -> None
     if getattr(args, "config", None) is not None:
         _apply_config(args, argv)
 
-    for dest in require:
-        if getattr(args, dest) is None:
-            print(f"Error: Missing option '--{dest.replace('_', '-')}'.", file=sys.stderr)
-            raise SystemExit(1)
+    _app_options.require_flags(args, require)
 
     kw = {k: v for k, v in vars(args).items() if k != "analysis_level"}
     if kw.get("derivatives_dir") is not None:
@@ -1378,4 +1375,4 @@ def main_merge(argv: list[str] | None = None) -> None:
 def main_band(argv: list[str] | None = None) -> None:
     # the band is the whole point of this one, so it is required here and optional on `run`
     _dispatch("nirspipe-hyper-band", COMMANDS["nirspipe-hyper-band"], argv,
-              require=("wtc_band_fmin", "wtc_band_fmax"))
+              require=("--wtc-band-fmin", "--wtc-band-fmax"))

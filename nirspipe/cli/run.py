@@ -416,16 +416,6 @@ def _apply_config(args: argparse.Namespace, argv: list[str] | None) -> None:
     args.inputs_given = {k: v for k, v in config["inputs_given"].items() if k not in given}
 
 
-def _require(args: argparse.Namespace, *flags: str) -> None:
-    """Exit non-zero naming the first flag the chosen level needs and did not get."""
-    for flag in flags:
-        dest = flag.lstrip("-").replace("-", "_")
-        if getattr(args, dest) is None:
-            hint = " (or --population)" if dest in (*BAND_KEYS, "dpf") else ""
-            print(f"Error: Missing option '{flag}'{hint}.", file=sys.stderr)
-            raise SystemExit(1)
-
-
 def main(argv: list[str] | None = None) -> None:
     args = _build_parser().parse_args(argv)
     if args.config is not None:
@@ -435,7 +425,7 @@ def main(argv: list[str] | None = None) -> None:
     args.from_population = _app_options.fill_population(args, BAND_KEYS)
 
     # checked before the workflow import: a bad command line should not first pay for mne
-    _require(args, *_LEVEL_REQUIRES[level])
+    _app_options.require_flags(args, _LEVEL_REQUIRES[level], level)
     _check_epoch_window(args)
     _app_options.check_keep_spans_from(args.keep_spans, args.keep_spans_from)
     _app_options.check_motion_settings(args.motion_correction, args.motion_std_thresh, args.wavelet_iqr)

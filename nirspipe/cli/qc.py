@@ -705,13 +705,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.analysis_level == "participant":
         # below the command line and --config, so either overrides any value it fills
         filled = _app_options.fill_population(args, BAND_KEYS)
-    for flag in _LEVEL_REQUIRES[args.analysis_level]:
-        dest = flag.lstrip("-").replace("-", "_")
-        if getattr(args, dest) is None:
-            hint = "; --population sets it" if dest in (*BAND_KEYS, "dpf") else ""
-            print(f"Error: Missing option '{flag}' (required at {args.analysis_level} "
-                  f"level{hint}).", file=sys.stderr)
-            raise SystemExit(1)
+    _app_options.require_flags(args, _LEVEL_REQUIRES[args.analysis_level], args.analysis_level)
     kw = vars(args)
     taken = {k: kw[k] for k in dispatched(parser, args.analysis_level)}
     if args.analysis_level == "participant":
