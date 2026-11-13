@@ -892,7 +892,8 @@ def _command_parser(prog: str, description: str, *, reads_subjects: bool,
     write to a second one. The rest re-read tables this package already wrote and have no
     subject data to open, so a source tree would be a positional they ignore.
     """
-    p = argparse.ArgumentParser(prog=prog, description=description, parents=parents)
+    p = argparse.ArgumentParser(prog=prog, description=description, parents=parents,
+                                allow_abbrev=False)
     p.add_argument("--version", action="version", version=f"{prog} {__version__}")
     if reads_subjects:
         p.add_argument("derivatives_dir", type=Path,

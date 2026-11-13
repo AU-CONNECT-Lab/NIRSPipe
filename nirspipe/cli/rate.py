@@ -184,13 +184,13 @@ def _add_rater(parser: argparse.ArgumentParser, kept: str) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-rate",
+        prog="nirspipe-rate", allow_abbrev=False,
         description="Interactive QC review for fNIRS data: rating, individual viewer, hyperscanning viewer.",
     )
     p.add_argument("--version", action="version", version=f"nirspipe-rate {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
-    pr = sub.add_parser("rate", help="Launch QC rating interface.")
+    pr = sub.add_parser("rate", help="Launch QC rating interface.", allow_abbrev=False)
     pr.add_argument("output_dir", type=Path, help="nirspipe output directory.")
     pr.add_argument("--participant-label", "--participant_label", nargs="+", action="extend",
                     type=_shared.BidsLabel,
@@ -200,7 +200,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_rater(pr, "ratings")
     pr.set_defaults(func=cmd_rate)
 
-    pw = sub.add_parser("raw", help="Launch interactive raw QC viewer: rate sections, decide channels, mark bad stretches.")
+    pw = sub.add_parser("raw", help="Launch interactive raw QC viewer: rate sections, decide channels, mark bad stretches.",
+                        allow_abbrev=False)
     pw.add_argument("output_dir", type=Path, help="nirspipe output directory.")
     # one subject, not a list: the viewer serves that subject's raw reports
     pw.add_argument("--participant-label", "--participant_label", required=True, type=_shared.BidsLabel,
@@ -220,7 +221,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_rater(pw, "ratings, channel decisions and marked stretches")
     pw.set_defaults(func=cmd_raw)
 
-    ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.")
+    ph = sub.add_parser("hyper", help="Launch interactive hyperscanning QC viewer.",
+                        allow_abbrev=False)
     ph.add_argument("output_dir", type=Path,
                     help="The tree holding the group-<id>/ raw report, as nirspipe-qc's group "
                          "level wrote it.")
@@ -241,7 +243,8 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_rater(ph, "ratings and channel decisions")
     ph.set_defaults(func=cmd_hyper)
 
-    pe = sub.add_parser("export", help="Export channel decisions for nirspipe --bad-channels.")
+    pe = sub.add_parser("export", help="Export channel decisions for nirspipe --bad-channels.",
+                        allow_abbrev=False)
     pe.add_argument("trees", type=Path, nargs="+",
                     help="The raw QC trees holding the decision files.")
     pe.add_argument("--out-dir", "--out_dir", type=Path, default=None,

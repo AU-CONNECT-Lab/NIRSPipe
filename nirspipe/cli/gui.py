@@ -9,7 +9,7 @@ DEFAULT_PORT = 8050
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-gui",
+        prog="nirspipe-gui", allow_abbrev=False,
         description="Local web GUI: a page per command with its form, Data Preparation for "
                     "editing a recording's events and crop, and the rating viewers.",
     )

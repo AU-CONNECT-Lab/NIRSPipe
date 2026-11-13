@@ -13,7 +13,7 @@ from nirspipe.cli import _shared
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-snirf2bids",
+        prog="nirspipe-snirf2bids", allow_abbrev=False,
         description="Convert a raw snirf file to BIDS format (one subject at a time). "
                     "For multiple subjects, loop over this command or use the GUI SNIRF to BIDS page.",
     )

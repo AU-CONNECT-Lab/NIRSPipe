@@ -283,14 +283,15 @@ def _add_selection(sp) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-prep",
+        prog="nirspipe-prep", allow_abbrev=False,
         description="fNIRS data preparation: cropping, alignment, marker editing and "
                     "--keep-spans tables.",
     )
     p.add_argument("--version", action="version", version=f"nirspipe-prep {__version__}")
     sub = p.add_subparsers(required=True)
 
-    crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.")
+    crop = sub.add_parser("crop", help="Crop SNIRFs to a time window or segments.",
+                          allow_abbrev=False)
     crop.add_argument("bids_dir",        type=Path, help="BIDS dataset root, or a "
                                                          "derivatives tree with --input-desc.")
     crop.add_argument("output_dir", type=Path,
@@ -324,7 +325,8 @@ def _build_parser() -> argparse.ArgumentParser:
                            "entity is kept on the output.")
     crop.set_defaults(func=cmd_crop)
 
-    align = sub.add_parser("align", help="Align multi-subject recordings by shared trigger.")
+    align = sub.add_parser("align", help="Align multi-subject recordings by shared trigger.",
+                           allow_abbrev=False)
     align.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
     align.add_argument("output_dir", type=Path,
                    help="Where the derived tree goes. An `aligned/` subtree is created under it.")
@@ -333,16 +335,19 @@ def _build_parser() -> argparse.ArgumentParser:
     _shared.add_skip_bids_validation(align)
     align.set_defaults(func=cmd_align)
 
-    markers = sub.add_parser("edit-markers", help="Edit markers in SNIRF files.")
+    markers = sub.add_parser("edit-markers", help="Edit markers in SNIRF files.",
+                             allow_abbrev=False)
     msub = markers.add_subparsers(required=True)
 
-    exp = msub.add_parser("export", help="Export events.tsv(s) for manual editing.")
+    exp = msub.add_parser("export", help="Export events.tsv(s) for manual editing.",
+                          allow_abbrev=False)
     exp.add_argument("bids_dir", type=Path, help="BIDS dataset root.")
     exp.add_argument("out_dir",  type=Path, help="Directory to write the exported events TSV(s).")
     _add_selection(exp)
     exp.set_defaults(func=cmd_markers_export)
 
-    app = msub.add_parser("apply", help="Apply marker edits (tsv/shift/set-duration/rename).")
+    app = msub.add_parser("apply", help="Apply marker edits (tsv/shift/set-duration/rename).",
+                          allow_abbrev=False)
     app.add_argument("bids_dir",        type=Path, help="BIDS dataset root.")
     app.add_argument("output_dir", type=Path,
                  help="Where the derived tree goes. A `marker_edited/` subtree is created under it.")
@@ -357,7 +362,8 @@ def _build_parser() -> argparse.ArgumentParser:
                      help="Rename marker: 'old:new'. Repeatable.")
     app.set_defaults(func=cmd_markers_apply)
 
-    keep = sub.add_parser("keep-spans", help="Write a --keep-spans table from condition names.")
+    keep = sub.add_parser("keep-spans", help="Write a --keep-spans table from condition names.",
+                          allow_abbrev=False)
     keep.add_argument("bids_dir", type=Path, help="BIDS dataset root.")
     keep.add_argument("out_tsv", type=Path,
                       help="The table to write, for nirspipe --keep-spans: one row per "

@@ -89,7 +89,7 @@ _LEVEL_CHOICES         = list(_LEVEL_REQUIRES)
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe",
+        prog="nirspipe", allow_abbrev=False,
         description="BIDS-compatible fNIRS preprocessing and postprocessing pipeline. "
                     "Prep always runs; add --mode to run postprocessing. Dyad analysis "
                     "lives in nirspipe-hyper, which reads what this writes.",

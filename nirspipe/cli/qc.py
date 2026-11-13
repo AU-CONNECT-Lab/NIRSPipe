@@ -498,7 +498,7 @@ def cmd_provenance(output_dir: Path) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-qc",
+        prog="nirspipe-qc", allow_abbrev=False,
         description="fNIRS raw quality control as a BIDS App: one report per recording at "
                     "participant level, then the cohort pages and, given a pairs table, each "
                     "dyad's page at group level, all in one tree.",
@@ -612,7 +612,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _provenance_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="nirspipe-provenance",
+        prog="nirspipe-provenance", allow_abbrev=False,
         description="Render the file provenance graph of every subject and dyad in a tree, "
                     "from the sidecars already on disk.")
     p.add_argument("--version", action="version", version=f"nirspipe-provenance {__version__}")
