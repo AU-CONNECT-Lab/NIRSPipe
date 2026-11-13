@@ -259,8 +259,9 @@ def _build_parser() -> argparse.ArgumentParser:
                           "events, capped at 0.01 Hz and never below --high-pass.")
     glm.add_argument("--drift-order", type=_shared.non_negative_int,
                      help="Polynomial drift order (polynomial drift model only), default 1.")
-    glm.add_argument("--fir-delays",
-                     help="FIR delay bins in scans, comma-separated, e.g. '0,1,2,3,4,5' (only used when --hrf-model fir).")
+    glm.add_argument("--fir-delays", nargs="+", action="extend", type=int, metavar="SCAN",
+                     help="FIR delay bins in scans, e.g. 0 1 2 3 4 5 (only used when "
+                          "--hrf-model fir).")
     glm.add_argument("--short-channel", choices=_SHORT_CHANNEL_CHOICES,
                      help="Short-channel confound regressor strategy, default auto: pca where "
                           "the montage has a channel at or under --short-max-dist, none where "

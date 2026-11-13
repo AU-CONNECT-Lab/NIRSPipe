@@ -84,7 +84,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
 
     ep = pick("events_path")
     sc = pick("short_channel", default=SHORT_CHANNEL_AUTO)
-    raw_fir = pick("fir_delays")  # CLI passes a comma-separated string, e.g. "0,1,2"
+    fir_delays = pick("fir_delays")
 
     # contrast_def lives in the file --contrast-file or the config key names
     contrast_def = None
@@ -112,7 +112,7 @@ def _build_post_config(subject: str, session: str | None, args: dict[str, Any], 
         drift_model=pick("drift_model"),
         drift_high_pass=pick("drift_high_pass"),
         drift_order=pick("drift_order", default=1),
-        fir_delays=tuple(int(x) for x in raw_fir.split(",")) if raw_fir else None,
+        fir_delays=tuple(fir_delays) if fir_delays else None,
         short_channel=sc if (sc and sc != "none") else None,
         aux=bool(pick("aux_regressors", default=False)),
         aux_channels=pick("aux_channels"),

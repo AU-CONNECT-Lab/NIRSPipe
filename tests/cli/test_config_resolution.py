@@ -65,16 +65,16 @@ def test_a_zero_cli_value_still_beats_the_toml():
 # ---- the small parsers inside the builders ----
 
 @pytest.mark.parametrize("raw, expected", [
-    ("0,1,2", (0, 1, 2)),
-    ("3", (3,)),
+    ([0, 1, 2], (0, 1, 2)),
+    ([3], (3,)),
     (None, None),
 ])
-def test_fir_delays_string_becomes_a_tuple_of_ints(raw, expected):
+def test_the_fir_delays_reach_the_config_as_a_tuple(raw, expected):
     assert _post({"fir_delays": raw}).fir_delays == expected
 
 
 def test_fir_delays_can_come_from_the_toml():
-    assert _post({}, {"fir_delays": "0,5"}).fir_delays == (0, 5)
+    assert _post({}, {"fir_delays": [0, 5]}).fir_delays == (0, 5)
 
 
 @pytest.mark.parametrize("raw, expected", [

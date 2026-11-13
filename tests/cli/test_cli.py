@@ -115,6 +115,13 @@ def test_bands_have_no_default(flag, capsys):
     assert flag in capsys.readouterr().err
 
 
+def test_fir_delays_are_whole_numbers_separated_by_spaces(capsys):
+    assert _parse(_MIN + ["--fir-delays", "0", "1", "2"]).fir_delays == [0, 1, 2]
+    with pytest.raises(SystemExit):
+        _parse(_MIN + ["--fir-delays", "0,1,2"])
+    assert "argument --fir-delays: invalid int value: '0,1,2'" in capsys.readouterr().err
+
+
 def test_motion_correction_choice_rejected():
     with pytest.raises(SystemExit):
         _parse(_MIN + ["--motion-correction", "bogus"])

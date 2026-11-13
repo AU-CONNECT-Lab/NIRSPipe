@@ -101,8 +101,6 @@ def _settings(keys: tuple[str, ...], args: dict[str, Any], config: Any) -> dict[
         # a table is read where the record is read, so it needs a path that works from anywhere
         if isinstance(value, Path) or (key == "bad_channels" and value and Path(str(value)).exists()):
             value = Path(value).resolve().as_posix()
-        elif key == "fir_delays" and value is not None:
-            value = ",".join(str(d) for d in value)
         out[key] = value
     return out
 

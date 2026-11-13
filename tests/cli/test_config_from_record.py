@@ -13,10 +13,10 @@ from tests._fingerprint import CLI_ARGS, make_fingerprint_dataset
 
 QUIET = ("--participant-label", "01", "--no-report", "--skip-bids-validation")
 # every kind of value a record holds: a switched-off mode default, a table, a plain list,
-# a band in mm, a flag with an argparse default, a comma list, a list of choices
+# a band in mm, a flag with an argparse default, a list of numbers, a list of choices
 RUN = (*CLI_ARGS, "--mode", "denoise", "--low-pass", "none", "--drift-model", "polynomial",
        "--short-channel", "mean", "--short-max-dist", "12", "--bad-channels", "S2_D2",
-       "--motion-correction", "wavelet", "--fir-delays", "0,1", "--export-mean-filled",
+       "--motion-correction", "wavelet", "--fir-delays", "0", "1", "--export-mean-filled",
        "--chromophores", "hbt", "hbo")
 
 
@@ -82,7 +82,7 @@ def test_the_record_names_its_inputs_as_typed(first, dataset):
     assert prep["keep_spans"] == keep.resolve().as_posix()
     assert prep["bad_channels"] == "S2_D2"
     assert prep["short_max_dist"] == 12.0
-    assert first[1]["post"]["fir_delays"] == "0,1"
+    assert first[1]["post"]["fir_delays"] == [0, 1]
 
 
 def test_the_rerun_names_where_its_settings_came_from(rerun):
