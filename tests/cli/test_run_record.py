@@ -258,7 +258,7 @@ def group_record(tmp_path):
 
     out = write_group_run_record(
         {"pairs_csv": tmp_path / "pairs.csv", "wtc_fmin": 0.004, "wtc_fmax": 0.2,
-         "wtc_channel_cross": False, "task_label": ["main"], "roi_mapping": None,
+         "channel_cross": False, "task_label": ["main"], "roi_mapping": None,
          "output_dir": tmp_path, "verbose": False, "func": None,
          "roi_map": {"L": ["S1_D1"]}},
         "G01", "main", "20260101_120000", tmp_path, tmp_path / "group-G01",
@@ -284,7 +284,7 @@ def test_the_group_record_names_the_group_and_its_members(group_record):
 def test_the_group_record_carries_every_resolved_option(group_record):
     _, record = group_record
     assert record["hyper"]["wtc_fmin"] == 0.004
-    assert record["hyper"]["wtc_channel_cross"] is False
+    assert record["hyper"]["channel_cross"] is False
     # structures are settings for the analysis, not for the record; the ROI file is named
     # by roi_mapping and its contents belong beside the results
     assert "roi_map" not in record["hyper"]

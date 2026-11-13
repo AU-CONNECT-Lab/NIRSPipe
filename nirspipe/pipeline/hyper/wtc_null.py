@@ -73,7 +73,7 @@ def run_wtc_null(
     the same way the real whole-run table was, or the two describe different spans of the
     recording and the comparison between them is not one.
 
-    ``windows`` is what ``--wtc-by-condition`` read its conditions out of, and carries through
+    ``windows`` is what ``--by-condition`` read its conditions out of, and carries through
     to the second table. Both tables come out of this one pass of ``n_iter`` transforms.
     ``cond_cone`` and ``margins`` mark each window's condition cone as the real run did.
 
@@ -216,7 +216,7 @@ def write_wtc_null(
     never drew the off-diagonal pairings that matrix averages. Both group their cells under
     ``roi_min_channels``, the rule the real ROI tables were blanked by.
 
-    ``windows`` adds the null for what ``--wtc-by-condition`` wrote, as rows of the same
+    ``windows`` adds the null for what ``--by-condition`` wrote, as rows of the same
     tables with a ``condition`` column, the whole run's rows carrying ``n/a``: the shape of
     the real tables. Only the draws, which exist per condition only, keep a ``cond-all``
     file of their own.

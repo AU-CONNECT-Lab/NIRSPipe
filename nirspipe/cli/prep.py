@@ -43,7 +43,7 @@ def cmd_crop(
     session_label: str | None, task_label: str | None, run_label: str | None,
     tmin: float | None, tmax: float | None, segments_path: Path | None,
     combine: bool, align: str, trigger_name: str | None, input_desc: str | None,
-    nprocs: int | None, skip_bids_validation: bool, margin_s: str | None = None,
+    nprocs: int | None, skip_bids_validation: bool, margin: str | None = None,
     band_fmin: float | None = None,
 ) -> None:
     """Crop SNIRFs and write to derivatives/cropped/."""
@@ -83,18 +83,18 @@ def cmd_crop(
 
     # "auto" is the width the lowest analysed frequency needs, so it can only be resolved
     # once that frequency is known; a crop made for a band nobody has chosen yet keeps none
-    margin = 0.0
-    if margin_s not in (None, "", "0", 0):
-        if str(margin_s).lower() == "auto":
+    margin_s = 0.0
+    if margin not in (None, "", "0", 0):
+        if str(margin).lower() == "auto":
             if not band_fmin:
                 print("[error] --margin auto requires --band-fmin (the lowest frequency the "
                       "analysis will average over).", file=sys.stderr)
                 raise SystemExit(1)
             from nirspipe.utils import cone_margin_s
-            margin = cone_margin_s(band_fmin)
+            margin_s = cone_margin_s(band_fmin)
         else:
-            margin = float(margin_s)
-        print(f"[info] keeping a {margin:.1f}s margin on each side of every segment")
+            margin_s = float(margin)
+        print(f"[info] keeping a {margin_s:.1f}s margin on each side of every segment")
 
     def _crop_one(sub):
         return crop_snirf(
@@ -106,7 +106,7 @@ def cmd_crop(
             align=align, trigger_name=trigger_name,
             input_desc=input_desc,
             validate=True,
-            margin_s=margin,
+            margin_s=margin_s,
         )
 
     _report(_run_parallel(_crop_one, participant_label, nprocs))
@@ -309,7 +309,7 @@ def _build_parser() -> argparse.ArgumentParser:
                            "A recording without it falls back to the recording start.")
     crop.add_argument("--combine", action=argparse.BooleanOptionalAction, default=False,
                       help="Concatenate multi-segment output into one file.")
-    crop.add_argument("--margin", dest="margin_s", type=_shared.seconds_or_auto, default=None,
+    crop.add_argument("--margin", type=_shared.seconds_or_auto, default=None,
                       metavar="SEC|auto",
                       help="Keep this many extra seconds on each side of every segment, and "
                            "record the span that was asked for in the sidecar. 'auto' takes "

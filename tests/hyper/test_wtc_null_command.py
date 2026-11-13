@@ -76,8 +76,8 @@ def test_the_iteration_count_is_what_asks_for_it():
 # ---- the null follows the table's crossing unless set ----
 
 def test_the_real_table_is_crossed_by_default():
-    assert _hyper().wtc_channel_cross is True
-    assert _hyper("--no-channel-cross").wtc_channel_cross is False
+    assert _hyper().channel_cross is True
+    assert _hyper("--no-channel-cross").channel_cross is False
 
 
 def test_the_nulls_crossing_is_left_to_follow_the_table_unless_set():
@@ -88,10 +88,10 @@ def test_the_nulls_crossing_is_left_to_follow_the_table_unless_set():
 def test_the_null_can_be_set_either_way_on_its_own():
     args = _hyper("--wtc-phase-null", "100", "--no-wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is False
-    assert args.wtc_channel_cross is True
+    assert args.channel_cross is True
     args = _hyper("--wtc-phase-null", "100", "--no-channel-cross", "--wtc-phase-null-cross")
     assert args.wtc_phase_null_cross is True
-    assert args.wtc_channel_cross is False
+    assert args.channel_cross is False
 
 
 # ---- what lands on disk ----

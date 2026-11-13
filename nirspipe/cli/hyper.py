@@ -325,7 +325,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
     # on the windows or their tables cannot be subtracted row by row
     ref = next(iter(aligned_raws.values()), None)
     cond_windows = (condition_windows(ref, min_duration=1.0 / s.wtc_fmin)
-                    if s.wtc_by_condition and ref is not None else [])
+                    if s.by_condition and ref is not None else [])
     if analysis_window is not None:
         # a condition outside the analysis window has nothing in it to report, and one
         # straddling an edge would be reported as a full block while only part of it
@@ -373,7 +373,7 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         session=ses,
         # an ROI level only where the null crosses as the real maps do: a crossed (R, R)
         # map and an uncrossed R average different pairings
-        roi_map=s.roi_map if s.wtc_phase_null_cross == s.wtc_channel_cross else None,
+        roi_map=s.roi_map if s.wtc_phase_null_cross == s.channel_cross else None,
         roi_map_name=s.roi_name,
         roi_min_channels=s.wtc_roi_min_channels,
         device=device,
@@ -402,8 +402,8 @@ def _run_one_group(s: SimpleNamespace, gid, task, ses, members):
         wtc_significance=s.wtc_significance,
         wtc_seed=s.seed,
         wtc_mc_count=s.wtc_mc_count,
-        wtc_channel_cross=s.wtc_channel_cross,
-        wtc_by_condition=s.wtc_by_condition, wtc_window_s=s.wtc_window,
+        wtc_channel_cross=s.channel_cross,
+        wtc_by_condition=s.by_condition, wtc_window_s=s.wtc_window,
         wtc_cond_pad_s=s.cond_pad,
         wtc_cond_cone=s.wtc_cond_cone,
         cond_windows=cond_windows,
@@ -478,8 +478,8 @@ def cmd_run(
     wtc_band_fmin: float | None, wtc_band_fmax: float | None,
     wtc_significance: bool, wtc_mc_count: int, seed: int | None,
     wtc_mask_coi: bool, wtc_roi_min_channels: int, wtc_arrow_min: float,
-    wtc_channel_cross: bool,
-    wtc_by_condition: bool, chromophores: "list[str]", wtc_window: "float | None",
+    channel_cross: bool,
+    by_condition: bool, chromophores: "list[str]", wtc_window: "float | None",
     wtc_cond_transform: bool, wtc_cond_pad: "float | None", wtc_cond_cone: bool,
     wtc_limit_scales: bool, wtc_save_maps: bool, wtc_whiten: float,
     wtc_phase_null: int | None, wtc_phase_null_cross: bool | None,
@@ -506,7 +506,7 @@ def cmd_run(
     """
     # unset, the null is crossed exactly when the real table is
     if wtc_phase_null_cross is None:
-        wtc_phase_null_cross = wtc_channel_cross
+        wtc_phase_null_cross = channel_cross
     # the shared band fills whichever metric was not given its own
     wtc_band_fmin = band_fmin if wtc_band_fmin is None else wtc_band_fmin
     wtc_band_fmax = band_fmax if wtc_band_fmax is None else wtc_band_fmax
@@ -543,12 +543,12 @@ def cmd_run(
     timestamp = datetime.now().strftime(RUN_TIMESTAMP_FORMAT)
 
     if wtc_window is not None:
-        if not wtc_by_condition:
+        if not by_condition:
             print("[error] --wtc-window needs --by-condition; there are no conditions to "
                   "cut into windows without it.", file=sys.stderr)
             raise SystemExit(1)
 
-    if wtc_channel_cross and roi_mapping is None:
+    if channel_cross and roi_mapping is None:
         print("[warn] --channel-cross without --roi-mapping: the crossed channel table "
               "is written but no ROI x ROI matrix is built from it.", file=sys.stderr)
 
@@ -588,8 +588,8 @@ def cmd_run(
                   "than the table it is subtracted from measures the difference between the "
                   "routes. Drop one of the two.", file=sys.stderr)
             raise SystemExit(1)
-        if not wtc_by_condition:
-            print("[error] --wtc-cond-transform needs --wtc-by-condition; there are no "
+        if not by_condition:
+            print("[error] --wtc-cond-transform needs --by-condition; there are no "
                   "conditions to transform without it.", file=sys.stderr)
             raise SystemExit(1)
         if str(wtc_cond_pad).lower() == "auto":
@@ -670,7 +670,7 @@ def cmd_band(
 
 
 def cmd_group_null(
-    output_dir: Path, task: str, chromophores: "list[str] | None", null: "list[str] | None",
+    output_dir: Path, task_label: str, chromophores: "list[str] | None", null: "list[str] | None",
     roi_mapping: "Path | None", n_resample: int, seed: int | None, verbose: bool,
     p_correction: str = "none", isc_test: str = "signed",
 ) -> None:
@@ -682,16 +682,16 @@ def cmd_group_null(
     setup_logging(verbose=verbose)
     roi_map = _app_options.load_roi_mapping(roi_mapping)
     seed = _shared.seed_or_drawn(seed, "--seed")
-    nulls = null or nulls_on_disk(output_dir, task)
+    nulls = null or nulls_on_disk(output_dir, task_label)
     if not nulls:
-        print(f"Error: no null draws for task {task} under {output_dir}. Run "
+        print(f"Error: no null draws for task {task_label} under {output_dir}. Run "
               "nirspipe-hyper-pairnull, or nirspipe-hyper with --wtc-phase-null or "
               "--isc-phase-null, first.", file=sys.stderr)
         raise SystemExit(1)
     # each combination seeded alike, so it matches a run that asked for it alone
     for one_null in nulls:
-        for one_chroma in chromophores or chromas_on_disk(output_dir, task, one_null):
-            written = write_group_null(output_dir, task=task, chroma=one_chroma,
+        for one_chroma in chromophores or chromas_on_disk(output_dir, task_label, one_null):
+            written = write_group_null(output_dir, task=task_label, chroma=one_chroma,
                                        null=one_null, roi_map=roi_map,
                                        n_resample=n_resample, seed=seed,
                                        p_correction=p_correction, isc_test=isc_test)
@@ -701,7 +701,7 @@ def cmd_group_null(
             for cohort in (p for p in written if entity_of(p.name, "desc") == "cohort"):
                 print(f"group-null methods -> {_write_group_null_methods(cohort)}")
     # every table on disk for the task, so a second chromophore or null adds a section
-    page = write_groupnull_report(output_dir, task)
+    page = write_groupnull_report(output_dir, task_label)
     if page is not None:
         print(f"group-null page -> {page}")
 
@@ -999,7 +999,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Coherence a cell needs before its phase arrow is drawn, when no null "
                           "was computed (default 0.5). Display only; --wtc-phase-null or "
                           "--wtc-significance replace it with a level per frequency.")
-    run.add_argument("--channel-cross", dest="wtc_channel_cross",
+    run.add_argument("--channel-cross",
                      action=argparse.BooleanOptionalAction, default=True,
                      help="Cross every long channel with every channel of the other brain "
                           "(default on), so n channels give n^2 values; the channel TSV gains a "
@@ -1009,7 +1009,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Cut every condition into non-overlapping windows of this length and "
                           "make the window the unit. Needs --by-condition; the remainder, and "
                           "any condition shorter than one window, is dropped.")
-    run.add_argument("--by-condition", "--wtc-by-condition", dest="wtc_by_condition",
+    run.add_argument("--by-condition",
                      action=argparse.BooleanOptionalAction, default=True,
                      help="Read the coherence out of each task annotation's window as well as "
                           "over the whole recording (default on; --no-by-condition turns it "
@@ -1025,7 +1025,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                      help="Transform each condition on its own instead of reading it out of "
                           "the whole-run transform, over a cut padded by --wtc-cond-pad. "
                           "Costs one extra transform per condition per chromophore. Requires "
-                          "--wtc-by-condition; refused with --wtc-phase-null.")
+                          "--by-condition; refused with --wtc-phase-null.")
     run.add_argument("--wtc-cond-pad", type=_shared.seconds_or_auto, default="auto",
                      metavar="SEC|auto",
                      help="Seconds kept on each side of a condition under "
@@ -1152,7 +1152,7 @@ def _parsers() -> dict[str, argparse.ArgumentParser]:
                     "cell can reach a p under 1/(n+1). It reads draws already on disk and "
                     "runs no transform.")
     # one value, unlike the other commands' --task-label: the cohort test reads one task
-    group_null.add_argument("--task-label", "--task_label", "--task", dest="task",
+    group_null.add_argument("--task-label", "--task_label",
                             required=True, type=_shared.BidsLabel,
                             help="Task whose tables to read, one at a time.")
     group_null.add_argument("--chromophores", nargs="+", choices=CHROMOPHORES, default=None,
@@ -1295,7 +1295,7 @@ _RECORD_ONLY = ("derivatives_dir", "pairs_csv", "check_only", "no_report")
 # over the record reaches it, as on a fresh command line
 _DERIVED_FROM = {"wtc_band_fmin": "band_fmin", "wtc_band_fmax": "band_fmax",
                  "isc_fmin": "band_fmin", "isc_fmax": "band_fmax",
-                 "wtc_phase_null_cross": "wtc_channel_cross"}
+                 "wtc_phase_null_cross": "channel_cross"}
 
 
 def read_hyper_config(path: Path) -> dict:

@@ -187,7 +187,7 @@ def _scale_range(dt: float, dj: float, fmin: float, fmax: float, n: int) -> tupl
 def _decim_step(sfreq: float) -> int:
     """Samples per retained column of a coherence map: one per second, at least one.
 
-    It bounds how short a window --wtc-by-condition can describe, and is reported in the
+    It bounds how short a window --by-condition can describe, and is reported in the
     sidecar as a time resolution.
     """
     return max(1, int(round(sfreq)))

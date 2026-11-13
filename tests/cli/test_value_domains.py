@@ -106,7 +106,7 @@ def test_the_edges_of_each_domain_are_values():
 def test_a_length_that_may_be_worked_out_takes_seconds_or_auto(typed, read):
     hyper = hyper_cli._parsers()["nirspipe-hyper"].parse_args([*HYPER, "--wtc-cond-pad", typed])
     crop = prep_cli._build_parser().parse_args([*CROP, "--tmin", "0", "--margin", typed])
-    assert (hyper.wtc_cond_pad, crop.margin_s) == (read, read)
+    assert (hyper.wtc_cond_pad, crop.margin) == (read, read)
 
 
 def test_a_length_that_is_neither_is_refused(capsys):

@@ -360,7 +360,7 @@ def test_the_per_condition_rows_carry_both_chromophores(by_condition, kind):
 
 
 def test_the_whole_run_pass_still_stands_beside_the_conditions(by_condition):
-    """`--wtc-by-condition` adds windows rather than replacing the whole-run analysis: its
+    """`--by-condition` adds windows rather than replacing the whole-run analysis: its
     rows come first in the one table, condition whole_run."""
     table = pd.read_csv(by_condition / name("G1", "tap"), sep="\t")
     whole = table[table["condition"] == "whole_run"]

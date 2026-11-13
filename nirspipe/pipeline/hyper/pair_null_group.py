@@ -224,7 +224,7 @@ def _read_tree(output_dir: Path, suffix: str, task: str, chroma: str,
             raise ValueError(
                 f"{path.name} has no condition column: its run had no conditions, or it "
                 f"predates the table holding the whole run and the conditions as one. Rerun "
-                f"`nirspipe-hyper` for that dyad with --wtc-by-condition.")
+                f"`nirspipe-hyper` for that dyad with --by-condition.")
         frame = frame[frame["condition"] != WHOLE_RUN]
         missing = [c for c in needs if c not in frame.columns]
         if missing:

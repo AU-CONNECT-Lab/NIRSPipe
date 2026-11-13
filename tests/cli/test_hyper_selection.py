@@ -44,7 +44,7 @@ def test_participant_label_parses_both_spellings_and_strips_sub():
     assert a.participant_label == b.participant_label == ["01", "02"]
 
 
-@pytest.mark.parametrize("flag", ["--task-label", "--task_label", "--task"])
+@pytest.mark.parametrize("flag", ["--task-label", "--task_label"])
 def test_groupnull_takes_task_label(flag):
     args = _parsers()["nirspipe-hyper-groupnull"].parse_args(["out", "group", flag, "task-main"])
-    assert args.task == "main"
+    assert args.task_label == "main"

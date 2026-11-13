@@ -423,7 +423,7 @@ def resolve_analysis_window(
 
     **It returns a window; it does not cut.** The recordings stay whole and the window is
     taken out of the wavelet transform afterwards, which is the same route
-    ``--wtc-by-condition`` takes (see :func:`~nirspipe.pipeline.hyper.wtc.window_result`).
+    ``--by-condition`` takes (see :func:`~nirspipe.pipeline.hyper.wtc.window_result`).
 
     ``tend`` past the end of the data is clipped rather than refused: recordings differ in
     length and an over-long window is a request for "to the end", not a mistake. A ``tstart``

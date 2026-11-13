@@ -33,10 +33,10 @@ def test_a_value_the_run_derived_from_the_shorthand_is_dropped_and_a_typed_one_k
     path = _record(tmp_path, "[hyper]\nband_fmin = 0.05\nband_fmax = 0.1\n"
                              "wtc_band_fmin = 0.05\nwtc_band_fmax = 0.08\n"
                              "isc_fmin = 0.05\nisc_fmax = 0.1\n"
-                             "wtc_channel_cross = true\nwtc_phase_null_cross = true\n")
+                             "channel_cross = true\nwtc_phase_null_cross = true\n")
     assert read_hyper_config(path)["hyper"] == {"band_fmin": 0.05, "band_fmax": 0.1,
                                                 "wtc_band_fmax": 0.08,
-                                                "wtc_channel_cross": True}
+                                                "channel_cross": True}
 
 
 @pytest.mark.parametrize("body, said", [

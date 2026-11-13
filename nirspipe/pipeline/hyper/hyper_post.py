@@ -617,10 +617,10 @@ def run_hyper_post(
             "wholerun": f"{WHOLE_RUN} is the condition the tables give the whole run"})
         if not cond_windows:
             note(notes, scope,
-                 "--wtc-by-condition asked for, but no annotation window is long enough "
+                 "--by-condition asked for, but no annotation window is long enough "
                  f"for one cycle of {wtc_fmin:.4f} Hz: no per-condition figures")
         else:
-            logger.info("--wtc-by-condition: %d window(s), each read off the whole-run "
+            logger.info("--by-condition: %d window(s), each read off the whole-run "
                         "transform", len(cond_windows))
 
     def _roi_band(chan_band_df, ch_type: str, what: str):

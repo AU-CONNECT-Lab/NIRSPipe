@@ -953,7 +953,7 @@ def test_the_command_writes_the_cohort_tests_methods_into_logs(tmp_path):
     from nirspipe.cli.hyper import cmd_group_null
 
     _write_tree(tmp_path)
-    cmd_group_null(tmp_path, task="main", chromophores=["hbo"], null=["repaired"],
+    cmd_group_null(tmp_path, task_label="main", chromophores=["hbo"], null=["repaired"],
                    roi_mapping=None, n_resample=500, seed=3, verbose=False)
 
     written = list((tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md"))
@@ -1050,7 +1050,7 @@ def test_each_statistic_gets_its_own_methods_paragraph(tmp_path):
 
     _write_tree(tmp_path)
     _write_isc_tree(tmp_path, [0.3] * 4)
-    cmd_group_null(tmp_path, task="main", chromophores=["hbo"], null=["repaired"], roi_mapping=None,
+    cmd_group_null(tmp_path, task_label="main", chromophores=["hbo"], null=["repaired"], roi_mapping=None,
                    n_resample=200, seed=3, verbose=False)
     texts = {p.name: p.read_text(encoding="utf-8")
              for p in (tmp_path / "logs").glob("*_desc-cohort_relmat_methods.md")}
@@ -1257,7 +1257,7 @@ def test_without_null_every_null_on_disk_is_read_as_if_asked_alone(tmp_path):
 
     _write_tree(tmp_path)
     _add_phase_draws(tmp_path)
-    cmd_group_null(tmp_path, task="main", chromophores=["hbo"], null=None, roi_mapping=None,
+    cmd_group_null(tmp_path, task_label="main", chromophores=["hbo"], null=None, roi_mapping=None,
                    n_resample=300, seed=3, verbose=False)
     together = {k: pd.read_csv(tmp_path / _cohort(k, "cohort"), sep=SEP) for k in ("pair", "phase")}
 
@@ -1274,7 +1274,7 @@ def test_groupnull_without_any_draws_stops(tmp_path, capsys):
     from nirspipe.cli.hyper import cmd_group_null
 
     with pytest.raises(SystemExit):
-        cmd_group_null(tmp_path, task="main", chromophores=["hbo"], null=None, roi_mapping=None,
+        cmd_group_null(tmp_path, task_label="main", chromophores=["hbo"], null=None, roi_mapping=None,
                        n_resample=300, seed=3, verbose=False)
     assert "no null draws for task main" in capsys.readouterr().err
 
@@ -1294,7 +1294,7 @@ def test_without_chroma_every_chromophore_the_draws_hold_is_read_on_its_own(tmp_
 
     _write_tree(tmp_path)
     _add_hbr_rows(tmp_path)
-    cmd_group_null(tmp_path, task="main", chromophores=None, null=["repaired"], roi_mapping=None,
+    cmd_group_null(tmp_path, task_label="main", chromophores=None, null=["repaired"], roi_mapping=None,
                    n_resample=300, seed=3, verbose=False)
     hbo = pd.read_csv(tmp_path / _cohort("pair", "cohort", chromophore="hbo"), sep=SEP)
     hbr = pd.read_csv(tmp_path / _cohort("pair", "cohort", chromophore="hbr"), sep=SEP)
