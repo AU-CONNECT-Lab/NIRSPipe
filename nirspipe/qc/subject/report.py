@@ -2514,7 +2514,9 @@ def build_subject_report(
         duration_s=float(raw_intensity.times[-1] - raw_intensity.times[0]),
         good_frac_thresh=run_cutoffs["good_frac"],
         dpf_label=dpf_text(list(getattr(config, "dpf", []) or []), wavelengths(raw_intensity),
-                           getattr(config, "age", None)),
+                           getattr(config, "age", None),
+                           getattr(config, "population", None)
+                           if "dpf" in (getattr(config, "from_population", ()) or ()) else None),
         heart_rate=heart_rate,
         heart_rate_outside=hr_note is not None,
 

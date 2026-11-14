@@ -61,14 +61,26 @@ def resolve_dpf(dpf: "list", raw: mne.io.Raw, age: "float | None") -> list[float
     return [age_dpf(w, age) for w in wavelengths(raw)]
 
 
-def dpf_text(dpf: "list", wavelengths_nm: "list[float]", age: "float | None") -> str:
-    """The factors as the reports print them: ``age 30 (6.30, 5.23)``, or the numbers given."""
+def dpf_text(dpf: "list", wavelengths_nm: "list[float]", age: "float | None",
+             population: "str | None" = None) -> str:
+    """The factors as the reports print them, naming where the age came from.
+
+    ::
+
+        age 30, adult         ->  "age 30 from --population adult (6.30, 5.23)"
+        age 19, participant   ->  "participant's age 19 (5.97, 4.91)"
+
+    ``population`` is the ``--population`` that filled the DPF, None when the age is the
+    participant's own.
+    """
     if not dpf_from_age(dpf):
         return ", ".join(f"{float(d):g}" for d in dpf)
     if age is None or not np.isfinite(age):
         return AGE
     factors = ", ".join(f"{age_dpf(w, age):.2f}" for w in wavelengths_nm)
-    return f"{AGE} {age:g} ({factors})"
+    if population:
+        return f"{AGE} {age:g} from --population {population} ({factors})"
+    return f"participant's {AGE} {age:g} ({factors})"
 
 
 def as_ppf(dpf: "list[float]") -> "float | list[float]":

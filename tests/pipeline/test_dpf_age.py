@@ -29,7 +29,12 @@ def test_numbers_pass_through_untouched():
 
 def test_the_reports_print_an_age_dpf_with_the_age_and_each_factor():
     # the two factors worked by hand above, rounded as the summaries print them
-    assert dpf_text(["age"], [760.0, 850.0], 30.0) == "age 30 (6.30, 5.23)"
+    assert dpf_text(["age"], [760.0, 850.0], 30.0) == "participant's age 30 (6.30, 5.23)"
+
+
+def test_the_reports_tell_a_population_age_from_the_participants():
+    assert (dpf_text(["age"], [760.0, 850.0], 30.0, "adult")
+            == "age 30 from --population adult (6.30, 5.23)")
 
 
 def test_the_reports_print_numbers_as_given():
