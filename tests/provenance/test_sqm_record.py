@@ -391,6 +391,30 @@ def test_a_listed_table_missing_from_disk_is_an_error(tmp_path):
         read_record(path)
 
 
+# ---- A condition's share of the run's spans ----
+
+def test_a_condition_counts_an_empty_span_list_as_none_crossed_and_a_missing_one_as_unknown(
+        tmp_path):
+    from nirspipe.io.snirf import read_snirf
+    from nirspipe.qc.subject.sqm_record import _bids_input, condition_sections
+
+    _, nirs_dir = _run(tmp_path, blocks=_BLOCKS)
+    stages = scan_runs(nirs_dir)["sub-01_task-tapping"]
+    sections = compute_run_sections(stages, **_BANDS)
+    raw = read_snirf(_bids_input(stages))
+
+    def shares(windowed):
+        out = condition_sections({**sections, "windowed": windowed}, raw, stages, **_BANDS)
+        assert out
+        return {e["scalars"].get("gvtd_pct_above_thresh") for e in out.values()}
+
+    keys = ("gvtd_above_spans_long_s", "gvtd_above_spans_s")
+    empty = {**sections["windowed"], **dict.fromkeys(keys, [])}
+    absent = {k: v for k, v in sections["windowed"].items() if k not in keys}
+    assert shares(empty) == {0.0}
+    assert shares(absent) == {None}
+
+
 # ---- GVTD censoring ----
 # The step is opt-in and everything it produces is opt-in with it: the annotations, the
 # sidecar entry and the record section. So every assertion here has a mirror in

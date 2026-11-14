@@ -927,8 +927,9 @@ def _condition_entries(
          "motion_corrected_n_segments"),
     )
 
-    def _spans_of(stem: str, set_name: str) -> list:
-        return _stored(stem, set_name, spans=True) or []
+    def _spans_of(stem: str, set_name: str) -> "list | None":
+        # None when the record never held the list, [] when nothing crossed: a share of 0
+        return _stored(stem, set_name, spans=True)
 
     sfreq = float(raw_intensity.info["sfreq"])
     long_names, short_names = long_short_channels(raw_intensity, sep_bands)
@@ -953,7 +954,7 @@ def _condition_entries(
         for stem, share_key, count_key, seg_key in _SPAN_FAMILIES:
             for set_name in span_counts_by_set:
                 spans = _spans_of(stem, set_name)
-                if not spans:
+                if spans is None:
                     continue
                 share, n_seg = span_counts(spans, t0, t1)
                 counted = {share_key: share,
