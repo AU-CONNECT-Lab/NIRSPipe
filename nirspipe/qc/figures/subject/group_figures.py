@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 import zlib
 
 import numpy as np
@@ -140,8 +141,8 @@ def group_metrics(metric_cols: list[str]) -> tuple[list[tuple[str, list[str]]], 
 
 # ---- Deviation from the cohort ----
 
-# Mean |z| over every metric, above which a run is called out. One number per run rather than
-# one test per metric, which would flag nearly every run in a large cohort.
+# The run's mean |z| over metric families, above which it is called out. One number per run
+# rather than one test per metric, which would flag nearly every run in a large cohort.
 SCORE_THRESHOLD = 2.0
 
 # One colour per run picked out of the pale mass, the same colour in every panel.
@@ -172,42 +173,91 @@ def _robust_z(values: np.ndarray) -> np.ndarray:
     return (values - median) / scale
 
 
-def deviation_scores(df: pd.DataFrame, metric_cols: list[str]) -> np.ndarray:
-    """Mean ``|z|`` per run over every metric that has any spread."""
+# charts split by unit, so a count and its share sit on two charts but are one quantity
+_SAME_QUANTITY = {"Motion & spike counts": "Motion & spike fraction",
+                  "Saturated channels": "Saturated share (0-1)"}
+# metrics recorded under several names: the excluded stretches, the wavelength-swap ratio
+_SAME_QUANTITY_SECTION = "excluded"
+_SAME_QUANTITY_PREFIX = ("cardiac_ratio",)
+
+
+def metric_family(col: str) -> str:
+    """The quantity a column measures, which the outlier score counts once.
+
+    ::
+
+        "raw_long_gvtd_filt_p95"            ->  "GVTD amplitude"
+        "motion_post_gvtd_num_above_thresh" ->  "Motion & spike fraction"
+        "raw_heart_rate"                    ->  "heart_rate"
+    """
+    section, _, bare = _split_column(col)
+    title = next((title for title, keys in _METRIC_GROUPS if bare in keys), None)
+    if title is not None:
+        return _SAME_QUANTITY.get(title, title)
+    if section == _SAME_QUANTITY_SECTION:
+        return section
+    return next((p for p in _SAME_QUANTITY_PREFIX if bare.startswith(p)), bare)
+
+
+def _family_abs_z(
+    df: pd.DataFrame, metric_cols: list[str],
+) -> "tuple[list[str], np.ndarray, np.ndarray, list[str]]":
+    """Each column's |z| and each family's mean |z|: (columns, column |z|, family |z|, families)."""
     columns = [c for c in metric_cols if c in df.columns]
     if not columns:
+        return [], np.empty((0, len(df))), np.empty((0, len(df))), []
+    absz = np.abs(np.array([_robust_z(pd.to_numeric(df[c], errors="coerce").to_numpy())
+                            for c in columns]))
+    of = [metric_family(c) for c in columns]
+    families = list(dict.fromkeys(of))
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        family_z = np.array([np.nanmean(absz[[i for i, f in enumerate(of) if f == fam]], axis=0)
+                             for fam in families])
+    return columns, absz, family_z, families
+
+
+def deviation_scores(df: pd.DataFrame, metric_cols: list[str]) -> np.ndarray:
+    """Per run, the mean over metric families of each family's mean ``|z|``.
+
+    A quantity the record holds under several stages and channel sets counts once, so a run
+    is not called out for one quantity written down twelve times.
+    """
+    columns, _, family_z, _ = _family_abs_z(df, metric_cols)
+    if not columns:
         return np.full(len(df), np.nan)
-    stack = np.array([_robust_z(pd.to_numeric(df[c], errors="coerce").to_numpy())
-                      for c in columns])
-    with np.errstate(invalid="ignore"):
-        return np.nanmean(np.abs(stack), axis=0)
+    return _mean_over_families(family_z)
+
+
+def _mean_over_families(family_z: np.ndarray) -> np.ndarray:
+    with np.errstate(invalid="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return np.nanmean(family_z, axis=0)
 
 
 def detect_outliers(
     df: pd.DataFrame, metric_cols: list[str], threshold: float = SCORE_THRESHOLD,
 ) -> dict[str, list[str]]:
-    """{bids_name: [worst metrics]} for runs whose mean ``|z|`` is past the threshold.
+    """{bids_name: [worst metrics]} for runs whose :func:`deviation_scores` is past the threshold.
 
-    The metric list is what put the run there, worst first, so the reader gets the reason
-    beside the verdict rather than a name alone.
+    The metric list is what put the run there, worst first and one column per family, so the
+    reader gets the reason beside the verdict rather than one quantity under six names.
     """
-    columns = [c for c in metric_cols if c in df.columns]
+    columns, absz, family_z, families = _family_abs_z(df, metric_cols)
     if not columns:
         return {}
-    stack = np.array([_robust_z(pd.to_numeric(df[c], errors="coerce").to_numpy())
-                      for c in columns])
-    with np.errstate(invalid="ignore"):
-        scores = np.nanmean(np.abs(stack), axis=0)
+    scores = _mean_over_families(family_z)
+    of = [metric_family(c) for c in columns]
 
     out: dict[str, list[str]] = {}
     for i, score in enumerate(scores):
         if not np.isfinite(score) or score <= threshold:
             continue
-        per_metric = np.abs(stack[:, i])
-        order = np.argsort(-np.where(np.isfinite(per_metric), per_metric, -np.inf))
-        worst = [columns[j] for j in order[:6]
-                 if np.isfinite(per_metric[j]) and per_metric[j] > 2]
-        out[str(df.iloc[i, 0])] = worst
+        per_metric = np.where(np.isfinite(absz[:, i]), absz[:, i], -np.inf)
+        worst_of = {fam: max((j for j, f in enumerate(of) if f == fam),
+                             key=lambda j: per_metric[j]) for fam in families}
+        ranked = sorted(worst_of.values(), key=lambda j: -per_metric[j])
+        out[str(df.iloc[i, 0])] = [columns[j] for j in ranked[:6] if per_metric[j] > 2]
     return out
 
 

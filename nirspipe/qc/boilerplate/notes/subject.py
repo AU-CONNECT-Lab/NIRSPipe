@@ -416,8 +416,9 @@ NOTES = {
         "interquartile band and median, smoothed over {smooth} s. SCI here uses the QC "
         "window, not the table's {sci_window} s.",
     "group.outlier_rule":
-        "Runs whose mean |z| over every metric is past {z}: one test per run, not one per "
-        "metric.",
+        "Runs whose mean |z| is past {z}, taken per quantity and then averaged, so a quantity "
+        "recorded at several stages and channel sets counts once: one test per run, not one "
+        "per metric. Each run lists its furthest metric of each quantity.",
     "group.fc_distribution":
         "Every connection between two kept long channels, one curve per run, its cohort median "
         "in colour: on the left the series the regression started from, on the right its "

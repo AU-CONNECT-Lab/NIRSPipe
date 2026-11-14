@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - `nirspipe-hyper` names each typed flag the run does not read, such as `--seed` with nothing drawn, in a warning and on the dyad page
 - A report's DPF line says whether an age-based factor's age came from `--population` or from the participant
+- The cohort outlier score averages per quantity, so one quantity recorded at several stages counts once, and each outlier names a quantity once
 
 ## [0.84.0] - 2026-11-13
 
