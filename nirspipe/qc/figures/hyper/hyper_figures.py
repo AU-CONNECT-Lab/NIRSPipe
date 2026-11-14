@@ -393,6 +393,7 @@ def motion_series(
     full_raws: "dict[str, mne.io.Raw] | None" = None,
     full_after: "dict[str, mne.io.Raw] | None" = None,
     roi_map: "dict | None" = None,
+    rejected: "dict[str, list[str]] | None" = None,
 ) -> dict:
     """Everything the two motion figures draw, measured once off the aligned recordings.
 
@@ -431,6 +432,9 @@ def motion_series(
     ``full_raws`` and ``full_after`` are the same recordings before the cut, on each member's
     own clock. Given, GVTD is filtered and spikes are found over the whole recording and then
     cut to the shared window, so the cut's edges are not a filter edge both members share.
+
+    ``rejected`` is each member's rejected channels, which its GVTD leaves out while its
+    carpet still draws them, as on the member's own page.
 
     Returns ``{}`` when no member carries usable optical density.
     """
@@ -483,12 +487,15 @@ def motion_series(
                           if src_after is not None else None)
         cut = slice(shift, shift + len(times) - 1)
 
+        left_out = set((rejected or {}).get(sid) or [])
         start = 0
         carpet_spans = []
         for name, names in blocks:
-            rows = slice(start, start + len(names))
+            rows = [start + i for i, c in enumerate(names) if c not in left_out]
             carpet_spans.append((name, start, start + len(names) - 1))
             start += len(names)
+            if not rows:
+                continue
             if name not in sets:
                 sets.append(name)
             g = gvtd_timetrace(src_data[rows], sfreq, *GVTD_MOTION_BAND)[cut]
@@ -506,7 +513,7 @@ def motion_series(
 
         if len(blocks) > 1:
             # every channel, for the tables' All column; not a figure row, so not in `sets`
-            every = list(od.ch_names)
+            every = [c for c in od.ch_names if c not in left_out]
             every_src = src_od.get_data(picks=every)
             g = gvtd_timetrace(every_src, sfreq, *GVTD_MOTION_BAND)[cut]
             mid = float(np.nanmedian(g))

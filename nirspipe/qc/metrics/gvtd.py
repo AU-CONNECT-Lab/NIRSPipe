@@ -5,6 +5,10 @@ The whole of GVTD is here, from the per-sample trace to the spans a run marks as
 against the trace, the censoring is defined against the threshold, and the channel set the
 figures print is the one the censoring used.
 
+Every GVTD trace is taken over the channels the screening kept (:func:`gvtd_kept`). It asks how
+much the analysed data moved, so a rejected channel's artefact is not counted, unlike SCI,
+whose mean keeps rejected channels so as not to be taken over channels picked for good SCI.
+
 The other motion measures, spikes and the correction footprint, are in ``motion.py``.
 """
 
@@ -169,6 +173,24 @@ def gvtd_threshold(gvtd: np.ndarray, n_std: float = GVTD_N_STD) -> float | None:
     return run_mode + n_std * left_std
 
 
+def gvtd_kept(raw: mne.io.Raw, names: "list[str] | None" = None) -> "list[str]":
+    """``names`` (every channel by default) without the ones in ``raw.info["bads"]``.
+
+    ::
+
+        names ["S1_D1 760", "S2_D1 760"], bads ["S2_D1 760"]  ->  ["S1_D1 760"]
+    """
+    rejected = set(raw.info["bads"])
+    return [c for c in (raw.ch_names if names is None else names) if c not in rejected]
+
+
+def with_bads(raw: mne.io.Raw, names) -> mne.io.Raw:
+    """A copy of ``raw`` with ``names`` marked bad, for a GVTD read off a file that carries no marks."""
+    out = raw.copy()
+    out.info["bads"] = [c for c in names if c in out.ch_names]
+    return out
+
+
 def gvtd_channel_picks(
     raw: mne.io.Raw, sep_bands=None, channel_set: "str | None" = None,
 ) -> "tuple[list[str], str]":
@@ -265,6 +287,9 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
 
     Notes
     -----
+    Taken over the channels not in ``raw.info["bads"]``, so a rejected channel's artefact
+    counts for nothing; every channel rejected leaves every value None.
+
     Already-OD input is passed through rather than converted, so the same metrics can be
     measured on the motion-corrected file and compared against the ones taken on the
     original recording. ``optical_density`` raises on anything that is not continuous-wave
@@ -272,7 +297,10 @@ def _motion_metrics(raw_intensity: mne.io.Raw,
     """
     raw_od = as_optical_density(raw_intensity)
     sfreq = float(raw_od.info["sfreq"])
-    od_data = raw_od.get_data()
+    kept = gvtd_kept(raw_od)
+    if not kept:
+        return dict.fromkeys(_motion_metrics.declared)
+    od_data = raw_od.get_data(picks=kept)
     gvtd_ts = gvtd_timetrace(od_data, sfreq)                           # canonical (unfiltered)
     gvtd_filt = gvtd_timetrace(od_data, sfreq, *GVTD_MOTION_BAND)  # motion-band
     gvtd_vstd = gvtd_timetrace(od_data, sfreq, standardize_channels=True)  # channel-equalized
@@ -314,10 +342,11 @@ def gvtd_above_segments(raw_intensity: mne.io.Raw, sep_bands=None,
     raw_od = as_optical_density(raw_intensity)
     if picks is None:
         picks, _ = gvtd_channel_picks(raw_od, sep_bands)
-    if picks and len(picks) < len(raw_od.ch_names):
-        raw_od = raw_od.copy().pick(picks)
+    picks = gvtd_kept(raw_od, picks)
+    if not picks:
+        return []
     sfreq = float(raw_od.info["sfreq"])
-    gvtd_filt = gvtd_timetrace(raw_od.get_data(), sfreq, *GVTD_MOTION_BAND)
+    gvtd_filt = gvtd_timetrace(raw_od.get_data(picks=picks), sfreq, *GVTD_MOTION_BAND)
     thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
     if thresh is None:
         return []
@@ -362,8 +391,7 @@ def gvtd_censor_spans(
     .. footbibliography::
     """
     picks, picked_set = gvtd_channel_picks(raw_od, sep_bands, channel_set)
-    rejected = set(raw_od.info["bads"])
-    picks = [ch for ch in picks if ch not in rejected]
+    picks = gvtd_kept(raw_od, picks)
     times = raw_od.times
     sfreq = float(raw_od.info["sfreq"])
     empty = {
@@ -441,8 +469,11 @@ def _windowed_gvtd(
     """GVTD trace binned into non-overlapping windows on :func:`window_grid`. Returns
     (mean, p95, center_times), the centres read off the real sample times."""
     sfreq = float(raw_od.info["sfreq"])
+    kept = gvtd_kept(raw_od)
+    if not kept:
+        return np.array([]), np.array([]), np.array([])
     # per-sample GVTD trace, one value shorter than the recording (it is a difference)
-    gvtd_ts = gvtd_timetrace(raw_od.get_data(), sfreq, l_freq=l_freq, h_freq=h_freq)
+    gvtd_ts = gvtd_timetrace(raw_od.get_data(picks=kept), sfreq, l_freq=l_freq, h_freq=h_freq)
     win_samples, starts, ends = window_grid(len(raw_od.times), sfreq, window_s)
     n_windows = len(starts)
     if n_windows == 0 or len(gvtd_ts) == 0:

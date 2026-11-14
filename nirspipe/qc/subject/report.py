@@ -94,7 +94,7 @@ from nirspipe.qc.common.figure_io import (
     extract_markers, figure_namer, get_channel_pairs,
 )
 from nirspipe.qc.metrics import (
-    CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks, long_short_channels,
+    CV_PASS, IMU_STAT_KEYS, gvtd_channel_blocks, long_short_channels, with_bads,
     separation_bands, separation_orphans, epochable_events,
     resolve_cutoffs,
 )
@@ -598,6 +598,7 @@ def _motion_detail_figures(
     corrected_by_set: dict | None = None,
     spike_by_set: dict | None = None,
     imu: "dict[str, ImuTrace] | None" = None,
+    rejected: "list[str] | None" = None,
 ) -> "list[tuple[str, Any]]":
     """One per-channel motion figure per channel, each with its own class's GVTD on top.
 
@@ -624,10 +625,12 @@ def _motion_detail_figures(
                 return name, names
         return gvtd_blocks[0]     # in no block (neither separation range): the canonical set
 
+    left_out = set(rejected or [])
     built = []
     for ch in shared_chs:
         with _guard(f"Motion detail {ch}", errors, subject):
             set_name, picks = set_of(ch)
+            picks = [c for c in picks if c not in left_out]
             built.append((ch, build_motion_detail_figure(
                 raw_od_before, raw_od_after, ch, segments,
                 corrected_segments=(corrected_by_set or {}).get(set_name),
@@ -729,6 +732,10 @@ def _section_psd_detail(
             saved.append({"pair": pair, "path": path, "h": h,
                           "label": _pair_label(pair, pair in short_pairs, pair in rejected)})
     return {"psd_detail_pairs": saved}
+
+
+def _gvtd_source(raw: "mne.io.Raw | None", rejected: list) -> "mne.io.Raw | None":
+    return None if raw is None else with_bads(raw, rejected)
 
 
 def _unmarked(raw: mne.io.Raw) -> mne.io.Raw:
@@ -2216,7 +2223,9 @@ def build_subject_report(
     # the GVTD panel's channel set, which follows the separation bands and need not be raw_long
     gvtd_blocks = gvtd_channel_blocks(raw_intensity, sep_bands)
     gvtd_set = gvtd_blocks[0][0]
-    raw_gvtd = raw_intensity.copy().pick([c for _, names in gvtd_blocks for c in names])
+    # marked so each GVTD row leaves the rejected channels out while the carpet still draws them
+    raw_gvtd = with_bads(raw_intensity, bad_channels).pick(
+        [c for _, names in gvtd_blocks for c in names])
 
     figures_dir = out_path.parent / "figures"
     # the run is in every figure's name rather than in a directory of its own, so one
@@ -2283,7 +2292,7 @@ def build_subject_report(
                             segments=segments,
                             corrected_by_set=motion_vars.get("corrected_by_set"),
                             spike_by_set=motion_vars.get("spike_by_set"),
-                            gvtd_blocks=gvtd_blocks, imu=imu)
+                            gvtd_blocks=gvtd_blocks, imu=imu, rejected=bad_channels)
     # every condition's window goes into the run's own files, which is what lets the
     # condition pages point at them with a fragment instead of getting copies
     motion_det_vars   = _section_motion_detail(
@@ -2298,7 +2307,8 @@ def build_subject_report(
                                             figures_dir, fig_name)
     nuisance_vars = _section_nuisance(
         nirs_dir, sqm_label, raw_haemo, psd_stages,
-        raw_after_motion if raw_after_motion is not None else raw_before_motion, imu,
+        _gvtd_source(raw_after_motion if raw_after_motion is not None else raw_before_motion,
+                     bad_channels), imu,
         sep_bands, subject, errors, figures_dir, fig_name)
     carpet_stages = _carpet_stages(raw_haemo, psd_stages)
     carpet_vars = _section_stage_carpets(carpet_stages, roi_map, raw_gvtd, None,

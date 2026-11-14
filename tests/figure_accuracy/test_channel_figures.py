@@ -199,7 +199,9 @@ def test_the_gvtd_row_is_its_set_s_gvtd_in_the_motion_band(denoise_run):
     od = denoise_run.read("sci")
     for short in (False, True):
         pair = next(p for p in denoise_run.truth.pairs if p.short == short)
-        names = [c for c in od.ch_names if denoise_run.truth.pair(c.rsplit(" ", 1)[0]).short == short]
+        # GVTD is over the kept channels of the set, the rejected pair left out
+        names = [c for c in od.ch_names
+                 if (p := denoise_run.truth.pair(c.rsplit(" ", 1)[0])).short == short and not p.bad]
         expected = display_value("gvtd_filt_mean", gvtd_timetrace(
             od.get_data(picks=names), od.info["sfreq"], *GVTD_MOTION_BAND))
         gvtd = next(t for t in _motion(denoise_run, pair.name)["data"]

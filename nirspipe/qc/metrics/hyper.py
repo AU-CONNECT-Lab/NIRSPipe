@@ -216,7 +216,7 @@ def shared_screen_windows(
     one from its own screening, which its own report shows. The lines and the cardiac band
     are each member's own, ``screen_cutoffs`` and ``screen_band``.
     """
-    from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd
+    from nirspipe.qc.metrics.gvtd import compute_windowed_filtered_gvtd, with_bads
     from nirspipe.qc.metrics.windowed import compute_windowed_cv, passing_windows
 
     out = {}
@@ -241,7 +241,8 @@ def shared_screen_windows(
             cv_m, cv_t = compute_windowed_cv(intensity_raws[sid])
             if cv_m is not None and len(cv_t) == n:
                 windows["cv"] = cv_m
-            gvtd, _p95, gvtd_t = compute_windowed_filtered_gvtd(od)
+            gvtd, _p95, gvtd_t = compute_windowed_filtered_gvtd(
+                with_bads(od, member.get("bad_channels") or []))
             if len(gvtd_t) == n:
                 windows["gvtd"] = gvtd
         except Exception:

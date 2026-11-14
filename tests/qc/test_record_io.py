@@ -42,3 +42,17 @@ def test_a_record_naming_every_channel_all_is_refused_rather_than_read_as_long(t
                                            "gvtd_filt_per_window_long": [1.0, 2.0],
                                            "gvtd_filt_per_window": [3.0, 4.0]}}
     assert read_record(write_record(tmp_path / _PATH, current))["windowed"]["spike_spans_long_s"]
+
+
+def test_a_record_written_before_gvtd_left_rejected_channels_out_is_refused(tmp_path):
+    """Its GVTD keys are the current ones, so only the record's own mark tells them apart."""
+    import json
+
+    from nirspipe.exceptions import StageError
+
+    path = write_record(tmp_path / _PATH, _record({}))
+    old = json.loads(path.read_text(encoding="utf-8"))
+    del old["data"]["gvtd_channels"]
+    path.write_text(json.dumps(old), encoding="utf-8")
+    with pytest.raises(StageError, match="rejected ones included"):
+        read_record(path)

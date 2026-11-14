@@ -582,9 +582,13 @@ def carpet_gvtd_figure(
     t_gvtd = times[1:]
     rows: list[dict] = []
     start = 0
+    rejected = set(raw_od.info["bads"])
     for name, names in blocks:
-        rows_slice = slice(start, start + len(names))
+        # the carpet draws every row of the block, GVTD averages the kept ones
+        rows_slice = [start + i for i, c in enumerate(names) if c not in rejected]
         start += len(names)
+        if not rows_slice:
+            continue
         gvtd_filt = gvtd_timetrace(od_data[rows_slice], sfreq, *GVTD_MOTION_BAND)
         thresh = gvtd_threshold(gvtd_filt, n_std=GVTD_N_STD)
         gvtd_filt = gvtd_filt * _GVTD_SCALE
@@ -594,7 +598,7 @@ def carpet_gvtd_figure(
             after = gvtd_timetrace(od_after[rows_slice], sfreq, *GVTD_MOTION_BAND) * _GVTD_SCALE
             after_ds = _maxpool_xy(t_gvtd, after)
         rows.append({
-            "name": name, "n_ch": len(names), "gvtd": gvtd_filt, "after": after,
+            "name": name, "n_ch": len(rows_slice), "gvtd": gvtd_filt, "after": after,
             "t_ds": t_ds, "g_ds": g_ds, "after_ds": after_ds,
             "thresh": None if thresh is None else thresh * _GVTD_SCALE,
         })

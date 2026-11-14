@@ -170,6 +170,8 @@ def test_only_the_retention_accounting_reads_the_bad_list(intensity):
     four_bad = _raw_record(intensity, sci, names[0:4])
 
     assert two_bad["channel_retention_rate"] > four_bad["channel_retention_rate"]
+    # GVTD is over the kept channels, so rejecting two more moves it on purpose
     moved = [k for k, v in two_bad.items()
-             if isinstance(v, float) and not np.isclose(v, four_bad[k])]
+             if isinstance(v, float) and not np.isclose(v, four_bad[k])
+             and not k.startswith("gvtd_")]
     assert moved == ["channel_retention_rate"], f"unexpectedly sensitive to bads: {moved}"

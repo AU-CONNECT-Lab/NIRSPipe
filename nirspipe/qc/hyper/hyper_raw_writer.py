@@ -216,7 +216,9 @@ def _process_hyper_raw_group(
     with guard("Motion panel", errors, label):
         motion = motion_series(od_raws or {}, after_raws, subject_ids, sep_bands,
                                imu=imu, full_raws=full_raws, full_after=full_after,
-                               roi_map=roi_map)
+                               roi_map=roi_map,
+                               rejected={sid: (sqm_data.get(sid) or {}).get("bad_channels")
+                                         for sid in subject_ids})
     if not motion:
         note(notes, label, "no optical density for the members: the motion panels "
                            "are empty")

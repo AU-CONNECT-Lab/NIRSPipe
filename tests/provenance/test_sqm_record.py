@@ -313,6 +313,7 @@ def test_the_tables_fold_back_into_the_record_the_writer_was_handed(on_disk):
     record, path = on_disk
     back = read_record(path)
     back["data"].pop("tables")
+    assert back["data"].pop("gvtd_channels") == "kept"
     np.testing.assert_equal(back, record)
 
 

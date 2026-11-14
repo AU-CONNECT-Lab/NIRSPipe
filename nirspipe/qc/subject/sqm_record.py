@@ -47,6 +47,9 @@ the analysis, and those metrics go through ``mne.pick_types``, which drops bads 
 default. Excluding them earlier would make ``sci_mean`` circular, taken over channels
 selected for good SCI. ``channel_retention_rate`` is what says how many were dropped.
 
+GVTD is the exception, in every section: it asks how much the analysed data moved, so it is
+taken over the kept channels, as ``--gvtd-censor`` takes it, and rejecting a channel moves it.
+
 Per-channel values live under ``per_channel`` so the sections stay scalar. Those are
 always complete, every channel, whichever section they sit under.
 """
@@ -642,6 +645,7 @@ def _motion_post_section(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     gvtd_thresh: "float | None" = None,
+    rejected: "list[str] | None" = None,
 ) -> dict[str, Any]:
     """Did the correction work, and did it cost anything.
 
@@ -659,11 +663,11 @@ def _motion_post_section(
     """
     from nirspipe.qc.metrics import (
         _mean_or_none, _motion_metrics, _psp_metrics, _sci_win_metrics, _spike_metrics,
-        compute_sci_scores,
+        compute_sci_scores, with_bads,
     )
 
     record: dict[str, Any] = {}
-    record.update(_motion_metrics(raw_od, thresh=gvtd_thresh))
+    record.update(_motion_metrics(with_bads(raw_od, rejected or []), thresh=gvtd_thresh))
     record.update(_spike_metrics(raw_od))
     # the mean over every channel, bads included, so it is comparable with `raw`
     scores, _ = compute_sci_scores(raw_od, cardiac_l_freq, cardiac_h_freq)
@@ -685,6 +689,7 @@ def motion_sections(
     cardiac_l_freq: float,
     cardiac_h_freq: float,
     sep_bands=None,
+    rejected: "list[str] | None" = None,
 ) -> None:
     """The whole motion family, from the optical density either side of the correction.
 
@@ -697,6 +702,9 @@ def motion_sections(
     ``raw_thresh(name)`` returns the ``raw*`` section's GVTD cutoff for the matching channel
     set, so before and after are counted against one yardstick. See
     :func:`_motion_post_section`.
+
+    ``rejected`` is the run's rejected channels, which the GVTD of ``motion_post*`` leaves out
+    as the ``raw*`` GVTD does.
 
     ``before_od`` None leaves the footprint half out and keeps the rest: measuring what the
     correction touched needs both sides, measuring the corrected file needs only the one.
@@ -737,17 +745,18 @@ def motion_sections(
         except Exception:
             logger.warning("windowed: correction spans failed", exc_info=True)
 
+    rejected = rejected or []
     section("motion_post", lambda: _motion_post_section(
-        after_od, cardiac_l_freq, cardiac_h_freq, raw_thresh("raw")))
+        after_od, cardiac_l_freq, cardiac_h_freq, raw_thresh("raw"), rejected))
     post_long, post_short = usable_split(after_od, sep_bands)
     if post_long and len(post_long) < len(after_od.ch_names):
         section("motion_post_long", lambda: _motion_post_section(
             after_od.copy().pick(post_long), cardiac_l_freq, cardiac_h_freq,
-            raw_thresh("raw_long")))
+            raw_thresh("raw_long"), rejected))
     if post_short:
         section("motion_post_short", lambda: _motion_post_section(
             after_od.copy().pick(post_short), cardiac_l_freq, cardiac_h_freq,
-            raw_thresh("raw_short")))
+            raw_thresh("raw_short"), rejected))
 
 
 def _cutoffs_from_sidecar(stages: dict[str, Path]) -> dict[str, float]:
@@ -1174,6 +1183,9 @@ def compute_run_sections(
         logger.warning("sci scores unavailable; sci metrics will be empty", exc_info=True)
         sci_scores = {}
 
+    # the run's rejections, which every GVTD below leaves out; the files on disk carry no marks
+    rejected = list(_sidecar(stages["sci"]).get("bad_channels") or []) if "sci" in stages else []
+
     raw_intensity = None
     bids_input = _bids_input(stages, bids_root)
     if bids_input is None:
@@ -1193,7 +1205,7 @@ def compute_run_sections(
         # the input carries no marks of its own, so the run's rejections and the user's
         # stretches come from the sci file, the stretches left out as screening left them out
         sci_sidecar = _sidecar(stages["sci"]) if "sci" in stages else {}
-        bad_channels = list(sci_sidecar.get("bad_channels") or [])
+        bad_channels = rejected
         mark_bads(raw_intensity, bad_channels)
         params = sci_sidecar.get("parameters") or {}
         mark_manual(mark_unselected(raw_intensity, params.get("keep_spans") or []),
@@ -1270,8 +1282,9 @@ def compute_run_sections(
     gvtd_span_source = stages.get("motcorrected") or stages.get("sci") or stages.get("od")
     if gvtd_span_source is not None:
         try:
-            from nirspipe.qc.metrics import gvtd_above_segments, gvtd_channel_picks
-            span_raw = read_snirf(gvtd_span_source)
+            from nirspipe.qc.metrics import (gvtd_above_segments, gvtd_channel_picks, gvtd_kept,
+                                             with_bads)
+            span_raw = with_bads(read_snirf(gvtd_span_source), rejected)
             # one list per set, each against its own threshold: three sets, three traces,
             # three cutoffs, so one set's share is not a second reading of another's. The long
             # set is the canonical trace's, absent on a montage that never split
@@ -1280,7 +1293,8 @@ def compute_run_sections(
             for channel_set, span_picks in (("all", list(span_raw.ch_names)),
                                             ("long", span_long if canonical == "long" else []),
                                             ("short", span_short)):
-                if span_picks:
+                # a set screening emptied has no GVTD, so no list, rather than nothing above
+                if gvtd_kept(span_raw, span_picks):
                     windowed[windowed_key("gvtd_above_spans", channel_set, spans=True)] = [
                         list(span) for span in
                         gvtd_above_segments(span_raw, sep_bands, picks=span_picks)]
@@ -1297,8 +1311,9 @@ def compute_run_sections(
     if sci_source is not None:
         try:
             raw_sci_od = read_snirf(sci_source)
-            raw_gvtd_od = (raw_sci_od if gvtd_source == sci_source
-                           else read_snirf(gvtd_source))
+            from nirspipe.qc.metrics import with_bads
+            raw_gvtd_od = with_bads(raw_sci_od if gvtd_source == sci_source
+                                    else read_snirf(gvtd_source), rejected)
             series = attach_windowed_series(
                 windowed, raw_sci_od, cardiac_l_freq, cardiac_h_freq, qc_window_s,
                 gvtd_od=raw_gvtd_od, raw_intensity=raw_intensity, sep_bands=sep_bands)
@@ -1337,7 +1352,7 @@ def compute_run_sections(
             # matching raw section failed, and the post section then falls back to its own.
             motion_sections(mc_before, mc_after, section, windowed,
                             lambda name: (sections.get(name) or {}).get("gvtd_thresh"),
-                            cardiac_l_freq, cardiac_h_freq, sep_bands)
+                            cardiac_l_freq, cardiac_h_freq, sep_bands, rejected)
 
     # One family per haemo stage the run actually wrote, each measured with the same
     # metrics as `preproc` so any of them subtracts against it. Band power and drift are

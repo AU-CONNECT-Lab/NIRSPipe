@@ -13,7 +13,8 @@ from nirspipe.pipeline.glm_censored import kept_frames
 from nirspipe.qc.figures.common._utils import CHROMA_STYLE
 from nirspipe.qc.figures.common.matrix_map import CORRELATION_SCALE
 from nirspipe.qc.metrics import long_short_channels
-from nirspipe.qc.metrics.gvtd import GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_timetrace
+from nirspipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_kept,
+                                      gvtd_timetrace)
 
 # the design columns that are nuisance rather than task or intercept
 NUISANCE_PREFIXES = ("short_ch_", "aux_", "drift_")
@@ -51,7 +52,7 @@ def nuisance_series(haemo: mne.io.BaseRaw, design: "pd.DataFrame | None" = None,
             if str(col).startswith(NUISANCE_PREFIXES):
                 columns[str(col)] = design[col].to_numpy(dtype=float)
     if od is not None:
-        picks = gvtd_channel_picks(od, sep_bands)[0]
+        picks = gvtd_kept(od, gvtd_channel_picks(od, sep_bands)[0])
         trace = gvtd_timetrace(od.get_data(picks=picks), float(od.info["sfreq"]),
                                *GVTD_MOTION_BAND)
         columns["GVTD"] = np.interp(times, od.times[1:], trace)

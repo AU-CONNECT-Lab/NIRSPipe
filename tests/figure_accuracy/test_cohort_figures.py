@@ -114,13 +114,20 @@ def test_the_condition_matrix_shows_each_run_s_movement_in_its_own_block(groups)
     panel = [t for t in fig["data"] if t["type"] == "heatmap"][titles.index("GVTD above threshold")]
     for i, label in enumerate(panel["y"]):
         subject = label.removeprefix("sub-")
+        shown_in_a_spike_block = False
         for j, condition in enumerate(panel["x"]):
             if condition not in CONDITIONS:
                 continue
             onset, span = next((on, dur) for n, on, dur in BLOCKS if n == condition)
             spikes = (OWN_SPIKE[subject], SHARED_SPIKE, *EXTRA_SPIKES.get(subject, ()))
             moved = any(onset <= t < onset + span for t in spikes)
-            assert (float(panel["text"][i][j]) > 0) == moved, (label, condition)
+            shown = float(panel["text"][i][j]) > 0
+            assert moved or not shown, (label, condition)
+            shown_in_a_spike_block |= shown
+        # what TDDR leaves of a spike may stay under the threshold; a run whose corrected
+        # file crossed it must show that in a block holding one of its spikes
+        crossed = groups.member_record(label)["windowed"].get("gvtd_above_spans_long_s")
+        assert shown_in_a_spike_block == bool(crossed), label
 
 
 def test_the_condition_lines_put_the_cohort_median_through_each_condition(groups):

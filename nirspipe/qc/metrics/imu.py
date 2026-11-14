@@ -13,8 +13,8 @@ import numpy as np
 from scipy.stats import spearmanr
 
 from nirspipe.qc.metrics._helpers import _safe_metrics, as_optical_density
-from nirspipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_timetrace,
-                                       window_grid)
+from nirspipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_kept,
+                                       gvtd_timetrace, window_grid)
 
 # record name of each magnitude -> its key in `imu_traces`
 IMU_QUANTITIES = {"gyro_speed": "gyro", "accel_jerk": "accel"}
@@ -134,7 +134,7 @@ def imu_section(imu: dict, raw: mne.io.Raw, sep_bands=None) -> dict[str, Any]:
     """
     raw_od = as_optical_density(raw)
     times = raw_od.times
-    picks, _ = gvtd_channel_picks(raw_od, sep_bands)
+    picks = gvtd_kept(raw_od, gvtd_channel_picks(raw_od, sep_bands)[0])
     gvtd = gvtd_timetrace(raw_od.get_data(picks=picks), float(raw_od.info["sfreq"]),
                           *GVTD_MOTION_BAND)
     # the unit the recording declared, so a number is never read on another device's scale

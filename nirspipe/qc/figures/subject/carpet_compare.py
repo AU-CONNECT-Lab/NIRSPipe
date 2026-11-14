@@ -15,7 +15,7 @@ from nirspipe.qc.figures.common.motion_panel import (
 )
 from nirspipe.qc.metrics._helpers import as_optical_density
 from nirspipe.qc.boilerplate.vocabulary import display_value
-from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_timetrace
+from nirspipe.qc.metrics import GVTD_MOTION_BAND, gvtd_kept, gvtd_timetrace
 from nirspipe.utils.spans import span_kind
 
 _CARPET_ROW_PX = 190
@@ -54,7 +54,7 @@ def _gvtd_rows(raw_before, raw_after, blocks: list):
         return []
     out = []
     for name, names in blocks:
-        picks = [c for c in names if c in od_b.ch_names]
+        picks = gvtd_kept(od_b, [c for c in names if c in od_b.ch_names])
         if not picks:
             continue
         sfreq = float(od_b.info["sfreq"])

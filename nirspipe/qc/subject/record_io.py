@@ -20,6 +20,7 @@ from nirspipe.qc.metrics.imu import IMU_QUANTITIES
 MATRIX_STATS = ("sci", "psp", "cv")
 SUMMARY_STAT = "summary"
 CHANNEL_COLUMNS = ("name", "section", "metric", "value")
+GVTD_CHANNELS = "kept"
 
 
 def _label_and_desc(path: Path) -> tuple[str, str]:
@@ -137,7 +138,8 @@ def write_record(path: Path, record: dict[str, Any]) -> Path:
     if "windowed" in record:
         record["windowed"] = windowed
     # the reader's list: a table missing from disk is an error, one never written is not
-    record["data"] = {**(record.get("data") or {}), "tables": sorted(tables)}
+    record["data"] = {**(record.get("data") or {}), "tables": sorted(tables),
+                      "gvtd_channels": GVTD_CHANNELS}
 
     path.parent.mkdir(parents=True, exist_ok=True)
     for name, (frame, sidecar) in tables.items():
@@ -163,6 +165,11 @@ def read_record(path: Path) -> dict[str, Any]:
     if tables is None:
         raise StageError(f"{path.name} keeps its arrays inline, which this version no longer "
                          "reads; rerun the command that wrote it.")
+    # same keys, other meaning: read as it stands, its GVTD would count rejected channels
+    if record["data"].get("gvtd_channels") != GVTD_CHANNELS:
+        raise StageError(f"{path.name} takes GVTD over every channel, rejected ones included, "
+                         "where this version takes it over the kept ones; rerun the command "
+                         "that wrote it.")
 
     label, desc = _label_and_desc(path)
     kinds = {record_table_name(label, desc, "timeseries", statistic=stat): stat

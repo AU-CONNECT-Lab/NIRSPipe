@@ -398,11 +398,12 @@ def _process_run(
         imu = imu_traces(*read_aux_snirf(run["snirf_path"]))
     imu_sec: dict = raw_secs.get("imu") or {}
     with guard("GVTD carpet", errors, label):
-        from nirspipe.qc.metrics import gvtd_channel_blocks
+        from nirspipe.qc.metrics import gvtd_channel_blocks, with_bads
         gvtd_blocks = gvtd_channel_blocks(raw, sep_bands)
         gvtd_set = gvtd_blocks[0][0]
         gvtd_picks = [c for _, names in gvtd_blocks for c in names]
-        raw_carpet = raw.copy().pick(gvtd_picks)
+        # marked so the GVTD rows leave the rejected channels out while the carpet draws them
+        raw_carpet = with_bads(raw, bad_channels).pick(gvtd_picks)
         # before and after in one panel where a correction ran, which is the pairing the
         # subject report's carpet draws and the reason the flag exists
         carpet_after = (None if raw_motcorr is None
@@ -515,7 +516,7 @@ def _process_run(
                 spike_by_set=_span_sets(windowed, "spike_spans",
                                         gvtd_blocks[0][0] if gvtd_blocks else "all"),
                 gvtd_blocks=gvtd_blocks or None,
-                imu=imu,
+                imu=imu, rejected=bad_channels,
             )
             if built:
                 saved = _section_motion_detail(
