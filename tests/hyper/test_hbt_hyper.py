@@ -241,7 +241,7 @@ def test_the_cohort_test_reads_hbt():
     from nirspipe.cli.hyper import _parsers
 
     args = _parsers()["nirspipe-hyper-groupnull"].parse_args(
-        ["out", "group", "--task", "tap", "--chromophores", "hbo", "hbt"])
+        ["out", "group", "--task-label", "tap", "--chromophores", "hbo", "hbt"])
     assert args.chromophores == ["hbo", "hbt"]
 
 
