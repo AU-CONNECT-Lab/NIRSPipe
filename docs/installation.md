@@ -57,7 +57,7 @@ pip install -e ".[gpu]"
 | `joblib` | ≥ 1.3 | Parallel `--nprocs` dispatch |
 | `threadpoolctl` | ≥ 3.2 | Numeric threads per subject under `--nprocs` |
 | `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
-| `pycwt` | ≥ 0.4 | Wavelet transform coherence for hyperscanning |
+| `pycwt` | ≥ 0.4.0b0 | Wavelet transform coherence for hyperscanning |
 | `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
 | `tomli` | ≥ 2.0 | TOML reader (Python < 3.11 only) |
 | `flask` | ≥ 3.0 | GUI (`nirspipe-gui`) and rating viewers (`nirspipe-rate`) |
