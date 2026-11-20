@@ -4,7 +4,7 @@ title: Tutorial
 
 # Tutorial
 
-This page runs three dyads from a public hyperscanning dataset through every step of a dyadic study, from download to the cohort null tests. It takes about 11 minutes on a desktop and 1.6 GB of disk. NIRSPipe must be [installed](installation.md) first.
+This page runs three dyads from a public hyperscanning dataset through every step of a dyadic study, from download to the cohort null tests. It takes about 25 minutes on a desktop and 1.6 GB of disk. NIRSPipe must be [installed](installation.md) first.
 
 The commands are written for a Mac or Linux terminal and Git Bash. In Windows PowerShell, end each continued line with a backtick (`` ` ``) instead of `\`.
 
@@ -58,7 +58,7 @@ nirspipe timed/marker_edited derivatives participant \
     --skip-bids-validation --nprocs 3
 ```
 
-About 2.5 minutes. `--population adult` sets the cardiac and respiration bands and the DPF for adults ([Population](usage.md#population)); short-channel regression runs by default, since the montage has short channels. Two settings are specific to this dataset:
+About 3.5 minutes. `--population adult` sets the cardiac and respiration bands and the DPF for adults ([Population](usage.md#population)); short-channel regression runs by default, since the montage has short channels. Two settings are specific to this dataset:
 
 | Option | Why |
 |---|---|
@@ -85,7 +85,7 @@ nirspipe-hyper derivatives hyper group \
     --wtc-phase-null 5 --isc-phase-null 100 --seed 1
 ```
 
-About 6 minutes. Two settings only save time here. Five coherence scrambles is far too few; a study uses about 100, as the correlation does. `--chromophores hbo` limits both measures to HbO; without it HbO and HbR are both computed, which doubles the time. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
+About 9 minutes. Two settings only save time here. Five coherence scrambles is far too few; a study uses about 100, as the correlation does. `--chromophores hbo` limits both measures to HbO; without it HbO and HbR are both computed, which doubles the time. Each dyad's pages start at `hyper/group-1001/group-1001_desc-index_report.html`.
 
 Then the raw quality pages, in a tree of their own: each person's first, then each dyad's and the two cohort pages from those records, under two minutes:
 
@@ -104,7 +104,7 @@ The members' markers in dyads 1002 and 1003 disagree by 5 to 30 s after alignmen
 
 ## 6. Nulls
 
-The re-paired null, about a minute, after which it draws each dyad's pages again so their condition arrows read it; then the cohort test, which reads every null and chromophore the draws hold. `--chromophores hbo` on the first command matches the HbO-only run above; leave it out after a run with both chromophores.
+The re-paired null, about 8 minutes, after which it draws each dyad's pages again so their condition arrows read it; then the cohort test, which reads every null and chromophore the draws hold. `--chromophores hbo` on the first command matches the HbO-only run above; leave it out after a run with both chromophores.
 
 ```bash
 nirspipe-hyper-pairnull derivatives hyper group \
