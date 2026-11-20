@@ -59,15 +59,14 @@ _TRIAL_LEAD_IN = 10.0     # room for the epoch window's baseline at the block's 
 _TRIAL_SPACING = 25.0
 
 
-def _channel_layout(n_long: int, short: bool) -> tuple[list[str], list[np.ndarray], list[bool]]:
-    """Names, MNE loc arrays, and an is-short flag per channel (two per pair)."""
+def _channel_layout(n_long: int, short: "bool | int") -> tuple[list[str], list[np.ndarray], list[bool]]:
+    """Names, MNE loc arrays, and an is-short flag per channel (two per pair); ``short`` counts the short pairs."""
     names: list[str] = []
     locs: list[np.ndarray] = []
     is_short: list[bool] = []
 
     pairs = [(i, LONG_DISTANCE) for i in range(n_long)]
-    if short:
-        pairs.append((n_long, SHORT_DISTANCE))
+    pairs += [(n_long + k, SHORT_DISTANCE) for k in range(int(short))]
 
     for idx, distance in pairs:
         src = np.array([idx * 0.03, 0.0, 0.0])
@@ -131,7 +130,7 @@ def synth_raw(
     task: str,
     duration: float = DURATION,
     n_long_pairs: int = N_LONG_PAIRS,
-    short_channels: bool = True,
+    short_channels: "bool | int" = True,
     bad_pair: int | None = BAD_PAIR,
     motion_onset: float | None = 150.0,
     seed: int | None = None,
@@ -142,6 +141,7 @@ def synth_raw(
     scalp coupling index lands near 0.9. ``bad_pair`` gets independent noise in
     each wavelength instead, which drives its SCI to roughly 0.05, below any
     sensible threshold. Pass ``bad_pair=None`` for a clean recording.
+    ``short_channels`` is the number of short pairs after the long ones, True being one.
     """
     # crc32, not hash(): str hashing is salted per process, so hash() would make the
     # data differ between runs and no golden baseline could ever be taken.

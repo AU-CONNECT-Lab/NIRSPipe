@@ -46,6 +46,8 @@ before Beer-Lambert describes the recording as it arrived; after it the channel 
 the analysis, and those metrics go through ``mne.pick_types``, which drops bads by
 default. Excluding them earlier would make ``sci_mean`` circular, taken over channels
 selected for good SCI. ``channel_retention_rate`` is what says how many were dropped.
+``errts`` also drops the short channels its regressor spanned, whose residual is float noise,
+as the GLM tables, ALFF and FC do (:func:`read_measured_stage`).
 
 GVTD is the exception, in every section: it asks how much the analysed data moved, so it is
 taken over the kept channels, as ``--gvtd-censor`` takes it, and rejecting a channel moves it.
@@ -68,7 +70,8 @@ from nirspipe.io.auxiliary import (aux_table_units, find_aux_table, imu_traces,
 from nirspipe.io.derivatives import bids_uris, entity_of, joined_runs, read_json, resolve_bids_uri
 from nirspipe.io.tables import read_table
 from nirspipe.pipeline.chromophores import chroma_of, with_hbt
-from nirspipe.pipeline.glm import SHORT_CH_PREFIX
+from nirspipe.pipeline.glm import SHORT_CH_PREFIX, sole_regressor_channels
+from nirspipe.qc.metrics._helpers import bands_from_record
 from nirspipe.utils import is_optical_density, mark_bads, pair_of
 from nirspipe.utils.logging import get_logger
 from nirspipe.utils.spans import is_bad_span, mark_manual, mark_unselected
@@ -171,6 +174,21 @@ def record_label(path: "Path | str") -> str:
 
 def _sidecar(path: Path) -> dict[str, Any]:
     return read_json(path.with_suffix(".json"))
+
+
+def read_measured_stage(path: Path) -> mne.io.Raw:
+    """A stage file as the record measures it: in ``errts``, the short channels its own regressor spanned marked bad."""
+    from nirspipe.io.snirf import read_snirf
+
+    raw = read_snirf(path)
+    if entity_of(path, "desc") != "errts":
+        return raw
+    # the sidecar names the regressor and the bands that chose its channels
+    params = _sidecar(path).get("parameters") or {}
+    emptied = set(sole_regressor_channels(raw, params.get("short_channel"),
+                                          bands_from_record(params)))
+    raw.info["bads"] = [ch for ch in raw.ch_names if ch in emptied or ch in raw.info["bads"]]
+    return raw
 
 
 def _bids_input(stages: dict[str, Path], bids_root: Path | None = None) -> Path | None:
@@ -803,7 +821,7 @@ def condition_sections(
         if path is None:
             return None
         try:
-            return read_snirf(path)
+            return read_measured_stage(path)
         except Exception:
             logger.warning("%s unreadable; conditions get no %s metrics", path, desc,
                            exc_info=True)
@@ -1095,7 +1113,8 @@ def _condition_haemo(haemo, errts, t0, t1, n_fft_floor, bands, sep_bands,
     def _pick(raw, picks):
         if raw is None:
             return None
-        names = [c for c in picks if c in raw.ch_names]
+        # a stage can mark more than preproc did: errts its emptied short channels
+        names = [c for c in picks if c in raw.ch_names and c not in raw.info["bads"]]
         return raw.copy().pick(names) if names else None
 
     haemo_cut, errts_cut, filt_cut = _cut(haemo), _cut(errts), _cut(filtered)
@@ -1368,7 +1387,7 @@ def compute_run_sections(
         if desc not in stages:
             continue
         try:
-            raw_haemo = read_snirf(stages[desc])
+            raw_haemo = read_measured_stage(stages[desc])
         except Exception:
             logger.warning("%s unreadable; its sections are skipped", stages[desc],
                            exc_info=True)

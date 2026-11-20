@@ -66,19 +66,21 @@ _RESAMPLE_SFREQ = SFREQ / 2
 _CENSOR = dict(gvtd_censor="long", gvtd_censor_n_std=8.0, gvtd_min_epoch_s=20.0)
 
 
-def _run(out_dir, subject="01", task="tapping", post=True, censor=None, blocks=None):
+def _run(out_dir, subject="01", task="tapping", post=True, censor=None, blocks=None,
+         short_channel="mean"):
     """A full run on synthetic data, left on disk the way the pipeline leaves it.
 
     Post is asked for every optional step it has, so the record comes out with one section
     per haemo stage. A leaner post is what `test_a_skipped_step_leaves_no_section` covers.
     ``blocks`` replaces the events with ``[(onset, duration, label), ...]`` conditions.
+    Two short pairs, so the mean regressor leaves each a residual of its own to measure.
     """
     bids = out_dir / "bids"
     (bids / f"sub-{subject}" / "nirs").mkdir(parents=True, exist_ok=True)
     source = bids / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-{task}_nirs.snirf"
 
     from nirspipe.io.snirf import read_snirf, write_snirf
-    raw = synth_raw(subject, task)
+    raw = synth_raw(subject, task, short_channels=2)
     if blocks:
         raw.set_annotations(mne.Annotations(*zip(*blocks)))
     write_snirf(raw, source)
@@ -93,7 +95,7 @@ def _run(out_dir, subject="01", task="tapping", post=True, censor=None, blocks=N
     if post:
         run_post(prep.raw_haemo.copy(),
                  PostConfig(subject=subject, high_pass=0.01, low_pass=0.5,
-                            resample_sfreq=_RESAMPLE_SFREQ, short_channel="mean",
+                            resample_sfreq=_RESAMPLE_SFREQ, short_channel=short_channel,
                             drift_model="cosine", drift_high_pass=0.01, **_BANDS),
                  output_dir=out_dir, mode="denoise", source_entities=entities)
     return prep, out_dir / f"sub-{subject}" / "nirs"
@@ -414,6 +416,30 @@ def test_a_condition_counts_an_empty_span_list_as_none_crossed_and_a_missing_one
     absent = {k: v for k, v in sections["windowed"].items() if k not in keys}
     assert shares(empty) == {0.0}
     assert shares(absent) == {None}
+
+
+# ---- A residual the short-channel regressor emptied ----
+
+def test_short_channels_the_regressor_spanned_are_left_out_of_every_errts_measure(tmp_path):
+    # pca spans every good short channel, so what is left of them in errts is float noise
+    _, nirs_dir = _run(tmp_path, blocks=_BLOCKS, short_channel="pca")
+    sections = compute_run_sections(scan_runs(nirs_dir)["sub-01_task-tapping"], **_BANDS)
+    assert "filtered_short" in sections and "errts_short" not in sections
+    # every good channel left in errts is long, so its whole-file numbers are the long ones
+    for key in ("hbo_hbr_corr_mean", "gcor_hbo", "gcor_hbr"):
+        assert sections["errts"][key] is not None, key
+        assert sections["errts"][key] == pytest.approx(sections["errts_long"][key]), key
+    shorts = {"S5_D5", "S6_D6"}
+    assert shorts <= set(sections["per_channel"]["filtered"]["hbo_hbr_corr_per_channel"])
+    assert not shorts & set(sections["per_channel"]["errts"]["hbo_hbr_corr_per_channel"])
+
+    assert sections["by_condition"]
+    for entry in sections["by_condition"].values():
+        by_set = entry["haemo_by_set"]
+        for key in ("hbo_hbr_corr_mean_errts", "gcor_hbo_postreg", "gcor_hbr_postreg"):
+            assert by_set["all"][key] == pytest.approx(by_set["long"][key]), key
+            assert by_set["short"].get(key) is None, key
+        assert by_set["short"]["gcor_hbo_prereg"] is not None
 
 
 # ---- GVTD censoring ----
