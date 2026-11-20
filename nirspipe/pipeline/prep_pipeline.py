@@ -26,7 +26,8 @@ from nirspipe.io.auxiliary import aux_table_path, write_aux_table
 from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,
                                      nirs_required_fields, write_sidecar_json)
 from nirspipe.io.head_template import FSAVERAGE, space_of
-from nirspipe.io.optode_space import Placement, hold_placement, place_optodes, write_channel_coords
+from nirspipe.io.optode_space import (Placement, copy_landmarks, hold_placement, place_optodes,
+                                      write_channel_coords)
 from nirspipe.io.snirf import write_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf, wavelengths
 from nirspipe.pipeline.motion import (  # noqa: F401  MotionMethod re-exported
@@ -417,12 +418,15 @@ def run_prep(
             raise StageError(f"_save({desc!r}) got an object stamped {stage_of(raw_step)!r}")
         path = _stage_path(desc)
         write_snirf(raw_step, path)
+        sources = rec.sources_of(raw_step)
+        if sources:
+            copy_landmarks(sources[0], path)
         bads = list(raw_step.ch_names) if every_rejected else list(raw_step.info["bads"])
         write_sidecar_json(path, {
             **nirs_required_fields(raw_step, source_metadata or {}),
             "pipeline_version": __version__,
             "step": lin.step,
-            "Sources": rec.sources_of(raw_step),
+            "Sources": sources,
             # the settings this step used; the run record holds the whole configuration
             "parameters": extra_parameters or {},
             "data": {**data_state(raw_step), "n_bad": len(bads)},

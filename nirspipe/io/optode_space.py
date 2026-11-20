@@ -163,9 +163,10 @@ def copy_landmarks(source_path, dest_path) -> None:
     ``source landmarkLabels [Nz, Cz, F3]`` in mm -> the same three in ``dest``, in its own unit
 
     MNE keeps a landmark's position but not its name (anything but the three fiducials reads
-    back as EEG001, EEG002, ...), and mne-nirs writes template fiducials where the source had
-    none, so a cropped or re-marked recording would otherwise be placed by landmarks it never
-    had. A source without landmarks leaves the copy without any.
+    back as EEG001, EEG002, ...), MNE 1.13 reads one in mm a million times too large, and
+    mne-nirs writes template fiducials where the source had none, so a cropped or re-marked
+    recording would otherwise be placed by landmarks it never had. A source without landmarks
+    leaves the copy without any.
     """
     with h5py.File(source_path, "r") as src, h5py.File(dest_path, "r+") as dest:
         ratio = (_UNIT_TO_M[_text(src["nirs/metaDataTags/LengthUnit"][()]).strip()]

@@ -67,6 +67,12 @@ def _write(path, frame: np.ndarray, landmarks: "list[str] | None" = None,
         src, det = (mne.transforms.apply_trans(frame, p / 1000) for p in (src, det))
         ch["loc"][3:6], ch["loc"][6:9], ch["loc"][0:3] = src, det, (src + det) / 2
     write_snirf(raw, path)
+    return _plant(path, frame, landmarks, landmark_shift_mm, unit)
+
+
+def _plant(path, frame: np.ndarray, landmarks: "list[str] | None" = None,
+           landmark_shift_mm: "dict[str, np.ndarray] | None" = None, unit: str = "m"):
+    """Replace a file's landmarks with the fsaverage ones named, through ``frame``, and write it in ``unit``."""
     ref = reference_points(FSAVERAGE)
     with h5py.File(path, "r+") as f:
         probe = f["nirs/probe"]
@@ -297,6 +303,63 @@ def test_a_cropped_recording_keeps_the_landmarks_that_place_it(tmp_path):
     assert placement.method == "landmarks"
     cropped = mne.io.read_raw_snirf(str(out), verbose="error")
     np.testing.assert_allclose(_sources_mm(cropped, placement), _planted_sources(), atol=1e-6)
+
+
+_TO_M = {"m": 1.0, "mm": 1e-3}
+
+
+def _landmarks_m(path) -> tuple[list[str], np.ndarray]:
+    """A file's landmark labels and positions in metres, read with h5py rather than MNE."""
+    with h5py.File(path, "r") as f:
+        unit = f["nirs/metaDataTags/LengthUnit"][()]
+        scale = _TO_M[(unit.decode() if isinstance(unit, bytes) else str(unit)).strip()]
+        labels = [x.decode() for x in f["nirs/probe/landmarkLabels"][()]]
+        return labels, f["nirs/probe/landmarkPos3D"][()][:, :3] * scale
+
+
+def test_every_stage_prep_and_post_write_keeps_the_sources_landmarks(tmp_path):
+    from nirspipe.pipeline.post_pipeline import PostConfig, run_post
+
+    # in mm, which MNE 1.13 reads a million times too large and mne-nirs then writes out
+    _write_dataset_root(tmp_path / "raw", ["01"])
+    source = _write(tmp_path / "raw" / "sub-01" / "nirs" / "sub-01_task-rest_nirs.snirf",
+                    _move(), landmarks=_LANDMARKS, unit="mm")
+    out = tmp_path / "out"
+    write_dataset_description(out, source=tmp_path / "raw")
+    raw = mne.io.read_raw_snirf(str(source), preload=True, verbose="error")
+    result = run_prep(raw, PrepConfig(subject="01", dpf=[6.0], sci_threshold=0.8,
+                                      motion_correction="none", **_BANDS),
+                      out, source_entities={"task": "rest"}, source_path=source)
+    nirs_dir = out / "sub-01" / "nirs"
+    post = PostConfig(subject="01", high_pass=0.01, drift_model="polynomial", drift_order=1,
+                      short_channel="mean", **_BANDS)
+    run_post(result.raw_haemo.copy(), post, out, mode="denoise", source_entities={"task": "rest"},
+             source_path=nirs_dir / "sub-01_task-rest_desc-preproc_nirs.snirf")
+
+    stages = sorted(nirs_dir.glob("*_desc-*_nirs.snirf"))
+    assert {"od", "preproc", "filtered", "errts"} <= {p.name.split("desc-")[1][:-11] for p in stages}
+    labels, positions = _landmarks_m(source)
+    for path in stages:
+        written_labels, written = _landmarks_m(path)
+        assert written_labels == labels, path.name
+        np.testing.assert_allclose(written, positions, atol=1e-9, err_msg=path.name)
+
+
+def test_an_aligned_member_keeps_the_landmarks_that_place_it(tmp_path):
+    from nirspipe.cli.prep import cmd_align
+    from tests._synth import make_hyper_dataset
+
+    bids_dir, pairs_csv = make_hyper_dataset(tmp_path, tasks=("hold",))
+    for subject in ("11", "12"):
+        _plant(bids_dir / f"sub-{subject}" / "nirs" / f"sub-{subject}_task-hold_nirs.snirf",
+               np.eye(4), _LANDMARKS, unit="mm")
+    cmd_align(bids_dir, tmp_path / "out", pairs_csv, skip_bids_validation=True)
+    for subject in ("11", "12"):
+        name = f"sub-{subject}/nirs/sub-{subject}_task-hold_nirs.snirf"
+        labels, positions = _landmarks_m(bids_dir / name)
+        aligned_labels, aligned = _landmarks_m(tmp_path / "out" / "aligned" / name)
+        assert aligned_labels == labels == _LANDMARKS
+        np.testing.assert_allclose(aligned, positions, atol=1e-9)
 
 
 # ---- the group copy ----

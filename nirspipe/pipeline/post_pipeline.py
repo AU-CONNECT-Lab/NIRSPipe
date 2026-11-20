@@ -41,6 +41,7 @@ from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
     nirs_required_fields, require_nirs_fields, split_sources,
 )
+from nirspipe.io.optode_space import copy_landmarks, copy_placement
 from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.utils.spans import excluded_spans
 
@@ -649,7 +650,6 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
     ``--min-time`` is left out, and fewer than two runs left join nothing. Returns the joined
     file, or None.
     """
-    from nirspipe.io.optode_space import copy_placement
     from nirspipe.pipeline.combine_runs import join_roi_signals, join_runs
 
     stage = final_stage(config, mode)
@@ -1111,6 +1111,8 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     _warn_if_replacing_another_analysis(out_path, parameters, config.subject)
     write_snirf(haemo, out_path)
     sources = rec.sources_of(haemo)
+    if sources:
+        copy_landmarks(sources[0], out_path)
     linked, external = split_sources(inputs, out_path)
     write_sidecar_json(out_path, {
         **({"Description": description} if description else {}),
