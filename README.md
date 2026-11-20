@@ -19,7 +19,7 @@ Outputs follow the [BIDS Derivatives](https://bids-specification.readthedocs.io/
 
 ## Installation
 
-Python 3.10 or later. Every dependency is resolved by the install:
+Python 3.11 or later. Every dependency is resolved by the install:
 
 ```bash
 git clone https://github.com/AU-CONNECT-Lab/NIRSPipe.git

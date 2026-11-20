@@ -231,7 +231,7 @@ def nearest_cortex_regions(space: str, points_mm: np.ndarray) -> dict[str, list]
 def reference_points(space: str) -> dict[str, np.ndarray]:
     """10-10 (fsaverage: 10-5) positions and the three fiducials on the template, in mm, by lower-case label."""
     if space == FSAVERAGE:
-        montage = mne.channels.make_standard_montage("standard_1005")
+        montage = mne.channels.make_standard_montage("colin27_1005")
         # the montage sits in its own frame, so its native->head step comes before fsaverage's
         trans = head_to_mri(space) @ mne.channels.compute_native_head_t(montage)["trans"]
         pos = montage.get_positions()
@@ -239,7 +239,7 @@ def reference_points(space: str) -> dict[str, np.ndarray]:
                   **{k: pos[k] for k in ("nasion", "lpa", "rpa")}}
         return {k: mne.transforms.apply_trans(trans, v) * 1000 for k, v in points.items()}
     # the 10-5 table names its in-between points by their two neighbours (af3_f1), which
-    # standard_1005 does not, so only the 10-10 names are shared
+    # colin27_1005 does not, so only the 10-10 names are shared
     table = pd.read_csv(template_dir(space) / "montages" / "10-5_electrodes.tsv", sep="\t")
     points = {str(n).lower(): np.array([x, y, z], float)
               for n, x, y, z in table[["name", "x", "y", "z"]].itertuples(index=False)}

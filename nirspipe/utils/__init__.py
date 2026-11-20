@@ -1,6 +1,7 @@
 """Shared utilities."""
 
 import re
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -162,9 +163,5 @@ def roi_overlaps(roi_map: "dict[str, list[str]]") -> "dict[str, list[str]]":
 
 
 def load_toml(path: Path) -> dict[str, Any]:
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib  # type: ignore[no-redef]
     with open(path, "rb") as fh:
         return tomllib.load(fh)

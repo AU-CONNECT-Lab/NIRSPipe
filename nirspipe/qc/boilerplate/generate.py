@@ -4,6 +4,7 @@ import importlib.metadata
 import re
 import unicodedata
 import sys
+import tomllib
 from importlib.resources import files
 from typing import Any
 
@@ -95,10 +96,6 @@ def _fmt_citations(keys: list[str], refs: dict, fmt: str) -> str:
 # ---- Resource loading ----
 
 def _load_steps() -> dict:
-    try:
-        import tomllib
-    except ImportError:
-        import tomli as tomllib  # type: ignore[no-redef]
     data = files("nirspipe.qc.boilerplate").joinpath("steps.toml").read_bytes()
     return tomllib.loads(data.decode())
 

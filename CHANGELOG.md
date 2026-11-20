@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **Breaking**: Python 3.11 and MNE 1.13 or later are required, and the 10-05 positions come from `colin27_1005`, since MNE 1.14 removes `standard_1005`
 - **Breaking**: GVTD leaves rejected channels out in every record section and figure, as `--gvtd-censor` does, and an older quality record is refused
 - `nirspipe-hyper` names each typed flag the run does not read, such as `--seed` with nothing drawn, in a warning and on the dyad page
 - A report's DPF line says whether an age-based factor's age came from `--population` or from the participant

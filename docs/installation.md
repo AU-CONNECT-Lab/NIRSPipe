@@ -4,7 +4,7 @@ title: Installation
 
 # Installation
 
-NIRSPipe needs Python 3.10 or later and is installed from source:
+NIRSPipe needs Python 3.11 or later and is installed from source:
 
 ```bash
 git clone https://github.com/AU-CONNECT-Lab/NIRSPipe.git
@@ -38,7 +38,7 @@ pip install -e ".[gpu]"
 
 | Package | Version | Role |
 |---------|---------|------|
-| `mne` | ≥ 1.6 | fNIRS signal processing |
+| `mne` | ≥ 1.13 | fNIRS signal processing |
 | `mne-nirs` | ≥ 0.7 | fNIRS preprocessing, GLM |
 | `mne-bids` | ≥ 0.14 | BIDS read and write |
 | `pybids` | ≥ 0.16 | BIDS dataset querying |
@@ -59,7 +59,6 @@ pip install -e ".[gpu]"
 | `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
 | `pycwt` | ≥ 0.4.0b0 | Wavelet transform coherence for hyperscanning |
 | `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
-| `tomli` | ≥ 2.0 | TOML reader (Python < 3.11 only) |
 | `flask` | ≥ 3.0 | GUI (`nirspipe-gui`) and rating viewers (`nirspipe-rate`) |
 
 `tables` (PyTables) is not among them. The package writes no HDF5 file of its own beyond SNIRF; install it yourself to call `save()` on a GLM object the Python API returned.

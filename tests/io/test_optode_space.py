@@ -81,7 +81,7 @@ def _plant(path, frame: np.ndarray, landmarks: "list[str] | None" = None,
                 del probe[key]
         if landmarks:
             shift = landmark_shift_mm or {}
-            # Nz is the file's spelling of the nasion, which standard_1005 lists as a fiducial
+            # Nz is the file's spelling of the nasion, which colin27_1005 lists as a fiducial
             pos = np.array([mne.transforms.apply_trans(
                 frame, (ref["nasion" if k == "Nz" else k.lower()] + shift.get(k, 0.0)) / 1000)
                 for k in landmarks])

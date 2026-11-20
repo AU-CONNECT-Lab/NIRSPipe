@@ -36,7 +36,7 @@ logger = get_logger("io.optode_space")
 SCALP_FIT_MAX_MM = 5.0
 _MIN_LANDMARKS = 3
 _UNIT_TO_M = {"m": 1.0, "cm": 1e-2, "mm": 1e-3}
-# spellings of the three fiducials that standard_1005 does not use itself
+# spellings of the three fiducials that colin27_1005 does not use itself
 _LANDMARK_ALIASES = {"nz": "nasion", "nas": "nasion", "al": "lpa", "ar": "rpa"}
 # a probe landmark this far from the same label in _coordsystem.json means the files disagree
 LANDMARK_AGREE_MM = 5.0
