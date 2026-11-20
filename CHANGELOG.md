@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - A condition's share of time above the GVTD threshold, spiking or corrected reads 0 when the run had none, where it was left empty
 - Every derivative and aligned SNIRF carries its source's landmarks and labels, which MNE dropped, and MNE 1.13 wrote a million times too large
 - The quality record's post-regression HbO-HbR correlation, gcor and CNR leave out short channels the regressor emptied, whose float-noise residual was measured, alone and within all channels
+- The report's HbO-HbR panel leaves those short channels blank after regression, where it drew their noise
 
 ## [0.84.0] - 2026-11-13
 

@@ -1,12 +1,13 @@
 """The HbO-HbR panel refits to its frame, and the report lets that frame follow it.
 
 The scripts run in a browser, so these pin the three things that broke when the window was
-narrowed rather than the behaviour itself.
+narrowed rather than the behaviour itself. One case pins what the after stage leaves blank.
 """
 
 import re
 
 import mne
+import numpy as np
 
 from nirspipe.qc.common.figure_io import _RESIZE_JS
 from nirspipe.qc.common.report_shell import TEMPLATE_DIR
@@ -36,6 +37,27 @@ def test_the_width_pin_a_height_relayout_sets_is_dropped():
     script = fit_js(hbo_hbr_correlation_figure(haemo, raw_after=haemo.copy()))
     assert "delete gd.layout.width" in script
     assert "gd.style.height=h+'px'" in script
+
+
+def test_a_channel_only_the_after_stage_marks_bad_is_blank_there():
+    # errts marks the short channels its regressor emptied; their residual is float noise
+    haemo = _haemo()
+    after = haemo.copy()
+    after.info["bads"] = ["S5_D5 hbo", "S5_D5 hbr"]
+    fig = hbo_hbr_correlation_figure(haemo, raw_after=after)
+    before_heat, after_heat = (t for t in fig.data if t.type == "heatmap")
+    rows = [i for i, name in enumerate(after_heat.y) if name.startswith("S5_D5")]
+    z_after, z_before = (np.asarray(t.z, dtype=float) for t in (after_heat, before_heat))
+    assert np.isnan(z_after[rows]).all() and np.isnan(z_after[:, rows]).all()
+    assert np.isfinite(z_before[rows]).any()
+    assert np.isfinite(np.delete(np.delete(z_after, rows, 0), rows, 1)).any()
+
+    def r_of(name):
+        trace = next(t for t in fig.data if t.name == name)
+        return dict(zip(trace.customdata, np.asarray(trace.y, dtype=float)))
+    before, after_r = r_of("before denoising"), r_of("after denoising")
+    assert np.isfinite(before["S5_D5"]) and np.isnan(after_r["S5_D5"])
+    assert np.isfinite(after_r["S1_D1"])
 
 
 def test_the_height_report_watches_the_plot_divs_not_the_body():

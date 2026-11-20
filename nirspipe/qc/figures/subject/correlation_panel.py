@@ -122,6 +122,16 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
     return corr, pair_r
 
 
+def _blank(corr: np.ndarray, pair_r: dict, order: "list[str]", names: "set[str]") -> None:
+    """NaN, in place, for the channels ``names`` in one stage's matrix and their pairs' r."""
+    rows = [i for i, n in enumerate(order) if n in names]
+    corr[rows, :] = np.nan
+    corr[:, rows] = np.nan
+    for name in names:
+        if pair_of(name) in pair_r:
+            pair_r[pair_of(name)] = np.nan
+
+
 def _add_heatmap(fig, corr, order, col, show_scale, heat_px):
     # float32 halves the serialised payload and still resolves r to ~1e-7, far below what
     # the colour scale or the hover readout distinguishes
@@ -249,7 +259,7 @@ def hbo_hbr_correlation_figure(
     in the raw viewer, where it is motion correction.
 
     ``bad_pairs`` are ranked in a group of their own after the kept ones; None reads them off
-    ``raw_haemo``'s marks.
+    ``raw_haemo``'s marks. A channel only ``raw_after`` marks bad is blank in the after stage.
     """
     groups = _pair_group(raw_haemo, sep_bands)
     if bad_pairs is None:
@@ -263,6 +273,9 @@ def hbo_hbr_correlation_figure(
         return None
     corr_a, r_a = (_stage(raw_after, order) if raw_after is not None else (None, None))
     two_stage = corr_a is not None
+    if two_stage:
+        # errts marks the short channels its regressor emptied, which have no residual to show
+        _blank(corr_a, r_a, order, set(raw_after.info["bads"]) - set(raw_haemo.info["bads"]))
 
     before_label, after_label = stage_labels or (
         _BEFORE_LABEL, _AFTER_LABEL_GLM if task_modelled else _AFTER_LABEL)

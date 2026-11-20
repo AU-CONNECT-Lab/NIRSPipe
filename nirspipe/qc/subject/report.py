@@ -1550,10 +1550,10 @@ def _load_stage_raw(
     if out_dir is None or sqm_label is None:
         return None
     with _guard(f"Reading desc-{desc}", errors, subject):
-        from nirspipe.io.snirf import read_snirf
-        from nirspipe.qc.subject.sqm_record import scan_runs
+        from nirspipe.qc.subject.sqm_record import read_measured_stage, scan_runs
         path = (scan_runs(out_dir).get(sqm_label) or {}).get(desc)
-        return None if path is None else read_snirf(path)
+        # read as the record reads it, so a figure blanks what the record leaves out
+        return None if path is None else read_measured_stage(path)
     return None
 
 
