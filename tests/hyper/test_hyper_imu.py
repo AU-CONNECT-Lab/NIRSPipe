@@ -164,3 +164,17 @@ def test_a_jolt_at_one_moment_lands_at_one_shared_time_for_both():
     step = 1.0 / raws["sub-01"].info["sfreq"]
     for sid, y in motion["imu"]["gyro"]["members"]:
         assert motion["t"][np.argmax(y)] == pytest.approx(expected, abs=step), sid
+
+
+def test_a_sample_an_ulp_before_the_shared_start_is_kept(members):
+    """A sample on the aligned start, read an ulp early, is the first shared sample."""
+    raws, aligned = members
+    imu = {}
+    for sid, shift in SHIFTS.items():
+        t = np.arange(0.0, 120.0, 0.5)
+        t[t == shift] = np.nextafter(shift, -np.inf)
+        imu[sid] = {"gyro": ImuTrace(t, np.where(np.isclose(t, shift), 7.0, 1.0), "°/s")}
+    out = align_imu_like(imu, raws, aligned)
+    for sid in SHIFTS:
+        t, y, _ = out[sid]["gyro"]
+        assert y[0] == 7.0 and abs(t[0]) < 1e-9

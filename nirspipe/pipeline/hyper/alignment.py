@@ -17,7 +17,7 @@ from nirspipe.exceptions import AlignmentError
 from nirspipe.io.auxiliary import ImuTrace
 from nirspipe.io.optode_space import copy_source_fields
 from nirspipe.io.snirf import write_snirf
-from nirspipe.utils import is_marker, zscore_rows
+from nirspipe.utils import TIME_TOL_S, is_marker, zscore_rows
 from nirspipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
 from nirspipe.utils.lineage import lineage_of
 from nirspipe.utils.lineage import path_from
@@ -351,7 +351,7 @@ def align_imu_like(
         out[sid] = {}
         for sensor, trace in traces.items():
             t_shared = np.asarray(trace.t, dtype=float) - shift
-            keep = (t_shared >= 0.0) & (t_shared <= end)
+            keep = (t_shared >= -TIME_TOL_S) & (t_shared <= end + TIME_TOL_S)
             out[sid][sensor] = ImuTrace(t_shared[keep], np.asarray(trace.y)[keep], trace.unit)
     return out
 

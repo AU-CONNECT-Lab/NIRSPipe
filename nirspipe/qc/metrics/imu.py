@@ -15,6 +15,7 @@ from scipy.stats import spearmanr
 from nirspipe.qc.metrics._helpers import _safe_metrics, as_optical_density
 from nirspipe.qc.metrics.gvtd import (GVTD_MOTION_BAND, gvtd_channel_picks, gvtd_kept,
                                        gvtd_timetrace, window_grid)
+from nirspipe.utils import TIME_TOL_S
 
 # record name of each magnitude -> its key in `imu_traces`
 IMU_QUANTITIES = {"gyro_speed": "gyro", "accel_jerk": "accel"}
@@ -50,7 +51,7 @@ def imu_scalars(imu: dict, t0: float, t1: float) -> dict[str, float]:
         if sensor not in imu:
             continue
         t, y = _finite(imu[sensor])
-        y = y[(t >= t0) & (t <= t1)]
+        y = y[(t >= t0 - TIME_TOL_S) & (t <= t1 + TIME_TOL_S)]
         if not y.size:
             continue
         out[f"{name}_mean"] = float(y.mean())
@@ -77,8 +78,9 @@ def imu_windowed(imu: dict, times: np.ndarray, sfreq: float,
         if sensor not in imu or not len(starts):
             continue
         t, y = _finite(imu[sensor])
-        lo = np.searchsorted(t, times[starts])
-        hi = np.searchsorted(t, times[ends])
+        # a sample on an edge, read an ulp either side of it, opens the window it starts
+        lo = np.searchsorted(t, times[starts] - TIME_TOL_S)
+        hi = np.searchsorted(t, times[ends] - TIME_TOL_S)
         out[f"{name}_per_window"] = [float(y[a:b].mean()) if b > a else np.nan
                                      for a, b in zip(lo, hi)]
         out[f"{name}_p95_per_window"] = [float(np.percentile(y[a:b], 95)) if b > a else np.nan
@@ -95,8 +97,8 @@ def _window_mean(t_src: np.ndarray, y: np.ndarray, t_dst: np.ndarray,
         t_src [0, 1, 2, 3], y [0, 2, 4, 6], t_dst [1.5], half 1.0  ->  [3.0]
     """
     csum = np.concatenate(([0.0], np.cumsum(y)))
-    i0 = np.searchsorted(t_src, t_dst - half)
-    i1 = np.searchsorted(t_src, t_dst + half, side="right")
+    i0 = np.searchsorted(t_src, t_dst - half - TIME_TOL_S)
+    i1 = np.searchsorted(t_src, t_dst + half + TIME_TOL_S, side="right")
     n = i1 - i0
     return np.where(n > 0, (csum[i1] - csum[i0]) / np.maximum(n, 1), np.nan)
 

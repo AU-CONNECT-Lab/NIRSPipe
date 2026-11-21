@@ -100,3 +100,36 @@ def test_a_window_the_sensor_missed_is_nan_not_dropped():
     means = np.asarray(series["gyro_speed_per_window"])
     assert len(means) == len(window_grid(len(raw.times), raw.info["sfreq"], 10.0)[1])
     assert np.all(means[:4] == 1.0) and np.all(np.isnan(means[6:]))
+
+
+def _ulp_off(t, every_other=True):
+    """Each sample read an ulp below or above itself, as a text parser can."""
+    t = np.asarray(t, dtype=float).copy()
+    t[0::2] = np.nextafter(t[0::2], -np.inf)
+    if every_other:
+        t[1::2] = np.nextafter(t[1::2], np.inf)
+    return t
+
+
+def test_a_sample_read_an_ulp_off_an_edge_stays_in_the_window_it_starts():
+    """IMU on the optical clock: a sample on a window edge read an ulp low or high belongs
+    to the window it starts, as it does read exactly."""
+    times = np.arange(400) / 10.0
+    y = np.arange(400, dtype=float)
+    exact = imu_windowed(_gyro(times, y), times, 10.0, 1.0)
+    for every_other in (False, True):
+        off = imu_windowed(_gyro(_ulp_off(times, every_other), y), times, 10.0, 1.0)
+        assert off == exact
+
+
+def test_a_stretch_keeps_the_samples_an_ulp_outside_its_edges():
+    t = np.arange(10.0)
+    t[2], t[5] = np.nextafter(2.0, -np.inf), np.nextafter(5.0, np.inf)
+    y = np.array([0.0, 0.0, 20.0, 1.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0])
+    assert imu_scalars(_gyro(t, y), 2.0, 5.0)["gyro_speed_mean"] == 6.0
+
+
+def test_the_window_mean_keeps_the_samples_an_ulp_outside_its_reach():
+    t = np.array([np.nextafter(0.5, -np.inf), 1.0, 2.0, np.nextafter(2.5, np.inf)])
+    out = _window_mean(t, np.array([1.0, 2.0, 3.0, 10.0]), np.array([1.5]), 1.0)
+    assert out[0] == 4.0
