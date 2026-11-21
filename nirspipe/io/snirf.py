@@ -174,6 +174,7 @@ def read_raw_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     mne starts the data at 0 but keeps the stims on the file's clock, in its unit, and drops
     those that then fall past the end. Its rate estimate is also freed of float noise, so a
     recording and the stages written from it read at the same rate (see :func:`clean_rate`).
+    An event the file lists twice is kept once.
     """
     import h5py
 
@@ -184,12 +185,30 @@ def read_raw_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     if rate is not None:
         kwargs.setdefault("sfreq", rate)
     raw = mne.io.read_raw_snirf(str(path), **kwargs)
-    if stims is None:
-        return raw
-    raw.set_annotations(stims, emit_warning=False)
-    if t0:
-        logger.warning("%s: the file's clock starts at %g s, so its events were moved back by "
-                       "as much to sit on the data, which starts at 0", Path(path).name, t0)
+    if stims is not None:
+        raw.set_annotations(stims, emit_warning=False)
+        if t0:
+            logger.warning("%s: the file's clock starts at %g s, so its events were moved back "
+                           "by as much to sit on the data, which starts at 0", Path(path).name, t0)
+    return _drop_repeated_events(raw, Path(path).name)
+
+
+def _drop_repeated_events(raw: mne.io.Raw, name: str) -> mne.io.Raw:
+    """Keep one of each event the file lists more than once, with the same onset, duration and name.
+
+    ``stim01 FingerTapping`` and ``stim1 FingerTapping`` holding the same 12 rows -> 12 events, not 24
+    """
+    a = raw.annotations
+    seen: set = set()
+    repeated = []
+    for i, row in enumerate(zip(a.onset.tolist(), a.duration.tolist(), a.description.tolist())):
+        if row in seen:
+            repeated.append(i)
+        seen.add(row)
+    if repeated:
+        logger.warning("%s: %d event(s) listed twice with the same onset, duration and name "
+                       "(a stim group stored twice); each is kept once", name, len(repeated))
+        raw.annotations.delete(repeated)
     return raw
 
 

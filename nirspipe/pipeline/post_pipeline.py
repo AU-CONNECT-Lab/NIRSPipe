@@ -41,7 +41,7 @@ from nirspipe.io.derivatives import (
     read_json, write_sidecar_json, write_step_sidecar, build_output_path, carry_entities, data_state,
     nirs_required_fields, require_nirs_fields, split_sources,
 )
-from nirspipe.io.optode_space import copy_landmarks, copy_placement
+from nirspipe.io.optode_space import copy_placement, copy_source_fields
 from nirspipe.io.snirf import read_snirf, write_snirf
 from nirspipe.utils.spans import excluded_spans
 
@@ -1112,7 +1112,7 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
     write_snirf(haemo, out_path)
     sources = rec.sources_of(haemo)
     if sources:
-        copy_landmarks(sources[0], out_path)
+        copy_source_fields(sources[0], out_path)
     linked, external = split_sources(inputs, out_path)
     write_sidecar_json(out_path, {
         **({"Description": description} if description else {}),

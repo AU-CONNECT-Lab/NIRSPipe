@@ -26,7 +26,7 @@ from nirspipe.io.auxiliary import aux_table_path, write_aux_table
 from nirspipe.io.derivatives import (build_output_path, carry_entities, data_state,
                                      nirs_required_fields, write_sidecar_json)
 from nirspipe.io.head_template import FSAVERAGE, space_of
-from nirspipe.io.optode_space import (Placement, copy_landmarks, hold_placement, place_optodes,
+from nirspipe.io.optode_space import (Placement, copy_source_fields, hold_placement, place_optodes,
                                       write_channel_coords)
 from nirspipe.io.snirf import write_snirf
 from nirspipe.pipeline.dpf import as_ppf, dpf_from_age, resolve_dpf, wavelengths
@@ -420,7 +420,7 @@ def run_prep(
         write_snirf(raw_step, path)
         sources = rec.sources_of(raw_step)
         if sources:
-            copy_landmarks(sources[0], path)
+            copy_source_fields(sources[0], path)
         bads = list(raw_step.ch_names) if every_rejected else list(raw_step.info["bads"])
         write_sidecar_json(path, {
             **nirs_required_fields(raw_step, source_metadata or {}),

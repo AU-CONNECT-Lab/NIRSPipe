@@ -15,7 +15,7 @@ import numpy as np
 
 from nirspipe.exceptions import AlignmentError
 from nirspipe.io.auxiliary import ImuTrace
-from nirspipe.io.optode_space import copy_landmarks
+from nirspipe.io.optode_space import copy_source_fields
 from nirspipe.io.snirf import write_snirf
 from nirspipe.utils import is_marker, zscore_rows
 from nirspipe.utils.snirf_prep import annotations_to_df, bids_stem, copy_sidecars
@@ -134,7 +134,7 @@ def write_aligned_member(raw_aligned: mne.io.Raw, snirf_path, out_dir, group_id:
     out_snirf = out_dir / f"{stem}_nirs.snirf"
     write_snirf(raw_aligned, out_snirf)
     # this tree is read as an input next, and placed by these landmarks
-    copy_landmarks(snirf_path, out_snirf)
+    copy_source_fields(snirf_path, out_snirf)
     write_tsv(annotations_to_df(raw_aligned), out_dir / f"{stem}_events.tsv")
 
     lin = lineage_of(raw_aligned)

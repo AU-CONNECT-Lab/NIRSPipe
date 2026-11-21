@@ -157,32 +157,76 @@ def _disagreement(probe: dict[str, np.ndarray], sidecar: dict[str, np.ndarray]) 
                default=0.0)
 
 
-def copy_landmarks(source_path, dest_path) -> None:
-    """Give a SNIRF rewritten through MNE its source's probe landmarks, labels and all.
+def copy_source_fields(source_path, dest_path) -> None:
+    """Give a SNIRF rewritten through MNE the fields of its source that MNE drops or rewrites.
 
     ``source landmarkLabels [Nz, Cz, F3]`` in mm -> the same three in ``dest``, in its own unit
+    ``source sourceLabels [F7, F5]``                -> ``dest sourceLabels [F7, F5]``, not S1, S2
+    ``source MeasurementTime 14:19:51+01``          -> the same string, not 00:00:00Z
 
     MNE keeps a landmark's position but not its name (anything but the three fiducials reads
     back as EEG001, EEG002, ...), MNE 1.13 reads one in mm a million times too large, and
     mne-nirs writes template fiducials where the source had none, so a cropped or re-marked
     recording would otherwise be placed by landmarks it never had. A source without landmarks
     leaves the copy without any.
+
+    mne-nirs also names every optode S1, D1, ..., and MNE sets a date it cannot parse to
+    2000-01-01 and drops the text tags it does not know. Those come back verbatim. The units,
+    the subject id and the per-sample device arrays stay as written.
     """
     with h5py.File(source_path, "r") as src, h5py.File(dest_path, "r+") as dest:
-        ratio = (_UNIT_TO_M[_text(src["nirs/metaDataTags/LengthUnit"][()]).strip()]
-                 / _UNIT_TO_M[_text(dest["nirs/metaDataTags/LengthUnit"][()]).strip()])
-        source, target = src["nirs/probe"], dest["nirs/probe"]
-        for key in ("landmarkPos3D", "landmarkPos2D", "landmarkLabels"):
-            if key in target:
-                del target[key]
-            if key not in source:
-                continue
-            value = source[key][()]
-            if key.startswith("landmarkPos"):
-                value = np.asarray(value, float).copy()
-                # the last column of a landmark position is its index, not a coordinate
-                value[:, :int(key[-2])] *= ratio
-            target.create_dataset(key, data=value)
+        _copy_landmarks(src, dest)
+        _copy_optode_labels(src["nirs/probe"], dest["nirs/probe"])
+        _copy_text_tags(src["nirs/metaDataTags"], dest["nirs/metaDataTags"])
+
+
+def _copy_landmarks(src, dest) -> None:
+    ratio = (_UNIT_TO_M[_text(src["nirs/metaDataTags/LengthUnit"][()]).strip()]
+             / _UNIT_TO_M[_text(dest["nirs/metaDataTags/LengthUnit"][()]).strip()])
+    source, target = src["nirs/probe"], dest["nirs/probe"]
+    for key in ("landmarkPos3D", "landmarkPos2D", "landmarkLabels"):
+        if key in target:
+            del target[key]
+        if key not in source:
+            continue
+        value = source[key][()]
+        if key.startswith("landmarkPos"):
+            value = np.asarray(value, float).copy()
+            # the last column of a landmark position is its index, not a coordinate
+            value[:, :int(key[-2])] *= ratio
+        target.create_dataset(key, data=value)
+
+
+def _copy_optode_labels(source, target) -> None:
+    """The source's label of each optode number, onto the copy's rows, which are numbered as the source's."""
+    for kind in ("source", "detector"):
+        key, rows = f"{kind}Labels", f"{kind}Pos3D"
+        if key not in source or rows not in target:
+            continue
+        labels = source[key][()]
+        n = len(target[rows])
+        if len(labels) < n:
+            continue
+        if key in target:
+            del target[key]
+        target.create_dataset(key, data=labels[:n])
+
+
+# written from the Raw, so the source's value would contradict the data beside it
+_WRITTEN_TAGS = {"LengthUnit", "TimeUnit", "FrequencyUnit", "SubjectID"}
+_DATE_TAGS = ("MeasurementDate", "MeasurementTime")
+
+
+def _copy_text_tags(source, target) -> None:
+    for key in source:
+        if key in _WRITTEN_TAGS or (key in target and key not in _DATE_TAGS):
+            continue
+        value = source[key][()]
+        if np.asarray(value).dtype.kind not in "SOU" or np.size(value) != 1:
+            continue
+        if key in target:
+            del target[key]
+        target.create_dataset(key, data=value)
 
 
 def _similarity(src: np.ndarray, dst: np.ndarray) -> np.ndarray:
@@ -466,8 +510,8 @@ def _from_frame(info) -> Placement:
 def placement_of(raw: mne.io.Raw) -> Placement:
     """The placement of a Raw's optodes: held on it, recorded for its run, or read off its file.
 
-    A derivative's own landmarks are the ones mne-nirs wrote, not the recording's, so a
-    derivative always takes the record prep left beside it. A raw file read here is placed
+    A derivative takes the record prep left beside it, placed from the recording itself, so
+    it is never placed a second time from its own copy. A raw file read here is placed
     on fsaverage; a run on another template holds its placement on the Raw.
     """
     held = (raw.info.get("temp") or {}).get(_HELD_KEY)
