@@ -274,7 +274,7 @@ def hbo_hbr_correlation_figure(
     corr_a, r_a = (_stage(raw_after, order) if raw_after is not None else (None, None))
     two_stage = corr_a is not None
     if two_stage:
-        # errts marks the short channels its regressor emptied, which have no residual to show
+        # errts reads the short channels its regressor emptied as bad, with no residual to show
         _blank(corr_a, r_a, order, set(raw_after.info["bads"]) - set(raw_haemo.info["bads"]))
 
     before_label, after_label = stage_labels or (

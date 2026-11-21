@@ -1,11 +1,15 @@
 """Every SNIRF the package writes keeps its source's probe and metadata fields, but for the few it must rewrite."""
+import json
+
 import h5py
 import mne
 import numpy as np
 import pandas as pd
+import pytest
 
+from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import write_dataset_description
-from nirspipe.io.snirf import read_raw_snirf
+from nirspipe.io.snirf import read_raw_snirf, read_snirf
 from nirspipe.pipeline.edit_markers import apply_markers_from_df
 from nirspipe.pipeline.post_pipeline import PostConfig, run_post
 from nirspipe.pipeline.prep_pipeline import PrepConfig, run_prep
@@ -108,3 +112,17 @@ def test_an_event_listed_twice_is_read_once(tmp_path):
     doubled = mne.io.read_raw_snirf(str(source), verbose="error").annotations
     assert len(read_raw_snirf(source).annotations) == len(doubled) // 2
 
+
+def test_a_residual_names_the_short_channels_its_regressor_emptied_and_reads_them_bad(tmp_path):
+    source = _source(tmp_path)
+    errts = next(p for p in _written(tmp_path, source) if "desc-errts_" in p.name)
+    sidecar = json.loads(errts.with_suffix(".json").read_text())
+    # one short pair survives screening, so under mean each chromophore's regressor is that channel
+    assert sidecar["emptied_channels"] == ["S5_D5 hbo", "S5_D5 hbr"]
+    assert not {"S5_D5 hbo", "S5_D5 hbr"} & set(sidecar["bad_channels"])
+    assert {"S5_D5 hbo", "S5_D5 hbr"} <= set(read_snirf(errts).info["bads"])
+
+    del sidecar["emptied_channels"]
+    errts.with_suffix(".json").write_text(json.dumps(sidecar))
+    with pytest.raises(StageError, match="emptied_channels"):
+        read_snirf(errts)

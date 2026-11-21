@@ -64,6 +64,7 @@ from nirspipe.pipeline.motion import overmarked
 from nirspipe.qc.metrics.aggregate import in_analysis_band
 from nirspipe.io.naming import parse_path, report_name
 from nirspipe.io.optode_space import placement_of, recorded_regions
+from nirspipe.io.snirf import read_snirf
 from nirspipe.io.tables import read_table
 import matplotlib
 matplotlib.use("Agg")
@@ -1550,10 +1551,9 @@ def _load_stage_raw(
     if out_dir is None or sqm_label is None:
         return None
     with _guard(f"Reading desc-{desc}", errors, subject):
-        from nirspipe.qc.subject.sqm_record import read_measured_stage, scan_runs
+        from nirspipe.qc.subject.sqm_record import scan_runs
         path = (scan_runs(out_dir).get(sqm_label) or {}).get(desc)
-        # read as the record reads it, so a figure blanks what the record leaves out
-        return None if path is None else read_measured_stage(path)
+        return None if path is None else read_snirf(path)
     return None
 
 

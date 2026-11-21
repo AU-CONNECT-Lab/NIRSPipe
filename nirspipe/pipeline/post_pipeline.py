@@ -42,7 +42,7 @@ from nirspipe.io.derivatives import (
     nirs_required_fields, require_nirs_fields, split_sources,
 )
 from nirspipe.io.optode_space import copy_placement, copy_source_fields
-from nirspipe.io.snirf import read_snirf, write_snirf
+from nirspipe.io.snirf import RESIDUAL_STAGES, read_snirf, write_snirf
 from nirspipe.utils.spans import excluded_spans
 
 logger = get_logger("post.pipeline")
@@ -507,7 +507,7 @@ def run_post(
             p_correction=config.p_correction,
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
-                          inputs=glm_inputs(config.events_path, aux_path))
+                          inputs=glm_inputs(config.events_path, aux_path), emptied=_emptied(raw_resid, config))
         # on the series the model was fitted to, over the trial window the report's epoch figures use
         write_block_average(result, nirs_dir, rec.path_of(result), epoch_tmin, epoch_tmax,
                             epoch_chunk_duration, events=design_events,
@@ -535,7 +535,7 @@ def run_post(
             **confound_kwargs,
         )
         _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
-                          inputs=glm_inputs(None, aux_path))
+                          inputs=glm_inputs(None, aux_path), emptied=_emptied(raw_resid, config))
 
         # ALFF/fALFF need a broadband residual: fALFF's denominator spans the full spectrum,
         # so its input must not be low-passed. Re-run the same confound regression on the
@@ -578,7 +578,8 @@ def run_post(
                          "filter_method": None, "filter_order": None})
                 _write_step_snirf(raw_resid_bb, config, output_dir, desc="errtsbroad",
                                   rec=rec, source_entities=source_entities, known_spans=known_spans,
-                                  inputs=glm_inputs(None, aux_path))
+                                  inputs=glm_inputs(None, aux_path),
+                                  emptied=_emptied(raw_resid_bb, config))
 
         alff_df, fc, fc_roi, fc_seed = _write_rest_derivatives(
             raw_resid, raw_resid_bb, config, output_dir, rec, source_entities=source_entities,
@@ -601,7 +602,7 @@ def run_post(
                 **_confound_kwargs(config, aux_kwargs),
             )
             _write_step_snirf(raw_resid, config, output_dir, desc="errts", rec=rec, source_entities=source_entities, known_spans=known_spans,
-                              inputs=glm_inputs(None, aux_path))
+                              inputs=glm_inputs(None, aux_path), emptied=_emptied(raw_resid, config))
 
         # No ALFF, for glm's reason: the source is bandpassed and fALFF's denominator spans
         # the full spectrum, so the number would be ~1 by construction.
@@ -615,7 +616,8 @@ def run_post(
     if config.export_mean_filled:
         # the residual FC reads: the regression's, or the last stage when none ran
         _write_mean_filled(raw_resid if raw_resid is not None else result, config, output_dir,
-                           rec, source_entities, known_spans)
+                           rec, source_entities, known_spans,
+                           emptied=_emptied(raw_resid, config) if raw_resid is not None else None)
 
     # GCOR around the confound regression is not measured here. Both of its stages are
     # written to disk and the SQM record measures each one per channel set, so the report
@@ -678,10 +680,13 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
         logger.warning("sub-%s | --combine-runs: fewer than two runs of task %s to join",
                        config.subject, runs[0].get("task"))
         return None
-    # a short channel regressed out of itself has no residual left to correlate in that run
-    absent = [set(raw.info["bads"]) | set(sole_regressor_channels(
-        raw, config.short_channel, separation_bands(config))) for raw in raws]
+    # read_snirf marks a short channel regressed out of itself bad, so it joins from no run
+    # where that happened
+    absent = [set(raw.info["bads"]) for raw in raws]
     joined, onsets = join_runs(raws, absent)
+    emptied = [ch for ch in joined.ch_names
+               if all(ch in (read_json(p.with_suffix(".json")).get("emptied_channels") or ())
+                      for p in paths)]
     rec = Recorder()
     # the first run under a stage of its own, since the joined series takes that run's stage
     rec.register_input(paths[0], stamp(raws[0], stage="combine_input", step="load"))
@@ -697,7 +702,8 @@ def write_combined_runs(config: PostConfig, output_dir: Path, mode: Mode,
              for span in read_json(path.with_suffix(".json")).get("excluded_spans", [])]
     entities = {k: v for k, v in carry_entities(runs[0]).items() if k != "run"}
     written = _write_step_snirf(joined, config, output_dir, desc=stage, rec=rec,
-                                source_entities=entities, known_spans=known, inputs=paths[1:])
+                                source_entities=entities, known_spans=known, inputs=paths[1:],
+                                emptied=emptied if stage in RESIDUAL_STAGES else None)
     try:
         copy_placement(paths[0], written)
     except StageError as exc:
@@ -741,10 +747,11 @@ def mean_filled(raw: mne.io.Raw) -> mne.io.Raw:
 
 def _write_mean_filled(raw: mne.io.Raw, config: PostConfig, output_dir: Path, rec: Recorder,
                        source_entities: "dict[str, str] | None",
-                       known_spans: "list[dict] | None") -> Path:
+                       known_spans: "list[dict] | None", emptied: "list[str] | None" = None) -> Path:
     return _write_step_snirf(mean_filled(raw), config, output_dir, desc="meanfilled",
                              rec=rec, source_entities=source_entities,
-                             known_spans=known_spans, description=MEAN_FILLED_DESCRIPTION)
+                             known_spans=known_spans, description=MEAN_FILLED_DESCRIPTION,
+                             emptied=emptied)
 
 def _write_fc_derivatives(
     raw_resid: mne.io.Raw,
@@ -1077,7 +1084,11 @@ def _known_spans(source_path: Path | None) -> list[dict]:
 _RESTATED = ("l_freq", "h_freq", "sfreq")
 
 
-def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None, inputs: "list[Path]" = ()) -> Path:
+def _emptied(raw_resid: mne.io.Raw, config: PostConfig) -> list[str]:
+    return sole_regressor_channels(raw_resid, config.short_channel, separation_bands(config))
+
+
+def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, desc: str, rec: Recorder, source_entities: dict[str, str] | None = None, known_spans: list[dict] | None = None, description: str | None = None, inputs: "list[Path]" = (), emptied: "list[str] | None" = None) -> Path:
     entities = carry_entities(source_entities)
     entities["desc"] = desc
     lin = lineage_of(haemo)
@@ -1124,7 +1135,9 @@ def _write_step_snirf(haemo: mne.io.Raw, config: PostConfig, output_dir: Path, d
         "parameters": parameters,
         "data": data_state(haemo),
         # read back by read_snirf: SNIRF itself cannot carry the marks
-        "bad_channels": list(haemo.info["bads"]),
+        "bad_channels": [ch for ch in haemo.info["bads"] if ch not in (emptied or ())],
+        # the short channels the regressor spanned, whose residual is float noise
+        **({"emptied_channels": list(emptied)} if emptied is not None else {}),
         "excluded_spans": excluded_spans(haemo, known=known_spans or ()),
     })
     logger.info("sub-%s | %s snirf -> %s", config.subject, desc, out_path)

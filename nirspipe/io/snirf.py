@@ -10,6 +10,7 @@ from typing import Any
 import mne
 import numpy as np
 
+from nirspipe.exceptions import StageError
 from nirspipe.io.derivatives import entity_of, read_json
 from nirspipe.utils import mark_bads
 from nirspipe.utils.lineage import stamp
@@ -103,13 +104,23 @@ def _sidecar(path: Path) -> dict:
     return read_json(path.with_suffix(".json"))
 
 
-def _restore_bads(raw: mne.io.Raw, sidecar: dict) -> None:
+# the confound regression's residuals, whose sidecar names the short channels it emptied
+RESIDUAL_STAGES = ("errts", "errtsbroad")
+
+
+def _restore_bads(raw: mne.io.Raw, sidecar: dict, path: Path) -> None:
     """SNIRF has no bad-channel field, so the sidecar carries the marks across the disk.
 
     Each sidecar lists the bads of its own file, so the names always match that file's
-    channels; the filter only guards against a hand-edited sidecar.
+    channels; the filter only guards against a hand-edited sidecar. A short channel the
+    regressor spanned is marked too: its residual is float noise, not signal.
     """
-    bads = sidecar.get("bad_channels") or []
+    # a file with no sidecar has no marks to restore, as for any stage
+    if (sidecar and entity_of(path.name, "desc") in RESIDUAL_STAGES
+            and "emptied_channels" not in sidecar):
+        raise StageError(f"{path.name} records no emptied_channels; this derivative tree "
+                         f"predates it, rerun nirspipe")
+    bads = [*(sidecar.get("bad_channels") or []), *(sidecar.get("emptied_channels") or [])]
     if bads:
         mark_bads(raw, bads)
 
@@ -225,7 +236,7 @@ def read_snirf(path: Path | str, **kwargs: Any) -> mne.io.Raw:
     path = Path(path)
     raw = read_raw_snirf(path, **kwargs)
     sidecar = _sidecar(path)
-    _restore_bads(raw, sidecar)
+    _restore_bads(raw, sidecar, path)
     params = sidecar.get("parameters") or {}
     return stamp(raw, stage=entity_of(path, "desc") or "raw", step="load", path=path.as_posix(),
                  **{k: params[k] for k in _FILTER_KEYS + _DRIFT_KEYS
