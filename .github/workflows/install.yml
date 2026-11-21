@@ -1,6 +1,6 @@
 name: install
 
-# What a new user's pip resolves today: no constraints file, the newest releases, and an older pip
+# What a new user's pip resolves today (no constraints file, the newest releases, an older pip) and the declared floors
 on:
   push:
     branches: [main]
@@ -59,6 +59,41 @@ jobs:
           for cmd in $cmds; do
             "$cmd" --help > /dev/null || { echo "::error::$cmd --help failed"; exit 1; }
           done
+      - uses: actions/cache@v4
+        with:
+          path: ~/mne_data
+          key: mne-data-fsaverage-${{ runner.os }}-v1
+      - name: fsaverage, which optode placement reads
+        run: python -c "import mne; mne.datasets.fetch_fsaverage(verbose=True)"
+      - name: Fast tests on synthetic data
+        run: >-
+          python -m pytest -q
+          tests/io tests/test_import_layers.py tests/cli/test_cli.py
+          tests/cli/test_bids_app_contract.py tests/provenance/test_sqm_record.py
+
+  floors:
+    # every direct dependency at the oldest release pyproject.toml admits
+    name: ubuntu-latest py3.11 lowest declared versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Libraries VTK loads on a Linux machine without a desktop
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libxrender1
+      - name: Install at the declared floors
+        # the dev extra has no floors to test, so pytest comes at its newest
+        run: |
+          python -m pip install uv
+          uv pip install --system --resolution lowest-direct -e .
+          uv pip install --system pytest
+          python -m pip check
+          python -m pip list
       - uses: actions/cache@v4
         with:
           path: ~/mne_data

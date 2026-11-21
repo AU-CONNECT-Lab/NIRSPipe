@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - `nirspipe-hyper` names each typed flag the run does not read, such as `--seed` with nothing drawn, in a warning and on the dyad page
 - A report's DPF line says whether an age-based factor's age came from `--population` or from the participant
 - The cohort outlier score averages per quantity, so one quantity recorded at several stages counts once, and each outlier names a quantity once
+- Dependency floors raised to the oldest releases that work together: NumPy 2.1, pandas 2.2.2, nilearn 0.11, pybids 0.20, plotly 5.19, pyvista 0.44.2 and others
 
 ### Fixed
 - `pip install` failed on a fresh environment, since pycwt has only pre-releases on PyPI and the requirement did not admit them

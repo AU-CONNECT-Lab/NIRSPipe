@@ -41,24 +41,24 @@ pip install -e ".[gpu]"
 | `mne` | ≥ 1.13 | fNIRS signal processing |
 | `mne-nirs` | ≥ 0.7 | fNIRS preprocessing, GLM |
 | `mne-bids` | ≥ 0.14 | BIDS read and write |
-| `pybids` | ≥ 0.16 | BIDS dataset querying |
-| `nilearn` | ≥ 0.10 | GLM design matrix and fitting |
-| `statsmodels` | ≥ 0.14 | The robust refit of `--noise-model ar_irls`, and every `--p-correction` |
-| `nibabel` | ≥ 3.2 | Surface curvature for the brain renders |
-| `scipy` | ≥ 1.11 | Filters, spectra |
-| `numpy` | ≥ 1.24 | Numerics |
-| `pandas` | ≥ 2.0 | Table I/O |
-| `h5py` | ≥ 3.9 | SNIRF read and write |
-| `plotly` | ≥ 5.18 | Interactive QC figures |
-| `pyvista` | ≥ 0.43 | Off-screen 3D brain renders |
-| `matplotlib` | ≥ 3.8 | Static QC panels |
+| `pybids` | ≥ 0.20 | BIDS dataset querying |
+| `nilearn` | ≥ 0.11 | GLM design matrix and fitting |
+| `statsmodels` | ≥ 0.14.2 | The robust refit of `--noise-model ar_irls`, and every `--p-correction` |
+| `nibabel` | ≥ 5.2 | Surface curvature for the brain renders |
+| `scipy` | ≥ 1.14 | Filters, spectra |
+| `numpy` | ≥ 2.1 | Numerics |
+| `pandas` | ≥ 2.2.2 | Table I/O |
+| `h5py` | ≥ 3.11 | SNIRF read and write |
+| `plotly` | ≥ 5.19 | Interactive QC figures |
+| `pyvista` | ≥ 0.44.2 | Off-screen 3D brain renders |
+| `matplotlib` | ≥ 3.9 | Static QC panels |
 | `pillow` | ≥ 10.0 | Stitches the rendered brain views side by side |
 | `jinja2` | ≥ 3.1 | HTML report templates |
 | `joblib` | ≥ 1.3 | Parallel `--nprocs` dispatch |
 | `threadpoolctl` | ≥ 3.2 | Numeric threads per subject under `--nprocs` |
-| `PyWavelets` | ≥ 1.4 | Wavelet motion correction |
-| `pycwt` | ≥ 0.4.0b0 | Wavelet transform coherence for hyperscanning |
-| `bibtexparser` | ≥ 2.0.0b1 | Methods citations |
+| `PyWavelets` | ≥ 1.6 | Wavelet motion correction |
+| `pycwt` | ≥ 0.5.0b0 | Wavelet transform coherence for hyperscanning |
+| `bibtexparser` | ≥ 2.0.0b9 | Methods citations |
 | `flask` | ≥ 3.0 | GUI (`nirspipe-gui`) and rating viewers (`nirspipe-rate`) |
 
 `tables` (PyTables) is not among them. The package writes no HDF5 file of its own beyond SNIRF; install it yourself to call `save()` on a GLM object the Python API returned.

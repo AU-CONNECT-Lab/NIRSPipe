@@ -16,26 +16,26 @@ requires-python = ">=3.11"
 dependencies = [
     "mne>=1.13",          # colin27_1005, as 1.14 drops the name standard_1005
     "mne-nirs>=0.7",      # 0.7 relocated scalp_coupling_index to mne.preprocessing.nirs
-    "nilearn>=0.10",
-    "nibabel>=3.2",       # FreeSurfer curvature for the activation renders
-    "scipy>=1.11",
-    "numpy>=1.24",
-    "pybids>=0.16",
+    "nilearn>=0.11",      # 0.10's AR fit fails under NumPy 2
+    "nibabel>=5.2",       # FreeSurfer curvature for the activation renders
+    "scipy>=1.14",
+    "numpy>=2.1",
+    "pybids>=0.20",       # parses the seg- entity
     "mne-bids>=0.14",
-    "h5py>=3.9",          # snirf (HDF5)
-    "pandas>=2.0",
+    "h5py>=3.11",         # snirf (HDF5)
+    "pandas>=2.2.2",      # the first built against NumPy 2
     "jinja2>=3.1",
-    "plotly>=5.18",
-    "pyvista>=0.43",      # off-screen 3D brain renders
-    "matplotlib>=3.8",    # every static QC panel; imported at module level
+    "plotly>=5.19",       # bar marker cornerradius
+    "pyvista>=0.44.2",    # off-screen 3D brain renders, the first to cap VTK below 9.4
+    "matplotlib>=3.9",    # every static QC panel, imported at module level
     "pillow>=10.0",       # stitches the rendered brain views side by side
     "joblib>=1.3",        # parallel subjects (--nprocs)
     "threadpoolctl>=3.2", # BLAS threads per unit under --nprocs
     "flask>=3.0",         # nirspipe-gui and the nirspipe-rate viewers
-    "pycwt>=0.4.0b0",     # hyperscanning WTC (nirspipe-hyper), b0 as PyPI has only pre-releases
-    "PyWavelets>=1.4",    # wavelet motion correction (--motion-correction wavelet)
-    "statsmodels>=0.14",  # ar_irls's robust refit and groupnull's p corrections
-    "bibtexparser>=2.0.0b1",
+    "pycwt>=0.5.0b0",     # hyperscanning WTC (nirspipe-hyper), b0 as PyPI has only pre-releases
+    "PyWavelets>=1.6",    # wavelet motion correction (--motion-correction wavelet)
+    "statsmodels>=0.14.2",# ar_irls's robust refit and groupnull's p corrections
+    "bibtexparser>=2.0.0b9",
 ]
 
 [project.optional-dependencies]
