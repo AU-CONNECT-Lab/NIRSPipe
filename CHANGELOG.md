@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.85.0] - 2026-11-20
+
 ### Changed
 - **Breaking**: Python 3.11 and MNE 1.13 or later are required, and the 10-05 positions come from `colin27_1005`, since MNE 1.14 removes `standard_1005`
 - **Breaking**: GVTD leaves rejected channels out in every record section and figure, as `--gvtd-censor` does, and an older quality record is refused
