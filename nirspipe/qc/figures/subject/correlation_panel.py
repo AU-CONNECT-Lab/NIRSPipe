@@ -105,7 +105,9 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
         return None, None
     data = raw.get_data(picks=picks)
     n = len(order)
-    corr = np.corrcoef(data).astype(float)
+    # a constant channel has no correlation, NaN, drawn blank
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr = np.corrcoef(data).astype(float)
     np.fill_diagonal(corr, np.nan)
     # Lower triangle only: the matrix is symmetric, so the upper half is the same values
     # read the other way round. The HbO x HbR block, which is what the panel is for,
@@ -118,7 +120,8 @@ def _stage(raw: mne.io.Raw, order: "list[str]"):
         k = pair_of(name)
         hbo, hbr = f"{k} hbo", f"{k} hbr"
         if k not in pair_r and hbo in by_name and hbr in by_name:
-            pair_r[k] = float(np.corrcoef(by_name[hbo], by_name[hbr])[0, 1])
+            with np.errstate(invalid="ignore", divide="ignore"):
+                pair_r[k] = float(np.corrcoef(by_name[hbo], by_name[hbr])[0, 1])
     return corr, pair_r
 
 

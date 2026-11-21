@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
@@ -655,7 +657,9 @@ def build_sci_psp_figure(
     # record's sci_mean is the whole-run correlation and its psp_mean and cv_mean are pinned
     # to 10 s. Here the dot is the row, averaged along time.
     def _row_mean(matrix) -> np.ndarray:
-        with np.errstate(invalid="ignore"):
+        # a row with no value anywhere (a constant channel) has no mean and no dot
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
             return np.nanmean(np.asarray(matrix, dtype=float), axis=1)
 
     # this grid follows --window-length, not the 10 s the per-channel tables are pinned to

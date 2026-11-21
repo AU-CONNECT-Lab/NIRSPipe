@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - The report's HbO-HbR panel leaves those short channels blank after regression, where it drew their noise
 - Every derivative SNIRF keeps its source's optode labels, measurement date and time, and text metadata, which MNE dropped or set to 2000-01-01
 - An event a SNIRF stores twice, in two identical stim groups, is read once, where every derivative listed it twice
+- A constant channel no longer writes RuntimeWarnings to the raw report's log
 
 ## [0.84.0] - 2026-11-13
 
